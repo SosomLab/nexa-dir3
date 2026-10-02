@@ -54,3 +54,7 @@ jobs:
         run: cargo run -q -p nexa-dir -- --smoke
       - name: selfcheck (ci subset)
         run: cargo run -q -p nexa-dir -- --selfcheck --ci
+      # T4 시나리오(실제 창 · docs/18 §4): Windows 러너는 데스크톱 세션이 있어 winit 창이 뜬다. Linux(xvfb)·macOS는 T-06 후속.
+      - name: scenarios (T4 · windows)
+        if: runner.os == 'Windows'
+        run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci

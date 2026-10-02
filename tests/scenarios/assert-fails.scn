@@ -1,0 +1,11 @@
+# T4 · 러너 자체 점검: 단언 실패는 stderr 한 줄 + 종료 코드 3 · 뒤의 quit:0이 덮지 못한다.
+id: assert-fails
+title: 단언 실패 = exit 3(음성 시험)
+tree: file a.txt 1
+settings: ui.lang=en
+cmd: @ready:assert.status:definitely-not-there
+cmd: @ready:quit:0
+exit: 3
+check: stderr: [assert] FAIL status:definitely-not-there
+check: stderr: left 1 item
+check: stderr: !panicked

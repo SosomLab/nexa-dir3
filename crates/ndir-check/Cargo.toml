@@ -1,0 +1,15 @@
+[package]
+name = "ndir-check"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir T4 시나리오 러너 — tests/scenarios/*.scn을 격리 홈·샘플 트리로 실행해 종료 코드·패닉·검사식을 판정(의존 0 · docs/port/44 CI-108)"
+
+[lints]
+workspace = true
+
+[dependencies]

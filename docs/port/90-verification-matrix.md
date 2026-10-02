@@ -90,3 +90,4 @@
 | CI-106 | 기동 명령 확장 — `@ready`/`@idle`/`@after` · `quit[:코드]` · `assert.<대상>:<식>`(종료 코드 3) · `ui.click:@영역` · `ui.key` | `app/startup_cmd.rs` | T3·T4 | `startup_ready_assert_and_dumps` · `classify_prefixes` · 창 실증(exit 5 / exit 3) | ✅ | T-46 · `@idle` 작업 큐는 M6 |
 | CI-107 · CI-081 | 덤프 어휘 — `layout` `panel` `list` `tabs` `status` `menu` · `dump:` 전부 | `app/startup_cmd.rs::dump_of` | T3 | `startup_ready_assert_and_dumps` | 🚧 | T-46 · tree/ops/term/preview/prefs/plugin/license/log 덤프는 각 기능과 함께 |
 | CI-112 · CI-072 | 패닉 훅 → `<HOME>/crash/crash-<unix>.txt`(버전·OS·마지막 명령) · 다음 기동 안내 1회 | `nexa-dir/src/crash.rs` | T2 | `report_has_version_os_and_last_command` · `unreported_is_taken_once_and_newest_first` | ✅ | T-46 |
+| CI-108 | `ndir-check` 시나리오 러너(의존 0 · `.scn` · 격리 홈·샘플 트리 · 종료 코드/패닉/검사식 · summary) + 시나리오 5 | `crates/ndir-check` · `tests/scenarios/*.scn` | T4 | 러너 시험 3 · 시나리오 5 PASS(Windows 로컬·CI) | ✅ | T-06 · Linux xvfb·macOS 러너는 후속 · 캡처 플러그 없음 |

@@ -1,0 +1,21 @@
+# T4 · 창이 뜨고 배치·상태줄이 맞는가(배율 1 가정 — 숫자는 접두만 본다).
+id: layout-basic
+title: 창 배치 · 상태줄 · 메뉴 덤프
+tree: dir sub
+tree: file a.txt 5
+tree: file b.md 3
+settings: ui.lang=en
+settings: window.main_size=1200,800
+cmd: @ready:layout.dump:<out>/layout.txt
+cmd: @ready:status.dump:<out>/status.txt
+cmd: @ready:menu.dump:<out>/menu.txt
+cmd: @ready:assert.layout:dual true
+cmd: @ready:assert.status:3 items
+cmd: @ready:quit
+check: layout.txt: menubar 0,0
+check: layout.txt: panel0.nav
+check: layout.txt: splitter
+check: status.txt: left 3 items
+check: status.txt: right Tab 1/1
+check: menu.txt: closed
+check: stderr: !panicked

@@ -35,7 +35,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | T1 | 순수 로직(정렬·필터·이름 규칙·경로·ops 계획·VT 파서·설정 레지스트리·i18n·라이선스 check·OS 분기 판정 MC/DC) | `#[cfg(test)]` · dir2 테스트 이식(DR-11) | ✅ | 실제 설정 폴더·사용자 파일 금지(`temp_dir()`/`from_text`) |
 | T2 | 컨트롤(nexa-ui 쪽): 히트 x·y · 포커스 링 ≤ 1 · 클립 · 스크롤 · 키 이동 | nexa-ctl `RecordCtx`(T-21에서 공용화) | ✅(nexa-ui CI) | 글자 폭 = 글자 × 7 고정 |
 | T3 | **앱 시나리오(창 없음)**: `AppCore::new(FakePlatform, 샌드박스)` → `route(InputEvent)`/`command(id)` → 상태·가짜 호출 기록·**레이아웃 덤프 골든**(영역 이름 + Rect 트리 · 픽셀 아님) | `crates/nexa-dir/tests/scenarios_*.rs` · 골든 `tests/golden/*.layout` | ✅ | "컨트롤 배치 유지" 자동 검증 수단 |
-| T4 | 실제 프로세스: 창 · present · 설정 영속 · 세션 복원 | `ndir-check`(T-06) + `NDIR_HOME` + `NDIR_STARTUP_CMD` + `*.dump:<파일>` + 검사식 `파일:정규식`/`!` · 시나리오 `tests/scenarios/*.scn` | ◐(Linux xvfb · 수동 워크플로) | 고정 sleep 대신 `@ready`/`@idle`/`quit` |
+| T4 | 실제 프로세스: 창 · present · 설정 영속 · 세션 복원 | `ndir-check`(T-06) + `NDIR_HOME` + `NDIR_STARTUP_CMD` + `*.dump:<파일>` + 검사식 `파일:정규식`/`!` · 시나리오 `tests/scenarios/*.scn` | ✅ Windows(CI 단계 `scenarios`) · ◐ Linux xvfb·macOS 후속 | 고정 sleep 대신 `@ready`/`@idle`/`quit` · 로컬 = `cargo build -p nexa-dir && cargo run -p ndir-check` |
 | T5 | 실제 OS 자원: 셸 · PTY · 휴지통 · 클립보드 · 컨텍스트 메뉴 · 플러그인 · 라이선스 | `nexa-dir --selfcheck [--ci] [--json] [--only 그룹] [--with-clipboard]` · Help ▸ 자가 점검 창(같은 함수) | ✅(`--ci`) | 격리 홈·임시 폴더 안에서만 · 네트워크 0 · 포트 공개 메서드를 그대로 호출 |
 | T6 | 성능·누수·용량 | `scripts/perf-*.{ps1,sh}`(T-08) | ✗ | 마일스톤마다 · Release |
 

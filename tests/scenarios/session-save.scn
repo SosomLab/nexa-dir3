@@ -1,0 +1,18 @@
+# T4 · 종료 때 세션(dir2 session.cfg 형식)이 격리 홈에 남는다 · 창 기하 저장.
+id: session-save
+title: 종료 = session.conf · settings.conf(window.*) 저장
+tree: dir sub
+tree: file a.txt 1
+settings: ui.lang=en
+cmd: @ready:file.new_tab
+cmd: @ready:nav:<root>/sub
+cmd: @ready:view.mode_flat
+cmd: @ready:panel:1
+cmd: @ready:quit
+check: <home>/session.conf: # nexa-dir session v1
+check: <home>/session.conf: active_panel=1
+check: <home>/session.conf: panel0.tabs=<root>|<root>
+check: <home>/session.conf: panel0.active=1
+check: <home>/session.conf: panel0.modes=tree|flat
+check: <home>/settings.conf: window.main_size=
+check: <home>/settings.conf: ui.lang=en

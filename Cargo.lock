@@ -766,6 +766,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndir-check"
+version = "0.23.0"
+
+[[package]]
 name = "ndir-core"
 version = "0.23.0"
 

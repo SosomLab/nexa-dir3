@@ -13,6 +13,7 @@ members = [
   "crates/ndir-settings", # 앱 설정 — nsql-settings 엔진 + dir2 키 표 · settings.conf · JSON · dir2 가져오기 (의존: i18n · nexa-conf · DR-3)
   "crates/ndir-license",  # 라이선스 앱 층 — nsql-license 복제 · Product nexa-dir · Feature 0 (의존: nexa-license · settings · DR-4)
   "crates/nexa-dir",      # (bin) 앱 — winit 호스트 · app/ 조각 · platform/ · preview/
+  "crates/ndir-check",    # (bin) T4 시나리오 러너 — tests/scenarios/*.scn · 격리 홈 · 검사식 (의존 0 · CI-108)
 ]
 # 플러그인 게스트 작업 공간(wasm32)은 따로 빌드한다(docs/18 · scripts/plugin-build.*).
 exclude = ["plugins/sdk"]

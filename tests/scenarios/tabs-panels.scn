@@ -1,0 +1,26 @@
+# T4 · 패널별 탭 · 활성 패널 · 단일/듀얼 전환 배치.
+id: tabs-panels
+title: 탭 생성/순환 · 패널 전환 · 단일 패널 배치
+tree: dir sub
+tree: file a.txt 1
+settings: ui.lang=en
+settings: window.main_size=1200,800
+cmd: @ready:file.new_tab
+cmd: @ready:nav:<root>/sub
+cmd: @ready:tab.prev
+cmd: @ready:assert.panel:tabs 2 active 0
+cmd: @ready:panel:1
+cmd: @ready:file.new_tab
+cmd: @ready:tabs.dump:<out>/tabs.txt
+cmd: @ready:assert.status:Tab 2/2
+cmd: @ready:view.panel_single
+cmd: @ready:layout.dump:<out>/single.txt
+cmd: @ready:view.panel_toggle
+cmd: @ready:layout.dump:<out>/dual.txt
+cmd: @ready:quit
+check: tabs.txt: tabs 2 active 1
+check: single.txt: dual false active 0
+check: single.txt: panel1 0,0 0x0
+check: single.txt: splitter 0,0 0x0
+check: dual.txt: dual true
+check: dual.txt: !panel1 0,0 0x0

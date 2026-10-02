@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 15차 — T-06 `ndir-check` T4 러너 + 시나리오 5
+
+- **한 일**: `crates/ndir-check`(의존 0): `.scn` → 격리 홈·샘플 트리 → 앱 실행 → 종료 코드·패닉·검사식 → 표·`summary.txt`. 시나리오 5(배치 · 위로 선택/히스토리 · 탭/패널 · 세션 저장 · 단언 실패 음성) 전부 PASS(각 0.2~0.3 s). CI에 Windows `scenarios` 단계. 상대 경로 함정(앱 cwd = 트리) 적발·수정.
+- **지금 상태**: M3 🚧 — T-40·41·45·46·06 ✅ · T-42·43 부분. **회귀 하네스 T0~T5가 전부 섰다**(T6 성능만 남음). 다음 = T-44 설정 창/단축키 창 → T-43 잔여 → T-05 check-all.
+- **걸린 것**: Linux xvfb·macOS 러너 단계(후속 · docs/18 §4).
+
+→ [journal/2026-10-03 §17](journal/2026-10-03.md)
+
 ## 10-03 14차 — M3 T-46 기동 명령 어휘 + 패닉 훅
 
 - **한 일**: `NDIR_STARTUP_CMD` 확장(`@ready`·`@idle`·`@after` · `quit[:코드]` · `assert.<대상>:<식>` 실패 = 종료 코드 3 · `ui.click:@영역` · `ui.key`) · 덤프 6종(`panel`·`list`·`tabs`·`status`·`menu`·`layout`) · `crash.rs` 패닉 훅(crash-<unix>.txt · 마지막 명령 id · 다음 기동 안내) · 종료 코드가 프로세스로. 창 실증(exit 5 · assert 실패 exit 3). 시험 59.

@@ -1,0 +1,23 @@
+# T4 · dir2 G-7: 위로 가면 떠난 폴더가 캐럿 + 단일 선택 · 히스토리 뒤로 가능.
+id: nav-up-select
+title: 위로 = 떠난 폴더 선택 · 뒤로/앞으로
+tree: dir sub/deep
+tree: dir zeta
+tree: file a.txt 5
+settings: ui.lang=en
+cmd: @ready:nav:<root>/sub
+cmd: @ready:nav.up
+cmd: @ready:panel.dump:<out>/panel.txt
+cmd: @ready:list.dump:<out>/list.txt
+cmd: @ready:assert.panel:back true
+cmd: @ready:nav.back
+cmd: @ready:assert.panel:path <root>/sub
+cmd: @ready:nav.forward
+cmd: @ready:assert.panel:path <root>
+cmd: @ready:quit
+check: panel.txt: path <root>
+check: panel.txt: selected 1 caret Some(0)
+check: panel.txt: back true forward false
+check: list.txt: 0 d0 Collapsed *sub |
+check: list.txt: 1 d0 Collapsed zeta |
+check: list.txt: a.txt | txt | 5 B |
