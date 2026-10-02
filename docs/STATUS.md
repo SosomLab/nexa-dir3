@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 32차 — T-61 B: 터미널 글꼴 크기 · 고정 열/가로 스크롤 · HTML 복사 · TUI 마우스 모드
+
+- **한 일**: `TermStyle` 도입(`term.font_size/wrap/cols`) · 가로 오프셋 `view_x` + 가로 휠 · `term.copy_format` html/both = CF_HTML 동시 게시 · DECSET 마우스 모드 SGR 좌표 전달(Shift = 로컬 선택) · 설정 즉시 반영 · 시험 +1(119).
+- **지금 상태**: M5 🚧(T-61 잔여 = 픽셀 스크롤·고속 스크롤·RTF · T-62 C · T-63 B) · M4 🚧(T-51 B-2 · T-52/53) · M6 🚧 — 다음 = M3 잔여(T-42 런처 바 · T-30 SVG 툴바 아이콘 · T-32 폴더 트리) 또는 T-62 C 압축 그리드 또는 M7 라이선스 창/배포.
+- **걸린 것**: RTF 클립보드 미지원(평문 폴백) · 비Windows 리치 클립보드 없음(T-52/53).
+
+→ [journal/2026-10-03 §34](journal/2026-10-03.md)
+
 ## 10-03 31차 — T-51 B-1: Windows 셸 컨텍스트 메뉴(IContextMenu 포트 · 행 메뉴 합류)
 
 - **한 일**: `platform/winshell.rs`(PIDL → IShellFolder → IContextMenu → HMENU 열거 → 항목 트리 · verb · InvokeCommand · `windows` 0.62) · 포트 계약 확장 · 행 메뉴 = 셸 항목 + 앱 고유(가로채기·중복 금지) · 실기 시험 1 · core 시험 보강(118).

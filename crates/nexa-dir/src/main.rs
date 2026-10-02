@@ -182,6 +182,8 @@ struct App {
     terms: [TermView; 2],
     /// 터미널 키 포커스(dir2 `term_focus`) — 클릭/→ 버튼으로 얻고 패널 클릭으로 잃는다.
     term_focus: Option<usize>,
+    /// TUI 마우스 모드로 누름을 보낸 터미널(뗌도 같은 쪽으로).
+    term_mouse_down: Option<usize>,
     /// 앱 내 파일 클립보드 사본(경로, 잘라내기) — OS 클립보드 미지원 OS의 폴백 · 붙여넣기 2순위(M6).
     clip: Option<(Vec<PathBuf>, bool)>,
     /// 진행 중 전송(동시 1건).
@@ -366,6 +368,7 @@ impl App {
             dock_preview: [(String::new(), Vec::new()), (String::new(), Vec::new())],
             terms: [TermView::new(), TermView::new()],
             term_focus: None,
+            term_mouse_down: None,
         };
         for d in &mut app.docks {
             d.set_kinds(

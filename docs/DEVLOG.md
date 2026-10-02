@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-61 B 터미널 보강**: `TermStyle`(글꼴 크기 · 줄 바꿈 끄기 = 고정 열 + 가로 스크롤) · HTML 복사(`term.copy_format` · CF_HTML) · TUI 마우스 모드 SGR 보고(누름/뗌/휠) · `term.*` 설정 즉시 반영 → [journal §34](journal/2026-10-03.md)
 - **T-51 B-1 Windows 셸 컨텍스트 메뉴**: `platform/winshell.rs`(IContextMenu → HMENU 열거 → 포트 항목 · 서브메뉴 2단 · InvokeCommand · `windows` crate) · 행 메뉴 상단 합류 + verb 가로채기 · 실기 시험 → [journal §33](journal/2026-10-03.md)
 - **파일 행/배경 컨텍스트 메뉴**: `app/ctxmenu.rs`(dir2 §2-1/§2-2 앱 고유 항목 · 경로/이름 복사 · 폴더에 붙여넣기 · undo/redo 설명) · 우클릭/Shift+F10 · `ctx.pick`/덤프 `ctx` · 시나리오 `ctx-menu` → [journal §32](journal/2026-10-03.md)
 - **T-62 B 독립 미리보기 창**: `preview_win.rs`(스타일드 7종 · 스크롤 · Esc · Ctrl+C) + `app/previewcmd.rs`(F3/↗ · 시임 · 압축 요약 · 암호 마스킹 대화상자 루프) · View 메뉴 등재 · 덤프 `pvwin` · 시나리오 `preview-window` → [journal §31](journal/2026-10-03.md)

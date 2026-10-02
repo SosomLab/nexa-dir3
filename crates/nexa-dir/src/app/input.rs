@@ -238,6 +238,14 @@ impl App {
                     if let Some(i) = self.term_hit_at(x, y) {
                         if self.terms[i].started() {
                             self.set_term_focus(Some(i), inv);
+                            // TUI 마우스 모드(dir2 X-5): 좌표를 셸로 보내고 로컬 선택은 억제(Shift = 로컬 선택 강제).
+                            if !shift {
+                                if let Some(rep) = self.terms[i].mouse_report(x, y, 0, true) {
+                                    self.terms[i].write(&rep);
+                                    self.term_mouse_down = Some(i);
+                                    return;
+                                }
+                            }
                             self.terms[i].mouse_down(x, y, shift);
                             inv.push(self.docks[i].bounds());
                             return;
@@ -265,7 +273,12 @@ impl App {
                 }
                 self.send(area, &ev, inv);
             }
-            InputEvent::MouseUp { .. } => {
+            InputEvent::MouseUp { x, y } => {
+                if let Some(i) = self.term_mouse_down.take() {
+                    if let Some(rep) = self.terms[i].mouse_report(x, y, 0, false) {
+                        self.terms[i].write(&rep);
+                    }
+                }
                 if let Some(i) = self.term_focus {
                     self.terms[i].mouse_up();
                 }
@@ -278,8 +291,21 @@ impl App {
             InputEvent::Wheel { .. } | InputEvent::HWheel { .. } => {
                 let (x, y) = self.cursor;
                 if let (InputEvent::Wheel { delta }, Some(i)) = (ev, self.term_hit_at(x, y)) {
-                    // 터미널 위 휠 = 스크롤백(3줄/노치 · dir2).
+                    // 터미널 위 휠 = 스크롤백(3줄/노치 · dir2) · TUI 마우스 모드면 휠 이벤트(64/65) 전달.
+                    if let Some(rep) =
+                        self.terms[i].mouse_report(x, y, if delta > 0 { 64 } else { 65 }, true)
+                    {
+                        self.terms[i].write(&rep);
+                        return;
+                    }
                     if self.terms[i].scroll_view(delta * 3 / 120) {
+                        inv.push(self.docks[i].bounds());
+                    }
+                    return;
+                }
+                if let (InputEvent::HWheel { delta }, Some(i)) = (ev, self.term_hit_at(x, y)) {
+                    // 가로 휠/Shift+휠 = 고정 열 모드 가로 스크롤(4열/노치 · dir2 X-3).
+                    if self.terms[i].scroll_x(delta * 4 / 120) {
                         inv.push(self.docks[i].bounds());
                     }
                     return;

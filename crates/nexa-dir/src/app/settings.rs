@@ -100,6 +100,10 @@ impl App {
             "launcher.visible" | "list.col_width_sync" => {
                 self.sync_menu_checks();
             }
+            "term.wrap" | "term.cols" | "term.theme" | "term.theme_dark" | "term.theme_light"
+            | "term.copy_format" | "term.shell" => {
+                self.redraw(); // 다음 paint가 설정을 읽는다(열·팔레트 · 셸은 다음 시작부터).
+            }
             k if k.starts_with("key.") => {
                 self.keymap = Keymap::from_settings(&self.settings);
                 self.sync_menu_shortcuts();

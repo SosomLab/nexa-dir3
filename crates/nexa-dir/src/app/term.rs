@@ -2,7 +2,7 @@
 //! → 폴더로 이동(cd) · 복사/붙여넣기/전체 선택 · 덤프. 뷰 자체는 `termview.rs`.
 
 use crate::platform::ShellSpec;
-use crate::termview::{TermView, POLL_MS};
+use crate::termview::{TermStyle, TermView, POLL_MS};
 use crate::*;
 
 impl App {
@@ -49,6 +49,21 @@ impl App {
             self.theme.is_dark,
         )
         .palette
+    }
+
+    /// 표시 설정(dir2 X-3): `term.font_size`(Mono 슬롯 = 상태줄 크기 기준 증분) · `term.wrap` · `term.cols`.
+    pub(crate) fn term_style(&self) -> TermStyle {
+        let want = self.settings.font_px("term.font_size");
+        let base = self.settings.font_px("statusbar.font_size");
+        TermStyle {
+            font_delta: if want > 0.0 && base > 0.0 {
+                want - base
+            } else {
+                0.0
+            },
+            wrap: self.settings.flag("term.wrap"),
+            cols: self.settings.int("term.cols").clamp(80, 1000) as usize,
+        }
     }
 
     /// 도크 i의 내용 원천 패널(단일 정보 = 활성).
@@ -149,22 +164,22 @@ impl App {
     /// 지연 시작·그리기(paint 길목 · dir2 `term_paint`): 도크 종류 2이고 세션이 없으면 cwd로 연다.
     pub(crate) fn paint_terms(&mut self, dc: &mut dyn DrawCtx, th: &Theme, row_h: i32) {
         let pal = self.term_palette();
+        let style = self.term_style();
         for i in 0..2 {
             if !self.term_shown(i) {
                 continue;
             }
             let rc = self.docks[i].content_rect();
-            let (cols, rows, _, _) = TermView::grid_dims(dc, rc, row_h);
+            let (cols, rows, _, _) = TermView::grid_dims(dc, rc, row_h, &style);
             if cols >= 2 && rows >= 2 && !self.terms[i].started() && !self.terms[i].failed {
                 let shell = self.term_shell();
                 let cwd = self.term_cwd(i);
                 self.terms[i].start(&self.platform, shell, &cwd, cols, rows);
             }
             let caret = self.term_focus == Some(i) && self.terms[i].caret_on;
-            self.terms[i].paint(dc, rc, th, &pal, caret, row_h);
+            self.terms[i].paint(dc, rc, th, &pal, caret, row_h, &style);
         }
     }
-
     /// 좌표가 어느 도크의 터미널 격자 위인가.
     pub(crate) fn term_hit_at(&self, x: i32, y: i32) -> Option<usize> {
         (0..2)
@@ -265,12 +280,39 @@ impl App {
         let Some(text) = self.terms[i].selected_text() else {
             return false;
         };
-        let ok = clipboard::write_text(&text);
+        // 복사 서식(dir2 X-50 `term.copy_format`): html/both = 평문 + HTML 동시 게시(색·글꼴 = 현재 팔레트/설정) · rtf는 dir3 클립보드가 HTML만 게시(평문 폴백).
+        let fmt = self
+            .settings
+            .get("term.copy_format")
+            .unwrap_or("text")
+            .to_string();
+        let ok = if matches!(fmt.as_str(), "html" | "both") {
+            let pal = self.term_palette();
+            let font = self
+                .settings
+                .get("term.font_face")
+                .unwrap_or("Consolas")
+                .split(',')
+                .next()
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .unwrap_or("Consolas")
+                .to_string();
+            let px = self.settings.font_px("term.font_size").round() as i32;
+            match self.terms[i].selected_runs() {
+                Some(runs) => {
+                    let html = ndir_term::export::to_html(&runs, &pal, &font, px.max(8));
+                    clipboard::write_rich(&text, &html) || clipboard::write_text(&text)
+                }
+                None => clipboard::write_text(&text),
+            }
+        } else {
+            clipboard::write_text(&text)
+        };
         self.terms[i].sel = None;
         self.redraw();
         ok
     }
-
     pub(crate) fn term_paste(&mut self) -> bool {
         let Some(i) = self.term_focused() else {
             return false;
@@ -297,11 +339,14 @@ impl App {
     pub(crate) fn term_dump(&self) -> String {
         let i = self.term_focus.unwrap_or(self.active.min(1));
         let t = &self.terms[i];
+        let st = self.term_style();
         format!(
-            "dock{i} {} focus {:?} cwd {}\n{}",
+            "dock{i} {} focus {:?} cwd {} wrap {} cols {}\n{}",
             t.state_line(),
             self.term_focus,
             t.cwd.display(),
+            st.wrap,
+            st.cols,
             t.screen_text()
         )
     }
