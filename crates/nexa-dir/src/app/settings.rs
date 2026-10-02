@@ -123,13 +123,26 @@ impl App {
         true
     }
 
+    /// 툴바 아이콘 논리 크기 → 물리 px(배율 반영 · SVG 마스크를 그 크기로 렌더해 선명).
+    pub(crate) fn toolbar_icon_px(scale: f32) -> u32 {
+        (TOOLBAR_ICON_LOGICAL as f32 * scale).round().max(8.0) as u32
+    }
+
+    /// 툴바 재구성(언어 · 배율 변경 — 체크 상태는 `sync_menu_checks`가 다시 맞춘다).
+    pub(crate) fn rebuild_toolbar(&mut self) {
+        let mut toolbar = Toolbar::new(App::build_toolbar(
+            &self.settings,
+            App::toolbar_icon_px(self.scale),
+        ));
+        toolbar.set_icon_size(TOOLBAR_ICON_LOGICAL);
+        toolbar.set_padding(2, 2);
+        self.toolbar = toolbar;
+    }
+
     /// 언어 전환 뒤 라벨 재구성(메뉴 · 툴바 · 열 · 상태줄).
     pub(crate) fn relabel(&mut self) {
         self.menubar.set_menus(App::build_menus(&self.settings));
-        let mut toolbar = Toolbar::new(App::build_toolbar(&self.settings));
-        toolbar.set_icon_size(20);
-        toolbar.set_padding(2, 2);
-        self.toolbar = toolbar;
+        self.rebuild_toolbar();
         self.sync_menu_shortcuts();
         self.sync_menu_checks();
         self.layout();

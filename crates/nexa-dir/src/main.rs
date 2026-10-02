@@ -22,6 +22,7 @@ mod dockinfo;
 mod file_win;
 mod filelist;
 mod icon;
+mod icons;
 #[allow(dead_code)]
 mod input;
 mod keys_win;
@@ -99,6 +100,8 @@ pub(crate) fn settings_clip_native() -> bool {
 const SPLIT_TH: f32 = 3.0;
 const SNAP_PX: f32 = 20.0;
 const MIN_PANEL: f32 = 200.0;
+/// 툴바 아이콘 논리 크기(dir2 20 · `Toolbar::set_icon_size` · 마스크는 배율 곱한 px로 렌더).
+const TOOLBAR_ICON_LOGICAL: i32 = 20;
 
 /// UI 스레드를 깨우는 사용자 이벤트(배경 작업이 보낸다 — M4 전송·감시 스레드 · SKEL-415).
 #[derive(Debug)]
@@ -319,8 +322,8 @@ impl App {
             let _ = settings.save();
         }
         let launcherbar = Toolbar::new(App::build_launcherbar(&launcher_items));
-        let mut toolbar = Toolbar::new(App::build_toolbar(&settings));
-        toolbar.set_icon_size(20);
+        let mut toolbar = Toolbar::new(App::build_toolbar(&settings, App::toolbar_icon_px(1.0)));
+        toolbar.set_icon_size(TOOLBAR_ICON_LOGICAL);
         toolbar.set_padding(2, 2);
         let session_keep = session.clone().unwrap_or_default();
         let mut panels = match &session {

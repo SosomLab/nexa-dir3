@@ -51,6 +51,11 @@ impl ApplicationHandler<Wake> for App {
             win.set_visible(true);
         }
         self.scale = win.scale_factor() as f32;
+        if (self.scale - 1.0).abs() > 0.01 {
+            // 창 배율에 맞는 크기로 툴바 SVG 아이콘 재렌더(T-30).
+            self.rebuild_toolbar();
+            self.sync_menu_checks();
+        }
         // 창이 생기면 OS 판정(winit)이 정확해진다 — System 모드는 여기서 확정.
         self.theme = theme::resolve(self.settings.theme_mode(), win.theme());
         match present::Presenter::new(win.clone()) {
@@ -202,6 +207,8 @@ impl ApplicationHandler<Wake> for App {
                     let s = w.scale_factor() as f32;
                     if (s - self.scale).abs() > 0.01 {
                         self.scale = s;
+                        self.rebuild_toolbar();
+                        self.sync_menu_checks();
                         self.layout();
                     }
                 }
@@ -213,6 +220,8 @@ impl ApplicationHandler<Wake> for App {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.scale = *scale_factor as f32;
+                self.rebuild_toolbar();
+                self.sync_menu_checks();
                 self.layout();
                 self.redraw();
             }

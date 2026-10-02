@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 37차 — T-30 A: 툴바 SVG 아이콘(dir2 자산 · 마스크 틴트 · HiDPI 재렌더)
+
+- **한 일**: `assets/toolbar` 이식 · `icons.rs` · `build_toolbar` 마스크 · 배율 변경 재구성 · 시험 +3(135).
+- **지금 상태**: M3 잔여 = T-30 B(런처 exe 아이콘 · 소형 컨트롤) · T-31(클립 스택 등) · T-32(폴더 트리). 다음 = T-32 또는 T-81/82(M7) 또는 T-51 B-2.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §39](journal/2026-10-03.md)
+
 ## 10-03 36차 — T-62 C-2: SVG 래스터(nexa-ui 108차) · 인라인 이미지 · Mermaid E2E
 
 - **한 일**: nexa-gfx `svg`(파서+래스터) · nexa-ctl `draw_image_hint`+캐시 · dir3 `render_svg_impl` 3-OS · preview_win/InfoDock 인라인 이미지 · `tree: text` · 시험 +1(132) · 시나리오 19.

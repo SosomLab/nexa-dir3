@@ -209,9 +209,16 @@ impl App {
     }
 
     /// 툴바(dir2 `build_toolbar` 블록 순서 panel · view · refresh · settings · show — 글리프 폴백 · SVG 아이콘은 T-30/T-43).
-    pub(crate) fn build_toolbar(settings: &Settings) -> Vec<ToolItem> {
+    pub(crate) fn build_toolbar(settings: &Settings, icon_px: u32) -> Vec<ToolItem> {
+        // dir2 SVG 아이콘(T-30 · `icons.rs` · nexa-gfx svg 마스크 → 테마 틴트) · 없으면 글리프(자산 미등록·파싱 실패 격리).
         let g = |id: &str, glyph: &str, tip_key: &str| {
-            ToolItem::new(id, ToolIcon::Glyph(glyph.to_string())).tip(tr(tip_key))
+            let icon = icons::asset_of(id)
+                .and_then(|name| icons::toolbar_mask(name, icon_px))
+                .map_or_else(
+                    || ToolIcon::Glyph(glyph.to_string()),
+                    |(w, h, alpha)| ToolIcon::Mask { w, h, alpha },
+                );
+            ToolItem::new(id, icon).tip(tr(tip_key))
         };
         let _ = settings;
         vec![
@@ -510,7 +517,7 @@ mod tests {
         let menus = App::build_menus(&s);
         assert_eq!(menus.len(), 5);
         assert!(menus[0].entries.len() >= 9);
-        let tools = App::build_toolbar(&s);
+        let tools = App::build_toolbar(&s, 20);
         assert!(tools.len() >= 13);
     }
 }

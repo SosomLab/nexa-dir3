@@ -1412,3 +1412,28 @@ fn archive_grid_window_from_preview() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-30 툴바 SVG 아이콘: 13개 명령 전부 마스크 아이콘(글리프 폴백 아님) · 배율 2 = 40px 마스크 · 재구성 뒤 체크 상태 유지.
+#[test]
+fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
+    let (mut app, dir) = fixture("tbicons");
+    let masks = app
+        .toolbar
+        .items()
+        .iter()
+        .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 20, h: 20, .. }))
+        .count();
+    assert_eq!(masks, 13, "13개 명령 = SVG 마스크(20px)");
+    app.layout_for(1200, 800, 2.0);
+    app.rebuild_toolbar();
+    app.sync_menu_checks();
+    assert!(
+        app.toolbar
+            .items()
+            .iter()
+            .all(|it| it.separator
+                || matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 40, h: 40, .. }))
+    );
+    assert_eq!(App::toolbar_icon_px(1.5), 30);
+    let _ = std::fs::remove_dir_all(&dir);
+}
