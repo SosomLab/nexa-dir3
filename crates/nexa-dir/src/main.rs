@@ -44,8 +44,8 @@ use ndir_i18n::{tr, trf};
 use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
 use nexa_ctl::controls::{
-    ComboItem, Control, MenuBar, MenuDef, MenuEntry, SplitAxis, SplitEvent, Splitter, StatusBar,
-    ToolIcon, ToolItem, Toolbar,
+    ComboItem, ContextMenu, Control, CtxItem, MenuBar, MenuDef, MenuEntry, SplitAxis, SplitEvent,
+    Splitter, StatusBar, ToolIcon, ToolItem, Toolbar,
 };
 use nexa_ctl::draw::DrawCtx;
 use nexa_ctl::geom::{Point, Rect};
@@ -145,6 +145,9 @@ struct App {
     keys_win: KeysWin,
     open_prefs: bool,
     open_keys: bool,
+    /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
+    tab_menu: ContextMenu,
+    tab_menu_at: Option<(usize, usize)>,
 }
 
 /// 논리 px → 장치 px(반올림).
@@ -296,6 +299,8 @@ impl App {
             keys_win: KeysWin::new(),
             open_prefs: false,
             open_keys: false,
+            tab_menu: ContextMenu::new(),
+            tab_menu_at: None,
         };
         app.apply_window_sizes();
         app.sync_menu_shortcuts();
@@ -371,6 +376,7 @@ impl App {
         self.menubar.set_scale(s);
         self.toolbar.set_scale(s);
         self.statusbar.set_scale(s);
+        self.tab_menu.set_scale(s);
         let menu_h = px(self.settings.font_px("ui.menu_font_size") + 11.0, s).min(h.max(0));
         self.menubar
             .set_bounds(Rect::new(0, 0, w, menu_h), &mut inv);

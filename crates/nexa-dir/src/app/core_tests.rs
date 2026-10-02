@@ -474,3 +474,76 @@ fn prefs_host_wiring_without_window() {
     assert!(app.lang_choices().iter().any(|(c, _)| c == "ko"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-43 2차: 탭 우클릭 = 컨텍스트 메뉴 · 잠금/고정/복제/이동/닫기 동작 · 세션에 잠금/고정 · 열 폭 동기.
+#[test]
+fn tab_menu_and_column_sync() {
+    let (mut app, dir) = fixture("tabmenu");
+    app.layout_for(1200, 800, 1.0);
+    app.command("file.new_tab");
+    // 탭 사각형은 그릴 때 측정된다(TabBar 규약) → 기록기로 한 번 그린다.
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let tr0 = app.panels[0].tabbar.tab_rect(0).expect("tab 0 rect");
+    let (x, y) = (tr0.x + tr0.w / 2, tr0.y + tr0.h / 2);
+    app.route(InputEvent::MouseMove { x, y });
+    app.route(InputEvent::RightDown { x, y });
+    assert!(app.tab_menu.is_open(), "탭 우클릭 = 메뉴");
+    assert_eq!(app.tab_menu_at, Some((0, 0)));
+    let ids: Vec<String> = app
+        .tab_menu
+        .item_ids()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            "tab.lock",
+            "tab.pin",
+            "tab.duplicate",
+            "tab.new",
+            "tab.move_other",
+            "tab.close"
+        ]
+    );
+    // Esc = 닫힘.
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(!app.tab_menu.is_open());
+    app.tab_menu_at = Some((0, 0));
+    app.tab_menu_action("tab.lock");
+    assert!(app.panels[0].tab_locked(0));
+    app.tab_menu_at = Some((0, 0));
+    app.tab_menu_action("tab.close");
+    assert_eq!(app.panels[0].tab_count(), 2, "잠긴 탭은 안 닫힌다");
+    app.tab_menu_at = Some((0, 1));
+    app.tab_menu_action("tab.pin");
+    assert!(app.panels[0].tab_pinned(0), "고정 = 앞으로");
+    app.tab_menu_at = Some((0, 1));
+    app.tab_menu_action("tab.duplicate");
+    assert_eq!(app.panels[0].tab_count(), 3);
+    app.tab_menu_at = Some((0, 2));
+    app.tab_menu_action("tab.move_other");
+    assert_eq!(app.panels[0].tab_count(), 2);
+    assert_eq!(app.panels[1].tab_count(), 2);
+    assert_eq!(app.active, 1);
+    let snap = app.session_snapshot();
+    assert_eq!(snap.panels[0].pinned, vec![true, false]);
+    assert!(snap.panels[0].locked.iter().any(|l| *l));
+    assert_eq!(Session::parse(&snap.serialize()).panels[0], snap.panels[0]);
+    // 열 폭 동기: 켜면 활성 패널 폭이 반대 패널로.
+    let mut inv = Invalidations::default();
+    app.set_active(0);
+    app.panels[0]
+        .rows_mut()
+        .set_col_widths(&[200, 50, 60, 70, 80], &mut inv);
+    let _ = app.settings.set("list.col_width_sync", "off");
+    app.command("view.col_width_sync");
+    assert!(app.settings.flag("list.col_width_sync"));
+    assert_eq!(app.panels[1].col_widths_now(), vec![200, 50, 60, 70, 80]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

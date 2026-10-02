@@ -37,6 +37,9 @@ pub(crate) struct PanelMetrics {
 pub(crate) struct Tab {
     pub rows: VirtualRows<TreeSource>,
     pub nav: History,
+    /// 탭 잠금(닫기 제외 · dir2 TAB-MENU) · 고정(📌 핀 그룹 앞 정렬) — 세션 영속.
+    pub locked: bool,
+    pub pinned: bool,
 }
 
 /// 포인터 캡처 대상(눌린 곳이 뗄 때까지 받는다).
@@ -67,6 +70,8 @@ pub(crate) struct Panel {
     /// 탭 우클릭 메뉴 요청(표시는 호스트 · 1회성).
     pending_tab_menu: Option<usize>,
     session_dirty: bool,
+    /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
+    col_changed: bool,
 }
 
 /// 네비 버튼 1개 폭(고정 — 배치가 측정 없이 계산 · dir2 `nav_btn_w`).
@@ -106,6 +111,8 @@ impl Panel {
             tabs: vec![Tab {
                 rows,
                 nav: History::new(path.to_path_buf()),
+                locked: false,
+                pinned: false,
             }],
             active: 0,
             bounds: Rect::default(),
@@ -118,6 +125,7 @@ impl Panel {
             pending_open: None,
             pending_tab_menu: None,
             session_dirty: false,
+            col_changed: false,
         };
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
@@ -170,6 +178,10 @@ impl Panel {
             .unwrap_or(0)
             .min(panel.tabs.len() - 1);
         panel.active = active;
+        for (slot, (orig, _)) in valid.iter().enumerate() {
+            panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
+            panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
+        }
         if !ps.col_widths.is_empty() {
             panel.apply_col_widths(&ps.col_widths, &mut inv);
         }
@@ -365,6 +377,10 @@ impl Panel {
             .map(|t| title_of(t.rows.source().path()))
             .collect();
         self.tabbar.set_tabs(titles, self.active, inv);
+        self.tabbar
+            .set_locked(self.tabs.iter().map(|t| t.locked).collect(), inv);
+        self.tabbar
+            .set_pinned(self.tabs.iter().map(|t| t.pinned).collect(), inv);
         let root = self.root_path();
         self.pathbar.set_path(display_path(&root), inv);
         let at_root = ndir_vfs::is_virtual_root(&root);
@@ -392,6 +408,8 @@ impl Panel {
         self.tabs.push(Tab {
             rows,
             nav: History::new(path),
+            locked: false,
+            pinned: false,
         });
         self.active = self.tabs.len() - 1;
         self.session_dirty = true;
@@ -401,7 +419,7 @@ impl Panel {
 
     /// 탭 닫기(Ctrl+W · ×) — 패널은 항상 ≥1 탭.
     pub(crate) fn close_tab(&mut self, i: usize, inv: &mut Invalidations) {
-        if self.tabs.len() <= 1 || i >= self.tabs.len() {
+        if self.tabs.len() <= 1 || i >= self.tabs.len() || self.tabs[i].locked {
             return;
         }
         self.session_dirty = true;
@@ -456,6 +474,122 @@ impl Panel {
         };
         self.sync_chrome(inv);
         inv.push(self.bounds);
+    }
+
+    // ── 탭 잠금 · 고정 · 복제 · 패널 간 이동(dir2 PANEL-017~022) ──
+
+    /// 탭 잠금 토글(우클릭 메뉴 — 닫기 제외).
+    pub(crate) fn toggle_tab_lock(&mut self, i: usize, inv: &mut Invalidations) {
+        if let Some(t) = self.tabs.get_mut(i) {
+            t.locked = !t.locked;
+            self.session_dirty = true;
+            self.sync_chrome(inv);
+        }
+    }
+
+    pub(crate) fn tab_locked(&self, i: usize) -> bool {
+        self.tabs.get(i).is_some_and(|t| t.locked)
+    }
+
+    /// 탭 고정 토글 — 고정 시 핀 그룹 끝으로, 해제 시 그룹 밖으로 이동(dir2 07-15).
+    pub(crate) fn toggle_tab_pin(&mut self, i: usize, inv: &mut Invalidations) {
+        let Some(t) = self.tabs.get_mut(i) else {
+            return;
+        };
+        t.pinned = !t.pinned;
+        self.session_dirty = true;
+        let target = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(j, t)| *j != i && t.pinned)
+            .count();
+        if target != i {
+            self.move_tab(i, target, inv);
+        }
+        self.sync_chrome(inv);
+    }
+
+    pub(crate) fn tab_pinned(&self, i: usize) -> bool {
+        self.tabs.get(i).is_some_and(|t| t.pinned)
+    }
+
+    /// 탭 복제 — 같은 경로 · 바로 옆에 삽입 후 활성 · 복제본은 잠금·고정 해제.
+    pub(crate) fn duplicate_tab(&mut self, i: usize, inv: &mut Invalidations) {
+        if i >= self.tabs.len() {
+            return;
+        }
+        let path = self.tabs[i].rows.source().path().to_path_buf();
+        let mut rows = VirtualRows::new(
+            TreeSource::open(&path, self.opts),
+            self.m.row_h,
+            self.m.pad_x,
+            self.m.indent_w,
+        );
+        rows.set_columns(self.rows().columns().to_vec(), inv);
+        rows.set_focused(self.focused, inv);
+        rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
+        self.tabs.insert(
+            i + 1,
+            Tab {
+                rows,
+                nav: History::new(path),
+                locked: false,
+                pinned: false,
+            },
+        );
+        self.active = i + 1;
+        self.session_dirty = true;
+        self.set_bounds(self.bounds, inv);
+        self.sync_chrome(inv);
+    }
+
+    /// 패널 간 탭 이동 — 분리(마지막 탭·잠긴 탭 거부).
+    pub(crate) fn detach_tab(&mut self, i: usize, inv: &mut Invalidations) -> Option<Tab> {
+        if self.tabs.len() <= 1 || i >= self.tabs.len() || self.tabs[i].locked {
+            return None;
+        }
+        self.session_dirty = true;
+        let tab = self.tabs.remove(i);
+        if self.active >= self.tabs.len() || self.active > i {
+            self.active = self.active.saturating_sub(1).min(self.tabs.len() - 1);
+        }
+        self.set_bounds(self.bounds, inv);
+        self.sync_chrome(inv);
+        inv.push(self.bounds);
+        Some(tab)
+    }
+
+    /// 패널 간 탭 이동 — 결합: `at`(없음 = 끝)에 삽입·활성. 열 구성은 대상 패널 상속.
+    pub(crate) fn attach_tab(&mut self, mut tab: Tab, at: Option<usize>, inv: &mut Invalidations) {
+        self.session_dirty = true;
+        let at = at.unwrap_or(self.tabs.len()).min(self.tabs.len());
+        tab.rows.set_focused(self.focused, inv);
+        tab.rows.set_columns(self.rows().columns().to_vec(), inv);
+        tab.rows.source_mut().set_opts(self.opts);
+        self.tabs.insert(at, tab);
+        self.active = at;
+        self.set_bounds(self.bounds, inv);
+        self.sync_chrome(inv);
+        inv.push(self.bounds);
+    }
+
+    pub(crate) fn session_locked(&self) -> Vec<bool> {
+        self.tabs.iter().map(|t| t.locked).collect()
+    }
+
+    pub(crate) fn session_pinned(&self) -> Vec<bool> {
+        self.tabs.iter().map(|t| t.pinned).collect()
+    }
+
+    /// 지금 열 폭(표시 순 · 사용자 변경 여부와 무관) — 반대 패널 동기용.
+    pub(crate) fn col_widths_now(&self) -> Vec<i32> {
+        self.rows().columns().iter().map(|c| c.width).collect()
+    }
+
+    /// 사용자가 열 폭을 바꿨는가(1회성 · 호스트가 동기에 쓴다).
+    pub(crate) fn take_col_changed(&mut self) -> bool {
+        std::mem::take(&mut self.col_changed)
     }
 
     // ── 네비게이션(활성 탭 — 탭별 독립) ──────────────
@@ -730,6 +864,7 @@ impl Panel {
         }
         if self.tabs[self.active].rows.take_col_resized() {
             self.user_cols = true;
+            self.col_changed = true;
         }
     }
 }
@@ -903,6 +1038,48 @@ mod tests {
         p.rows_mut().select_program(1, SelectOp::Single, &mut inv);
         p.reopen(&mut inv);
         assert_eq!(p.rows().caret(), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lock_pin_duplicate_detach_attach() {
+        let dir = tree("lockpin");
+        let mut p = Panel::new(&dir, opts(), m(), cols());
+        let mut inv = Invalidations::default();
+        p.set_bounds(Rect::new(0, 0, 400, 400), &mut inv);
+        p.new_tab(&mut inv);
+        p.new_tab(&mut inv); // 3탭 · 활성 2
+        p.toggle_tab_lock(2, &mut inv);
+        assert!(p.tab_locked(2));
+        p.close_tab(2, &mut inv);
+        assert_eq!(p.tab_count(), 3, "잠긴 탭은 안 닫힌다");
+        assert!(
+            p.detach_tab(2, &mut inv).is_none(),
+            "잠긴 탭은 분리도 안 된다"
+        );
+        p.toggle_tab_lock(2, &mut inv);
+        // 고정 = 핀 그룹 앞으로.
+        p.toggle_tab_pin(2, &mut inv);
+        assert!(p.tab_pinned(0) && p.active_index() == 0);
+        p.toggle_tab_pin(0, &mut inv);
+        assert!(!p.tab_pinned(0));
+        // 복제 = 바로 옆 · 활성 · 잠금/고정 해제.
+        p.navigate_to(dir.join("sub"), &mut inv);
+        p.duplicate_tab(0, &mut inv);
+        assert_eq!(p.tab_count(), 4);
+        assert_eq!(p.active_index(), 1);
+        assert!(p.root_path().ends_with("sub") && !p.tab_locked(1));
+        // 분리 → 다른 패널에 부착(열 구성은 대상 상속).
+        let mut q = Panel::new(&dir, opts(), m(), vec![Column::new(0, "Name", 123)]);
+        q.set_bounds(Rect::new(0, 0, 300, 300), &mut inv);
+        let tab = p.detach_tab(1, &mut inv).expect("detach");
+        assert_eq!(p.tab_count(), 3);
+        q.attach_tab(tab, None, &mut inv);
+        assert_eq!(q.tab_count(), 2);
+        assert_eq!(q.active_index(), 1);
+        assert!(q.root_path().ends_with("sub"));
+        assert_eq!(q.rows().columns()[0].width, 123);
+        assert_eq!(q.session_locked(), vec![false, false]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

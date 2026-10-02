@@ -59,5 +59,6 @@ impl App {
             self.panels[1].paint_popups(dc, &th);
         }
         self.menubar.paint(dc, &th);
+        self.tab_menu.paint(dc, &th);
     }
 }

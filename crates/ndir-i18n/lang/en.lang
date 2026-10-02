@@ -665,3 +665,4 @@ keys.col.shortcut = Shortcut
 keys.capturing = Press keys…
 keys.conflict = conflicts with {0}
 status.needsRestart = Takes effect after restart
+tab.moveOther = Move to other panel

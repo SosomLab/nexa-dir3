@@ -267,6 +267,13 @@ impl App {
                 };
                 self.toggle_flag(key);
                 self.sync_menu_checks();
+                // 동기화를 켜는 순간 활성 패널 폭으로 반대 패널 즉시 정렬(dir2 07-18).
+                if id == "view.col_width_sync"
+                    && self.dual
+                    && self.settings.flag("list.col_width_sync")
+                {
+                    self.sync_col_widths_from(a);
+                }
             }
             "view.always_on_top" => {
                 let on = self.toggle_flag("window.always_on_top");

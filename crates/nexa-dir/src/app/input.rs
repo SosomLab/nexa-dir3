@@ -165,6 +165,15 @@ impl App {
     }
 
     fn route_inner(&mut self, ev: InputEvent, inv: &mut Invalidations) {
+        // 열린 탭 메뉴 = 모달(안 = 고르기 · Esc/바깥 클릭 = 닫기 · 바깥 클릭은 아래로 흘린다 — 팝업 UX 규칙).
+        if self.tab_menu.is_open() {
+            let outside = self.tab_menu.is_outside_click(&ev);
+            let _ = self.tab_menu.on_event(&ev);
+            inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+            if !outside {
+                return;
+            }
+        }
         match ev {
             InputEvent::MouseMove { x, y } => {
                 self.cursor = (x, y);
@@ -263,12 +272,19 @@ impl App {
                 self.open_external(&path);
             }
             if let Some(t) = self.panels[i].take_tab_menu() {
-                // 탭 컨텍스트 메뉴(잠금·고정·복제·닫기)는 T-43 잔여 — 지금은 상태줄 안내.
-                let mut inv2 = Invalidations::default();
-                self.statusbar
-                    .set_left(&format!("tab.menu:{t}: {}", tr("cmd.notYet")), &mut inv2);
-                inv.push(self.statusbar.bounds());
+                self.open_tab_menu(i, t);
+                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
+            // 열 폭 동기(`list.col_width_sync` · dir2 07-18): 사용자가 한쪽 열 폭을 바꾸면 반대 패널도.
+            if self.panels[i].take_col_changed()
+                && self.dual
+                && self.settings.flag("list.col_width_sync")
+            {
+                self.sync_col_widths_from(i);
+            }
+        }
+        if let Some(id) = self.tab_menu.take_picked() {
+            self.tab_menu_action(&id);
         }
         if let Some(id) = self.toasts.take_action() {
             self.command(&id);
@@ -284,6 +300,67 @@ impl App {
             tr("cmd.activate"),
             path.display().to_string(),
         );
+        self.redraw();
+    }
+
+    /// 탭 우클릭 메뉴(dir2 TAB-MENU 07-20 순서: 잠금 · 고정 · 복제 · 새 탭 · 닫기 + 패널 간 이동).
+    pub(crate) fn open_tab_menu(&mut self, panel: usize, tab: usize) {
+        let p = &self.panels[panel];
+        let locked = p.tab_locked(tab);
+        let pinned = p.tab_pinned(tab);
+        let count = p.tab_count();
+        let items = vec![
+            CtxItem::item(
+                "tab.lock",
+                tr(if locked { "tab.unlock" } else { "tab.lock" }),
+            ),
+            CtxItem::item("tab.pin", tr(if pinned { "tab.unpin" } else { "tab.pin" })),
+            CtxItem::item("tab.duplicate", tr("tab.duplicate")),
+            CtxItem::item("tab.new", tr("tab.new")),
+            CtxItem::maybe(
+                "tab.move_other",
+                tr("tab.moveOther"),
+                self.dual && count > 1 && !locked,
+            ),
+            CtxItem::maybe("tab.close", tr("tab.close"), !locked && count > 1),
+        ];
+        let host = Rect::new(0, 0, self.viewport.0, self.viewport.1);
+        let text_w = px(220.0, self.scale);
+        self.tab_menu_at = Some((panel, tab));
+        let (x, y) = self.cursor;
+        self.tab_menu.open_at(x, y, items, host, text_w);
+    }
+
+    /// 탭 메뉴 선택 실행.
+    pub(crate) fn tab_menu_action(&mut self, id: &str) {
+        let Some((panel, tab)) = self.tab_menu_at.take() else {
+            return;
+        };
+        let mut inv = Invalidations::default();
+        match id {
+            "tab.lock" => self.panels[panel].toggle_tab_lock(tab, &mut inv),
+            "tab.pin" => self.panels[panel].toggle_tab_pin(tab, &mut inv),
+            "tab.duplicate" => self.panels[panel].duplicate_tab(tab, &mut inv),
+            "tab.new" => self.panels[panel].new_tab(&mut inv),
+            "tab.close" => self.panels[panel].close_tab(tab, &mut inv),
+            "tab.move_other" if self.dual => {
+                if let Some(t) = self.panels[panel].detach_tab(tab, &mut inv) {
+                    let other = 1 - panel;
+                    self.panels[other].attach_tab(t, None, &mut inv);
+                    self.set_active(other);
+                }
+            }
+            _ => {}
+        }
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 열 폭 동기 — `from` 패널의 폭을 반대 패널에.
+    pub(crate) fn sync_col_widths_from(&mut self, from: usize) {
+        let widths = self.panels[from].col_widths_now();
+        let mut inv = Invalidations::default();
+        self.panels[1 - from].apply_col_widths(&widths, &mut inv);
         self.redraw();
     }
 

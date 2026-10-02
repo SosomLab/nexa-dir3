@@ -16,6 +16,10 @@ impl App {
             s.panels[i].active = active;
             s.panels[i].modes = p.session_modes();
             s.panels[i].col_widths = p.col_widths();
+            // 전부 거짓이면 빈 목록(dir2 직렬화는 하나라도 참일 때만 기록 → 파싱 왕복이 같아진다).
+            let any = |v: Vec<bool>| if v.iter().any(|x| *x) { v } else { Vec::new() };
+            s.panels[i].locked = any(p.session_locked());
+            s.panels[i].pinned = any(p.session_pinned());
         }
         s
     }

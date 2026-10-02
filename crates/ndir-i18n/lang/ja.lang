@@ -665,3 +665,4 @@ keys.col.shortcut = ショートカット
 keys.capturing = キーを押してください…
 keys.conflict = {0} と競合
 status.needsRestart = 再起動後に反映されます
+tab.moveOther = もう一方のパネルへ移動

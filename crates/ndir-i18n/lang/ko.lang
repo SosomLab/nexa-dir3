@@ -664,3 +664,4 @@ keys.col.shortcut = 단축키
 keys.capturing = 키를 누르세요…
 keys.conflict = {0}와(과) 충돌
 status.needsRestart = 다시 시작 후 적용됩니다
+tab.moveOther = 다른 패널로 이동

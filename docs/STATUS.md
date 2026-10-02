@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 17차 — M3 T-43 2차: 탭 메뉴 · 패널 간 이동 · 열 폭 동기
+
+- **한 일**: `Tab{locked, pinned}` · 잠금/고정/복제/분리·부착(dir2 PANEL-016~022) · 탭 우클릭 메뉴(nexa-ctl ContextMenu · 잠금·고정·복제·새 탭·다른 패널로·닫기) · 열 폭 동기(`list.col_width_sync`) · 세션 잠금/고정 저장·복원 · i18n +1 · 시험 +2.
+- **지금 상태**: M3 🚧 — T-40·41·43·44·45·46·06 ✅ · 남은 M3 = T-42 런처 바·SVG 아이콘(T-30과 함께) · T-44 잔여(JSON 편집 · 폴더 찾아보기 T-29). **M4 플랫폼 층 착수 가능**(T-50 포트 trait + Fake → 셸/PTY/휴지통/클립보드/드라이브 용량).
+- **걸린 것**: 내 PC 용량 열(PANEL-044) = M4 용량 조회 뒤 ⚠ · 탭 드래그 간 이동은 메뉴로 대체(잔여).
+
+→ [journal/2026-10-03 §19](journal/2026-10-03.md)
+
 ## 10-03 16차 — M3 T-44 설정 창 · 단축키 창
 
 - **한 일**: `prefs_win.rs`(nexa-sql 복사 · 검색/트리/카드/종속 잠금/고급/복사/기하 기억 · 라벨은 i18n 키) · `keys_win.rs`(캡처·충돌) · `app/windows.rs`(열기 펌프 · 사건 분배 · 메인 창 id 가드) · `app/settings.rs` `apply_setting` + **적용 누락 감시 시험**(레지스트리 전 키) · `copybtn.rs` · i18n +19×3 · 시나리오 `prefs-open`. 시험 +5.

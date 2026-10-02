@@ -94,3 +94,7 @@
 | SET-060~097 · PREFS-301~311 | 설정 창(검색 · 트리 · 카드 · 종속 잠금 · 고급 · 복사 · 기하 기억) — nexa-sql 복사 · dir2 사이드바 순 | `nexa-dir/src/prefs_win.rs` · `copybtn.rs` | T2·T4 | `category_search_and_advanced` · `dependent_cards_lock_and_unlock_with_parent` · 시나리오 `prefs-open` | ✅ | T-44 · JSON 편집·폴더 찾아보기·순서 편집(PREFS-312)은 잔여 |
 | CMD-287~329 · SET-130 | 단축키 창(명령 48 · 캡처 · 비우기 · 초기화 · 충돌 배지) | `nexa-dir/src/keys_win.rs` | T2·T4 | `rows_follow_keymap_and_have_no_default_conflicts` · `prefs-open` | ✅ | T-44 |
 | SET-090~097 · PREFS-3xx(적용) | `apply_setting` 한 길 + **적용 누락 감시**(레지스트리 전 키 = 적용 ∨ NEEDS_RESTART) · 보조 창 호스트 배선(SKEL-419) | `app/settings.rs` · `app/windows.rs` | T3 | `every_registry_key_is_applied_or_declared_restart` · `prefs_host_wiring_without_window` | ✅ | T-44 |
+| PANEL-016~022 · 019·020 | 탭 잠금(닫기·분리 거부) · 고정(핀 그룹) · 복제 · 패널 간 분리/부착 · 세션 잠금/고정 | `nexa-dir/src/panel.rs` · `app/sessions.rs` | T2·T3 | `lock_pin_duplicate_detach_attach` · `tab_menu_and_column_sync` | ✅ | T-43 2차 · 드래그로 패널 간 이동은 잔여(메뉴로 가능) |
+| PANEL-021 · TAB-MENU | 탭 우클릭 메뉴(nexa-ctl ContextMenu · 잠금·고정·복제·새 탭·다른 패널로·닫기) | `app/input.rs` `open_tab_menu`/`tab_menu_action` | T3 | `tab_menu_and_column_sync` | ✅ | T-43 2차 |
+| PANEL(colw) · 07-18 | 열 폭 동기(`list.col_width_sync` · 켜는 순간 즉시 정렬 · 사용자 변경 전파) | `app/input.rs` `sync_col_widths_from` · `panel.rs` | T3 | `tab_menu_and_column_sync` | ✅ | T-43 2차 |
+| PANEL-044 | 내 PC 전용 열(이름·종류·전체 크기·여유 공간) | — | — | — | ⚠ | OS별 용량 조회(platform 층 M4) 뒤 |
