@@ -148,6 +148,10 @@ impl App {
             self.redraw();
             return;
         }
+        if let Some(item) = id.strip_prefix("ctx.pick:") {
+            self.ctx_pick(item.trim());
+            return;
+        }
         if let Some(n) = id.strip_prefix("dlg.pick:") {
             let id = n.trim().parse::<i32>().unwrap_or(0);
             self.dlg_pick(id);
@@ -320,6 +324,7 @@ impl App {
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),
+            "ctx" => self.ctx_dump(),
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))

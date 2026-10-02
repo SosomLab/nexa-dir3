@@ -324,6 +324,16 @@ impl App {
             if let Some((row, name)) = self.panels[i].take_rename() {
                 self.apply_rename(i, row, &name);
             }
+            if let Some(on_row) = self.panels[i].take_ctx() {
+                if i != self.active {
+                    self.set_active(i);
+                }
+                if on_row {
+                    self.open_row_menu(i);
+                } else {
+                    self.open_bg_menu(i);
+                }
+            }
             if let Some(t) = self.panels[i].take_tab_menu() {
                 self.open_tab_menu(i, t);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
@@ -346,7 +356,11 @@ impl App {
             }
         }
         if let Some(id) = self.tab_menu.take_picked() {
-            self.tab_menu_action(&id);
+            if self.tab_menu_at.is_some() {
+                self.tab_menu_action(&id);
+            } else {
+                self.ctx_menu_action(&id);
+            }
         }
         if let Some(id) = self.toasts.take_action() {
             self.command(&id);

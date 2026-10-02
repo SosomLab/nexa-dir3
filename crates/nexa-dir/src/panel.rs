@@ -73,6 +73,8 @@ pub(crate) struct Panel {
     pending_tab_menu: Option<usize>,
     /// 인라인 이름 바꾸기 확정(행, 새 이름) — 실행(fs)은 호스트(`App::apply_rename`).
     pending_rename: Option<(usize, String)>,
+    /// 목록 우클릭(행 위 = true · 빈 영역 = false) — 호스트가 컨텍스트 메뉴를 연다.
+    pending_ctx: Option<bool>,
     session_dirty: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
@@ -130,6 +132,7 @@ impl Panel {
             pending_open: None,
             pending_tab_menu: None,
             pending_rename: None,
+            pending_ctx: None,
             session_dirty: false,
             col_changed: false,
         };
@@ -292,6 +295,10 @@ impl Panel {
 
     pub(crate) fn take_rename(&mut self) -> Option<(usize, String)> {
         self.pending_rename.take()
+    }
+
+    pub(crate) fn take_ctx(&mut self) -> Option<bool> {
+        self.pending_ctx.take()
     }
 
     pub(crate) fn take_tab_menu(&mut self) -> Option<usize> {
@@ -882,6 +889,10 @@ impl Panel {
             InputEvent::RightDown { x, y } | InputEvent::MiddleDown { x, y } => {
                 if let Some(part) = self.part_at(Point { x, y }) {
                     self.send(part, ev, inv);
+                    if part == Part::List && matches!(ev, InputEvent::RightDown { .. }) {
+                        // 우클릭 = 행 단독 선택은 그리드가 했다 → 메뉴 종류만 보고(dir2 §2-1/§2-2).
+                        self.pending_ctx = Some(self.rows().row_at(x, y).is_some());
+                    }
                 }
             }
             InputEvent::Wheel { .. } | InputEvent::HWheel { .. } => {

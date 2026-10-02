@@ -1180,3 +1180,49 @@ fn preview_window_and_archive_password_flow() {
     assert!(!app.open_preview);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 행/배경 컨텍스트 메뉴: 행 우클릭 = 행 메뉴(열기·편집·삭제·경로/이름 복사·새로 만들기) · 빈 영역 = 배경 메뉴(붙여넣기·undo·새 폴더·새로 고침) ·
+/// ctx.pick = 항목 실행(새 폴더 생성) · Shift+F10 명령 = 캐럿 행 메뉴 · 덤프 `ctx`.
+#[test]
+fn row_and_background_context_menus() {
+    let (mut app, dir) = fixture("ctx");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let list = app.panels[0].rows().bounds();
+    // 행 1(a.txt) 위 우클릭.
+    let (x, y) = (list.x + 40, list.y + 20 + 10);
+    app.route(InputEvent::MouseMove { x, y });
+    app.route(InputEvent::RightDown { x, y });
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        d.starts_with("row ")
+            && d.contains("edit.copy")
+            && d.contains("ctx.copy_path")
+            && d.contains("file.new_folder"),
+        "{d}"
+    );
+    app.startup_cmd("ctx.pick:ctx.copy_name");
+    assert_eq!(app.dump_of("ctx").unwrap(), "none\n");
+    // 빈 영역 우클릭 = 배경 메뉴 → 새 폴더.
+    let (x, y) = (list.x + 40, list.bottom() - 10);
+    app.route(InputEvent::MouseMove { x, y });
+    app.route(InputEvent::RightDown { x, y });
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        d.starts_with("bg ")
+            && d.contains("edit.paste")
+            && d.contains("edit.undo")
+            && d.contains("view.refresh"),
+        "{d}"
+    );
+    app.startup_cmd("ctx.pick:file.new_folder");
+    assert!(dir.join("New Folder").is_dir());
+    app.startup_cmd("ui.press:escape");
+    // 키보드 메뉴(캐럿 행).
+    app.command("cmd.contextMenu");
+    assert!(app.dump_of("ctx").unwrap().starts_with("row "));
+    app.startup_cmd("ctx.pick:edit.copy");
+    assert!(app.dump_of("ops").unwrap().contains("clip 1 copy"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

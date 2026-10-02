@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **파일 행/배경 컨텍스트 메뉴**: `app/ctxmenu.rs`(dir2 §2-1/§2-2 앱 고유 항목 · 경로/이름 복사 · 폴더에 붙여넣기 · undo/redo 설명) · 우클릭/Shift+F10 · `ctx.pick`/덤프 `ctx` · 시나리오 `ctx-menu` → [journal §32](journal/2026-10-03.md)
 - **T-62 B 독립 미리보기 창**: `preview_win.rs`(스타일드 7종 · 스크롤 · Esc · Ctrl+C) + `app/previewcmd.rs`(F3/↗ · 시임 · 압축 요약 · 암호 마스킹 대화상자 루프) · View 메뉴 등재 · 덤프 `pvwin` · 시나리오 `preview-window` → [journal §31](journal/2026-10-03.md)
 - **T-29 A 대화상자 창**: `dlg_win.rs`(버튼 N · 마스킹 입력 · 모달) + `app/dialogs.rs`(요청 큐 · 결과 분기) — 영구 삭제 확인 · 전송 충돌 4버튼(작업 스레드 채널) · 기동 명령 `dlg.pick/dlg.type` · 시나리오 `delete-confirm` → [journal §30](journal/2026-10-03.md)
 - **M6 B 새 폴더/새 파일 · 인라인 이름 바꾸기**: `create_new`(CreateOp · 생성 즉시 이름 바꾸기) · F2 → nexa-grid rename → `apply_rename`(RenameOp) · 편집 필드 Edit 명령 · 기동 명령 `ui.type`/`ui.press` · 시나리오 `new-rename` → [journal §29](journal/2026-10-03.md)

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 30차 — 파일 행 · 배경 컨텍스트 메뉴(앱 고유 항목) + Shift+F10
+
+- **한 일**: `app/ctxmenu.rs`(행 15항목 · 배경 8항목 · 활성/비활성 규칙 · 고유 항목 실행) · 패널 우클릭 보고 · `cmd.contextMenu` · 기동 명령 `ctx.pick` · 덤프 `ctx` · 시험 +1(117) · 시나리오 15.
+- **지금 상태**: M4 🚧(T-51 B = 셸 메뉴 합류 · OLE DnD · ReadDirectoryChangesW · 휴지통 복원 · T-52/53) · M5 🚧(T-62 C · T-61 B · T-63 B) · M6 🚧(일괄 이름 변경 창 · 진행 창) — 다음 = T-51 B 셸 컨텍스트 메뉴(IContextMenu → `ContextMenuProvider` 포트 · 행 메뉴 상단 합류) 또는 T-61 B.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §32](journal/2026-10-03.md)
+
 ## 10-03 29차 — T-62 B: 독립 미리보기 창(F3 · ↗) · 압축 암호 입력 흐름
 
 - **한 일**: `preview_win.rs`(스타일드 라인 렌더 · 스크롤 · 복사 · 창 없이 덤프) · `app/previewcmd.rs`(F3/↗ → 시임 → 창/안내/압축 요약 · 암호 대화상자 재시도 루프 + 세션 기억) · View 메뉴 `view.preview_window` · 시험 +2(116) · 시나리오 14.

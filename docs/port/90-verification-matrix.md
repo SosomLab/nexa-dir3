@@ -97,6 +97,7 @@
 | PLUG-054 · 057~059 | 인라인 이미지 · 드래그 문자 선택 · 부분 복사 · 우클릭 메뉴 | — | — | — | ☐ | T-62 C(Ctrl+C = 전체 복사만) |
 | PLUG-070 · 078~081 | 암호 입력 창(마스킹 · 재시도 문구 · 취소 = 창 없음) · 세션 기억 · `read_via` 재조회 | `app/previewcmd.rs::ask_archive_password/archive_password_result` · `dlg_win.rs` | T2 | `preview_window_and_archive_password_flow` | ✅ | 암호 표시 체크박스는 생략 |
 | PLUG-071~077 | 압축 그리드 창(컬럼 8 · 정렬 · TSV 복사 · 상태 줄) | — | — | — | ☐ | T-62 C(지금 = 요약 텍스트 창 · nexa-ui DataGrid 필요) |
+| SHELL §2-1 · §2-2 | 파일 행 메뉴(열기 · 편집 · 삭제/완전 삭제/이름 바꾸기 · 경로/이름 복사 · 폴더에 붙여넣기 · 새로 만들기) · 배경 메뉴(붙여넣기 · undo/redo 설명 · 새로 만들기 · 새로 고침) · 우클릭/Shift+F10 · 비활성 패널 활성화 | `app/ctxmenu.rs` · `panel.rs::pending_ctx` | T2·T4 | `row_and_background_context_menus` · `ctx-menu.scn` | ✅ | 셸 항목(IContextMenu) 합류 = T-51 B · `ctx_menu_order` 설정 = T-51 B |
 | PLUG-122 · EXT-417 | 플러그인 빌드 스크립트 3-OS(`plugins.list` 단일 출처 · `--out-dir`/`--skip-dist`) | `scripts/plugin-build.{sh,ps1}` | T4(CI) | CI `plugins` 잡 · 로컬 실기 §26 | ✅ | |
 | PLUG-123 · CI-113 · T-07 | CI wasm32 빌드 → 갓 빌드한 .wasm 로드 검증(`--selfcheck --only plugin`) | `.github/workflows/ci.yml` | T4 | `plugins` 잡 | ✅ | 바이트 동일성은 묻지 않음(툴체인) |
 | PLUG-125 · EXT-414 | 설정 창 플러그인 페이지 — 로드 목록·오류 설명 줄(`plugins.disabled`) | `app/windows.rs::plugin_note` | — | — | ⚠ | 체크박스 묶음 = T-63 B |

@@ -17,3 +17,4 @@ mod windows;
 
 #[cfg(test)]
 mod core_tests;
+pub(crate) mod ctxmenu;

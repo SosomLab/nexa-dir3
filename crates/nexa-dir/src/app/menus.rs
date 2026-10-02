@@ -402,6 +402,7 @@ impl App {
             }
             "help.selfcheck" => self.open_check = true,
             "view.preview_window" => self.open_preview_window(a),
+            "cmd.contextMenu" => self.open_row_menu(a),
             "help.about" => {
                 self.toasts.push(
                     toast::ToastKind::Info,

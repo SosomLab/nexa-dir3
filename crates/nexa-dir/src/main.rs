@@ -172,6 +172,8 @@ struct App {
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
     tab_menu: ContextMenu,
     tab_menu_at: Option<(usize, usize)>,
+    /// 행/배경 컨텍스트 메뉴 주인(탭 메뉴와 같은 `ContextMenu` 공유).
+    ctx_kind: Option<app::ctxmenu::CtxKind>,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -351,6 +353,7 @@ impl App {
             open_keys: false,
             tab_menu: ContextMenu::new(),
             tab_menu_at: None,
+            ctx_kind: None,
             platform,
             watch_next: Instant::now(),
             clip: None,
