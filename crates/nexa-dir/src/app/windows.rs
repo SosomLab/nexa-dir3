@@ -4,6 +4,7 @@
 //! `all_aux_windows` + 틱(`aux_tick`) + 기하 기억(`persist_window_sizes`/`apply_window_sizes`).
 
 use crate::check_win::CheckAction;
+use crate::dlg_win::DlgAction;
 use crate::keys_win::KeysAction;
 use crate::prefs_win::PrefsAction;
 use crate::*;
@@ -46,6 +47,15 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.check_win.open(el, theme, over, owner.as_deref());
+        }
+        if self.window.is_some() && !self.dlg.is_open() {
+            if let Some((spec, reply)) = self.dlg_pending.take() {
+                self.dlg_reply = Some(reply);
+                let over = self.main_rect();
+                let theme = theme::window_theme(self.settings.theme_mode());
+                let owner = self.window.clone();
+                self.dlg.open(el, spec, theme, over, owner.as_deref());
+            }
         }
     }
 
@@ -153,6 +163,24 @@ impl App {
             }
             return true;
         }
+        if self.dlg.is(id) {
+            let ui_px = self.settings.font_px("ui.font_size");
+            match self.dlg.handle(event) {
+                DlgAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.dlg.paint(&font, &self.theme, ui_px);
+                }
+                DlgAction::Done { id, text } => {
+                    self.dlg.close();
+                    self.dlg_done(id, text);
+                    if let Some(w) = &self.window {
+                        w.focus_window();
+                    }
+                }
+                DlgAction::None => {}
+            }
+            return true;
+        }
         if self.check_win.is(id) {
             let ui_px = self.settings.font_px("ui.font_size");
             match self.check_win.handle(event) {
@@ -202,8 +230,14 @@ impl App {
         if self.check_win.tick(now_ms) {
             self.check_win.redraw();
         }
+        if self.dlg.tick(now_ms) {
+            self.dlg.redraw();
+        }
         self.persist_window_sizes();
-        self.prefs_win.animating() || self.keys_win.animating() || self.check_win.animating()
+        self.prefs_win.animating()
+            || self.keys_win.animating()
+            || self.check_win.animating()
+            || self.dlg.animating()
     }
 
     /// 닫힌 보조 창의 마지막 (위치, 크기)를 설정에(`window.prefs_pos`/`_size` · dir2 계승).

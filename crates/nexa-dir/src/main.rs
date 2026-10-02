@@ -16,6 +16,7 @@ mod clipboard;
 mod clipboard_x11;
 mod copybtn;
 mod crash;
+mod dlg_win;
 mod dockinfo;
 mod filelist;
 mod icon;
@@ -44,6 +45,7 @@ mod wingeom;
 mod winhost;
 
 use check_win::CheckWin;
+use dlg_win::DlgWin;
 use filelist::ListOpts;
 use keys_win::KeysWin;
 use ndir_i18n::{tr, trf};
@@ -156,6 +158,10 @@ struct App {
     /// 자가 점검 창(T-54 · Help ▸ 자가 점검).
     check_win: CheckWin,
     open_check: bool,
+    /// 대화상자 창(T-29 A · 모달 · 동시 1건) + 대기 요청 + 결과 수신자.
+    dlg: DlgWin,
+    dlg_pending: Option<(dlg_win::DlgSpec, app::dialogs::DlgReply)>,
+    dlg_reply: Option<app::dialogs::DlgReply>,
     open_prefs: bool,
     open_keys: bool,
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
@@ -331,6 +337,9 @@ impl App {
             keys_win: KeysWin::new(),
             check_win: CheckWin::new(),
             open_check: false,
+            dlg: DlgWin::new(),
+            dlg_pending: None,
+            dlg_reply: None,
             open_prefs: false,
             open_keys: false,
             tab_menu: ContextMenu::new(),

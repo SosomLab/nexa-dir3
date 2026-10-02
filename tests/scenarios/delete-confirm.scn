@@ -1,0 +1,19 @@
+# T4 · T-29 A 대화상자(실제 창): 영구 삭제 확인 창 → dlg.dump(열림) → 취소 = 유지 → 다시 → 확인 = 삭제 → 목록에 없음.
+id: delete-confirm
+title: 영구 삭제 확인 대화상자(취소/확인)
+tree: file a.txt 3
+tree: file b.md 3
+settings: ui.lang=en
+cmd: @ready:list.select:1
+cmd: @ready:edit.delete_permanent
+cmd: @after:300:dlg.dump:<out>/dlg.txt
+cmd: @after:400:dlg.pick:0
+cmd: @after:500:assert.dlg:none
+cmd: @after:600:list.dump:<out>/list1.txt
+cmd: @after:700:edit.delete_permanent
+cmd: @after:1000:dlg.pick:1
+cmd: @after:1200:list.dump:<out>/list2.txt
+cmd: @after:1300:quit
+check: dlg.txt: open Delete | Permanently delete 1
+check: list1.txt: b.md
+check: list2.txt: !b.md

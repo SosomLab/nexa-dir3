@@ -305,6 +305,7 @@ impl App {
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
             "edit.delete" => self.delete_to_trash(),
+            "edit.delete_permanent" => self.delete_permanent_ask(),
             "edit.copy" => self.clip_write(false),
             "edit.cut" => self.clip_write(true),
             "edit.paste" => self.paste(),

@@ -170,6 +170,13 @@ impl App {
     }
 
     fn route_inner(&mut self, ev: InputEvent, inv: &mut Invalidations) {
+        // 대화상자가 열려 있으면 모달(T-29): 메인 창 입력은 무시하고 대화상자로 포커스.
+        if self.dlg.is_open() {
+            if matches!(ev, InputEvent::MouseDown { .. }) {
+                self.dlg.focus();
+            }
+            return;
+        }
         // 열린 탭 메뉴 = 모달(안 = 고르기 · Esc/바깥 클릭 = 닫기 · 바깥 클릭은 아래로 흘린다 — 팝업 UX 규칙).
         if self.tab_menu.is_open() {
             let outside = self.tab_menu.is_outside_click(&ev);

@@ -148,6 +148,15 @@ impl App {
             self.redraw();
             return;
         }
+        if let Some(n) = id.strip_prefix("dlg.pick:") {
+            let id = n.trim().parse::<i32>().unwrap_or(0);
+            self.dlg_pick(id);
+            return;
+        }
+        if let Some(text) = id.strip_prefix("dlg.type:") {
+            self.dlg_type(text);
+            return;
+        }
         if let Some(text) = id.strip_prefix("ui.type:") {
             // 글자 입력(이름 바꾸기·경로 바·타입어헤드) — `\b` = Backspace.
             let text = text.replace("\\b", "\u{8}");
@@ -309,6 +318,7 @@ impl App {
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
             "ops" => self.ops_dump(),
+            "dlg" => self.dlg_dump(),
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))

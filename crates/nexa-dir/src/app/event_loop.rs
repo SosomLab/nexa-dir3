@@ -252,6 +252,10 @@ impl ApplicationHandler<Wake> for App {
                 }
             }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
+                if self.dlg.is_open() {
+                    self.dlg.focus(); // 모달(T-29) — 단축키도 대화상자로
+                    return;
+                }
                 // 단축키 = 키맵 표 조회(dir2 표 + macOS 대응안). 조합키 없는 글자는 타이핑(타입어헤드·경로바)이므로 가로채지 않는다.
                 if let Some(ch) = chord_from_winit(
                     &kev.logical_key,

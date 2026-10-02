@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 28차 — T-29 A: 대화상자 창(영구 삭제 확인 · 전송 충돌 4버튼 · 암호 입력 준비)
+
+- **한 일**: `dlg_win.rs` + `app/dialogs.rs`(모달 보조 창 · 요청 큐 · `DlgReply` 분기 · 창 없이도 결정) · `edit.delete_permanent` 확인 · 충돌 = 작업 스레드 채널 질문 → 4버튼 회신(OPS-004 ⚠ 해소) · 기동 명령 `dlg.*` · 시험 +2(114) · 시나리오 13.
+- **지금 상태**: M6 🚧(남은 것 = 진행 창(선택) · 일괄 이름 변경 창) — 다음 = T-62 B(F3 독립 미리보기 창 · 압축 그리드 창 · 암호 입력 — 대화상자 재사용) 또는 T-61 B 또는 T-51 B(셸 메뉴 · DnD · ReadDirectoryChangesW · 휴지통 복원).
+- **걸린 것**: 진행 창 없음(상태줄 % + 취소는 `ops.cancel` 기동 명령뿐 — 메뉴/단축키 배선은 진행 창과 함께).
+
+→ [journal/2026-10-03 §30](journal/2026-10-03.md)
+
 ## 10-03 27차 — M6 B: 새 폴더/새 파일 · 인라인 이름 바꾸기(F2) · 편집 필드 명령
 
 - **한 일**: `create_new`(unique 이름 · CreateOp · 생성 행 선택 + 즉시 이름 바꾸기) · `begin_rename`/`apply_rename`(nexa-grid 인라인 편집 · RenameOp · 상태줄) · 편집 필드 안 Edit 명령 라우팅 · 기동 명령 `ui.type`/`ui.press` · 시험 +1(112) · 시나리오 12.

@@ -13,7 +13,7 @@ use crate::*;
 use ndir_ops::history::{CopyBatchOp, MoveBatchOp, OpError, OperationHistory};
 use ndir_ops::{Conflict, Event, Op, Outcome};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 /// 전송 중 공유 상태(작업 스레드 ↔ UI 틱).
 pub(crate) struct TransferShared {
@@ -23,9 +23,22 @@ pub(crate) struct TransferShared {
     pub outcome: Mutex<Option<Outcome>>,
 }
 
+/// 충돌 결정(UI → 작업 스레드).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConflictChoice {
+    Overwrite,
+    OverwriteAll,
+    Skip,
+    Cancel,
+}
+
+/// 작업 스레드의 충돌 질문: (대상 경로, 회신 채널).
+pub(crate) type ConflictReq = (PathBuf, mpsc::Sender<ConflictChoice>);
+
 /// 진행 중인 전송 1건.
 pub(crate) struct TransferJob {
     pub shared: Arc<TransferShared>,
+    pub conflict_rx: mpsc::Receiver<ConflictReq>,
     pub op: Op,
     pub cut: bool,
     pub count: usize,
@@ -139,13 +152,36 @@ impl App {
         });
         let sh = Arc::clone(&shared);
         let count = sources.len();
+        let (req_tx, conflict_rx) = mpsc::channel::<ConflictReq>();
         std::thread::spawn(move || {
+            // 충돌 = UI 대화상자 4버튼(dir2 QA 07-14 개정): "모두 덮어쓰기"만 이후 무확인 · 취소 = 전체 중단 + 그 항목 건너뜀.
+            let mut decided: Option<Conflict> = None;
+            let sh2 = Arc::clone(&sh);
             let out = ndir_ops::transfer(
                 &sources,
                 &dest,
                 op,
-                // 충돌 확인 창(T-29) 전까지 = 건너뜀(조용한 덮어쓰기 금지).
-                &mut |_| Conflict::Skip,
+                &mut |p: &std::path::Path| {
+                    if let Some(c) = decided {
+                        return c;
+                    }
+                    let (tx, rx) = mpsc::channel();
+                    if req_tx.send((p.to_path_buf(), tx)).is_err() {
+                        return Conflict::Skip;
+                    }
+                    match rx.recv() {
+                        Ok(ConflictChoice::Overwrite) => Conflict::Overwrite,
+                        Ok(ConflictChoice::OverwriteAll) => {
+                            decided = Some(Conflict::Overwrite);
+                            Conflict::Overwrite
+                        }
+                        Ok(ConflictChoice::Skip) => Conflict::Skip,
+                        Ok(ConflictChoice::Cancel) | Err(_) => {
+                            sh2.cancel.store(true, Ordering::Relaxed);
+                            Conflict::Skip
+                        }
+                    }
+                },
                 &mut |ev| match ev {
                     Event::Plan { total_bytes, .. } => {
                         sh.total.store(total_bytes, Ordering::Relaxed)
@@ -161,6 +197,7 @@ impl App {
         });
         self.transfer = Some(TransferJob {
             shared,
+            conflict_rx,
             op,
             cut,
             count,
@@ -180,6 +217,11 @@ impl App {
         let Some(job) = &self.transfer else {
             return false;
         };
+        // 충돌 질문 수거 → 대화상자(동시 1건 · 작업 스레드는 회신까지 대기).
+        if let Ok((path, tx)) = job.conflict_rx.try_recv() {
+            self.conflict_ask(&path, tx);
+            return true;
+        }
         let outcome = job.shared.outcome.lock().ok().and_then(|mut s| s.take());
         match outcome {
             Some(out) => {

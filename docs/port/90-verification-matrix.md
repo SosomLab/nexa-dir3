@@ -99,7 +99,9 @@
 | PLUG-125 · EXT-414 | 설정 창 플러그인 페이지 — 로드 목록·오류 설명 줄(`plugins.disabled`) | `app/windows.rs::plugin_note` | — | — | ⚠ | 체크박스 묶음 = T-63 B |
 | CI-110 · CI-111 · T-54 | Help ▸ 자가 점검 창(백그라운드 `selfcheck::run` · 판정 색 표 · 요약 · 다시 점검 · 복사 · Esc) · 덤프 `check` | `check_win.rs` · `app/windows.rs` · `app/menus.rs`(help.selfcheck) | T2·T4 | `report_rows_counts_summary_and_table` · `start_runs_in_background_and_reports` · `help_selfcheck_requests_check_window` · `selfcheck-win.scn` | ✅ | 그룹 SKIP 항목은 해당 슬라이스가 채움 |
 | OPS-001~003 · 006~008 | 붙여넣기 = `transfer` 단일 경로(작업 스레드 · 진행 이벤트 · 결과 집계 · 같은 폴더 규칙) | `app/ops.rs::start_transfer/ops_tick/finish_transfer` | T2·T4 | `copy_cut_paste_undo_through_ops` · `copy-paste.scn` | ✅ | 엔진 시험은 ndir-ops 자체 |
-| OPS-004 | 충돌 4버튼 확인 창(덮어쓰기/모두/건너뛰기/취소) | — | — | — | ⚠ | 지금 = `Conflict::Skip` 고정(조용한 덮어쓰기 금지) · T-29 nexa-dlg 뒤 |
+| OPS-004 | 충돌 4버튼 확인 창(덮어쓰기/모두 덮어쓰기/건너뛰기/취소 · 작업 스레드 채널 질문 · "모두"만 이후 무확인 · 취소 = 중단) | `app/ops.rs`(closure + `conflict_rx`) · `app/dialogs.rs::conflict_ask` | T2 | `dialogs_delete_permanent_and_paste_conflict` | ✅ | |
+| DLG-001 · T-29 | 대화상자 창(제목 · 줄 바꿈 본문 · 버튼 N · 기본/취소 · 마스킹 입력란 · 모달 · 창 없이 결정) · 기동 명령 `dlg.pick/dlg.type` · 덤프 `dlg` | `dlg_win.rs` · `app/dialogs.rs` | T2·T4 | `spec_dump_and_headless_pick` · `delete-confirm.scn` | ✅ | 폴더 찾아보기(T-29 B) |
+| OPS-016 · 영구 삭제 | `edit.delete_permanent` = 확인 창 → `delete_permanent` → 토스트 `del.done/partialFail` | `app/dialogs.rs::delete_permanent_ask` | T2·T4 | 위 | ✅ | undo 없음(dir2 동일) |
 | OPS-030~035 · 039 | undo/redo(이동 되돌림 · 복사 = 휴지통 포트 삭제 주입 · 완료 시 기록 규칙 · 문구 변환) | `app/ops.rs::history_step` · `Platform.trash: Rc` | T2 | `copy_cut_paste_undo_through_ops` | ✅ | 휴지통 복원 undo(OPS-036) T-51 B |
 | M3-5 · 파일 클립보드 | `edit.copy/cut` = OS 파일 클립보드 + 앱 내 사본 · `edit.paste` 2단 · 대상 규칙(`paste_dest`) | `app/ops.rs::clip_write/clip_sources/paste_dest` | T2 | 위 | ✅ | mac/Linux OS 클립보드 = T-52/53 |
 | OPS-017 · 034 | 인라인 이름 바꾸기(F2 · 이름부 선택 · Enter 확정 · Esc 취소 · 편집 키 · RenameOp · 같은 이름 무동작) | `app/ops.rs::begin_rename/apply_rename/rename_edit` · `panel.rs::key_event` | T2·T4 | `new_folder_rename_and_undo` · `new-rename.scn` | ✅ | `.lnk` 확장자 숨김 T-51 B |

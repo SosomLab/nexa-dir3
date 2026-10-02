@@ -1009,3 +1009,92 @@ fn new_folder_rename_and_undo() {
     assert!(app.dump_of("ops").unwrap().contains("undo true"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-29 A 대화상자(창 없이 = 대기 사양 + dlg.pick): 영구 삭제 확인(취소 = 유지 · 확인 = 삭제) · 붙여넣기 충돌 4버튼
+/// (작업 스레드가 채널로 묻고 UI가 답한다 — 건너뛰기 = 원본 유지 · 덮어쓰기 = 교체 · 모두 덮어쓰기 = 이후 무확인 · 취소 = 중단).
+#[test]
+fn dialogs_delete_permanent_and_paste_conflict() {
+    let (mut app, dir) = fixture("dlg");
+    app.layout_for(1200, 800, 1.0);
+    let wait = |app: &mut App, pick: Option<i32>| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let live = app.ops_tick();
+            if app.dlg_pending.is_some() {
+                if let Some(id) = pick {
+                    app.startup_cmd(&format!("dlg.pick:{id}"));
+                } else {
+                    return true;
+                }
+            }
+            if !live && app.transfer.is_none() {
+                return false;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "transfer did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let row_of = |app: &App, name: &str| {
+        (0..64)
+            .find(|&r| {
+                app.panels[0]
+                    .rows()
+                    .source()
+                    .row_path(r)
+                    .is_some_and(|p| p.ends_with(name))
+            })
+            .expect("row")
+    };
+    // 영구 삭제: 취소 → 유지 · 확인 → 삭제(휴지통 포트 호출 없음).
+    let r = row_of(&app, "b.md");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("edit.delete_permanent");
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.starts_with("pending Delete | Permanently delete 1"),
+        "{d}"
+    );
+    app.startup_cmd("dlg.pick:0");
+    assert!(dir.join("b.md").is_file() && app.dump_of("dlg").unwrap() == "none\n");
+    app.command("edit.delete_permanent");
+    app.startup_cmd("dlg.pick:1");
+    assert!(!dir.join("b.md").exists(), "확인 = 영구 삭제");
+    // 충돌: sub/a.txt(old)가 있을 때 a.txt 복사 → 질문 → 건너뛰기.
+    std::fs::write(dir.join("sub/a.txt"), b"old").unwrap();
+    let r = row_of(&app, "a.txt");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("edit.copy");
+    app.startup_cmd(&format!("nav:{}", dir.join("sub").display()));
+    app.command("edit.paste");
+    assert!(wait(&mut app, None), "충돌 질문이 온다");
+    assert!(
+        app.dump_of("dlg").unwrap().contains("Confirm Overwrite"),
+        "{}",
+        app.dump_of("dlg").unwrap()
+    );
+    app.startup_cmd("dlg.pick:3");
+    wait(&mut app, Some(3));
+    assert_eq!(
+        std::fs::read(dir.join("sub/a.txt")).unwrap(),
+        b"old",
+        "건너뛰기 = 원본 유지"
+    );
+    // 덮어쓰기.
+    app.command("edit.paste");
+    wait(&mut app, Some(1));
+    assert_eq!(
+        std::fs::read(dir.join("sub/a.txt")).unwrap(),
+        b"hello",
+        "덮어쓰기 = 교체"
+    );
+    // 취소 = 중단(아무것도 안 바뀜) · 덤프 idle.
+    std::fs::write(dir.join("sub/a.txt"), b"old2").unwrap();
+    app.command("edit.paste");
+    wait(&mut app, Some(4));
+    assert_eq!(std::fs::read(dir.join("sub/a.txt")).unwrap(), b"old2");
+    assert!(app.dump_of("ops").unwrap().starts_with("transfer idle"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
