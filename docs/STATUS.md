@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 8차 — M2 T-25 `nexa-grid`(nexa-ui 105차)
+
+- **한 일**: dir2 가상 행 그리드 엔진 전체를 nexa-ui `nexa-grid` 크레이트로 이식(dir2 테스트 52 green) + `draw::Adapt` + nexa-ctl `Invalidations` 틱 요청. push 완료.
+- **지금 상태**: M2 🚧 — 남은 것 = T-26 PathBar → T-27 InfoDock → T-28 Tooltip/Overlay → T-29 nexa-dlg 대화상자 → T-30~32. 그 뒤 M3 앱 골격.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §10](journal/2026-10-03.md)
+
 ## 10-03 7차 — M2 착수: nexa-ui 103·104차(T-20~T-24)
 
 - **한 일**(형제 저장소 nexa-ui · push 완료): `InputEvent` 3변형 + 휠 줄 수 · `RecordCtx` · MenuBar 체크/라디오/단축키 열/활성/프로그램 열기 · Toolbar 토글 · TabBar 아이콘/툴팁/가운데 클릭 · **StatusBar 신규**. nexa-ctl 시험 391 · nexa-sql 빌드 유지.
