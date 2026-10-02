@@ -641,3 +641,7 @@ cmd.panelSwitch = Switch Panel
 cmd.tabNext = Next Tab
 cmd.tabPrev = Previous Tab
 cmd.contextMenu = Context Menu
+
+# ── M3 app shell (10-03) ──
+menu.go = Go
+cmd.notYet = not available yet (planned)

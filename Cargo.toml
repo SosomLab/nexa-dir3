@@ -53,6 +53,9 @@ nexa-conf = { path = "../nexa-ui/crates/nexa-conf" }
 nexa-font = { path = "../nexa-ui/crates/nexa-font" }
 nexa-fs = { path = "../nexa-ui/crates/nexa-fs" }
 nexa-dlg = { path = "../nexa-ui/crates/nexa-dlg" }
+# dir2 위젯 이식분(M2 · nexa-ui 105·106차): 가상 행 그리드 · 경로바/정보 도크/오버레이 막대.
+nexa-grid = { path = "../nexa-ui/crates/nexa-grid" }
+nexa-explorer = { path = "../nexa-ui/crates/nexa-explorer" }
 # 기본 = 신호만(GUI 프레임워크 링크 없음) · GUI 크레이트가 features = ["gui"]를 켠다.
 nexa-sys = { path = "../nexa-ui/crates/nexa-sys", default-features = false }
 # nexa-license(공용 라이선스 라이브러리 · 형제 저장소 · 검증 전용 — DR-4).

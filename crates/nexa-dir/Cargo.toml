@@ -7,12 +7,46 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Nexa Dir — 크로스플랫폼 파일 탐색기(앱 bin). M0 = 인자 · --smoke · --selfcheck 뼈대"
+description = "Nexa Dir — 크로스플랫폼 파일 탐색기(앱 bin). winit 호스트 + nexa-ui 위에 그린다 · --smoke · --selfcheck"
+# Windows 실행 파일 아이콘·버전 리소스 — rc.exe/windres가 있을 때만 · 외부 crate 0 · 다른 OS 불변(nexa-sql T-62 복사).
+build = "build.rs"
 
 [lints]
 workspace = true
 
 [dependencies]
+ndir-core = { workspace = true }
+ndir-vfs = { workspace = true }
+ndir-tree = { workspace = true }
 ndir-i18n = { workspace = true }
 ndir-settings = { workspace = true }
 ndir-license = { workspace = true }
+nexa-gfx = { workspace = true }
+nexa-ctl = { workspace = true }
+nexa-font = { workspace = true }
+nexa-grid = { workspace = true }
+nexa-explorer = { workspace = true }
+# OS 신호 — 입력 소스(한글 조합 방식) · macOS IOSurface present(`nexa_sys::layer_present`).
+nexa-sys = { workspace = true, features = ["gui"] }
+# 창·입력(winit) + CPU 픽셀 제출(softbuffer) — nexa-sql과 같은 판(실증 조합 · DR-1). Linux는 Wayland/X11 런타임 dlopen.
+winit = { version = "0.30", features = ["wayland-dlopen"] }
+softbuffer = { version = "0.4", features = ["wayland-dlopen"] }
+
+# ── Linux: 모달 창을 메인의 transient(WM_TRANSIENT_FOR + _NET_WM_STATE_MODAL)로 · X11 클립보드 직접(nexa-sql docs/61 §3 · DR-3 예외).
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+x11rb = { version = "0.13", default-features = false }
+
+# ── macOS: Dock 아이콘(`icon::set_dock_icon`) — winit과 같은 판(objc2 0.5 · app-kit/foundation 0.2 · 의존 트리 중복 0).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
+objc2-app-kit = { version = "0.2", features = [
+    "NSApplication",
+    "NSResponder",
+    "NSImage",
+    "NSImageRep",
+    "NSBitmapImageRep",
+    "NSWindow",
+    "NSView",
+    "NSGraphics",
+] }
+objc2-foundation = { version = "0.2", features = ["NSString", "NSGeometry", "NSThread"] }

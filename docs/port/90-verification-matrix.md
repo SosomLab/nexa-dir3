@@ -71,3 +71,10 @@
 | UIK-202 · GUI-090~101 | PathBar(브레드크럼·편집·자동완성 팝업) | nexa-ui `nexa-explorer/src/pathbar.rs` | T2 | dir2 시험 7 | ✅ | 106차 · 경로 문법·제안은 호스트 |
 | UIK-204 · GUI-110~ | InfoDock(스트립·텍스트/이미지·선택·팝아웃·오버레이 바) | nexa-ui `nexa-explorer/src/dock.rs` | T2 | dir2 시험 13 | ✅ | 106차 · 이미지 그리기는 호스트 `IconImage`(G-2) |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
+| SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
+| SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |
+| SKEL-401·402·406~412 | `App` 골격(창·표면·자원·입력 상태·시간·깃발·진단) + `app/*.rs` 조각 + 재그리기 3원칙 | `nexa-dir/src/main.rs` · `app/{event_loop,input,paint}.rs` | T4 | `NDIR_STARTUP_CMD=layout.dump` 실증(10-03 Windows) | ✅ | T-40 · 깨움 표(워커)는 M4 |
+| SKEL-421 · CMD-120~167 | 명령 한 길 `App::command` — 메뉴 5 · 툴바 13 · 단축키 · 기동 명령 | `nexa-dir/src/app/menus.rs` | T2·T4 | `menu_ids_are_commands` · `menus_build_with_labels` · 실증(메뉴 클릭·F6·`view.hidden`) | 🚧 | T-42 · 미구현 id = 상태줄 `cmd.notYet` |
+| CMD-287~329 · 480~497 | winit 키 → `Chord`(IME 모드 물리 키 · 숫자 물리 키) · 2단 · 자동 반복 가드 | `nexa-dir/src/app/keywinit.rs` · `event_loop.rs` | T2 | `ascii_letters_and_named_keys` · `ime_and_digit_use_physical_key` | ✅ | T-40 |
+| PANEL-1A~1F(목록) | 파일 목록 = `ndir-tree` → nexa-grid `RowSource`(컬럼 4 · 펼침 · 선택 · 정렬 · 타입어헤드 · 크기/시각 서식) | `nexa-dir/src/filelist.rs` | T2 | `opens_folder_dirs_first_and_toggles` · `size_and_time_format` · `missing_folder_is_empty_with_error` | ✅ | T-40 · 아이콘(G-2)·시간대(T-72)는 뒤 |
+| CI-106·107 | 기동 명령(`NDIR_STARTUP_CMD`) · `layout.dump` · `@after` · `ui.*` 포인터 합성 · `key:` · `app.exit` | `nexa-dir/src/app/startup_cmd.rs` | T4 | 실증(덤프 2장 · 종료 1.5 s) | 🚧 | T-46(`assert`·패닉 훅·골든 비교 러너 T-06) |

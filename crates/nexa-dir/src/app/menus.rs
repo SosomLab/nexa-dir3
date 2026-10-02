@@ -1,0 +1,413 @@
+//! App — 메뉴바·툴바 구성(dir2 `win.rs` `build_menus`/`build_toolbar` 대응 · docs/port/30 CMD-120~167) + **명령 한 길**(`command`).
+//!
+//! 메뉴·툴바·단축키·기동 명령이 같은 문자열 id(`ndir_settings::commands::COMMANDS`)를 쓴다(SKEL-421). 라벨은 i18n 키(DR-14).
+//! 체크/라디오 상태는 설정에서 매번 계산(`sync_menu_checks`) — 설정이 단일 원천.
+
+use crate::*;
+use ndir_settings::commands::COMMANDS;
+
+/// 명령 id → 라벨 i18n 키(표에 없는 id = id 그대로).
+fn label_key(id: &str) -> &str {
+    COMMANDS.iter().find(|c| c.id == id).map_or(id, |c| c.label)
+}
+
+fn item(id: &str) -> MenuEntry {
+    MenuEntry::Item(ComboItem::new(id, tr(label_key(id))))
+}
+
+fn items(ids: &[&str]) -> Vec<MenuEntry> {
+    let mut out = Vec::new();
+    for id in ids {
+        if *id == "-" {
+            out.push(MenuEntry::Separator);
+        } else {
+            out.push(item(id));
+        }
+    }
+    out
+}
+
+/// 메뉴 항목 전체(단축키·체크 동기화 대상).
+const MENU_IDS: &[&str] = &[
+    "file.new_tab",
+    "file.close_tab",
+    "-",
+    "file.new_folder",
+    "file.new_file",
+    "-",
+    "file.prefs",
+    "-",
+    "file.exit",
+    "edit.undo",
+    "edit.redo",
+    "-",
+    "edit.cut",
+    "edit.copy",
+    "edit.paste",
+    "-",
+    "edit.select_all",
+    "-",
+    "edit.bulk_rename",
+    "view.mode_tree",
+    "view.mode_flat",
+    "view.mode_tiles",
+    "-",
+    "view.panel_dual",
+    "view.panel_single",
+    "view.info_dual",
+    "view.info_single",
+    "view.col_width_sync",
+    "-",
+    "view.hidden",
+    "view.dot",
+    "view.dock",
+    "view.launcher",
+    "view.always_on_top",
+    "-",
+    "view.refresh",
+    "-",
+    "view.theme_system",
+    "view.theme_light",
+    "view.theme_dark",
+    "-",
+    "view.lang_system",
+    "nav.back",
+    "nav.forward",
+    "nav.up",
+    "-",
+    "tab.next",
+    "tab.prev",
+    "-",
+    "panel.switch",
+    "help.about",
+];
+
+impl App {
+    /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
+    pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
+        let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
+        let mut view = items(&MENU_IDS[19..42]);
+        // 언어 목록(동적 명령 `lang:<code>` — 단축키 재정의 대상 아님).
+        for (code, name) in ndir_i18n::discover(&home) {
+            view.push(MenuEntry::Item(ComboItem::new(
+                format!("lang:{code}"),
+                name,
+            )));
+        }
+        let _ = settings;
+        vec![
+            MenuDef::new(tr("menu.file"), items(&MENU_IDS[..9])),
+            MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..19])),
+            MenuDef::new(tr("menu.view"), view),
+            MenuDef::new(tr("menu.go"), items(&MENU_IDS[42..50])),
+            MenuDef::new(tr("menu.help"), items(&MENU_IDS[50..])),
+        ]
+    }
+
+    /// 메뉴 단축키 열 = 키맵 표시(설정 재정의 반영).
+    pub(crate) fn sync_menu_shortcuts(&mut self) {
+        for id in MENU_IDS.iter().filter(|id| **id != "-") {
+            let text = self.keymap.menu_display_of(id);
+            self.menubar.set_shortcut(id, &text);
+        }
+    }
+
+    /// 체크·라디오 = 설정값(dir2 `build_menus` 인자 14개와 같은 출처).
+    pub(crate) fn sync_menu_checks(&mut self) {
+        let s = &self.settings;
+        let checks = [
+            ("view.hidden", s.flag("list.show_hidden")),
+            ("view.dot", s.flag("list.show_dotfiles")),
+            ("view.dock", s.flag("dock.visible")),
+            ("view.launcher", s.flag("launcher.visible")),
+            ("view.always_on_top", s.flag("window.always_on_top")),
+            ("view.col_width_sync", s.flag("list.col_width_sync")),
+        ];
+        let mode = s.get("list.view_mode").unwrap_or("tree").to_string();
+        let panel = s.get("layout.panel_mode").unwrap_or("dual").to_string();
+        let info = s.get("layout.info_mode").unwrap_or("dual").to_string();
+        let theme = s.theme_mode();
+        let lang = s.lang_setting().to_string();
+        let mut inv = Invalidations::default();
+        for (id, on) in checks {
+            self.menubar.set_checked(id, on, &mut inv);
+        }
+        self.menubar.set_radio(&format!("view.mode_{mode}"));
+        self.menubar.set_radio(&format!("view.panel_{panel}"));
+        self.menubar.set_radio(&format!("view.info_{info}"));
+        self.menubar
+            .set_radio(&format!("view.theme_{}", theme.as_str()));
+        self.menubar.set_radio(&if lang == "system" {
+            "view.lang_system".to_string()
+        } else {
+            format!("lang:{lang}")
+        });
+        // 툴바 토글도 같은 출처.
+        let tool = [
+            ("view.panel_toggle", panel == "dual"),
+            ("view.dock", s.flag("dock.visible")),
+            ("view.always_on_top", s.flag("window.always_on_top")),
+            ("view.info_toggle", info == "dual"),
+            ("view.col_width_sync", s.flag("list.col_width_sync")),
+            ("view.mode_tree", mode == "tree"),
+            ("view.mode_flat", mode == "flat"),
+            ("view.mode_tiles", mode == "tiles"),
+            ("view.hidden", s.flag("list.show_hidden")),
+            ("view.dot", s.flag("list.show_dotfiles")),
+            ("view.folders_first", s.flag("list.folders_first")),
+        ];
+        for (id, on) in tool {
+            self.toolbar.set_item_checked(id, on, &mut inv);
+        }
+    }
+
+    /// 툴바(dir2 `build_toolbar` 블록 순서 panel · view · refresh · settings · show — 글리프 폴백 · SVG 아이콘은 T-30/T-43).
+    pub(crate) fn build_toolbar(settings: &Settings) -> Vec<ToolItem> {
+        let g = |id: &str, glyph: &str, tip_key: &str| {
+            ToolItem::new(id, ToolIcon::Glyph(glyph.to_string())).tip(tr(tip_key))
+        };
+        let _ = settings;
+        vec![
+            g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
+            g("view.dock", "▂", "menu.view.dock"),
+            g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
+            g("view.info_toggle", "ⓘ", "cmd.infoToggle"),
+            g("view.col_width_sync", "⇔", "menu.view.colWidthSync"),
+            ToolItem::separator(),
+            g("view.mode_tree", "├─", "menu.view.modeTree"),
+            g("view.mode_flat", "☰", "menu.view.modeFlat"),
+            g("view.mode_tiles", "▦", "menu.view.modeTiles"),
+            ToolItem::separator(),
+            g("view.refresh", "⟳", "menu.view.refresh"),
+            ToolItem::separator(),
+            g("file.prefs", "⚙", "menu.file.prefs"),
+            ToolItem::separator(),
+            g("view.hidden", "👁", "menu.view.hidden"),
+            g("view.dot", "…", "menu.view.dot"),
+            g("view.folders_first", "▲", "pref.sortFoldersFirst"),
+        ]
+    }
+
+    /// 설정 토글(on/off) + 저장. 저장 실패는 조용히(다음 종료 때 다시).
+    fn toggle_flag(&mut self, key: &str) -> bool {
+        let on = !self.settings.flag(key);
+        let _ = self.settings.set(key, if on { "on" } else { "off" });
+        let _ = self.settings.save();
+        on
+    }
+
+    fn set_setting(&mut self, key: &str, raw: &str) {
+        let _ = self.settings.set(key, raw);
+        let _ = self.settings.save();
+    }
+
+    /// 두 패널 다시 읽기(옵션 반영).
+    fn reload_panels(&mut self) {
+        let opts = list_opts(&self.settings);
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.source_mut().set_opts(opts);
+            p.source_mut().reload();
+            // 목록 구조가 바뀌었다 — 뷰(스크롤·캐럿)는 유지하되 전체 무효화.
+            inv.push(p.bounds());
+        }
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 패널을 다른 폴더로(경로바 · Enter · 더블클릭 · `nav:` 기동 명령).
+    pub(crate) fn navigate(&mut self, panel: usize, path: &std::path::Path) {
+        let opts = list_opts(&self.settings);
+        let mut inv = Invalidations::default();
+        self.panels[panel].replace_source(TreeSource::open(path, opts), &mut inv);
+        if panel == self.active {
+            self.pathbar
+                .set_path(path.to_string_lossy().into_owned(), &mut inv);
+            self.tabs
+                .set_tabs(vec![tab_title(path)], self.tabs.active(), &mut inv);
+        }
+        if let Some(e) = self.panels[panel].source().error() {
+            self.toasts
+                .push(toast::ToastKind::Error, tr("menu.view.refresh"), e);
+        }
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 테마 모드 적용(설정 저장 포함 · 창 장식도 따라간다).
+    fn apply_theme_mode(&mut self, mode: ThemeMode) {
+        self.set_setting("ui.theme", mode.as_str());
+        let wt = self.window.as_ref().and_then(|w| w.theme());
+        self.theme = theme::resolve(mode, wt);
+        if let Some(w) = &self.window {
+            w.set_theme(theme::window_theme(mode));
+        }
+        self.sync_menu_checks();
+        self.redraw();
+    }
+
+    /// 명령 한 길 — 메뉴 · 툴바 · 단축키 · 기동 명령이 전부 여기로(SKEL-421). 모르는 id = 상태줄 안내(구현 단계 표시).
+    pub(crate) fn command(&mut self, id: &str) {
+        match id {
+            "file.exit" => self.exit_requested = true,
+            "view.refresh" => self.reload_panels(),
+            "view.hidden" => {
+                self.toggle_flag("list.show_hidden");
+                self.sync_menu_checks();
+                self.reload_panels();
+            }
+            "view.dot" => {
+                self.toggle_flag("list.show_dotfiles");
+                self.sync_menu_checks();
+                self.reload_panels();
+            }
+            "view.folders_first" => {
+                self.toggle_flag("list.folders_first");
+                self.sync_menu_checks();
+                self.reload_panels();
+            }
+            "view.dock" | "view.launcher" | "view.col_width_sync" => {
+                let key = match id {
+                    "view.dock" => "dock.visible",
+                    "view.launcher" => "launcher.visible",
+                    _ => "list.col_width_sync",
+                };
+                self.toggle_flag(key);
+                self.sync_menu_checks();
+                self.redraw();
+            }
+            "view.always_on_top" => {
+                let on = self.toggle_flag("window.always_on_top");
+                if let Some(w) = &self.window {
+                    w.set_window_level(if on {
+                        winit::window::WindowLevel::AlwaysOnTop
+                    } else {
+                        winit::window::WindowLevel::Normal
+                    });
+                }
+                self.sync_menu_checks();
+                self.redraw();
+            }
+            "view.theme_system" => self.apply_theme_mode(ThemeMode::System),
+            "view.theme_light" => self.apply_theme_mode(ThemeMode::Light),
+            "view.theme_dark" => self.apply_theme_mode(ThemeMode::Dark),
+            "view.theme_cycle" => {
+                let cur = self.settings.theme_mode();
+                let i = ThemeMode::ALL.iter().position(|m| *m == cur).unwrap_or(0);
+                self.apply_theme_mode(ThemeMode::ALL[(i + 1) % ThemeMode::ALL.len()]);
+            }
+            "view.panel_dual" | "view.panel_single" | "view.panel_toggle" => {
+                let dual = match id {
+                    "view.panel_dual" => true,
+                    "view.panel_single" => false,
+                    _ => !self.dual,
+                };
+                self.set_setting("layout.panel_mode", if dual { "dual" } else { "single" });
+                self.dual = dual;
+                if !dual {
+                    self.set_focus(Focus::Panel(0));
+                }
+                self.sync_menu_checks();
+                self.layout();
+                self.update_status();
+                self.redraw();
+            }
+            "view.info_dual" | "view.info_single" | "view.info_toggle" => {
+                let cur = self.settings.get("layout.info_mode").unwrap_or("dual") == "dual";
+                let dual = match id {
+                    "view.info_dual" => true,
+                    "view.info_single" => false,
+                    _ => !cur,
+                };
+                self.set_setting("layout.info_mode", if dual { "dual" } else { "single" });
+                self.sync_menu_checks();
+                self.redraw();
+            }
+            "view.mode_tree" | "view.mode_flat" | "view.mode_tiles" => {
+                self.set_setting("list.view_mode", &id["view.mode_".len()..]);
+                self.sync_menu_checks();
+                self.redraw();
+            }
+            "view.lang_system" => self.switch_lang("system"),
+            "nav.up" => {
+                let cur = self.panels[self.active].source().path().to_path_buf();
+                if let Some(parent) = cur.parent().map(std::path::Path::to_path_buf) {
+                    self.navigate(self.active, &parent);
+                }
+            }
+            "panel.switch" => {
+                if self.dual {
+                    let next = 1 - self.active;
+                    self.set_focus(Focus::Panel(next));
+                    let p = self.panels[next]
+                        .source()
+                        .path()
+                        .to_string_lossy()
+                        .into_owned();
+                    let mut inv = Invalidations::default();
+                    self.pathbar.set_path(p, &mut inv);
+                    self.update_status();
+                    self.redraw();
+                }
+            }
+            "help.about" => {
+                self.toasts.push(
+                    toast::ToastKind::Info,
+                    tr("menu.help.about"),
+                    format!("nexa-dir {}", env!("CARGO_PKG_VERSION")),
+                );
+                self.redraw();
+            }
+            _ if id.starts_with("lang:") => self.switch_lang(&id["lang:".len()..]),
+            _ => {
+                // 아직 없는 명령 — 상태줄에 id(검증 매트릭스 ⚠ · 구현 단계가 오면 위 가지로).
+                let mut inv = Invalidations::default();
+                self.statusbar
+                    .set_left(&format!("{id}: {}", tr("cmd.notYet")), &mut inv);
+                self.redraw();
+            }
+        }
+    }
+
+    /// 언어 전환 — 설정 + i18n 재활성 + 메뉴·툴바·컬럼 라벨 재구성.
+    fn switch_lang(&mut self, code: &str) {
+        self.set_setting("ui.lang", code);
+        init_i18n(&self.settings);
+        self.menubar.set_menus(App::build_menus(&self.settings));
+        self.toolbar = Toolbar::new(App::build_toolbar(&self.settings));
+        self.sync_menu_shortcuts();
+        self.sync_menu_checks();
+        self.layout();
+        self.update_status();
+        self.redraw();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 메뉴 id는 전부 명령 표에 있다(동적 `lang:` 제외) · 구분선 경계가 메뉴 5개와 맞는다.
+    #[test]
+    fn menu_ids_are_commands() {
+        for id in MENU_IDS.iter().filter(|id| **id != "-") {
+            assert!(COMMANDS.iter().any(|c| c.id == *id), "{id} not in COMMANDS");
+        }
+        assert_eq!(MENU_IDS[0], "file.new_tab");
+        assert_eq!(MENU_IDS[9], "edit.undo");
+        assert_eq!(MENU_IDS[19], "view.mode_tree");
+        assert_eq!(MENU_IDS[42], "nav.back");
+        assert_eq!(MENU_IDS[50], "help.about");
+        assert_eq!(MENU_IDS.len(), 51);
+    }
+
+    #[test]
+    fn menus_build_with_labels() {
+        let s = Settings::from_text(std::env::temp_dir().join("ndir-menus-test.conf"), "");
+        let menus = App::build_menus(&s);
+        assert_eq!(menus.len(), 5);
+        assert!(menus[0].entries.len() >= 9);
+        let tools = App::build_toolbar(&s);
+        assert!(tools.len() >= 13);
+    }
+}

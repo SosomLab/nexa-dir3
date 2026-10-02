@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 10차 — M3 T-40 앱 골격(창이 뜬다)
+
+- **한 일**: nexa-sql 호스트 껍질 복사(`NDIR_*`) · dir2 아이콘 자원 · `App`/`Focus`/`layout`/`ApplicationHandler` · `filelist::TreeSource`(ndir-tree → nexa-grid) · 메뉴 5/툴바 13/명령 한 길 `command(id)` · 키맵 연결 · `NDIR_STARTUP_CMD`(`layout.dump`·`ui.click`·`@after`·`app.exit`). Windows 실증: 격리 홈·비활성 창으로 덤프 → 메뉴 클릭 → F6 → 더블클릭 진입 → 종료 1.5 s · 설정 저장 확인. 게이트 전부 green.
+- **지금 상태**: M3 🚧 — T-40 ✅ · T-42/T-43 부분. 다음 = T-41(AppCore/Shell + FakePlatform + 골든) → T-43 잔여(패널별 탭·스플리터 드래그·폴더 트리·열 폭 기억) → T-44 설정/단축키 창 → T-45 세션 → T-46 덤프 어휘.
+- **걸린 것**: Q-8(macOS present 설정 노출 — 기본 softbuffer로 진행). 컬럼 폭이 `layout()`마다 초기화됨(T-43에서 기억).
+
+→ [journal/2026-10-03 §12](journal/2026-10-03.md)
+
 ## 10-03 9차 — M2 T-26·27 `nexa-explorer`(nexa-ui 106차)
 
 - **한 일**: dir2 PathBar·InfoDock·OverlayBars를 nexa-ui `nexa-explorer` 크레이트로 이식(dir2 시험 25) · nexa-grid DrawCtx 어휘 보강. push 완료 · nexa-sql 빌드 유지.

@@ -640,3 +640,7 @@ cmd.panelSwitch = 패널 전환
 cmd.tabNext = 다음 탭
 cmd.tabPrev = 이전 탭
 cmd.contextMenu = 컨텍스트 메뉴
+
+# ── M3 app shell (10-03) ──
+menu.go = 이동
+cmd.notYet = 아직 준비 중인 기능입니다
