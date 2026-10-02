@@ -106,6 +106,50 @@ impl App {
         ]
     }
 
+    /// 런처 바 항목(dir2 WINA-029: 항목 순서대로 버튼 · `-` = 구분선 · 아이콘 추출(T-30)은 후속 — 라벨 버튼).
+    pub(crate) fn build_launcherbar(items: &[launcher::LauncherItem]) -> Vec<ToolItem> {
+        items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| {
+                if it.is_separator() {
+                    ToolItem::separator()
+                } else {
+                    ToolItem::text(format!("launch:{i}"), it.label.clone())
+                }
+            })
+            .collect()
+    }
+
+    /// 런처 항목 실행 — 활성 패널 현재 폴더(`%path%`) · 결과 = 상태줄(`launcher.ran/failed` · dir2 무중단 규약).
+    pub(crate) fn launch_item(&mut self, idx: usize) {
+        let Some(item) = self.launcher_items.get(idx).cloned() else {
+            return;
+        };
+        let folder = self.term_cwd(0);
+        let mut inv = Invalidations::default();
+        let text = match launcher::launch(&item, &folder) {
+            Ok(()) => trf("launcher.ran", &[&item.label]),
+            Err(e) => format!("{} — {e}", trf("launcher.failed", &[&item.label])),
+        };
+        self.statusbar.set_left(&text, &mut inv);
+        self.toasts.push(
+            toast::ToastKind::Info,
+            tr("menu.view.launcher"),
+            text.clone(),
+        );
+        self.launcher_last = text;
+        self.redraw();
+    }
+
+    /// 설정 `launcher.items` 변경 → 바 재구성 + 재배치.
+    pub(crate) fn rebuild_launcher(&mut self) {
+        self.launcher_items =
+            launcher::parse_items(self.settings.get("launcher.items").unwrap_or(""));
+        self.launcherbar = Toolbar::new(App::build_launcherbar(&self.launcher_items));
+        self.layout();
+    }
+
     /// 메뉴 단축키 열 = 키맵 표시(설정 재정의 반영).
     pub(crate) fn sync_menu_shortcuts(&mut self) {
         for id in MENU_IDS.iter().filter(|id| **id != "-") {
@@ -342,7 +386,7 @@ impl App {
                 {
                     self.sync_col_widths_from(a);
                 }
-                if id == "view.dock" {
+                if id == "view.dock" || id == "view.launcher" {
                     self.layout();
                 }
             }
@@ -409,6 +453,11 @@ impl App {
                     tr("menu.help.about"),
                     format!("nexa-dir {}", env!("CARGO_PKG_VERSION")),
                 );
+            }
+            _ if id.starts_with("launch:") => {
+                if let Ok(i) = id["launch:".len()..].trim().parse::<usize>() {
+                    self.launch_item(i);
+                }
             }
             _ if id.starts_with("lang:") => self.switch_lang(&id["lang:".len()..]),
             _ => {

@@ -115,6 +115,8 @@ impl App {
             Some(Area::Menu)
         } else if self.toolbar.bounds().contains(p) {
             Some(Area::Tool)
+        } else if self.launcherbar.bounds().h > 0 && self.launcherbar.bounds().contains(p) {
+            Some(Area::Launcher)
         } else if self.dual && self.splitter.rect().contains(p) {
             Some(Area::Split)
         } else if self.panels[0].bounds().contains(p) {
@@ -140,6 +142,7 @@ impl App {
             Area::Split => self.split_event(ev, inv),
             Area::Status => self.statusbar.on_event(ev, inv),
             Area::Dock(i) => self.docks[i].on_event(ev, inv),
+            Area::Launcher => self.launcherbar.on_event(ev, inv),
         }
     }
 
@@ -206,6 +209,9 @@ impl App {
                 // hover는 전부(들어오고 나갈 때 스스로 무효화한다).
                 self.menubar.on_event(&ev, inv);
                 self.toolbar.on_event(&ev, inv);
+                if self.launcherbar.bounds().h > 0 {
+                    self.launcherbar.on_event(&ev, inv);
+                }
                 if self.dual {
                     self.split_event(&ev, inv);
                 }
@@ -340,6 +346,9 @@ impl App {
             self.command(&id);
         }
         if let Some(id) = self.toolbar.take_clicked() {
+            self.command(&id);
+        }
+        if let Some(id) = self.launcherbar.take_clicked() {
             self.command(&id);
         }
         for i in 0..2 {

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 33차 — T-42: 퀵 런처 바(3-OS 시드 · 24 밴드 · launch:<i>)
+
+- **한 일**: `launcher.rs` + App 배선(배치 밴드 · 입력 영역 · 명령 · 설정 즉시 반영 · 덤프) · 픽스처 런처 끔(골든 안정) · 시험 +5(124) · 시나리오 16.
+- **지금 상태**: M3 잔여 = T-30(SVG 툴바/런처 아이콘·소형 컨트롤) · T-31 · T-32(폴더 트리) · T-44 잔여 — 다음 = T-32 폴더 트리(nexa-ui FolderTree) 또는 T-62 C 압축 그리드 또는 M7(라이선스 창 · 배포 패키징).
+- **걸린 것**: 런처 exe 아이콘 없음(라벨 버튼) — T-30 아이콘 추출(Windows SHGetFileInfo · mac NSWorkspace · Linux .desktop) 뒤.
+
+→ [journal/2026-10-03 §35](journal/2026-10-03.md)
+
 ## 10-03 32차 — T-61 B: 터미널 글꼴 크기 · 고정 열/가로 스크롤 · HTML 복사 · TUI 마우스 모드
 
 - **한 일**: `TermStyle` 도입(`term.font_size/wrap/cols`) · 가로 오프셋 `view_x` + 가로 휠 · `term.copy_format` html/both = CF_HTML 동시 게시 · DECSET 마우스 모드 SGR 좌표 전달(Shift = 로컬 선택) · 설정 즉시 반영 · 시험 +1(119).

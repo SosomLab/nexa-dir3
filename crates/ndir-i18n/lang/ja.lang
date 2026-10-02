@@ -575,7 +575,7 @@ pref.launcherVisible.desc = ツールバーの下にクイックランチャー�
 pref.launcherSeed = ランチャーのシード
 pref.launcherSeed.desc = 組み込みランチャー項目を初期化したバージョン(内部用)。
 pref.launcherItems = ランチャー項目
-pref.launcherItems.desc = 1行に1項目: ラベル|プログラム|引数、区切り線は -。
+pref.launcherItems.desc = 項目は ;; で区切ります — ラベル|プログラム|引数（%path% = 現在のフォルダー）、区切り線は -。
 pref.pluginsDisabled = 無効なプラグイン
 pref.pluginsDisabled.desc = オフにしたプラグインID(上のチェックボックスで編集)。
 pref.previewMap = プレビュープラグインの割り当て

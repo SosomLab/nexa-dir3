@@ -325,6 +325,17 @@ impl App {
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),
             "ctx" => self.ctx_dump(),
+            "launcher" => {
+                format!(
+                    "last {}\n{}\n",
+                    self.launcher_last,
+                    self.launcher_items
+                        .iter()
+                        .map(launcher::LauncherItem::encode)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))
@@ -425,6 +436,11 @@ impl App {
         ));
         out.push_str(&format!("menubar {}\n", r(self.menubar.bounds())));
         out.push_str(&format!("toolbar {}\n", r(self.toolbar.bounds())));
+        out.push_str(&format!(
+            "launcher {} items {}\n",
+            r(self.launcherbar.bounds()),
+            self.launcher_items.len()
+        ));
         for (i, p) in self.panels.iter().enumerate() {
             out.push_str(&format!(
                 "panel{i} {} tabs {} active {} path {}\n",

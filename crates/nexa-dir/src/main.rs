@@ -23,6 +23,7 @@ mod icon;
 #[allow(dead_code)]
 mod input;
 mod keys_win;
+mod launcher;
 mod nav;
 mod panel;
 mod platform;
@@ -106,6 +107,7 @@ enum Area {
     Split,
     Status,
     Dock(usize),
+    Launcher,
 }
 
 /// 앱 — 상태 한 곳. **창 없이도 동작**(DR-10 · CI-102 최소 분리): `viewport`·`scale`은 Shell(이벤트 루프)이 창에서 읽어 넣고,
@@ -174,6 +176,11 @@ struct App {
     tab_menu_at: Option<(usize, usize)>,
     /// 행/배경 컨텍스트 메뉴 주인(탭 메뉴와 같은 `ContextMenu` 공유).
     ctx_kind: Option<app::ctxmenu::CtxKind>,
+    /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
+    launcherbar: Toolbar,
+    launcher_items: Vec<launcher::LauncherItem>,
+    /// 마지막 런처 실행 결과(덤프 `launcher` 첫 줄 — 상태줄은 틱마다 갱신돼 시나리오가 못 본다).
+    launcher_last: String,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -263,7 +270,7 @@ fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
 impl App {
     /// `start` = 실행 인자 경로(있으면 세션 무시 · dir2 PREFS-054) · `session` = 복원할 세션(탭이 없으면 `start`/현재 폴더).
     fn new(
-        settings: Settings,
+        mut settings: Settings,
         ui_font: Font,
         start: Option<PathBuf>,
         session: Option<Session>,
@@ -284,6 +291,17 @@ impl App {
         let mut toasts = toast::Toasts::new();
         toasts.configure(3000, 85);
         // 도구 모음 = dir2 28px 셀 / 아이콘 20(08-11 사용자 확정).
+        // 런처 시드/마이그레이션(dir2 WINA-054): 첫 실행 = OS별 시드 · 구버전 = 누락분 추가 · 결과는 설정에 저장.
+        let (launcher_items, seeded) = launcher::load_or_seed(
+            settings.get("launcher.items").unwrap_or(""),
+            settings.int("launcher.seed").max(0) as u32,
+        );
+        if seeded {
+            let _ = settings.set("launcher.items", &launcher::encode_items(&launcher_items));
+            let _ = settings.set("launcher.seed", &launcher::SEED_VERSION.to_string());
+            let _ = settings.save();
+        }
+        let launcherbar = Toolbar::new(App::build_launcherbar(&launcher_items));
         let mut toolbar = Toolbar::new(App::build_toolbar(&settings));
         toolbar.set_icon_size(20);
         toolbar.set_padding(2, 2);
@@ -361,6 +379,9 @@ impl App {
             clip: None,
             transfer: None,
             history: ndir_ops::history::OperationHistory::default(),
+            launcherbar,
+            launcher_items,
+            launcher_last: String::new(),
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),
@@ -508,7 +529,17 @@ impl App {
         let tool_h = px(self.toolbar.preferred_height() as f32, s);
         self.toolbar
             .set_bounds(Rect::new(0, menu_h, w, tool_h), &mut inv);
-        let top = menu_h + tool_h;
+        // 퀵 런처 바(dir2 WINA-065: 24 · 숨김이거나 실행 항목 0이면 0).
+        let has_items = self.launcher_items.iter().any(|i| !i.is_separator());
+        let launch_h = if self.settings.flag("launcher.visible") && has_items {
+            px(24.0, s)
+        } else {
+            0
+        };
+        self.launcherbar.set_scale(s);
+        self.launcherbar
+            .set_bounds(Rect::new(0, menu_h + tool_h, w, launch_h), &mut inv);
+        let top = menu_h + tool_h + launch_h;
         let status_h = px(22.0, s);
         let bottom = (h - status_h).max(top);
         self.statusbar

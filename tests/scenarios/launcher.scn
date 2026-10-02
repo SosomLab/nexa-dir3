@@ -1,0 +1,19 @@
+# T4 · T-42 런처 바(실제 창 · Windows 러너): 항목 1개(cmd /c exit) → 도구 모음 아래 24 밴드 → launch:0 = 덤프 last launched · 끄면 0.
+id: launcher
+title: 퀵 런처 바 배치 · 실행 · 토글
+tree: file a.txt 3
+settings: ui.lang=en
+settings: launcher.visible=on
+settings: launcher.seed=2
+settings: launcher.items=Shell|cmd.exe|/c exit
+cmd: @ready:layout.dump:<out>/layout.txt
+cmd: @ready:launch:0
+cmd: @ready:launcher.dump:<out>/launcher.txt
+cmd: @ready:assert.launcher:last Shell launched
+cmd: @ready:view.launcher
+cmd: @ready:layout.dump:<out>/layout2.txt
+cmd: @ready:quit
+check: layout.txt: launcher 0,51 1200x24 items 1
+check: layout2.txt: launcher 0,51 1200x0
+check: launcher.txt: last Shell launched
+check: launcher.txt: Shell|cmd.exe|/c exit

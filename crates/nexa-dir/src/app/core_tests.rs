@@ -15,7 +15,11 @@ fn fixture(tag: &str) -> (App, PathBuf) {
     std::fs::write(dir.join("sub/inner.rs"), b"fn x() {}").expect("write");
     // 상태줄 문구가 OS 언어에 따라 달라지지 않게 영어 고정.
     ndir_i18n::activate(ndir_i18n::load("en", &dir.join("nowhere")));
-    let settings = Settings::from_text(dir.join("settings.conf"), "");
+    // 런처 시드는 OS마다 달라 골든이 흔들린다 → 픽스처는 끔(런처 시험이 명시적으로 켠다).
+    let settings = Settings::from_text(
+        dir.join("settings.conf"),
+        "launcher.visible=off\nlauncher.seed=2\n",
+    );
     let font = nexa_font::ui_font(None).expect("OS UI font (CI installs fonts)");
     (
         App::new(
@@ -1240,5 +1244,56 @@ fn row_and_background_context_menus() {
     assert!(app.dump_of("ctx").unwrap().starts_with("row "));
     app.startup_cmd("ctx.pick:edit.copy");
     assert!(app.dump_of("ops").unwrap().contains("clip 1 copy"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-42 런처 바: 숨김/항목 0 = 높이 0 · 켜고 항목을 주면 도구 모음 아래 24 · 패널이 내려감 · 클릭 id `launch:<i>` 실행 = 상태줄 `launched` ·
+/// 실패 = `launch failed` · 구분선은 버튼 아님 · 덤프 `launcher`.
+#[test]
+fn launcher_bar_layout_and_launch() {
+    let (mut app, dir) = fixture("launch");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(app.launcherbar.bounds().h, 0, "픽스처 = 숨김");
+    let exe = std::env::current_exe()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let items = format!("Self|{exe}|--version;;-;;Bad|nope-xyz-program|");
+    let _ = app.settings.set("launcher.items", &items);
+    app.apply_setting("launcher.items");
+    let _ = app.settings.set("launcher.visible", "on");
+    app.apply_setting("launcher.visible");
+    let lb = app.launcherbar.bounds();
+    assert_eq!((lb.y, lb.h), (app.toolbar.bounds().bottom(), 24), "{lb:?}");
+    assert_eq!(app.panels[0].bounds().y, lb.bottom(), "패널은 런처 아래");
+    assert!(app.dump_of("layout").unwrap().contains("launcher 0,"));
+    let ld = app.dump_of("launcher").unwrap();
+    assert_eq!(ld.lines().count(), 4, "{ld}");
+    // 상태줄은 목록 갱신 틱이 덮어쓰므로 `launcher_last`(덤프 첫 줄)로 본다.
+    app.command("launch:0");
+    assert!(
+        app.launcher_last.contains("launched"),
+        "{}",
+        app.launcher_last
+    );
+    assert!(app
+        .dump_of("launcher")
+        .unwrap()
+        .starts_with("last Self launched"));
+    app.command("launch:2");
+    assert!(
+        app.launcher_last.contains("launch failed"),
+        "{}",
+        app.launcher_last
+    );
+    app.command("launch:1");
+    assert!(
+        app.launcher_last.contains("launch failed"),
+        "구분선은 실행 불가"
+    );
+    // 끄면 0 · 패널 복귀.
+    app.command("view.launcher");
+    assert_eq!(app.launcherbar.bounds().h, 0);
+    assert_eq!(app.panels[0].bounds().y, app.toolbar.bounds().bottom());
     let _ = std::fs::remove_dir_all(&dir);
 }

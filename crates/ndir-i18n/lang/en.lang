@@ -575,7 +575,7 @@ pref.launcherVisible.desc = Show the quick launcher bar under the toolbar (View 
 pref.launcherSeed = Launcher seed
 pref.launcherSeed.desc = Version of the built-in launcher items that were seeded (internal).
 pref.launcherItems = Launcher items
-pref.launcherItems.desc = One item per line: label|program|arguments, or - for a separator.
+pref.launcherItems.desc = Items separated by ;; — label|program|arguments (%path% = current folder), or - for a separator.
 pref.pluginsDisabled = Disabled plugins
 pref.pluginsDisabled.desc = Plugin IDs that are turned off (edited with the checkboxes above).
 pref.previewMap = Preview plugin map

@@ -97,7 +97,12 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
-            "launcher.visible" | "list.col_width_sync" => {
+            "launcher.visible" => {
+                self.sync_menu_checks();
+                self.layout();
+            }
+            "launcher.items" | "launcher.seed" => self.rebuild_launcher(),
+            "list.col_width_sync" => {
                 self.sync_menu_checks();
             }
             "term.wrap" | "term.cols" | "term.theme" | "term.theme_dark" | "term.theme_light"

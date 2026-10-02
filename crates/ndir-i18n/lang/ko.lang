@@ -574,7 +574,7 @@ pref.launcherVisible.desc = 도구 모음 아래 퀵 런처 바를 표시합니�
 pref.launcherSeed = 런처 시드
 pref.launcherSeed.desc = 내장 런처 항목을 심은 버전(내부용).
 pref.launcherItems = 런처 항목
-pref.launcherItems.desc = 한 줄에 하나: 라벨|프로그램|인자, 구분선은 -.
+pref.launcherItems.desc = 항목은 ;; 로 구분 — 라벨|프로그램|인자(%path% = 현재 폴더), 구분선은 -.
 pref.pluginsDisabled = 사용 안 함 플러그인
 pref.pluginsDisabled.desc = 꺼 둔 플러그인 ID(위 체크 상자로 편집).
 pref.previewMap = 미리보기 플러그인 매핑

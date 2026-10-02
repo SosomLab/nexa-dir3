@@ -47,6 +47,10 @@ impl App {
         // 크롬(창 전폭)
         dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
         self.toolbar.paint(dc, &th);
+        if self.launcherbar.bounds().h > 0 {
+            dc.fill_rect(self.launcherbar.bounds(), th.chrome_bg);
+            self.launcherbar.paint(dc, &th);
+        }
         dc.fill_rect(
             Rect::new(0, self.toolbar.bounds().bottom() - 1, wi, 1),
             th.border,

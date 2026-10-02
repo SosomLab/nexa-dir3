@@ -1,6 +1,7 @@
 window 1200x800 scale 1.00 theme dark dual true active 0
 menubar 0,0 1200x23
 toolbar 0,23 1200x28
+launcher 0,51 1200x0 items 0
 panel0 0,51 599x509 tabs 1 active 0 path <root>
 panel0.tabs 0,51 599x22
 panel0.nav 0,73 104x24
