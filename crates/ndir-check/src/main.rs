@@ -8,6 +8,7 @@
 //! title: 위로 = 떠난 폴더 선택
 //! tree: dir sub/deep           # 샘플 트리(여러 줄) — dir <경로> | file <경로> [<바이트>]
 //! tree: file a.txt 5
+//! tree: text d.md # 제목\n본문  # 내용 있는 텍스트 파일(두 글자 `\n` = 줄바꿈)
 //! settings: ui.lang=en         # 격리 홈 settings.conf 한 줄(여러 줄)
 //! cmd: @ready:nav:<root>/sub   # NDIR_STARTUP_CMD 항목(여러 줄 · 자리표 <root> <home> <out>)
 //! cmd: @ready:quit
@@ -27,6 +28,8 @@ use std::time::{Duration, Instant};
 enum TreeItem {
     Dir(String),
     File(String, usize),
+    /// 내용이 있는 텍스트 파일(`\n` = 줄바꿈 · 미리보기/플러그인 시나리오).
+    Text(String, String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +79,13 @@ fn parse(text: &str) -> Result<Scenario, String> {
             "tree" => {
                 let mut it = v.split_whitespace();
                 match (it.next(), it.next(), it.next()) {
+                    (Some("text"), Some(p), _) => {
+                        // `text <경로> <내용>` — 내용은 경로 뒤 전부(두 글자 `\n` = 줄바꿈).
+                        let body = v.trim_start()["text".len()..].trim_start()[p.len()..]
+                            .trim_start()
+                            .replace("\\n", "\n");
+                        s.tree.push(TreeItem::Text(p.to_string(), body));
+                    }
                     (Some("dir"), Some(p), _) => s.tree.push(TreeItem::Dir(p.to_string())),
                     (Some("file"), Some(p), size) => s.tree.push(TreeItem::File(
                         p.to_string(),
@@ -83,9 +93,9 @@ fn parse(text: &str) -> Result<Scenario, String> {
                     )),
                     _ => {
                         return Err(format!(
-                            "line {}: tree = dir <path> | file <path> [bytes]",
-                            n + 1
-                        ))
+                        "line {}: tree = dir <path> | file <path> [bytes] | text <path> <content>",
+                        n + 1
+                    ))
                     }
                 }
             }
@@ -165,6 +175,13 @@ fn build_tree(root: &Path, items: &[TreeItem]) -> std::io::Result<()> {
                     std::fs::create_dir_all(parent)?;
                 }
                 std::fs::write(path, "x".repeat(*size))?;
+            }
+            TreeItem::Text(p, body) => {
+                let path = root.join(p);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(path, body)?;
             }
         }
     }

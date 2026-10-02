@@ -45,10 +45,16 @@ fn bundled_markdown_plugin_end_to_end() {
         joined.contains("굵게") && !joined.contains("**굵게**"),
         "인라인 마커 정리"
     );
-    // Mermaid flowchart 3단 폴백(이미지 마커 → 아트 → 원문) — render_svg는 T-62 B라 아트/원문.
+    // Mermaid flowchart: 호스트 `render_svg`(nexa-gfx svg · T-62 C-2)가 이미지 파일을 주므로 **이미지 마커**가 온다(글꼴 없이도 그린다).
+    let img_line = lines
+        .iter()
+        .find(|l| l.starts_with("\u{1}img|"))
+        .unwrap_or_else(|| panic!("flowchart 이미지 마커: {joined}"));
+    let img_path = &img_line["\u{1}img|".len()..];
+    assert!(Path::new(img_path).is_file(), "{img_path}");
     assert!(
-        joined.contains("\u{1}img|") || joined.contains('▼') || joined.contains("graph TD"),
-        "flowchart 이미지/아트/원문 폴백 중 하나: {joined}"
+        lines.iter().any(|l| l == "\u{1}pad"),
+        "이미지 뒤 예약 행(pad)"
     );
     assert!(joined.contains("Client"), "sequence participant 별칭");
     assert!(

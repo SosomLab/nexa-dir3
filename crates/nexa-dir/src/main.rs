@@ -354,7 +354,12 @@ impl App {
             toasts,
             settings,
             keymap,
-            ui_font: Rc::new(ui_font),
+            ui_font: {
+                let f = Rc::new(ui_font);
+                // 플러그인 `render_svg`(Mermaid 다이어그램)의 텍스트 글꼴(T-62 C-2).
+                preview::set_svg_font(Rc::clone(&f));
+                f
+            },
             theme,
             scale: 1.0,
             viewport: (0, 0),

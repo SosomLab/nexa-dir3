@@ -27,8 +27,18 @@ pub(crate) enum PvAction {
 const PAD_X: f32 = 8.0;
 const PAD_TOP: f32 = 4.0;
 
+/// 인라인 이미지 종류(dir2 `IMG_MARKER`/`IMG_PAD` · T-62 C-2): 8 = `\u{1}img|<경로>`(본문 = 경로) · 9 = `\u{1}pad`(예약 행).
+pub(crate) const KIND_IMG: u8 = 8;
+pub(crate) const KIND_PAD: u8 = 9;
+
 /// 라인 종류(dir2 `parse_kind`): 태그 접두를 벗기고 종류 번호를 돌려준다.
 pub(crate) fn parse_kind(l: &str) -> (u8, &str) {
+    if let Some(p) = l.strip_prefix("\u{1}img|") {
+        return (KIND_IMG, p);
+    }
+    if l == "\u{1}pad" {
+        return (KIND_PAD, "");
+    }
     for (tag, k) in [
         ("\u{2}h1|", 1u8),
         ("\u{2}h2|", 2),
@@ -89,7 +99,10 @@ impl PreviewWin {
         self.text.clear();
         for l in lines {
             let (k, body) = parse_kind(&l);
-            if l.starts_with('\u{1}') {
+            if k == KIND_IMG || k == KIND_PAD {
+                self.kinds.push(k);
+                self.text.push(body.to_string());
+            } else if l.starts_with('\u{1}') {
                 self.kinds.push(0);
                 self.text.push(String::new());
             } else {
@@ -120,15 +133,45 @@ impl PreviewWin {
         self.text.len()
     }
 
-    /// 전체 텍스트(복사 · 덤프) — 줄 구분 `\r\n`.
+    /// 전체 텍스트(복사 · 덤프) — 줄 구분 `\r\n` · 이미지/패드 행은 빈 줄.
     pub(crate) fn all_text(&self) -> String {
-        self.text.join("\r\n")
+        self.text_lines().join("\r\n")
     }
 
-    /// 덤프: `open|closed <제목> lines N top T` + 줄들.
+    /// 텍스트 행(이미지 행 = 빈 줄).
+    fn text_lines(&self) -> Vec<&str> {
+        self.text
+            .iter()
+            .zip(&self.kinds)
+            .map(|(t, k)| {
+                if *k == KIND_IMG || *k == KIND_PAD {
+                    ""
+                } else {
+                    t.as_str()
+                }
+            })
+            .collect()
+    }
+
+    /// 인라인 이미지 수(덤프 · 시험).
+    pub(crate) fn image_count(&self) -> usize {
+        self.kinds.iter().filter(|k| **k == KIND_IMG).count()
+    }
+
+    /// 덤프: `open|closed <제목> lines N top T images I` + 줄들(이미지 행 = `[img <경로>]`).
     pub(crate) fn dump(&self) -> String {
+        let lines: Vec<String> = self
+            .text
+            .iter()
+            .zip(&self.kinds)
+            .map(|(t, k)| match *k {
+                KIND_IMG => format!("[img {t}]"),
+                KIND_PAD => String::new(),
+                _ => t.clone(),
+            })
+            .collect();
         format!(
-            "{} {} lines {} top {}\n{}\n",
+            "{} {} lines {} top {} images {}\n{}\n",
             if self.window.is_some() {
                 "open"
             } else {
@@ -137,7 +180,8 @@ impl PreviewWin {
             self.title,
             self.text.len(),
             self.top,
-            self.text.join("\n")
+            self.image_count(),
+            lines.join("\n")
         )
     }
 
@@ -338,6 +382,21 @@ impl PreviewWin {
                             th.border,
                         );
                     }
+                    // 인라인 이미지(dir2 §2.4): 마커 행 + 뒤따르는 패드 행 = 예약 영역 전체에 비율 유지 가운데.
+                    KIND_IMG => {
+                        let k = 1 + self.kinds[i + 1..]
+                            .iter()
+                            .take_while(|k| **k == KIND_PAD)
+                            .count() as i32;
+                        let area = Rect::new(
+                            pad_x,
+                            y,
+                            (wi - pad_x * 2).max(0),
+                            (self.line_h * k).min(hi - y),
+                        );
+                        dc.draw_image_hint(area, text);
+                    }
+                    KIND_PAD => {}
                     _ => {
                         let (slot, bold) = match kind {
                             1..=3 => (FontSlot::Base, true),
@@ -394,9 +453,12 @@ mod tests {
         assert_eq!(w.lines_len(), 4);
         assert_eq!(w.title(), "a.md");
         assert_eq!(w.all_text(), "Title\r\n\r\na    b\r\n");
+        assert_eq!(w.image_count(), 1);
+        assert_eq!(parse_kind("\u{1}img|x.bmp"), (KIND_IMG, "x.bmp"));
+        assert_eq!(parse_kind("\u{1}pad"), (KIND_PAD, ""));
         assert!(w
             .dump()
-            .starts_with("closed a.md lines 4 top 0\nTitle\n\na    b\n"));
+            .starts_with("closed a.md lines 4 top 0 images 1\nTitle\n[img x.bmp]\na    b\n"));
         w.scroll_lines(5);
         assert_eq!(w.top, 3, "가시 1줄 기준 상한 = 줄 수 - 1");
     }

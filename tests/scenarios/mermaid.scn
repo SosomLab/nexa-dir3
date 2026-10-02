@@ -1,0 +1,12 @@
+# T4 · T-62 C-2(실제 창 · 동봉 markdown.wasm): Mermaid 블록이 든 .md → F3 → 호스트 render_svg(nexa-gfx svg) → 미리보기 창에 인라인 이미지 1개.
+id: mermaid
+title: Mermaid 다이어그램 → SVG 래스터 → 미리보기 창 인라인 이미지
+tree: text d.md # Flow\n\n```mermaid\ngraph TD\nA[Start] --> B[End]\n```\n\nafter
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:view.preview_window
+cmd: @after:600:pvwin.dump:<out>/pv.txt
+cmd: @after:600:quit
+check: pv.txt: images 1
+check: pv.txt: [img
+check: pv.txt: Flow

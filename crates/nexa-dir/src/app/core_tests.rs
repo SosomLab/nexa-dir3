@@ -1128,7 +1128,10 @@ fn preview_window_and_archive_password_flow() {
     app.command("view.preview_window");
     assert!(app.open_preview);
     let d = app.dump_of("pvwin").unwrap();
-    assert!(d.starts_with("closed a.txt lines 1 top 0\nhello\n"), "{d}");
+    assert!(
+        d.starts_with("closed a.txt lines 1 top 0 images 0\nhello\n"),
+        "{d}"
+    );
     app.open_preview = false;
     // 암호 zip: 중앙 디렉터리 플래그 bit13(헤더 암호화) → NeedPassword → 마스킹 입력 창.
     let mut z: Vec<u8> = Vec::new();

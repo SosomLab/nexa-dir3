@@ -44,7 +44,7 @@
 | T-28 | Tooltip 관리자 · Overlay z 스택 | P1 | 소 | — | UIK-208·209 | ☐ |
 | T-29 | nexa-dlg: Dialog 프레임 · MessageBox(버튼 N) · Prompt · Progress 창 · 폴더 선택 | P0 | 중 | — | UIK-212·215 · DLG | 🚧 10-03 journal §30(A: 확인/4버튼/마스킹 입력 창 + 영구 삭제·충돌 배선 ✅ · B: 폴더 찾아보기 ✅ journal §36 `file_win` · 진행 창 ☐) |
 | T-30 | dir2 전용 소형 컨트롤 대응(fontbox · spin · segmented · ordertree · groupcard · searchbox · iconbutton · menubutton) — 기존 nexa-ctl 대체 또는 추가 | P1 | 중 | — | DLG-0xx | ☐ |
-| T-31 | DrawCtx `push_clip/pop_clip` · 터미널 셀 텍스트 · italic · 테마 토큰(tab_bar_bg·header_bg·dock_bg·status_bar_bg) · ICO/SVG 디코더 | P1 | 중 | — | UIC-310~317 · RENDER | ☐ |
+| T-31 | DrawCtx `push_clip/pop_clip` · 터미널 셀 텍스트 · italic · 테마 토큰(tab_bar_bg·header_bg·dock_bg·status_bar_bg) · ICO/SVG 디코더 | P1 | 중 | — | UIC-310~317 · RENDER | 🚧 10-03(SVG 래스터 + `draw_image_hint` ✅ nexa-ui 108차 journal §38 · 클립 스택·ICO·italic·테마 토큰 ☐) |
 | T-32 | FolderTree(지연 로딩) · Toast 승격 · FilterBox | P1 | 중 | — | UIK-210·213·214 | ☐ |
 
 ## M3 앱 골격
@@ -75,7 +75,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | T-60 | 도크(정보 8줄+형식별 상세 · 미리보기 텍스트/이미지 · 스크롤·선택·복사) | P0 | 중 | T-27 | WINA · GUI-11x | 🚧 10-03 journal §23(배치·정보 기본 8줄·텍스트 미리보기·스트립 ✅ · 이미지 그리기 T-31 · 형식별 상세 T-5x · 터미널 T-61) |
 | T-61 | 터미널 뷰(셀 격자·선택·캐럿·스크롤백·테마 15종·복사 서식 HTML/RTF·cwd 동기·키 라우팅) | P0 | 대 | T-31 · T-51~53 | TERM | 🚧 10-03 journal §24·§34(A ✅ · B 고정 열/가로 스크롤·HTML 복사·TUI 마우스·글꼴 크기 ✅ · 잔여: 픽셀 스크롤·고속 스크롤·RTF) |
-| T-62 | 플러그인 런타임 이식(dir2 ABI · 탐색 경로 3단 · 내장 폴백 · 격리 시험) + 동봉 `.wasm` 2종 + F3 창 + 압축 미리보기 그리드·암호 | P0 | 대 | T-60 | PLUG · EXT-441~445 | 🚧 10-03 journal §25·§31(A 런타임·시임·동봉 ✅ · B F3 창·암호 입력 ✅ · C-1 압축 그리드 창 ✅ journal §37 · C-2: SVG 래스터·인라인 이미지·드래그 선택) |
+| T-62 | 플러그인 런타임 이식(dir2 ABI · 탐색 경로 3단 · 내장 폴백 · 격리 시험) + 동봉 `.wasm` 2종 + F3 창 + 압축 미리보기 그리드·암호 | P0 | 대 | T-60 | PLUG · EXT-441~445 | 🚧 10-03 journal §25·§31(A 런타임·시임·동봉 ✅ · B F3 창·암호 입력 ✅ · C-1 압축 그리드 창 ✅ journal §37 · C-2 SVG 래스터·인라인 이미지 ✅ journal §38 · C-3 드래그 선택 ☐) |
 | T-63 | 플러그인 설정 페이지 · 매니저(sha256·설치) · `plugins/sdk` · `plugin-build.{ps1,sh}` | P1 | 중 | T-62 | EXT-414~418 | 🚧 10-03 journal §26(A: sdk·빌드 스크립트·CI·설정 목록 줄 ✅ · B: 체크박스 페이지·매니저) |
 
 ## M6 파일 작업

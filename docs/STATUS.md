@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 36차 — T-62 C-2: SVG 래스터(nexa-ui 108차) · 인라인 이미지 · Mermaid E2E
+
+- **한 일**: nexa-gfx `svg`(파서+래스터) · nexa-ctl `draw_image_hint`+캐시 · dir3 `render_svg_impl` 3-OS · preview_win/InfoDock 인라인 이미지 · `tree: text` · 시험 +1(132) · 시나리오 19.
+- **지금 상태**: T-62 잔여 = C-3 드래그 문자 선택. T-30(툴바 SVG 아이콘)은 이제 래스터가 있어 착수 가능. 다음 = T-30 또는 T-32 폴더 트리 또는 T-81/82.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §38](journal/2026-10-03.md)
+
 ## 10-03 35차 — T-62 C-1: 압축 그리드 창(nexa-grid) · Linux CI 런처 시드 수정
 
 - **한 일**: `archive_win.rs` + 미리보기 흐름 배선 · `archive.dump` · 시험 +4(131) · 시나리오 18 · 런처 시드 시험 3-OS 안정화.

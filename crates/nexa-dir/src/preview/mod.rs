@@ -90,11 +90,76 @@ pub(crate) fn disp_width_impl(s: &str) -> usize {
         .sum()
 }
 
-/// SVG → 이미지 캐시(플러그인 `render_svg`). dir2는 GDI+ 래스터(Windows 전용)였다 — dir3는 3-OS 공통
-/// CPU 래스터(nexa-gfx svg · docs/port/20 §3 "추가 필요")가 T-62 B. 그때까지 `None` = Mermaid 3단 폴백(아트·원문).
+thread_local! {
+    /// SVG 텍스트 글꼴(앱 UI 글꼴 — `App::new`가 주입 · 없으면 텍스트 없이 그린다).
+    static SVG_FONT: std::cell::RefCell<Option<std::rc::Rc<nexa_gfx::Font>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// `render_svg`가 쓸 글꼴 주입(UI 스레드).
+pub(crate) fn set_svg_font(font: std::rc::Rc<nexa_gfx::Font>) {
+    SVG_FONT.with(|f| *f.borrow_mut() = Some(font));
+}
+
+/// SVG → 이미지 파일(플러그인 `render_svg` · dir2 PLUG-011/114 · T-62 C-2): nexa-gfx `svg` **3-OS CPU 래스터**(dir2는 GDI+) ·
+/// viewBox 크기 그대로(한 변 ≤ 2000) · 잉크/배경 = 현재 테마(dark 흰 글/어두운 배경) · 결과 = `<temp>/nexa-preview/d<해시>.bmp`
+/// (32bpp top-down · 내용 해시 이름 = 같은 그림은 다시 쓰지 않는다 · 도크/창은 `draw_image_hint` 캐시로 읽는다).
 pub(crate) fn render_svg_impl(svg: &str) -> Option<String> {
-    let _ = svg;
-    None
+    if svg.len() > 256 * 1024 {
+        return None;
+    }
+    let doc = nexa_gfx::svg::parse(svg)?;
+    let dark = is_dark_now();
+    let opts = nexa_gfx::svg::RenderOpts {
+        ink: if dark {
+            nexa_gfx::Color::from_rgb(0xE6, 0xE6, 0xE6)
+        } else {
+            nexa_gfx::Color::from_rgb(0x20, 0x20, 0x20)
+        },
+        bg: if dark {
+            nexa_gfx::Color::from_rgb(0x1E, 0x1E, 0x1E)
+        } else {
+            nexa_gfx::Color::from_rgb(0xFF, 0xFF, 0xFF)
+        },
+    };
+    use std::hash::{Hash, Hasher};
+    let mut hsh = std::collections::hash_map::DefaultHasher::new();
+    svg.hash(&mut hsh);
+    dark.hash(&mut hsh);
+    let dir = std::env::temp_dir().join("nexa-preview");
+    let path = dir.join(format!("d{:016x}.bmp", hsh.finish()));
+    if path.exists() {
+        return Some(path.to_string_lossy().into_owned());
+    }
+    let img = SVG_FONT.with(|f| {
+        let f = f.borrow();
+        nexa_gfx::svg::render_natural(&doc, opts, f.as_deref(), 2000)
+    })?;
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(&path, bmp_bytes(&img)).ok()?;
+    Some(path.to_string_lossy().into_owned())
+}
+
+/// RGBA → 32bpp top-down BMP(BGRA · 알파 255 · nexa-gfx `image::decode`가 읽는 형식).
+pub(crate) fn bmp_bytes(img: &nexa_gfx::IconImage) -> Vec<u8> {
+    let (w, h) = (img.w as i32, img.h as i32);
+    let n = img.rgba.len();
+    let mut f = Vec::with_capacity(54 + n);
+    f.extend_from_slice(b"BM");
+    f.extend_from_slice(&(54 + n as u32).to_le_bytes());
+    f.extend_from_slice(&[0u8; 4]);
+    f.extend_from_slice(&54u32.to_le_bytes());
+    f.extend_from_slice(&40u32.to_le_bytes());
+    f.extend_from_slice(&w.to_le_bytes());
+    f.extend_from_slice(&(-h).to_le_bytes()); // top-down
+    f.extend_from_slice(&1u16.to_le_bytes());
+    f.extend_from_slice(&32u16.to_le_bytes());
+    f.extend_from_slice(&0u32.to_le_bytes()); // BI_RGB
+    f.extend_from_slice(&(n as u32).to_le_bytes());
+    f.extend_from_slice(&[0u8; 16]);
+    for p in img.rgba.as_chunks::<4>().0 {
+        f.extend_from_slice(&[p[2], p[1], p[0], 255]);
+    }
+    f
 }
 
 /// 내장 텍스트 공급자 — 첫 16KB·이진 판정·200줄·탭 4칸.
@@ -322,6 +387,34 @@ pub(crate) fn dock_lines(lines: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// T-62 C-2: `render_svg` = nexa-gfx svg 래스터 → 임시 BMP(해시 이름) · 디코드 크기 = viewBox · 같은 입력 = 같은 경로 · 손상 SVG = None.
+    #[test]
+    fn render_svg_writes_bmp_and_caches() {
+        set_dark(true);
+        let svg = r##"<svg viewBox="0 0 40 24" stroke-width="1"><rect x="1" y="1" width="38" height="22" rx="4" fill="#336699"/><text x="20" y="16" font-size="12" text-anchor="middle" fill="#ffffff">ok</text></svg>"##;
+        let p1 = render_svg_impl(svg).expect("render");
+        assert!(p1.ends_with(".bmp") && Path::new(&p1).is_file(), "{p1}");
+        let bytes = std::fs::read(&p1).unwrap();
+        let img = nexa_gfx::image::decode(&bytes, 1 << 20).expect("decode");
+        assert_eq!((img.w, img.h), (40, 24));
+        let i = ((12 * 40 + 5) * 4) as usize;
+        assert_eq!(&img.rgba[i..i + 3], &[0x33, 0x66, 0x99], "채움 색");
+        assert_eq!(
+            render_svg_impl(svg).as_deref(),
+            Some(p1.as_str()),
+            "같은 입력 = 같은 파일"
+        );
+        assert!(
+            render_svg_impl("<svg><rect/></svg>").is_none(),
+            "viewBox 없음 = None(폴백)"
+        );
+        assert!(
+            render_svg_impl(r##"<svg viewBox="0 0 5000 10"><rect width="1" height="1"/></svg>"##)
+                .is_none(),
+            "상한"
+        );
+    }
 
     fn tmp(name: &str, bytes: &[u8]) -> PathBuf {
         let p = std::env::temp_dir().join(format!("ndir_prev_{}_{}", std::process::id(), name));
