@@ -176,14 +176,22 @@ struct ClipGuard;
 
 impl ClipGuard {
     fn open() -> Result<ClipGuard, PlatformError> {
-        // SAFETY: 소유 창 없음(null) — 읽기/쓰기 모두 허용.
-        if unsafe { OpenClipboard(0) } == 0 {
-            return Err(PlatformError::Failed(format!(
-                "OpenClipboard: {}",
-                unsafe { GetLastError() }
-            )));
+        // ★ 변경 직후엔 클립보드 기록/클라우드 서비스가 잠깐 잡고 있다(10-03 실기: 바로 열면 실패·null) → 5회 · 10 ms 재시도
+        //   (nexa-sql `clipboard.rs`와 같은 규약).
+        for attempt in 0..10 {
+            // SAFETY: 소유 창 없음(0) — 읽기/쓰기 모두 허용.
+            if unsafe { OpenClipboard(0) } != 0 {
+                return Ok(ClipGuard);
+            }
+            if attempt < 9 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
         }
-        Ok(ClipGuard)
+        // SAFETY: 마지막 오류 코드 조회.
+        Err(PlatformError::Failed(format!(
+            "OpenClipboard: {}",
+            unsafe { GetLastError() }
+        )))
     }
 }
 
@@ -242,14 +250,21 @@ fn dword_global(v: u32) -> Option<*mut c_void> {
     }
 }
 
-impl FileClipboard for NativeFileClipboard {
-    fn read_files(&self) -> Option<(Vec<PathBuf>, bool)> {
+impl NativeFileClipboard {
+    fn read_once(&self) -> Option<(Vec<PathBuf>, bool)> {
         // SAFETY: 형식 가용 확인 → 열기 → HDROP 질의(개수·각 경로) → 효과 DWORD 읽기 → 닫기(가드).
         unsafe {
-            if IsClipboardFormatAvailable(CF_HDROP) == 0 {
-                return None;
-            }
             let _g = ClipGuard::open().ok()?;
+            // ★ 효과 DWORD를 HDROP보다 **먼저** 읽는다(10-03 실기: HDROP를 읽은 뒤에는 등록 형식 GetClipboardData가 null · ERROR_CLIPBOARD_NOT_OPEN 1418).
+            let mut cut = false;
+            let eff = GetClipboardData(drop_effect_format());
+            if !eff.is_null() && GlobalSize(eff) >= 4 {
+                let p = GlobalLock(eff) as *const u32;
+                if !p.is_null() {
+                    cut = std::ptr::read_unaligned(p) & DROPEFFECT_MOVE != 0;
+                    GlobalUnlock(eff);
+                }
+            }
             let h = GetClipboardData(CF_HDROP);
             if h.is_null() {
                 return None;
@@ -263,17 +278,23 @@ impl FileClipboard for NativeFileClipboard {
                 buf.truncate(got as usize);
                 out.push(PathBuf::from(std::ffi::OsString::from_wide(&buf)));
             }
-            let mut cut = false;
-            let eff = GetClipboardData(drop_effect_format());
-            if !eff.is_null() && GlobalSize(eff) >= 4 {
-                let p = GlobalLock(eff) as *const u32;
-                if !p.is_null() {
-                    cut = std::ptr::read_unaligned(p) & DROPEFFECT_MOVE != 0;
-                    GlobalUnlock(eff);
-                }
-            }
             Some((out, cut))
         }
+    }
+}
+
+impl FileClipboard for NativeFileClipboard {
+    fn read_files(&self) -> Option<(Vec<PathBuf>, bool)> {
+        // ★ 쓰기 직후 ~25 ms 동안은 열려도 HDROP가 null(클립보드 기록 서비스가 다시 렌더 · 10-03 실기 23 ms) → 짧게 재시도.
+        for attempt in 0..3 {
+            if let Some(r) = self.read_once() {
+                return Some(r);
+            }
+            if attempt < 2 {
+                std::thread::sleep(std::time::Duration::from_millis(15));
+            }
+        }
+        None
     }
 
     fn write_files(&self, paths: &[PathBuf], cut: bool) -> Result<(), PlatformError> {
@@ -327,7 +348,18 @@ mod tests {
         std::fs::write(&f, b"1").unwrap();
         let c = NativeFileClipboard;
         c.write_files(std::slice::from_ref(&f), true).unwrap();
-        assert_eq!(c.read_files(), Some((vec![f.clone()], true)));
+        // 쓰기 직후엔 클립보드 기록 서비스가 잠깐 잡는다 → 1 s까지 폴링(걸린 시간을 출력).
+        let t0 = std::time::Instant::now();
+        let mut got = None;
+        while t0.elapsed() < std::time::Duration::from_secs(1) {
+            got = c.read_files();
+            if got.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        eprintln!("[clip] readable after {:?}", t0.elapsed());
+        assert_eq!(got, Some((vec![f.clone()], true)));
         assert_eq!(NativeTrash.trash(std::slice::from_ref(&f)), Ok(1));
         assert!(!f.exists());
         let _ = std::fs::remove_dir_all(&dir);
