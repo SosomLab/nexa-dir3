@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 9차 — M2 T-26·27 `nexa-explorer`(nexa-ui 106차)
+
+- **한 일**: dir2 PathBar·InfoDock·OverlayBars를 nexa-ui `nexa-explorer` 크레이트로 이식(dir2 시험 25) · nexa-grid DrawCtx 어휘 보강. push 완료 · nexa-sql 빌드 유지.
+- **지금 상태**: M2 🚧 — 남은 것 = T-28 Tooltip/Overlay → T-29 nexa-dlg 대화상자 → T-30 소형 컨트롤 → T-31 DrawCtx 보강 → T-32 FolderTree. 핵심 창 골격 컨트롤은 전부 준비됨 → M3 착수 가능.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §11](journal/2026-10-03.md)
+
 ## 10-03 8차 — M2 T-25 `nexa-grid`(nexa-ui 105차)
 
 - **한 일**: dir2 가상 행 그리드 엔진 전체를 nexa-ui `nexa-grid` 크레이트로 이식(dir2 테스트 52 green) + `draw::Adapt` + nexa-ctl `Invalidations` 틱 요청. push 완료.

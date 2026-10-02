@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M2 T-26·27(nexa-ui 106차)**: `nexa-explorer` — dir2 PathBar·InfoDock·OverlayBars 이식(시험 25) → [journal §11](journal/2026-10-03.md)
 - **M2 T-25(nexa-ui 105차)**: `nexa-grid` 크레이트 — dir2 VirtualRows 엔진 이식(테스트 52) + DrawCtx 어댑터 + Invalidations 틱 → [journal §10](journal/2026-10-03.md)
 - **M2 T-20~24(nexa-ui 103·104차)**: InputEvent 확장 · RecordCtx · MenuBar/Toolbar/TabBar 보강 · StatusBar 신규 — nexa-ctl 391 · nexa-sql check ✓ → [journal §9](journal/2026-10-03.md)
 - **M1 T-17 · M1 완료**: 명령 표 48 + 키맵 엔진 + `key.<id>` 전수 등재(설정 창 "단축키" 페이지) · 충돌 시험이 macOS ⌘Y 충돌 적발 → ⇧⌘Y → [journal §8](journal/2026-10-03.md)

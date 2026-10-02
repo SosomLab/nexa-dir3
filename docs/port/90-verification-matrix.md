@@ -68,3 +68,6 @@
 | UIK-201·216·217 · PANEL-1F(rows·columns·typeahead) · GUI(fastscroll·edit) | 가상 행 그리드 엔진(가상화·컬럼·정렬·선택·계층·인라인 이름 바꾸기·보기 모드·픽셀/고속 스크롤·타입어헤드) | nexa-ui `crates/nexa-grid` | T1·T2 | dir2 테스트 52(rows 34 · edit 8 · fastscroll 5 · typeahead 4 · columns 1) + `adapt_forwards_to_ctl_ctx` | ✅ G-1 | 아이콘(`draw_icon`)·italic은 G-2/U-5 |
 | UIC-310·311·313·315 | DrawCtx 클립 스택·터미널 셀·italic·List 슬롯 | nexa-grid `draw::Adapt` 우회(`List`→`PeerList` · italic 버림) | — | — | 🚧 | T-31에서 nexa-ctl 보강 |
 | GUI(위젯 틱 요청) | `Invalidations::request_tick` | nexa-ui `widget.rs` | T2 | `tick_request_is_idempotent_and_taken_once` | ✅ | 105차 |
+| UIK-202 · GUI-090~101 | PathBar(브레드크럼·편집·자동완성 팝업) | nexa-ui `nexa-explorer/src/pathbar.rs` | T2 | dir2 시험 7 | ✅ | 106차 · 경로 문법·제안은 호스트 |
+| UIK-204 · GUI-110~ | InfoDock(스트립·텍스트/이미지·선택·팝아웃·오버레이 바) | nexa-ui `nexa-explorer/src/dock.rs` | T2 | dir2 시험 13 | ✅ | 106차 · 이미지 그리기는 호스트 `IconImage`(G-2) |
+| GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
