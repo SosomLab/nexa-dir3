@@ -53,3 +53,4 @@
 | Q-4 | macOS/Linux 셸 컨텍스트 메뉴 범위 | 자체 메뉴(열기·연결 프로그램·파일 관리자에서 보기·속성) + "OS 메뉴 열기" 없음 | [port/19](port/19-dir2-shell-integration.md) |
 | Q-5 | `kind=org` 라이선스 단독 설치 허용 | nexa-sql과 같이 허용(경고 없음) | LIC-172 |
 | Q-6 | 클라우드(OAuth) 기능의 3-OS HTTP 스택 | M6에서 결정(OS 네이티브 API별 vs 최소 crate) | [port/21](port/21-dir2-cloud.md) |
+| Q-7 | 성능 거버너(nexa-sql `perf.mode`/`perf.boost` · `nexa-sys` 신호) 도입 여부 | 도입하지 않음(dir2에 대응 기능 없음 · `ndir-settings`에 `perf.rs` 없음) — 부하원이 늘면 재검토 | [port/41](port/41-sql-settings.md) SET-051~053 |

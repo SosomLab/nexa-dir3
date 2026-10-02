@@ -36,4 +36,14 @@
 | EXT-207 | 사용자 오버레이 층 | `ndir_i18n::load(code, home)` | T1 | `merge_override_fallback_and_resolve` | ✅ | home = 설정 폴더(M1 T-13 연결) |
 | EXT-212 | `del.lockedMsg`/`failMsg` `{1}` 결함 | `lang/*.lang` | T1 | `locked_and_fail_messages_carry_list_placeholder` | ✅ | 빌드 검사가 재발 방지 |
 | EXT-214 | OS 종속 문구 15건 | — | — | — | ☐ | 기능 이식 때 3언어 동시 수정 |
-| CI-109 | `--smoke` = `--ci` 전체 | `nexa-dir/src/main.rs` | T5 | CI | 🚧 | 그룹 env·resources 실제 |
+| CI-109 | `--smoke` = `--ci` 전체 | `nexa-dir/src/main.rs` | T5 | CI | 🚧 | 그룹 env·config·resources 실제 |
+| SET-001~008 | nexa-conf 저장 계층(파서·직렬화·원자 쓰기·`user_config_dir`·포터블 판정) | 형제 의존 `nexa-conf` | T1 | nexa-conf 14 시험 | ✅ | `config_dir()`가 DR-9 순서로 조합 |
+| SET-010~024 | 레지스트리 타입·종류·곁 표 함수·검증·테마 모드 | `ndir-settings/src/lib.rs` | T1 | `registry_defaults_are_valid_and_keys_unique` · `size_units_and_theme_mode` | ✅ | `Lang` 종류 제외(DR-14) |
+| SET-030~038 | `Settings` 열기·읽기·쓰기·초기화·저장·목록·설정 폴더 | 〃 | T1 | `set_validates_and_saves_only_changes` · `corrupt_value_falls_back_and_unknown_keys_survive` · `config_dir_honors_env_home` | ✅ | `effective` 없음 |
+| SET-040~044 | 이주(옛 기본값·이름 바꿈·단위 변환·fail-soft) | 〃 | T1 | `renamed_and_rescaled_tables_are_consistent` | ✅ | 표는 비어 시작 |
+| SET-050 | JSON 코덱·내보내기/가져오기 | `ndir-settings/src/json.rs` | T1 | json 2 시험 | ✅ | 그대로 복사 |
+| SET-051~053 | 성능 거버너 | — | — | — | ⚠ Q-7 | 도입하지 않음 |
+| SET-120~124·132·134·137 | 무결성 시험·결함 회피 | `ndir-settings` tests | T1 | `side_tables_reference_existing_keys_and_labels` 외 | ✅ | SET-132 신규 시험 |
+| PREFS-101~170 · KEY-501~570 | dir2 설정 키 → dir3 레지스트리 + 가져오기 | `ndir-settings/src/{registry,migrate}.rs` | T1 | `defaults_follow_dir2` · migrate 3 시험 | ✅ | 세션 키(PREFS-201~)는 T-45 |
+| KEY-591~598 | 신규 키(term.shell · window.* · license.gates · ui.prefs_advanced · text raster · dblclick · scroll_natural) | `registry.rs` | T1 | 레지스트리 무결성 | ✅ | `gfx.*`/`clipboard.x11_native`는 호스트 이식 때 |
+| CI-110(config) | 자가 점검 config 그룹 | `nexa-dir/src/selfcheck.rs` | T5 | 스모크 | ✅ | |

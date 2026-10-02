@@ -179,6 +179,7 @@ pub(crate) fn run(opts: &Options) -> Report {
         }
         match *g {
             "env" => check_env(&mut r),
+            "config" => check_config(&mut r),
             "resources" => check_resources(&mut r),
             other => r.items.push(Item {
                 group: other,
@@ -228,6 +229,81 @@ fn check_env(r: &mut Report) {
                 Err(e) => (Verdict::Fail, e),
             },
             None => (Verdict::Skip, "unset (M1: config_dir)".into()),
+        }
+    });
+}
+
+/// config — 설정 레지스트리(기본값 전수 유효 · 곁 표 키 존재) · 설정 폴더 판정 · 격리 폴더에서 저장 → 재적재 왕복.
+/// 실제 설정 폴더에는 쓰지 않는다(임시 폴더 안 PID 하위).
+fn check_config(r: &mut Report) {
+    timed(r, "config", "registry defaults valid", || {
+        let bad: Vec<&str> = ndir_settings::REGISTRY
+            .iter()
+            .filter(|e| ndir_settings::normalize(e.kind, e.default).is_none())
+            .map(|e| e.key)
+            .collect();
+        let side = ndir_settings::HIDDEN
+            .iter()
+            .chain(ndir_settings::ADVANCED)
+            .chain(ndir_settings::INFO_KEYS)
+            .filter(|k| ndir_settings::entry(k).is_none())
+            .count();
+        if bad.is_empty() && side == 0 {
+            (
+                Verdict::Pass,
+                format!("{} keys", ndir_settings::REGISTRY.len()),
+            )
+        } else {
+            (
+                Verdict::Fail,
+                format!("invalid defaults {bad:?} · dangling side-table keys {side}"),
+            )
+        }
+    });
+    timed(
+        r,
+        "config",
+        "config dir",
+        || match ndir_settings::config_dir() {
+            Some(d) => {
+                let src = if std::env::var_os(ndir_settings::ENV_HOME).is_some() {
+                    "NDIR_HOME"
+                } else if ndir_settings::portable_dir().is_some() {
+                    "portable data/"
+                } else {
+                    "user config dir"
+                };
+                (Verdict::Pass, format!("{src}: {}", d.display()))
+            }
+            None => (Verdict::Fail, "none".into()),
+        },
+    );
+    timed(r, "config", "save/reload round trip", || {
+        let dir =
+            std::env::temp_dir().join(format!("nexa-dir-selfcheck-cfg-{}", std::process::id()));
+        let path = dir.join(ndir_settings::FILE_NAME);
+        let mut s = ndir_settings::Settings::open(path.clone());
+        let r1 = s
+            .set("ui.theme", "light")
+            .and_then(|_| s.set("scroll.fast_step", "7"));
+        let saved = r1.is_ok() && s.save().is_ok();
+        let back = ndir_settings::Settings::open(path);
+        let ok = saved
+            && back.get("ui.theme") == Some("light")
+            && back.int("scroll.fast_step") == 7
+            && !back.is_modified("ui.lang");
+        let _ = std::fs::remove_dir_all(&dir);
+        if ok {
+            (Verdict::Pass, "temp dir · 2 keys".into())
+        } else {
+            (
+                Verdict::Fail,
+                format!(
+                    "saved={saved} theme={:?} step={}",
+                    back.get("ui.theme"),
+                    back.int("scroll.fast_step")
+                ),
+            )
         }
     });
 }

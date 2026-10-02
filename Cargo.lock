@@ -18,6 +18,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndir-settings"
+version = "0.23.0"
+dependencies = [
+ "ndir-i18n",
+ "nexa-conf",
+]
+
+[[package]]
 name = "ndir-term"
 version = "0.23.0"
 
@@ -37,10 +45,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-conf"
+version = "0.1.0"
+
+[[package]]
 name = "nexa-dir"
 version = "0.23.0"
 dependencies = [
  "ndir-i18n",
+ "ndir-settings",
 ]
 
 [[package]]

@@ -1,0 +1,17 @@
+[package]
+name = "ndir-settings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir 앱 설정 — 레지스트리(단일 원천) + settings.conf(nexa-conf · 변경분만) · 곁 표 · JSON · dir2 설정 가져오기 (출처: nexa-sql/crates/nsql-settings · DR-3)"
+
+[dependencies]
+ndir-i18n = { workspace = true }
+nexa-conf = { workspace = true }
+
+[lints]
+workspace = true
