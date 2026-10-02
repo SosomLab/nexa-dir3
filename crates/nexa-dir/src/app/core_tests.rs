@@ -433,6 +433,12 @@ fn startup_ready_assert_and_dumps() {
     app.exit_code = 0;
     app.startup_cmd("assert.nope:x");
     assert!(app.exit_requested && app.exit_code == super::startup_cmd::EXIT_ASSERT);
+    app.startup_cmd("quit:0");
+    assert_eq!(
+        app.exit_code,
+        super::startup_cmd::EXIT_ASSERT,
+        "단언 실패 뒤 quit은 코드를 못 덮는다"
+    );
     // quit 코드.
     app.exit_requested = false;
     app.exit_code = 0;

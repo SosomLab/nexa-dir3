@@ -17,7 +17,7 @@ pub(crate) const EXIT_ASSERT: u8 = 3;
 impl App {
     pub(crate) fn startup_cmd(&mut self, id: &str) {
         crash::note_command(id);
-        if let Some((target, path)) = id.split_once(".dump:").map(|(t, p)| (t, p)) {
+        if let Some((target, path)) = id.split_once(".dump:") {
             if let Some(text) = self.dump_of(target) {
                 let _ = std::fs::write(path, text);
             }
@@ -32,10 +32,13 @@ impl App {
             return;
         }
         if let Some(code) = id.strip_prefix("quit") {
-            self.exit_code = code
-                .strip_prefix(':')
-                .and_then(|c| c.trim().parse().ok())
-                .unwrap_or(self.exit_code);
+            // 단언 실패(3)는 뒤의 `quit:<코드>`가 덮지 못한다(10-03 실증: 실패 뒤 quit:5 = 5로 끝나 러너가 성공으로 봤다).
+            if self.exit_code == 0 {
+                self.exit_code = code
+                    .strip_prefix(':')
+                    .and_then(|c| c.trim().parse().ok())
+                    .unwrap_or(0);
+            }
             self.exit_requested = true;
             return;
         }
