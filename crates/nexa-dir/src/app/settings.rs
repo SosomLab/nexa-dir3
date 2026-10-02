@@ -90,7 +90,14 @@ impl App {
             "input.scroll_natural" => {
                 input::set_natural_scroll(self.settings.flag("input.scroll_natural"));
             }
-            "dock.visible" | "launcher.visible" | "list.col_width_sync" | "layout.info_mode" => {
+            "dock.visible"
+            | "layout.info_mode"
+            | "layout.dock_height_pct"
+            | "layout.dock_split_pct" => {
+                self.sync_menu_checks();
+                self.layout();
+            }
+            "launcher.visible" | "list.col_width_sync" => {
                 self.sync_menu_checks();
             }
             k if k.starts_with("key.") => {

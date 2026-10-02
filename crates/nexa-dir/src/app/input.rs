@@ -123,6 +123,10 @@ impl App {
             Some(Area::Panel(1))
         } else if self.statusbar.bounds().contains(p) {
             Some(Area::Status)
+        } else if self.docks[0].bounds().contains(p) {
+            Some(Area::Dock(0))
+        } else if self.docks[1].bounds().contains(p) {
+            Some(Area::Dock(1))
         } else {
             None
         }
@@ -135,6 +139,7 @@ impl App {
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
             Area::Split => self.split_event(ev, inv),
             Area::Status => self.statusbar.on_event(ev, inv),
+            Area::Dock(i) => self.docks[i].on_event(ev, inv),
         }
     }
 
@@ -194,6 +199,11 @@ impl App {
                 self.panels[0].on_event(&ev, inv);
                 if self.dual {
                     self.panels[1].on_event(&ev, inv);
+                }
+                for d in &mut self.docks {
+                    if d.bounds().h > 0 {
+                        d.on_event(&ev, inv);
+                    }
                 }
             }
             InputEvent::MouseDown { x, y, .. }
@@ -281,6 +291,20 @@ impl App {
                 && self.settings.flag("list.col_width_sync")
             {
                 self.sync_col_widths_from(i);
+            }
+        }
+        for i in 0..2 {
+            if self.docks[i].take_goto() {
+                // 터미널 "폴더로 이동"(→)은 T-61 — 지금은 안내.
+                self.toasts.push(
+                    toast::ToastKind::Info,
+                    tr("dock.terminal"),
+                    tr("cmd.notYet"),
+                );
+            }
+            if self.docks[i].take_popout() {
+                self.toasts
+                    .push(toast::ToastKind::Info, tr("dock.preview"), tr("cmd.notYet"));
             }
         }
         if let Some(id) = self.tab_menu.take_picked() {

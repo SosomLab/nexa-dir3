@@ -306,6 +306,9 @@ impl App {
                 {
                     self.sync_col_widths_from(a);
                 }
+                if id == "view.dock" {
+                    self.layout();
+                }
             }
             "view.always_on_top" => {
                 let on = self.toggle_flag("window.always_on_top");
@@ -347,6 +350,7 @@ impl App {
                 };
                 self.set_setting("layout.info_mode", if dual { "dual" } else { "single" });
                 self.sync_menu_checks();
+                self.layout();
             }
             "view.mode_tree" | "view.mode_flat" | "view.mode_tiles" => {
                 let mode = &id["view.mode_".len()..];

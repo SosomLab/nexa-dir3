@@ -163,6 +163,8 @@ impl App {
             "toolbar" => Some(self.toolbar.bounds()),
             "splitter" => Some(self.splitter.rect()),
             "statusbar" => Some(self.statusbar.bounds()),
+            "dock0" => Some(self.docks[0].bounds()),
+            "dock1" => Some(self.docks[1].bounds()),
             _ => {
                 let (p, part) = name.split_once('.').unwrap_or((name, ""));
                 match p {
@@ -221,6 +223,17 @@ impl App {
                 self.prefs_win.is_open(),
                 self.prefs_win.shown_keys()
             ),
+            "dock" => {
+                let d = &self.docks[0];
+                format!(
+                    "dock0 kind {} rect {},{} {}x{}\n",
+                    d.active_kind(),
+                    d.bounds().x,
+                    d.bounds().y,
+                    d.bounds().w,
+                    d.bounds().h
+                )
+            }
             "menu" => match self.menubar.open_index() {
                 Some(i) => format!("open {i}\n"),
                 None => "closed\n".to_string(),
@@ -326,6 +339,13 @@ impl App {
                 r(p.rows().bounds()),
                 p.rows().source().len(),
                 p.rows().caret()
+            ));
+        }
+        for (i, d) in self.docks.iter().enumerate() {
+            out.push_str(&format!(
+                "dock{i} {} kind {}\n",
+                r(d.bounds()),
+                d.active_kind()
             ));
         }
         out.push_str(&format!("splitter {}\n", r(self.splitter.rect())));

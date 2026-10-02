@@ -105,7 +105,10 @@ fn layout_scales_and_stays_inside() {
         sp.x >= l.right() - sp.w && sp.right() <= r.x + sp.w,
         "splitter between: {sp:?}"
     );
-    assert_eq!(l.bottom(), app.statusbar.bounds().y);
+    // 패널 ▸ (틈) ▸ 도크 밴드 ▸ 상태줄 — 도크(기본 켜짐 · T-60)가 배율에도 상태줄 위에 꼭 맞는다.
+    let d = app.docks[0].bounds();
+    assert!(l.bottom() < d.y && d.y - l.bottom() <= 8, "{l:?} {d:?}");
+    assert_eq!(d.bottom(), app.statusbar.bounds().y);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -650,5 +653,71 @@ fn my_pc_drive_columns_from_disk_port() {
     }
     app.command("nav.back");
     assert_eq!(app.panels[0].rows().columns().len(), 5);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-60 도크: 기본 켜짐 = 전폭 밴드(듀얼 = 좌/우 · 단일 정보 = 좌 전폭) · 패널 높이가 줄어든다 · 정보 줄 = 선택 파일 · 미리보기 종류 전환 = 텍스트 · 끄면 0.
+#[test]
+fn dock_layout_and_contents() {
+    let (mut app, dir) = fixture("dock");
+    app.layout_for(1200, 800, 1.0);
+    let (d0, d1) = (app.docks[0].bounds(), app.docks[1].bounds());
+    assert!(d0.h > 0 && d1.h > 0 && d0.right() <= d1.x, "{d0:?} {d1:?}");
+    assert_eq!(d0.bottom(), app.statusbar.bounds().y);
+    assert!(app.panels[0].bounds().bottom() < d0.y);
+    // 높이 = 영역 × 30 %(기본) · 행 3줄 ~ 절반 클램프.
+    let area_h = app.statusbar.bounds().y - app.panels[0].bounds().y;
+    assert_eq!(
+        d0.bottom() - app.panels[0].bounds().bottom(),
+        area_h * 30 / 100
+    );
+    // 단일 정보 = 좌 전폭.
+    let _ = app.settings.set("layout.info_mode", "single");
+    app.apply_setting("layout.info_mode");
+    assert_eq!(app.docks[0].bounds().w, 1200);
+    assert_eq!(app.docks[1].bounds().h, 0);
+    // 정보 줄 = 선택 파일(a.txt) · 선택 없음 = 현재 폴더.
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(
+        rec.drew_text("Current folder:"),
+        "{:?}",
+        rec.strings().collect::<Vec<_>>()
+    );
+    let mut inv = Invalidations::default();
+    app.panels[0]
+        .rows_mut()
+        .select_program(1, nexa_grid::SelectOp::Single, &mut inv);
+    app.update_status();
+    rec.clear();
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(rec.drew_text("Name: a.txt") && rec.drew_text("Kind: TXT"));
+    // 종류 스트립 클릭(둘째 라벨 = 미리보기 · 클릭 범위는 paint 때 캐시 → 왼쪽부터 훑어 찾기) → 파일 내용.
+    let strip_y = app.docks[0].bounds().y + 4;
+    let mut x = app.docks[0].bounds().x + 2;
+    while app.docks[0].active_kind() != 1 && x < 400 {
+        app.route(down(x, strip_y));
+        app.route(InputEvent::MouseUp { x, y: strip_y });
+        x += 3;
+    }
+    assert_eq!(
+        app.docks[0].active_kind(),
+        1,
+        "스트립 클릭으로 미리보기 전환"
+    );
+    app.update_status();
+    rec.clear();
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(
+        rec.drew_text("hello"),
+        "{:?}",
+        rec.strings().collect::<Vec<_>>()
+    );
+    assert!(app.dump_of("layout").unwrap().contains("dock0 "));
+    assert!(app.dump_of("dock").unwrap().contains("kind 1"));
+    let _ = app.settings.set("dock.visible", "off");
+    app.apply_setting("dock.visible");
+    assert_eq!(app.docks[0].bounds().h, 0);
+    assert_eq!(app.panels[0].bounds().bottom(), app.statusbar.bounds().y);
     let _ = std::fs::remove_dir_all(&dir);
 }

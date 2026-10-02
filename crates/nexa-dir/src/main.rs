@@ -15,6 +15,7 @@ mod clipboard;
 mod clipboard_x11;
 mod copybtn;
 mod crash;
+mod dockinfo;
 mod filelist;
 mod icon;
 #[allow(dead_code)]
@@ -53,6 +54,7 @@ use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, Theme};
 use nexa_ctl::{InputEvent, Invalidations, Widget};
+use nexa_explorer::InfoDock;
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
 use panel::{Panel, PanelMetrics};
@@ -94,6 +96,7 @@ enum Area {
     Panel(usize),
     Split,
     Status,
+    Dock(usize),
 }
 
 /// 앱 — 상태 한 곳. **창 없이도 동작**(DR-10 · CI-102 최소 분리): `viewport`·`scale`은 Shell(이벤트 루프)이 창에서 읽어 넣고,
@@ -150,6 +153,8 @@ struct App {
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
     tab_menu: ContextMenu,
     tab_menu_at: Option<(usize, usize)>,
+    /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
+    docks: [InfoDock; 2],
     /// 플랫폼 포트 묶음(DR-5 · ADR-0001) — 운영 `Platform::native()` · 시험 `Platform::fake()`.
     platform: Platform,
     /// 폴더 감시 폴링 시각(1 s 간격 · 자동 재열람 PANEL-036).
@@ -310,7 +315,17 @@ impl App {
             tab_menu_at: None,
             platform,
             watch_next: Instant::now(),
+            docks: [
+                InfoDock::new(tr("dock.info"), 20, 6),
+                InfoDock::new(tr("dock.info"), 20, 6),
+            ],
         };
+        for d in &mut app.docks {
+            d.set_kinds(
+                vec![tr("dock.info"), tr("dock.preview"), tr("dock.terminal")],
+                &mut inv,
+            );
+        }
         app.apply_window_sizes();
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
@@ -358,6 +373,37 @@ impl App {
         );
         let mut inv = Invalidations::default();
         self.statusbar.set_text(&left, &right, &mut inv);
+        self.update_docks();
+    }
+
+    /// 도크 내용(dir2 `update_dock_info`): 단일 정보 = 좌 도크의 원천은 **활성 패널** · 종류 0 정보 · 1 미리보기 · 2 터미널(T-61).
+    /// 키 = 종류 + 대상(선택 경로·없으면 현재 폴더) → 같은 대상의 갱신은 스크롤·선택 유지.
+    pub(crate) fn update_docks(&mut self) {
+        let single_info =
+            !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
+        let mut inv = Invalidations::default();
+        for i in 0..2 {
+            if self.docks[i].bounds().h <= 0 {
+                continue;
+            }
+            let src = if single_info { self.active } else { i };
+            let selected = self.panels[src].selected_paths();
+            let current = self.panels[src].root_path();
+            let kind = self.docks[i].active_kind();
+            let (lines, image) = match kind {
+                1 => dockinfo::preview_content(&selected),
+                2 => (vec![tr("cmd.notYet")], None),
+                _ => (dockinfo::info_lines(&selected, &current), None),
+            };
+            let subject = selected.first().map_or_else(
+                || current.display().to_string(),
+                |p| p.display().to_string(),
+            );
+            let key = format!("{kind}|{}|{subject}", selected.len());
+            self.docks[i].set_content(&key, lines, &mut inv);
+            self.docks[i].set_image(image, &mut inv);
+            self.docks[i].set_popout(kind == 1, &mut inv);
+        }
     }
 
     /// 배치(Shell 쪽) — 창 크기를 읽어 [`App::layout_core`].
@@ -410,19 +456,51 @@ impl App {
         let gap = px(SPLIT_TH, s).max(2);
         let g2 = gap / 2;
         let half = px(3.0, s);
+        let m = panel_metrics(&self.settings, s);
+        // 하단 도크 = 전폭 밴드(dir2 X-6): 높이 = 영역 × `layout.dock_height_pct`(행 3줄 ~ 절반) · 숨김 = 0.
+        let band_h = if self.settings.flag("dock.visible") {
+            let pct = self.settings.int("layout.dock_height_pct").clamp(5, 50) as i32;
+            (area_h * pct / 100).clamp((m.row_h * 3).min(area_h / 2), area_h / 2)
+        } else {
+            0
+        };
+        let ph = (area_h - band_h).max(0);
         let rects = if self.dual {
             let sx = self.splitter_x(w);
             self.splitter
-                .set_rect(Rect::new(sx - half, top, half * 2 + 1, area_h));
+                .set_rect(Rect::new(sx - half, top, half * 2 + 1, ph));
             [
-                Rect::new(0, top, (sx - g2).max(0), area_h),
-                Rect::new(sx - g2 + gap, top, (w - sx + g2 - gap).max(0), area_h),
+                Rect::new(0, top, (sx - g2).max(0), ph),
+                Rect::new(sx - g2 + gap, top, (w - sx + g2 - gap).max(0), ph),
             ]
         } else {
             self.splitter.set_rect(Rect::default());
-            [Rect::new(0, top, w, area_h), Rect::default()]
+            [Rect::new(0, top, w, ph), Rect::default()]
         };
-        let m = panel_metrics(&self.settings, s);
+        // 도크 좌/우 = 파일 좌/우와 **독립** 비율(`layout.dock_split_pct`) · 단일 정보 = 좌 하나 전폭 · 우 = 0.
+        let single_info =
+            !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
+        let dock_rects = if band_h > 0 {
+            let band_y = top + ph;
+            let dock_y = band_y + gap;
+            let dock_h = (band_h - gap).max(0);
+            if single_info {
+                [Rect::new(0, dock_y, w, dock_h), Rect::default()]
+            } else {
+                let dpct = self.settings.int("layout.dock_split_pct").clamp(10, 90) as i32;
+                let dsx = (w * dpct / 100).clamp(w / 8, w * 7 / 8);
+                [
+                    Rect::new(0, dock_y, (dsx - g2).max(0), dock_h),
+                    Rect::new(dsx - g2 + gap, dock_y, (w - dsx + g2 - gap).max(0), dock_h),
+                ]
+            }
+        } else {
+            [Rect::default(), Rect::default()]
+        };
+        for (d, r) in self.docks.iter_mut().zip(dock_rects) {
+            d.set_metrics(m.row_h, m.pad_x, &mut inv);
+            d.set_bounds(r, &mut inv);
+        }
         for (p, r) in self.panels.iter_mut().zip(rects) {
             p.set_metrics(m, &mut inv);
             p.set_default_columns(columns_for(r.w, s), &mut inv);

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 21차 — M5 착수: T-60 하단 도크(정보 · 미리보기 · 터미널 스트립)
+
+- **한 일**: nexa-explorer `InfoDock` 2개를 App에 통합 — dir2 전폭 밴드 배치(`dock.visible` · `layout.dock_height_pct/dock_split_pct/info_mode`) · 정보 8줄(std 메타) · 미리보기 텍스트(64 KiB · 바이너리/빈 파일 판정 · 이미지는 경로만) · 활성 패널 원천 · `Area::Dock` 라우팅 · `dock.dump` · 시험 +4(82) · T4 시나리오 7.
+- **지금 상태**: M4 🚧 · **M5 🚧** — 다음 = T-61 터미널 뷰(Pty 포트 ConPTY/forkpty · ndir-term VtScreen 셀 렌더 · cwd 동기 · → 버튼) → T-62 플러그인 런타임. 이미지 미리보기 그리기는 T-31 `draw_image`(nexa-grid Adapt) 뒤.
+- **걸린 것**: 디스크 할당 크기·형식별 상세는 Windows 속성 시스템(T-5x) ⚠.
+
+→ [journal/2026-10-03 §23](journal/2026-10-03.md)
+
 ## 10-03 20차 — PANEL-044 내 PC 전용 열 + Windows 클립보드 실기 교훈
 
 - **한 일**: 내 PC(가상 최상위) = 드라이브 열(이름·종류·전체 크기·여유 공간 · 진입/이탈 시점만 교체 · 이름 폭 상속 · 타일 "X 중 Y 사용 가능" + 용량 바)을 Disk 포트로 채움(한 번만) · 시험 +3(78). Windows 파일 클립보드 opt-in 왕복 시험이 적발한 실기 교훈 2(DropEffect 선독 · 쓰기 직후 재렌더 재시도) 수정.

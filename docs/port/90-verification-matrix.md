@@ -70,6 +70,12 @@
 | GUI(위젯 틱 요청) | `Invalidations::request_tick` | nexa-ui `widget.rs` | T2 | `tick_request_is_idempotent_and_taken_once` | ✅ | 105차 |
 | UIK-202 · GUI-090~101 | PathBar(브레드크럼·편집·자동완성 팝업) | nexa-ui `nexa-explorer/src/pathbar.rs` | T2 | dir2 시험 7 | ✅ | 106차 · 경로 문법·제안은 호스트 |
 | UIK-204 · GUI-110~ | InfoDock(스트립·텍스트/이미지·선택·팝아웃·오버레이 바) | nexa-ui `nexa-explorer/src/dock.rs` | T2 | dir2 시험 13 | ✅ | 106차 · 이미지 그리기는 호스트 `IconImage`(G-2) |
+| GUI-110 · X-6 | 도크 배치(전폭 밴드 · 높이 % · 좌/우 분할 % · 단일 정보 전폭 · 숨김 = 0) | `main.rs::layout_core` | T2·T4 | `dock_layout_and_contents` · `layout_scales_and_stays_inside` · 골든 · `dock-info.scn` | ✅ | 10-03 §23 |
+| GUI-111 | 종류 스트립(정보/미리보기/터미널 · →) 클릭 전환 · 내용 갱신은 호스트 | `app/input.rs`(Area::Dock) · `update_docks` | T2 | `dock_layout_and_contents`(클릭 → "hello") | ✅ | → 버튼·↗ 팝아웃 = 토스트(T-61/T-62) |
+| GUI-112 | 정보 줄(이름·종류·경로·크기·만든/수정/액세스 · 다중 선택 수 · 현재 폴더) | `dockinfo.rs::info_lines` | T2 | `info_and_preview_on_temp_tree` · core "Name: a.txt" | ⚠ | 디스크 할당 크기·형식별 상세(Windows 속성 시스템) T-5x |
+| GUI-113 | 미리보기 텍스트(64 KiB · NUL = 바이너리 · 빈 파일 · 200줄 · 탭 4칸) · 폴더/없음 = none · 실패 | `dockinfo.rs::preview_content` | T2 | `preview_lines_rules` · `info_and_preview_on_temp_tree` | ✅ | 플러그인·압축 미리보기 T-62 |
+| GUI-114 | 미리보기 이미지(확장자 → `set_image(경로)`) | `dockinfo.rs::is_image_ext` | T2 | `info_and_preview_on_temp_tree`(p.png) | ⚠ | 실제 그리기 = T-31 nexa-grid `Adapt::draw_image` 뒤 |
+| GUI-115 | 도크 갱신 길목 = `update_status`(선택·폴더 변경마다) · 키 `종류|선택수|대상` 유지 | `main.rs::update_docks` | T2 | `dock_layout_and_contents` | ✅ | dir2 `update_dock_info` 동일 |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
 | SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |

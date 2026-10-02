@@ -38,6 +38,11 @@ impl App {
             self.panels[1].paint(dc, &th);
             self.splitter.paint(dc, &th);
         }
+        for d in &self.docks {
+            if d.bounds().h > 0 {
+                d.paint(dc, &th);
+            }
+        }
         // 크롬(창 전폭)
         dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
         self.toolbar.paint(dc, &th);

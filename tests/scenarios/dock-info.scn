@@ -1,0 +1,19 @@
+# T4 · T-60 하단 도크: 기본 켜짐 = 전폭 밴드 · 정보 종류 0 · 선택 파일 정보 · 숨김 토글(view.dock) = 높이 0 · 다시 켜면 복귀.
+id: dock-info
+title: 하단 도크 배치 · 정보 줄 · 숨김 토글
+tree: file a.txt 11
+tree: dir sub
+settings: ui.lang=en
+cmd: @ready:layout.dump:<out>/layout-on.txt
+cmd: @ready:dock.dump:<out>/dock-on.txt
+cmd: @ready:view.dock
+cmd: @ready:layout.dump:<out>/layout-off.txt
+cmd: @ready:view.dock
+cmd: @ready:dock.dump:<out>/dock-again.txt
+cmd: @ready:quit
+check: layout-on.txt: dock0 0,
+check: layout-on.txt: dock1
+check: layout-on.txt: !dock0 0,0 0x0
+check: dock-on.txt: dock0 kind 0
+check: layout-off.txt: dock0 0,0 0x0 kind 0
+check: dock-again.txt: !rect 0,0 0x0
