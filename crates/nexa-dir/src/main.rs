@@ -22,6 +22,7 @@ mod input;
 mod keys_win;
 mod nav;
 mod panel;
+mod platform;
 mod prefs_win;
 #[allow(dead_code)]
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
@@ -55,6 +56,7 @@ use nexa_ctl::{InputEvent, Invalidations, Widget};
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
 use panel::{Panel, PanelMetrics};
+use platform::Platform;
 use prefs_win::PrefsWin;
 use session::Session;
 use std::path::PathBuf;
@@ -148,6 +150,10 @@ struct App {
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
     tab_menu: ContextMenu,
     tab_menu_at: Option<(usize, usize)>,
+    /// 플랫폼 포트 묶음(DR-5 · ADR-0001) — 운영 `Platform::native()` · 시험 `Platform::fake()`.
+    platform: Platform,
+    /// 폴더 감시 폴링 시각(1 s 간격 · 자동 재열람 PANEL-036).
+    watch_next: Instant,
 }
 
 /// 논리 px → 장치 px(반올림).
@@ -221,6 +227,7 @@ impl App {
         ui_font: Font,
         start: Option<PathBuf>,
         session: Option<Session>,
+        platform: Platform,
     ) -> App {
         let session = session.filter(|s| start.is_none() && !s.is_empty());
         let start_dir = start
@@ -301,6 +308,8 @@ impl App {
             open_keys: false,
             tab_menu: ContextMenu::new(),
             tab_menu_at: None,
+            platform,
+            watch_next: Instant::now(),
         };
         app.apply_window_sizes();
         app.sync_menu_shortcuts();
@@ -584,7 +593,7 @@ fn run_gui() -> ExitCode {
     // 세션 복원(dir2 PREFS-054 — 창 생성 전) · 저장 폴더 = 설정 폴더.
     let session_dir = ndir_settings::config_dir();
     let session = session_dir.as_deref().and_then(Session::load);
-    let mut app = App::new(settings, ui.font, None, session);
+    let mut app = App::new(settings, ui.font, None, session, Platform::native());
     app.session_dir = session_dir;
     // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
     if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {

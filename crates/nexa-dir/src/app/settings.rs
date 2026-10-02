@@ -134,7 +134,13 @@ mod tests {
         // `ui.lang=en` 고정 — `apply_setting("ui.lang")`이 i18n 전역 표를 바꾸므로 병렬 시험이 OS 언어로 새지 않게(10-03 경합 적발).
         let settings = Settings::from_text(dir.join("settings.conf"), "ui.lang=en");
         let font = nexa_font::ui_font(None).expect("font");
-        let mut app = App::new(settings, font.font, Some(dir.clone()), None);
+        let mut app = App::new(
+            settings,
+            font.font,
+            Some(dir.clone()),
+            None,
+            Platform::fake(),
+        );
         app.layout_for(1200, 800, 1.0);
         let mut missing = Vec::new();
         for e in ndir_settings::REGISTRY {

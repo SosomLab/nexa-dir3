@@ -182,6 +182,9 @@ pub(crate) fn run(opts: &Options) -> Report {
             "config" => check_config(&mut r),
             "resources" => check_resources(&mut r),
             "license" => check_license(&mut r),
+            "shell" => check_shell(&mut r),
+            "open" => check_open(&mut r),
+            "fs" => check_fs(&mut r),
             other => r.items.push(Item {
                 group: other,
                 name: "(not implemented)".into(),
@@ -460,6 +463,100 @@ fn probe_writable(dir: &std::path::Path) -> Result<String, String> {
     std::fs::write(&p, b"probe").map_err(|e| format!("{}: write failed: {e}", dir.display()))?;
     let _ = std::fs::remove_file(&p);
     Ok(dir.display().to_string())
+}
+
+/// 셸 탐지(T-50 `Shell` 포트 · SKEL-425): 기본 셸이 있고 실행 파일이 존재한다 · 후보 목록.
+fn check_shell(r: &mut Report) {
+    let p = crate::platform::Platform::native();
+    timed(r, "shell", "default shell", || {
+        match p.shell.default_shell() {
+            Some(sh) if sh.program.is_file() => (
+                Verdict::Pass,
+                format!("{} ({})", sh.label, sh.program.display()),
+            ),
+            Some(sh) => (Verdict::Fail, format!("missing: {}", sh.program.display())),
+            None => (Verdict::Fail, "no shell found".into()),
+        }
+    });
+    timed(r, "shell", "candidates", || {
+        let c = p.shell.candidates();
+        (
+            if c.is_empty() {
+                Verdict::Warn
+            } else {
+                Verdict::Pass
+            },
+            c.iter()
+                .map(|s| s.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" · "),
+        )
+    });
+}
+
+/// 열기 수단(T-50 `Opener` 포트): 실행은 하지 않고 명령 존재만(CI 안전).
+fn check_open(r: &mut Report) {
+    timed(r, "open", "opener command", || {
+        let name = if cfg!(windows) {
+            "cmd.exe"
+        } else if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        let found = if cfg!(windows) {
+            std::env::var_os("SystemRoot")
+                .map(std::path::PathBuf::from)
+                .map(|r| r.join("System32").join("cmd.exe"))
+                .is_some_and(|p| p.is_file())
+                || crate::platform::find_in_path(name).is_some()
+        } else {
+            crate::platform::find_in_path(name).is_some()
+        };
+        if found {
+            (Verdict::Pass, name.into())
+        } else {
+            (Verdict::Warn, format!("{name} not in PATH"))
+        }
+    });
+}
+
+/// 파일 시스템(샌드박스 임시 폴더 안에서만 · docs/18 §6 fs): 만들기·복사·이동·이름 바꾸기·삭제·유니코드 · 드라이브 용량(`Disk` 포트).
+fn check_fs(r: &mut Report) {
+    let base = std::env::temp_dir().join(format!("nexa-dir-selfcheck-fs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    timed(r, "fs", "create · copy · rename · delete", || {
+        let run = || -> std::io::Result<String> {
+            std::fs::create_dir_all(base.join("한글 폴더"))?;
+            std::fs::write(base.join("한글 폴더").join("a.txt"), b"nexa")?;
+            std::fs::copy(base.join("한글 폴더").join("a.txt"), base.join("b.txt"))?;
+            std::fs::rename(base.join("b.txt"), base.join("c.txt"))?;
+            let n = std::fs::read(base.join("c.txt"))?.len();
+            std::fs::remove_file(base.join("c.txt"))?;
+            std::fs::remove_dir_all(base.join("한글 폴더"))?;
+            Ok(format!("{n} bytes round trip"))
+        };
+        let out = run();
+        let _ = std::fs::remove_dir_all(&base);
+        match out {
+            Ok(d) => (Verdict::Pass, d),
+            Err(e) => (Verdict::Fail, e.to_string()),
+        }
+    });
+    timed(r, "fs", "drive space (temp)", || {
+        let p = crate::platform::Platform::native();
+        match p.disk.space(&std::env::temp_dir()) {
+            Some((total, free)) => (
+                Verdict::Pass,
+                format!(
+                    "{} free / {}",
+                    crate::filelist::format_size(free),
+                    crate::filelist::format_size(total)
+                ),
+            ),
+            None => (Verdict::Skip, "unsupported on this OS (T-52/53)".into()),
+        }
+    });
 }
 
 #[cfg(test)]

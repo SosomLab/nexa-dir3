@@ -131,6 +131,7 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.startup_timed.iter().map(|(at, _)| *at).min() {
             next = next.min(t);
         }
+        next = next.min(self.watch_tick(now));
         if let Some(t) = self.session_tick(now) {
             next = next.min(t);
         }

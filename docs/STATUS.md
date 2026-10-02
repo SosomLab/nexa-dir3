@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 18차 — M4 착수: T-50 플랫폼 포트 + 가짜 + ADR-0001
+
+- **한 일**: `platform/{mod,fake,windows,macos,linux}.rs` — 포트 9종(DR-5 8 + `Disk`) · `Platform::native()`(셸 탐지 · 열기/보기 · Windows 용량 · 폴링 감시) · `Platform::fake()`(기록·주입) · `App.platform` 배선(파일 열기 = Opener · 1 s 폴링 자동 재열람) · `--selfcheck` shell/open/fs 실제 항목 · [ADR-0001](adr/0001-platform-ports.md). 시험 +5.
+- **지금 상태**: M3 🚧(T-42 런처·SVG 잔여) · **M4 🚧** — 다음 = T-51 Windows(셸 메뉴 IContextMenu · 휴지통 · CF_HDROP · OLE DnD · ConPTY · ReadDirectoryChangesW) → T-52 macOS → T-53 Linux → T-54 자가 점검 나머지.
+- **걸린 것**: Unix 드라이브 용량(statvfs 수동 extern 구조체 레이아웃) = T-52/53에서.
+
+→ [journal/2026-10-03 §20](journal/2026-10-03.md)
+
 ## 10-03 17차 — M3 T-43 2차: 탭 메뉴 · 패널 간 이동 · 열 폭 동기
 
 - **한 일**: `Tab{locked, pinned}` · 잠금/고정/복제/분리·부착(dir2 PANEL-016~022) · 탭 우클릭 메뉴(nexa-ctl ContextMenu · 잠금·고정·복제·새 탭·다른 패널로·닫기) · 열 폭 동기(`list.col_width_sync`) · 세션 잠금/고정 저장·복원 · i18n +1 · 시험 +2.

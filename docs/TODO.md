@@ -62,7 +62,7 @@
 
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-50 | 포트 trait 8종 + Fake + ADR-0001 | P0 | 중 | T-41 | DR-5 · CI-103 | ☐ |
+| T-50 | 포트 trait 8종 + Fake + ADR-0001 | P0 | 중 | T-41 | DR-5 · CI-103 | ✅ 10-03(journal §20 · 9종(+Disk) · 폴링 감시·외부 열기·Windows 용량 · selfcheck shell/open/fs) |
 | T-51 | Windows: 셸 메뉴(IContextMenu + 메뉴 스레드) · 휴지통 · CF_HDROP 클립보드 · OLE DnD · 폴더 감시 · 셸 통지 · ShellExecute · ConPTY | P0 | 대 | T-50 | SHELL · TERM | ☐ |
 | T-52 | macOS: 자체 메뉴 + 연결 프로그램 · trashItem · NSPasteboard 파일 URL · NSDragging · FSEvents · open · forkpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | ☐ |
 | T-53 | Linux: 자체 메뉴 + xdg/MimeApps · freedesktop Trash · gnome-copied-files/text/uri-list · XDND · inotify · xdg-open · openpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | ☐ |

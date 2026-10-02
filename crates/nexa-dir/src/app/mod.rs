@@ -8,6 +8,7 @@ mod paint;
 mod sessions;
 mod settings;
 mod startup_cmd;
+mod watch;
 mod windows;
 
 #[cfg(test)]

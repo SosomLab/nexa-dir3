@@ -17,7 +17,16 @@ fn fixture(tag: &str) -> (App, PathBuf) {
     ndir_i18n::activate(ndir_i18n::load("en", &dir.join("nowhere")));
     let settings = Settings::from_text(dir.join("settings.conf"), "");
     let font = nexa_font::ui_font(None).expect("OS UI font (CI installs fonts)");
-    (App::new(settings, font.font, Some(dir.clone()), None), dir)
+    (
+        App::new(
+            settings,
+            font.font,
+            Some(dir.clone()),
+            None,
+            Platform::fake(),
+        ),
+        dir,
+    )
 }
 
 fn normalize(dump: &str, root: &std::path::Path) -> String {
@@ -349,7 +358,7 @@ fn session_roundtrip_through_app() {
     broken.panels[1].active = 2;
     let settings = Settings::from_text(dir.join("settings2.conf"), "");
     let font = nexa_font::ui_font(None).expect("font");
-    let mut app2 = App::new(settings, font.font, None, Some(broken));
+    let mut app2 = App::new(settings, font.font, None, Some(broken), Platform::fake());
     app2.layout_for(1200, 800, 1.0);
     assert_eq!(app2.active, 1);
     assert_eq!(app2.panels[0].tab_count(), 2);
@@ -362,7 +371,13 @@ fn session_roundtrip_through_app() {
     // 실행 인자가 있으면 세션 무시.
     let settings = Settings::from_text(dir.join("settings3.conf"), "");
     let font = nexa_font::ui_font(None).expect("font");
-    let app3 = App::new(settings, font.font, Some(dir.join("sub")), Some(parsed));
+    let app3 = App::new(
+        settings,
+        font.font,
+        Some(dir.join("sub")),
+        Some(parsed),
+        Platform::fake(),
+    );
     assert_eq!(app3.panels[0].tab_count(), 1);
     assert!(app3.panels[0].root_path().ends_with("sub"));
     // 저장은 폴더가 있을 때만 · flush = 파일.
@@ -545,5 +560,47 @@ fn tab_menu_and_column_sync() {
     app.command("view.col_width_sync");
     assert!(app.settings.flag("list.col_width_sync"));
     assert_eq!(app.panels[1].col_widths_now(), vec![200, 50, 60, 70, 80]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-50 포트 배선(가짜 플랫폼): 파일 활성화 = Opener · 실패 = 토스트 · 감시 변경 = 그 폴더 탭 재열람(캐럿 유지) · 감시 대상 = 두 패널 폴더.
+#[test]
+fn platform_ports_wire_open_and_watch() {
+    let (mut app, dir) = fixture("ports");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    // 파일 활성화(Enter) → Opener.open.
+    let mut inv = Invalidations::default();
+    app.panels[0]
+        .rows_mut()
+        .select_program(1, nexa_grid::SelectOp::Single, &mut inv);
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Enter,
+        shift: false,
+        primary: false,
+    });
+    assert!(
+        log.borrow()
+            .calls
+            .iter()
+            .any(|c| c.starts_with("open:") && c.ends_with("a.txt")),
+        "{:?}",
+        log.borrow().calls
+    );
+    assert!(!app.toasts.animating(), "성공은 조용히");
+    log.borrow_mut().open_fails = true;
+    app.open_external(&dir.join("b.md"));
+    assert!(app.toasts.animating(), "실패 = 토스트 한 번");
+    // 감시: 1 s 틱 → 대상 = 두 패널 폴더 · 변경 주입 → 재열람(새 파일이 보인다 · 캐럿 유지).
+    app.watch_next = Instant::now();
+    app.watch_tick(Instant::now());
+    assert_eq!(log.borrow().watched, vec![dir.clone()]);
+    std::fs::write(dir.join("zz.txt"), b"new").expect("write");
+    assert_eq!(app.panels[0].rows().source().len(), 3);
+    log.borrow_mut().changed = vec![dir.clone()];
+    app.watch_next = Instant::now();
+    app.watch_tick(Instant::now());
+    assert_eq!(app.panels[0].rows().source().len(), 4);
+    assert_eq!(app.panels[0].rows().caret(), Some(1));
     let _ = std::fs::remove_dir_all(&dir);
 }

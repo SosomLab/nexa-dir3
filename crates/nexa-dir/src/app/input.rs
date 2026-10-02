@@ -295,11 +295,10 @@ impl App {
 
     /// 파일 활성화 — 연결 프로그램으로 열기(platform 층 T-6x). 지금은 토스트.
     pub(crate) fn open_external(&mut self, path: &std::path::Path) {
-        self.toasts.push(
-            toast::ToastKind::Info,
-            tr("cmd.activate"),
-            path.display().to_string(),
-        );
+        if let Err(e) = self.platform.opener.open(path) {
+            self.toasts
+                .push(toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());
+        }
         self.redraw();
     }
 

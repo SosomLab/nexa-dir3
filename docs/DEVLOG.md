@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M4 T-50 플랫폼 포트**: `platform/` 포트 9종 + `Platform::native/fake` + ADR-0001 · 폴링 감시 자동 재열람 · 외부 열기(Opener) · Windows 드라이브 용량 · selfcheck shell/open/fs 실제 항목 · 시험 +5 → [journal §20](journal/2026-10-03.md)
 - **M3 T-43 2차 탭 메뉴·열 폭 동기**: 탭 잠금/고정/복제/분리·부착 + 우클릭 컨텍스트 메뉴(nexa-ctl) + 다른 패널로 이동 + 열 폭 동기 + 세션 잠금/고정 · 시험 +2 · 내 PC 용량 열은 M4 ⚠ → [journal §19](journal/2026-10-03.md)
 - **M3 T-44 설정 창·단축키 창**: nexa-sql `prefs_win`/`keys_win` 복사(SQL 미리보기·확장·`Msg` 제거 · i18n 키) · 보조 창 호스트 배선(`app/windows.rs`) · `apply_setting` 한 길 + **적용 누락 감시 시험** · i18n +19×3 · 시나리오 `prefs-open` → [journal §18](journal/2026-10-03.md)
 - **T-06 `ndir-check` 러너**: `.scn` 시나리오(격리 홈·샘플 트리·`@ready…assert…quit`·검사식) 5개 PASS · 의존 0 · CI Windows 단계 · 상대 경로 함정 적발 → [journal §17](journal/2026-10-03.md)
