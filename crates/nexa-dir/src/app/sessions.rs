@@ -14,7 +14,13 @@ impl App {
             let (tabs, active) = p.session();
             s.panels[i].tabs = tabs;
             s.panels[i].active = active;
-            s.panels[i].modes = p.session_modes();
+            // 전부 tree(기본)면 빈 목록 — 직렬화 생략 규약과 왕복이 같아진다.
+            let modes = p.session_modes();
+            s.panels[i].modes = if modes.iter().any(|m| m != "tree") {
+                modes
+            } else {
+                Vec::new()
+            };
             s.panels[i].col_widths = p.col_widths();
             // 전부 거짓이면 빈 목록(dir2 직렬화는 하나라도 참일 때만 기록 → 파싱 왕복이 같아진다).
             let any = |v: Vec<bool>| if v.iter().any(|x| *x) { v } else { Vec::new() };
