@@ -337,6 +337,14 @@ impl App {
 
     /// 상태줄 = 활성 패널 요약(왼쪽) · 탭 n/N(오른쪽).
     fn update_status(&mut self) {
+        // 내 PC(가상 최상위)를 보는 탭 = 드라이브 용량을 Disk 포트로 한 번 채운다(PANEL-044).
+        {
+            let mut inv = Invalidations::default();
+            let disk = &*self.platform.disk;
+            for p in &mut self.panels {
+                p.fill_drive_space(&|root| disk.space(root), &mut inv);
+            }
+        }
         // 세션 더러움 수거 길목(dir2 PREFS-051: update_status가 양 패널 플래그를 거둔다).
         self.session_collect_dirty(Instant::now());
         let p = &self.panels[self.active];

@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **PANEL-044 내 PC 전용 열**: 드라이브 열(이름·종류·전체·여유 · 진입/이탈 시점만 교체 · 타일 용량 바) = Disk 포트 소비 · 시험 +3 → [journal §22](journal/2026-10-03.md)
 - **M4 T-51 A 휴지통·클립보드·용량**: 휴지통 3-OS(SHFileOperationW · freedesktop Trash · ~/.Trash) · Windows CF_HDROP 파일 클립보드 · statvfs 용량(Linux/mac) · `edit.delete` 배선 · selfcheck trash · 시험 +4 → [journal §21](journal/2026-10-03.md)
 - **M4 T-50 플랫폼 포트**: `platform/` 포트 9종 + `Platform::native/fake` + ADR-0001 · 폴링 감시 자동 재열람 · 외부 열기(Opener) · Windows 드라이브 용량 · selfcheck shell/open/fs 실제 항목 · 시험 +5 → [journal §20](journal/2026-10-03.md)
 - **M3 T-43 2차 탭 메뉴·열 폭 동기**: 탭 잠금/고정/복제/분리·부착 + 우클릭 컨텍스트 메뉴(nexa-ctl) + 다른 패널로 이동 + 열 폭 동기 + 세션 잠금/고정 · 시험 +2 · 내 PC 용량 열은 M4 ⚠ → [journal §19](journal/2026-10-03.md)

@@ -16,6 +16,9 @@ pub(crate) const COL_EXT: u32 = 1;
 pub(crate) const COL_SIZE: u32 = 2;
 pub(crate) const COL_MODIFIED: u32 = 3;
 pub(crate) const COL_KIND: u32 = 4;
+/// 내 PC 전용 열(dir2 X-17 · PANEL-044): 전체 크기 · 여유 공간 — 값은 `Disk` 포트가 채운다(`set_drive_space`).
+pub(crate) const COL_TOTAL: u32 = 5;
+pub(crate) const COL_FREE: u32 = 6;
 
 /// 탭 제목(dir2 PANEL-013): 가상 최상위 = `nav.mypc` · 일반 = 마지막 경로 요소 · 드라이브 루트 = `D:`(후행 구분자 제거).
 pub(crate) fn title_of(p: &Path) -> String {
@@ -57,6 +60,8 @@ pub(crate) struct TreeSource {
     opts: ListOpts,
     /// 열기 실패 사유(상태줄에 · 빈 목록).
     error: Option<String>,
+    /// 드라이브 이름(`C:\`) → (전체, 여유) — 가상 최상위에서만 · 호스트가 Disk 포트로 채운다.
+    drive_space: std::collections::HashMap<String, (u64, u64)>,
 }
 
 impl TreeSource {
@@ -67,6 +72,7 @@ impl TreeSource {
             path: path.to_path_buf(),
             opts,
             error: None,
+            drive_space: std::collections::HashMap::new(),
         };
         s.reload();
         s
@@ -96,6 +102,27 @@ impl TreeSource {
             self.opts = opts;
             self.reload();
         }
+    }
+
+    /// 가상 최상위(내 PC)를 보고 있는가.
+    pub(crate) fn is_virtual_root(&self) -> bool {
+        ndir_vfs::is_virtual_root(&self.path)
+    }
+
+    /// 드라이브 행 이름들(가상 최상위) — 호스트가 용량을 조회해 [`Self::set_drive_space`]로 넣는다.
+    pub(crate) fn drive_names(&self) -> Vec<String> {
+        if !self.is_virtual_root() {
+            return Vec::new();
+        }
+        (0..self.len()).map(|i| self.row(i).text).collect()
+    }
+
+    pub(crate) fn drive_space_known(&self) -> bool {
+        !self.drive_space.is_empty()
+    }
+
+    pub(crate) fn set_drive_space(&mut self, space: Vec<(String, (u64, u64))>) {
+        self.drive_space = space.into_iter().collect();
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -275,9 +302,42 @@ impl RowSource for TreeSource {
             COL_SIZE if r.kind == FileKind::Dir => String::new(),
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time(r.modified_unix_ms),
+            COL_KIND if self.drive_space.contains_key(&r.name) || r.name.ends_with(":\\") => {
+                ndir_i18n::tr("kind.drive")
+            }
             COL_KIND => kind_label(r.kind, &r.name),
+            COL_TOTAL => self
+                .drive_space
+                .get(&r.name)
+                .map(|(t, _)| format_size(*t))
+                .unwrap_or_default(),
+            COL_FREE => self
+                .drive_space
+                .get(&r.name)
+                .map(|(_, f)| format_size(*f))
+                .unwrap_or_default(),
             _ => String::new(),
         }
+    }
+
+    /// 타일 보조 줄(dir2 07-16): 드라이브 = "X 중 Y 사용 가능" + 사용량 바 · 그 밖 = 종류.
+    fn tile_info(&self, index: usize) -> (String, Option<f32>) {
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+            return (String::new(), None);
+        };
+        if let Some(&(total, free)) = self.drive_space.get(&r.name) {
+            let used = total.saturating_sub(free);
+            let frac = if total > 0 {
+                used as f32 / total as f32
+            } else {
+                0.0
+            };
+            return (
+                ndir_i18n::trf("drive.freeOf", &[&format_size(total), &format_size(free)]),
+                Some(frac),
+            );
+        }
+        (self.cell(index, COL_KIND), None)
     }
 
     fn toggle(&mut self, index: usize) -> bool {
@@ -452,6 +512,27 @@ mod tests {
         assert_eq!(sort_key_of(COL_EXT), Some(SortKey::Kind));
         assert!(src.set_sort(&[(COL_SIZE, true)]));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 내 PC 열: 용량을 넣으면 전체/여유 셀 + 타일 보조 줄 + 종류 = 드라이브 · 안 넣으면 빈 셀.
+    #[test]
+    fn drive_columns_use_injected_space() {
+        ndir_i18n::activate(ndir_i18n::load("en", Path::new("nowhere")));
+        let mut src = TreeSource::open(Path::new(ndir_vfs::MY_PC), opts());
+        assert!(src.is_virtual_root());
+        let names = src.drive_names();
+        if names.is_empty() {
+            return; // 비Windows: 드라이브 열거 없음(X-17) — 열 전환은 panel 시험이 본다.
+        }
+        assert_eq!(src.cell(0, COL_TOTAL), "");
+        src.set_drive_space(vec![(names[0].clone(), (2048, 1024))]);
+        assert!(src.drive_space_known());
+        assert_eq!(src.cell(0, COL_TOTAL), "2.0 KB");
+        assert_eq!(src.cell(0, COL_FREE), "1.0 KB");
+        assert_eq!(src.cell(0, COL_KIND), "Drive");
+        let (line, frac) = src.tile_info(0);
+        assert_eq!(line, "1.0 KB free of 2.0 KB");
+        assert_eq!(frac, Some(0.5));
     }
 
     #[test]

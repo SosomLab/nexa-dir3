@@ -65,6 +65,8 @@ pub(crate) struct Panel {
     pressed: Option<Part>,
     /// 사용자가 열 폭을 바꿨다 — 배치가 기본 열을 다시 넣지 않는다(dir2 "사용자 폭 리셋 방지").
     user_cols: bool,
+    /// 호스트가 준 기본 열(내 PC 드라이브 열 ↔ 일반 열 전환의 복귀 원본 · dir2 X-17).
+    base_columns: Vec<Column>,
     /// 파일 활성화(실행은 호스트 몫 · 1회성 수거).
     pending_open: Option<PathBuf>,
     /// 탭 우클릭 메뉴 요청(표시는 호스트 · 1회성).
@@ -122,6 +124,7 @@ impl Panel {
             nav_up_align: ScrollAlign::Center,
             pressed: None,
             user_cols: false,
+            base_columns: Vec::new(),
             pending_open: None,
             pending_tab_menu: None,
             session_dirty: false,
@@ -339,11 +342,93 @@ impl Panel {
 
     /// 기본 열(패널 폭에 맞춘 것) — 사용자가 열 폭을 바꾼 뒤에는 넣지 않는다.
     pub(crate) fn set_default_columns(&mut self, cols: Vec<Column>, inv: &mut Invalidations) {
+        self.base_columns = cols.clone();
         if self.user_cols {
             return;
         }
         for tab in &mut self.tabs {
             tab.rows.set_columns(cols.clone(), inv);
+        }
+        self.sync_columns_for_root(inv);
+    }
+
+    /// 내 PC 전용 열(이름 · 종류 · 전체 크기 · 여유 공간 — dir2 PANEL-044 · §2-5): 폭은 기본 열 것을 상속.
+    fn drive_columns(&self) -> Vec<Column> {
+        let w_of = |key: u32, fallback: f32| {
+            self.base_columns
+                .iter()
+                .find(|c| c.key == key)
+                .map_or((fallback * self.m.scale).round() as i32, |c| c.width)
+        };
+        let s = self.m.scale;
+        vec![
+            Column::new(
+                crate::filelist::COL_NAME,
+                ndir_i18n::tr("col.name"),
+                w_of(crate::filelist::COL_NAME, 340.0),
+            ),
+            Column::new(
+                crate::filelist::COL_KIND,
+                ndir_i18n::tr("col.kind"),
+                w_of(crate::filelist::COL_KIND, 110.0),
+            ),
+            Column::new(
+                crate::filelist::COL_TOTAL,
+                ndir_i18n::tr("col.total"),
+                (110.0 * s).round() as i32,
+            )
+            .right_aligned(),
+            Column::new(
+                crate::filelist::COL_FREE,
+                ndir_i18n::tr("col.free"),
+                (130.0 * s).round() as i32,
+            )
+            .right_aligned(),
+        ]
+    }
+
+    /// 가상 최상위 진입/이탈 **시점에만** 열을 교체한다(평시 재호출로 사용자 폭 리셋 방지 · dir2 X-17).
+    pub(crate) fn sync_columns_for_root(&mut self, inv: &mut Invalidations) {
+        if self.base_columns.is_empty() {
+            return;
+        }
+        let virt = self.rows().source().is_virtual_root();
+        let has_drive = self
+            .rows()
+            .columns()
+            .iter()
+            .any(|c| c.key == crate::filelist::COL_TOTAL);
+        if virt != has_drive {
+            let cols = if virt {
+                self.drive_columns()
+            } else {
+                self.base_columns.clone()
+            };
+            self.tabs[self.active].rows.set_columns(cols, inv);
+        }
+    }
+
+    /// 내 PC 드라이브 용량 채우기 — 호스트가 Disk 포트를 넘긴다(한 번만 · 이미 알면 건너뜀).
+    pub(crate) fn fill_drive_space(
+        &mut self,
+        space_of: &dyn Fn(&Path) -> Option<(u64, u64)>,
+        inv: &mut Invalidations,
+    ) {
+        let src = self.rows().source();
+        if !src.is_virtual_root() || src.drive_space_known() {
+            return;
+        }
+        let names = src.drive_names();
+        let space: Vec<(String, (u64, u64))> = names
+            .into_iter()
+            .filter_map(|n| space_of(Path::new(&n)).map(|s| (n, s)))
+            .collect();
+        if !space.is_empty() {
+            self.tabs[self.active]
+                .rows
+                .source_mut()
+                .set_drive_space(space);
+            inv.push(self.rows().bounds());
         }
     }
 
@@ -440,6 +525,7 @@ impl Panel {
         if i < self.tabs.len() && i != self.active {
             self.active = i;
             self.session_dirty = true;
+            self.sync_columns_for_root(inv);
             self.sync_chrome(inv);
             inv.push(self.bounds);
         }
@@ -603,6 +689,7 @@ impl Panel {
     fn apply_source(&mut self, src: TreeSource, inv: &mut Invalidations) {
         self.tabs[self.active].rows.replace_source(src, inv);
         self.session_dirty = true;
+        self.sync_columns_for_root(inv);
         self.sync_chrome(inv);
     }
 
@@ -1085,6 +1172,26 @@ mod tests {
         assert!(q.root_path().ends_with("sub"));
         assert_eq!(q.rows().columns()[0].width, 123);
         assert_eq!(q.session_locked(), vec![false, false]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 내 PC 진입 = 드라이브 열(이름·종류·전체·여유) · 이탈 = 기본 열 복귀 · 사용자 폭 보존.
+    #[test]
+    fn my_pc_switches_columns_and_back() {
+        let dir = tree("mypc");
+        let mut p = Panel::new(&dir, opts(), m(), cols());
+        let mut inv = Invalidations::default();
+        p.set_default_columns(cols(), &mut inv);
+        p.set_bounds(Rect::new(0, 0, 400, 400), &mut inv);
+        assert_eq!(p.rows().columns().len(), 2);
+        p.nav_home(&mut inv);
+        assert!(p.rows().source().is_virtual_root());
+        let keys: Vec<u32> = p.rows().columns().iter().map(|c| c.key).collect();
+        assert_eq!(keys, vec![0, 4, 5, 6]);
+        assert_eq!(p.rows().columns()[0].width, 200, "이름 폭은 기본 열 상속");
+        p.fill_drive_space(&|_| Some((10, 5)), &mut inv);
+        p.nav_back(&mut inv);
+        assert_eq!(p.rows().columns().len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

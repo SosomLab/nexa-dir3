@@ -630,3 +630,25 @@ fn delete_goes_through_trash_port() {
     assert!(app.toasts.animating());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// PANEL-044: `nav.home` = 내 PC(드라이브 열) · 가짜 Disk가 준 용량이 전체/여유 셀에 · 뒤로 = 기본 열.
+#[test]
+fn my_pc_drive_columns_from_disk_port() {
+    let (mut app, dir) = fixture("mypc");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    log.borrow_mut().space = Some((4096, 1024));
+    app.command("nav.home");
+    let p = &app.panels[0];
+    assert!(p.rows().source().is_virtual_root());
+    let keys: Vec<u32> = p.rows().columns().iter().map(|c| c.key).collect();
+    assert_eq!(keys, vec![0, 4, 5, 6]);
+    if p.rows().source().len() > 0 {
+        assert_eq!(p.rows().source().cell(0, filelist::COL_TOTAL), "4.0 KB");
+        assert_eq!(p.rows().source().cell(0, filelist::COL_FREE), "1.0 KB");
+        assert!(log.borrow().calls.iter().any(|c| c.starts_with("disk:")));
+    }
+    app.command("nav.back");
+    assert_eq!(app.panels[0].rows().columns().len(), 5);
+    let _ = std::fs::remove_dir_all(&dir);
+}

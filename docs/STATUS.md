@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 20차 — PANEL-044 내 PC 전용 열 + Windows 클립보드 실기 교훈
+
+- **한 일**: 내 PC(가상 최상위) = 드라이브 열(이름·종류·전체 크기·여유 공간 · 진입/이탈 시점만 교체 · 이름 폭 상속 · 타일 "X 중 Y 사용 가능" + 용량 바)을 Disk 포트로 채움(한 번만) · 시험 +3(78). Windows 파일 클립보드 opt-in 왕복 시험이 적발한 실기 교훈 2(DropEffect 선독 · 쓰기 직후 재렌더 재시도) 수정.
+- **지금 상태**: M4 🚧 — 다음 = T-51 B(IContextMenu 셸 메뉴 · OLE DnD · ReadDirectoryChangesW) 또는 M5 터미널(ConPTY/forkpty · nexa-term) → T-54 자가 점검 창. 비Windows 내 PC 마운트 열거(X-17 β)는 T-53.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §22](journal/2026-10-03.md)
+
 ## 10-03 19차 — M4 T-51 A: 휴지통 3-OS · CF_HDROP · 용량 3-OS · `edit.delete`
 
 - **한 일**: 휴지통(Windows SHFileOperationW ALLOWUNDO · Linux freedesktop Trash 규격 · macOS ~/.Trash) · Windows 파일 클립보드(CF_HDROP + Preferred DropEffect) · 드라이브 용량 Linux/mac(`statvfs` 수동 extern · CI 3-OS가 레이아웃 검증) · `edit.delete` = Trash 포트 → 재열람 + 토스트 · selfcheck `trash`(비CI). 시험 +4(75 · 1 ignored).
