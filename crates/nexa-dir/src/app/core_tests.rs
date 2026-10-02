@@ -852,3 +852,89 @@ fn help_selfcheck_requests_check_window() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// M6 A: edit.copy → 다른 폴더로 edit.paste(작업 스레드 전송 · 틱 수거) → 사본 존재 · undo = 휴지통 포트(가짜 로그) ·
+/// edit.cut → paste = 이동 · undo = 되돌림(실제 fs) · redo · 덤프 `ops` · 선택 없으면 클립보드 유지 · 붙여넣을 것 없으면 안내.
+#[test]
+fn copy_cut_paste_undo_through_ops() {
+    let (mut app, dir) = fixture("ops");
+    app.layout_for(1200, 800, 1.0);
+    let wait = |app: &mut App| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while app.ops_tick() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "transfer did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let row_of = |app: &App, name: &str| {
+        (0..64)
+            .find(|&r| {
+                app.panels[0]
+                    .rows()
+                    .source()
+                    .row_path(r)
+                    .is_some_and(|p| p.ends_with(name))
+            })
+            .expect("row")
+    };
+    // 붙여넣을 것 없음 = 안내만.
+    app.command("edit.paste");
+    assert!(app.transfer.is_none() && app.dump_of("ops").unwrap().contains("clip none"));
+    // 복사: a.txt → sub/
+    let r = row_of(&app, "a.txt");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("edit.copy");
+    assert!(
+        app.dump_of("ops").unwrap().contains("clip 1 copy"),
+        "{}",
+        app.dump_of("ops").unwrap()
+    );
+    app.startup_cmd(&format!("nav:{}", dir.join("sub").display()));
+    app.command("edit.paste");
+    assert!(app.transfer.is_some() || dir.join("sub/a.txt").is_file());
+    wait(&mut app);
+    assert!(
+        dir.join("sub/a.txt").is_file() && dir.join("a.txt").is_file(),
+        "복사 = 원본 유지"
+    );
+    assert!(app.history().can_undo());
+    // undo(복사) = 사본을 휴지통 포트로(가짜 = 로그만).
+    app.command("edit.undo");
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(
+        log.borrow().calls.iter().any(|c| c == "trash:1"),
+        "{:?}",
+        log.borrow().calls
+    );
+    assert!(app.history().can_redo());
+    // 잘라내기: b.md → sub/ (이동 · 실제 fs) → undo = 되돌림 → redo = 다시 이동.
+    app.startup_cmd(&format!("nav:{}", dir.display()));
+    let r = row_of(&app, "b.md");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("edit.cut");
+    assert!(app.dump_of("ops").unwrap().contains("clip 1 cut"));
+    app.startup_cmd(&format!("nav:{}", dir.join("sub").display()));
+    app.command("edit.paste");
+    wait(&mut app);
+    assert!(
+        dir.join("sub/b.md").is_file() && !dir.join("b.md").exists(),
+        "이동"
+    );
+    assert!(
+        app.dump_of("ops").unwrap().contains("clip none"),
+        "잘라내기 뒤 클립보드 비움"
+    );
+    app.command("edit.undo");
+    assert!(
+        dir.join("b.md").is_file() && !dir.join("sub/b.md").exists(),
+        "undo = 되돌림"
+    );
+    app.command("edit.redo");
+    assert!(dir.join("sub/b.md").is_file(), "redo = 다시 이동");
+    // 바쁜 중 붙여넣기 금지는 start_transfer 가드(여기선 idle) · 덤프 어휘.
+    assert!(app.dump_of("ops").unwrap().starts_with("transfer idle"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

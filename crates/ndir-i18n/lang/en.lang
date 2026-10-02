@@ -677,3 +677,6 @@ check.btn.copy = Copy
 check.col.group = Group
 check.col.item = Item
 check.col.detail = Detail
+clip.copied = {0} item(s) copied
+clip.cut = {0} item(s) cut
+clip.empty = Clipboard has no files

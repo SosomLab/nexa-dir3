@@ -169,6 +169,12 @@ struct App {
     terms: [TermView; 2],
     /// 터미널 키 포커스(dir2 `term_focus`) — 클릭/→ 버튼으로 얻고 패널 클릭으로 잃는다.
     term_focus: Option<usize>,
+    /// 앱 내 파일 클립보드 사본(경로, 잘라내기) — OS 클립보드 미지원 OS의 폴백 · 붙여넣기 2순위(M6).
+    clip: Option<(Vec<PathBuf>, bool)>,
+    /// 진행 중 전송(동시 1건).
+    transfer: Option<app::ops::TransferJob>,
+    /// 파일 작업 undo/redo(세션 한정 100).
+    history: ndir_ops::history::OperationHistory,
     /// 플랫폼 포트 묶음(DR-5 · ADR-0001) — 운영 `Platform::native()` · 시험 `Platform::fake()`.
     platform: Platform,
     /// 폴더 감시 폴링 시각(1 s 간격 · 자동 재열람 PANEL-036).
@@ -331,6 +337,9 @@ impl App {
             tab_menu_at: None,
             platform,
             watch_next: Instant::now(),
+            clip: None,
+            transfer: None,
+            history: ndir_ops::history::OperationHistory::default(),
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),

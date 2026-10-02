@@ -676,3 +676,6 @@ check.btn.copy = 복사
 check.col.group = 그룹
 check.col.item = 항목
 check.col.detail = 상세
+clip.copied = {0}개 항목 복사됨
+clip.cut = {0}개 항목 잘라냄
+clip.empty = 클립보드에 파일이 없습니다

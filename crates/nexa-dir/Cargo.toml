@@ -19,6 +19,8 @@ ndir-core = { workspace = true }
 ndir-vfs = { workspace = true }
 ndir-tree = { workspace = true }
 ndir-term = { workspace = true }
+# 파일 작업 엔진(전송 · undo/redo · 일괄 이름 변경 — M6).
+ndir-ops = { workspace = true }
 # WASM 플러그인 런타임(DR-7 · dir2 ABI 바이트 호환).
 wasmi = { workspace = true }
 ndir-i18n = { workspace = true }

@@ -96,6 +96,7 @@ impl ApplicationHandler<Wake> for App {
         }
         let aux_live = self.aux_tick(now_ms);
         let term_live = self.term_tick(now_ms);
+        let ops_live = self.ops_tick();
         self.open_requested_windows(el);
         if !self.startup_timed.is_empty() {
             let due: Vec<String> = self
@@ -138,6 +139,9 @@ impl ApplicationHandler<Wake> for App {
         }
         if let Some(d) = self.term_wake(term_live) {
             next = next.min(now + d);
+        }
+        if ops_live {
+            next = next.min(now + Duration::from_millis(app::ops::OPS_POLL_MS));
         }
         el.set_control_flow(ControlFlow::WaitUntil(next));
     }

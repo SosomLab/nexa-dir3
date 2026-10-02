@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 26차 — M6 A: 복사/잘라내기/붙여넣기 · 전송 엔진 작업 스레드 · undo/redo
+
+- **한 일**: `app/ops.rs`(클립보드 2단 · `paste_dest` · 작업 스레드 전송 + 틱 진행 · 완료 재열람/토스트/히스토리 · undo/redo · `ops.busy`) · `Platform.trash = Rc`(삭제 주입 공유) · i18n `clip.*` 3언어 · 덤프 `ops` · `ops.cancel` · 시험 +1(111) · 시나리오 11.
+- **지금 상태**: M6 🚧(A ✅) — 다음 = M6 B(새 폴더/새 파일 · 인라인 이름 바꾸기 · 영구 삭제 · 일괄 이름 변경 창 · 충돌/진행 창은 T-29 뒤) 또는 T-62 B(F3 창 · 압축 그리드) 또는 T-51 B(셸 메뉴 · DnD · 감시).
+- **걸린 것**: 충돌 확인 창 없음(건너뜀 정책 ⚠ OPS-004) · 진행 창 없음(상태줄 %만) — nexa-dlg(T-29) 뒤.
+
+→ [journal/2026-10-03 §28](journal/2026-10-03.md)
+
 ## 10-03 25차 — T-54: Help ▸ 자가 점검 창(백그라운드 점검 · 표 · 복사)
 
 - **한 일**: `check_win.rs`(작업 스레드 `selfcheck::run` + mpsc 수거 · 판정 색 표 · 요약 · 다시 점검/F5 · 복사 · Esc) · `help.selfcheck` 명령/키/메뉴/i18n 3언어 · 덤프 `check` · 시험 +3(110) · 시나리오 10 · CI `plugins` 잡 실행 비트(+x) 수정.

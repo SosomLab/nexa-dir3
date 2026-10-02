@@ -4,6 +4,7 @@ mod event_loop;
 mod input;
 pub(crate) mod keywinit;
 mod menus;
+pub(crate) mod ops;
 mod paint;
 mod sessions;
 mod settings;

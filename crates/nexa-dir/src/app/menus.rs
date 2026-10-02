@@ -298,6 +298,11 @@ impl App {
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
             "edit.delete" => self.delete_to_trash(),
+            "edit.copy" => self.clip_write(false),
+            "edit.cut" => self.clip_write(true),
+            "edit.paste" => self.paste(),
+            "edit.undo" => self.history_step(false),
+            "edit.redo" => self.history_step(true),
             "view.refresh" => {
                 for p in &mut self.panels {
                     p.reopen(&mut inv);

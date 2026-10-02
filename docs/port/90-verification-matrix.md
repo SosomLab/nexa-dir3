@@ -98,6 +98,10 @@
 | PLUG-123 · CI-113 · T-07 | CI wasm32 빌드 → 갓 빌드한 .wasm 로드 검증(`--selfcheck --only plugin`) | `.github/workflows/ci.yml` | T4 | `plugins` 잡 | ✅ | 바이트 동일성은 묻지 않음(툴체인) |
 | PLUG-125 · EXT-414 | 설정 창 플러그인 페이지 — 로드 목록·오류 설명 줄(`plugins.disabled`) | `app/windows.rs::plugin_note` | — | — | ⚠ | 체크박스 묶음 = T-63 B |
 | CI-110 · CI-111 · T-54 | Help ▸ 자가 점검 창(백그라운드 `selfcheck::run` · 판정 색 표 · 요약 · 다시 점검 · 복사 · Esc) · 덤프 `check` | `check_win.rs` · `app/windows.rs` · `app/menus.rs`(help.selfcheck) | T2·T4 | `report_rows_counts_summary_and_table` · `start_runs_in_background_and_reports` · `help_selfcheck_requests_check_window` · `selfcheck-win.scn` | ✅ | 그룹 SKIP 항목은 해당 슬라이스가 채움 |
+| OPS-001~003 · 006~008 | 붙여넣기 = `transfer` 단일 경로(작업 스레드 · 진행 이벤트 · 결과 집계 · 같은 폴더 규칙) | `app/ops.rs::start_transfer/ops_tick/finish_transfer` | T2·T4 | `copy_cut_paste_undo_through_ops` · `copy-paste.scn` | ✅ | 엔진 시험은 ndir-ops 자체 |
+| OPS-004 | 충돌 4버튼 확인 창(덮어쓰기/모두/건너뛰기/취소) | — | — | — | ⚠ | 지금 = `Conflict::Skip` 고정(조용한 덮어쓰기 금지) · T-29 nexa-dlg 뒤 |
+| OPS-030~035 · 039 | undo/redo(이동 되돌림 · 복사 = 휴지통 포트 삭제 주입 · 완료 시 기록 규칙 · 문구 변환) | `app/ops.rs::history_step` · `Platform.trash: Rc` | T2 | `copy_cut_paste_undo_through_ops` | ✅ | 휴지통 복원 undo(OPS-036) T-51 B |
+| M3-5 · 파일 클립보드 | `edit.copy/cut` = OS 파일 클립보드 + 앱 내 사본 · `edit.paste` 2단 · 대상 규칙(`paste_dest`) | `app/ops.rs::clip_write/clip_sources/paste_dest` | T2 | 위 | ✅ | mac/Linux OS 클립보드 = T-52/53 |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
 | SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |

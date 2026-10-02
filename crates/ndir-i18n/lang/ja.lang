@@ -677,3 +677,6 @@ check.btn.copy = コピー
 check.col.group = グループ
 check.col.item = 項目
 check.col.detail = 詳細
+clip.copied = {0} 件をコピーしました
+clip.cut = {0} 件を切り取りました
+clip.empty = クリップボードにファイルがありません

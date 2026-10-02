@@ -1,0 +1,20 @@
+# T4 · M6 A 파일 작업: a.txt 선택 → edit.copy → sub로 이동 → edit.paste(작업 스레드) → 목록에 a.txt · ops 덤프 idle · undo 가능.
+id: copy-paste
+title: 복사 → 붙여넣기 → 되돌리기(전송 엔진 · 히스토리)
+tree: dir sub
+tree: file a.txt 7
+tree: file b.md 3
+settings: ui.lang=en
+cmd: @ready:list.select:1
+cmd: @ready:edit.copy
+cmd: @ready:assert.ops:clip 1 copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @after:1500:ops.dump:<out>/ops.txt
+cmd: @after:1500:list.dump:<out>/list.txt
+cmd: @after:1600:assert.ops:transfer idle
+cmd: @after:1600:assert.ops:undo true
+cmd: @after:1700:quit
+check: ops.txt: transfer idle
+check: ops.txt: undo true
+check: list.txt: a.txt

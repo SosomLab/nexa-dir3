@@ -178,7 +178,7 @@ pub(crate) fn platform() -> Platform {
         shell: Box::new(FakeShell(log.clone())),
         pty: Box::new(FakePty(log.clone())),
         ctxmenu: Box::new(FakeMenu(log.clone())),
-        trash: Box::new(FakeTrash(log.clone())),
+        trash: Rc::new(FakeTrash(log.clone())),
         clipboard: Box::new(FakeClip(log.clone())),
         drag: Box::new(FakeDrag(log.clone())),
         watcher: Box::new(FakeWatch(log.clone())),

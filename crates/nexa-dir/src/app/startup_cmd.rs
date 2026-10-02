@@ -172,6 +172,7 @@ impl App {
         }
         match id {
             "app.exit" => self.exit_requested = true,
+            "ops.cancel" => self.cancel_transfer(),
             _ => self.command(id),
         }
     }
@@ -272,6 +273,7 @@ impl App {
             ),
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
+            "ops" => self.ops_dump(),
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))

@@ -141,7 +141,7 @@ type OsPorts = (
     Box<dyn Shell>,
     Box<dyn Opener>,
     Box<dyn Disk>,
-    Box<dyn Trash>,
+    Rc<dyn Trash>,
     Box<dyn FileClipboard>,
 );
 
@@ -150,7 +150,8 @@ pub(crate) struct Platform {
     pub shell: Box<dyn Shell>,
     pub pty: Box<dyn Pty>,
     pub ctxmenu: Box<dyn ContextMenuProvider>,
-    pub trash: Box<dyn Trash>,
+    /// 휴지통 — `Rc`(히스토리 CopyBatchOp의 삭제 주입이 공유 · M6).
+    pub trash: Rc<dyn Trash>,
     pub clipboard: Box<dyn FileClipboard>,
     pub drag: Box<dyn DragSource>,
     pub watcher: Box<dyn Watcher>,
@@ -354,7 +355,7 @@ impl Platform {
             Box::new(windows::NativeShell),
             Box::new(windows::opener()),
             Box::new(windows::NativeDisk),
-            Box::new(windows::NativeTrash),
+            Rc::new(windows::NativeTrash),
             Box::new(windows::NativeFileClipboard),
         );
         #[cfg(target_os = "macos")]
@@ -362,7 +363,7 @@ impl Platform {
             Box::new(macos::NativeShell),
             Box::new(macos::opener()),
             Box::new(macos::NativeDisk),
-            Box::new(macos::HomeTrash::new()),
+            Rc::new(macos::HomeTrash::new()),
             Box::new(Unsupported),
         );
         #[cfg(all(unix, not(target_os = "macos")))]
@@ -370,7 +371,7 @@ impl Platform {
             Box::new(linux::NativeShell),
             Box::new(linux::opener()),
             Box::new(linux::NativeDisk),
-            Box::new(linux::FreedesktopTrash::new()),
+            Rc::new(linux::FreedesktopTrash::new()),
             Box::new(Unsupported),
         );
         #[cfg(windows)]
