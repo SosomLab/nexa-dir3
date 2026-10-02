@@ -7,6 +7,7 @@ use crate::check_win::CheckAction;
 use crate::dlg_win::DlgAction;
 use crate::keys_win::KeysAction;
 use crate::prefs_win::PrefsAction;
+use crate::preview_win::PvAction;
 use crate::*;
 
 impl App {
@@ -47,6 +48,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.check_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_preview) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.preview_win.open(el, theme, over, owner.as_deref());
         }
         if self.window.is_some() && !self.dlg.is_open() {
             if let Some((spec, reply)) = self.dlg_pending.take() {
@@ -163,6 +170,20 @@ impl App {
             }
             return true;
         }
+        if self.preview_win.is(id) {
+            let ui_px = self.settings.font_px("ui.font_size");
+            match self.preview_win.handle(event) {
+                PvAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.preview_win.paint(&font, &self.theme, ui_px);
+                }
+                PvAction::Copy(text) => {
+                    let _ = clipboard::write_text(&text);
+                }
+                PvAction::None => {}
+            }
+            return true;
+        }
         if self.dlg.is(id) {
             let ui_px = self.settings.font_px("ui.font_size");
             match self.dlg.handle(event) {
@@ -215,6 +236,9 @@ impl App {
         }
         if self.check_win.is_open() {
             self.check_win.redraw(); // 테마·글꼴 변경 반영
+        }
+        if self.preview_win.is_open() {
+            self.preview_win.redraw();
         }
         self.redraw();
     }

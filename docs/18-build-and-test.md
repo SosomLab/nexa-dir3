@@ -48,7 +48,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | 이름 | 뜻 |
 | --- | --- |
 | `NDIR_HOME` | 설정·세션·라이선스·플러그인 폴더 재지정(격리) |
-| `NDIR_STARTUP_CMD` | 쉼표 구분 명령: `<명령id>` · `@ready:<명령>`(첫 프레임 + 초기 열거 뒤) · `@idle:<명령>`(작업 큐 빈 뒤) · `@after:<ms>:<명령>` · `quit[:코드]` · `assert.<대상>:<식>` · `ui.click:@<영역>`/`ui.key:<조합>` · `ui.type:<text>`(`\b` = Backspace) · `ui.press:<enter|escape|up|down|left|right|home|end|pageup|pagedown|delete|space>` · `list.select:<n>` · `dock.kind:<n>` · `term.focus` · `term.send:<text>` · `ops.cancel` · `dlg.pick:<id>`/`dlg.type:<text>` · `prefs.search:<q>`/`prefs.cat:<키>` · `<영역>.dump:<파일>`(layout·panel·list·tabs·status·menu·prefs·dock·preview·term·ops·dlg·check) |
+| `NDIR_STARTUP_CMD` | 쉼표 구분 명령: `<명령id>` · `@ready:<명령>`(첫 프레임 + 초기 열거 뒤) · `@idle:<명령>`(작업 큐 빈 뒤) · `@after:<ms>:<명령>` · `quit[:코드]` · `assert.<대상>:<식>` · `ui.click:@<영역>`/`ui.key:<조합>` · `ui.type:<text>`(`\b` = Backspace) · `ui.press:<enter|escape|up|down|left|right|home|end|pageup|pagedown|delete|space>` · `list.select:<n>` · `dock.kind:<n>` · `term.focus` · `term.send:<text>` · `ops.cancel` · `dlg.pick:<id>`/`dlg.type:<text>` · `prefs.search:<q>`/`prefs.cat:<키>` · `<영역>.dump:<파일>`(layout·panel·list·tabs·status·menu·prefs·dock·preview·term·ops·dlg·pvwin·check) |
 | `NDIR_NO_ACTIVATE` | 창을 앞으로 가져오지 않음(사용자 작업 방해 금지) |
 | `NDIR_TRACE_FRAMES` / `_IME` / `_CLIP` / `_WINDOW` | 추적 로그 |
 | 덤프 어휘 | `layout` · `panel` · `list` · `tree` · `tabs` · `status` · `menu` · `ops` · `term` · `preview` · `prefs` · `plugin` · `license` · `log` — 컨트롤·패널마다 `dump()` 하나가 구현 요건 |

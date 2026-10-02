@@ -1098,3 +1098,85 @@ fn dialogs_delete_permanent_and_paste_conflict() {
     assert!(app.dump_of("ops").unwrap().starts_with("transfer idle"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-62 B: F3 = 단일 선택 파일을 독립 창 내용으로(창 없이 = 요청 플래그 + 덤프) · 폴더/없음 = 무동작 · 암호 필요 zip =
+/// 마스킹 입력 대화상자 → 빈/틀린 암호 = 재시도 문구 → 취소 = 아무 창도 없음. 메뉴 등재(View) 확인.
+#[test]
+fn preview_window_and_archive_password_flow() {
+    let (mut app, dir) = fixture("pvwin");
+    app.layout_for(1200, 800, 1.0);
+    assert!(super::menus::MENU_IDS.contains(&"view.preview_window"));
+    app.command("view.preview_window");
+    assert!(!app.open_preview, "선택 없음 = 무동작");
+    let row_of = |app: &App, name: &str| {
+        (0..64)
+            .find(|&r| {
+                app.panels[0]
+                    .rows()
+                    .source()
+                    .row_path(r)
+                    .is_some_and(|p| p.ends_with(name))
+            })
+            .expect("row")
+    };
+    let r = row_of(&app, "a.txt");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("view.preview_window");
+    assert!(app.open_preview);
+    let d = app.dump_of("pvwin").unwrap();
+    assert!(d.starts_with("closed a.txt lines 1 top 0\nhello\n"), "{d}");
+    app.open_preview = false;
+    // 암호 zip: 중앙 디렉터리 플래그 bit13(헤더 암호화) → NeedPassword → 마스킹 입력 창.
+    let mut z: Vec<u8> = Vec::new();
+    z.extend_from_slice(b"PK\x03\x04");
+    z.extend_from_slice(&[0u8; 26]);
+    let cd_off = z.len() as u32;
+    let mut cd: Vec<u8> = Vec::new();
+    cd.extend_from_slice(b"PK\x01\x02");
+    cd.extend_from_slice(&[0u8; 4]);
+    cd.extend_from_slice(&(0x800u16 | 0x2000).to_le_bytes());
+    cd.extend_from_slice(&[0u8; 10]);
+    cd.extend_from_slice(&7u32.to_le_bytes());
+    cd.extend_from_slice(&10u32.to_le_bytes());
+    cd.extend_from_slice(&(5u16).to_le_bytes());
+    cd.extend_from_slice(&[0u8; 12]);
+    cd.extend_from_slice(&0u32.to_le_bytes());
+    cd.extend_from_slice(b"s.txt");
+    let cd_size = cd.len() as u32;
+    z.extend_from_slice(&cd);
+    z.extend_from_slice(b"PK\x05\x06");
+    z.extend_from_slice(&[0u8; 4]);
+    z.extend_from_slice(&1u16.to_le_bytes());
+    z.extend_from_slice(&1u16.to_le_bytes());
+    z.extend_from_slice(&cd_size.to_le_bytes());
+    z.extend_from_slice(&cd_off.to_le_bytes());
+    z.extend_from_slice(&0u16.to_le_bytes());
+    std::fs::write(dir.join("locked.zip"), &z).unwrap();
+    app.command("view.refresh");
+    let r = row_of(&app, "locked.zip");
+    app.startup_cmd(&format!("list.select:{r}"));
+    app.command("view.preview_window");
+    assert!(!app.open_preview, "암호 필요 = 창 대신 대화상자");
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.starts_with("pending Archive password") && d.ends_with("input(masked)\n"),
+        "{d}"
+    );
+    // 빈 암호 확인 → 재시도 문구.
+    app.startup_cmd("dlg.pick:1");
+    let d = app.dump_of("dlg").unwrap();
+    assert!(d.contains("Wrong password"), "{d}");
+    // 틀린 암호(내장 zip 리더는 CD 암호화를 풀지 않는다) → 다시 재시도.
+    app.startup_cmd("dlg.type:nope");
+    app.startup_cmd("dlg.pick:1");
+    assert!(app.dump_of("dlg").unwrap().contains("Wrong password"));
+    assert_eq!(
+        crate::preview::archive::pw::len(),
+        0,
+        "틀린 암호는 기억하지 않는다"
+    );
+    app.startup_cmd("dlg.pick:0");
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    assert!(!app.open_preview);
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -341,8 +341,8 @@ impl App {
                 self.term_goto(i, inv); // → = 현재 폴더로 cd(살아 있으면) · 아니면 재시작 · 포커스
             }
             if self.docks[i].take_popout() {
-                self.toasts
-                    .push(toast::ToastKind::Info, tr("dock.preview"), tr("cmd.notYet"));
+                let src = self.dock_source(i);
+                self.open_preview_window(src); // ↗ = 독립 미리보기 창(T-62 B)
             }
         }
         if let Some(id) = self.tab_menu.take_picked() {

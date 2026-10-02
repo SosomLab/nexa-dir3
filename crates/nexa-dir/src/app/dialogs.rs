@@ -12,6 +12,8 @@ pub(crate) enum DlgReply {
     DeletePermanent(Vec<PathBuf>),
     /// 전송 충돌 — 작업 스레드가 기다린다(1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 그 외 취소).
     Conflict(mpsc::Sender<ConflictChoice>),
+    /// 압축 암호(마스킹 입력) — 확인(1)이면 입력 텍스트로 재조회(T-62 B).
+    ArchivePassword(PathBuf),
 }
 
 impl App {
@@ -80,6 +82,7 @@ impl App {
                     self.delete_permanent(&paths);
                 }
             }
+            DlgReply::ArchivePassword(path) => self.archive_password_result(path, id, text),
             DlgReply::Conflict(tx) => {
                 let choice = match id {
                     1 => ConflictChoice::Overwrite,

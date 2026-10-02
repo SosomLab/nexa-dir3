@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-62 B 독립 미리보기 창**: `preview_win.rs`(스타일드 7종 · 스크롤 · Esc · Ctrl+C) + `app/previewcmd.rs`(F3/↗ · 시임 · 압축 요약 · 암호 마스킹 대화상자 루프) · View 메뉴 등재 · 덤프 `pvwin` · 시나리오 `preview-window` → [journal §31](journal/2026-10-03.md)
 - **T-29 A 대화상자 창**: `dlg_win.rs`(버튼 N · 마스킹 입력 · 모달) + `app/dialogs.rs`(요청 큐 · 결과 분기) — 영구 삭제 확인 · 전송 충돌 4버튼(작업 스레드 채널) · 기동 명령 `dlg.pick/dlg.type` · 시나리오 `delete-confirm` → [journal §30](journal/2026-10-03.md)
 - **M6 B 새 폴더/새 파일 · 인라인 이름 바꾸기**: `create_new`(CreateOp · 생성 즉시 이름 바꾸기) · F2 → nexa-grid rename → `apply_rename`(RenameOp) · 편집 필드 Edit 명령 · 기동 명령 `ui.type`/`ui.press` · 시나리오 `new-rename` → [journal §29](journal/2026-10-03.md)
 - **M6 A 파일 작업**: `app/ops.rs` — 복사/잘라내기(OS 클립보드 + 앱 내 사본) · 붙여넣기 = `ndir_ops::transfer` 작업 스레드 · 완료 토스트/재열람 · undo/redo(휴지통 삭제 주입) · 충돌 = 건너뜀(확인 창 T-29) · 덤프 `ops` · 시나리오 `copy-paste` → [journal §28](journal/2026-10-03.md)

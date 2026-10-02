@@ -319,6 +319,7 @@ impl App {
             "check" => self.check_win.table(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
+            "pvwin" => self.preview_win.dump(),
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))

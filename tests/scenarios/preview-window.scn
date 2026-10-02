@@ -1,0 +1,12 @@
+# T4 · T-62 B 독립 미리보기 창(실제 창): a.txt 선택 → F3 명령 → 창 열림 · 내용 줄 · Esc = 닫힘.
+id: preview-window
+title: 독립 미리보기 창(F3) 열기 · 내용 · 닫기
+tree: file a.txt 9
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:view.preview_window
+cmd: @after:400:pvwin.dump:<out>/pv.txt
+cmd: @after:500:assert.pvwin:open a.txt lines 1
+cmd: @after:600:quit
+check: pv.txt: open a.txt lines 1 top 0
+check: pv.txt: xxxxxxxxx

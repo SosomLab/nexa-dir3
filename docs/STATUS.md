@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 29차 — T-62 B: 독립 미리보기 창(F3 · ↗) · 압축 암호 입력 흐름
+
+- **한 일**: `preview_win.rs`(스타일드 라인 렌더 · 스크롤 · 복사 · 창 없이 덤프) · `app/previewcmd.rs`(F3/↗ → 시임 → 창/안내/압축 요약 · 암호 대화상자 재시도 루프 + 세션 기억) · View 메뉴 `view.preview_window` · 시험 +2(116) · 시나리오 14.
+- **지금 상태**: M5 🚧(T-62 C = 압축 그리드 창 · SVG 래스터 · 인라인 이미지 · T-63 B) · M6 🚧(일괄 이름 변경 창 · 진행 창) — 다음 = T-51 B(Windows 셸 메뉴 IContextMenu · OLE DnD · ReadDirectoryChangesW · 휴지통 복원) 또는 T-61 B 또는 T-62 C.
+- **걸린 것**: 압축 목록은 창에 요약 텍스트로(그리드 컨트롤 = nexa-ui 추가 필요 — port/20 §3 DataGrid).
+
+→ [journal/2026-10-03 §31](journal/2026-10-03.md)
+
 ## 10-03 28차 — T-29 A: 대화상자 창(영구 삭제 확인 · 전송 충돌 4버튼 · 암호 입력 준비)
 
 - **한 일**: `dlg_win.rs` + `app/dialogs.rs`(모달 보조 창 · 요청 큐 · `DlgReply` 분기 · 창 없이도 결정) · `edit.delete_permanent` 확인 · 충돌 = 작업 스레드 채널 질문 → 4버튼 회신(OPS-004 ⚠ 해소) · 기동 명령 `dlg.*` · 시험 +2(114) · 시나리오 13.

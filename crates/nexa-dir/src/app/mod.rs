@@ -7,6 +7,7 @@ pub(crate) mod keywinit;
 mod menus;
 pub(crate) mod ops;
 mod paint;
+mod previewcmd;
 mod sessions;
 mod settings;
 mod startup_cmd;

@@ -65,6 +65,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "view.always_on_top",
     "-",
     "view.refresh",
+    "view.preview_window",
     "-",
     "view.theme_system",
     "view.theme_light",
@@ -87,7 +88,7 @@ impl App {
     /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
         let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
-        let mut view = items(&MENU_IDS[19..42]);
+        let mut view = items(&MENU_IDS[19..43]);
         // 언어 목록(동적 명령 `lang:<code>` — 단축키 재정의 대상 아님).
         for (code, name) in ndir_i18n::discover(&home) {
             view.push(MenuEntry::Item(ComboItem::new(
@@ -100,8 +101,8 @@ impl App {
             MenuDef::new(tr("menu.file"), items(&MENU_IDS[..9])),
             MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..19])),
             MenuDef::new(tr("menu.view"), view),
-            MenuDef::new(tr("menu.go"), items(&MENU_IDS[42..50])),
-            MenuDef::new(tr("menu.help"), items(&MENU_IDS[50..])),
+            MenuDef::new(tr("menu.go"), items(&MENU_IDS[43..51])),
+            MenuDef::new(tr("menu.help"), items(&MENU_IDS[51..])),
         ]
     }
 
@@ -400,6 +401,7 @@ impl App {
                 }
             }
             "help.selfcheck" => self.open_check = true,
+            "view.preview_window" => self.open_preview_window(a),
             "help.about" => {
                 self.toasts.push(
                     toast::ToastKind::Info,
@@ -440,10 +442,12 @@ mod tests {
         assert_eq!(MENU_IDS[0], "file.new_tab");
         assert_eq!(MENU_IDS[9], "edit.undo");
         assert_eq!(MENU_IDS[19], "view.mode_tree");
-        assert_eq!(MENU_IDS[42], "nav.back");
-        assert_eq!(MENU_IDS[50], "help.about");
-        assert_eq!(MENU_IDS[51], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 52);
+        assert_eq!(MENU_IDS[42], "view.lang_system");
+        assert!(MENU_IDS[19..43].contains(&"view.preview_window"));
+        assert_eq!(MENU_IDS[43], "nav.back");
+        assert_eq!(MENU_IDS[51], "help.about");
+        assert_eq!(MENU_IDS[52], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 53);
     }
 
     #[test]

@@ -31,6 +31,7 @@ mod prefs_win;
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
 mod preview;
+mod preview_win;
 mod selfcheck;
 mod session;
 mod termview;
@@ -66,6 +67,7 @@ use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
 use panel::{Panel, PanelMetrics};
 use platform::Platform;
 use prefs_win::PrefsWin;
+use preview_win::PreviewWin;
 use session::Session;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -159,6 +161,9 @@ struct App {
     check_win: CheckWin,
     open_check: bool,
     /// 대화상자 창(T-29 A · 모달 · 동시 1건) + 대기 요청 + 결과 수신자.
+    /// 독립 미리보기 창(F3 · ↗ · T-62 B) + 열기 요청.
+    preview_win: PreviewWin,
+    open_preview: bool,
     dlg: DlgWin,
     dlg_pending: Option<(dlg_win::DlgSpec, app::dialogs::DlgReply)>,
     dlg_reply: Option<app::dialogs::DlgReply>,
@@ -337,6 +342,8 @@ impl App {
             keys_win: KeysWin::new(),
             check_win: CheckWin::new(),
             open_check: false,
+            preview_win: PreviewWin::new(),
+            open_preview: false,
             dlg: DlgWin::new(),
             dlg_pending: None,
             dlg_reply: None,
