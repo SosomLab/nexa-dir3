@@ -52,3 +52,10 @@
 | LIC-192 | `Product.version` = 앱 버전 | `Cargo.toml version.workspace` | T5 | selfcheck `license/product` | ✅ | |
 | LIC-181~182 | 기기 ID 원천 · 기기 공용 폴더(3-OS) | nexa-license `machine.rs` · `machine_dir()` | T5 | selfcheck `license/machine id`·`installed state` | ✅ | |
 | CI-110(license) | 자가 점검 license 그룹 5항목 | `nexa-dir/src/selfcheck.rs` | T5 | 스모크 | ✅ | |
+| CMD-120~159 · 287~329 | dir2 명령 상수·단축키 → 명령 표 48(문자열 id · OS별 기본 코드) | `ndir-settings/src/commands.rs` | T1 | `dir2_windows_bindings_resolve`(31건) · `every_default_code_parses` | ✅ | 동적 명령(언어·런처·클라우드 i)은 호스트 조립(M3) |
+| CMD-480~497 | macOS 대응안 | 〃 | T1 | `macos_preset_follows_cmd_480_497`(13건) | ✅ | ⌘Y 충돌 → 미리보기 ⇧⌘Y(시험 적발) |
+| CMD-487 | `tab.prev`(dir2에 없음) | 〃 | T1 | 〃 | ⚠ DR-3 | 의도된 차이(권장안 채택) |
+| CMD-491 | F6 단일 표기(`view.theme_cycle`) | 〃 | T1 | 〃 | ⚠ DR-3 | 의도된 차이 |
+| SET-090~095 · 130 | 명령 표·프리셋·Chord·Keymap·`key.<id>` 전수 등재·repeatable | `ndir-settings/src/{commands,keymap}.rs` | T1 | `every_command_has_key_entry_and_label` · `no_default_conflicts_within_a_preset` · `overrides_none_sequences_and_conflicts` | ✅ | `from_winit`은 M3 |
+| SET-096~097 | 단축키 창 · 변경 적용 | — | — | — | ☐ | M3 T-44 |
+| PREFS-307(단축키 페이지) | 설정 창 "단축키" 분류 신설 | `registry.rs` CAT_KEYS | — | — | ⚠ DR-3 | 의도된 차이(dir2에 없던 페이지) |

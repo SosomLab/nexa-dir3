@@ -618,3 +618,26 @@ cfg.unknownKey = 不明な設定: {0}
 cfg.invalidValue = {0} の値が不正です: "{1}" (許容: {2})
 cfg.noConfigDir = 設定フォルダーを特定できません
 cfg.readOnly = 読み取り専用
+
+# ── コマンド · ショートカット (nexa-dir3 · 2026-10-03 追加) ──
+pref.cat.keys = ショートカット
+pref.key.desc = キーコード(例: ctrl+shift+n · f5 · 代替は | · 2段は , · none = なし)。空 = プラットフォーム既定。
+pref.keyPreset = ショートカットプリセット
+pref.keyPreset.desc = 既定のキーセット: auto = この OS。
+pref.keyPreset.auto = 自動(この OS)
+pref.keyPreset.windows = Windows
+pref.keyPreset.macos = macOS
+pref.keyPreset.linux = Linux
+cmd.rename = 名前の変更
+cmd.panelToggle = デュアル/シングルパネル切替
+cmd.infoToggle = デュアル/シングル情報切替
+cmd.themeCycle = テーマ切替
+cmd.previewWindow = プレビューウィンドウ
+cmd.navBack = 戻る
+cmd.navForward = 進む
+cmd.navUp = 上のフォルダーへ
+cmd.activate = 選択項目を開く
+cmd.panelSwitch = パネル切替
+cmd.tabNext = 次のタブ
+cmd.tabPrev = 前のタブ
+cmd.contextMenu = コンテキストメニュー

@@ -21,11 +21,15 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub mod commands;
 pub mod json;
+pub mod keymap;
 pub mod migrate;
 mod registry;
 
+pub use commands::{command, preset_default, repeatable, setting_key, Command, Preset, COMMANDS};
 pub use json::{to_json, Import as JsonImport, Json};
+pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
     ADVANCED, CATEGORY_TREE, DEPENDS, EXTENSION_CATEGORIES, HIDDEN, INFO_KEYS, OLD_DEFAULTS,
     OS_DEFAULTS, REGISTRY, RENAMED, RESCALED,

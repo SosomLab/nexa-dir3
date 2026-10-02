@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 6차 — M1 T-17 명령 표·키맵 → **M1 완료**
+
+- **한 일**: `ndir-settings::commands`(48 명령 · dir2 단축키 + macOS 대응안) · `keymap`(nexa-sql 엔진) · 레지스트리 `key.*` 49 · 시험 7(명령↔키 1:1 · 충돌 0 · dir2 31건 · macOS 13건). 전체 테스트 196.
+- **지금 상태**: M1 ✅ → **M2 nexa-ui 보강 착수**(형제 저장소 · T-20 InputEvent → T-21 RecordCtx → T-22 MenuBar → T-24 StatusBar → T-25 nexa-grid …). 각 컨트롤은 nexa-ui 커밋/push 뒤 dir3에서 소비.
+- **걸린 것**: 의도된 차이 3(단축키 페이지 신설 · `tab.prev` · F6 단일 표기) — 매트릭스 ⚠ 등재.
+
+→ [journal/2026-10-03 §8](journal/2026-10-03.md)
+
 ## 10-03 5차 — M1 T-16 `ndir-license`
 
 - **한 일**: nsql-license 1:1 복제(제품 `nexa-dir` · `NDIR_BUILD_DATE` · Feature 변형 0 = dir2 게이트 0 정책) · 시험 8(타 제품 거부 포함) · 자가 점검 license 5항목 PASS.

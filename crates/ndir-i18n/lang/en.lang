@@ -618,3 +618,26 @@ cfg.unknownKey = Unknown setting: {0}
 cfg.invalidValue = Invalid value for {0}: "{1}" (allowed: {2})
 cfg.noConfigDir = Cannot determine the settings folder
 cfg.readOnly = read-only
+
+# ── Commands · shortcuts (nexa-dir3 · added 2026-10-03) ──
+pref.cat.keys = Shortcuts
+pref.key.desc = Key code, e.g. ctrl+shift+n · f5 · alternatives with | · two-step with , · none = no shortcut. Empty = platform default.
+pref.keyPreset = Shortcut preset
+pref.keyPreset.desc = Default key set: auto = this OS.
+pref.keyPreset.auto = Auto (this OS)
+pref.keyPreset.windows = Windows
+pref.keyPreset.macos = macOS
+pref.keyPreset.linux = Linux
+cmd.rename = Rename
+cmd.panelToggle = Toggle Dual/Single Panel
+cmd.infoToggle = Toggle Dual/Single Info
+cmd.themeCycle = Cycle Theme
+cmd.previewWindow = Preview Window
+cmd.navBack = Back
+cmd.navForward = Forward
+cmd.navUp = Up One Level
+cmd.activate = Open Selected
+cmd.panelSwitch = Switch Panel
+cmd.tabNext = Next Tab
+cmd.tabPrev = Previous Tab
+cmd.contextMenu = Context Menu

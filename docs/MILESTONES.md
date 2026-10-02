@@ -4,8 +4,8 @@
 
 | M | 목표 | 완료 기준 | 상태 |
 | --- | --- | --- | --- |
-| M0 | **골격** — 규칙 문서(CLAUDE·10·15·16·18·01) · 워크스페이스 · CI 3-OS · `--smoke`/`--selfcheck` 뼈대 · 이식 원장 색인 · 복원 태그 | CI green · 문서 4층 존재 · `cargo run -- --smoke` = 0 | 🚧 10-03 |
-| M1 | **기반 크레이트 이식** — `ndir-core/vfs/tree/ops/term`(dir2 테스트 그대로) · `ndir-i18n`(`.lang` + 키 검사) · `ndir-settings`(엔진 + dir2 키 표 + dir2 가져오기) · `ndir-license` | dir2 테스트 전수 green(3-OS) · 레지스트리 무결성 시험 · 라이선스 7건 | ☐ |
+| M0 | **골격** — 규칙 문서(CLAUDE·10·15·16·18·01) · 워크스페이스 · CI 3-OS · `--smoke`/`--selfcheck` 뼈대 · 이식 원장 색인 · 복원 태그 | CI green · 문서 4층 존재 · `cargo run -- --smoke` = 0 | ✅ 10-03(T-05~08 잔여는 M3 이후) |
+| M1 | **기반 크레이트 이식** — `ndir-core/vfs/tree/ops/term`(dir2 테스트 그대로) · `ndir-i18n`(`.lang` + 키 검사) · `ndir-settings`(엔진 + dir2 키 표 + dir2 가져오기 + 명령 표·키맵) · `ndir-license` | dir2 테스트 전수 green(3-OS) · 레지스트리 무결성 시험 · 라이선스 8건 | ✅ 10-03 (테스트 196) |
 | M2 | **nexa-ui 보강** — InputEvent 확장 · MenuBar(체크·단축키 열) · Toolbar(checked) · TabBar(아이콘·툴팁) · StatusBar · PathBar · `nexa-grid` VirtualRows(dir2 rows/columns/typeahead) · InfoDock · Tooltip · Dialog/MessageBox/Progress · `RecordCtx` 공용 | nexa-ui 테스트 green · nexa-sql 빌드 유지 · 각 컨트롤 T2 시험 | ☐ |
 | M3 | **앱 골격** — winit 호스트(nexa-sql 복사) · AppCore/Shell · 명령 표 · 메뉴바·툴바·런처·탭·경로바·듀얼 패널 파일 목록·스플리터·상태바 · 설정 창·단축키 창·키맵 · 세션 복원 · 테마/언어 전환 | dir2 레이아웃 수치와 동일한 `layout.dump` 골든 · T3 시나리오 · 실기 캡처 | ☐ |
 | M4 | **플랫폼 층** — 포트 + Windows/macOS/Linux 구현(셸 메뉴 · 휴지통 · 파일 클립보드 · DnD · 감시 · 열기 · 셸 탐지 · PTY) + Fake · `--selfcheck` 실제 항목 | 3-OS selfcheck PASS(CI = `--ci`) · MC/DC 시험 | ☐ |
