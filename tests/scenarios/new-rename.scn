@@ -1,0 +1,20 @@
+# T4 · M6 B: 새 폴더 → 인라인 이름 바꾸기(타이핑 + Enter) → 목록에 새 이름 · F2 이름 바꾸기 → 확장자 유지 · undo 가능.
+id: new-rename
+title: 새 폴더 · 인라인 이름 바꾸기 · F2
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:file.new_folder
+cmd: @ready:ui.type:Docs
+cmd: @ready:ui.press:enter
+cmd: @ready:list.dump:<out>/list1.txt
+cmd: @ready:assert.ops:undo true
+cmd: @ready:list.select:1
+cmd: @ready:edit.rename
+cmd: @ready:ui.type:renamed
+cmd: @ready:ui.press:enter
+cmd: @ready:list.dump:<out>/list2.txt
+cmd: @ready:quit
+check: list1.txt: Docs
+check: list1.txt: !New Folder
+check: list2.txt: renamed.txt
+check: list2.txt: !a.txt

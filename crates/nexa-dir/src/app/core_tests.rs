@@ -938,3 +938,74 @@ fn copy_cut_paste_undo_through_ops() {
     assert!(app.dump_of("ops").unwrap().starts_with("transfer idle"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// M6 B: 새 폴더 → 생성 행이 선택되고 인라인 이름 바꾸기 중 → 타이핑 + Enter = 이름 확정(RenameOp) → undo 2회 = 이름 복귀 + 생성 취소(휴지통 포트) ·
+/// F2 = 캐럿 행 이름 바꾸기(파일은 이름부만 선택 → 확장자 유지) · Esc = 취소 · 새 파일 `New File.txt`.
+#[test]
+fn new_folder_rename_and_undo() {
+    let (mut app, dir) = fixture("newrn");
+    app.layout_for(1200, 800, 1.0);
+    app.command("file.new_folder");
+    assert!(
+        dir.join("New Folder").is_dir(),
+        "{:?}",
+        std::fs::read_dir(&dir).unwrap().count()
+    );
+    assert!(app.panels[0].rows().is_renaming(), "생성 직후 이름 바꾸기");
+    app.startup_cmd("ui.type:Docs");
+    app.startup_cmd("ui.press:enter");
+    assert!(
+        dir.join("Docs").is_dir() && !dir.join("New Folder").exists(),
+        "이름 확정"
+    );
+    assert!(!app.panels[0].rows().is_renaming());
+    assert!(
+        app.history()
+            .undo_description()
+            .is_some_and(|d| d.contains("Docs")),
+        "{:?}",
+        app.history().undo_description()
+    );
+    app.command("edit.undo");
+    assert!(
+        dir.join("New Folder").is_dir() && !dir.join("Docs").exists(),
+        "undo = 이름 복귀"
+    );
+    app.command("edit.undo");
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(
+        log.borrow().calls.iter().any(|c| c == "trash:1"),
+        "undo(생성) = 휴지통 포트"
+    );
+    // F2: a.txt 이름부만 바꿔 확장자 유지 · Esc 취소.
+    let row = (0..64)
+        .find(|&r| {
+            app.panels[0]
+                .rows()
+                .source()
+                .row_path(r)
+                .is_some_and(|p| p.ends_with("a.txt"))
+        })
+        .expect("a.txt");
+    app.startup_cmd(&format!("list.select:{row}"));
+    app.command("edit.rename");
+    assert!(app.panels[0].rows().is_renaming());
+    app.startup_cmd("ui.press:escape");
+    assert!(
+        !app.panels[0].rows().is_renaming() && dir.join("a.txt").is_file(),
+        "Esc = 취소"
+    );
+    app.command("edit.rename");
+    app.startup_cmd("ui.type:zz");
+    app.startup_cmd("ui.press:enter");
+    assert!(
+        dir.join("zz.txt").is_file() && !dir.join("a.txt").exists(),
+        "이름부만 교체 · 확장자 유지"
+    );
+    // 새 파일.
+    app.command("file.new_file");
+    assert!(dir.join("New File.txt").is_file());
+    app.startup_cmd("ui.press:escape");
+    assert!(app.dump_of("ops").unwrap().contains("undo true"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

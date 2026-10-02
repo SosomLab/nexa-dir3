@@ -102,6 +102,9 @@
 | OPS-004 | 충돌 4버튼 확인 창(덮어쓰기/모두/건너뛰기/취소) | — | — | — | ⚠ | 지금 = `Conflict::Skip` 고정(조용한 덮어쓰기 금지) · T-29 nexa-dlg 뒤 |
 | OPS-030~035 · 039 | undo/redo(이동 되돌림 · 복사 = 휴지통 포트 삭제 주입 · 완료 시 기록 규칙 · 문구 변환) | `app/ops.rs::history_step` · `Platform.trash: Rc` | T2 | `copy_cut_paste_undo_through_ops` | ✅ | 휴지통 복원 undo(OPS-036) T-51 B |
 | M3-5 · 파일 클립보드 | `edit.copy/cut` = OS 파일 클립보드 + 앱 내 사본 · `edit.paste` 2단 · 대상 규칙(`paste_dest`) | `app/ops.rs::clip_write/clip_sources/paste_dest` | T2 | 위 | ✅ | mac/Linux OS 클립보드 = T-52/53 |
+| OPS-017 · 034 | 인라인 이름 바꾸기(F2 · 이름부 선택 · Enter 확정 · Esc 취소 · 편집 키 · RenameOp · 같은 이름 무동작) | `app/ops.rs::begin_rename/apply_rename/rename_edit` · `panel.rs::key_event` | T2·T4 | `new_folder_rename_and_undo` · `new-rename.scn` | ✅ | `.lnk` 확장자 숨김 T-51 B |
+| OPS-018 · 035 | 새 폴더/새 파일(unique 이름 · CreateOp · 생성 즉시 이름 바꾸기) | `app/ops.rs::create_new` | T2·T4 | 위 | ✅ | |
+| CI-107 | 기동 명령 `ui.type:<text>` · `ui.press:<key>`(편집 흐름 재현) | `app/startup_cmd.rs` | T4 | `new-rename.scn` | ✅ | |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
 | SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |

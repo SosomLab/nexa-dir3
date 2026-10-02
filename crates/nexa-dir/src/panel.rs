@@ -71,6 +71,8 @@ pub(crate) struct Panel {
     pending_open: Option<PathBuf>,
     /// 탭 우클릭 메뉴 요청(표시는 호스트 · 1회성).
     pending_tab_menu: Option<usize>,
+    /// 인라인 이름 바꾸기 확정(행, 새 이름) — 실행(fs)은 호스트(`App::apply_rename`).
+    pending_rename: Option<(usize, String)>,
     session_dirty: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
@@ -127,6 +129,7 @@ impl Panel {
             base_columns: Vec::new(),
             pending_open: None,
             pending_tab_menu: None,
+            pending_rename: None,
             session_dirty: false,
             col_changed: false,
         };
@@ -285,6 +288,10 @@ impl Panel {
 
     pub(crate) fn take_open(&mut self) -> Option<PathBuf> {
         self.pending_open.take()
+    }
+
+    pub(crate) fn take_rename(&mut self) -> Option<(usize, String)> {
+        self.pending_rename.take()
     }
 
     pub(crate) fn take_tab_menu(&mut self) -> Option<usize> {
@@ -764,7 +771,7 @@ impl Panel {
     }
 
     /// 경로의 행을 캐럿 + 단일 선택(뷰 정렬 = `nav_up_align`).
-    fn select_path(&mut self, path: &Path, inv: &mut Invalidations) {
+    pub(crate) fn select_path(&mut self, path: &Path, inv: &mut Invalidations) {
         let align = self.nav_up_align;
         let rows = &mut self.tabs[self.active].rows;
         let n = rows.source().len();
@@ -908,6 +915,30 @@ impl Panel {
                     _ => {}
                 },
                 InputEvent::SelectAll => self.pathbar.edit_key(EditKey::SelectAll, false, inv),
+                _ => {}
+            }
+            return;
+        }
+        if self.rows().is_renaming() {
+            // 인라인 이름 바꾸기(dir2 M3-2 · QA 07-13): 글자 = 편집 · Enter = 확정(호스트 실행) · Esc = 취소 · 편집 키.
+            let rows = self.rows_mut();
+            match *ev {
+                InputEvent::Char { c, .. } => rows.rename_char(c, inv),
+                InputEvent::Key { key, shift, .. } => match key {
+                    CtlKey::Enter => {
+                        if let Some(done) = rows.submit_rename(inv) {
+                            self.pending_rename = Some(done);
+                        }
+                    }
+                    CtlKey::Escape => rows.cancel_rename(inv),
+                    CtlKey::Left => rows.rename_key(EditKey::Left, shift, inv),
+                    CtlKey::Right => rows.rename_key(EditKey::Right, shift, inv),
+                    CtlKey::Home => rows.rename_key(EditKey::Home, shift, inv),
+                    CtlKey::End => rows.rename_key(EditKey::End, shift, inv),
+                    CtlKey::Delete => rows.rename_key(EditKey::DeleteForward, shift, inv),
+                    _ => {}
+                },
+                InputEvent::SelectAll => rows.rename_key(EditKey::SelectAll, false, inv),
                 _ => {}
             }
             return;

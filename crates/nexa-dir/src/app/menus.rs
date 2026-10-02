@@ -281,8 +281,15 @@ impl App {
                 return;
             }
         }
+        // 인라인 이름 바꾸기 중 편집 명령은 편집 필드로(dir2 do_clip ②).
+        if self.rename_edit(id) {
+            return;
+        }
         match id {
             "file.exit" => self.exit_requested = true,
+            "file.new_folder" => self.create_new(true),
+            "file.new_file" => self.create_new(false),
+            "edit.rename" => self.begin_rename(),
             "file.prefs" => self.open_prefs = true,
             "keys.window" => self.open_keys = true,
             "file.new_tab" => self.panels[a].new_tab(&mut inv),

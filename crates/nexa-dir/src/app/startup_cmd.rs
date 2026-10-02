@@ -148,6 +148,41 @@ impl App {
             self.redraw();
             return;
         }
+        if let Some(text) = id.strip_prefix("ui.type:") {
+            // 글자 입력(이름 바꾸기·경로 바·타입어헤드) — `\b` = Backspace.
+            let text = text.replace("\\b", "\u{8}");
+            for c in text.chars() {
+                self.route(InputEvent::Char { c, now_ms: 0 });
+            }
+            return;
+        }
+        if let Some(name) = id.strip_prefix("ui.press:") {
+            use nexa_ctl::Key as K;
+            let key = match name.trim() {
+                "enter" => K::Enter,
+                "escape" | "esc" => K::Escape,
+                "up" => K::Up,
+                "down" => K::Down,
+                "left" => K::Left,
+                "right" => K::Right,
+                "home" => K::Home,
+                "end" => K::End,
+                "pageup" => K::PageUp,
+                "pagedown" => K::PageDown,
+                "delete" => K::Delete,
+                "space" => K::Space,
+                other => {
+                    eprintln!("[startup] unknown key: {other}");
+                    return;
+                }
+            };
+            self.route(InputEvent::Key {
+                key,
+                shift: false,
+                primary: false,
+            });
+            return;
+        }
         if let Some(n) = id.strip_prefix("list.select:") {
             let row = n.trim().parse::<usize>().unwrap_or(0);
             let mut inv = Invalidations::default();

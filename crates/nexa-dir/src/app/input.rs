@@ -314,6 +314,9 @@ impl App {
             if let Some(path) = self.panels[i].take_open() {
                 self.open_external(&path);
             }
+            if let Some((row, name)) = self.panels[i].take_rename() {
+                self.apply_rename(i, row, &name);
+            }
             if let Some(t) = self.panels[i].take_tab_menu() {
                 self.open_tab_menu(i, t);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));

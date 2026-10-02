@@ -297,7 +297,8 @@ impl ApplicationHandler<Wake> for App {
                     let plain_char =
                         !ch.primary && !ch.alt && !ch.ctrl && ch.key.chars().count() == 1;
                     // 경로바 편집 중엔 조합키 없는 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
-                    let editing = self.panels[self.active].pathbar.is_editing();
+                    let editing = self.panels[self.active].pathbar.is_editing()
+                        || self.panels[self.active].rows().is_renaming();
                     let term_typing =
                         self.term_focused().is_some() && !ch.primary && !ch.alt && !ch.ctrl;
                     let typing = plain_char || term_typing || (editing && !ch.primary && !ch.alt);

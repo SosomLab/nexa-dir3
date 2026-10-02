@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 27차 — M6 B: 새 폴더/새 파일 · 인라인 이름 바꾸기(F2) · 편집 필드 명령
+
+- **한 일**: `create_new`(unique 이름 · CreateOp · 생성 행 선택 + 즉시 이름 바꾸기) · `begin_rename`/`apply_rename`(nexa-grid 인라인 편집 · RenameOp · 상태줄) · 편집 필드 안 Edit 명령 라우팅 · 기동 명령 `ui.type`/`ui.press` · 시험 +1(112) · 시나리오 12.
+- **지금 상태**: M6 🚧(A·B ✅ — 남은 것 = 확인/진행 창(T-29) · 일괄 이름 변경 창 · 영구 삭제) · 다음 = T-29 nexa-dlg(확인/입력 대화상자 — 충돌 4버튼 · 영구 삭제 · 암호 창이 전부 이 위에) 또는 T-62 B · T-61 B · T-51 B.
+- **걸린 것**: 대화상자 부재가 M6 잔여·T-62 B(암호)·T-29 전부의 공통 선행 — nexa-dlg를 다음 슬라이스로.
+
+→ [journal/2026-10-03 §29](journal/2026-10-03.md)
+
 ## 10-03 26차 — M6 A: 복사/잘라내기/붙여넣기 · 전송 엔진 작업 스레드 · undo/redo
 
 - **한 일**: `app/ops.rs`(클립보드 2단 · `paste_dest` · 작업 스레드 전송 + 틱 진행 · 완료 재열람/토스트/히스토리 · undo/redo · `ops.busy`) · `Platform.trash = Rc`(삭제 주입 공유) · i18n `clip.*` 3언어 · 덤프 `ops` · `ops.cancel` · 시험 +1(111) · 시나리오 11.

@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M6 B 새 폴더/새 파일 · 인라인 이름 바꾸기**: `create_new`(CreateOp · 생성 즉시 이름 바꾸기) · F2 → nexa-grid rename → `apply_rename`(RenameOp) · 편집 필드 Edit 명령 · 기동 명령 `ui.type`/`ui.press` · 시나리오 `new-rename` → [journal §29](journal/2026-10-03.md)
 - **M6 A 파일 작업**: `app/ops.rs` — 복사/잘라내기(OS 클립보드 + 앱 내 사본) · 붙여넣기 = `ndir_ops::transfer` 작업 스레드 · 완료 토스트/재열람 · undo/redo(휴지통 삭제 주입) · 충돌 = 건너뜀(확인 창 T-29) · 덤프 `ops` · 시나리오 `copy-paste` → [journal §28](journal/2026-10-03.md)
 - **T-54 자가 점검 창**: Help ▸ 자가 점검 — 작업 스레드 점검 · 판정 색 표 · 다시 점검/복사 · 명령·키·i18n 등재 · 덤프 `check` · 시나리오 `selfcheck-win` · CI plugins 잡 실행 비트 수정 → [journal §27](journal/2026-10-03.md)
 - **T-63 A + T-07 플러그인 빌드·CI 검증**: `plugins.list` + `plugin-build.{sh,ps1}` · CI `plugins` 잡(wasm32 빌드 → 자가 점검 plugin으로 로드 검증) · 설정 창 플러그인 목록 설명 줄 → [journal §26](journal/2026-10-03.md)

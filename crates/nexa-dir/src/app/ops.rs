@@ -321,6 +321,161 @@ impl App {
         )
     }
 
+    /// 새 폴더/새 파일(dir2 `create_new` · OPS-018 · CreateOp): 활성 폴더에 `unique_dest` 이름으로 만들고 → 재열람 → 그 행 선택 + 인라인 이름 바꾸기.
+    pub(crate) fn create_new(&mut self, folder: bool) {
+        let a = self.active;
+        let dir = self.panels[a].root_path();
+        if !dir.is_dir() {
+            return;
+        }
+        let created = if folder {
+            ndir_ops::create_new_dir(&dir, &tr("new.folderBase"))
+        } else {
+            ndir_ops::create_new_file(&dir, &format!("{}.txt", tr("new.fileBase")))
+        };
+        let path = match created {
+            Ok(p) => p,
+            Err(e) => {
+                self.status_note(&trf("new.fail", &[&e.to_string()]));
+                return;
+            }
+        };
+        let desc = tr(if folder { "new.folderOp" } else { "new.fileOp" });
+        let trash = Rc::clone(&self.platform.trash);
+        let delete: ndir_ops::history::DeleteFn = Box::new(move |p: &std::path::Path| {
+            trash
+                .trash(std::slice::from_ref(&p.to_path_buf()))
+                .map(|_| ())
+                .map_err(|e| std::io::Error::other(e.to_string()))
+        });
+        let recreate: ndir_ops::history::RecreateFn = {
+            let p = path.clone();
+            if folder {
+                Box::new(move || std::fs::create_dir(&p))
+            } else {
+                Box::new(move || {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&p)
+                        .map(|_| ())
+                })
+            }
+        };
+        self.history.push(Box::new(ndir_ops::history::CreateOp::new(
+            path.clone(),
+            desc,
+            delete,
+            recreate,
+        )));
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.reopen(&mut inv);
+        }
+        // 생성 행 선택 + 이름 바꾸기(dir2 RevealAndRename).
+        self.panels[a].select_path(&path, &mut inv);
+        self.begin_rename();
+        self.update_status();
+        self.redraw();
+    }
+
+    /// F2 — 캐럿 행 인라인 이름 바꾸기 시작(가상 최상위·캐럿 없음 = 무동작).
+    pub(crate) fn begin_rename(&mut self) {
+        let a = self.active;
+        let Some(row) = self.panels[a].rows().caret() else {
+            return;
+        };
+        let Some(path) = self.panels[a].rows().source().row_path(row) else {
+            return;
+        };
+        let name = ndir_ops::leaf_name(&path);
+        if name.is_empty() {
+            return;
+        }
+        let mut inv = Invalidations::default();
+        self.panels[a].rows_mut().begin_rename(row, &name, &mut inv);
+        self.redraw();
+    }
+
+    /// 인라인 이름 바꾸기 확정(dir2 `apply_rename` · OPS-017 · RenameOp): 같은 이름 = 무동작 · 실패 = 상태줄 `rename.fail`.
+    pub(crate) fn apply_rename(&mut self, panel: usize, row: usize, new_name: &str) {
+        let Some(path) = self.panels[panel].rows().source().row_path(row) else {
+            return;
+        };
+        let mut inv = Invalidations::default();
+        match ndir_ops::rename(&path, new_name) {
+            Ok(new_path) => {
+                if new_path != path {
+                    let desc = trf("rename.done", &[&ndir_ops::leaf_name(&path), new_name]);
+                    self.history.push(Box::new(ndir_ops::history::RenameOp::new(
+                        path.clone(),
+                        new_path.clone(),
+                        desc.clone(),
+                    )));
+                    self.statusbar.set_left(&desc, &mut inv);
+                }
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
+                self.panels[panel].select_path(&new_path, &mut inv);
+            }
+            Err(e) => {
+                self.statusbar
+                    .set_left(&trf("rename.fail", &[&e.to_string()]), &mut inv);
+            }
+        }
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 이름 바꾸기 편집 필드 안의 편집 명령(dir2 `do_clip` ② — undo/cut/copy/paste/select_all/delete). 처리했으면 true.
+    pub(crate) fn rename_edit(&mut self, id: &str) -> bool {
+        let a = self.active;
+        if !self.panels[a].rows().is_renaming() {
+            return false;
+        }
+        let mut inv = Invalidations::default();
+        let rows = self.panels[a].rows_mut();
+        let done = match id {
+            "edit.undo" => {
+                rows.rename_undo(&mut inv);
+                true
+            }
+            "edit.cut" => {
+                if let Some(t) = rows.rename_cut(&mut inv) {
+                    let _ = clipboard::write_text(&t);
+                }
+                true
+            }
+            "edit.copy" => {
+                if let Some(t) = rows.rename_selected_text() {
+                    let _ = clipboard::write_text(&t);
+                }
+                true
+            }
+            "edit.paste" => {
+                if let Some(t) = clipboard::read_text() {
+                    let line: String = t.chars().filter(|c| !c.is_control()).collect();
+                    rows.rename_paste(&line, &mut inv);
+                }
+                true
+            }
+            "edit.select_all" => {
+                rows.rename_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+                true
+            }
+            "edit.delete" => {
+                rows.rename_delete(&mut inv);
+                true
+            }
+            _ => false,
+        };
+        if done {
+            self.redraw();
+        }
+        done
+    }
+
     /// 히스토리 접근(시험).
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn history(&self) -> &OperationHistory {
