@@ -666,3 +666,4 @@ keys.capturing = Press keys…
 keys.conflict = conflicts with {0}
 status.needsRestart = Takes effect after restart
 tab.moveOther = Move to other panel
+status.deletedCount = {0} item(s) moved to trash

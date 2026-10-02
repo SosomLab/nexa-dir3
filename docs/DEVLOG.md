@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M4 T-51 A 휴지통·클립보드·용량**: 휴지통 3-OS(SHFileOperationW · freedesktop Trash · ~/.Trash) · Windows CF_HDROP 파일 클립보드 · statvfs 용량(Linux/mac) · `edit.delete` 배선 · selfcheck trash · 시험 +4 → [journal §21](journal/2026-10-03.md)
 - **M4 T-50 플랫폼 포트**: `platform/` 포트 9종 + `Platform::native/fake` + ADR-0001 · 폴링 감시 자동 재열람 · 외부 열기(Opener) · Windows 드라이브 용량 · selfcheck shell/open/fs 실제 항목 · 시험 +5 → [journal §20](journal/2026-10-03.md)
 - **M3 T-43 2차 탭 메뉴·열 폭 동기**: 탭 잠금/고정/복제/분리·부착 + 우클릭 컨텍스트 메뉴(nexa-ctl) + 다른 패널로 이동 + 열 폭 동기 + 세션 잠금/고정 · 시험 +2 · 내 PC 용량 열은 M4 ⚠ → [journal §19](journal/2026-10-03.md)
 - **M3 T-44 설정 창·단축키 창**: nexa-sql `prefs_win`/`keys_win` 복사(SQL 미리보기·확장·`Msg` 제거 · i18n 키) · 보조 창 호스트 배선(`app/windows.rs`) · `apply_setting` 한 길 + **적용 누락 감시 시험** · i18n +19×3 · 시나리오 `prefs-open` → [journal §18](journal/2026-10-03.md)

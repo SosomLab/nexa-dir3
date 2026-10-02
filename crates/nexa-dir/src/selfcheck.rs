@@ -185,6 +185,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "shell" => check_shell(&mut r),
             "open" => check_open(&mut r),
             "fs" => check_fs(&mut r),
+            "trash" => check_trash(&mut r, opts.ci),
             other => r.items.push(Item {
                 group: other,
                 name: "(not implemented)".into(),
@@ -556,6 +557,33 @@ fn check_fs(r: &mut Report) {
             ),
             None => (Verdict::Skip, "unsupported on this OS (T-52/53)".into()),
         }
+    });
+}
+
+/// 휴지통(T-51 `Trash` 포트): 샌드박스 임시 파일 하나를 실제 휴지통으로(사용자 휴지통에 1개 남는다 → `--ci`는 SKIP).
+fn check_trash(r: &mut Report, ci: bool) {
+    timed(r, "trash", "trash one temp file", || {
+        if ci {
+            return (Verdict::Skip, "needs user trash (not in --ci)".into());
+        }
+        let dir =
+            std::env::temp_dir().join(format!("nexa-dir-selfcheck-trash-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let f = dir.join("nexa-dir-selfcheck.txt");
+        if let Err(e) = std::fs::write(&f, b"nexa-dir selfcheck") {
+            return (Verdict::Fail, e.to_string());
+        }
+        let p = crate::platform::Platform::native();
+        let out = match p.trash.trash(std::slice::from_ref(&f)) {
+            Ok(1) if !f.exists() => (Verdict::Pass, "moved".into()),
+            Ok(n) => (Verdict::Warn, format!("moved {n} but still exists")),
+            Err(crate::platform::PlatformError::Unsupported(w)) => {
+                (Verdict::Skip, format!("unsupported: {w}"))
+            }
+            Err(e) => (Verdict::Fail, e.to_string()),
+        };
+        let _ = std::fs::remove_dir_all(&dir);
+        out
     });
 }
 

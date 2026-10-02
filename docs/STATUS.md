@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 19차 — M4 T-51 A: 휴지통 3-OS · CF_HDROP · 용량 3-OS · `edit.delete`
+
+- **한 일**: 휴지통(Windows SHFileOperationW ALLOWUNDO · Linux freedesktop Trash 규격 · macOS ~/.Trash) · Windows 파일 클립보드(CF_HDROP + Preferred DropEffect) · 드라이브 용량 Linux/mac(`statvfs` 수동 extern · CI 3-OS가 레이아웃 검증) · `edit.delete` = Trash 포트 → 재열람 + 토스트 · selfcheck `trash`(비CI). 시험 +4(75 · 1 ignored).
+- **지금 상태**: M4 🚧 — T-50 ✅ · T-51/52/53 부분. 다음 = 내 PC 드라이브 열(PANEL-044 · Disk 포트 소비) → T-51 B(IContextMenu · OLE DnD · ReadDirectoryChangesW) 또는 M5 터미널(ConPTY/forkpty) → T-54 자가 점검 창.
+- **걸린 것**: 삭제 확인창 없음(interim · 휴지통이라 되돌릴 수 있음 · T-29 nexa-dlg 뒤) · 실제 클립보드/휴지통 시험은 `--ignored`.
+
+→ [journal/2026-10-03 §21](journal/2026-10-03.md)
+
 ## 10-03 18차 — M4 착수: T-50 플랫폼 포트 + 가짜 + ADR-0001
 
 - **한 일**: `platform/{mod,fake,windows,macos,linux}.rs` — 포트 9종(DR-5 8 + `Disk`) · `Platform::native()`(셸 탐지 · 열기/보기 · Windows 용량 · 폴링 감시) · `Platform::fake()`(기록·주입) · `App.platform` 배선(파일 열기 = Opener · 1 s 폴링 자동 재열람) · `--selfcheck` shell/open/fs 실제 항목 · [ADR-0001](adr/0001-platform-ports.md). 시험 +5.

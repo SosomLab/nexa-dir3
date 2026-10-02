@@ -120,6 +120,19 @@ impl TreeSource {
             .is_some_and(|r| r.kind == FileKind::Dir)
     }
 
+    /// 선택된 항목의 전체 경로(선택 순).
+    pub(crate) fn selected_paths(&self) -> Vec<PathBuf> {
+        self.tree
+            .as_ref()
+            .map(|t| {
+                t.selected_paths()
+                    .into_iter()
+                    .map(Path::to_path_buf)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub(crate) fn selection_count(&self) -> usize {
         self.tree.as_ref().map_or(0, Tree::selection_count)
     }
@@ -163,6 +176,20 @@ pub(crate) fn format_size(bytes: u64) -> String {
         u += 1;
     }
     format!("{v:.1} {}", UNITS[u])
+}
+
+/// Unix 초(UTC) → `YYYY-MM-DDThh:mm:ss`(freedesktop `.trashinfo` DeletionDate).
+#[cfg_attr(not(all(unix, not(target_os = "macos"))), allow(dead_code))] // freedesktop Trash(Linux)만 쓴다.
+pub(crate) fn format_iso_utc(unix_secs: i64) -> String {
+    let days = unix_secs.div_euclid(86_400);
+    let rem = unix_secs.rem_euclid(86_400);
+    let (y, m, d) = civil_from_days(days);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}",
+        rem / 3600,
+        (rem % 3600) / 60,
+        rem % 60
+    )
 }
 
 /// Unix ms(UTC) → `YYYY-MM-DD HH:MM`(로컬 시간대 변환 없음 — 시간대는 platform 층 과제 · T-72). 0 이하 = 빈 값.
@@ -371,6 +398,7 @@ mod tests {
         assert_eq!(format_time(0), "");
         // 2026-10-03 12:34:56 UTC
         assert_eq!(format_time(1_791_030_896_000), "2026-10-03 12:34");
+        assert_eq!(format_iso_utc(1_791_030_896), "2026-10-03T12:34:56");
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(-1), (1969, 12, 31));
         assert_eq!(civil_from_days(10_957), (2000, 1, 1));

@@ -604,3 +604,29 @@ fn platform_ports_wire_open_and_watch() {
     assert_eq!(app.panels[0].rows().caret(), Some(1));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-51 A: `edit.delete` = 선택 경로 → Trash 포트(가짜 기록) → 그 폴더 탭 재열람 · 선택 없음 = 무동작 · 실패 = 토스트.
+#[test]
+fn delete_goes_through_trash_port() {
+    let (mut app, dir) = fixture("trash");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    app.command("edit.delete");
+    assert!(
+        log.borrow().calls.iter().all(|c| !c.starts_with("trash:")),
+        "선택 없음 = 호출 없음"
+    );
+    let mut inv = Invalidations::default();
+    app.panels[0]
+        .rows_mut()
+        .select_program(1, nexa_grid::SelectOp::Single, &mut inv);
+    assert_eq!(app.panels[0].selected_paths(), vec![dir.join("a.txt")]);
+    app.command("edit.delete");
+    assert!(
+        log.borrow().calls.iter().any(|c| c == "trash:1"),
+        "{:?}",
+        log.borrow().calls
+    );
+    assert!(app.toasts.animating());
+    let _ = std::fs::remove_dir_all(&dir);
+}

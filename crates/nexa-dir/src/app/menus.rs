@@ -188,6 +188,37 @@ impl App {
         ]
     }
 
+    /// 선택 항목을 휴지통으로(Trash 포트 · 확인창은 T-29 뒤 · 실패/미지원 = 토스트 한 번) → 그 폴더를 보는 탭 전부 재열람.
+    pub(crate) fn delete_to_trash(&mut self) {
+        let paths = self.panels[self.active].selected_paths();
+        if paths.is_empty() {
+            return;
+        }
+        let mut inv = Invalidations::default();
+        match self.platform.trash.trash(&paths) {
+            Ok(n) => {
+                self.toasts.push(
+                    toast::ToastKind::Info,
+                    tr("menu.edit.delete"),
+                    trf("status.deletedCount", &[&n.to_string()]),
+                );
+                let dir = self.panels[self.active].root_path();
+                for p in &mut self.panels {
+                    if p.root_path() == dir {
+                        p.reopen(&mut inv);
+                    }
+                }
+            }
+            Err(e) => {
+                self.toasts.push(
+                    toast::ToastKind::Warn,
+                    tr("menu.edit.delete"),
+                    e.to_string(),
+                );
+            }
+        }
+    }
+
     /// 설정 토글(on/off) + 저장. 저장 실패는 조용히(다음 종료 때 다시).
     fn toggle_flag(&mut self, key: &str) -> bool {
         let on = !self.settings.flag(key);
@@ -244,6 +275,7 @@ impl App {
             "nav.up" => self.panels[a].nav_up(&mut inv),
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
+            "edit.delete" => self.delete_to_trash(),
             "view.refresh" => {
                 for p in &mut self.panels {
                     p.reopen(&mut inv);

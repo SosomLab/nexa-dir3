@@ -17,9 +17,11 @@
 | --- | --- | --- | --- | --- |
 | Shell | pwsh → powershell → cmd | $SHELL → zsh → bash → sh | $SHELL → bash → sh | 주입 |
 | Opener | `cmd /C start` · `explorer /select,` | `open` · `open -R` | `xdg-open` | 기록 |
-| Disk | `GetDiskFreeSpaceExW`(kernel32 수동 extern) | Unsupported(T-52 statvfs) | Unsupported(T-53) | 주입 |
+| Disk | `GetDiskFreeSpaceExW`(kernel32 수동 extern) | `statvfs`(Darwin 레이아웃) | `statvfs`(glibc 64비트 레이아웃) | 주입 |
 | Watcher | PollWatcher | PollWatcher | PollWatcher | 주입 큐 |
-| Pty · ContextMenuProvider · Trash · FileClipboard · DragSource | Unsupported(T-51) | Unsupported(T-52) | Unsupported(T-53) | 기록/echo |
+| Trash | `SHFileOperationW`(ALLOWUNDO) | `~/.Trash` 이동(되돌리기 T-52) | freedesktop Trash 규격 | 기록 |
+| FileClipboard | CF_HDROP + Preferred DropEffect | Unsupported(T-52) | Unsupported(T-53) | 메모리 |
+| Pty · ContextMenuProvider · DragSource | Unsupported(T-51 B · M5) | Unsupported(T-52) | Unsupported(T-53) | 기록/echo |
 
 ## 대안과 기각
 

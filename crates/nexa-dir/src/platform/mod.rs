@@ -128,6 +128,15 @@ pub(crate) trait Disk {
     fn space(&self, root: &Path) -> Option<(u64, u64)>;
 }
 
+/// OS 모듈이 주는 포트 다섯(셸 · 열기 · 용량 · 휴지통 · 파일 클립보드).
+type OsPorts = (
+    Box<dyn Shell>,
+    Box<dyn Opener>,
+    Box<dyn Disk>,
+    Box<dyn Trash>,
+    Box<dyn FileClipboard>,
+);
+
 /// 포트 묶음 — 호출부는 이 안의 trait 객체만 본다.
 pub(crate) struct Platform {
     pub shell: Box<dyn Shell>,
@@ -333,29 +342,35 @@ impl Platform {
     /// 운영 플랫폼(이 OS 모듈 + 공용 폴백).
     pub(crate) fn native() -> Platform {
         #[cfg(windows)]
-        let (shell, opener, disk): (Box<dyn Shell>, Box<dyn Opener>, Box<dyn Disk>) = (
+        let (shell, opener, disk, trash, clipboard): OsPorts = (
             Box::new(windows::NativeShell),
             Box::new(windows::opener()),
             Box::new(windows::NativeDisk),
+            Box::new(windows::NativeTrash),
+            Box::new(windows::NativeFileClipboard),
         );
         #[cfg(target_os = "macos")]
-        let (shell, opener, disk): (Box<dyn Shell>, Box<dyn Opener>, Box<dyn Disk>) = (
+        let (shell, opener, disk, trash, clipboard): OsPorts = (
             Box::new(macos::NativeShell),
             Box::new(macos::opener()),
+            Box::new(macos::NativeDisk),
+            Box::new(macos::HomeTrash::new()),
             Box::new(Unsupported),
         );
         #[cfg(all(unix, not(target_os = "macos")))]
-        let (shell, opener, disk): (Box<dyn Shell>, Box<dyn Opener>, Box<dyn Disk>) = (
+        let (shell, opener, disk, trash, clipboard): OsPorts = (
             Box::new(linux::NativeShell),
             Box::new(linux::opener()),
+            Box::new(linux::NativeDisk),
+            Box::new(linux::FreedesktopTrash::new()),
             Box::new(Unsupported),
         );
         Platform {
             shell,
             pty: Box::new(Unsupported),
             ctxmenu: Box::new(Unsupported),
-            trash: Box::new(Unsupported),
-            clipboard: Box::new(Unsupported),
+            trash,
+            clipboard,
             drag: Box::new(Unsupported),
             watcher: Box::new(PollWatcher::default()),
             opener,
@@ -423,16 +438,18 @@ mod tests {
         let p = Platform::native();
         let sh = p.shell.default_shell().expect("default shell");
         assert!(sh.program.is_file(), "{:?}", sh.program);
-        assert!(matches!(
+        assert_eq!(
             p.trash.trash(&[]),
-            Err(PlatformError::Unsupported("trash"))
+            Ok(0),
+            "빈 목록 = 0(3-OS 휴지통 구현 존재)"
+        );
+        assert!(matches!(
+            p.ctxmenu.items(&[]),
+            Err(PlatformError::Unsupported(_))
         ));
-        assert!(p.clipboard.read_files().is_none());
         assert!(p.log.is_none());
         let cwd = std::env::current_dir().unwrap();
-        if cfg!(windows) {
-            let (total, free) = p.disk.space(&cwd).expect("drive space on windows");
-            assert!(total >= free && total > 0);
-        }
+        let (total, free) = p.disk.space(&cwd).expect("drive space (3-OS)");
+        assert!(total >= free && total > 0);
     }
 }

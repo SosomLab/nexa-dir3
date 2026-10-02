@@ -238,6 +238,11 @@ impl Panel {
         &mut self.tabs[self.active].rows
     }
 
+    /// 활성 탭의 선택 경로.
+    pub(crate) fn selected_paths(&self) -> Vec<PathBuf> {
+        self.rows().source().selected_paths()
+    }
+
     pub(crate) fn root_path(&self) -> PathBuf {
         self.rows().source().path().to_path_buf()
     }
