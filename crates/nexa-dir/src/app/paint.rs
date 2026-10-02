@@ -1,60 +1,69 @@
 //! App — 그리기(프레임 합성 · nexa-sql `app/paint.rs` 축약). 층 순서 = 본문 → 크롬(툴바·메뉴바 배경) → 상태줄 → 토스트 →
 //! 툴팁 → **메뉴바 드롭다운**(최상위 · nexa-sql 09-15 교훈: 풀다운이 뒤로 가림) → 경로바 제안 팝업.
+//!
+//! `paint`(Shell · 표면 빌림 + 래스터 컨텍스트) / [`App::paint_into`](AppCore · 어떤 `DrawCtx`든 — 시험은 `RecordCtx` · CI-105).
 
 use crate::*;
 
 impl App {
     pub(crate) fn paint(&mut self) {
-        let (Some(win), Some(surface)) = (self.window.clone(), self.surface.as_mut()) else {
+        // 표면을 잠시 꺼내 둔다 — 버퍼가 표면을 빌리는 동안 `paint_into(&mut self)`를 부르기 위해(그리기 중 `self.surface`는 안 쓴다).
+        let (Some(win), Some(mut surface)) = (self.window.clone(), self.surface.take()) else {
             return;
         };
         let size = win.inner_size();
-        let Some(mut buf) = surface.frame(size) else {
-            return;
-        };
         let s = self.scale;
         let (wi, hi) = (size.width as i32, size.height as i32);
-        {
-            let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
-            let th = self.theme;
-            let ui_px = self.settings.font_px("ui.font_size");
-            let mut dc =
-                RasterCtx::new(&mut gfx, &self.ui_font, s).with_fonts(FontPrefs::with_base(ui_px));
-            dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
-            // 본문
-            self.tabs.paint(&mut dc, &th);
-            self.pathbar.paint(&mut dc, &th);
-            self.panels[0].paint(&mut dc, &th);
-            if self.dual {
-                let l = self.panels[0].bounds();
-                let r = self.panels[1].bounds();
-                dc.fill_rect(
-                    Rect::new(l.right(), l.y, r.x - l.right(), l.h),
-                    th.chrome_bg,
-                );
-                self.panels[1].paint(&mut dc, &th);
+        if let Some(mut buf) = surface.frame(size) {
+            {
+                let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
+                let ui_px = self.settings.font_px("ui.font_size");
+                let font = Rc::clone(&self.ui_font);
+                let mut dc =
+                    RasterCtx::new(&mut gfx, &font, s).with_fonts(FontPrefs::with_base(ui_px));
+                self.paint_into(&mut dc, wi, hi, s);
             }
-            // 크롬(창 전폭)
-            dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
-            self.toolbar.paint(&mut dc, &th);
-            dc.fill_rect(
-                Rect::new(0, self.toolbar.bounds().bottom() - 1, wi, 1),
-                th.border,
-            );
-            dc.fill_rect(self.menubar.bounds(), th.chrome_bg);
-            // 상태줄
-            let sb = self.statusbar.bounds();
-            dc.fill_rect(sb, th.chrome_bg);
-            dc.fill_rect(Rect::new(0, sb.y, wi, 1), th.border);
-            self.statusbar.paint(&mut dc, &th);
-            // 팝업 층
-            self.toasts.paint(&mut dc, &th, wi, sb.y, s);
-            self.toolbar.paint_tooltip(&mut dc, &th);
-            self.menubar.paint(&mut dc, &th);
-            // 경로바 제안 팝업은 dir2 세대 DrawCtx 어휘(nexa-grid `Adapt`로 감싼다 · 어휘 어댑터 원칙 journal §10).
-            let mut adapt = nexa_grid::Adapt(&mut dc);
-            self.pathbar.paint_suggest(&mut adapt, &th);
+            let _ = buf.present();
         }
-        let _ = buf.present();
+        self.surface = Some(surface);
+    }
+
+    /// 한 프레임을 `dc`에(창 무관). `wi`×`hi` = 표면 크기(장치 px) · `s` = 배율.
+    pub(crate) fn paint_into(&mut self, dc: &mut dyn DrawCtx, wi: i32, hi: i32, s: f32) {
+        let th = self.theme;
+        dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
+        // 본문
+        self.tabs.paint(dc, &th);
+        self.pathbar.paint(dc, &th);
+        self.panels[0].paint(dc, &th);
+        if self.dual {
+            let l = self.panels[0].bounds();
+            let r = self.panels[1].bounds();
+            dc.fill_rect(
+                Rect::new(l.right(), l.y, r.x - l.right(), l.h),
+                th.chrome_bg,
+            );
+            self.panels[1].paint(dc, &th);
+        }
+        // 크롬(창 전폭)
+        dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
+        self.toolbar.paint(dc, &th);
+        dc.fill_rect(
+            Rect::new(0, self.toolbar.bounds().bottom() - 1, wi, 1),
+            th.border,
+        );
+        dc.fill_rect(self.menubar.bounds(), th.chrome_bg);
+        // 상태줄
+        let sb = self.statusbar.bounds();
+        dc.fill_rect(sb, th.chrome_bg);
+        dc.fill_rect(Rect::new(0, sb.y, wi, 1), th.border);
+        self.statusbar.paint(dc, &th);
+        // 팝업 층
+        self.toasts.paint(dc, &th, wi, sb.y, s);
+        self.toolbar.paint_tooltip(dc, &th);
+        self.menubar.paint(dc, &th);
+        // 경로바 제안 팝업은 dir2 세대 DrawCtx 어휘(nexa-grid `Adapt`로 감싼다 · 어휘 어댑터 원칙 journal §10).
+        let mut adapt = nexa_grid::Adapt(dc);
+        self.pathbar.paint_suggest(&mut adapt, &th);
     }
 }

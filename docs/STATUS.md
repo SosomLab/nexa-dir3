@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 11차 — M3 T-41 창 없는 AppCore + 골든
+
+- **한 일**: `viewport`/`scale` 주입(`layout_for`) · `paint_into(&mut dyn DrawCtx)` · 창 없이도 `layout()` — `cargo test`가 App을 만들어 골든(`tests/golden/layout-1200x800.txt`)·RecordCtx(표면 밖 0)·입력 시나리오·기동 명령 어휘를 0.1 s에 돈다(시험 5 · nexa-dir 43). 적발 3 수정(종류 열 넘침 → 이름 열 흡수 ⚠T-31 · 창 없는 layout 조기 반환 · CI mac/linux 플랫폼 단언).
+- **지금 상태**: M3 🚧 — T-40·41 ✅ · T-42/43 부분. 다음 = T-43 잔여(패널별 탭·스플리터 드래그·폴더 트리·열 폭 기억) → T-44 설정/단축키 창 → T-45 세션 → T-46 덤프 어휘(`assert`·`@ready`·패닉 훅).
+- **걸린 것**: 직전 CI(51f8c38) mac/linux 빨강 = `tab_title("C:/")` 단언 — 이번 커밋에 수정 포함. Q-8 그대로.
+
+→ [journal/2026-10-03 §13](journal/2026-10-03.md)
+
 ## 10-03 10차 — M3 T-40 앱 골격(창이 뜬다)
 
 - **한 일**: nexa-sql 호스트 껍질 복사(`NDIR_*`) · dir2 아이콘 자원 · `App`/`Focus`/`layout`/`ApplicationHandler` · `filelist::TreeSource`(ndir-tree → nexa-grid) · 메뉴 5/툴바 13/명령 한 길 `command(id)` · 키맵 연결 · `NDIR_STARTUP_CMD`(`layout.dump`·`ui.click`·`@after`·`app.exit`). Windows 실증: 격리 홈·비활성 창으로 덤프 → 메뉴 클릭 → F6 → 더블클릭 진입 → 종료 1.5 s · 설정 저장 확인. 게이트 전부 green.

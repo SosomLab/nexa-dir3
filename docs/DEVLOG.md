@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M3 T-41 창 없는 AppCore**: `layout_for`/`paint_into` 최소 분리 + 배치 골든 1장 + `RecordCtx`/입력/기동 명령 시험 5(창 0 · 0.1 s) · 적발 3(열 넘침·창 없는 layout·플랫폼 단언) → [journal §13](journal/2026-10-03.md)
 - **M3 T-40 앱 골격**: nexa-sql 호스트 껍질 9파일 복사 + dir2 아이콘 + `App`/`layout`/이벤트 루프 + `ndir-tree` 파일 목록 + 메뉴 5·툴바 13·명령 한 길 + `NDIR_STARTUP_CMD`/`layout.dump` — **창이 뜨고 폴더를 다닌다**(Windows 실증 · 시험 +38) → [journal §12](journal/2026-10-03.md)
 - **M2 T-26·27(nexa-ui 106차)**: `nexa-explorer` — dir2 PathBar·InfoDock·OverlayBars 이식(시험 25) → [journal §11](journal/2026-10-03.md)
 - **M2 T-25(nexa-ui 105차)**: `nexa-grid` 크레이트 — dir2 VirtualRows 엔진 이식(테스트 52) + DrawCtx 어댑터 + Invalidations 틱 → [journal §10](journal/2026-10-03.md)

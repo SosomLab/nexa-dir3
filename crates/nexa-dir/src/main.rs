@@ -88,14 +88,19 @@ enum Area {
     Status,
 }
 
+/// 앱 — 상태 한 곳. **창 없이도 동작**(DR-10 · CI-102 최소 분리): `viewport`·`scale`은 Shell(이벤트 루프)이 창에서 읽어 넣고,
+/// `layout_core`·`route`·`paint_into`·`command`는 winit을 모른다 → `cargo test`가 `App::new` + `layout_for` + `RecordCtx`로 시나리오를 돈다.
 struct App {
     window: Option<Rc<Window>>,
     surface: Option<present::Presenter>,
     settings: Settings,
     keymap: Keymap,
-    ui_font: Font,
+    /// `Rc` = 그리기 때 래스터 컨텍스트가 글꼴을 빌리는 동안 `&mut self`(paint_into)를 쓰기 위해.
+    ui_font: Rc<Font>,
     theme: Theme,
     scale: f32,
+    /// 창 안쪽 크기(장치 px) — 창이 있으면 `layout()`이 창에서 읽고, 시험은 `layout_for`로 넣는다.
+    viewport: (i32, i32),
     /// 포인터(장치 px) · 수식키.
     cursor: (i32, i32),
     shift: bool,
@@ -176,9 +181,10 @@ impl App {
             toasts,
             settings,
             keymap,
-            ui_font,
+            ui_font: Rc::new(ui_font),
             theme,
             scale: 1.0,
+            viewport: (0, 0),
             cursor: (0, 0),
             shift: false,
             primary: false,
@@ -234,11 +240,27 @@ impl App {
         self.statusbar.set_text(&left, &right, &mut inv);
     }
 
-    /// 배치 — 위에서부터 메뉴바 · 툴바 · 탭 · 경로바 · 본문(패널 1~2) · 상태줄(dir2 화면 구성 · docs/port/13).
+    /// 배치(Shell 쪽) — 창 크기를 읽어 [`App::layout_core`].
     fn layout(&mut self) {
-        let Some(win) = &self.window else { return };
-        let size = win.inner_size();
-        let (w, h) = (size.width as i32, size.height as i32);
+        // 창이 없으면(시험) 마지막 `viewport`로 — 명령이 부르는 `layout()`도 창 없이 돌아야 한다(10-03 `view.panel_single` 시험 적발).
+        if let Some(win) = &self.window {
+            let size = win.inner_size();
+            self.viewport = (size.width as i32, size.height as i32);
+        }
+        self.layout_core();
+    }
+
+    /// 배치(시험 쪽) — 창 없이 크기·배율을 넣는다(CI-105 골든 · T-41).
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn layout_for(&mut self, w: i32, h: i32, scale: f32) {
+        self.viewport = (w, h);
+        self.scale = scale;
+        self.layout_core();
+    }
+
+    /// 배치 — 위에서부터 메뉴바 · 툴바 · 탭 · 경로바 · 본문(패널 1~2) · 상태줄(dir2 화면 구성 · docs/port/13). winit 무관.
+    fn layout_core(&mut self) {
+        let (w, h) = self.viewport;
         let s = self.scale;
         let mut inv = Invalidations::default();
         self.menubar.set_scale(s);
@@ -265,12 +287,18 @@ impl App {
         let status_h = px(24.0, s);
         let body_h = (h - y - status_h).max(0);
         let row_h = px(self.settings.font_px("list.font_size") + 8.0, s);
-        let cols = vec![
-            Column::new(filelist::COL_NAME, tr("col.name"), px(300.0, s)),
-            Column::new(filelist::COL_SIZE, tr("col.size"), px(90.0, s)).right_aligned(),
-            Column::new(filelist::COL_MODIFIED, tr("col.modified"), px(140.0, s)),
-            Column::new(filelist::COL_KIND, tr("col.kind"), px(90.0, s)),
-        ];
+        // 컬럼 = 이름이 나머지를 흡수(패널 폭 안에 맞춘다 — nexa-grid는 셀을 패널 경계로 자르지 않는다(클립 스택 T-31) → 10-03 RecordCtx
+        //   시험이 "종류 열이 오른쪽 패널로 넘침"을 적발). 열 폭 기억·동기화(`list.col_width_sync`)는 T-43.
+        let (size_w, mod_w, kind_w) = (px(90.0, s), px(140.0, s), px(90.0, s));
+        let cols_for = |panel_w: i32| {
+            let name_w = (panel_w - size_w - mod_w - kind_w - px(8.0, s)).max(px(120.0, s));
+            vec![
+                Column::new(filelist::COL_NAME, tr("col.name"), name_w),
+                Column::new(filelist::COL_SIZE, tr("col.size"), size_w).right_aligned(),
+                Column::new(filelist::COL_MODIFIED, tr("col.modified"), mod_w),
+                Column::new(filelist::COL_KIND, tr("col.kind"), kind_w),
+            ]
+        };
         let gap = px(4.0, s);
         let pct = self.settings.int("layout.panel_split_pct").clamp(10, 90) as i32;
         let rects = if self.dual {
@@ -284,7 +312,7 @@ impl App {
         };
         for (p, r) in self.panels.iter_mut().zip(rects) {
             p.set_metrics(row_h, px(6.0, s), px(16.0, s), &mut inv);
-            p.set_columns(cols.clone(), &mut inv);
+            p.set_columns(cols_for(r.w), &mut inv);
             p.set_bounds(r, &mut inv);
         }
         self.statusbar
@@ -454,6 +482,8 @@ mod tests {
         assert_eq!(px(24.0, 1.5), 36);
         assert_eq!(px(26.0, 1.25), 33);
         assert_eq!(tab_title(std::path::Path::new("C:/Users/kiros")), "kiros");
-        assert_eq!(tab_title(std::path::Path::new("C:/")), "C:/");
+        // 루트(이름 없음)는 경로 그대로 — OS마다 루트 표기가 달라 플랫폼 중립 경로로(10-03 CI mac/linux 적발: `C:/`의 file_name = `C:`).
+        assert_eq!(tab_title(std::path::Path::new("/")), "/");
+        assert_eq!(tab_title(std::path::Path::new("a/b")), "b");
     }
 }

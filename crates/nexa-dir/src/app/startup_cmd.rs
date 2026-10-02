@@ -88,11 +88,7 @@ impl App {
     /// 배치·상태 덤프(한 줄 = 한 영역 · 골든 비교 · 하네스 T3).
     pub(crate) fn layout_dump(&self) -> String {
         let r = |r: Rect| format!("{},{} {}x{}", r.x, r.y, r.w, r.h);
-        let size = self
-            .window
-            .as_ref()
-            .map(|w| w.inner_size())
-            .map_or((0, 0), |s| (s.width, s.height));
+        let size = self.viewport;
         let mut out = String::new();
         out.push_str(&format!(
             "window {}x{} scale {:.2} theme {} dual {} focus {:?}\n",

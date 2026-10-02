@@ -1,0 +1,8 @@
+window 1200x800 scale 1.00 theme dark dual true focus Panel(0)
+menubar 0,0 1200x23
+toolbar 0,23 1200x48
+tabs 0,71 1200x28 active 0 n 1
+pathbar 0,99 1200x26 path <root>
+panel0 0,127 598x649 rows 3 caret None path <root>
+panel1 602,127 598x649 rows 3 caret None path <root>
+statusbar 0,776 1200x24 left 3 items right Tab 1/1

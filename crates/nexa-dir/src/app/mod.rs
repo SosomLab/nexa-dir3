@@ -6,3 +6,6 @@ mod keywinit;
 mod menus;
 mod paint;
 mod startup_cmd;
+
+#[cfg(test)]
+mod core_tests;
