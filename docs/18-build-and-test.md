@@ -55,6 +55,8 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 
 ## 6. 자가 점검(`--selfcheck`) 항목
 
+> 창: **Help ▸ 자가 점검…**(`help.selfcheck` · T-54) — 같은 `selfcheck::run`을 작업 스레드에서 돌려 표로 보이고 [복사]는 CLI 표 텍스트와 동일. 기동 명령 `help.selfcheck` + `check.dump:<파일>`/`assert.check:<식>`으로 시나리오 검증(`selfcheck-win.scn`).
+
 | 그룹 | 점검 | `--ci` |
 | --- | --- | --- |
 | env | OS·아키·버전·빌드일 · 홈/임시 폴더 쓰기 | 실행 |

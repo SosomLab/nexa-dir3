@@ -51,7 +51,7 @@ pub(crate) enum Verdict {
 }
 
 impl Verdict {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Verdict::Pass => "PASS",
             Verdict::Fail => "FAIL",

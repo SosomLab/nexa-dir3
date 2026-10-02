@@ -271,6 +271,7 @@ impl App {
                 self.prefs_win.shown_keys()
             ),
             "term" => self.term_dump(),
+            "check" => self.check_win.table(),
             "preview" => {
                 let (id, lines) = &self.dock_preview[self.term_dock_index()];
                 format!("provider {id}\n{}\n", lines.join("\n"))

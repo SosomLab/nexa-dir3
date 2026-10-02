@@ -1157,6 +1157,14 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    e!(
+        "key.help.selfcheck",
+        CAT_KEYS,
+        "menu.help.selfcheck",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
     // ── 클라우드(dir2 동적 키 군 → 고정 키 · 여러 줄 값)
     e!(
         "cloud.conns",

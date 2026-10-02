@@ -1,0 +1,12 @@
+# T4 · T-54 자가 점검 창: Help ▸ 자가 점검 → 작업 스레드 점검 → 창 덤프(표)에 PASS 항목 · FAIL 0(CI 변수면 --ci 부분집합).
+id: selfcheck-win
+title: 자가 점검 창 — 백그라운드 점검 결과 표
+settings: ui.lang=en
+cmd: @ready:help.selfcheck
+cmd: @after:8000:check.dump:<out>/check.txt
+cmd: @after:8100:assert.check:!FAIL
+cmd: @after:8200:assert.check:PASS env
+cmd: @after:8300:quit
+check: check.txt: PASS env
+check: check.txt: PASS plugin
+check: check.txt: !FAIL

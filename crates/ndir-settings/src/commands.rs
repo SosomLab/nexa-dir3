@@ -222,6 +222,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     // ── 도움말
     c!("help.about", "menu.help.about", "", "", ""),
+    c!("help.selfcheck", "menu.help.selfcheck", "", "", ""),
 ];
 
 /// id로 찾기.

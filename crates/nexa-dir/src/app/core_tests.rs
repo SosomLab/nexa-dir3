@@ -833,3 +833,22 @@ fn preview_plugin_renders_markdown_in_dock() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-54: Help ▸ 자가 점검 명령은 보조 창 열기 요청(창 없는 시험 = 플래그) · 메뉴 표에 등재 · 덤프 `check`는 결과 전이면 안내 줄.
+#[test]
+fn help_selfcheck_requests_check_window() {
+    let (mut app, dir) = fixture("check");
+    assert!(super::menus::MENU_IDS.contains(&"help.selfcheck"));
+    assert!(
+        ndir_settings::command("help.selfcheck").is_some(),
+        "명령 표 등재(키 설정 key.help.selfcheck)"
+    );
+    app.command("help.selfcheck");
+    assert!(app.open_check);
+    assert!(
+        app.dump_of("check").unwrap().contains("selfcheck"),
+        "{}",
+        app.dump_of("check").unwrap()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

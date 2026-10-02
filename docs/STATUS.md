@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 25차 — T-54: Help ▸ 자가 점검 창(백그라운드 점검 · 표 · 복사)
+
+- **한 일**: `check_win.rs`(작업 스레드 `selfcheck::run` + mpsc 수거 · 판정 색 표 · 요약 · 다시 점검/F5 · 복사 · Esc) · `help.selfcheck` 명령/키/메뉴/i18n 3언어 · 덤프 `check` · 시험 +3(110) · 시나리오 10 · CI `plugins` 잡 실행 비트(+x) 수정.
+- **지금 상태**: M4 🚧(T-51 B·52·53 잔여) · M5 🚧 — 다음 = T-62 B(F3 독립 미리보기 창 · 압축 그리드 · 암호 창 · SVG 래스터) 또는 T-61 B(터미널 가로 스크롤·HTML/RTF 복사) 또는 M6 파일 작업(edit.cut/copy/paste · ndir-ops 배선).
+- **걸린 것**: selfcheck 그룹 중 pty/ctxmenu/clipboard/dnd/preview/archive/cloud/window은 아직 "(not implemented)" SKIP — 각 기능 슬라이스가 채운다.
+
+→ [journal/2026-10-03 §27](journal/2026-10-03.md)
+
 ## 10-03 24차 — T-63 A + T-07: 플러그인 빌드 스크립트 3-OS · CI wasm32 검증 · 설정 플러그인 목록
 
 - **한 일**: `plugins/sdk/plugins.list` 단일 출처 + `scripts/plugin-build.{sh,ps1}`(옵션 동형) · CI `plugins` 잡(빌드 → `NDIR_PLUGINS_DIR` 자가 점검 로드 검증) · 설정 창 `plugins.disabled` 설명 줄에 로드 목록·오류 · 로컬 실기 PASS(2종 빌드 · selfcheck 3 PASS).

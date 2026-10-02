@@ -667,3 +667,13 @@ keys.conflict = conflicts with {0}
 status.needsRestart = Takes effect after restart
 tab.moveOther = Move to other panel
 status.deletedCount = {0} item(s) moved to trash
+menu.help.selfcheck = Self-check…
+check.title = Self-check
+check.hint = Checks core functions (environment · config · resources · shell · open · files · trash · plugins · license) in the background. F5 = run again.
+check.running = Running…
+check.summary = {0} pass · {1} fail · {2} warn · {3} skip
+check.btn.run = Run again
+check.btn.copy = Copy
+check.col.group = Group
+check.col.item = Item
+check.col.detail = Detail

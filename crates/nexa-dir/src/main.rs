@@ -7,6 +7,7 @@
 //! 규칙: 인자 해석·판정은 순수 함수(`cli.rs` · `selfcheck.rs`) · 그리기는 `RedrawRequested`에서만 · 유휴는 `WaitUntil`(SKEL-414).
 
 mod app;
+mod check_win;
 mod cli;
 #[allow(dead_code)] // M6 파일 작업·M5 터미널 복사에서 소비(지금은 호스트 껍질만 들여놓음).
 mod clipboard;
@@ -42,6 +43,7 @@ mod wingeom;
 #[allow(dead_code)] // 보조 창(설정 · 단축키 · About)이 T-44에서 쓴다.
 mod winhost;
 
+use check_win::CheckWin;
 use filelist::ListOpts;
 use keys_win::KeysWin;
 use ndir_i18n::{tr, trf};
@@ -151,6 +153,9 @@ struct App {
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
     keys_win: KeysWin,
+    /// 자가 점검 창(T-54 · Help ▸ 자가 점검).
+    check_win: CheckWin,
+    open_check: bool,
     open_prefs: bool,
     open_keys: bool,
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
@@ -318,6 +323,8 @@ impl App {
             ready_fired: false,
             prefs_win: PrefsWin::new(),
             keys_win: KeysWin::new(),
+            check_win: CheckWin::new(),
+            open_check: false,
             open_prefs: false,
             open_keys: false,
             tab_menu: ContextMenu::new(),

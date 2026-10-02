@@ -85,6 +85,6 @@ jobs:
             nexa-dir3/plugins/sdk/markdown-viewer
             nexa-dir3/plugins/sdk/archive-viewer
       - name: build plugins (wasm32)
-        run: scripts/plugin-build.sh --out-dir target/plugins-ci --skip-dist
+        run: bash scripts/plugin-build.sh --out-dir target/plugins-ci --skip-dist
       - name: fresh build loads (selfcheck plugin)
         run: NDIR_PLUGINS_DIR=target/plugins-ci cargo run -q -p nexa-dir -- --selfcheck --ci --only plugin

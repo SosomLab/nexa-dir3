@@ -3,6 +3,7 @@
 //! 규칙(docs/port/40 SKEL-419): 보조 창 하나 = 필드 + `open_<이름>` 깃발 + `open_requested_windows` 소비 줄 + `aux_window_event` 분배 줄 +
 //! `all_aux_windows` + 틱(`aux_tick`) + 기하 기억(`persist_window_sizes`/`apply_window_sizes`).
 
+use crate::check_win::CheckAction;
 use crate::keys_win::KeysAction;
 use crate::prefs_win::PrefsAction;
 use crate::*;
@@ -39,6 +40,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.keys_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_check) {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.check_win.open(el, theme, over, owner.as_deref());
         }
     }
 
@@ -146,6 +153,20 @@ impl App {
             }
             return true;
         }
+        if self.check_win.is(id) {
+            let ui_px = self.settings.font_px("ui.font_size");
+            match self.check_win.handle(event) {
+                CheckAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.check_win.paint(&font, &self.theme, ui_px);
+                }
+                CheckAction::Copy(text) => {
+                    let _ = clipboard::write_text(&text);
+                }
+                CheckAction::None => {}
+            }
+            return true;
+        }
         false
     }
 
@@ -164,6 +185,9 @@ impl App {
             self.keys_win.refresh(&self.keymap);
             self.keys_win.redraw();
         }
+        if self.check_win.is_open() {
+            self.check_win.redraw(); // 테마·글꼴 변경 반영
+        }
         self.redraw();
     }
 
@@ -175,8 +199,11 @@ impl App {
         if self.keys_win.tick(now_ms) {
             self.keys_win.redraw();
         }
+        if self.check_win.tick(now_ms) {
+            self.check_win.redraw();
+        }
         self.persist_window_sizes();
-        self.prefs_win.animating() || self.keys_win.animating()
+        self.prefs_win.animating() || self.keys_win.animating() || self.check_win.animating()
     }
 
     /// 닫힌 보조 창의 마지막 (위치, 크기)를 설정에(`window.prefs_pos`/`_size` · dir2 계승).

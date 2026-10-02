@@ -666,3 +666,13 @@ keys.conflict = {0}와(과) 충돌
 status.needsRestart = 다시 시작 후 적용됩니다
 tab.moveOther = 다른 패널로 이동
 status.deletedCount = {0}개 항목을 휴지통으로 옮겼습니다
+menu.help.selfcheck = 자가 점검…
+check.title = 자가 점검
+check.hint = 핵심 기능(환경 · 설정 · 자원 · 셸 · 열기 · 파일 · 휴지통 · 플러그인 · 라이선스)을 백그라운드에서 점검합니다. F5 = 다시 점검.
+check.running = 점검 중…
+check.summary = 통과 {0} · 실패 {1} · 경고 {2} · 건너뜀 {3}
+check.btn.run = 다시 점검
+check.btn.copy = 복사
+check.col.group = 그룹
+check.col.item = 항목
+check.col.detail = 상세

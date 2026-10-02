@@ -667,3 +667,13 @@ keys.conflict = {0} と競合
 status.needsRestart = 再起動後に反映されます
 tab.moveOther = もう一方のパネルへ移動
 status.deletedCount = {0} 件をごみ箱へ移動しました
+menu.help.selfcheck = 自己診断…
+check.title = 自己診断
+check.hint = 主要機能（環境 · 設定 · リソース · シェル · 開く · ファイル · ごみ箱 · プラグイン · ライセンス）をバックグラウンドで診断します。F5 = 再診断。
+check.running = 診断中…
+check.summary = 合格 {0} · 失敗 {1} · 警告 {2} · スキップ {3}
+check.btn.run = 再診断
+check.btn.copy = コピー
+check.col.group = グループ
+check.col.item = 項目
+check.col.detail = 詳細

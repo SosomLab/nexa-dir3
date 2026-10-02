@@ -66,7 +66,7 @@
 | T-51 | Windows: 셸 메뉴(IContextMenu + 메뉴 스레드) · 휴지통 · CF_HDROP 클립보드 · OLE DnD · 폴더 감시 · 셸 통지 · ShellExecute · ConPTY | P0 | 대 | T-50 | SHELL · TERM | 🚧 10-03 A(journal §21 — 휴지통 ✅ · CF_HDROP ✅ · ShellExecute(start) ✅ · 용량 ✅ · 폴링 감시 ✅ / IContextMenu · OLE DnD · ConPTY · ReadDirectoryChangesW ☐) |
 | T-52 | macOS: 자체 메뉴 + 연결 프로그램 · trashItem · NSPasteboard 파일 URL · NSDragging · FSEvents · open · forkpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | 🚧 10-03(open/open -R · $SHELL · statvfs · ~/.Trash 이동 ✅ / trashItem 되돌리기 · NSPasteboard · NSDragging · FSEvents · forkpty ☐) |
 | T-53 | Linux: 자체 메뉴 + xdg/MimeApps · freedesktop Trash · gnome-copied-files/text/uri-list · XDND · inotify · xdg-open · openpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | 🚧 10-03(xdg-open · $SHELL · statvfs · freedesktop Trash ✅ / uri-list 클립보드 · XDND · inotify · openpty ☐) |
-| T-54 | `--selfcheck` 실제 항목(fs·trash·shell·pty·ctxmenu·clipboard·open) · Help ▸ 자가 점검 창 | P0 | 중 | T-51~53 | CI-110·111 | ☐ |
+| T-54 | `--selfcheck` 실제 항목(fs·trash·shell·pty·ctxmenu·clipboard·open) · Help ▸ 자가 점검 창 | P0 | 중 | T-51~53 | CI-110·111 | 🚧 10-03 journal §27(창 ✅ · 실제 항목 fs/trash/shell/open/plugin/license ✅ · pty/ctxmenu/clipboard/dnd = 해당 슬라이스에서) |
 
 ## M5 도크·터미널·미리보기·플러그인
 

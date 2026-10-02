@@ -28,7 +28,7 @@ fn items(ids: &[&str]) -> Vec<MenuEntry> {
 }
 
 /// 메뉴 항목 전체(단축키·체크 동기화 대상).
-const MENU_IDS: &[&str] = &[
+pub(crate) const MENU_IDS: &[&str] = &[
     "file.new_tab",
     "file.close_tab",
     "-",
@@ -80,6 +80,7 @@ const MENU_IDS: &[&str] = &[
     "-",
     "panel.switch",
     "help.about",
+    "help.selfcheck",
 ];
 
 impl App {
@@ -385,6 +386,7 @@ impl App {
                     self.set_active(1 - self.active);
                 }
             }
+            "help.selfcheck" => self.open_check = true,
             "help.about" => {
                 self.toasts.push(
                     toast::ToastKind::Info,
@@ -427,7 +429,8 @@ mod tests {
         assert_eq!(MENU_IDS[19], "view.mode_tree");
         assert_eq!(MENU_IDS[42], "nav.back");
         assert_eq!(MENU_IDS[50], "help.about");
-        assert_eq!(MENU_IDS.len(), 51);
+        assert_eq!(MENU_IDS[51], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 52);
     }
 
     #[test]
