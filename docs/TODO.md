@@ -25,7 +25,7 @@
 | T-13 | `ndir-settings` 엔진(kind·store·tables·migrate·json + 무결성 시험 · perf는 Q-7로 보류) | P0 | 중 | T-12 | SET-001~044 · 120~137 | ✅ 10-03 |
 | T-14 | 레지스트리 표(dir2 70키 → nexa-sql 규칙 키 · `CATEGORY_TREE` dir2 페이지 순 · `DEPENDS` · `HIDDEN` · `OS_DEFAULTS` · nexa-sql 공통 키) — 86키 | P0 | 중 | T-13 | PREFS-101~170 · KEY §5 | ✅ 10-03 |
 | T-15 | dir2 `settings.cfg` 가져오기(`import_dir2` 순수 함수 + 전수 시험) ✅ · `session.cfg` → `session.conf` Store는 M3 T-45로 | P1 | 소 | T-14 | PREFS-040~057 | ✅ 10-03(세션은 T-45) |
-| T-16 | `ndir-license`(nsql-license 복제 · Product `nexa-dir` · 시험 7건 + 타 제품 거부) | P0 | 소 | T-13 | LIC-151~157 · 164 | ☐ |
+| T-16 | `ndir-license`(nsql-license 복제 · Product `nexa-dir` · Feature 0 · 시험 8건 + 타 제품 거부 · 자가 점검 license 5항목) | P0 | 소 | T-13 | LIC-151~157 · 164 | ✅ 10-03 |
 | T-17 | 명령 표 `commands.rs`(dir2 전 명령 · 라벨 키 · OS별 기본 키 · repeatable) + `key.<id>` 전수 등재 시험 | P0 | 중 | T-14 | CMD · SET-090~097 · 130 | ☐ |
 
 ## M2 nexa-ui 보강(형제 저장소 · 각각 nexa-ui 커밋/push)

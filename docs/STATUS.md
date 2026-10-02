@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 5차 — M1 T-16 `ndir-license`
+
+- **한 일**: nsql-license 1:1 복제(제품 `nexa-dir` · `NDIR_BUILD_DATE` · Feature 변형 0 = dir2 게이트 0 정책) · 시험 8(타 제품 거부 포함) · 자가 점검 license 5항목 PASS.
+- **지금 상태**: M1 남은 것 = T-17 명령 표(`commands.rs`). 그 뒤 M2(nexa-ui 보강 — 형제 저장소 작업).
+- **걸린 것**: Q-1(Feature/Tier/Kind 구성)은 기본값(게이트 0)으로 진행.
+
+→ [journal/2026-10-03 §7](journal/2026-10-03.md)
+
 ## 10-03 4차 — M1 T-13~15 `ndir-settings`
 
 - **한 일**: nexa-sql 설정 엔진 복사 + dir2 86키 레지스트리(dir2 페이지 순·기본값) + 곁 표(OS_DEFAULTS·DEPENDS·HIDDEN·ADVANCED) + JSON + dir2 가져오기(`import_dir2`) + 자가 점검 `config` 3항목. 시험 +17.

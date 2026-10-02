@@ -1,0 +1,24 @@
+[package]
+name = "ndir-license"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir 라이선스 앱 층 — nexa-license 위의 얇은 층: Product nexa-dir · LicenseState · 폴더(설정 폴더/license → 기기 공용) · 설치/삭제 · 요청 코드 · Feature 0(dir2 정책 전 기능 무료 · DR-4) (출처: nexa-sql/crates/nsql-license)"
+# 빌드일 NDIR_BUILD_DATE(영구 라이선스 updates_until 판정 기준 = 시계가 아니라 빌드일).
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+nexa-license = { workspace = true, features = ["ed25519", "machine-id", "fs"] }
+ndir-settings = { workspace = true }
+
+[dev-dependencies]
+# 시험 전용 키쌍 생성·서명(발급 코드가 아니다 · #[cfg(test)]) — nexa-license verify 시험과 같은 판.
+ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }

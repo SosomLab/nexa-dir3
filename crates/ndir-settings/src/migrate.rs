@@ -128,13 +128,15 @@ const MAP: &[(&str, &str, Conv)] = &[
     ("launcher_seed", "launcher.seed", Conv::Int(0, 9999)),
 ];
 
-/// dir2 기본 글꼴(Windows 전용 이름) — dir3 기본은 빈 값(OS 기본)이므로 같은 값이면 옮기지 않는다.
+/// dir2 기본 글꼴(Windows 전용 이름) — dir3 기본은 빈 값(OS 기본)·OS별 고정폭이므로 같은 값이면 옮기지 않는다.
 const WINDOWS_ONLY_FONT_DEFAULTS: &[(&str, &str)] = &[
     ("base_font", "Segoe UI"),
     ("ctx_font", "Segoe UI"),
     ("status_font", "Segoe UI"),
     ("list_font", "Segoe UI"),
     ("dlg_font", "Segoe UI"),
+    // 터미널 글꼴은 OS_DEFAULTS(Consolas/Menlo/DejaVu Sans Mono) — dir2 기본 Consolas는 Windows 밖에서 뜻이 없다(CI mac/linux 실측 10-03).
+    ("term_font", "Consolas"),
 ];
 
 fn clamp_int(v: &str, min: i64, max: i64) -> Option<String> {

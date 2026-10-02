@@ -11,6 +11,7 @@ members = [
   "crates/ndir-term",     # dir2 nexa-term — VT 파서 · 화면 버퍼 · 복사 서식 (의존 0)
   "crates/ndir-i18n",     # 메시지 카탈로그 — dir2 lang/*.lang 임베드 · 오버레이 · OS 언어 · 빌드 검사 (의존 0 · DR-14)
   "crates/ndir-settings", # 앱 설정 — nsql-settings 엔진 + dir2 키 표 · settings.conf · JSON · dir2 가져오기 (의존: i18n · nexa-conf · DR-3)
+  "crates/ndir-license",  # 라이선스 앱 층 — nsql-license 복제 · Product nexa-dir · Feature 0 (의존: nexa-license · settings · DR-4)
   "crates/nexa-dir",      # (bin) 앱 — winit 호스트 · app/ 조각 · platform/ · preview/
 ]
 # 플러그인 게스트 작업 공간(wasm32)은 따로 빌드한다(docs/18 · scripts/plugin-build.*).
@@ -44,6 +45,7 @@ ndir-ops = { path = "crates/ndir-ops" }
 ndir-term = { path = "crates/ndir-term" }
 ndir-i18n = { path = "crates/ndir-i18n" }
 ndir-settings = { path = "crates/ndir-settings" }
+ndir-license = { path = "crates/ndir-license" }
 # nexa-ui(공용 UI · 형제 저장소 · 경로 의존 — DR-1·2). M1에서 소비 시작.
 nexa-gfx = { path = "../nexa-ui/crates/nexa-gfx" }
 nexa-ctl = { path = "../nexa-ui/crates/nexa-ctl" }

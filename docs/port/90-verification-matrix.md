@@ -47,3 +47,8 @@
 | PREFS-101~170 · KEY-501~570 | dir2 설정 키 → dir3 레지스트리 + 가져오기 | `ndir-settings/src/{registry,migrate}.rs` | T1 | `defaults_follow_dir2` · migrate 3 시험 | ✅ | 세션 키(PREFS-201~)는 T-45 |
 | KEY-591~598 | 신규 키(term.shell · window.* · license.gates · ui.prefs_advanced · text raster · dblclick · scroll_natural) | `registry.rs` | T1 | 레지스트리 무결성 | ✅ | `gfx.*`/`clipboard.x11_native`는 호스트 이식 때 |
 | CI-110(config) | 자가 점검 config 그룹 | `nexa-dir/src/selfcheck.rs` | T5 | 스모크 | ✅ | |
+| LIC-151~157 | `ndir-license` 크레이트 · PRODUCT · 빌드일 · 폴더 순서 · Feature/Tier · 상태·판정·설치 API | `crates/ndir-license` | T1 | 8 시험(`other_machine_outdated_expired_and_wrong_product` 등) | ✅ | Feature 변형 0(Q-1 기본값) |
+| LIC-164 ①③ | 단위 시험 이식 · 타 제품 파일 거부 · `*` 번들 | 〃 | T1 | 〃 | ✅ | ② 기동 명령 `license.*`는 T-46/T-80 |
+| LIC-192 | `Product.version` = 앱 버전 | `Cargo.toml version.workspace` | T5 | selfcheck `license/product` | ✅ | |
+| LIC-181~182 | 기기 ID 원천 · 기기 공용 폴더(3-OS) | nexa-license `machine.rs` · `machine_dir()` | T5 | selfcheck `license/machine id`·`installed state` | ✅ | |
+| CI-110(license) | 자가 점검 license 그룹 5항목 | `nexa-dir/src/selfcheck.rs` | T5 | 스모크 | ✅ | |

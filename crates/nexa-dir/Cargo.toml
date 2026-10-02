@@ -15,3 +15,4 @@ workspace = true
 [dependencies]
 ndir-i18n = { workspace = true }
 ndir-settings = { workspace = true }
+ndir-license = { workspace = true }

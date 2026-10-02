@@ -181,6 +181,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "env" => check_env(&mut r),
             "config" => check_config(&mut r),
             "resources" => check_resources(&mut r),
+            "license" => check_license(&mut r),
             other => r.items.push(Item {
                 group: other,
                 name: "(not implemented)".into(),
@@ -305,6 +306,94 @@ fn check_config(r: &mut Report) {
                 ),
             )
         }
+    });
+}
+
+/// license — 루트 키 등재 · 기기 ID · 설치 상태(기본 자리 · 읽기만) · 요청 코드 왕복. 파일을 쓰지 않는다.
+fn check_license(r: &mut Report) {
+    timed(r, "license", "root keys", || {
+        let n = ndir_license::ROOT_KEYS.len();
+        if n == 0 {
+            (
+                Verdict::Fail,
+                "ROOT_KEYS empty — every license file would be Invalid(NoRootKey)".into(),
+            )
+        } else {
+            (
+                Verdict::Pass,
+                format!(
+                    "{n} key(s): {}",
+                    ndir_license::ROOT_KEYS
+                        .iter()
+                        .map(|k| k.id)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            )
+        }
+    });
+    timed(r, "license", "product", || {
+        let p = &ndir_license::PRODUCT;
+        if p.id == "nexa-dir" && p.version == env!("CARGO_PKG_VERSION") && p.build_date.len() == 10
+        {
+            (
+                Verdict::Pass,
+                format!("{}/{} built {}", p.id, p.version, p.build_date),
+            )
+        } else {
+            (
+                Verdict::Fail,
+                format!("{p:?} vs app {}", env!("CARGO_PKG_VERSION")),
+            )
+        }
+    });
+    timed(
+        r,
+        "license",
+        "machine id",
+        || match ndir_license::Licensing::machine_code() {
+            Some(c) => (Verdict::Pass, format!("{}…", &c[..c.len().min(8)])),
+            None => (
+                Verdict::Warn,
+                "unavailable (container? request code disabled)".into(),
+            ),
+        },
+    );
+    timed(r, "license", "request code round trip", || {
+        let meta = ndir_license::RequestMeta {
+            name: "selfcheck".into(),
+            email: String::new(),
+        };
+        match ndir_license::Licensing::request_code(&meta) {
+            Some(code) => match ndir_license::request::decode(&code) {
+                Some(r)
+                    if r.meta.get("n") == Some("selfcheck")
+                        && r.meta
+                            .get("app")
+                            .is_some_and(|a| a.starts_with("nexa-dir/")) =>
+                {
+                    (Verdict::Pass, format!("{} chars", code.len()))
+                }
+                Some(_) => (Verdict::Fail, "decoded meta mismatch".into()),
+                None => (Verdict::Fail, "decode failed".into()),
+            },
+            None => (Verdict::Skip, "no machine id".into()),
+        }
+    });
+    timed(r, "license", "installed state", || {
+        let l = ndir_license::Licensing::open_default();
+        let dirs = l
+            .dirs()
+            .iter()
+            .map(|d| d.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" → ");
+        let state = l.state().name();
+        let v = match l.state() {
+            ndir_license::LicenseState::Invalid(_) => Verdict::Warn,
+            _ => Verdict::Pass,
+        };
+        (v, format!("{state} · {dirs}"))
     });
 }
 
