@@ -1,0 +1,38 @@
+# 빌드 산출물 (Rust)
+/target/
+/build/
+/dist/
+/out/
+# Cargo.lock은 바이너리 워크스페이스이므로 커밋한다(재현 빌드).
+**/*.rs.bk
+
+# 플러그인 게스트 작업 공간(wasm32)·하네스 산출물
+/plugins/sdk/target/
+/tests/out/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 에디터
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# 로컬 실행 데이터 (개발 중 NDIR_HOME 격리 산출물)
+/data/
+*.log
+
+# Claude Code 로컬 설정(개인) — 공용 설정은 .claude/settings.json(커밋)
+.claude/settings.local.json
+
+# 신원·키·비밀 잔재 (배포·커밋 금지)
+*.key
+*.pfx
+*.snk
+secrets/
+__pycache__/
+*.pyc

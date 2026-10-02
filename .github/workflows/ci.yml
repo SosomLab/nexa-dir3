@@ -1,0 +1,56 @@
+# CI — "main은 항상 green"(docs/16 §3). 3-OS × fmt/clippy/test/smoke/selfcheck(docs/18 §8).
+# ★ 형제 저장소 ../nexa-ui · ../nexa-license를 path 의존한다(DR-1·DR-4) → 나란히 체크아웃.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: nexa-dir3
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nexa-dir3
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-ui
+          path: nexa-ui
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-license
+          path: nexa-license
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nexa-dir3
+      # Linux 러너: 한글 글꼴(nexa-font 실측) — 빌드 자체는 시스템 라이브러리 불요(Wayland/X11 dlopen).
+      - name: fonts (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core
+        working-directory: .
+
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+      - name: smoke
+        run: cargo run -q -p nexa-dir -- --smoke
+      - name: selfcheck (ci subset)
+        run: cargo run -q -p nexa-dir -- --selfcheck --ci

@@ -1,0 +1,15 @@
+[package]
+name = "nexa-dir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir — 크로스플랫폼 파일 탐색기(앱 bin). M0 = 인자 · --smoke · --selfcheck 뼈대"
+
+[lints]
+workspace = true
+
+[dependencies]
