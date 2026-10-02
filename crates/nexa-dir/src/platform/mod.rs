@@ -20,8 +20,12 @@ pub(crate) mod fake;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(unix)]
+mod unixpty;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod winpty;
 
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +66,10 @@ pub(crate) trait PtySession {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
     fn resize(&mut self, cols: u16, rows: u16) -> std::io::Result<()>;
     fn kill(&mut self);
+    /// 프로세스가 아직 살아 있는가(종료 감지 → 안내 · 재시작). 기본 = 항상 참(가짜).
+    fn alive(&self) -> bool {
+        true
+    }
 }
 
 /// 기본 셸 탐지(Windows `pwsh` → `powershell` → `cmd` · Unix `$SHELL` → `/bin/sh`).
@@ -365,9 +373,13 @@ impl Platform {
             Box::new(linux::FreedesktopTrash::new()),
             Box::new(Unsupported),
         );
+        #[cfg(windows)]
+        let pty: Box<dyn Pty> = Box::new(winpty::ConPty);
+        #[cfg(unix)]
+        let pty: Box<dyn Pty> = Box::new(unixpty::ForkPty);
         Platform {
             shell,
-            pty: Box::new(Unsupported),
+            pty,
             ctxmenu: Box::new(Unsupported),
             trash,
             clipboard,

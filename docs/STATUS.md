@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 22차 — M5 T-61 A: 도크 터미널(Pty 3-OS · VT 셀 렌더 · 키/마우스 · cd 동기)
+
+- **한 일**: Pty 포트 구현(Windows ConPTY `winpty.rs` · Unix `unixpty.rs` forkpty) + `termview.rs`(Utf8Chunker · pump · 셀 격자 렌더 · 선택/스크롤백) + 호스트 배선(`app/term.rs` — 지연 시작 · 30 ms 폴링 · 포커스 · 키 라우팅 · → cd · Edit 메뉴) + 기동 명령 `dock.kind/term.focus/term.send/term.dump`. ConPTY 실기 적발 2(파이프 std 핸들 누수 → `STARTF_USESTDHANDLES` · 종료 flush → read가 ClosePseudoConsole). 시험 +7(89) · 시나리오 8.
+- **지금 상태**: M5 🚧 — 다음 = T-61 B(고정 열·가로 스크롤 · 트랙패드 픽셀 · 고속 스크롤 · HTML/RTF 복사 · TUI 마우스 모드 · 터미널 글꼴 크기) 또는 T-62 플러그인 런타임(WASM) → T-54 자가 점검 창.
+- **걸린 것**: nexa-ctl DrawCtx에 클립 스택이 없어 셀 클립은 호출마다 rect(T-31). macOS/Linux pty는 CI 실기 시험으로만 검증(로컬 Windows).
+
+→ [journal/2026-10-03 §24](journal/2026-10-03.md)
+
 ## 10-03 21차 — M5 착수: T-60 하단 도크(정보 · 미리보기 · 터미널 스트립)
 
 - **한 일**: nexa-explorer `InfoDock` 2개를 App에 통합 — dir2 전폭 밴드 배치(`dock.visible` · `layout.dock_height_pct/dock_split_pct/info_mode`) · 정보 8줄(std 메타) · 미리보기 텍스트(64 KiB · 바이너리/빈 파일 판정 · 이미지는 경로만) · 활성 패널 원천 · `Area::Dock` 라우팅 · `dock.dump` · 시험 +4(82) · T4 시나리오 7.

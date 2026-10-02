@@ -870,6 +870,7 @@ dependencies = [
  "ndir-i18n",
  "ndir-license",
  "ndir-settings",
+ "ndir-term",
  "ndir-tree",
  "ndir-vfs",
  "nexa-conf",

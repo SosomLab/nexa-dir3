@@ -182,6 +182,12 @@ impl App {
         match ev {
             InputEvent::MouseMove { x, y } => {
                 self.cursor = (x, y);
+                if let Some(i) = self.term_focus {
+                    if self.terms[i].mouse_move(x, y) {
+                        inv.push(self.docks[i].bounds());
+                        return;
+                    }
+                }
                 if let Some(a) = self.pressed {
                     self.send(a, &ev, inv);
                     return;
@@ -220,7 +226,21 @@ impl App {
                     self.menubar.on_event(&ev, inv);
                     return;
                 }
+                // 터미널 격자 클릭 = 터미널 포커스 + 선택 시작(dir2 QA 07-14) — 도크 위젯으로는 보내지 않는다.
+                if let InputEvent::MouseDown { shift, .. } = ev {
+                    if let Some(i) = self.term_hit_at(x, y) {
+                        if self.terms[i].started() {
+                            self.set_term_focus(Some(i), inv);
+                            self.terms[i].mouse_down(x, y, shift);
+                            inv.push(self.docks[i].bounds());
+                            return;
+                        }
+                    }
+                }
                 let Some(area) = self.area_at(p) else { return };
+                if matches!(area, Area::Panel(_)) && self.term_focus.is_some() {
+                    self.set_term_focus(None, inv); // 목록 클릭 = 터미널 포커스 해제
+                }
                 if let Area::Panel(i) = area {
                     if i != self.active {
                         // 다른 패널 클릭 = 활성 전환(dir2 PANEL-001 "활성 패널에 키보드를 라우팅").
@@ -239,6 +259,9 @@ impl App {
                 self.send(area, &ev, inv);
             }
             InputEvent::MouseUp { .. } => {
+                if let Some(i) = self.term_focus {
+                    self.terms[i].mouse_up();
+                }
                 if let Some(a) = self.pressed.take() {
                     self.send(a, &ev, inv);
                 } else if self.menubar.is_open() {
@@ -247,6 +270,13 @@ impl App {
             }
             InputEvent::Wheel { .. } | InputEvent::HWheel { .. } => {
                 let (x, y) = self.cursor;
+                if let (InputEvent::Wheel { delta }, Some(i)) = (ev, self.term_hit_at(x, y)) {
+                    // 터미널 위 휠 = 스크롤백(3줄/노치 · dir2).
+                    if self.terms[i].scroll_view(delta * 3 / 120) {
+                        inv.push(self.docks[i].bounds());
+                    }
+                    return;
+                }
                 if let Some(a) = self.area_at(Point { x, y }) {
                     self.send(a, &ev, inv);
                 }
@@ -262,6 +292,9 @@ impl App {
                 if self.menubar.is_open() {
                     self.menubar.on_event(&ev, inv);
                     return;
+                }
+                if self.term_key(&ev, inv) {
+                    return; // 터미널 포커스 = 키를 셸로(목록 단축키 차단 · dir2 KeyRoute::Term)
                 }
                 self.panels[self.active].key_event(&ev, inv);
             }
@@ -295,12 +328,7 @@ impl App {
         }
         for i in 0..2 {
             if self.docks[i].take_goto() {
-                // 터미널 "폴더로 이동"(→)은 T-61 — 지금은 안내.
-                self.toasts.push(
-                    toast::ToastKind::Info,
-                    tr("dock.terminal"),
-                    tr("cmd.notYet"),
-                );
+                self.term_goto(i, inv); // → = 현재 폴더로 cd(살아 있으면) · 아니면 재시작 · 포커스
             }
             if self.docks[i].take_popout() {
                 self.toasts

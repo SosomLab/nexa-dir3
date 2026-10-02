@@ -30,6 +30,7 @@ mod prefs_win;
 mod present;
 mod selfcheck;
 mod session;
+mod termview;
 mod theme;
 #[allow(dead_code)]
 mod toast;
@@ -66,6 +67,7 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use termview::TermView;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -155,6 +157,10 @@ struct App {
     tab_menu_at: Option<(usize, usize)>,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
+    /// 도크 터미널 2(T-61 · 도크 종류 2일 때 지연 시작 · 폴링 틱).
+    terms: [TermView; 2],
+    /// 터미널 키 포커스(dir2 `term_focus`) — 클릭/→ 버튼으로 얻고 패널 클릭으로 잃는다.
+    term_focus: Option<usize>,
     /// 플랫폼 포트 묶음(DR-5 · ADR-0001) — 운영 `Platform::native()` · 시험 `Platform::fake()`.
     platform: Platform,
     /// 폴더 감시 폴링 시각(1 s 간격 · 자동 재열람 PANEL-036).
@@ -319,6 +325,8 @@ impl App {
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),
             ],
+            terms: [TermView::new(), TermView::new()],
+            term_focus: None,
         };
         for d in &mut app.docks {
             d.set_kinds(
@@ -392,7 +400,7 @@ impl App {
             let kind = self.docks[i].active_kind();
             let (lines, image) = match kind {
                 1 => dockinfo::preview_content(&selected),
-                2 => (vec![tr("cmd.notYet")], None),
+                2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => (dockinfo::info_lines(&selected, &current), None),
             };
             let subject = selected.first().map_or_else(

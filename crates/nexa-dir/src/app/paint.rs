@@ -43,6 +43,7 @@ impl App {
                 d.paint(dc, &th);
             }
         }
+        self.paint_terms(dc, &th, panel_metrics(&self.settings, s).row_h);
         // 크롬(창 전폭)
         dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
         self.toolbar.paint(dc, &th);

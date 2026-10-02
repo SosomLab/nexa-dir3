@@ -259,6 +259,27 @@ impl App {
     pub(crate) fn command(&mut self, id: &str) {
         let mut inv = Invalidations::default();
         let a = self.active;
+        // 터미널 포커스 중 편집 명령은 터미널로(dir2 Edit 메뉴 규약 · T-61).
+        if self.term_focused().is_some() {
+            let done = match id {
+                "edit.copy" => {
+                    self.term_copy();
+                    true
+                }
+                "edit.paste" => {
+                    self.term_paste();
+                    true
+                }
+                "edit.select_all" => {
+                    self.term_select_all();
+                    true
+                }
+                _ => false,
+            };
+            if done {
+                return;
+            }
+        }
         match id {
             "file.exit" => self.exit_requested = true,
             "file.prefs" => self.open_prefs = true,

@@ -76,6 +76,15 @@
 | GUI-113 | 미리보기 텍스트(64 KiB · NUL = 바이너리 · 빈 파일 · 200줄 · 탭 4칸) · 폴더/없음 = none · 실패 | `dockinfo.rs::preview_content` | T2 | `preview_lines_rules` · `info_and_preview_on_temp_tree` | ✅ | 플러그인·압축 미리보기 T-62 |
 | GUI-114 | 미리보기 이미지(확장자 → `set_image(경로)`) | `dockinfo.rs::is_image_ext` | T2 | `info_and_preview_on_temp_tree`(p.png) | ⚠ | 실제 그리기 = T-31 nexa-grid `Adapt::draw_image` 뒤 |
 | GUI-115 | 도크 갱신 길목 = `update_status`(선택·폴더 변경마다) · 키 `종류|선택수|대상` 유지 | `main.rs::update_docks` | T2 | `dock_layout_and_contents` | ✅ | dir2 `update_dock_info` 동일 |
+| TERM-01 · DR-5 | Pty 포트 구현 3-OS(ConPTY · forkpty) · 비차단 읽기 · 리사이즈 · 종료 감지 | `platform/winpty.rs` · `platform/unixpty.rs` | T2(실기) | `conpty_runs_cmd_echo` · `forkpty_runs_sh_echo` | ✅ | 실기 교훈: STARTF_USESTDHANDLES · 종료 flush(§24) |
+| TERM-02 | VT 화면 → 셀 격자 렌더(런 배경 · 셀 글자 · 전각 · faint · 선택 반전 · 캐럿 · 종료 안내) | `termview.rs::paint` | T2 | `lifecycle_with_fake_pty` · core `terminal_dock_with_fake_pty` | ✅ | 고정 열·가로 스크롤 T-61 B |
+| TERM-03 | 지연 시작(cwd = 원천 패널) · 폴링 틱 30 ms · 캐럿 530 ms · 살아 있을 때만 깸 | `app/term.rs::paint_terms/term_tick/term_wake` | T2 | `terminal_dock_with_fake_pty`(spawn 로그 cwd) | ✅ | |
+| TERM-04 | 키 라우팅(포커스 중 목록 단축키 차단 · 화살표/Home/End/Del/PgUp/Dn/Enter/Esc/BS/Tab · Ctrl+글자 제어 문자 · 복사/붙여넣기 조합) | `app/term.rs::term_key/term_ctrl` · `event_loop.rs` | T2 | `terminal_dock_with_fake_pty` · `key_and_char_sequences` | ✅ | |
+| TERM-05 | 마우스(격자 클릭 = 포커스 · 드래그 선택 · 엣지 자동 스크롤 · 휠 = 스크롤백 3줄) · 패널 클릭 = 포커스 해제 | `app/input.rs` · `termview.rs` | T2 | `terminal_dock_with_fake_pty` | ✅ | TUI 마우스 모드(DECSET 1000/1006) T-61 B |
+| TERM-06 | → 버튼 = `cd "<폴더>"`(cmd `/d`) · 종료/실패 뒤 아무 키·→ = 재시작 | `app/term.rs::term_goto` | T2 | `terminal_dock_with_fake_pty`(reset) | ✅ | |
+| TERM-07 | 팔레트 선택(`term.theme` system/dark/light/스킴 id + `theme_dark/light` 폴백) · 셸 선택(`term.shell`) | `app/term.rs::term_palette/term_shell` | T1 | ndir-term `resolve_scheme` 시험 | ✅ | 터미널 글꼴 크기(`term.font_size`) T-61 B |
+| TERM-08 | 실제 셸 왕복(기동 명령 `term.focus/term.send/term.dump` · 3-OS) | `app/startup_cmd.rs` | T4 | `term-echo.scn` | ✅ | |
+| TERM-09 | 복사 서식 HTML/RTF(`term.copy_format`) · 고정 열/가로 스크롤(`term.wrap/cols`) · 트랙패드 픽셀 스크롤 · 고속 스크롤 | — | — | — | ☐ | T-61 B |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
 | SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |

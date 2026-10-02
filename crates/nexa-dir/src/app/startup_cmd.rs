@@ -123,6 +123,41 @@ impl App {
             }
             return;
         }
+        if let Some(n) = id.strip_prefix("dock.kind:") {
+            let k = n.trim().parse::<usize>().unwrap_or(0);
+            let i = self.term_dock_index();
+            let mut inv = Invalidations::default();
+            self.docks[i].set_active_kind(k, &mut inv);
+            self.update_docks();
+            self.redraw();
+            return;
+        }
+        if let Some(text) = id.strip_prefix("term.send:") {
+            let i = self.term_dock_index();
+            let mut inv = Invalidations::default();
+            self.docks[i].set_active_kind(2, &mut inv);
+            self.set_term_focus(Some(i), &mut inv);
+            self.term_ensure_started(i);
+            let s = text
+                .replace("\\r", "\r")
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\e", "\x1b");
+            self.terms[i].write(&s);
+            self.terms[i].view_off = 0;
+            self.redraw();
+            return;
+        }
+        if id == "term.focus" {
+            let i = self.term_dock_index();
+            let mut inv = Invalidations::default();
+            self.docks[i].set_active_kind(2, &mut inv);
+            self.set_term_focus(Some(i), &mut inv);
+            self.term_ensure_started(i);
+            self.update_docks();
+            self.redraw();
+            return;
+        }
         match id {
             "app.exit" => self.exit_requested = true,
             _ => self.command(id),
@@ -223,6 +258,7 @@ impl App {
                 self.prefs_win.is_open(),
                 self.prefs_win.shown_keys()
             ),
+            "term" => self.term_dump(),
             "dock" => {
                 let d = &self.docks[0];
                 format!(

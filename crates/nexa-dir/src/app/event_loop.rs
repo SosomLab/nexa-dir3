@@ -95,6 +95,7 @@ impl ApplicationHandler<Wake> for App {
             redraw = true;
         }
         let aux_live = self.aux_tick(now_ms);
+        let term_live = self.term_tick(now_ms);
         self.open_requested_windows(el);
         if !self.startup_timed.is_empty() {
             let due: Vec<String> = self
@@ -134,6 +135,9 @@ impl ApplicationHandler<Wake> for App {
         next = next.min(self.watch_tick(now));
         if let Some(t) = self.session_tick(now) {
             next = next.min(t);
+        }
+        if let Some(d) = self.term_wake(term_live) {
+            next = next.min(now + d);
         }
         el.set_control_flow(ControlFlow::WaitUntil(next));
     }
@@ -253,6 +257,31 @@ impl ApplicationHandler<Wake> for App {
                     self.alt,
                     self.ctrl_mac,
                 ) {
+                    // 터미널 포커스(T-61): Ctrl/⌘+글자는 키맵보다 먼저 — 제어 문자·복사/붙여넣기 · Tab = 완성.
+                    if self.term_focused().is_some() && self.pending_chord.is_none() {
+                        let is_cmd = cfg!(target_os = "macos") && ch.primary;
+                        let is_ctrl = if cfg!(target_os = "macos") {
+                            ch.ctrl
+                        } else {
+                            ch.primary
+                        };
+                        let mut it = ch.key.chars();
+                        if let (Some(c), None) = (it.next(), it.next()) {
+                            if (is_cmd || is_ctrl)
+                                && !ch.alt
+                                && c.is_ascii_alphabetic()
+                                && self.term_ctrl(c, ch.shift, is_cmd)
+                            {
+                                return;
+                            }
+                        }
+                        if ch.key == "tab" && !ch.primary && !ch.alt && !ch.ctrl {
+                            let mut inv = Invalidations::default();
+                            self.term_key(&InputEvent::Char { c: '\t', now_ms: 0 }, &mut inv);
+                            self.redraw();
+                            return;
+                        }
+                    }
                     if let Some(first) = self.pending_chord.take() {
                         if let Some(id) = self.keymap.lookup_seq(&first, &ch) {
                             if !(kev.repeat && !ndir_settings::repeatable(id)) {
@@ -265,7 +294,9 @@ impl ApplicationHandler<Wake> for App {
                         !ch.primary && !ch.alt && !ch.ctrl && ch.key.chars().count() == 1;
                     // 경로바 편집 중엔 조합키 없는 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
                     let editing = self.panels[self.active].pathbar.is_editing();
-                    let typing = plain_char || (editing && !ch.primary && !ch.alt);
+                    let term_typing =
+                        self.term_focused().is_some() && !ch.primary && !ch.alt && !ch.ctrl;
+                    let typing = plain_char || term_typing || (editing && !ch.primary && !ch.alt);
                     if !typing {
                         if self.keymap.is_prefix(&ch) {
                             self.pending_chord = Some(ch);

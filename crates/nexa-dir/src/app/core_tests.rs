@@ -721,3 +721,76 @@ fn dock_layout_and_contents() {
     assert_eq!(app.panels[0].bounds().bottom(), app.statusbar.bounds().y);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-61 도크 터미널(가짜 echo PTY): 종류 2 전환 → paint가 cwd로 지연 시작(로그) → term.send 되돌림 → 화면·덤프·그리기 →
+/// 키 경로(Char/Enter) → 패널 클릭 = 포커스 해제 → 도크 숨김 = 낡은 포커스 무시.
+#[test]
+fn terminal_dock_with_fake_pty() {
+    let (mut app, dir) = fixture("term");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("dock.kind:2");
+    assert_eq!(app.docks[0].active_kind(), 2);
+    assert!(!app.terms[0].started(), "시작은 paint에서(지연)");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(app.terms[0].alive(), "{}", app.term_dump());
+    let log = app.platform.log.clone().expect("fake log");
+    let spawn = log
+        .borrow()
+        .calls
+        .iter()
+        .find(|c| c.starts_with("pty:"))
+        .cloned()
+        .expect("pty spawn 기록");
+    assert!(
+        spawn.contains(&dir.to_string_lossy().to_string()),
+        "cwd = 패널 폴더: {spawn}"
+    );
+    app.startup_cmd("term.send:ls\\r");
+    assert_eq!(app.term_focus, Some(0));
+    assert!(app.term_tick(100), "echo 수거 = 변화");
+    assert!(app.term_dump().contains("\nls"), "{}", app.term_dump());
+    rec.clear();
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(rec.drew_text("l") && rec.drew_text("s"), "셀 단위 그리기");
+    // 키 경로: 포커스 중 Char/Enter는 셸로(목록 단축키 차단) — echo로 되돌아온다.
+    app.route(InputEvent::Char { c: 'x', now_ms: 0 });
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Enter,
+        shift: false,
+        primary: false,
+    });
+    app.term_tick(200);
+    assert!(app.term_dump().contains('x'), "{}", app.term_dump());
+    // Ctrl+글자 = 제어 문자(선택 없음) · 전체 선택 → Ctrl+C = 복사 경로(클립보드 결과는 OS 종속 — 선택 해제만 확인).
+    assert!(app.term_ctrl('l', false, false));
+    assert!(app.term_select_all());
+    assert!(app.terms[0].sel.is_some());
+    app.term_ctrl('c', false, false);
+    assert!(app.terms[0].sel.is_none(), "복사 뒤 선택 해제");
+    // 패널 클릭 = 포커스 해제.
+    let lp = app.panels[0].bounds();
+    app.route(down(lp.x + 50, lp.y + 120));
+    app.route(InputEvent::MouseUp {
+        x: lp.x + 50,
+        y: lp.y + 120,
+    });
+    assert_eq!(app.term_focus, None);
+    // 터미널 격자 클릭 = 포커스 복귀.
+    let cr = app.docks[0].content_rect();
+    app.route(down(cr.x + 10, cr.y + 10));
+    app.route(InputEvent::MouseUp {
+        x: cr.x + 10,
+        y: cr.y + 10,
+    });
+    assert_eq!(app.term_focus, Some(0));
+    // 덤프 어휘 · 도크 숨김 = 낡은 포커스는 키를 삼키지 않는다.
+    assert!(app.dump_of("term").unwrap().starts_with("dock0 alive"));
+    let _ = app.settings.set("dock.visible", "off");
+    app.apply_setting("dock.visible");
+    assert!(app.term_focused().is_none());
+    let mut inv = Invalidations::default();
+    assert!(!app.term_key(&InputEvent::Char { c: 'q', now_ms: 0 }, &mut inv));
+    assert_eq!(app.term_focus, None, "낡은 포커스 해제");
+    let _ = std::fs::remove_dir_all(&dir);
+}

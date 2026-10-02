@@ -18,6 +18,7 @@ workspace = true
 ndir-core = { workspace = true }
 ndir-vfs = { workspace = true }
 ndir-tree = { workspace = true }
+ndir-term = { workspace = true }
 ndir-i18n = { workspace = true }
 ndir-settings = { workspace = true }
 ndir-license = { workspace = true }

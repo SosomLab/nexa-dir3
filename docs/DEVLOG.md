@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M5 T-61 A 도크 터미널**: Pty 포트 3-OS(ConPTY 수동 extern · forkpty) · `termview.rs` VT 셀 렌더·선택·스크롤백 · 키/마우스/→ cd 동기 · 기동 명령 `term.*` · ConPTY 실기 교훈 2(파이프 std 핸들 누수 · 종료 flush) · 시험 +7 · 시나리오 `term-echo` → [journal §24](journal/2026-10-03.md)
 - **M5 T-60 하단 도크**: `InfoDock` 2개 = dir2 전폭 밴드 배치(높이 %·분할 %·단일 정보·숨김) · 정보 8줄/미리보기 텍스트·이미지 경로/터미널 자리 · `update_status` 길목 갱신 · `dock.dump` · 시험 +4 · 시나리오 `dock-info` → [journal §23](journal/2026-10-03.md)
 - **PANEL-044 내 PC 전용 열**: 드라이브 열(이름·종류·전체·여유 · 진입/이탈 시점만 교체 · 타일 용량 바) = Disk 포트 소비 · 시험 +3 → [journal §22](journal/2026-10-03.md)
 - **M4 T-51 A 휴지통·클립보드·용량**: 휴지통 3-OS(SHFileOperationW · freedesktop Trash · ~/.Trash) · Windows CF_HDROP 파일 클립보드 · statvfs 용량(Linux/mac) · `edit.delete` 배선 · selfcheck trash · 시험 +4 → [journal §21](journal/2026-10-03.md)

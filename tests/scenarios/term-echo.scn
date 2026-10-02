@@ -1,0 +1,15 @@
+# T4 · T-61 도크 터미널(실제 셸 · 3-OS): term.send로 echo → 셸 출력이 VT 화면에 → term.dump에 보인다. 종료 = 세션 정리.
+# 셸 = cmd(Windows · 프로필 없이 빠름) · Unix는 `cmd`가 없어 기본 셸로 폴백(sh/bash).
+id: term-echo
+title: 도크 터미널 실제 셸 echo 왕복
+tree: file a.txt 3
+settings: ui.lang=en
+settings: term.shell=cmd
+cmd: @ready:term.focus
+cmd: @ready:assert.term:dock0 alive
+cmd: @ready:term.send:echo hello-term-ok\r
+cmd: @after:3000:term.dump:<out>/term.txt
+cmd: @after:3100:assert.term:hello-term-ok
+cmd: @after:3200:quit
+check: term.txt: dock0 alive
+check: term.txt: hello-term-ok
