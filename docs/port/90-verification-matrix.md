@@ -59,3 +59,9 @@
 | SET-090~095 · 130 | 명령 표·프리셋·Chord·Keymap·`key.<id>` 전수 등재·repeatable | `ndir-settings/src/{commands,keymap}.rs` | T1 | `every_command_has_key_entry_and_label` · `no_default_conflicts_within_a_preset` · `overrides_none_sequences_and_conflicts` | ✅ | `from_winit`은 M3 |
 | SET-096~097 | 단축키 창 · 변경 적용 | — | — | — | ☐ | M3 T-44 |
 | PREFS-307(단축키 페이지) | 설정 창 "단축키" 분류 신설 | `registry.rs` CAT_KEYS | — | — | ⚠ DR-3 | 의도된 차이(dir2에 없던 페이지) |
+| UIK-211 · UIC-316 | InputEvent 더블클릭·가운데·X 버튼 · 휠 줄 수 | nexa-ui `nexa-ctl/src/event.rs` | T2 | `new_mouse_variants_carry_coordinates` · `wheel_lines_clamps_and_restores` | ✅ | 103차 |
+| CI-104 | `RecordCtx` 공용 기록기 | nexa-ui `controls/mod.rs` | T2 | `record_ctx_collects_and_judges_bounds` | ✅ | 103차 |
+| UIK-205 · GUI-060~066 | MenuBar 단축키 열·체크/라디오·활성·프로그램 열기 | nexa-ui `controls/pulldown.rs` | T2 | `shortcut_column_and_check_marks` · `set_enabled_toggles_and_open_menu_index` | ✅ | 104차 · Alt 니모닉은 호스트(M3) |
+| UIK-206 · GUI-074 | Toolbar 토글 켜짐(강조색 38 % 블렌드) | nexa-ui `controls/toolbar.rs` | T2 | `checked_toggle_draws_accent_blend_background` | ✅ | 104차 · 오버플로 보류 |
+| UIK-207 · GUI-040·046 | TabBar 아이콘·툴팁·가운데 클릭 | nexa-ui `controls/tabbar.rs` | T2 | `icons_tips_and_middle_click` | ✅ | 104차 · press 전환 옵션 보류 |
+| UIK-203 · GUI-080 | StatusBar | nexa-ui `controls/statusbar.rs` | T2 | `set_text_invalidates_only_on_change_and_right_aligns` · `right_text_never_goes_left_of_pad` | ✅ | 104차 |

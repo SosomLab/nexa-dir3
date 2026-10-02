@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 7차 — M2 착수: nexa-ui 103·104차(T-20~T-24)
+
+- **한 일**(형제 저장소 nexa-ui · push 완료): `InputEvent` 3변형 + 휠 줄 수 · `RecordCtx` · MenuBar 체크/라디오/단축키 열/활성/프로그램 열기 · Toolbar 토글 · TabBar 아이콘/툴팁/가운데 클릭 · **StatusBar 신규**. nexa-ctl 시험 391 · nexa-sql 빌드 유지.
+- **지금 상태**: M2 🚧 — 다음 = T-25 `nexa-grid`(dir2 rows/columns/typeahead/fastscroll 이식 · 가장 큰 덩어리) → T-26 PathBar → T-27 InfoDock → T-28·29.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §9](journal/2026-10-03.md) · nexa-ui [journal](../../nexa-ui/docs/journal/2026-10-03.md)
+
 ## 10-03 6차 — M1 T-17 명령 표·키맵 → **M1 완료**
 
 - **한 일**: `ndir-settings::commands`(48 명령 · dir2 단축키 + macOS 대응안) · `keymap`(nexa-sql 엔진) · 레지스트리 `key.*` 49 · 시험 7(명령↔키 1:1 · 충돌 0 · dir2 31건 · macOS 13건). 전체 테스트 196.

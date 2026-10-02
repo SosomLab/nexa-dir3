@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M2 T-20~24(nexa-ui 103·104차)**: InputEvent 확장 · RecordCtx · MenuBar/Toolbar/TabBar 보강 · StatusBar 신규 — nexa-ctl 391 · nexa-sql check ✓ → [journal §9](journal/2026-10-03.md)
 - **M1 T-17 · M1 완료**: 명령 표 48 + 키맵 엔진 + `key.<id>` 전수 등재(설정 창 "단축키" 페이지) · 충돌 시험이 macOS ⌘Y 충돌 적발 → ⇧⌘Y → [journal §8](journal/2026-10-03.md)
 - **M1 T-16**: `ndir-license` — nsql-license 복제(제품 `nexa-dir` · Feature 0 · 시험 8) + 자가 점검 license 5항목 → [journal §7](journal/2026-10-03.md)
 - **M1 T-13~15**: `ndir-settings` — nexa-sql 엔진 복사 + dir2 86키 레지스트리(dir2 기본값) + 곁 표 + JSON + dir2 `settings.cfg` 가져오기 · 곁 표 무결성 시험 신설 · i18n 79키 추가 → [journal §6](journal/2026-10-03.md)
