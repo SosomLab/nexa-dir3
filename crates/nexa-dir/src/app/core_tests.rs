@@ -372,3 +372,74 @@ fn session_roundtrip_through_app() {
     assert_eq!(saved.panels[0].tabs.len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-46 기동 명령 확장: `@ready` 큐 · `ui.click:@영역` · 덤프 어휘 · `assert.<대상>:<식>`(부정 · 실패 = 종료 코드 3) · `quit:<코드>`.
+#[test]
+fn startup_ready_assert_and_dumps() {
+    let (mut app, dir) = fixture("t46");
+    app.layout_for(1200, 800, 1.0);
+    app.queue_startup("@ready:panel:1,@idle:file.new_tab, ,@after:10:nav.up");
+    assert_eq!(app.active, 0, "ready 전에는 안 돈다");
+    assert_eq!(app.startup_timed.len(), 1);
+    app.fire_ready();
+    app.fire_ready();
+    assert_eq!(app.active, 1);
+    assert_eq!(
+        app.panels[1].tab_count(),
+        2,
+        "@idle = ready · 두 번 쏘지 않는다"
+    );
+    // 영역 클릭: 메뉴바 가운데 = 메뉴 열림(어느 라벨이든) · 덤프 menu = open.
+    app.startup_cmd("ui.click:@panel0.list");
+    assert_eq!(app.active, 0);
+    // 메뉴바 가운데는 라벨이 없다(라벨은 왼쪽) → 첫 라벨 좌표로.
+    let m = app.menubar.bounds();
+    app.startup_cmd(&format!("ui.click:{}/{}", m.x + 20, m.y + m.h / 2));
+    assert!(app.dump_of("menu").unwrap().starts_with("open "));
+    app.startup_cmd("ui.click:@statusbar");
+    assert_eq!(app.dump_of("menu").unwrap(), "closed\n");
+    assert!(app.area_rect("panel1.nav").is_some() && app.area_rect("nope").is_none());
+    // 덤프 어휘.
+    let list = app.dump_of("list").unwrap();
+    assert!(list.starts_with("list panel0 rows 3 viewport 0+"), "{list}");
+    assert!(
+        list.contains("0 d0 Collapsed sub |") && list.contains("a.txt | txt | 5 B |"),
+        "{list}"
+    );
+    let panel = app.dump_of("panel").unwrap();
+    assert!(
+        panel.contains("tabs 1 active 0 rows 3 selected 0 caret None mode Tree sort []"),
+        "{panel}"
+    );
+    assert!(app
+        .dump_of("tabs")
+        .unwrap()
+        .starts_with("tabs 1 active 0\ntab0 "));
+    assert!(app
+        .dump_of("status")
+        .unwrap()
+        .starts_with("left 3 items\nright Tab 1/1"));
+    assert!(app.dump_of("all").unwrap().contains("panel1 path"));
+    let f = dir.join("list.txt");
+    app.startup_cmd(&format!("list.dump:{}", f.display()));
+    assert_eq!(std::fs::read_to_string(&f).unwrap(), list);
+    // 단언: 참 · 부정 · 실패 → 종료 코드 3 + 종료 요청.
+    assert!(app.assert_dump("status", "3 items"));
+    assert!(app.assert_dump("list", "!zzz"));
+    assert!(!app.exit_requested);
+    app.startup_cmd("assert.panel:selected 9");
+    assert!(app.exit_requested && app.exit_code == super::startup_cmd::EXIT_ASSERT);
+    app.exit_requested = false;
+    app.exit_code = 0;
+    app.startup_cmd("assert.nope:x");
+    assert!(app.exit_requested && app.exit_code == super::startup_cmd::EXIT_ASSERT);
+    // quit 코드.
+    app.exit_requested = false;
+    app.exit_code = 0;
+    app.startup_cmd("quit:7");
+    assert!(app.exit_requested && app.exit_code == 7);
+    app.startup_cmd("quit");
+    assert_eq!(app.exit_code, 7, "코드 없는 quit은 기존 코드를 유지");
+    assert_eq!(crash::last_command(), "quit");
+    let _ = std::fs::remove_dir_all(&dir);
+}

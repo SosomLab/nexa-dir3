@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 14차 — M3 T-46 기동 명령 어휘 + 패닉 훅
+
+- **한 일**: `NDIR_STARTUP_CMD` 확장(`@ready`·`@idle`·`@after` · `quit[:코드]` · `assert.<대상>:<식>` 실패 = 종료 코드 3 · `ui.click:@영역` · `ui.key`) · 덤프 6종(`panel`·`list`·`tabs`·`status`·`menu`·`layout`) · `crash.rs` 패닉 훅(crash-<unix>.txt · 마지막 명령 id · 다음 기동 안내) · 종료 코드가 프로세스로. 창 실증(exit 5 · assert 실패 exit 3). 시험 59.
+- **지금 상태**: M3 🚧 — T-40·41·45·46 ✅ · T-42·43 부분. 다음 = T-44 설정 창/단축키 창(nexa-sql prefs_win·keys_win 복사 · 보조 창 호스트 winhost · `apply_setting`) → T-43 잔여 → T-06 `ndir-check` 러너(이제 `@ready…assert…quit`로 판정 가능).
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §16](journal/2026-10-03.md)
+
 ## 10-03 13차 — M3 T-45 세션 복원·저장
 
 - **한 일**: `session.rs`(dir2 `session.cfg` 형식 그대로 · `session.conf` + 레거시 읽기 · 원자적 저장 · 미사용 키 보존) · `Panel::restore`(실패 탭 건너뜀 · 보기 모드 · 열 폭) · `App::new(…, start, session)`(실행 인자 우선) · `app/sessions.rs`(더러움 수거 → `SaveScheduler` 1 s/5 s → 틱 저장 · 종료 flush). 시험 +3 · 창 2회 실행으로 저장→복원 실증.

@@ -65,16 +65,7 @@ impl ApplicationHandler<Wake> for App {
         self.update_status();
         // 자체 캡처·하네스용 기동 명령(`NDIR_STARTUP_CMD=…` · 쉼표 구분 · `@after:<ms>:<명령>`).
         if let Ok(cmds) = std::env::var("NDIR_STARTUP_CMD") {
-            for id in cmds.split(',').map(str::trim).filter(|c| !c.is_empty()) {
-                if let Some(rest) = id.strip_prefix("@after:") {
-                    if let Some((ms, cmd)) = rest.split_once(':') {
-                        let at = Instant::now() + Duration::from_millis(ms.parse().unwrap_or(0));
-                        self.startup_timed.push((at, cmd.to_string()));
-                    }
-                    continue;
-                }
-                self.startup_cmd(id);
-            }
+            self.queue_startup(&cmds);
         }
         self.redraw();
     }
@@ -280,6 +271,14 @@ impl ApplicationHandler<Wake> for App {
             }
             WindowEvent::RedrawRequested => {
                 self.paint();
+                // 첫 프레임 뒤 = `@ready` 큐(초기 열거는 `App::new`에서 이미 끝났다).
+                if !self.ready_fired {
+                    self.fire_ready();
+                    if self.exit_requested {
+                        self.persist_window();
+                        el.exit();
+                    }
+                }
                 return;
             }
             _ => {}

@@ -13,6 +13,7 @@ mod clipboard;
 #[cfg(all(unix, not(target_os = "macos")))]
 #[allow(dead_code)]
 mod clipboard_x11;
+mod crash;
 mod filelist;
 mod icon;
 #[allow(dead_code)]
@@ -130,6 +131,10 @@ struct App {
     session_dir: Option<PathBuf>,
     session_save: nexa_conf::SaveScheduler,
     session_keep: Session,
+    /// 종료 코드(`quit:<코드>` · 단언 실패 3) · `@ready` 큐 · 첫 프레임 뒤 한 번.
+    exit_code: u8,
+    startup_ready: Vec<String>,
+    ready_fired: bool,
 }
 
 /// 논리 px → 장치 px(반올림).
@@ -274,6 +279,9 @@ impl App {
             session_dir: None,
             session_save: nexa_conf::SaveScheduler::new(1000, 5000),
             session_keep,
+            exit_code: 0,
+            startup_ready: Vec::new(),
+            ready_fired: false,
         };
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
@@ -518,6 +526,8 @@ fn run_gui() -> ExitCode {
         )
     });
     init_i18n(&settings);
+    // 패닉 훅(CI-112 · 릴리스 panic=abort라 유일한 기록 수단) — `<HOME>/crash/crash-<unix>.txt` + stderr.
+    crash::install(ndir_settings::config_dir());
     install_ctl_labels();
     input::set_natural_scroll(settings.flag("input.scroll_natural"));
     // UI 글꼴 = 설정 `ui.font_face`(비면 OS 사슬 · 못 찾으면 사슬로 fail-over).
@@ -555,12 +565,21 @@ fn run_gui() -> ExitCode {
     let session = session_dir.as_deref().and_then(Session::load);
     let mut app = App::new(settings, ui.font, None, session);
     app.session_dir = session_dir;
+    // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
+    if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {
+        app.toasts.push(
+            toast::ToastKind::Warn,
+            tr("menu.help.about"),
+            format!("crash report: {}", p.display()),
+        );
+    }
     let _ = start;
     if let Err(e) = el.run_app(&mut app) {
         eprintln!("nexa-dir: event loop error: {e}");
         return ExitCode::FAILURE;
     }
-    ExitCode::SUCCESS
+    // `quit:<코드>` · 단언 실패(3) = 러너가 종료 코드로 판정(docs/18 §5).
+    ExitCode::from(app.exit_code)
 }
 
 #[cfg(test)]

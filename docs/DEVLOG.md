@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M3 T-46 기동 명령·패닉 훅**: `@ready/@idle/@after` · `quit:<코드>` · `assert.<대상>:<식>`(실패 = exit 3) · `ui.click:@영역` · 덤프 6(panel/list/tabs/status/menu/layout) · `crash.rs`(crash-<unix>.txt + 다음 기동 안내) · 창 실증 exit 5/3 → [journal §16](journal/2026-10-03.md)
 - **M3 T-45 세션**: dir2 `session.cfg` 형식 그대로(`session.rs` · 미사용 키 보존) · 창 생성 전 복원(실패 탭 건너뜀 · 실행 인자 우선) · 디바운스 저장(nexa-conf SaveScheduler 1 s/5 s) · 종료 저장 · 창 2회 실행 실증 → [journal §15](journal/2026-10-03.md)
 - **M3 T-43 1차 dir2 패널 구조**: `panel.rs`(패널별 탭 바·네비 4버튼·경로 바·목록 · 탭별 히스토리 · 위로 = 떠난 폴더 선택 · 홈 = 내 PC) + `nav.rs`(dir2 그대로) + 스플리터 드래그/50 % 스냅 + dir2 배치 수치(툴바 28 · 상태 22 · 열 5) · 시험 52 → [journal §14](journal/2026-10-03.md)
 - **M3 T-41 창 없는 AppCore**: `layout_for`/`paint_into` 최소 분리 + 배치 골든 1장 + `RecordCtx`/입력/기동 명령 시험 5(창 0 · 0.1 s) · 적발 3(열 넘침·창 없는 layout·플랫폼 단언) → [journal §13](journal/2026-10-03.md)
