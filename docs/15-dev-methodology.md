@@ -82,6 +82,13 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 4. dir2 테스트가 있으면 **그대로 이식**(DR-11) + 새 시험(단위/T3).
 5. 커밋(`출처: nexa-dir2/crates/…:줄` + 원장 ID) → 매트릭스 행 → 기록.
 
+## 3-1. Windows 개발 PC 함정(실측)
+
+- **Git Bash heredoc이 백슬래시·따옴표를 망가뜨린다**(`\\n` → 실제 개행): 인라인 `python3 - <<EOF`·`perl -pi` 코드 패치는 "치환 2건"이라 보고하면서 파일은 그대로인 유령 현상이 난다(10-03 `.lang` 결함 수정에서 3회 헛돎). → 패치는 **스크립트 파일**(스크래치패드 `.py`)로 쓰고 바이너리 모드로 읽고 쓴 뒤 `grep -c`/`od -c`로 검증.
+- 실행 중인 exe가 링크를 막는다 → 내가 띄운 `target/` 아래 `nexa-dir.exe`는 종료하고 진행.
+- Git Bash에서 `target\x` 같은 백슬래시 경로 인자는 `targetx`가 된다 → 슬래시로.
+- `autocrlf`: `.gitattributes`가 텍스트를 LF로 고정 · `.sh`는 체크아웃도 LF.
+
 ## 4. 금지 목록
 
 - `git add -A`/`.` · 자동 태그 push · 강제 push · 사용자 자원 수정.

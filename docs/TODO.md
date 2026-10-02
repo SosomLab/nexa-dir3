@@ -21,7 +21,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | T-10 | `ndir-core` · `ndir-vfs` · `ndir-tree` 이식(dir2 테스트 그대로 · cfg 4곳 3-OS 처리) | P0 | 중 | T-02 | OPS | ✅ 10-03 |
 | T-11 | `ndir-ops`(전송·히스토리·일괄 이름 변경) · `ndir-term`(VT) 이식 | P0 | 중 | T-10 | OPS · TERM | ✅ 10-03 |
-| T-12 | `ndir-i18n` — `.lang` 3종 임베드 · 파서 · `@fallback` · 사용자 오버레이 · 키 파리티 빌드 검사 · OS 언어 감지(syslang) | P0 | 중 | — | KEY · EXT-2xx | ☐ |
+| T-12 | `ndir-i18n` — `.lang` 3종 임베드 · 파서 · `@fallback` · 사용자 오버레이 · 키 파리티 빌드 검사 · OS 언어 감지(syslang) | P0 | 중 | — | KEY · EXT-2xx | ✅ 10-03 |
 | T-13 | `ndir-settings` 엔진(kind·store·tables·migrate·json·perf 최소) + 무결성 시험 | P0 | 중 | T-12 | SET-001~044 · 120~137 | ☐ |
 | T-14 | 레지스트리 표(dir2 70키 → nexa-sql 규칙 키 · `CATEGORY_TREE` dir2 페이지 순 · `DEPENDS` · `HIDDEN` · `OS_DEFAULTS` · nexa-sql 공통 키) | P0 | 중 | T-13 | PREFS-101~170 · KEY §5 | ☐ |
 | T-15 | dir2 `settings.cfg`/`session.cfg` 가져오기(`import_dir2` 순수 함수 + 전수 시험) · `session.conf` Store | P1 | 소 | T-14 | PREFS-040~057 | ☐ |

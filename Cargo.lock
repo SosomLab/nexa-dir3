@@ -7,6 +7,10 @@ name = "ndir-core"
 version = "0.23.0"
 
 [[package]]
+name = "ndir-i18n"
+version = "0.23.0"
+
+[[package]]
 name = "ndir-ops"
 version = "0.23.0"
 dependencies = [
@@ -35,6 +39,9 @@ dependencies = [
 [[package]]
 name = "nexa-dir"
 version = "0.23.0"
+dependencies = [
+ "ndir-i18n",
+]
 
 [[package]]
 name = "regex-lite"

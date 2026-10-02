@@ -179,6 +179,7 @@ pub(crate) fn run(opts: &Options) -> Report {
         }
         match *g {
             "env" => check_env(&mut r),
+            "resources" => check_resources(&mut r),
             other => r.items.push(Item {
                 group: other,
                 name: "(not implemented)".into(),
@@ -231,6 +232,52 @@ fn check_env(r: &mut Report) {
     });
 }
 
+/// resources — 내장 자원. M1: i18n 표(언어 3종 · 키 수 · 파리티는 빌드가 보장하므로 여기서는 적재·조회만) ·
+/// 아이콘·샘플은 M2·M5에서 추가.
+fn check_resources(r: &mut Report) {
+    timed(r, "resources", "i18n tables", || {
+        let n = ndir_i18n::KEY_COUNT;
+        if n == 0 {
+            return (Verdict::Fail, "key count 0".into());
+        }
+        let nowhere = std::path::Path::new("");
+        let mut bad = Vec::new();
+        for (code, _) in ndir_i18n::BUILTIN {
+            let l = ndir_i18n::load(code, nowhere);
+            if l.get("menu.file").is_none() || l.get("status.tab").is_none() {
+                bad.push(*code);
+            }
+        }
+        if bad.is_empty() {
+            (
+                Verdict::Pass,
+                format!("{} langs · {n} keys", ndir_i18n::BUILTIN.len()),
+            )
+        } else {
+            (
+                Verdict::Fail,
+                format!("missing core keys in {}", bad.join(",")),
+            )
+        }
+    });
+    timed(r, "resources", "os locale", || {
+        let code = ndir_i18n::syslang::system_lang_code();
+        let avail: Vec<(String, String)> = ndir_i18n::BUILTIN
+            .iter()
+            .map(|(c, n)| (c.to_string(), n.to_string()))
+            .collect();
+        let resolved = ndir_i18n::resolve_code(
+            "system",
+            ndir_i18n::syslang::system_locale().unwrap_or("?"),
+            &avail,
+        );
+        (
+            Verdict::Pass,
+            format!("{} → {resolved}", if code.is_empty() { "?" } else { &code }),
+        )
+    });
+}
+
 /// 폴더에 프로브 파일을 만들었다 지운다(PID + 시퀀스 — 병렬 실행 충돌 없음).
 fn probe_writable(dir: &std::path::Path) -> Result<String, String> {
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -266,6 +313,19 @@ mod tests {
             .items
             .iter()
             .any(|i| i.name == "temp dir writable" && i.verdict == Verdict::Pass));
+    }
+
+    #[test]
+    fn resources_group_loads_i18n() {
+        let r = run(&Options {
+            only: Some("resources".into()),
+            ..Options::default()
+        });
+        assert_eq!(r.failed(), 0, "{}", r.to_table());
+        assert!(r
+            .items
+            .iter()
+            .any(|i| i.name == "i18n tables" && i.detail.contains("3 langs")));
     }
 
     #[test]

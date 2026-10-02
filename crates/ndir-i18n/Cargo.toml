@@ -1,0 +1,17 @@
+[package]
+name = "ndir-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir 메시지 카탈로그 — dir2 `.lang`(en·ko·ja) 임베드 · 키 단위 사용자 오버레이 · en 폴백 · OS 언어 감지 · 빌드 시 키 파리티 검사 (의존 0 · DR-14)"
+# 세 언어 파일의 키·자리표 파리티를 컴파일 때 검사한다(불일치 = 빌드 실패).
+build = "build.rs"
+
+[dependencies]
+
+[lints]
+workspace = true

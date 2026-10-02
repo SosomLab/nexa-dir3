@@ -13,3 +13,4 @@ description = "Nexa Dir — 크로스플랫폼 파일 탐색기(앱 bin). M0 = �
 workspace = true
 
 [dependencies]
+ndir-i18n = { workspace = true }

@@ -46,11 +46,11 @@ fn main() -> ExitCode {
 }
 
 /// `--smoke`: 창 없이 "기동에 필요한 것"을 순서대로 확인하고 0으로 끝난다(CI 3-OS 공통 게이트 · docs/18 §3).
-/// M0는 틀만 — 항목은 M1(설정·i18n·라이선스 루트 키) · M2(글꼴) · M5(플러그인 런타임)에서 채운다.
+/// = 자가 점검의 `--ci` 부분집합 전체(미구현 그룹은 SKIP) — 항목이 늘면 스모크도 같이 넓어진다.
 fn run_smoke() -> ExitCode {
     let report = selfcheck::run(&selfcheck::Options {
         ci: true,
-        only: Some("env".into()),
+        only: None,
         json: false,
         with_clipboard: false,
     });
