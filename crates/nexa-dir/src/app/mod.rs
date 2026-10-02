@@ -2,11 +2,13 @@
 
 mod event_loop;
 mod input;
-mod keywinit;
+pub(crate) mod keywinit;
 mod menus;
 mod paint;
 mod sessions;
+mod settings;
 mod startup_cmd;
+mod windows;
 
 #[cfg(test)]
 mod core_tests;

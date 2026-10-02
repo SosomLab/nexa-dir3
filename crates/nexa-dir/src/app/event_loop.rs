@@ -94,6 +94,8 @@ impl ApplicationHandler<Wake> for App {
         if self.toasts.tick(now) {
             redraw = true;
         }
+        let aux_live = self.aux_tick(now_ms);
+        self.open_requested_windows(el);
         if !self.startup_timed.is_empty() {
             let due: Vec<String> = self
                 .startup_timed
@@ -117,6 +119,7 @@ impl ApplicationHandler<Wake> for App {
         }
         // 애니메이션 중에만 프레임 간격으로 깬다 · 아니면 다음 예약(기동 지연 명령)까지 잔다.
         let live = inv.tick_requested()
+            || aux_live
             || self.toasts.animating()
             || self.splitter.is_hover()
             || self.splitter.is_dragging();
@@ -161,6 +164,14 @@ impl ApplicationHandler<Wake> for App {
             if k.state == ElementState::Pressed {
                 return;
             }
+        }
+        // 보조 창(설정 · 단축키) 사건 = 창마다 자기 처리기로(처리했으면 끝) — 보조 창이 낸 "창 열기" 요청도 같은 펌프를 지난다.
+        if self.aux_window_event(id, &event) {
+            self.open_requested_windows(el);
+            return;
+        }
+        if self.window.as_ref().is_some_and(|w| w.id() != id) {
+            return;
         }
         match &event {
             WindowEvent::CloseRequested => {
@@ -286,5 +297,7 @@ impl ApplicationHandler<Wake> for App {
         if let Some(ev) = self.ctl_event(&event) {
             self.route(ev);
         }
+        // 사건 처리 중에 쌓인 "창 열기" 요청을 한 번에.
+        self.open_requested_windows(el);
     }
 }

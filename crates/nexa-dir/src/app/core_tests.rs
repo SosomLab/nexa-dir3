@@ -449,3 +449,28 @@ fn startup_ready_assert_and_dumps() {
     assert_eq!(crash::last_command(), "quit");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-44 호스트 배선(창 없이): `file.prefs` = 열기 깃발 · 기동 명령 `prefs.search:`/`prefs.cat:` · `after_setting_changed`가 적용·갱신한다.
+#[test]
+fn prefs_host_wiring_without_window() {
+    let (mut app, dir) = fixture("prefs");
+    app.layout_for(1200, 800, 1.0);
+    app.command("file.prefs");
+    assert!(app.open_prefs);
+    app.open_prefs = false;
+    app.startup_cmd("prefs.search:dotfiles");
+    assert!(app.open_prefs);
+    assert!(app.dump_of("prefs").unwrap().contains("list.show_dotfiles"));
+    app.startup_cmd("prefs.cat:pref.cat.keys");
+    assert!(app.dump_of("prefs").unwrap().contains("key.file.new_tab"));
+    // 설정 창이 값을 바꿨을 때의 길: 저장 → 적용 → 메뉴 체크 동기.
+    let _ = app.settings.set("list.show_hidden", "off");
+    app.after_setting_changed("list.show_hidden");
+    assert_eq!(app.menubar.is_checked("view.hidden"), Some(false));
+    let _ = app.settings.set("ui.font_face", "Nope");
+    app.after_setting_changed("ui.font_face");
+    assert_eq!(app.statusbar.left(), "Takes effect after restart");
+    assert_eq!(app.lang_choices()[0].0, "system");
+    assert!(app.lang_choices().iter().any(|(c, _)| c == "ko"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 16차 — M3 T-44 설정 창 · 단축키 창
+
+- **한 일**: `prefs_win.rs`(nexa-sql 복사 · 검색/트리/카드/종속 잠금/고급/복사/기하 기억 · 라벨은 i18n 키) · `keys_win.rs`(캡처·충돌) · `app/windows.rs`(열기 펌프 · 사건 분배 · 메인 창 id 가드) · `app/settings.rs` `apply_setting` + **적용 누락 감시 시험**(레지스트리 전 키) · `copybtn.rs` · i18n +19×3 · 시나리오 `prefs-open`. 시험 +5.
+- **지금 상태**: M3 🚧 — T-40·41·44·45·46·06 ✅ · T-42·43 부분. 남은 M3 = T-43 잔여(탭 잠금/고정/메뉴 · 열 폭 동기 · 폴더 트리 T-32) · T-42 런처 · T-44 잔여(JSON 편집 · 폴더 찾아보기 T-29). 다음 = T-43 잔여 → M4 플랫폼 층(T-50 포트 trait + Fake).
+- **걸린 것**: 설정 창 한글 IME는 nexa-sql 경로 그대로(Windows 실기 확인 필요 · 하네스로는 못 본다).
+
+→ [journal/2026-10-03 §18](journal/2026-10-03.md)
+
 ## 10-03 15차 — T-06 `ndir-check` T4 러너 + 시나리오 5
 
 - **한 일**: `crates/ndir-check`(의존 0): `.scn` → 격리 홈·샘플 트리 → 앱 실행 → 종료 코드·패닉·검사식 → 표·`summary.txt`. 시나리오 5(배치 · 위로 선택/히스토리 · 탭/패널 · 세션 저장 · 단언 실패 음성) 전부 PASS(각 0.2~0.3 s). CI에 Windows `scenarios` 단계. 상대 경로 함정(앱 cwd = 트리) 적발·수정.

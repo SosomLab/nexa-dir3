@@ -13,13 +13,16 @@ mod clipboard;
 #[cfg(all(unix, not(target_os = "macos")))]
 #[allow(dead_code)]
 mod clipboard_x11;
+mod copybtn;
 mod crash;
 mod filelist;
 mod icon;
 #[allow(dead_code)]
 mod input;
+mod keys_win;
 mod nav;
 mod panel;
+mod prefs_win;
 #[allow(dead_code)]
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
@@ -36,6 +39,7 @@ mod wingeom;
 mod winhost;
 
 use filelist::ListOpts;
+use keys_win::KeysWin;
 use ndir_i18n::{tr, trf};
 use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
@@ -51,6 +55,7 @@ use nexa_ctl::{InputEvent, Invalidations, Widget};
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
 use panel::{Panel, PanelMetrics};
+use prefs_win::PrefsWin;
 use session::Session;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -135,6 +140,11 @@ struct App {
     exit_code: u8,
     startup_ready: Vec<String>,
     ready_fired: bool,
+    /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
+    prefs_win: PrefsWin,
+    keys_win: KeysWin,
+    open_prefs: bool,
+    open_keys: bool,
 }
 
 /// 논리 px → 장치 px(반올림).
@@ -282,7 +292,12 @@ impl App {
             exit_code: 0,
             startup_ready: Vec::new(),
             ready_fired: false,
+            prefs_win: PrefsWin::new(),
+            keys_win: KeysWin::new(),
+            open_prefs: false,
+            open_keys: false,
         };
+        app.apply_window_sizes();
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
         app.set_active(if dual { active0 } else { 0 });

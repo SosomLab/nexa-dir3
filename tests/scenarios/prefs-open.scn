@@ -1,0 +1,14 @@
+# T4 · 설정 창이 실제로 뜨고(두 번째 winit 창) 검색 카드·분류 선택이 된다 · 단축키 창 열기 깃발.
+id: prefs-open
+title: 설정 창 열기 · 검색 · 분류 · 단축키 창
+tree: file a.txt 1
+settings: ui.lang=en
+cmd: @ready:prefs.search:dotfiles
+cmd: @after:300:prefs.dump:<out>/prefs.txt
+cmd: @after:400:prefs.cat:pref.cat.keys
+cmd: @after:500:prefs.dump:<out>/prefs2.txt
+cmd: @after:600:keys.window
+cmd: @after:900:quit
+check: prefs.txt: open true keys ["list.show_dotfiles"]
+check: prefs2.txt: key.file.new_tab
+check: stderr: !panicked

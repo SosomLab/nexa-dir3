@@ -645,3 +645,23 @@ cmd.contextMenu = コンテキストメニュー
 # ── M3 app shell (10-03) ──
 menu.go = 移動
 cmd.notYet = まだ準備中の機能です
+
+# ── M3 T-44 preferences / shortcuts windows (10-03) ──
+pref.btn.reset = 初期化
+pref.btn.close = 閉じる
+pref.btn.capture = 割り当て…
+pref.btn.pick = 選択…
+pref.btn.json = JSON を編集…
+pref.btn.browse = 参照…
+pref.advanced = 詳細
+pref.defaultValue = 既定値: {0}
+pref.advancedHidden = 詳細設定 {0} 件は非表示 — 詳細をオンにしてください
+keys.title = ショートカット
+keys.hint = コマンドを選び [割り当て] を押してからキーを押してください。\nEsc = 取消 · クリア = なし · 初期化 = 既定。
+keys.btn.assign = 割り当て
+keys.btn.clear = クリア
+keys.col.command = コマンド
+keys.col.shortcut = ショートカット
+keys.capturing = キーを押してください…
+keys.conflict = {0} と競合
+status.needsRestart = 再起動後に反映されます

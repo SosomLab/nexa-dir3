@@ -230,6 +230,8 @@ impl App {
         let a = self.active;
         match id {
             "file.exit" => self.exit_requested = true,
+            "file.prefs" => self.open_prefs = true,
+            "keys.window" => self.open_keys = true,
             "file.new_tab" => self.panels[a].new_tab(&mut inv),
             "file.close_tab" => {
                 let i = self.panels[a].active_index();
@@ -342,17 +344,7 @@ impl App {
     /// 언어 전환 — 설정 + i18n 재활성 + 메뉴·툴바·컬럼 라벨 재구성.
     fn switch_lang(&mut self, code: &str) {
         self.set_setting("ui.lang", code);
-        init_i18n(&self.settings);
-        self.menubar.set_menus(App::build_menus(&self.settings));
-        let mut toolbar = Toolbar::new(App::build_toolbar(&self.settings));
-        toolbar.set_icon_size(20);
-        toolbar.set_padding(2, 2);
-        self.toolbar = toolbar;
-        self.sync_menu_shortcuts();
-        self.sync_menu_checks();
-        self.layout();
-        self.update_status();
-        self.redraw();
+        self.after_setting_changed("ui.lang");
     }
 }
 

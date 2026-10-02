@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **M3 T-44 설정 창·단축키 창**: nexa-sql `prefs_win`/`keys_win` 복사(SQL 미리보기·확장·`Msg` 제거 · i18n 키) · 보조 창 호스트 배선(`app/windows.rs`) · `apply_setting` 한 길 + **적용 누락 감시 시험** · i18n +19×3 · 시나리오 `prefs-open` → [journal §18](journal/2026-10-03.md)
 - **T-06 `ndir-check` 러너**: `.scn` 시나리오(격리 홈·샘플 트리·`@ready…assert…quit`·검사식) 5개 PASS · 의존 0 · CI Windows 단계 · 상대 경로 함정 적발 → [journal §17](journal/2026-10-03.md)
 - **M3 T-46 기동 명령·패닉 훅**: `@ready/@idle/@after` · `quit:<코드>` · `assert.<대상>:<식>`(실패 = exit 3) · `ui.click:@영역` · 덤프 6(panel/list/tabs/status/menu/layout) · `crash.rs`(crash-<unix>.txt + 다음 기동 안내) · 창 실증 exit 5/3 → [journal §16](journal/2026-10-03.md)
 - **M3 T-45 세션**: dir2 `session.cfg` 형식 그대로(`session.rs` · 미사용 키 보존) · 창 생성 전 복원(실패 탭 건너뜀 · 실행 인자 우선) · 디바운스 저장(nexa-conf SaveScheduler 1 s/5 s) · 종료 저장 · 창 2회 실행 실증 → [journal §15](journal/2026-10-03.md)

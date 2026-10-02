@@ -42,6 +42,18 @@ impl App {
             self.exit_requested = true;
             return;
         }
+        if let Some(q) = id.strip_prefix("prefs.search:") {
+            self.open_prefs = true;
+            self.prefs_win.refresh(&self.settings);
+            self.prefs_win.preset_query(q);
+            return;
+        }
+        if let Some(cat) = id.strip_prefix("prefs.cat:") {
+            self.open_prefs = true;
+            self.prefs_win.refresh(&self.settings);
+            self.prefs_win.select_category(cat);
+            return;
+        }
         if let Some(path) = id.strip_prefix("nav:") {
             let mut inv = Invalidations::default();
             let _ = self.panels[self.active].navigate_to(PathBuf::from(path), &mut inv);
@@ -203,6 +215,11 @@ impl App {
                 "left {}\nright {}\n",
                 self.statusbar.left(),
                 self.statusbar.right()
+            ),
+            "prefs" => format!(
+                "open {} keys {:?}\n",
+                self.prefs_win.is_open(),
+                self.prefs_win.shown_keys()
             ),
             "menu" => match self.menubar.open_index() {
                 Some(i) => format!("open {i}\n"),

@@ -645,3 +645,23 @@ cmd.contextMenu = Context Menu
 # ── M3 app shell (10-03) ──
 menu.go = Go
 cmd.notYet = not available yet (planned)
+
+# ── M3 T-44 preferences / shortcuts windows (10-03) ──
+pref.btn.reset = Reset
+pref.btn.close = Close
+pref.btn.capture = Assign…
+pref.btn.pick = Pick…
+pref.btn.json = Edit JSON…
+pref.btn.browse = Browse…
+pref.advanced = Advanced
+pref.defaultValue = Default: {0}
+pref.advancedHidden = {0} advanced setting(s) hidden — turn on Advanced
+keys.title = Shortcuts
+keys.hint = Select a command and press Assign, then press the key combination.\nEsc cancels · Clear = no shortcut · Reset = platform defaults.
+keys.btn.assign = Assign
+keys.btn.clear = Clear
+keys.col.command = Command
+keys.col.shortcut = Shortcut
+keys.capturing = Press keys…
+keys.conflict = conflicts with {0}
+status.needsRestart = Takes effect after restart
