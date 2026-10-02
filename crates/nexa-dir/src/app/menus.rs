@@ -81,6 +81,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "-",
     "panel.switch",
     "help.about",
+    "help.license",
     "help.selfcheck",
 ];
 
@@ -445,15 +446,17 @@ impl App {
                 }
             }
             "help.selfcheck" => self.open_check = true,
+            // 라이선스 창(T-80 · LIC-105): 열려 있으면 닫기 토글.
+            "help.license" => {
+                if self.license_win.is_open() {
+                    self.license_win.close();
+                } else {
+                    self.open_license = true;
+                }
+            }
             "view.preview_window" => self.open_preview_window(a),
             "cmd.contextMenu" => self.open_row_menu(a),
-            "help.about" => {
-                self.toasts.push(
-                    toast::ToastKind::Info,
-                    tr("menu.help.about"),
-                    format!("nexa-dir {}", env!("CARGO_PKG_VERSION")),
-                );
-            }
+            "help.about" => self.about_ask(),
             _ if id.starts_with("launch:") => {
                 if let Ok(i) = id["launch:".len()..].trim().parse::<usize>() {
                     self.launch_item(i);
@@ -496,8 +499,9 @@ mod tests {
         assert!(MENU_IDS[19..43].contains(&"view.preview_window"));
         assert_eq!(MENU_IDS[43], "nav.back");
         assert_eq!(MENU_IDS[51], "help.about");
-        assert_eq!(MENU_IDS[52], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 53);
+        assert_eq!(MENU_IDS[52], "help.license");
+        assert_eq!(MENU_IDS[53], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 54);
     }
 
     #[test]

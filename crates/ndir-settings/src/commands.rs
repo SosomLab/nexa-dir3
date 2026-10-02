@@ -222,6 +222,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     // ── 도움말
     c!("help.about", "menu.help.about", "", "", ""),
+    c!("help.license", "menu.help.license", "", "", ""),
     c!("help.selfcheck", "menu.help.selfcheck", "", "", ""),
 ];
 

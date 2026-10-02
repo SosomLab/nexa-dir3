@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 34차 — T-80: 라이선스 창 · About 대화상자 · 파일 창(FilePicker 호스트)
+
+- **한 일**: `license_win.rs` + `app/license.rs` + `file_win.rs` · Help ▸ 라이선스… · About [라이선스…] · `license.install/dump` 기동 명령 · i18n 3언어 · 시험 +3(127) · 시나리오 17.
+- **지금 상태**: M7 잔여 = T-81(발급기 보강 `mail_text` 제품 분기 · `--id-prefix` · E2E) · T-82(패키징 3-OS) · LICENSE 파일(LIC-163). M3 잔여 = T-30 · T-31 · T-32. 다음 = T-32 폴더 트리 또는 T-62 C 압축 그리드 또는 T-81/82.
+- **걸린 것**: 상태줄 라이선스 배지(LIC-158 ⓒ)는 dir2 배치 유지 지시로 보류 · 유효 라이선스 설치 경로는 발급 PC 루트 키(`ROOT_KEYS`)가 비어 있어 실기로는 `Invalid(NoRootKey)`까지만 확인(단위 시험은 ndir-license에서 주입 키로 통과).
+
+→ [journal/2026-10-03 §36](journal/2026-10-03.md)
+
 ## 10-03 33차 — T-42: 퀵 런처 바(3-OS 시드 · 24 밴드 · launch:<i>)
 
 - **한 일**: `launcher.rs` + App 배선(배치 밴드 · 입력 영역 · 명령 · 설정 즉시 반영 · 덤프) · 픽스처 런처 끔(골든 안정) · 시험 +5(124) · 시나리오 16.

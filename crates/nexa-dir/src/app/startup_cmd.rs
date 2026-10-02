@@ -123,6 +123,11 @@ impl App {
             }
             return;
         }
+        if let Some(path) = id.strip_prefix("license.install:") {
+            // 라이선스 파일 설치(LIC-164 ② · 파일 창 없이).
+            self.license_install(std::path::Path::new(path.trim()));
+            return;
+        }
         if let Some(n) = id.strip_prefix("dock.kind:") {
             let k = n.trim().parse::<usize>().unwrap_or(0);
             let i = self.term_dock_index();
@@ -321,6 +326,7 @@ impl App {
             ),
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
+            "license" => self.license_dump(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),

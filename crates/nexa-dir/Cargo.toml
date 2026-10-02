@@ -28,6 +28,8 @@ ndir-settings = { workspace = true }
 ndir-license = { workspace = true }
 nexa-gfx = { workspace = true }
 nexa-ctl = { workspace = true }
+# 파일/폴더 고르기 창(FilePicker · T-29 B · T-80 라이선스 파일 열기).
+nexa-dlg = { workspace = true }
 # 세션 디바운스 저장(`SaveScheduler` quiet 1 s + max_delay 5 s — dir2 PREFS-051·617).
 nexa-conf = { workspace = true }
 nexa-font = { workspace = true }

@@ -1,0 +1,17 @@
+# T4 · T-80 라이선스 창(실제 창): Help ▸ 라이선스… → 창 열림(덤프 open=true · state=free) → 손상 파일 설치 = 거부 안내 → 토글로 닫힘.
+id: license
+title: 라이선스 창 열기 · 덤프 · 손상 파일 설치 거부 · 닫기
+tree: file bad.license 12
+settings: ui.lang=en
+cmd: @ready:help.license
+cmd: @after:400:license.dump:<out>/lic1.txt
+cmd: @after:400:license.install:<root>/bad.license
+cmd: @after:700:license.dump:<out>/lic2.txt
+cmd: @after:700:help.license
+cmd: @after:900:license.dump:<out>/lic3.txt
+cmd: @after:900:quit
+check: lic1.txt: open=true
+check: lic1.txt: state=free
+check: lic1.txt: badge=Free · non-commercial use only
+check: lic2.txt: note=warn:Not installed: invalid
+check: lic3.txt: open=false

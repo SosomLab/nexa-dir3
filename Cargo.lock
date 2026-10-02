@@ -903,6 +903,7 @@ dependencies = [
  "ndir-vfs",
  "nexa-conf",
  "nexa-ctl",
+ "nexa-dlg",
  "nexa-explorer",
  "nexa-font",
  "nexa-gfx",
@@ -920,6 +921,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-dlg"
+version = "0.1.0"
+dependencies = [
+ "nexa-ctl",
+ "nexa-fs",
+]
+
+[[package]]
 name = "nexa-explorer"
 version = "0.1.0"
 dependencies = [
@@ -934,6 +943,10 @@ dependencies = [
  "memmap2",
  "nexa-gfx",
 ]
+
+[[package]]
+name = "nexa-fs"
+version = "0.1.0"
 
 [[package]]
 name = "nexa-gfx"

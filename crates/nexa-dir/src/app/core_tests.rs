@@ -1297,3 +1297,63 @@ fn launcher_bar_layout_and_launch() {
     assert_eq!(app.panels[0].bounds().y, app.toolbar.bounds().bottom());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-80 라이선스: 픽스처 격리 폴더 = Free · 보기 표 · About = 대화상자([라이선스…] = 2 → 창 깃발) · Help ▸ 라이선스… 토글 ·
+/// 손상 파일 설치 = 거부(파일 안 씀 · 상태줄/덤프 안내) · 제거 = 없음 안내 · 파일 창 사양(라이선스 = 열기 + .license 필터 · 설정 = 폴더).
+#[test]
+fn license_view_about_install_rejects_garbage() {
+    let (mut app, dir) = fixture("license");
+    let v = app.license_view();
+    assert_eq!(v.state, "Free · non-commercial use only");
+    assert!(v.warn && v.request.is_some());
+    assert_eq!(v.rows[0], ("State".to_string(), "free".to_string()));
+    assert_eq!(v.rows[1].1, "-", "파일 없음");
+    assert!(v.rows.iter().any(|(k, val)| k == "Install location"
+        && val.starts_with(&dir.join("license").display().to_string())));
+    assert_eq!(v.contact, ndir_license::LICENSE_CONTACT);
+    assert!(app.dump_of("license").unwrap().starts_with("badge=Free"));
+    // About = 대화상자(제목 · 라이선스 줄 · [라이선스…][OK]) → 2 = 라이선스 창 요청.
+    app.command("help.about");
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains("About Nexa Dir") && d.contains("2:License…") && d.contains("License: Free"),
+        "{d}"
+    );
+    app.dlg_pick(2);
+    assert!(app.open_license);
+    app.open_license = false;
+    app.command("help.license");
+    assert!(app.open_license, "창이 없으면 열기 요청");
+    // 손상 파일 → 거부 · 설치 자리에 아무것도 쓰지 않는다.
+    let bad = dir.join("bad.license");
+    std::fs::write(&bad, b"not a license").unwrap();
+    app.license_install(&bad);
+    let ld = app.dump_of("license").unwrap();
+    assert!(
+        ld.contains("state=free") && ld.contains("note=warn:Not installed: invalid"),
+        "{ld}"
+    );
+    assert!(!dir.join("license").exists());
+    assert_eq!(
+        app.statusbar.left(),
+        "Not installed: invalid (the file was not changed)"
+    );
+    app.license_remove();
+    assert!(app
+        .dump_of("license")
+        .unwrap()
+        .contains("note=warn:No license file to remove"));
+    // 파일 창 사양.
+    app.open_file_window(app::license::FilePurpose::License);
+    let (mode, _, filters) = app.file_window_spec();
+    assert!(app.open_file && mode == nexa_dlg::PickerMode::Open && filters.len() == 2);
+    // 폴더형 설정 키는 아직 없다(prefs_win `is_folder_key` = false) — Text 키로 저장 경로만 검증.
+    app.open_file_window(app::license::FilePurpose::Setting("launcher.items".into()));
+    assert_eq!(app.file_window_spec().0, nexa_dlg::PickerMode::Folder);
+    app.file_confirmed(dir.join("sub"));
+    assert_eq!(
+        app.settings.get("launcher.items"),
+        Some(dir.join("sub").display().to_string().as_str())
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

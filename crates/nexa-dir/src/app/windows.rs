@@ -5,7 +5,9 @@
 
 use crate::check_win::CheckAction;
 use crate::dlg_win::DlgAction;
+use crate::file_win::FileWinAction;
 use crate::keys_win::KeysAction;
+use crate::license_win::LicAction;
 use crate::prefs_win::PrefsAction;
 use crate::preview_win::PvAction;
 use crate::*;
@@ -54,6 +56,29 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.preview_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_license) && self.window.is_some() {
+            self.licensing.refresh();
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.license_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_file) && self.window.is_some() {
+            let (mode, start, filters) = self.file_window_spec();
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            // 라이선스 창이 열려 있으면 그 위에(닫히면 그 창으로 포커스가 돌아온다).
+            let owner = self.license_win.window_rc().or_else(|| self.window.clone());
+            self.file_win.open(
+                el,
+                theme,
+                over,
+                owner.as_deref(),
+                mode,
+                start.as_deref(),
+                filters,
+            );
         }
         if self.window.is_some() && !self.dlg.is_open() {
             if let Some((spec, reply)) = self.dlg_pending.take() {
@@ -133,10 +158,11 @@ impl App {
                     self.prefs_win.redraw();
                 }
                 PrefsAction::OpenKeys => self.open_keys = true,
-                PrefsAction::OpenColors(_)
-                | PrefsAction::BrowseFolder { .. }
-                | PrefsAction::EditJson => {
-                    // 색 창(dir2에 없음) · 폴더 고르기(T-29) · JSON 편집(T-44 잔여) — 안내만.
+                PrefsAction::BrowseFolder { key, .. } => {
+                    self.open_file_window(app::license::FilePurpose::Setting(key));
+                }
+                PrefsAction::OpenColors(_) | PrefsAction::EditJson => {
+                    // 색 창(dir2에 없음) · JSON 편집(T-44 잔여) — 안내만.
                     self.toasts
                         .push(toast::ToastKind::Info, tr("pref.title"), tr("cmd.notYet"));
                     self.redraw();
@@ -202,6 +228,62 @@ impl App {
             }
             return true;
         }
+        if self.license_win.is(id) {
+            let ui_px = self.settings.font_px("ui.font_size");
+            match self.license_win.handle(event) {
+                LicAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    let view = self.license_view();
+                    self.license_win.paint(view, &font, &self.theme, ui_px);
+                }
+                LicAction::Close => {
+                    self.license_win.close();
+                    if let Some(w) = &self.window {
+                        w.focus_window();
+                    }
+                }
+                LicAction::OpenFile => {
+                    self.open_file_window(app::license::FilePurpose::License);
+                }
+                LicAction::Remove => self.license_remove(),
+                LicAction::CopyRequest(name, email) => {
+                    self.license_copy_request(&name, &email);
+                }
+                LicAction::CopyText(text) => {
+                    let ok = clipboard::write_text(&text);
+                    let msg = if ok {
+                        tr("license.note.emailCopied")
+                    } else {
+                        tr("license.note.copyFailed")
+                    };
+                    self.license_win.set_flash(msg, !ok);
+                }
+                LicAction::None => {}
+            }
+            return true;
+        }
+        if self.file_win.is(id) {
+            let ui_px = self.settings.font_px("ui.font_size");
+            match self.file_win.handle(event) {
+                FileWinAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.file_win.paint(&font, &self.theme, ui_px);
+                }
+                FileWinAction::Confirm(path) => {
+                    self.file_confirmed(path);
+                    self.license_win.redraw();
+                }
+                FileWinAction::Cancel => {
+                    self.file_purpose = None;
+                    self.license_win.redraw();
+                }
+                FileWinAction::CopyText(text) => {
+                    let _ = clipboard::write_text(&text);
+                }
+                FileWinAction::None => {}
+            }
+            return true;
+        }
         if self.check_win.is(id) {
             let ui_px = self.settings.font_px("ui.font_size");
             match self.check_win.handle(event) {
@@ -240,6 +322,12 @@ impl App {
         if self.preview_win.is_open() {
             self.preview_win.redraw();
         }
+        if self.license_win.is_open() {
+            self.license_win.redraw();
+        }
+        if self.file_win.is_open() {
+            self.file_win.redraw();
+        }
         self.redraw();
     }
 
@@ -257,11 +345,23 @@ impl App {
         if self.dlg.tick(now_ms) {
             self.dlg.redraw();
         }
+        // 밖에서(다른 설치 경로) 라이선스 파일이 바뀌면 재판정 → 창 다시 그림(LIC-109).
+        if self.licensing.refresh() {
+            self.license_win.redraw();
+        }
+        if self.license_win.tick(now_ms) {
+            self.license_win.redraw();
+        }
+        if self.file_win.tick(now_ms) {
+            self.file_win.redraw();
+        }
         self.persist_window_sizes();
         self.prefs_win.animating()
             || self.keys_win.animating()
             || self.check_win.animating()
             || self.dlg.animating()
+            || self.license_win.animating()
+            || self.file_win.animating()
     }
 
     /// 닫힌 보조 창의 마지막 (위치, 크기)를 설정에(`window.prefs_pos`/`_size` · dir2 계승).

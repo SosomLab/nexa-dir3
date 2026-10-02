@@ -14,6 +14,8 @@ pub(crate) enum DlgReply {
     Conflict(mpsc::Sender<ConflictChoice>),
     /// 압축 암호(마스킹 입력) — 확인(1)이면 입력 텍스트로 재조회(T-62 B).
     ArchivePassword(PathBuf),
+    /// About(T-80 LIC-158 ⓑ) — 2 = 라이선스 창.
+    About,
 }
 
 impl App {
@@ -83,6 +85,11 @@ impl App {
                 }
             }
             DlgReply::ArchivePassword(path) => self.archive_password_result(path, id, text),
+            DlgReply::About => {
+                if id == 2 {
+                    self.open_license = true;
+                }
+            }
             DlgReply::Conflict(tx) => {
                 let choice = match id {
                     1 => ConflictChoice::Overwrite,

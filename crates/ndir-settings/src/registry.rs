@@ -1158,6 +1158,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.help.license",
+        CAT_KEYS,
+        "menu.help.license",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.help.selfcheck",
         CAT_KEYS,
         "menu.help.selfcheck",

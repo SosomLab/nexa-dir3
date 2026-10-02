@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-80 라이선스 창**: `license_win.rs`(표 · 요청 코드 · 파일 열기/제거) · About 대화상자([라이선스…]) · `file_win.rs`(nexa-dlg FilePicker 호스트 · 설정 찾아보기 공용) · `help.license` · 기동 명령 `license.install/dump` · i18n 3언어(ja 신규) · 시나리오 `license` → [journal §36](journal/2026-10-03.md)
 - **T-42 퀵 런처 바**: `launcher.rs`(3-OS 시드 · `launcher.items` 파싱/직렬화 · Command 실행) · 도구 모음 아래 24 밴드 · `launch:<i>` · 설정/메뉴 즉시 반영 · 시나리오 `launcher` → [journal §35](journal/2026-10-03.md)
 - **T-61 B 터미널 보강**: `TermStyle`(글꼴 크기 · 줄 바꿈 끄기 = 고정 열 + 가로 스크롤) · HTML 복사(`term.copy_format` · CF_HTML) · TUI 마우스 모드 SGR 보고(누름/뗌/휠) · `term.*` 설정 즉시 반영 → [journal §34](journal/2026-10-03.md)
 - **T-51 B-1 Windows 셸 컨텍스트 메뉴**: `platform/winshell.rs`(IContextMenu → HMENU 열거 → 포트 항목 · 서브메뉴 2단 · InvokeCommand · `windows` crate) · 행 메뉴 상단 합류 + verb 가로채기 · 실기 시험 → [journal §33](journal/2026-10-03.md)

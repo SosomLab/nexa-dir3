@@ -18,12 +18,14 @@ mod copybtn;
 mod crash;
 mod dlg_win;
 mod dockinfo;
+mod file_win;
 mod filelist;
 mod icon;
 #[allow(dead_code)]
 mod input;
 mod keys_win;
 mod launcher;
+mod license_win;
 mod nav;
 mod panel;
 mod platform;
@@ -48,8 +50,10 @@ mod winhost;
 
 use check_win::CheckWin;
 use dlg_win::DlgWin;
+use file_win::FileWin;
 use filelist::ListOpts;
 use keys_win::KeysWin;
+use license_win::LicenseWin;
 use ndir_i18n::{tr, trf};
 use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
@@ -166,6 +170,13 @@ struct App {
     /// 독립 미리보기 창(F3 · ↗ · T-62 B) + 열기 요청.
     preview_win: PreviewWin,
     open_preview: bool,
+    /// 라이선스(T-80): 판정 문맥(단일 원천) · 창 · 열기 깃발 · 파일 창(용도 = 라이선스 파일/설정 폴더) · 열기 깃발.
+    licensing: ndir_license::Licensing,
+    license_win: LicenseWin,
+    open_license: bool,
+    file_win: FileWin,
+    file_purpose: Option<app::license::FilePurpose>,
+    open_file: bool,
     dlg: DlgWin,
     dlg_pending: Option<(dlg_win::DlgSpec, app::dialogs::DlgReply)>,
     dlg_reply: Option<app::dialogs::DlgReply>,
@@ -277,6 +288,7 @@ impl App {
         platform: Platform,
     ) -> App {
         let session = session.filter(|s| start.is_none() && !s.is_empty());
+        let licensing = Self::licensing_for(start.as_deref());
         let start_dir = start
             .or_else(|| std::env::current_dir().ok())
             .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
@@ -366,6 +378,12 @@ impl App {
             open_check: false,
             preview_win: PreviewWin::new(),
             open_preview: false,
+            licensing,
+            license_win: LicenseWin::new(),
+            open_license: false,
+            file_win: FileWin::new(),
+            file_purpose: None,
+            open_file: false,
             dlg: DlgWin::new(),
             dlg_pending: None,
             dlg_reply: None,
