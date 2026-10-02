@@ -17,12 +17,16 @@ impl App {
             return;
         }
         if let Some(path) = id.strip_prefix("nav:") {
-            self.navigate(self.active, std::path::Path::new(path));
+            let mut inv = Invalidations::default();
+            let _ = self.panels[self.active].navigate_to(PathBuf::from(path), &mut inv);
+            self.update_status();
+            self.redraw();
             return;
         }
         if let Some(n) = id.strip_prefix("panel:") {
             let i = n.trim().parse::<usize>().unwrap_or(0).min(1);
-            self.set_focus(Focus::Panel(i));
+            self.set_active(i);
+            self.update_status();
             self.redraw();
             return;
         }
@@ -85,42 +89,45 @@ impl App {
         }
     }
 
-    /// 배치·상태 덤프(한 줄 = 한 영역 · 골든 비교 · 하네스 T3).
+    /// 배치·상태 덤프(한 줄 = 한 영역 · 골든 비교 · 하네스 T3). 패널은 dir2 수직 스택(탭 · 네비 · 경로 · 목록)을 그대로 적는다.
     pub(crate) fn layout_dump(&self) -> String {
         let r = |r: Rect| format!("{},{} {}x{}", r.x, r.y, r.w, r.h);
         let size = self.viewport;
         let mut out = String::new();
         out.push_str(&format!(
-            "window {}x{} scale {:.2} theme {} dual {} focus {:?}\n",
+            "window {}x{} scale {:.2} theme {} dual {} active {}\n",
             size.0,
             size.1,
             self.scale,
             if self.theme.is_dark { "dark" } else { "light" },
             self.dual,
-            self.focus
+            self.active
         ));
         out.push_str(&format!("menubar {}\n", r(self.menubar.bounds())));
         out.push_str(&format!("toolbar {}\n", r(self.toolbar.bounds())));
-        out.push_str(&format!(
-            "tabs {} active {} n {}\n",
-            r(self.tabs.bounds()),
-            self.tabs.active(),
-            self.tabs.len()
-        ));
-        out.push_str(&format!(
-            "pathbar {} path {}\n",
-            r(self.pathbar.bounds()),
-            self.pathbar.path()
-        ));
         for (i, p) in self.panels.iter().enumerate() {
             out.push_str(&format!(
-                "panel{i} {} rows {} caret {:?} path {}\n",
+                "panel{i} {} tabs {} active {} path {}\n",
                 r(p.bounds()),
-                p.source().len(),
-                p.caret(),
-                p.source().path().display()
+                p.tab_count(),
+                p.active_index(),
+                p.root_path().display()
+            ));
+            out.push_str(&format!("panel{i}.tabs {}\n", r(p.tabbar.bounds())));
+            out.push_str(&format!("panel{i}.nav {}\n", r(p.nav_rect())));
+            out.push_str(&format!(
+                "panel{i}.path {} text {}\n",
+                r(p.pathbar.bounds()),
+                p.pathbar.path()
+            ));
+            out.push_str(&format!(
+                "panel{i}.list {} rows {} caret {:?}\n",
+                r(p.rows().bounds()),
+                p.rows().source().len(),
+                p.rows().caret()
             ));
         }
+        out.push_str(&format!("splitter {}\n", r(self.splitter.rect())));
         out.push_str(&format!(
             "statusbar {} left {} right {}\n",
             r(self.statusbar.bounds()),

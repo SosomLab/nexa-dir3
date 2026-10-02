@@ -59,7 +59,7 @@ impl ApplicationHandler<Wake> for App {
         }
         self.window = Some(win);
         self.layout();
-        self.set_focus(Focus::Panel(0));
+        self.set_active(0);
         self.update_status();
         // 자체 캡처·하네스용 기동 명령(`NDIR_STARTUP_CMD=…` · 쉼표 구분 · `@after:<ms>:<명령>`).
         if let Ok(cmds) = std::env::var("NDIR_STARTUP_CMD") {
@@ -95,6 +95,9 @@ impl ApplicationHandler<Wake> for App {
             p.tick(now_ms, &mut inv);
         }
         let mut redraw = !inv.is_empty();
+        if self.splitter.tick(now_ms) {
+            redraw = true;
+        }
         if self.toasts.tick(now) {
             redraw = true;
         }
@@ -120,7 +123,10 @@ impl ApplicationHandler<Wake> for App {
             self.redraw();
         }
         // 애니메이션 중에만 프레임 간격으로 깬다 · 아니면 다음 예약(기동 지연 명령)까지 잔다.
-        let live = inv.tick_requested() || self.toasts.animating();
+        let live = inv.tick_requested()
+            || self.toasts.animating()
+            || self.splitter.is_hover()
+            || self.splitter.is_dragging();
         let mut next = if live {
             now + Duration::from_millis(16)
         } else {
@@ -219,8 +225,10 @@ impl ApplicationHandler<Wake> for App {
                         x: self.cursor.0,
                         y: self.cursor.1,
                     };
-                    let over_edge = self.panels.iter().any(|g| g.resize_hot(p.x, p.y));
-                    w.set_cursor(if over_edge {
+                    let over_split = self.dual
+                        && (self.splitter.is_dragging() || self.splitter.rect().contains(p));
+                    let over_edge = self.panels.iter().any(|g| g.rows().resize_hot(p.x, p.y));
+                    w.set_cursor(if over_split || over_edge {
                         winit::window::CursorIcon::ColResize
                     } else {
                         winit::window::CursorIcon::Default
@@ -247,9 +255,9 @@ impl ApplicationHandler<Wake> for App {
                     }
                     let plain_char =
                         !ch.primary && !ch.alt && !ch.ctrl && ch.key.chars().count() == 1;
-                    // 경로바 편집 중엔 글자 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
-                    let typing =
-                        plain_char || (self.focus == Focus::PathBar && !ch.primary && !ch.alt);
+                    // 경로바 편집 중엔 조합키 없는 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
+                    let editing = self.panels[self.active].pathbar.is_editing();
+                    let typing = plain_char || (editing && !ch.primary && !ch.alt);
                     if !typing {
                         if self.keymap.is_prefix(&ch) {
                             self.pending_chord = Some(ch);

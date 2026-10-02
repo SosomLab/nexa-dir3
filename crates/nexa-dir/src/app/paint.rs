@@ -1,5 +1,5 @@
-//! App — 그리기(프레임 합성 · nexa-sql `app/paint.rs` 축약). 층 순서 = 본문 → 크롬(툴바·메뉴바 배경) → 상태줄 → 토스트 →
-//! 툴팁 → **메뉴바 드롭다운**(최상위 · nexa-sql 09-15 교훈: 풀다운이 뒤로 가림) → 경로바 제안 팝업.
+//! App — 그리기(프레임 합성 · nexa-sql `app/paint.rs` 축약). 층 순서 = 본문(패널 · 스플리터) → 크롬(툴바·메뉴바 배경) → 상태줄 →
+//! 토스트 → 툴팁·경로 제안 → **메뉴바 드롭다운**(최상위 · nexa-sql 09-15 교훈: 풀다운이 뒤로 가림).
 //!
 //! `paint`(Shell · 표면 빌림 + 래스터 컨텍스트) / [`App::paint_into`](AppCore · 어떤 `DrawCtx`든 — 시험은 `RecordCtx` · CI-105).
 
@@ -33,17 +33,10 @@ impl App {
         let th = self.theme;
         dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
         // 본문
-        self.tabs.paint(dc, &th);
-        self.pathbar.paint(dc, &th);
         self.panels[0].paint(dc, &th);
         if self.dual {
-            let l = self.panels[0].bounds();
-            let r = self.panels[1].bounds();
-            dc.fill_rect(
-                Rect::new(l.right(), l.y, r.x - l.right(), l.h),
-                th.chrome_bg,
-            );
             self.panels[1].paint(dc, &th);
+            self.splitter.paint(dc, &th);
         }
         // 크롬(창 전폭)
         dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
@@ -61,9 +54,10 @@ impl App {
         // 팝업 층
         self.toasts.paint(dc, &th, wi, sb.y, s);
         self.toolbar.paint_tooltip(dc, &th);
+        self.panels[0].paint_popups(dc, &th);
+        if self.dual {
+            self.panels[1].paint_popups(dc, &th);
+        }
         self.menubar.paint(dc, &th);
-        // 경로바 제안 팝업은 dir2 세대 DrawCtx 어휘(nexa-grid `Adapt`로 감싼다 · 어휘 어댑터 원칙 journal §10).
-        let mut adapt = nexa_grid::Adapt(dc);
-        self.pathbar.paint_suggest(&mut adapt, &th);
     }
 }

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 12차 — M3 T-43 1차: dir2 패널 구조 + 스플리터
+
+- **한 일**: `panel.rs`(dir2 `panel.rs` 핵심 이식 — 패널 = 탭 바 + [홈][←][→][↑] + 경로 바 + 목록 · 탭별 히스토리 · 위로 = 떠난 폴더 자동 선택 · 홈 = 내 PC · 무간섭 재열람) · `nav.rs`(dir2 그대로) · 창 배치 dir2 수치(툴바 28 · 상태 22 · 스플리터 3 · 최소 200) · 스플리터 드래그 = 비율 설정 + 50 % 스냅(Alt 해제) · 열 5(name·ext·size·modified·kind). 골든 재생성 · 시험 52 green.
+- **지금 상태**: M3 🚧 — T-40·41 ✅ · T-42·43 부분. 다음 = T-43 잔여(탭 잠금/고정/복제/메뉴 · 패널 간 탭 이동 · 열 폭 기억/동기 · 내 PC 열) → T-44 설정/단축키 창 → T-45 세션(`panel.session()` 준비됨) → T-46.
+- **걸린 것**: 패치 스크립트 사고로 `filelist.rs`가 비워졌다 → git 복원(메모리·docs/15 §3-1 등재). 셀 클립(T-31)은 그대로 ⚠.
+
+→ [journal/2026-10-03 §14](journal/2026-10-03.md)
+
 ## 10-03 11차 — M3 T-41 창 없는 AppCore + 골든
 
 - **한 일**: `viewport`/`scale` 주입(`layout_for`) · `paint_into(&mut dyn DrawCtx)` · 창 없이도 `layout()` — `cargo test`가 App을 만들어 골든(`tests/golden/layout-1200x800.txt`)·RecordCtx(표면 밖 0)·입력 시나리오·기동 명령 어휘를 0.1 s에 돈다(시험 5 · nexa-dir 43). 적발 3 수정(종류 열 넘침 → 이름 열 흡수 ⚠T-31 · 창 없는 layout 조기 반환 · CI mac/linux 플랫폼 단언).

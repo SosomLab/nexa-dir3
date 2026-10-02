@@ -1,8 +1,15 @@
-window 1200x800 scale 1.00 theme dark dual true focus Panel(0)
+window 1200x800 scale 1.00 theme dark dual true active 0
 menubar 0,0 1200x23
-toolbar 0,23 1200x48
-tabs 0,71 1200x28 active 0 n 1
-pathbar 0,99 1200x26 path <root>
-panel0 0,127 598x649 rows 3 caret None path <root>
-panel1 602,127 598x649 rows 3 caret None path <root>
-statusbar 0,776 1200x24 left 3 items right Tab 1/1
+toolbar 0,23 1200x28
+panel0 0,51 599x727 tabs 1 active 0 path <root>
+panel0.tabs 0,51 599x22
+panel0.nav 0,73 104x24
+panel0.path 104,73 495x24 text <root>
+panel0.list 0,97 599x681 rows 3 caret None
+panel1 602,51 598x727 tabs 1 active 0 path <root>
+panel1.tabs 602,51 598x22
+panel1.nav 602,73 104x24
+panel1.path 706,73 494x24 text <root>
+panel1.list 602,97 598x681 rows 3 caret None
+splitter 597,51 7x727
+statusbar 0,778 1200x22 left 3 items right Tab 1/1

@@ -201,34 +201,12 @@ impl App {
         let _ = self.settings.save();
     }
 
-    /// 두 패널 다시 읽기(옵션 반영).
-    fn reload_panels(&mut self) {
+    /// 보기 옵션(숨김 · Dot · 폴더 우선) 변경 → 두 패널 전 탭 무간섭 재열람.
+    fn apply_list_opts(&mut self) {
         let opts = list_opts(&self.settings);
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
-            p.source_mut().set_opts(opts);
-            p.source_mut().reload();
-            // 목록 구조가 바뀌었다 — 뷰(스크롤·캐럿)는 유지하되 전체 무효화.
-            inv.push(p.bounds());
-        }
-        self.update_status();
-        self.redraw();
-    }
-
-    /// 패널을 다른 폴더로(경로바 · Enter · 더블클릭 · `nav:` 기동 명령).
-    pub(crate) fn navigate(&mut self, panel: usize, path: &std::path::Path) {
-        let opts = list_opts(&self.settings);
-        let mut inv = Invalidations::default();
-        self.panels[panel].replace_source(TreeSource::open(path, opts), &mut inv);
-        if panel == self.active {
-            self.pathbar
-                .set_path(path.to_string_lossy().into_owned(), &mut inv);
-            self.tabs
-                .set_tabs(vec![tab_title(path)], self.tabs.active(), &mut inv);
-        }
-        if let Some(e) = self.panels[panel].source().error() {
-            self.toasts
-                .push(toast::ToastKind::Error, tr("menu.view.refresh"), e);
+            p.set_opts(opts, &mut inv);
         }
         self.update_status();
         self.redraw();
@@ -248,23 +226,36 @@ impl App {
 
     /// 명령 한 길 — 메뉴 · 툴바 · 단축키 · 기동 명령이 전부 여기로(SKEL-421). 모르는 id = 상태줄 안내(구현 단계 표시).
     pub(crate) fn command(&mut self, id: &str) {
+        let mut inv = Invalidations::default();
+        let a = self.active;
         match id {
             "file.exit" => self.exit_requested = true,
-            "view.refresh" => self.reload_panels(),
-            "view.hidden" => {
-                self.toggle_flag("list.show_hidden");
-                self.sync_menu_checks();
-                self.reload_panels();
+            "file.new_tab" => self.panels[a].new_tab(&mut inv),
+            "file.close_tab" => {
+                let i = self.panels[a].active_index();
+                self.panels[a].close_tab(i, &mut inv);
             }
-            "view.dot" => {
-                self.toggle_flag("list.show_dotfiles");
-                self.sync_menu_checks();
-                self.reload_panels();
+            "tab.next" => self.panels[a].next_tab(&mut inv),
+            "tab.prev" => self.panels[a].prev_tab(&mut inv),
+            "nav.back" => self.panels[a].nav_back(&mut inv),
+            "nav.forward" => self.panels[a].nav_forward(&mut inv),
+            "nav.up" => self.panels[a].nav_up(&mut inv),
+            "nav.home" => self.panels[a].nav_home(&mut inv),
+            "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
+            "view.refresh" => {
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
             }
-            "view.folders_first" => {
-                self.toggle_flag("list.folders_first");
+            "view.hidden" | "view.dot" | "view.folders_first" => {
+                let key = match id {
+                    "view.hidden" => "list.show_hidden",
+                    "view.dot" => "list.show_dotfiles",
+                    _ => "list.folders_first",
+                };
+                self.toggle_flag(key);
                 self.sync_menu_checks();
-                self.reload_panels();
+                self.apply_list_opts();
             }
             "view.dock" | "view.launcher" | "view.col_width_sync" => {
                 let key = match id {
@@ -274,7 +265,6 @@ impl App {
                 };
                 self.toggle_flag(key);
                 self.sync_menu_checks();
-                self.redraw();
             }
             "view.always_on_top" => {
                 let on = self.toggle_flag("window.always_on_top");
@@ -286,7 +276,6 @@ impl App {
                     });
                 }
                 self.sync_menu_checks();
-                self.redraw();
             }
             "view.theme_system" => self.apply_theme_mode(ThemeMode::System),
             "view.theme_light" => self.apply_theme_mode(ThemeMode::Light),
@@ -304,13 +293,9 @@ impl App {
                 };
                 self.set_setting("layout.panel_mode", if dual { "dual" } else { "single" });
                 self.dual = dual;
-                if !dual {
-                    self.set_focus(Focus::Panel(0));
-                }
+                self.set_active(if dual { self.active } else { 0 });
                 self.sync_menu_checks();
                 self.layout();
-                self.update_status();
-                self.redraw();
             }
             "view.info_dual" | "view.info_single" | "view.info_toggle" => {
                 let cur = self.settings.get("layout.info_mode").unwrap_or("dual") == "dual";
@@ -321,33 +306,17 @@ impl App {
                 };
                 self.set_setting("layout.info_mode", if dual { "dual" } else { "single" });
                 self.sync_menu_checks();
-                self.redraw();
             }
             "view.mode_tree" | "view.mode_flat" | "view.mode_tiles" => {
-                self.set_setting("list.view_mode", &id["view.mode_".len()..]);
+                let mode = &id["view.mode_".len()..];
+                self.set_setting("list.view_mode", mode);
+                self.panels[a].set_view_mode(view_mode_of(mode), &mut inv);
                 self.sync_menu_checks();
-                self.redraw();
             }
             "view.lang_system" => self.switch_lang("system"),
-            "nav.up" => {
-                let cur = self.panels[self.active].source().path().to_path_buf();
-                if let Some(parent) = cur.parent().map(std::path::Path::to_path_buf) {
-                    self.navigate(self.active, &parent);
-                }
-            }
             "panel.switch" => {
                 if self.dual {
-                    let next = 1 - self.active;
-                    self.set_focus(Focus::Panel(next));
-                    let p = self.panels[next]
-                        .source()
-                        .path()
-                        .to_string_lossy()
-                        .into_owned();
-                    let mut inv = Invalidations::default();
-                    self.pathbar.set_path(p, &mut inv);
-                    self.update_status();
-                    self.redraw();
+                    self.set_active(1 - self.active);
                 }
             }
             "help.about" => {
@@ -356,17 +325,18 @@ impl App {
                     tr("menu.help.about"),
                     format!("nexa-dir {}", env!("CARGO_PKG_VERSION")),
                 );
-                self.redraw();
             }
             _ if id.starts_with("lang:") => self.switch_lang(&id["lang:".len()..]),
             _ => {
                 // 아직 없는 명령 — 상태줄에 id(검증 매트릭스 ⚠ · 구현 단계가 오면 위 가지로).
-                let mut inv = Invalidations::default();
                 self.statusbar
                     .set_left(&format!("{id}: {}", tr("cmd.notYet")), &mut inv);
                 self.redraw();
+                return;
             }
         }
+        self.update_status();
+        self.redraw();
     }
 
     /// 언어 전환 — 설정 + i18n 재활성 + 메뉴·툴바·컬럼 라벨 재구성.
@@ -374,7 +344,10 @@ impl App {
         self.set_setting("ui.lang", code);
         init_i18n(&self.settings);
         self.menubar.set_menus(App::build_menus(&self.settings));
-        self.toolbar = Toolbar::new(App::build_toolbar(&self.settings));
+        let mut toolbar = Toolbar::new(App::build_toolbar(&self.settings));
+        toolbar.set_icon_size(20);
+        toolbar.set_padding(2, 2);
+        self.toolbar = toolbar;
         self.sync_menu_shortcuts();
         self.sync_menu_checks();
         self.layout();

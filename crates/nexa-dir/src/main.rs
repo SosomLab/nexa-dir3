@@ -1,8 +1,9 @@
-//! Nexa Dir — 앱 진입점(M3 T-40 · winit 호스트 + nexa-ui 위에 그리는 수직 슬라이스).
+//! Nexa Dir — 앱 진입점(M3 · winit 호스트 + nexa-ui 위에 그리는 수직 슬라이스).
 //!
-//! 구조 = nexa-sql 3층(docs/port/40 SKEL-401): 이 파일(모듈 선언 · `struct App` · `enum Focus` · `layout()` · `main()`) /
+//! 구조 = nexa-sql 3층(docs/port/40 SKEL-401): 이 파일(모듈 선언 · `struct App` · `layout_core()` · `main()`) /
 //! `app/*.rs`(`impl App` 조각 — 이벤트 루프 · 입력 · 그리기 · 메뉴/명령 · 기동 명령) / 호스트 껍질은 파일 하나씩
 //! (`present` · `winhost` · `wingeom` · `winfocus` · `theme` · `icon` · `input` · `clipboard` · `toast` — nexa-sql 복사 · SKEL-403).
+//! 화면 = dir2 `win.rs::layout`(docs/port/13 PANEL-001·002): 메뉴 / 도구 모음 / [좌 패널 ║ 우 패널] / 상태바 · 패널 = `panel.rs`.
 //! 규칙: 인자 해석·판정은 순수 함수(`cli.rs` · `selfcheck.rs`) · 그리기는 `RedrawRequested`에서만 · 유휴는 `WaitUntil`(SKEL-414).
 
 mod app;
@@ -16,6 +17,8 @@ mod filelist;
 mod icon;
 #[allow(dead_code)]
 mod input;
+mod nav;
+mod panel;
 #[allow(dead_code)]
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
@@ -30,22 +33,22 @@ mod wingeom;
 #[allow(dead_code)] // 보조 창(설정 · 단축키 · About)이 T-44에서 쓴다.
 mod winhost;
 
-use filelist::{ListOpts, TreeSource};
+use filelist::ListOpts;
 use ndir_i18n::{tr, trf};
 use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
 use nexa_ctl::controls::{
-    ComboItem, Control, MenuBar, MenuDef, MenuEntry, StatusBar, TabAction, TabBar, ToolIcon,
-    ToolItem, Toolbar,
+    ComboItem, Control, MenuBar, MenuDef, MenuEntry, SplitAxis, SplitEvent, Splitter, StatusBar,
+    ToolIcon, ToolItem, Toolbar,
 };
 use nexa_ctl::draw::DrawCtx;
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, Theme};
 use nexa_ctl::{InputEvent, Invalidations, Widget};
-use nexa_explorer::pathbar::PathBar;
 use nexa_gfx::{Font, Surface};
-use nexa_grid::{Column, RowSource, VirtualRows};
+use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
+use panel::{Panel, PanelMetrics};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
@@ -64,27 +67,22 @@ pub(crate) fn settings_clip_native() -> bool {
     CLIP_NATIVE.load(Ordering::Relaxed)
 }
 
+/// 스플리터 두께(논리 px · dir2 `SPLIT_TH`) · 자석 스냅 임계(dir2 `SNAP_PX` — 창 50% · Alt = 해제) · 패널 최소 폭(dir2 `MIN_PANEL`).
+const SPLIT_TH: f32 = 3.0;
+const SNAP_PX: f32 = 20.0;
+const MIN_PANEL: f32 = 200.0;
+
 /// UI 스레드를 깨우는 사용자 이벤트(배경 작업이 보낸다 — M4 전송·감시 스레드 · SKEL-415).
 #[derive(Debug)]
 struct Wake;
-
-/// 키 입력이 가는 영역(docs/port/40 SKEL-417 — dir2 화면 구성의 첫 부분집합 · 도크·트리·필터는 M5).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Focus {
-    /// 파일 패널(0 왼쪽 · 1 오른쪽).
-    Panel(usize),
-    /// 경로바 편집.
-    PathBar,
-}
 
 /// 포인터 캡처 대상(눌린 곳이 뗄 때까지 받는다).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Area {
     Menu,
     Tool,
-    Tabs,
-    Path,
     Panel(usize),
+    Split,
     Status,
 }
 
@@ -107,13 +105,12 @@ struct App {
     primary: bool,
     alt: bool,
     ctrl_mac: bool,
-    focus: Focus,
     menubar: MenuBar,
     toolbar: Toolbar,
-    tabs: TabBar,
-    pathbar: PathBar,
-    /// 파일 패널 2(듀얼) — 단일 모드면 `panels[1]`은 빈 사각형.
-    panels: [VirtualRows<TreeSource>; 2],
+    /// 파일 패널 2(듀얼 · dir2 좌/우) — 단일 모드면 `panels[1]`은 빈 사각형(상태는 보존).
+    panels: [Panel; 2],
+    /// 좌/우 스플리터(`layout.panel_split_pct` · 드래그 · 50% 스냅).
+    splitter: Splitter,
     active: usize,
     dual: bool,
     statusbar: StatusBar,
@@ -144,12 +141,53 @@ fn list_opts(s: &Settings) -> ListOpts {
     }
 }
 
-/// 탭 제목 = 폴더 이름(루트는 경로 그대로).
-fn tab_title(p: &std::path::Path) -> String {
-    p.file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| p.to_string_lossy().into_owned())
+/// 설정 `list.nav_up_align`(top/center/bottom · 기본 center).
+fn nav_up_align(s: &Settings) -> ScrollAlign {
+    match s.get("list.nav_up_align").unwrap_or("center") {
+        "top" => ScrollAlign::Top,
+        "bottom" => ScrollAlign::Bottom,
+        _ => ScrollAlign::Center,
+    }
+}
+
+/// 설정 `list.view_mode`(tree/flat/tiles).
+fn view_mode_of(v: &str) -> ViewMode {
+    match v {
+        "flat" => ViewMode::Flat,
+        "tiles" => ViewMode::Tiles,
+        _ => ViewMode::Tree,
+    }
+}
+
+/// 패널 지표(dir2 `panel_metrics`: row 20 · pad 6 · indent 16 · tab 22 · bar 24 @96dpi — 행은 목록 글꼴보다 작아지지 않게).
+fn panel_metrics(settings: &Settings, s: f32) -> PanelMetrics {
+    let list_px = settings.font_px("list.font_size");
+    PanelMetrics {
+        row_h: px(20.0, s).max(px(list_px + 6.0, s)).max(14),
+        pad_x: px(6.0, s),
+        indent_w: px(16.0, s),
+        tab_h: px(22.0, s),
+        bar_h: px(24.0, s),
+        scale: s,
+    }
+}
+
+/// 기본 5열(dir2 docs/port/13 §2-5: 340 · 64 · 96 · 140 · 110) — 패널보다 넓으면 이름 열이 줄어든다
+/// (nexa-grid는 셀을 패널 경계로 자르지 않는다 · 클립 스택 T-31 · 10-03 RecordCtx 시험 적발).
+fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
+    let (ext_w, size_w, mod_w, kind_w) = (px(64.0, s), px(96.0, s), px(140.0, s), px(110.0, s));
+    let mut name_w = px(340.0, s);
+    let total = name_w + ext_w + size_w + mod_w + kind_w;
+    if total > panel_w {
+        name_w = (panel_w - ext_w - size_w - mod_w - kind_w - px(8.0, s)).max(px(120.0, s));
+    }
+    vec![
+        Column::new(filelist::COL_NAME, tr("col.name"), name_w),
+        Column::new(filelist::COL_EXT, tr("col.ext"), ext_w),
+        Column::new(filelist::COL_SIZE, tr("col.size"), size_w).right_aligned(),
+        Column::new(filelist::COL_MODIFIED, tr("col.modified"), mod_w),
+        Column::new(filelist::COL_KIND, tr("col.kind"), kind_w),
+    ]
 }
 
 impl App {
@@ -158,23 +196,30 @@ impl App {
         let theme = theme::resolve(settings.theme_mode(), None);
         let opts = list_opts(&settings);
         let dual = settings.get("layout.panel_mode").unwrap_or("dual") == "dual";
+        let m = panel_metrics(&settings, 1.0);
         let mut inv = Invalidations::default();
-        let mut tabs = TabBar::new();
-        tabs.set_show_new(true);
-        tabs.set_tabs(vec![tab_title(&start_dir)], 0, &mut inv);
         let mut toasts = toast::Toasts::new();
         toasts.configure(3000, 85);
+        // 도구 모음 = dir2 28px 셀 / 아이콘 20(08-11 사용자 확정).
+        let mut toolbar = Toolbar::new(App::build_toolbar(&settings));
+        toolbar.set_icon_size(20);
+        toolbar.set_padding(2, 2);
+        let mut panels = [
+            Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
+            Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
+        ];
+        let mode = view_mode_of(settings.get("list.view_mode").unwrap_or("tree"));
+        for p in &mut panels {
+            p.set_nav_up_align(nav_up_align(&settings));
+            p.set_view_mode(mode, &mut inv);
+        }
         let mut app = App {
             window: None,
             surface: None,
             menubar: MenuBar::new(App::build_menus(&settings)),
-            toolbar: Toolbar::new(App::build_toolbar(&settings)),
-            tabs,
-            pathbar: PathBar::new(start_dir.to_string_lossy().into_owned(), 26, 6),
-            panels: [
-                VirtualRows::new(TreeSource::open(&start_dir, opts), 24, 6, 16),
-                VirtualRows::new(TreeSource::open(&start_dir, opts), 24, 6, 16),
-            ],
+            toolbar,
+            panels,
+            splitter: Splitter::new(SplitAxis::Vertical),
             active: 0,
             dual,
             statusbar: StatusBar::new(),
@@ -190,7 +235,6 @@ impl App {
             primary: false,
             alt: false,
             ctrl_mac: false,
-            focus: Focus::Panel(0),
             started: Instant::now(),
             main_active: true,
             pending_chord: None,
@@ -202,7 +246,7 @@ impl App {
         };
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
-        app.set_focus(Focus::Panel(0));
+        app.set_active(0);
         app.update_status();
         app
     }
@@ -213,27 +257,25 @@ impl App {
         }
     }
 
-    fn set_focus(&mut self, f: Focus) {
-        self.focus = f;
+    /// 활성 패널(키보드가 가는 곳 · 단일 모드는 늘 0).
+    fn set_active(&mut self, i: usize) {
+        let i = if self.dual { i.min(1) } else { 0 };
+        self.active = i;
         let mut inv = Invalidations::default();
-        for (i, p) in self.panels.iter_mut().enumerate() {
-            p.set_focused(f == Focus::Panel(i), &mut inv);
-        }
-        if let Focus::Panel(i) = f {
-            if i == 0 || self.dual {
-                self.active = i;
-            }
+        for (k, p) in self.panels.iter_mut().enumerate() {
+            p.set_focused(k == i, &mut inv);
         }
     }
 
     /// 상태줄 = 활성 패널 요약(왼쪽) · 탭 n/N(오른쪽).
     fn update_status(&mut self) {
-        let left = self.panels[self.active].source().status_text();
+        let p = &self.panels[self.active];
+        let left = p.status_text();
         let right = trf(
             "status.tab",
             &[
-                &(self.tabs.active() + 1).to_string(),
-                &self.tabs.len().max(1).to_string(),
+                &(p.active_index() + 1).to_string(),
+                &p.tab_count().to_string(),
             ],
         );
         let mut inv = Invalidations::default();
@@ -258,66 +300,76 @@ impl App {
         self.layout_core();
     }
 
-    /// 배치 — 위에서부터 메뉴바 · 툴바 · 탭 · 경로바 · 본문(패널 1~2) · 상태줄(dir2 화면 구성 · docs/port/13). winit 무관.
+    /// 스플리터 x(창 기준 · dir2 `splitter_x`) — 비율에서 계산 · 패널 최소 폭 클램프.
+    fn splitter_x(&self, w: i32) -> i32 {
+        let pct = self.settings.int("layout.panel_split_pct").clamp(10, 90) as i32;
+        let min = px(MIN_PANEL, self.scale);
+        (w * pct / 100).clamp(min.min(w / 2), (w - min).max(w / 2))
+    }
+
+    /// 전체 배치(dir2 `win.rs::layout`): 메뉴 / 도구 모음 / [좌 ║ 우 패널] / 상태바. winit 무관.
     fn layout_core(&mut self) {
         let (w, h) = self.viewport;
         let s = self.scale;
         let mut inv = Invalidations::default();
         self.menubar.set_scale(s);
         self.toolbar.set_scale(s);
-        self.tabs.set_scale(s);
         self.statusbar.set_scale(s);
-        let menu_h = px(self.settings.font_px("ui.menu_font_size") + 11.0, s);
+        let menu_h = px(self.settings.font_px("ui.menu_font_size") + 11.0, s).min(h.max(0));
         self.menubar
             .set_bounds(Rect::new(0, 0, w, menu_h), &mut inv);
         // `preferred_height`는 논리 px(nexa-ctl 규약) → 장치 px로(nexa-sql 09-16 맥 2x 교훈).
         let tool_h = px(self.toolbar.preferred_height() as f32, s);
         self.toolbar
             .set_bounds(Rect::new(0, menu_h, w, tool_h), &mut inv);
-        let mut y = menu_h + tool_h;
-        let tab_h = px(28.0, s);
-        self.tabs.set_metrics(tab_h, px(10.0, s), &mut inv);
-        self.tabs.set_bounds(Rect::new(0, y, w, tab_h), &mut inv);
-        y += tab_h;
-        let path_h = px(26.0, s);
-        self.pathbar.set_metrics(path_h, px(6.0, s), &mut inv);
-        self.pathbar
-            .set_bounds(Rect::new(0, y, w, path_h), &mut inv);
-        y += path_h + px(2.0, s);
-        let status_h = px(24.0, s);
-        let body_h = (h - y - status_h).max(0);
-        let row_h = px(self.settings.font_px("list.font_size") + 8.0, s);
-        // 컬럼 = 이름이 나머지를 흡수(패널 폭 안에 맞춘다 — nexa-grid는 셀을 패널 경계로 자르지 않는다(클립 스택 T-31) → 10-03 RecordCtx
-        //   시험이 "종류 열이 오른쪽 패널로 넘침"을 적발). 열 폭 기억·동기화(`list.col_width_sync`)는 T-43.
-        let (size_w, mod_w, kind_w) = (px(90.0, s), px(140.0, s), px(90.0, s));
-        let cols_for = |panel_w: i32| {
-            let name_w = (panel_w - size_w - mod_w - kind_w - px(8.0, s)).max(px(120.0, s));
-            vec![
-                Column::new(filelist::COL_NAME, tr("col.name"), name_w),
-                Column::new(filelist::COL_SIZE, tr("col.size"), size_w).right_aligned(),
-                Column::new(filelist::COL_MODIFIED, tr("col.modified"), mod_w),
-                Column::new(filelist::COL_KIND, tr("col.kind"), kind_w),
-            ]
-        };
-        let gap = px(4.0, s);
-        let pct = self.settings.int("layout.panel_split_pct").clamp(10, 90) as i32;
+        let top = menu_h + tool_h;
+        let status_h = px(22.0, s);
+        let bottom = (h - status_h).max(top);
+        self.statusbar
+            .set_bounds(Rect::new(0, bottom, w, h - bottom), &mut inv);
+        let area_h = (bottom - top).max(0);
+        let gap = px(SPLIT_TH, s).max(2);
+        let g2 = gap / 2;
+        let half = px(3.0, s);
         let rects = if self.dual {
-            let lw = (w - gap) * pct / 100;
+            let sx = self.splitter_x(w);
+            self.splitter
+                .set_rect(Rect::new(sx - half, top, half * 2 + 1, area_h));
             [
-                Rect::new(0, y, lw, body_h),
-                Rect::new(lw + gap, y, w - lw - gap, body_h),
+                Rect::new(0, top, (sx - g2).max(0), area_h),
+                Rect::new(sx - g2 + gap, top, (w - sx + g2 - gap).max(0), area_h),
             ]
         } else {
-            [Rect::new(0, y, w, body_h), Rect::new(0, y, 0, 0)]
+            self.splitter.set_rect(Rect::default());
+            [Rect::new(0, top, w, area_h), Rect::default()]
         };
+        let m = panel_metrics(&self.settings, s);
         for (p, r) in self.panels.iter_mut().zip(rects) {
-            p.set_metrics(row_h, px(6.0, s), px(16.0, s), &mut inv);
-            p.set_columns(cols_for(r.w), &mut inv);
+            p.set_metrics(m, &mut inv);
+            p.set_default_columns(columns_for(r.w, s), &mut inv);
             p.set_bounds(r, &mut inv);
         }
-        self.statusbar
-            .set_bounds(Rect::new(0, h - status_h, w, status_h), &mut inv);
-        self.pathbar.set_overlay_bottom(h - status_h);
+    }
+
+    /// 스플리터 드래그(`SplitEvent::Drag(v)` · v = 띠의 새 x) → 비율 설정(저장은 `End`에서) · 50% 자석 스냅(Alt = 해제).
+    fn split_drag(&mut self, v: i32) {
+        let (w, _) = self.viewport;
+        if w <= 0 {
+            return;
+        }
+        let half = px(3.0, self.scale);
+        let mut sx = v + half;
+        let snap = px(SNAP_PX, self.scale);
+        if !self.alt && (sx - w / 2).abs() <= snap {
+            sx = w / 2;
+        }
+        let min = px(MIN_PANEL, self.scale);
+        let sx = sx.clamp(min.min(w / 2), (w - min).max(w / 2));
+        let pct = (sx * 100 / w).clamp(10, 90);
+        let _ = self
+            .settings
+            .set("layout.panel_split_pct", &pct.to_string());
+        self.layout_core();
     }
 
     /// 창을 닫을 때 자리·크기 기억(`window.main_size`/`main_pos` · dir2 계승).
@@ -477,13 +529,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn px_rounds_and_tab_title() {
+    fn px_rounds_and_columns_fit() {
         assert_eq!(px(24.0, 1.0), 24);
         assert_eq!(px(24.0, 1.5), 36);
         assert_eq!(px(26.0, 1.25), 33);
-        assert_eq!(tab_title(std::path::Path::new("C:/Users/kiros")), "kiros");
-        // 루트(이름 없음)는 경로 그대로 — OS마다 루트 표기가 달라 플랫폼 중립 경로로(10-03 CI mac/linux 적발: `C:/`의 file_name = `C:`).
-        assert_eq!(tab_title(std::path::Path::new("/")), "/");
-        assert_eq!(tab_title(std::path::Path::new("a/b")), "b");
+        // 넓은 패널 = dir2 기본 폭 그대로 · 좁은 패널 = 이름 열이 줄되 120 이상.
+        let wide = columns_for(1000, 1.0);
+        assert_eq!(wide[0].width, 340);
+        let narrow = columns_for(500, 1.0);
+        assert!(narrow[0].width >= 120 && narrow[0].width < 340);
+        assert_eq!(narrow.len(), 5);
+        assert_eq!(view_mode_of("tiles"), ViewMode::Tiles);
+        assert_eq!(view_mode_of("x"), ViewMode::Tree);
     }
 }

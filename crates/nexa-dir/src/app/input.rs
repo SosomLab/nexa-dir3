@@ -1,6 +1,6 @@
 //! App — 입력 변환·라우팅(nexa-sql `app/input.rs` 축약 · docs/port/40 §1-5).
 //!
-//! 규칙: 포인터 = **눌린 곳**이 뗄 때까지 받는다(`pressed`) · 이동은 hover가 있는 컨트롤 전부에 · 키 = `focus`.
+//! 규칙: 포인터 = **눌린 곳**이 뗄 때까지 받는다(`pressed`) · 이동은 hover가 있는 컨트롤 전부에 · 키 = **활성 패널**(dir2 PANEL §2-4).
 //! 열린 메뉴가 있으면 메뉴가 먼저(바깥 클릭 = 닫기). 사건 뒤에는 컨트롤의 "보고"(`take_*`)를 거둬 명령 한 길로.
 
 use crate::*;
@@ -115,10 +115,8 @@ impl App {
             Some(Area::Menu)
         } else if self.toolbar.bounds().contains(p) {
             Some(Area::Tool)
-        } else if self.tabs.bounds().contains(p) {
-            Some(Area::Tabs)
-        } else if self.pathbar.bounds().contains(p) {
-            Some(Area::Path)
+        } else if self.dual && self.splitter.rect().contains(p) {
+            Some(Area::Split)
         } else if self.panels[0].bounds().contains(p) {
             Some(Area::Panel(0))
         } else if self.dual && self.panels[1].bounds().contains(p) {
@@ -134,10 +132,26 @@ impl App {
         match area {
             Area::Menu => self.menubar.on_event(ev, inv),
             Area::Tool => self.toolbar.on_event(ev, inv),
-            Area::Tabs => self.tabs.on_event(ev, inv),
-            Area::Path => self.pathbar.on_event(ev, inv),
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
+            Area::Split => self.split_event(ev, inv),
             Area::Status => self.statusbar.on_event(ev, inv),
+        }
+    }
+
+    /// 스플리터 사건 → 비율 갱신 · 드래그 끝 = 설정 저장.
+    fn split_event(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
+        match self.splitter.on_event(ev) {
+            SplitEvent::Hover => inv.push(self.splitter.rect()),
+            SplitEvent::Start => inv.push(self.splitter.rect()),
+            SplitEvent::Drag(v) => {
+                self.split_drag(v);
+                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+            }
+            SplitEvent::End => {
+                let _ = self.settings.save();
+                inv.push(self.splitter.rect());
+            }
+            SplitEvent::None => {}
         }
     }
 
@@ -165,8 +179,9 @@ impl App {
                 // hover는 전부(들어오고 나갈 때 스스로 무효화한다).
                 self.menubar.on_event(&ev, inv);
                 self.toolbar.on_event(&ev, inv);
-                self.tabs.on_event(&ev, inv);
-                self.pathbar.on_event(&ev, inv);
+                if self.dual {
+                    self.split_event(&ev, inv);
+                }
                 self.panels[0].on_event(&ev, inv);
                 if self.dual {
                     self.panels[1].on_event(&ev, inv);
@@ -188,30 +203,15 @@ impl App {
                 }
                 let Some(area) = self.area_at(p) else { return };
                 if let Area::Panel(i) = area {
-                    if self.pathbar.is_editing() {
-                        self.pathbar.cancel_edit(inv);
-                    }
-                    self.set_focus(Focus::Panel(i));
-                    if i != self.active || self.focus != Focus::Panel(i) {
-                        inv.push(self.pathbar.bounds());
-                    }
-                    let path = self.panels[i]
-                        .source()
-                        .path()
-                        .to_string_lossy()
-                        .into_owned();
-                    self.pathbar.set_path(path, inv);
-                }
-                if let InputEvent::DoubleClick { .. } = ev {
-                    if let Area::Panel(i) = area {
-                        if let Some(row) = self.panels[i].row_at(x, y) {
-                            if self.panels[i].source().row_is_dir(row) {
-                                if let Some(p) = self.panels[i].source().row_path(row) {
-                                    self.navigate(i, &p);
-                                    return;
-                                }
-                            }
+                    if i != self.active {
+                        // 다른 패널 클릭 = 활성 전환(dir2 PANEL-001 "활성 패널에 키보드를 라우팅").
+                        let other = 1 - i;
+                        if self.panels[other].pathbar.is_editing() {
+                            self.panels[other].pathbar.cancel_edit(inv);
                         }
+                        self.set_active(i);
+                        inv.push(self.panels[0].bounds());
+                        inv.push(self.panels[1].bounds());
                     }
                 }
                 if matches!(ev, InputEvent::MouseDown { .. }) {
@@ -235,56 +235,21 @@ impl App {
             InputEvent::XButton { forward, .. } => {
                 self.command(if forward { "nav.forward" } else { "nav.back" });
             }
-            InputEvent::Key { .. } | InputEvent::Char { .. } => {
+            InputEvent::Key { .. }
+            | InputEvent::Char { .. }
+            | InputEvent::SelectAll
+            | InputEvent::Undo
+            | InputEvent::Redo => {
                 if self.menubar.is_open() {
                     self.menubar.on_event(&ev, inv);
                     return;
                 }
-                match self.focus {
-                    Focus::PathBar => {
-                        match ev {
-                            InputEvent::Key {
-                                key: nexa_ctl::Key::Enter,
-                                ..
-                            } => self.pathbar.submit_edit(inv),
-                            InputEvent::Key {
-                                key: nexa_ctl::Key::Escape,
-                                ..
-                            } => {
-                                self.pathbar.cancel_edit(inv);
-                                self.set_focus(Focus::Panel(self.active));
-                            }
-                            _ => self.pathbar.on_event(&ev, inv),
-                        }
-                        if !self.pathbar.is_editing() && self.focus == Focus::PathBar {
-                            self.set_focus(Focus::Panel(self.active));
-                        }
-                    }
-                    Focus::Panel(i) => {
-                        // Enter = 활성(폴더 = 진입 · 파일 = 외부 열기 T-6x).
-                        if let InputEvent::Key {
-                            key: nexa_ctl::Key::Enter,
-                            ..
-                        } = ev
-                        {
-                            if let Some(row) = self.panels[i].caret() {
-                                if self.panels[i].source().row_is_dir(row) {
-                                    if let Some(p) = self.panels[i].source().row_path(row) {
-                                        self.navigate(i, &p);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                        self.panels[i].on_event(&ev, inv);
-                    }
-                }
+                self.panels[self.active].key_event(&ev, inv);
             }
-            _ => {}
         }
     }
 
-    /// 사건 뒤 컨트롤 보고 수거 — 메뉴 선택 · 툴바 클릭 · 탭 동작 · 경로바 이동 · 토스트 동작.
+    /// 사건 뒤 컨트롤 보고 수거 — 메뉴 선택 · 툴바 클릭 · 패널 보고(탭·네비·경로·파일 열기) · 토스트 동작.
     fn after_event(&mut self, inv: &mut Invalidations) {
         if let Some(id) = self.menubar.take_picked() {
             self.command(&id);
@@ -292,29 +257,34 @@ impl App {
         if let Some(id) = self.toolbar.take_clicked() {
             self.command(&id);
         }
-        if let Some(act) = self.tabs.take_action() {
-            match act {
-                TabAction::Switch(i) => {
-                    self.tabs.set_active(i, inv);
-                    self.update_status();
-                }
-                TabAction::New => self.command("file.new_tab"),
-                TabAction::Close(_) => self.command("file.close_tab"),
-                _ => {}
+        for i in 0..2 {
+            self.panels[i].drain_actions(inv);
+            if let Some(path) = self.panels[i].take_open() {
+                self.open_external(&path);
             }
-        }
-        if let Some(path) = self.pathbar.take_navigation() {
-            self.navigate(self.active, std::path::Path::new(&path));
-            self.set_focus(Focus::Panel(self.active));
-        }
-        if self.pathbar.is_editing() && self.focus != Focus::PathBar {
-            self.focus = Focus::PathBar;
+            if let Some(t) = self.panels[i].take_tab_menu() {
+                // 탭 컨텍스트 메뉴(잠금·고정·복제·닫기)는 T-43 잔여 — 지금은 상태줄 안내.
+                let mut inv2 = Invalidations::default();
+                self.statusbar
+                    .set_left(&format!("tab.menu:{t}: {}", tr("cmd.notYet")), &mut inv2);
+                inv.push(self.statusbar.bounds());
+            }
         }
         if let Some(id) = self.toasts.take_action() {
             self.command(&id);
         }
-        // 선택 수가 바뀌면 상태줄.
+        // 선택 수·탭이 바뀌면 상태줄.
         self.update_status();
+    }
+
+    /// 파일 활성화 — 연결 프로그램으로 열기(platform 층 T-6x). 지금은 토스트.
+    pub(crate) fn open_external(&mut self, path: &std::path::Path) {
+        self.toasts.push(
+            toast::ToastKind::Info,
+            tr("cmd.activate"),
+            path.display().to_string(),
+        );
+        self.redraw();
     }
 
     /// 포인터가 창을 떠남/비활성 = hover 정리.
@@ -322,8 +292,6 @@ impl App {
         let mut inv = Invalidations::default();
         let away = InputEvent::MouseMove { x: -1, y: -1 };
         self.toolbar.on_event(&away, &mut inv);
-        self.tabs.on_event(&away, &mut inv);
-        self.pathbar.on_event(&away, &mut inv);
         for p in &mut self.panels {
             p.on_event(&away, &mut inv);
         }

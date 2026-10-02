@@ -3,7 +3,7 @@
 //! dir2에서는 `nexa-app/src/panel.rs`가 같은 일을 했다(docs/port/13 · 21 G-1): 위젯은 가시 행만 묻고, 펼침/선택/정렬/타입어헤드는
 //! 코어(`ndir-tree`)가 결정한다. 이 파일은 **번역만**(셀 텍스트 서식 포함) — 창·OS API를 모른다(docs/15 §2-1).
 //!
-//! 컬럼 키: 0 이름(트리) · 1 크기 · 2 수정 시각 · 3 종류(`col.*` i18n). 정렬 키 대응 = [`sort_key_of`].
+//! 컬럼 키(dir2 docs/port/13 §2-5 순서): 0 이름(트리) · 1 확장자 · 2 크기 · 3 수정 시각 · 4 종류(`col.*` i18n). 정렬 키 대응 = [`sort_key_of`].
 
 use ndir_core::FileKind;
 use ndir_tree::{FindScope, SelectMode, SortKey, SortSpec, Tree};
@@ -12,9 +12,33 @@ use std::path::{Path, PathBuf};
 
 /// 컬럼 키(그리드 `Column.key`).
 pub(crate) const COL_NAME: u32 = 0;
-pub(crate) const COL_SIZE: u32 = 1;
-pub(crate) const COL_MODIFIED: u32 = 2;
-pub(crate) const COL_KIND: u32 = 3;
+pub(crate) const COL_EXT: u32 = 1;
+pub(crate) const COL_SIZE: u32 = 2;
+pub(crate) const COL_MODIFIED: u32 = 3;
+pub(crate) const COL_KIND: u32 = 4;
+
+/// 탭 제목(dir2 PANEL-013): 가상 최상위 = `nav.mypc` · 일반 = 마지막 경로 요소 · 드라이브 루트 = `D:`(후행 구분자 제거).
+pub(crate) fn title_of(p: &Path) -> String {
+    if ndir_vfs::is_virtual_root(p) {
+        return ndir_i18n::tr("nav.mypc");
+    }
+    match p.file_name() {
+        Some(n) if !n.is_empty() => n.to_string_lossy().into_owned(),
+        _ => p
+            .to_string_lossy()
+            .trim_end_matches(['\\', '/'])
+            .to_string(),
+    }
+}
+
+/// 경로 바 문자열: 가상 최상위 = 사람이 읽는 라벨 · 그 밖 = 경로 그대로.
+pub(crate) fn display_path(p: &Path) -> String {
+    if ndir_vfs::is_virtual_root(p) {
+        ndir_i18n::tr("nav.mypc")
+    } else {
+        p.to_string_lossy().into_owned()
+    }
+}
 
 /// 열람 옵션(설정 `list.*`에서) — 다시 열 때 그대로 쓴다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,9 +143,9 @@ impl TreeSource {
 pub(crate) fn sort_key_of(col: u32) -> Option<SortKey> {
     Some(match col {
         COL_NAME => SortKey::Name,
+        COL_EXT | COL_KIND => SortKey::Kind,
         COL_SIZE => SortKey::Size,
         COL_MODIFIED => SortKey::Modified,
-        COL_KIND => SortKey::Kind,
         _ => return None,
     })
 }
@@ -216,6 +240,11 @@ impl RowSource for TreeSource {
             return String::new();
         };
         match key {
+            COL_EXT if r.kind == FileKind::Dir => String::new(),
+            COL_EXT => match r.name.rsplit_once('.') {
+                Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_string(),
+                _ => String::new(),
+            },
             COL_SIZE if r.kind == FileKind::Dir => String::new(),
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time(r.modified_unix_ms),
@@ -364,6 +393,14 @@ mod tests {
         assert_eq!(src.cell(1, COL_SIZE), "5 B");
         assert_eq!(src.cell(0, COL_SIZE), "");
         assert_eq!(src.cell(1, COL_KIND), "TXT");
+        assert_eq!(src.cell(1, COL_EXT), "txt");
+        assert_eq!(src.cell(0, COL_EXT), "");
+        assert_eq!(title_of(&dir.join("sub")), "sub");
+        assert_eq!(
+            title_of(Path::new(ndir_vfs::MY_PC)),
+            ndir_i18n::tr("nav.mypc")
+        );
+        assert_eq!(display_path(&dir), dir.to_string_lossy());
         assert!(src.toggle(0), "펼침");
         assert_eq!(src.len(), 3);
         assert_eq!(src.row(1).text, "inner.rs");
@@ -384,6 +421,7 @@ mod tests {
         // 정렬 키 대응
         assert_eq!(sort_key_of(COL_MODIFIED), Some(SortKey::Modified));
         assert_eq!(sort_key_of(99), None);
+        assert_eq!(sort_key_of(COL_EXT), Some(SortKey::Kind));
         assert!(src.set_sort(&[(COL_SIZE, true)]));
         let _ = std::fs::remove_dir_all(&dir);
     }
