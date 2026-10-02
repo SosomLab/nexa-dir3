@@ -204,10 +204,13 @@ fn startup_cmd_vocabulary() {
     app.startup_cmd("panel:1");
     assert_eq!(app.focus, Focus::Panel(1));
     app.startup_cmd("key:f5");
-    app.startup_cmd("key:ctrl+h");
+    // 숨김 토글은 OS 프리셋마다 코드가 다르다(Windows/Linux ctrl+h · macOS ⇧⌘. — 10-03 CI mac 적발) → 키맵이 아는 첫 코드로.
+    let hidden_code = app.keymap.code_of("view.hidden");
+    let first = hidden_code.split('|').next().unwrap_or("");
+    app.startup_cmd(&format!("key:{first}"));
     assert!(
         !app.settings.flag("list.show_hidden"),
-        "ctrl+h = view.hidden 토글(기본 on → off)"
+        "key:{first} = view.hidden 토글(기본 on → off)"
     );
     let dump = dir.join("layout.txt");
     app.startup_cmd(&format!("layout.dump:{}", dump.display()));
