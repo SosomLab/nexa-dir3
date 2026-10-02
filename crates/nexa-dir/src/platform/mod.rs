@@ -26,6 +26,8 @@ mod unixpty;
 mod windows;
 #[cfg(windows)]
 mod winpty;
+#[cfg(windows)]
+mod winshell;
 
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,12 +53,16 @@ pub(crate) struct ShellSpec {
     pub label: String,
 }
 
-/// 셸 컨텍스트 메뉴 항목(OS 셸이 주는 것 — id · 라벨 · 활성).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 셸 컨텍스트 메뉴 항목(OS 셸이 주는 것 — id · 라벨 · 활성 · verb(가로채기 판정) · 서브메뉴 · 구분자).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ShellMenuItem {
     pub id: String,
     pub label: String,
     pub enabled: bool,
+    /// canonical verb(`GetCommandString(GCS_VERBW)` · 없으면 빈 문자열) — cut/copy/paste/delete/rename/copyaspath는 앱이 가로챈다.
+    pub verb: String,
+    pub children: Vec<ShellMenuItem>,
+    pub separator: bool,
 }
 
 /// PTY 세션(M5 터미널이 쓴다) — 읽기/쓰기/크기/종료.
@@ -91,6 +97,8 @@ pub(crate) trait Pty {
 }
 
 pub(crate) trait ContextMenuProvider {
+    /// 메뉴 소유 창(셸 확장의 대화상자 부모) — 창이 생기면 호스트가 한 번 알린다. 기본 = 무시.
+    fn set_owner(&self, _hwnd: isize) {}
     fn items(&self, paths: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError>;
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError>;
 }
@@ -378,10 +386,14 @@ impl Platform {
         let pty: Box<dyn Pty> = Box::new(winpty::ConPty);
         #[cfg(unix)]
         let pty: Box<dyn Pty> = Box::new(unixpty::ForkPty);
+        #[cfg(windows)]
+        let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(winshell::NativeShellMenu::new());
+        #[cfg(not(windows))]
+        let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(Unsupported);
         Platform {
             shell,
             pty,
-            ctxmenu: Box::new(Unsupported),
+            ctxmenu,
             trash,
             clipboard,
             drag: Box::new(Unsupported),
@@ -456,10 +468,18 @@ mod tests {
             Ok(0),
             "빈 목록 = 0(3-OS 휴지통 구현 존재)"
         );
-        assert!(matches!(
-            p.ctxmenu.items(&[]),
-            Err(PlatformError::Unsupported(_))
-        ));
+        if cfg!(windows) {
+            assert_eq!(
+                p.ctxmenu.items(&[]).map(|v| v.len()),
+                Ok(0),
+                "Windows = 셸 메뉴 포트(빈 입력 = 빈 목록)"
+            );
+        } else {
+            assert!(matches!(
+                p.ctxmenu.items(&[]),
+                Err(PlatformError::Unsupported(_))
+            ));
+        }
         assert!(p.log.is_none());
         let cwd = std::env::current_dir().unwrap();
         let (total, free) = p.disk.space(&cwd).expect("drive space (3-OS)");

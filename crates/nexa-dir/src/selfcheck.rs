@@ -199,6 +199,16 @@ pub(crate) fn run(opts: &Options) -> Report {
     r
 }
 
+/// 임시 폴더 꼬리표 — pid + 호출 순번(같은 프로세스에서 동시에 두 점검이 돌아도 충돌 없음 · 10-03 시험 적발: 창 점검 + CLI 점검 시험 동시 실행 시 같은 폴더를 두 쪽이 지웠다).
+fn unique_tag() -> String {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    format!(
+        "{}-{}",
+        std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )
+}
+
 fn timed(r: &mut Report, group: &'static str, name: &str, f: impl FnOnce() -> (Verdict, String)) {
     let t = Instant::now();
     let (verdict, detail) = f();
@@ -571,7 +581,7 @@ fn check_plugin(r: &mut Report) {
 }
 
 fn check_fs(r: &mut Report) {
-    let base = std::env::temp_dir().join(format!("nexa-dir-selfcheck-fs-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("nexa-dir-selfcheck-fs-{}", unique_tag()));
     let _ = std::fs::remove_dir_all(&base);
     timed(r, "fs", "create · copy · rename · delete", || {
         let run = || -> std::io::Result<String> {
@@ -613,8 +623,7 @@ fn check_trash(r: &mut Report, ci: bool) {
         if ci {
             return (Verdict::Skip, "needs user trash (not in --ci)".into());
         }
-        let dir =
-            std::env::temp_dir().join(format!("nexa-dir-selfcheck-trash-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nexa-dir-selfcheck-trash-{}", unique_tag()));
         let _ = std::fs::create_dir_all(&dir);
         let f = dir.join("nexa-dir-selfcheck.txt");
         if let Err(e) = std::fs::write(&f, b"nexa-dir selfcheck") {
@@ -681,7 +690,12 @@ mod tests {
         for g in GROUPS {
             assert!(r.items.iter().any(|i| i.group == *g), "group {g} missing");
         }
-        assert_eq!(r.failed(), 0);
+        let fails: Vec<&Item> = r
+            .items
+            .iter()
+            .filter(|i| i.verdict == Verdict::Fail)
+            .collect();
+        assert!(fails.is_empty(), "{fails:?}");
     }
 
     #[test]

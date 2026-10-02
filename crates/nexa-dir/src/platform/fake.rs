@@ -100,6 +100,7 @@ impl ContextMenuProvider for FakeMenu {
             id: "fake.open".into(),
             label: "Fake Open".into(),
             enabled: true,
+            ..Default::default()
         }])
     }
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {

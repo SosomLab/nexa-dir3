@@ -17,5 +17,6 @@ cmd: @ready:quit
 check: bg.txt: bg edit.paste
 check: bg.txt: file.new_folder
 check: list.txt: New Folder
-check: row.txt: row cmd.activate
+check: row.txt: row 
+check: row.txt: edit.cut
 check: row.txt: ctx.copy_path

@@ -1202,6 +1202,22 @@ fn row_and_background_context_menus() {
             && d.contains("file.new_folder"),
         "{d}"
     );
+    assert!(
+        d.contains("fake.open"),
+        "셸 항목(가짜 포트)이 상단에 합류: {d}"
+    );
+    app.startup_cmd("ctx.pick:fake.open");
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(
+        log.borrow()
+            .calls
+            .iter()
+            .any(|c| c == "menu.invoke:fake.open:1"),
+        "{:?}",
+        log.borrow().calls
+    );
+    app.route(InputEvent::MouseMove { x, y });
+    app.route(InputEvent::RightDown { x, y });
     app.startup_cmd("ctx.pick:ctx.copy_name");
     assert_eq!(app.dump_of("ctx").unwrap(), "none\n");
     // 빈 영역 우클릭 = 배경 메뉴 → 새 폴더.

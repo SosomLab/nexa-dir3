@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 31차 — T-51 B-1: Windows 셸 컨텍스트 메뉴(IContextMenu 포트 · 행 메뉴 합류)
+
+- **한 일**: `platform/winshell.rs`(PIDL → IShellFolder → IContextMenu → HMENU 열거 → 항목 트리 · verb · InvokeCommand · `windows` 0.62) · 포트 계약 확장 · 행 메뉴 = 셸 항목 + 앱 고유(가로채기·중복 금지) · 실기 시험 1 · core 시험 보강(118).
+- **지금 상태**: M4 🚧(T-51 B-2 = 배경 셸 메뉴 · ShellNew · OLE DnD · ReadDirectoryChangesW · 휴지통 복원 · T-52/53) · M5 🚧 · M6 🚧 — 다음 = T-61 B(터미널 가로 스크롤·HTML/RTF 복사·TUI 마우스) 또는 T-62 C 또는 M3 잔여(T-42 런처 · T-30 SVG 아이콘 · T-32 폴더 트리).
+- **걸린 것**: 셸 `InvokeCommand`는 UI 스레드 동기(모달 대화상자를 띄우는 확장은 그동안 앱이 멈춤 — dir2는 전용 스레드) · 서브메뉴 아이콘 없음.
+
+→ [journal/2026-10-03 §33](journal/2026-10-03.md)
+
 ## 10-03 30차 — 파일 행 · 배경 컨텍스트 메뉴(앱 고유 항목) + Shift+F10
 
 - **한 일**: `app/ctxmenu.rs`(행 15항목 · 배경 8항목 · 활성/비활성 규칙 · 고유 항목 실행) · 패널 우클릭 보고 · `cmd.contextMenu` · 기동 명령 `ctx.pick` · 덤프 `ctx` · 시험 +1(117) · 시나리오 15.

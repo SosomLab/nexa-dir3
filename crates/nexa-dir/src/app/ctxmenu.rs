@@ -1,7 +1,9 @@
-//! 파일 행 · 배경 컨텍스트 메뉴(dir2 docs/port/19 §2-1·§2-2 구성 — 셸 항목(IContextMenu · T-51 B) 제외한 **앱 고유 항목**):
+//! 파일 행 · 배경 컨텍스트 메뉴(dir2 docs/port/19 §2-1·§2-2 구성): **셸 항목**(ContextMenuProvider 포트 · Windows IContextMenu · T-51 B)이 상단에,
+//! 그 아래 앱 고유 항목. 셸 verb cut/copy/paste/delete/rename/copyaspath는 **앱 경로로 가로채기**(SHELL-005/006 — undo 기록·인라인 이름 바꾸기·교차 폴더).
 //! 행 = 열기 · 잘라내기/복사/붙여넣기 · 삭제/완전 삭제/이름 바꾸기 · 경로 복사/이름 복사 · 폴더에 붙여넣기(단일 폴더 + 클립보드) · 새로 만들기.
 //! 배경 = 붙여넣기 · 실행 취소/다시 실행(설명 포함) · 새 폴더/새 파일 · 새로 고침. 탭 메뉴와 같은 `ContextMenu` 인스턴스를 쓴다.
 
+use crate::platform::ShellMenuItem;
 use crate::*;
 
 /// 열린 메뉴의 주인(탭 메뉴는 `tab_menu_at`가 따로 든다).
@@ -11,6 +13,45 @@ pub(crate) enum CtxKind {
     Row(usize),
     /// 배경(빈 영역) 메뉴.
     Bg(usize),
+}
+
+/// 셸 verb → 앱 명령(dir2 SHELL-005/006 가로채기).
+fn intercept(verb: &str) -> Option<&'static str> {
+    Some(match verb.to_ascii_lowercase().as_str() {
+        "cut" => "edit.cut",
+        "copy" => "edit.copy",
+        "paste" => "edit.paste",
+        "delete" => "edit.delete",
+        "rename" => "edit.rename",
+        "copyaspath" => "ctx.copy_path",
+        _ => return None,
+    })
+}
+
+/// 셸 항목 → 메뉴 항목(가로채기 id 치환 · 서브메뉴 재귀).
+fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
+    if it.separator {
+        return CtxItem::Separator;
+    }
+    let id = intercept(&it.verb).map_or_else(|| it.id.clone(), str::to_string);
+    if it.children.is_empty() {
+        CtxItem::maybe(id, it.label.clone(), it.enabled)
+    } else {
+        CtxItem::submenu(
+            id,
+            it.label.clone(),
+            it.children.iter().map(shell_to_ctx).collect(),
+        )
+    }
+}
+
+fn has_id(items: &[CtxItem], id: &str) -> bool {
+    items.iter().any(|c| match c {
+        CtxItem::Item {
+            id: cid, children, ..
+        } => cid == id || has_id(children, id),
+        _ => false,
+    })
 }
 
 impl App {
@@ -24,7 +65,7 @@ impl App {
         self.redraw();
     }
 
-    /// 행 메뉴(선택 항목 기준).
+    /// 행 메뉴(선택 항목 기준): 셸 항목 상단 합류 → 앱 고유 항목(셸이 이미 준 동사는 중복 금지).
     pub(crate) fn open_row_menu(&mut self, panel: usize) {
         let sel = self.panels[panel].selected_paths();
         if sel.is_empty() {
@@ -32,28 +73,67 @@ impl App {
         }
         let has_clip = self.clip_sources().is_some();
         let single_dir = matches!(&sel[..], [one] if one.is_dir());
-        let items = vec![
-            CtxItem::item("cmd.activate", tr("cmd.activate")).with_emphasis(true),
-            CtxItem::Separator,
-            CtxItem::item("edit.cut", tr("menu.edit.cut")),
-            CtxItem::item("edit.copy", tr("menu.edit.copy")),
-            CtxItem::maybe("edit.paste", tr("menu.edit.paste"), has_clip),
-            CtxItem::Separator,
-            CtxItem::item("edit.delete", tr("menu.edit.delete")),
-            CtxItem::item("edit.delete_permanent", tr("ctx.deletePermanent")),
-            CtxItem::maybe("edit.rename", tr("cmd.rename"), sel.len() == 1),
-            CtxItem::Separator,
-            CtxItem::item("ctx.copy_path", tr("ctx.copyPath")),
-            CtxItem::item("ctx.copy_name", tr("ctx.copyName")),
-            CtxItem::maybe(
-                "ctx.paste_into",
-                tr("ctx.pasteInto"),
-                single_dir && has_clip,
-            ),
-            CtxItem::Separator,
-            CtxItem::item("file.new_folder", tr("menu.file.newFolder")),
-            CtxItem::item("file.new_file", tr("menu.file.newFile")),
-        ];
+        if let Some(w) = &self.window {
+            if let Some(h) = winfocus::hwnd(w) {
+                self.platform.ctxmenu.set_owner(h);
+            }
+        }
+        let shell: Vec<CtxItem> = self
+            .platform
+            .ctxmenu
+            .items(&sel)
+            .map(|v| v.iter().map(shell_to_ctx).collect())
+            .unwrap_or_default();
+        let have = |id: &str| has_id(&shell, id);
+        let mut items: Vec<CtxItem> = Vec::new();
+        if !shell.is_empty() {
+            items.extend(shell.iter().cloned());
+            items.push(CtxItem::Separator);
+        } else {
+            items.push(CtxItem::item("cmd.activate", tr("cmd.activate")).with_emphasis(true));
+            items.push(CtxItem::Separator);
+        }
+        if !have("edit.cut") {
+            items.push(CtxItem::item("edit.cut", tr("menu.edit.cut")));
+        }
+        if !have("edit.copy") {
+            items.push(CtxItem::item("edit.copy", tr("menu.edit.copy")));
+        }
+        if !have("edit.paste") {
+            items.push(CtxItem::maybe(
+                "edit.paste",
+                tr("menu.edit.paste"),
+                has_clip,
+            ));
+        }
+        items.push(CtxItem::Separator);
+        if !have("edit.delete") {
+            items.push(CtxItem::item("edit.delete", tr("menu.edit.delete")));
+        }
+        items.push(CtxItem::item(
+            "edit.delete_permanent",
+            tr("ctx.deletePermanent"),
+        ));
+        if !have("edit.rename") {
+            items.push(CtxItem::maybe(
+                "edit.rename",
+                tr("cmd.rename"),
+                sel.len() == 1,
+            ));
+        }
+        items.push(CtxItem::Separator);
+        if !have("ctx.copy_path") {
+            items.push(CtxItem::item("ctx.copy_path", tr("ctx.copyPath")));
+        }
+        items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
+        items.push(CtxItem::maybe(
+            "ctx.paste_into",
+            tr("ctx.pasteInto"),
+            single_dir && has_clip,
+        ));
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("file.new_folder", tr("menu.file.newFolder")));
+        items.push(CtxItem::item("file.new_file", tr("menu.file.newFile")));
         self.open_ctx(CtxKind::Row(panel), items);
     }
 
@@ -86,7 +166,7 @@ impl App {
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
-    /// 메뉴 선택 실행(명령 id는 `command` 한 길 · 고유 항목만 여기서).
+    /// 메뉴 선택 실행(명령 id는 `command` 한 길 · 고유 항목 · 셸 항목 = 포트 실행 뒤 재열람).
     pub(crate) fn ctx_menu_action(&mut self, id: &str) {
         let Some(kind) = self.ctx_kind.take() else {
             return;
@@ -134,6 +214,26 @@ impl App {
                 let mut inv = Invalidations::default();
                 if let Some(row) = self.panels[panel].rows().caret() {
                     self.panels[panel].activate_row(row, &mut inv);
+                }
+            }
+            other if ndir_settings::command(other).is_none() => {
+                // 셸 항목(`shell:<id>` · 가짜 `fake.*`) = 플랫폼 포트 실행 → FS가 바뀌었을 수 있어 재열람(SHELL-012).
+                let sel = self.panels[panel].selected_paths();
+                match self.platform.ctxmenu.invoke(other, &sel) {
+                    Ok(()) => {
+                        let mut inv = Invalidations::default();
+                        for p in &mut self.panels {
+                            p.reopen(&mut inv);
+                        }
+                        self.update_status();
+                    }
+                    Err(e) => {
+                        self.toasts.push(
+                            toast::ToastKind::Warn,
+                            tr("cmd.contextMenu"),
+                            e.to_string(),
+                        );
+                    }
                 }
             }
             other => self.command(other),

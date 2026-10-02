@@ -39,6 +39,17 @@ nexa-sys = { workspace = true, features = ["gui"] }
 winit = { version = "0.30", features = ["wayland-dlopen"] }
 softbuffer = { version = "0.4", features = ["wayland-dlopen"] }
 
+# ── Windows: 셸 컨텍스트 메뉴(IContextMenu · T-51 B) — DR-8 허용 OS 바인딩 · dir2와 같은 판(0.62).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 # ── Linux: 모달 창을 메인의 transient(WM_TRANSIENT_FOR + _NET_WM_STATE_MODAL)로 · X11 클립보드 직접(nexa-sql docs/61 §3 · DR-3 예외).
 [dev-dependencies]
 # 시험 전용 — WAT 텍스트 모듈 조립(격리·브레이커·ABI v2 시험 · dir2 동일 · docs/10 §3).
