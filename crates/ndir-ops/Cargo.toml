@@ -1,0 +1,17 @@
+[package]
+name = "ndir-ops"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "파일 조작 엔진 — 복사/이동 전송(진행률·취소·충돌·스테이징) · 히스토리(실행 취소) · 일괄 이름 변경 (출처: nexa-dir2/crates/nexa-ops · 3-OS)"
+
+[dependencies]
+# 일괄 이름 변경 정규식 — 시간 최적화 판(MIT/Apache-2.0). dir2 DR-6 계승 · 원장 docs/10 §3.
+regex-lite = "0.1"
+
+[lints]
+workspace = true

@@ -8,7 +8,8 @@
 | 접두 | 원장 항목 | 매트릭스 행 | ✅ | 🚧 | ⚠ | 🖐 | 갱신 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | SKEL | 291 | 5 | 0 | 5 | 0 | 0 | 10-03 |
-| CI | 120 | 6 | 0 | 6 | 0 | 0 | 10-03 |
+| CI | 120 | 6 | 1 | 5 | 0 | 0 | 10-03 |
+| OPS | (22 문서) | 5 | 5 | 0 | 0 | 0 | 10-03 |
 
 ## 행
 
@@ -25,3 +26,8 @@
 | CI-115 | `check-all` | — | — | — | ☐ | T-05 |
 | CI-116 | 검증 매트릭스 | 이 문서 | — | — | 🚧 | |
 | CI-119 | 규칙 문서 dir3판 | `docs/15·16·18` · `CLAUDE.md` | — | — | ✅ | |
+| OPS(core) | `nexa-core` → `ndir-core`(FileKind · Secret 소거) | `crates/ndir-core` | T1 | dir2 테스트 6 | ✅ | DR-11 전수 이식 |
+| OPS(vfs) | `nexa-vfs` → `ndir-vfs`(열거 · MY_PC · 압축 5형식) | `crates/ndir-vfs` | T1 | dir2 테스트 40(Windows 전용 2 포함) | ✅ | 비Windows `MY_PC` 동작은 T-43에서 확인 |
+| OPS(tree) | `nexa-tree` → `ndir-tree` | `crates/ndir-tree` | T1 | dir2 테스트 20(Windows 전용 1) | ✅ | |
+| OPS(ops) | `nexa-ops` → `ndir-ops`(전송·히스토리·일괄 이름 변경) | `crates/ndir-ops` | T1 | dir2 테스트 25 + ignored 1(Windows 전용 1) | ✅ | |
+| TERM(vt) | `nexa-term` → `ndir-term`(VT 파서·스킴·복사 서식) | `crates/ndir-term` | T1 | dir2 테스트 56 | ✅ | PTY·뷰는 M4·M5 |

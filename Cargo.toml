@@ -4,6 +4,11 @@
 [workspace]
 resolver = "2"
 members = [
+  "crates/ndir-core",     # dir2 nexa-core — FileKind · Secret (의존 0)
+  "crates/ndir-vfs",      # dir2 nexa-vfs — 열거 · 가상 최상위 · 압축 스트림 (의존: core)
+  "crates/ndir-tree",     # dir2 nexa-tree — 인라인 트리 평면 스트림 · 정렬 · 필터 (의존: core · vfs)
+  "crates/ndir-ops",      # dir2 nexa-ops — 전송 · 히스토리 · 일괄 이름 변경 (의존: regex-lite)
+  "crates/ndir-term",     # dir2 nexa-term — VT 파서 · 화면 버퍼 · 복사 서식 (의존 0)
   "crates/nexa-dir",      # (bin) 앱 — winit 호스트 · app/ 조각 · platform/ · preview/
 ]
 # 플러그인 게스트 작업 공간(wasm32)은 따로 빌드한다(docs/18 · scripts/plugin-build.*).
@@ -30,6 +35,11 @@ inefficient_to_string = "warn"
 unwrap_used = "warn"
 
 [workspace.dependencies]
+ndir-core = { path = "crates/ndir-core" }
+ndir-vfs = { path = "crates/ndir-vfs" }
+ndir-tree = { path = "crates/ndir-tree" }
+ndir-ops = { path = "crates/ndir-ops" }
+ndir-term = { path = "crates/ndir-term" }
 # nexa-ui(공용 UI · 형제 저장소 · 경로 의존 — DR-1·2). M1에서 소비 시작.
 nexa-gfx = { path = "../nexa-ui/crates/nexa-gfx" }
 nexa-ctl = { path = "../nexa-ui/crates/nexa-ctl" }

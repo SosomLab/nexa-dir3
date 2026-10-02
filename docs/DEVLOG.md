@@ -4,4 +4,5 @@
 
 ## 2026-10-03
 
+- **M1 T-10·11**: dir2 코어 5크레이트(`ndir-core/vfs/tree/ops/term`) 전수 이식 — 테스트 156 green · 3-OS clippy ✓ · lint 적응만(Debug·expect) → [journal §4](journal/2026-10-03.md)
 - **M0 착수**: 형제 저장소 최신화 + 복원 태그 · 이식 원장 23문서(docs/port) · 규칙 문서(CLAUDE·01·10·15·16·18) · 현황 4층 · 워크스페이스·bin 뼈대·CI 3-OS → [journal](journal/2026-10-03.md)

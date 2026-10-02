@@ -1,0 +1,3 @@
+# 워크스페이스 lint `unwrap_used = warn`(Cargo.toml)은 시험 코드에서는 허용 — dir2 이식 테스트(약 425개)는 unwrap이 관례.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

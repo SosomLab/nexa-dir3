@@ -1,0 +1,16 @@
+[package]
+name = "ndir-vfs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Dir 가상 파일시스템 — 스트리밍 열거 · 가상 최상위(MY_PC) · 압축 스트림(zip/7z/rar/cab/tar) (출처: nexa-dir2/crates/nexa-vfs · 3-OS · cfg(windows) = 속성 비트만)"
+
+[dependencies]
+ndir-core = { workspace = true }
+
+[lints]
+workspace = true

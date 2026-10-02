@@ -3,5 +3,41 @@
 version = 4
 
 [[package]]
+name = "ndir-core"
+version = "0.23.0"
+
+[[package]]
+name = "ndir-ops"
+version = "0.23.0"
+dependencies = [
+ "regex-lite",
+]
+
+[[package]]
+name = "ndir-term"
+version = "0.23.0"
+
+[[package]]
+name = "ndir-tree"
+version = "0.23.0"
+dependencies = [
+ "ndir-core",
+ "ndir-vfs",
+]
+
+[[package]]
+name = "ndir-vfs"
+version = "0.23.0"
+dependencies = [
+ "ndir-core",
+]
+
+[[package]]
 name = "nexa-dir"
 version = "0.23.0"
+
+[[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"

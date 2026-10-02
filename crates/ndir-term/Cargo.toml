@@ -1,0 +1,15 @@
+[package]
+name = "ndir-term"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "터미널 VT/ANSI 파서 + 화면 버퍼 + 복사 서식(HTML/RTF) (출처: nexa-dir2/crates/nexa-term · 플랫폼 중립 · 의존 0)"
+
+[dependencies]
+
+[lints]
+workspace = true
