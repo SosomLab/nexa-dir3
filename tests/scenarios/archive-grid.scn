@@ -1,0 +1,13 @@
+# T4 · T-62 C 압축 그리드 창(실제 창): 손상 .zip 선택 → F3 → 그리드 창 열림(open=true · rows=0 · 실패 사유 상태 줄) → 덤프.
+id: archive-grid
+title: 압축 그리드 창 열기 · 실패 사유 상태 줄 · 덤프
+tree: file bad.zip 16
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:view.preview_window
+cmd: @after:400:archive.dump:<out>/arc.txt
+cmd: @after:400:quit
+check: arc.txt: open=true
+check: arc.txt: rows=0
+check: arc.txt: title=bad.zip — Archive
+check: arc.txt: status=could not read the archive

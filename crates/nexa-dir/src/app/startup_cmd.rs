@@ -327,6 +327,7 @@ impl App {
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
             "license" => self.license_dump(),
+            "archive" => self.archive_win.dump(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),

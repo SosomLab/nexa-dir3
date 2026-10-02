@@ -7,6 +7,7 @@
 //! 규칙: 인자 해석·판정은 순수 함수(`cli.rs` · `selfcheck.rs`) · 그리기는 `RedrawRequested`에서만 · 유휴는 `WaitUntil`(SKEL-414).
 
 mod app;
+mod archive_win;
 mod check_win;
 mod cli;
 #[allow(dead_code)] // M6 파일 작업·M5 터미널 복사에서 소비(지금은 호스트 껍질만 들여놓음).
@@ -48,6 +49,7 @@ mod wingeom;
 #[allow(dead_code)] // 보조 창(설정 · 단축키 · About)이 T-44에서 쓴다.
 mod winhost;
 
+use archive_win::ArchiveWin;
 use check_win::CheckWin;
 use dlg_win::DlgWin;
 use file_win::FileWin;
@@ -170,6 +172,9 @@ struct App {
     /// 독립 미리보기 창(F3 · ↗ · T-62 B) + 열기 요청.
     preview_win: PreviewWin,
     open_preview: bool,
+    /// 압축 미리보기 그리드 창(T-62 C · F3/↗ 결과가 Archive면 텍스트 창 대신) + 열기 깃발.
+    archive_win: ArchiveWin,
+    open_archive: bool,
     /// 라이선스(T-80): 판정 문맥(단일 원천) · 창 · 열기 깃발 · 파일 창(용도 = 라이선스 파일/설정 폴더) · 열기 깃발.
     licensing: ndir_license::Licensing,
     license_win: LicenseWin,
@@ -378,6 +383,8 @@ impl App {
             open_check: false,
             preview_win: PreviewWin::new(),
             open_preview: false,
+            archive_win: ArchiveWin::new(),
+            open_archive: false,
             licensing,
             license_win: LicenseWin::new(),
             open_license: false,

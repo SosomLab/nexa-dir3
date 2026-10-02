@@ -1,5 +1,5 @@
 //! F3 · 도크 ↗ — 독립 미리보기 창 열기(T-62 B · dir2 `open_preview_window` · docs/port/20 §5.4 메시지 흐름):
-//! 단일 선택 파일 → 시임(`preview_for`) → Lines = 창 · Image = 안내 1줄 · Archive = 요약 텍스트(그리드 창은 T-62 C) ·
+//! 단일 선택 파일 → 시임(`preview_for`) → Lines = 창 · Image = 안내 1줄 · Archive = **그리드 창**(`archive_win` · T-62 C · dir2 PLUG-070) ·
 //! `NeedPassword` = 마스킹 입력 대화상자 → `read_via`(활성 암호 슬롯) → 성공 = 세션 기억(`pw::remember`) · 다시 실패 = 폐기 + 재시도 문구.
 
 use crate::app::dialogs::DlgReply;
@@ -47,7 +47,10 @@ impl App {
                     self.ask_archive_password(path, retry);
                     return;
                 }
-                archive::summary_lines(&doc, 0, 500)
+                // 읽어 둔 목록을 그대로 그리드 창에(재조회 없음 · 실패 상태도 사유 줄과 함께 연다).
+                self.archive_win.set_doc(&title, *doc, 0);
+                self.open_archive = true;
+                return;
             }
         };
         self.preview_win.set_lines(&title, lines);

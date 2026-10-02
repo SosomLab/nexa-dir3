@@ -360,10 +360,14 @@ mod tests {
 
     #[test]
     fn seed_and_migration_rules() {
-        // 첫 실행 = 시드(이 OS에서 셸/터미널 또는 VS Code가 있으면 비어 있지 않다 · CI 러너 전부 셸 있음).
+        // 첫 실행 = 시드. 발견분만 넣으므로 GUI 터미널·VS Code가 없는 Linux CI 러너(ubuntu-latest · 10-03 CI 적발)에서는 비어
+        // 있을 수 있다 — 시드 함수와 일치하는지만 본다.
         let (items, changed) = load_or_seed("", 0);
         assert!(changed);
-        assert!(!items.is_empty(), "시드 비어 있음 — 셸 탐지 실패?");
+        assert_eq!(items.is_empty(), seed().is_empty(), "시드 = seed()");
+        if cfg!(windows) {
+            assert!(!items.is_empty(), "Windows는 cmd.exe가 늘 있다");
+        }
         // 사용자 편집(비움)은 보존: 값은 비었지만 시드 버전이 현재면 시드하지 않는다.
         let (items, changed) = load_or_seed("", SEED_VERSION);
         assert!(items.is_empty() && !changed);

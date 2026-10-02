@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 35차 — T-62 C-1: 압축 그리드 창(nexa-grid) · Linux CI 런처 시드 수정
+
+- **한 일**: `archive_win.rs` + 미리보기 흐름 배선 · `archive.dump` · 시험 +4(131) · 시나리오 18 · 런처 시드 시험 3-OS 안정화.
+- **지금 상태**: T-62 잔여 = C-2(SVG 래스터 · 인라인 이미지 · 드래그 선택). 다음 = T-62 C-2 또는 T-32 폴더 트리 또는 T-81/82(M7).
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §37](journal/2026-10-03.md)
+
 ## 10-03 34차 — T-80: 라이선스 창 · About 대화상자 · 파일 창(FilePicker 호스트)
 
 - **한 일**: `license_win.rs` + `app/license.rs` + `file_win.rs` · Help ▸ 라이선스… · About [라이선스…] · `license.install/dump` 기동 명령 · i18n 3언어 · 시험 +3(127) · 시나리오 17.

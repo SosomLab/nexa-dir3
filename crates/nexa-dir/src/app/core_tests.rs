@@ -1357,3 +1357,55 @@ fn license_view_about_install_rejects_garbage() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-62 C 압축 그리드 창: F3(view.preview_window)로 zip을 열면 텍스트 창이 아니라 그리드 창 요청 · 자료 = 읽어 둔 목록 ·
+/// 덤프(행·상태·셀) · 선택/TSV · 정렬 통지 · 손상 파일 = 실패 사유 줄로도 연다.
+#[test]
+fn archive_grid_window_from_preview() {
+    let (mut app, dir) = fixture("arcgrid");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::write(
+        dir.join("z.zip"),
+        preview::archive::zip_bytes_for_tests("docs/readme.md"),
+    )
+    .unwrap();
+    std::fs::write(dir.join("bad.zip"), b"not a zip at all").unwrap();
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let row = (0..app.panels[0].rows().source().len())
+        .find(|&i| app.panels[0].rows().source().row(i).text == "z.zip")
+        .expect("z.zip row");
+    app.panels[0]
+        .rows_mut()
+        .select_program(row, nexa_grid::SelectOp::Single, &mut inv);
+    app.command("view.preview_window");
+    assert!(app.open_archive && !app.open_preview, "압축 = 그리드 창");
+    let d = app.dump_of("archive").unwrap();
+    assert!(
+        d.contains("title=z.zip — Archive")
+            && d.contains("rows=1")
+            && d.contains("status=ZIP · 1 items")
+            && d.contains("readme.md | docs | "),
+        "{d}"
+    );
+    let src = app.archive_win.source_mut().unwrap();
+    assert!(src.select(0, nexa_grid::SelectOp::Single));
+    assert!(app.archive_win.tsv().starts_with("readme.md\tdocs\t"));
+    assert!(app.archive_win.source_mut().unwrap().set_sort(&[(0, true)]));
+    // 손상 파일 = 실패 사유를 상태 줄에 · 행 0.
+    app.open_archive = false;
+    let row = (0..app.panels[0].rows().source().len())
+        .find(|&i| app.panels[0].rows().source().row(i).text == "bad.zip")
+        .expect("bad.zip row");
+    app.panels[0]
+        .rows_mut()
+        .select_program(row, nexa_grid::SelectOp::Single, &mut inv);
+    app.command("view.preview_window");
+    assert!(app.open_archive);
+    let d = app.dump_of("archive").unwrap();
+    assert!(
+        d.contains("rows=0") && d.contains("status=could not read the archive"),
+        "{d}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

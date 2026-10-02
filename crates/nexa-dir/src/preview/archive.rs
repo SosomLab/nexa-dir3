@@ -328,6 +328,12 @@ pub(crate) fn install_name_decoder() {
 #[cfg(not(windows))]
 pub(crate) fn install_name_decoder() {}
 
+/// 시험용 최소 ZIP(다른 모듈의 시험 — 그리드 창·core).
+#[cfg(test)]
+pub(crate) fn zip_bytes_for_tests(name: &str) -> Vec<u8> {
+    tests::zip_bytes(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
