@@ -1,0 +1,16 @@
+# T4 · T-62 플러그인 미리보기(동봉 markdown.wasm · 러너가 NDIR_PLUGINS_DIR=<저장소>/plugins): .md 선택 + 도크 미리보기 종류 →
+# 공급자 = markdown(플러그인) · 비매치 .txt = builtin.text · 꺼진 플러그인(plugins.disabled) = 내장 폴백.
+id: preview-plugin
+title: 동봉 WASM 플러그인으로 .md 미리보기 라우팅
+tree: file note.md 5
+tree: file plain.txt 3
+settings: ui.lang=en
+cmd: @ready:dock.kind:1
+cmd: @ready:list.select:0
+cmd: @ready:preview.dump:<out>/md.txt
+cmd: @ready:assert.preview:provider markdown
+cmd: @ready:list.select:1
+cmd: @ready:assert.preview:provider builtin.text
+cmd: @ready:quit
+check: md.txt: provider markdown
+check: md.txt: xxxxx

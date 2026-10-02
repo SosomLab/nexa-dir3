@@ -794,3 +794,42 @@ fn terminal_dock_with_fake_pty() {
     assert_eq!(app.term_focus, None, "낡은 포커스 해제");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-62 도크 미리보기 = 시임(동봉 markdown.wasm · `NDIR_PLUGINS_DIR` · 스레드 로컬 캐시): .md 선택 → 공급자 markdown ·
+/// h1 태그가 벗겨진 줄이 그려진다 · `plugins.disabled` = 내장 폴백 · 덤프 어휘 `preview`.
+#[test]
+fn preview_plugin_renders_markdown_in_dock() {
+    std::env::set_var(
+        "NDIR_PLUGINS_DIR",
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins"),
+    );
+    let (mut app, dir) = fixture("plug");
+    std::fs::write(dir.join("note.md"), "# Hello Plug\n\n- item\n").unwrap();
+    app.command("view.refresh");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("dock.kind:1");
+    let row = (0..64)
+        .find(|&r| {
+            app.panels[0]
+                .rows()
+                .source()
+                .row_path(r)
+                .is_some_and(|p| p.ends_with("note.md"))
+        })
+        .expect("note.md 행");
+    app.startup_cmd(&format!("list.select:{row}"));
+    let dump = app.dump_of("preview").unwrap();
+    assert!(dump.starts_with("provider markdown\n"), "{dump}");
+    assert!(dump.contains("\nHello Plug"), "h1 태그 벗김: {dump}");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(rec.drew_text("Hello Plug"));
+    let _ = app.settings.set("plugins.disabled", "markdown");
+    app.update_status();
+    let dump = app.dump_of("preview").unwrap();
+    assert!(
+        dump.starts_with("provider builtin.text\n") && dump.contains("# Hello Plug"),
+        "{dump}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

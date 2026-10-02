@@ -186,6 +186,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "open" => check_open(&mut r),
             "fs" => check_fs(&mut r),
             "trash" => check_trash(&mut r, opts.ci),
+            "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
                 group: other,
                 name: "(not implemented)".into(),
@@ -523,6 +524,52 @@ fn check_open(r: &mut Report) {
 }
 
 /// 파일 시스템(샌드박스 임시 폴더 안에서만 · docs/18 §6 fs): 만들기·복사·이동·이름 바꾸기·삭제·유니코드 · 드라이브 용량(`Disk` 포트).
+/// 플러그인(T-62 · port/20 §7 T-27 "상시 점검"): 탐색 경로 · 동봉 2종 로드 + `nx_meta` id 일치 · 로드 오류 0건.
+fn check_plugin(r: &mut Report) {
+    timed(r, "plugin", "search paths", || {
+        let dirs = crate::preview::plugin_dirs();
+        let found: Vec<String> = dirs
+            .iter()
+            .filter(|d| d.is_dir())
+            .map(|d| d.display().to_string())
+            .collect();
+        if found.is_empty() {
+            (
+                Verdict::Warn,
+                format!("no plugins folder present ({} candidates)", dirs.len()),
+            )
+        } else {
+            (Verdict::Pass, found.join(" · "))
+        }
+    });
+    timed(r, "plugin", "bundled markdown · archive-sample", || {
+        let infos = crate::preview::plugin_infos();
+        let has = |id: &str| infos.iter().any(|i| i.id == id);
+        let ids: Vec<&str> = infos.iter().map(|i| i.id.as_str()).collect();
+        if has("markdown") && has("archive-sample") {
+            (Verdict::Pass, ids.join(", "))
+        } else if infos.is_empty() {
+            (
+                Verdict::Warn,
+                "no plugins loaded (bundled set missing?)".into(),
+            )
+        } else {
+            (
+                Verdict::Warn,
+                format!("bundled ids missing — loaded: {}", ids.join(", ")),
+            )
+        }
+    });
+    timed(r, "plugin", "load errors", || {
+        let notes = crate::preview::load_notes();
+        if notes.is_empty() {
+            (Verdict::Pass, "0".into())
+        } else {
+            (Verdict::Fail, notes.join(" | "))
+        }
+    });
+}
+
 fn check_fs(r: &mut Report) {
     let base = std::env::temp_dir().join(format!("nexa-dir-selfcheck-fs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);

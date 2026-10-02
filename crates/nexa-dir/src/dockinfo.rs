@@ -2,12 +2,13 @@
 //!
 //! - **정보**(`info_lines`): 기본 정보 8줄(이름·종류·경로·크기·디스크 할당 크기·만든/수정한/액세스한 날짜) — std 메타데이터만(동기·즉시).
 //!   디스크 할당 크기·형식별 상세(Windows 속성 시스템)는 T-5x. 다중 선택 = `info.selected` · 선택 없음 = `info.currentFolder`.
-//! - **미리보기**(`preview_content`): 텍스트 = 앞 64 KiB를 읽어 NUL이 있으면 `preview.binary` · 비면 `preview.empty` · 아니면 앞 200줄 ·
-//!   이미지 확장자 = 이미지 경로(`InfoDock::set_image` · 그리기는 T-31 `draw_image`) · 플러그인(WASM)·압축은 T-62.
+//! - **미리보기**(`preview_content`): 미리보기 시임([`crate::preview`] — 플러그인 > 내장 archive/image/text · `preview.map` · `plugins.disabled`)
+//!   결과를 도크 줄로(태그 벗기기 PLUG-042 · 압축 = 요약 60행 · 이미지 = 경로 → `InfoDock::set_image`).
 //!
 //! 순수 함수 = 시험(임시 트리).
 
 use crate::filelist::{format_size, format_time};
+use crate::preview::{self, PreviewDoc};
 use ndir_i18n::{tr, trf};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -107,67 +108,51 @@ pub(crate) fn info_lines(selected: &[PathBuf], current: &Path) -> Vec<String> {
     }
 }
 
-/// 이미지 확장자(내장 디코더 PNG·BMP·GIF + 판별만 하는 JPEG — nexa-gfx `image`).
-pub(crate) fn is_image_ext(path: &Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase())
-            .as_deref(),
-        Some("png" | "bmp" | "gif" | "jpg" | "jpeg")
-    )
+/// 도크 요약 뷰의 압축 항목 상한(dir2 60).
+pub(crate) const ARCHIVE_ROWS: usize = 60;
+
+/// 미리보기 산출(도크용) — 줄 · 이미지 경로 · 공급자 id(덤프·시나리오 검증).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PreviewOut {
+    pub lines: Vec<String>,
+    pub image: Option<String>,
+    pub provider: String,
 }
 
-/// 미리보기 바이트 상한 · 줄 상한(도크 = 축약 뷰 · 독립 창 T-62).
-pub(crate) const PREVIEW_BYTES: usize = 64 * 1024;
-pub(crate) const PREVIEW_LINES: usize = 200;
-
-/// 바이트 → 미리보기 줄(순수): NUL 포함 = 바이너리 · 비면 empty · UTF-8 손실 치환 · 앞 `PREVIEW_LINES`줄.
-pub(crate) fn preview_lines_from(bytes: &[u8]) -> Vec<String> {
-    if bytes.is_empty() {
-        return vec![tr("preview.empty")];
-    }
-    if bytes.contains(&0) {
-        return vec![tr("preview.binary")];
-    }
-    let text = String::from_utf8_lossy(bytes);
-    text.lines()
-        .take(PREVIEW_LINES)
-        .map(|l| l.trim_end_matches('\r').replace('\t', "    "))
-        .collect()
-}
-
-/// 미리보기 내용(dir2 `preview_content`): (줄, 이미지 경로). 선택 1개 파일만 · 폴더/없음 = `preview.none`.
-pub(crate) fn preview_content(selected: &[PathBuf]) -> (Vec<String>, Option<String>) {
+/// 미리보기 내용(dir2 `preview_content` + PLUG-042): 선택 1개 파일만 · 폴더/없음 = `preview.none` ·
+/// 시임(`preview.map` 오버라이드 · `plugins.disabled`) → Lines = 태그 벗기기 · Image = 경로 · Archive = 요약.
+pub(crate) fn preview_content(
+    selected: &[PathBuf],
+    preview_map: &str,
+    disabled: &str,
+) -> PreviewOut {
+    let none = || PreviewOut {
+        lines: vec![tr("preview.none")],
+        ..Default::default()
+    };
     let [path] = selected else {
-        return (vec![tr("preview.none")], None);
+        return none();
     };
     if path.is_dir() {
-        return (vec![tr("preview.none")], None);
+        return none();
     }
-    if is_image_ext(path) {
-        return (
-            vec![tr("preview.window.image")],
-            Some(path.to_string_lossy().into_owned()),
-        );
-    }
-    let mut buf = vec![0u8; PREVIEW_BYTES];
-    let read = std::fs::File::open(path).and_then(|mut f| {
-        use std::io::Read as _;
-        let mut total = 0;
-        loop {
-            let n = f.read(&mut buf[total..])?;
-            if n == 0 || total + n >= buf.len() {
-                total += n;
-                break;
-            }
-            total += n;
-        }
-        Ok(total)
-    });
-    match read {
-        Ok(n) => (preview_lines_from(&buf[..n]), None),
-        Err(_) => (vec![tr("preview.fail")], None),
+    let (doc, provider) = preview::preview_for(path, preview_map, disabled);
+    match doc {
+        PreviewDoc::Lines(l) => PreviewOut {
+            lines: preview::dock_lines(&l),
+            image: None,
+            provider,
+        },
+        PreviewDoc::Image(p) => PreviewOut {
+            lines: vec![tr("preview.window.image")],
+            image: Some(p),
+            provider,
+        },
+        PreviewDoc::Archive(doc) => PreviewOut {
+            lines: preview::archive::summary_lines(&doc, 0, ARCHIVE_ROWS),
+            image: None,
+            provider,
+        },
     }
 }
 
@@ -184,21 +169,6 @@ mod tests {
     }
 
     #[test]
-    fn preview_lines_rules() {
-        ndir_i18n::activate(ndir_i18n::load("en", Path::new("nowhere")));
-        assert_eq!(preview_lines_from(b""), vec!["(empty file)"]);
-        assert_eq!(
-            preview_lines_from(b"a\0b"),
-            vec!["binary file \u{2014} no text preview"]
-        );
-        assert_eq!(preview_lines_from(b"x\r\ny\tz\n"), vec!["x", "y    z"]);
-        let many: Vec<u8> = (0..300)
-            .flat_map(|i| format!("{i}\n").into_bytes())
-            .collect();
-        assert_eq!(preview_lines_from(&many).len(), PREVIEW_LINES);
-    }
-
-    #[test]
     fn info_and_preview_on_temp_tree() {
         ndir_i18n::activate(ndir_i18n::load("en", Path::new("nowhere")));
         let dir = std::env::temp_dir().join(format!("ndir-dockinfo-{}", std::process::id()));
@@ -206,6 +176,8 @@ mod tests {
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("a.txt"), b"hello\nworld").unwrap();
         std::fs::write(dir.join("p.png"), b"\x89PNG").unwrap();
+        std::fs::write(dir.join("e.txt"), b"").unwrap();
+        std::fs::write(dir.join("b.bin"), b"a\0b").unwrap();
         let a = dir.join("a.txt");
         let lines = info_lines(std::slice::from_ref(&a), &dir);
         assert_eq!(lines[0], "Name: a.txt");
@@ -217,29 +189,39 @@ mod tests {
             info_lines(&[], &dir)[0],
             format!("Current folder: {}", dir.display())
         );
-        assert_eq!(
-            info_lines(&[a.clone(), dir.join("sub")], &dir),
-            vec!["2 selected"]
-        );
+        assert_eq!(info_lines(&[a, dir.join("sub")], &dir), vec!["2 selected"]);
         assert_eq!(
             info_lines(std::slice::from_ref(&dir.join("sub")), &dir)[1],
             "Kind: Folder"
         );
+        let one = |name: &str, map: &str, dis: &str| {
+            preview_content(std::slice::from_ref(&dir.join(name)), map, dis)
+        };
+        let out = one("a.txt", "", "");
         assert_eq!(
-            preview_content(std::slice::from_ref(&a)),
-            (vec!["hello".to_string(), "world".to_string()], None)
+            (out.lines, out.image, out.provider.as_str()),
+            (
+                vec!["hello".to_string(), "world".to_string()],
+                None,
+                "builtin.text"
+            )
         );
-        assert_eq!(preview_content(&[]).0, vec!["nothing to preview"]);
         assert_eq!(
-            preview_content(std::slice::from_ref(&dir.join("sub"))).0,
+            preview_content(&[], "", "").lines,
             vec!["nothing to preview"]
         );
-        let (l, img) = preview_content(std::slice::from_ref(&dir.join("p.png")));
-        assert!(img.is_some_and(|p| p.ends_with("p.png")) && l.len() == 1);
+        assert_eq!(one("sub", "", "").lines, vec!["nothing to preview"]);
+        let out = one("p.png", "", "");
+        assert!(out.image.is_some_and(|p| p.ends_with("p.png")) && out.provider == "builtin.image");
+        assert_eq!(one("e.txt", "", "").lines, vec!["(empty file)"]);
         assert_eq!(
-            preview_content(std::slice::from_ref(&dir.join("nope.txt"))).0,
-            vec!["read failed"]
+            one("b.bin", "", "").lines,
+            vec!["binary file \u{2014} no text preview"]
         );
+        assert_eq!(one("nope.txt", "", "").lines, vec!["read failed"]);
+        // 오버라이드: png를 텍스트로 → 이진 안내 1줄(이미지 없음).
+        let out = one("p.png", "png:builtin.text", "");
+        assert!(out.image.is_none() && out.provider == "builtin.text");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

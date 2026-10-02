@@ -19,6 +19,8 @@ ndir-core = { workspace = true }
 ndir-vfs = { workspace = true }
 ndir-tree = { workspace = true }
 ndir-term = { workspace = true }
+# WASM 플러그인 런타임(DR-7 · dir2 ABI 바이트 호환).
+wasmi = { workspace = true }
 ndir-i18n = { workspace = true }
 ndir-settings = { workspace = true }
 ndir-license = { workspace = true }
@@ -36,6 +38,10 @@ winit = { version = "0.30", features = ["wayland-dlopen"] }
 softbuffer = { version = "0.4", features = ["wayland-dlopen"] }
 
 # ── Linux: 모달 창을 메인의 transient(WM_TRANSIENT_FOR + _NET_WM_STATE_MODAL)로 · X11 클립보드 직접(nexa-sql docs/61 §3 · DR-3 예외).
+[dev-dependencies]
+# 시험 전용 — WAT 텍스트 모듈 조립(격리·브레이커·ABI v2 시험 · dir2 동일 · docs/10 §3).
+wat = "1"
+
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 x11rb = { version = "0.13", default-features = false }
 

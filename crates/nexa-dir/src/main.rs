@@ -28,6 +28,7 @@ mod prefs_win;
 #[allow(dead_code)]
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
+mod preview;
 mod selfcheck;
 mod session;
 mod termview;
@@ -157,6 +158,8 @@ struct App {
     tab_menu_at: Option<(usize, usize)>,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
+    /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
+    dock_preview: [(String, Vec<String>); 2],
     /// 도크 터미널 2(T-61 · 도크 종류 2일 때 지연 시작 · 폴링 틱).
     terms: [TermView; 2],
     /// 터미널 키 포커스(dir2 `term_focus`) — 클릭/→ 버튼으로 얻고 패널 클릭으로 잃는다.
@@ -325,6 +328,7 @@ impl App {
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),
             ],
+            dock_preview: [(String::new(), Vec::new()), (String::new(), Vec::new())],
             terms: [TermView::new(), TermView::new()],
             term_focus: None,
         };
@@ -390,6 +394,13 @@ impl App {
         let single_info =
             !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
         let mut inv = Invalidations::default();
+        preview::set_dark(self.theme.is_dark); // 플러그인 `is_dark()` 신호(dir2 PLUG-009)
+        let map = self.settings.get("preview.map").unwrap_or("").to_string();
+        let disabled = self
+            .settings
+            .get("plugins.disabled")
+            .unwrap_or("")
+            .to_string();
         for i in 0..2 {
             if self.docks[i].bounds().h <= 0 {
                 continue;
@@ -399,7 +410,11 @@ impl App {
             let current = self.panels[src].root_path();
             let kind = self.docks[i].active_kind();
             let (lines, image) = match kind {
-                1 => dockinfo::preview_content(&selected),
+                1 => {
+                    let out = dockinfo::preview_content(&selected, &map, &disabled);
+                    self.dock_preview[i] = (out.provider, out.lines.clone());
+                    (out.lines, out.image)
+                }
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => (dockinfo::info_lines(&selected, &current), None),
             };

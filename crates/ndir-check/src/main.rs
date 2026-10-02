@@ -212,6 +212,7 @@ fn run(scn: &Scenario, bin: &Path, out_root: &Path) -> Outcome {
         .current_dir(&root)
         .env("NDIR_HOME", &home)
         .env("NDIR_NO_ACTIVATE", "1")
+        .env("NDIR_PLUGINS_DIR", plugins_dir())
         .env("NDIR_STARTUP_CMD", cmds.join(","))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -302,6 +303,11 @@ fn run(scn: &Scenario, bin: &Path, out_root: &Path) -> Outcome {
 }
 
 /// `nexa-dir` 실행 파일 — 같은 폴더(`target/<profile>/`)의 형제 · 없으면 PATH 이름.
+/// 저장소 동봉 플러그인 폴더(`plugins/` — T-62 시나리오가 markdown.wasm을 쓴다).
+fn plugins_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins")
+}
+
 fn default_bin() -> PathBuf {
     let name = format!("nexa-dir{}", std::env::consts::EXE_SUFFIX);
     std::env::current_exe()

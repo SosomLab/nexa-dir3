@@ -148,6 +148,18 @@ impl App {
             self.redraw();
             return;
         }
+        if let Some(n) = id.strip_prefix("list.select:") {
+            let row = n.trim().parse::<usize>().unwrap_or(0);
+            let mut inv = Invalidations::default();
+            self.panels[self.active].rows_mut().select_program(
+                row,
+                nexa_grid::SelectOp::Single,
+                &mut inv,
+            );
+            self.update_status();
+            self.redraw();
+            return;
+        }
         if id == "term.focus" {
             let i = self.term_dock_index();
             let mut inv = Invalidations::default();
@@ -259,6 +271,10 @@ impl App {
                 self.prefs_win.shown_keys()
             ),
             "term" => self.term_dump(),
+            "preview" => {
+                let (id, lines) = &self.dock_preview[self.term_dock_index()];
+                format!("provider {id}\n{}\n", lines.join("\n"))
+            }
             "dock" => {
                 let d = &self.docks[0];
                 format!(

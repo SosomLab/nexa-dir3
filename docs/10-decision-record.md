@@ -36,6 +36,7 @@
 | `winit 0.30` | 창·입력 | Apache-2.0 | DR-1 | nexa-sql·clip·beep과 같은 판 |
 | `softbuffer 0.4` | CPU 픽셀 제출 | MIT/Apache-2.0 | DR-1 | Wayland dlopen |
 | `wasmi 1.1` | 플러그인 런타임 | MIT/Apache-2.0 | DR-7 | dir2·nexa-sql 동일 판 |
+| `wat 1`(dev) | 시험 전용 — WAT 텍스트 → .wasm 조립(격리·브레이커·ABI v2 시험) | Apache-2.0 WITH LLVM-exception | DR-7 | dir2 dev-dependency 동일 · 배포 바이너리에 안 들어간다 |
 | `regex-lite 0.1` | 일괄 이름 변경 정규식 | MIT/Apache-2.0 | DR-8 | dir2 `nexa-ops` 계승 |
 | `windows`/`windows-core 0.62` | Win32 바인딩(platform/windows만) | MIT/Apache-2.0 | DR-8 | 기능 플래그는 필요한 것만 |
 | `objc2` · `objc2-app-kit` · `objc2-foundation` | macOS(platform/macos · Dock 아이콘) | MIT | DR-8 | winit과 같은 판 |

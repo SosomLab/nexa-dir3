@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 23차 — M5 T-62 A: WASM 플러그인 런타임 · 미리보기 시임 · 동봉 플러그인 2종
+
+- **한 일**: dir2 `preview/` 이식(`mod/wasm/archive/sample_tests` — 격리 수치·브레이커·ABI v1/v2·암호 슬롯 그대로) · 탐색 경로 3단 + `NDIR_PLUGINS_DIR` · 로드 오류 표면화 · 도크 미리보기가 시임을 소비(태그 벗기기·압축 요약·공급자 id) · 동봉 `plugins/markdown.wasm`·`archive.wasm`(dir2 dist 무수정) + `plugins/sdk/` 소스 · 자가 점검 `plugin` 3항목 · 시험 +18(107) · 시나리오 9.
+- **지금 상태**: M5 🚧 — 다음 = T-62 B(F3 독립 미리보기 창 `LineView` · 압축 그리드 창 · 암호 창 · SVG CPU 래스터 · 인라인 이미지) 또는 T-63(설정 플러그인 페이지 · 매니저 · `plugin-build.{ps1,sh}`) 또는 T-54 자가 점검 창.
+- **걸린 것**: Mermaid flowchart는 `render_svg` 미구현으로 아트/원문 폴백(이미지 마커 단언은 B에서 강화) · 비Windows 구형 zip 이름 디코더 없음(CP437 폴백).
+
+→ [journal/2026-10-03 §25](journal/2026-10-03.md)
+
 ## 10-03 22차 — M5 T-61 A: 도크 터미널(Pty 3-OS · VT 셀 렌더 · 키/마우스 · cd 동기)
 
 - **한 일**: Pty 포트 구현(Windows ConPTY `winpty.rs` · Unix `unixpty.rs` forkpty) + `termview.rs`(Utf8Chunker · pump · 셀 격자 렌더 · 선택/스크롤백) + 호스트 배선(`app/term.rs` — 지연 시작 · 30 ms 폴링 · 포커스 · 키 라우팅 · → cd · Edit 메뉴) + 기동 명령 `dock.kind/term.focus/term.send/term.dump`. ConPTY 실기 적발 2(파이프 std 핸들 누수 → `STARTF_USESTDHANDLES` · 종료 flush → read가 ClosePseudoConsole). 시험 +7(89) · 시나리오 8.
