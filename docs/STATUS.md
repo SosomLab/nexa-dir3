@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 24차 — T-63 A + T-07: 플러그인 빌드 스크립트 3-OS · CI wasm32 검증 · 설정 플러그인 목록
+
+- **한 일**: `plugins/sdk/plugins.list` 단일 출처 + `scripts/plugin-build.{sh,ps1}`(옵션 동형) · CI `plugins` 잡(빌드 → `NDIR_PLUGINS_DIR` 자가 점검 로드 검증) · 설정 창 `plugins.disabled` 설명 줄에 로드 목록·오류 · 로컬 실기 PASS(2종 빌드 · selfcheck 3 PASS).
+- **지금 상태**: M5 🚧 — 다음 = T-62 B(F3 독립 미리보기 창 · 압축 그리드 · 암호 창 · SVG 래스터) 또는 T-54(Help ▸ 자가 점검 창) 또는 T-61 B(터미널 가로 스크롤·HTML/RTF 복사).
+- **걸린 것**: 플러그인 체크박스 묶음 UI(T-63 B) · 매니저(sha256·설치·index.json)는 T-63 B.
+
+→ [journal/2026-10-03 §26](journal/2026-10-03.md)
+
 ## 10-03 23차 — M5 T-62 A: WASM 플러그인 런타임 · 미리보기 시임 · 동봉 플러그인 2종
 
 - **한 일**: dir2 `preview/` 이식(`mod/wasm/archive/sample_tests` — 격리 수치·브레이커·ABI v1/v2·암호 슬롯 그대로) · 탐색 경로 3단 + `NDIR_PLUGINS_DIR` · 로드 오류 표면화 · 도크 미리보기가 시임을 소비(태그 벗기기·압축 요약·공급자 id) · 동봉 `plugins/markdown.wasm`·`archive.wasm`(dir2 dist 무수정) + `plugins/sdk/` 소스 · 자가 점검 `plugin` 3항목 · 시험 +18(107) · 시나리오 9.

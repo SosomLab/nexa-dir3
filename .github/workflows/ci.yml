@@ -58,3 +58,33 @@ jobs:
       - name: scenarios (T4 · windows)
         if: runner.os == 'Windows'
         run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
+
+  # T-07 · CI-113: 동봉 플러그인 소스(plugins/sdk)가 wasm32로 빌드되고, 그 산출물을 앱이 로드해 nx_meta id가 맞는지(자가 점검 plugin 그룹).
+  # 바이트 동일성은 묻지 않는다(툴체인 차이) — 동봉본(plugins/*.wasm)은 dir2 dist 무수정이 회귀 기준(DR-7).
+  plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nexa-dir3
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-ui
+          path: nexa-ui
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-license
+          path: nexa-license
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            nexa-dir3
+            nexa-dir3/plugins/sdk/markdown-viewer
+            nexa-dir3/plugins/sdk/archive-viewer
+      - name: build plugins (wasm32)
+        run: scripts/plugin-build.sh --out-dir target/plugins-ci --skip-dist
+      - name: fresh build loads (selfcheck plugin)
+        run: NDIR_PLUGINS_DIR=target/plugins-ci cargo run -q -p nexa-dir -- --selfcheck --ci --only plugin

@@ -1,0 +1,5 @@
+# 동봉 플러그인 목록 — scripts/plugin-build.{sh,ps1}가 읽는 **단일 출처**(docs/port/20 §4-11 · EXT-417).
+# 형식: <sdk 폴더>  <cargo 산출물 이름>  <배포 파일명>   (공백 구분 · `#` 주석 · 빈 줄 무시)
+# 새 플러그인 = 여기 한 줄 + plugins/sdk/<폴더>/ 추가.
+markdown-viewer  markdown_viewer.wasm  markdown.wasm
+archive-viewer   archive_viewer.wasm   archive.wasm

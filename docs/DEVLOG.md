@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-63 A + T-07 플러그인 빌드·CI 검증**: `plugins.list` + `plugin-build.{sh,ps1}` · CI `plugins` 잡(wasm32 빌드 → 자가 점검 plugin으로 로드 검증) · 설정 창 플러그인 목록 설명 줄 → [journal §26](journal/2026-10-03.md)
 - **M5 T-62 A 플러그인 런타임**: `src/preview/`(dir2 ABI 바이트 호환 wasmi 런타임 · 시임 · 압축 공급자 · 암호 슬롯) · 동봉 `plugins/*.wasm` 2종 무수정 로드 · 도크 미리보기 = 시임 소비 · 자가 점검 `plugin` · `preview.dump`/`list.select` · 시험 +18 · 시나리오 `preview-plugin` → [journal §25](journal/2026-10-03.md)
 - **M5 T-61 A 도크 터미널**: Pty 포트 3-OS(ConPTY 수동 extern · forkpty) · `termview.rs` VT 셀 렌더·선택·스크롤백 · 키/마우스/→ cd 동기 · 기동 명령 `term.*` · ConPTY 실기 교훈 2(파이프 std 핸들 누수 · 종료 flush) · 시험 +7 · 시나리오 `term-echo` → [journal §24](journal/2026-10-03.md)
 - **M5 T-60 하단 도크**: `InfoDock` 2개 = dir2 전폭 밴드 배치(높이 %·분할 %·단일 정보·숨김) · 정보 8줄/미리보기 텍스트·이미지 경로/터미널 자리 · `update_status` 길목 갱신 · `dock.dump` · 시험 +4 · 시나리오 `dock-info` → [journal §23](journal/2026-10-03.md)

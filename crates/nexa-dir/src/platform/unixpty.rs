@@ -66,8 +66,7 @@ impl Pty for ForkPty {
             CString::new(s.as_encoded_bytes())
                 .map_err(|_| PlatformError::Failed("NUL in argument".into()))
         };
-        let prog = c(shell.program.as_os_str())?;
-        let mut argv: Vec<CString> = vec![prog.clone()];
+        let mut argv: Vec<CString> = vec![c(shell.program.as_os_str())?];
         for a in &shell.args {
             argv.push(c(std::ffi::OsStr::new(a))?);
         }

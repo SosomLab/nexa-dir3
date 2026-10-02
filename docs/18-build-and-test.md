@@ -16,6 +16,10 @@ cargo build --release -p nexa-dir       # 배포 프로필(lto fat · panic abor
 cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
 ```
 
+### 2-1. 동봉 플러그인(.wasm) 빌드
+
+`plugins/sdk/plugins.list`(단일 출처)의 게스트 크레이트를 `scripts/plugin-build.sh`(mac/Linux) · `scripts/plugin-build.ps1`(Windows)이 `wasm32-unknown-unknown`으로 빌드해 `plugins/<이름>.wasm`(동봉본)에 복사한다. 사전 준비 `rustup target add wasm32-unknown-unknown`. 옵션 `--out-dir <폴더>`(스테이징) · `--skip-dist`(동봉본 유지). 동봉본은 dir2 dist **무수정**이 회귀 기준(DR-7)이므로 소스를 고친 뒤에만 갱신한다. 앱이 보는 폴더는 `NDIR_PLUGINS_DIR` → `<설정 폴더>/plugins` → `<exe>/plugins`(docs/port/20 §4-7).
+
 ## 3. push 전 게이트(순서 고정 — 빨강이면 push 금지)
 
 ```bash
@@ -78,7 +82,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 
 ## 8. CI(`.github/workflows/ci.yml`)
 
-3-OS 매트릭스 · 형제 2 체크아웃 · Linux 한글 글꼴 설치 · fmt → clippy → test → `--smoke` → `--selfcheck --ci` → (T-07) `wasm32` 플러그인 빌드 검증 → (Windows) 임포트 화이트리스트·용량 측정. 별도 `e2e.yml`(수동·main): Linux `xvfb-run` + `ndir-check`. 릴리스 = `release.yml`(M7).
+3-OS 매트릭스 · 형제 2 체크아웃 · Linux 한글 글꼴 설치 · fmt → clippy → test → `--smoke` → `--selfcheck --ci` → `plugins` 잡(T-07 ✅: `plugin-build.sh` → `NDIR_PLUGINS_DIR` 자가 점검 `plugin` 로드 검증) → (Windows) 임포트 화이트리스트·용량 측정. 별도 `e2e.yml`(수동·main): Linux `xvfb-run` + `ndir-check`. 릴리스 = `release.yml`(M7).
 
 ## 9. 검증 매트릭스 · 교차 검증
 

@@ -7,7 +7,7 @@
 **/*.rs.bk
 
 # 플러그인 게스트 작업 공간(wasm32)·하네스 산출물
-/plugins/sdk/target/
+/plugins/sdk/*/target/
 /tests/out/
 
 # OS

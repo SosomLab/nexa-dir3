@@ -93,7 +93,10 @@
 | PLUG-084 | 구형 이름 디코더(Windows CP_ACP) | `preview/archive.rs::install_name_decoder` | — | — | ⚠ | 호출 배선·비Windows iconv = T-62 B |
 | PLUG-110~120 · 124 | 동봉 markdown.wasm·archive.wasm E2E(h1·불릿·체크·표·인라인 정리·Mermaid 폴백·ISO/ar/cpio) | `preview/sample_tests.rs` · `plugins/*.wasm` | T2 | `bundled_markdown_plugin_end_to_end` · `bundled_archive_plugin_lists_iso_ar_and_cpio` | ✅ | Mermaid 이미지 마커 단언은 SVG 래스터 뒤 |
 | PLUG-042 · T-27 | 도크 미리보기 = 시임 소비(공급자 id 덤프) · 자가 점검 `plugin`(경로·동봉 2종·로드 오류) | `main.rs::update_docks` · `selfcheck.rs::check_plugin` · `startup_cmd.rs`(preview.dump · list.select) | T2·T4 | `preview_plugin_renders_markdown_in_dock` · `preview-plugin.scn` | ✅ | |
-| PLUG-050~078 · 125 | F3 독립 미리보기 창 · 압축 그리드 창 · 암호 입력 창 · 설정 플러그인 페이지 | — | — | — | ☐ | T-62 B · T-63 |
+| PLUG-050~078 | F3 독립 미리보기 창 · 압축 그리드 창 · 암호 입력 창 | — | — | — | ☐ | T-62 B |
+| PLUG-122 · EXT-417 | 플러그인 빌드 스크립트 3-OS(`plugins.list` 단일 출처 · `--out-dir`/`--skip-dist`) | `scripts/plugin-build.{sh,ps1}` | T4(CI) | CI `plugins` 잡 · 로컬 실기 §26 | ✅ | |
+| PLUG-123 · CI-113 · T-07 | CI wasm32 빌드 → 갓 빌드한 .wasm 로드 검증(`--selfcheck --only plugin`) | `.github/workflows/ci.yml` | T4 | `plugins` 잡 | ✅ | 바이트 동일성은 묻지 않음(툴체인) |
+| PLUG-125 · EXT-414 | 설정 창 플러그인 페이지 — 로드 목록·오류 설명 줄(`plugins.disabled`) | `app/windows.rs::plugin_note` | — | — | ⚠ | 체크박스 묶음 = T-63 B |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
 | SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |
