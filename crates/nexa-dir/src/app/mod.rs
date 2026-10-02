@@ -5,6 +5,7 @@ mod input;
 mod keywinit;
 mod menus;
 mod paint;
+mod sessions;
 mod startup_cmd;
 
 #[cfg(test)]

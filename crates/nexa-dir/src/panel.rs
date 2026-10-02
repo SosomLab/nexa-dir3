@@ -7,6 +7,7 @@
 
 use crate::filelist::{display_path, title_of, ListOpts, TreeSource};
 use crate::nav::History;
+use crate::session::PanelSession;
 use nexa_ctl::controls::{Control, TabAction, TabBar, ToolIcon, ToolItem, Toolbar};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::theme::Theme;
@@ -121,6 +122,91 @@ impl Panel {
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
         p
+    }
+
+    /// 세션 복원(dir2 `Panel::restore` · PANEL-023) — 경로 목록으로 탭을 연다(열기 실패 탭은 건너뜀 · 전부 실패면 `fallback`) ·
+    /// 탭별 보기 모드 · 활성 인덱스 클램프 · 열 폭(`colw`)은 기본 열 위에 덮는다.
+    pub(crate) fn restore(
+        ps: &PanelSession,
+        fallback: &Path,
+        opts: ListOpts,
+        m: PanelMetrics,
+        columns: Vec<Column>,
+    ) -> Panel {
+        let mut valid: Vec<(usize, PathBuf)> = ps
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| ndir_vfs::is_virtual_root(p) || p.is_dir())
+            .map(|(i, p)| (i, p.clone()))
+            .collect();
+        if valid.is_empty() {
+            valid.push((usize::MAX, fallback.to_path_buf()));
+        }
+        let (_, first) = &valid[0];
+        let mut panel = Panel::new(first, opts, m, columns);
+        let mut inv = Invalidations::default();
+        for (_, p) in valid.iter().skip(1) {
+            panel.new_tab(&mut inv);
+            let _ = panel.navigate_to(p.clone(), &mut inv);
+            // 복원한 탭의 히스토리는 새로(dir2 — 히스토리는 영속하지 않는다).
+            let i = panel.active;
+            panel.tabs[i].nav = History::new(p.clone());
+        }
+        for (slot, (orig, _)) in valid.iter().enumerate() {
+            if let Some(mode) = ps.modes.get(*orig) {
+                let mode = match mode.as_str() {
+                    "flat" => ViewMode::Flat,
+                    "tiles" => ViewMode::Tiles,
+                    _ => ViewMode::Tree,
+                };
+                panel.tabs[slot].rows.set_view_mode(mode, &mut inv);
+            }
+        }
+        // 활성 = 세션 인덱스가 살아남은 탭이면 그 자리 · 아니면 클램프.
+        let active = valid
+            .iter()
+            .position(|(orig, _)| *orig == ps.active)
+            .unwrap_or(0)
+            .min(panel.tabs.len() - 1);
+        panel.active = active;
+        if !ps.col_widths.is_empty() {
+            panel.apply_col_widths(&ps.col_widths, &mut inv);
+        }
+        panel.session_dirty = false;
+        panel.sync_chrome(&mut inv);
+        panel
+    }
+
+    /// 탭별 보기 모드(세션 `modes`).
+    pub(crate) fn session_modes(&self) -> Vec<String> {
+        self.tabs
+            .iter()
+            .map(|t| match t.rows.view_mode() {
+                ViewMode::Flat => "flat".to_string(),
+                ViewMode::Tiles => "tiles".to_string(),
+                ViewMode::Tree => "tree".to_string(),
+            })
+            .collect()
+    }
+
+    /// 열 폭(활성 탭 · 표시 순) — 사용자가 바꾼 뒤에만 세션에 쓴다(기본 폭은 배치가 패널 폭에 맞춘다).
+    pub(crate) fn col_widths(&self) -> Vec<i32> {
+        if !self.user_cols {
+            return Vec::new();
+        }
+        self.rows().columns().iter().map(|c| c.width).collect()
+    }
+
+    /// 세션의 열 폭을 모든 탭에(개수가 다르면 앞부분만) · 이후 배치가 기본 열을 덮지 않게.
+    pub(crate) fn apply_col_widths(&mut self, widths: &[i32], inv: &mut Invalidations) {
+        if widths.is_empty() {
+            return;
+        }
+        for tab in &mut self.tabs {
+            tab.rows.set_col_widths(widths, inv);
+        }
+        self.user_cols = true;
     }
 
     pub(crate) fn tab_count(&self) -> usize {

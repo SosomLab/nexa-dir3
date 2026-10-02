@@ -23,6 +23,7 @@ mod panel;
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
 mod selfcheck;
+mod session;
 mod theme;
 #[allow(dead_code)]
 mod toast;
@@ -49,6 +50,7 @@ use nexa_ctl::{InputEvent, Invalidations, Widget};
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
 use panel::{Panel, PanelMetrics};
+use session::Session;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
@@ -124,6 +126,10 @@ struct App {
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,
+    /// 세션 파일 폴더(설정 폴더 · 시험은 `None` = 저장 안 함) · 디바운스 저장기 · 복원 때 받은 세션(dir3가 안 쓰는 키 보존).
+    session_dir: Option<PathBuf>,
+    session_save: nexa_conf::SaveScheduler,
+    session_keep: Session,
 }
 
 /// 논리 px → 장치 px(반올림).
@@ -191,7 +197,19 @@ fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
 }
 
 impl App {
-    fn new(settings: Settings, ui_font: Font, start_dir: PathBuf) -> App {
+    /// `start` = 실행 인자 경로(있으면 세션 무시 · dir2 PREFS-054) · `session` = 복원할 세션(탭이 없으면 `start`/현재 폴더).
+    fn new(
+        settings: Settings,
+        ui_font: Font,
+        start: Option<PathBuf>,
+        session: Option<Session>,
+    ) -> App {
+        let session = session.filter(|s| start.is_none() && !s.is_empty());
+        let start_dir = start
+            .or_else(|| std::env::current_dir().ok())
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."));
         let keymap = Keymap::from_settings(&settings);
         let theme = theme::resolve(settings.theme_mode(), None);
         let opts = list_opts(&settings);
@@ -204,14 +222,24 @@ impl App {
         let mut toolbar = Toolbar::new(App::build_toolbar(&settings));
         toolbar.set_icon_size(20);
         toolbar.set_padding(2, 2);
-        let mut panels = [
-            Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
-            Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
-        ];
+        let session_keep = session.clone().unwrap_or_default();
+        let mut panels = match &session {
+            Some(s) => [0usize, 1].map(|i| {
+                let ps = &s.panels[i];
+                Panel::restore(ps, &start_dir, opts, m, columns_for(600, 1.0))
+            }),
+            None => [
+                Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
+                Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
+            ],
+        };
+        let active0 = session.as_ref().map_or(0, |s| s.active_panel.min(1));
         let mode = view_mode_of(settings.get("list.view_mode").unwrap_or("tree"));
         for p in &mut panels {
             p.set_nav_up_align(nav_up_align(&settings));
-            p.set_view_mode(mode, &mut inv);
+            if session.is_none() {
+                p.set_view_mode(mode, &mut inv);
+            }
         }
         let mut app = App {
             window: None,
@@ -243,10 +271,13 @@ impl App {
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),
+            session_dir: None,
+            session_save: nexa_conf::SaveScheduler::new(1000, 5000),
+            session_keep,
         };
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
-        app.set_active(0);
+        app.set_active(if dual { active0 } else { 0 });
         app.update_status();
         app
     }
@@ -269,6 +300,8 @@ impl App {
 
     /// 상태줄 = 활성 패널 요약(왼쪽) · 탭 n/N(오른쪽).
     fn update_status(&mut self) {
+        // 세션 더러움 수거 길목(dir2 PREFS-051: update_status가 양 패널 플래그를 거둔다).
+        self.session_collect_dirty(Instant::now());
         let p = &self.panels[self.active];
         let left = p.status_text();
         let right = trf(
@@ -386,6 +419,7 @@ impl App {
             }
             let _ = self.settings.save();
         }
+        self.session_flush();
     }
 }
 
@@ -516,7 +550,12 @@ fn run_gui() -> ExitCode {
         .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
         .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("."));
-    let mut app = App::new(settings, ui.font, start);
+    // 세션 복원(dir2 PREFS-054 — 창 생성 전) · 저장 폴더 = 설정 폴더.
+    let session_dir = ndir_settings::config_dir();
+    let session = session_dir.as_deref().and_then(Session::load);
+    let mut app = App::new(settings, ui.font, None, session);
+    app.session_dir = session_dir;
+    let _ = start;
     if let Err(e) = el.run_app(&mut app) {
         eprintln!("nexa-dir: event loop error: {e}");
         return ExitCode::FAILURE;

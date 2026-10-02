@@ -868,6 +868,7 @@ dependencies = [
  "ndir-settings",
  "ndir-tree",
  "ndir-vfs",
+ "nexa-conf",
  "nexa-ctl",
  "nexa-explorer",
  "nexa-font",

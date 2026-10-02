@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 13차 — M3 T-45 세션 복원·저장
+
+- **한 일**: `session.rs`(dir2 `session.cfg` 형식 그대로 · `session.conf` + 레거시 읽기 · 원자적 저장 · 미사용 키 보존) · `Panel::restore`(실패 탭 건너뜀 · 보기 모드 · 열 폭) · `App::new(…, start, session)`(실행 인자 우선) · `app/sessions.rs`(더러움 수거 → `SaveScheduler` 1 s/5 s → 틱 저장 · 종료 flush). 시험 +3 · 창 2회 실행으로 저장→복원 실증.
+- **지금 상태**: M3 🚧 — T-40·41·45 ✅ · T-42·43 부분. 다음 = T-44 설정 창/단축키 창(nexa-sql prefs_win·keys_win 복사 · `apply_setting`) → T-43 잔여(탭 잠금/고정/메뉴 · 열 폭 동기 · 폴더 트리) → T-46 덤프 어휘.
+- **걸린 것**: 없음(펼침 집합 `exp`·잠금/고정 복원은 T-43 잔여와 함께).
+
+→ [journal/2026-10-03 §15](journal/2026-10-03.md)
+
 ## 10-03 12차 — M3 T-43 1차: dir2 패널 구조 + 스플리터
 
 - **한 일**: `panel.rs`(dir2 `panel.rs` 핵심 이식 — 패널 = 탭 바 + [홈][←][→][↑] + 경로 바 + 목록 · 탭별 히스토리 · 위로 = 떠난 폴더 자동 선택 · 홈 = 내 PC · 무간섭 재열람) · `nav.rs`(dir2 그대로) · 창 배치 dir2 수치(툴바 28 · 상태 22 · 스플리터 3 · 최소 200) · 스플리터 드래그 = 비율 설정 + 50 % 스냅(Alt 해제) · 열 5(name·ext·size·modified·kind). 골든 재생성 · 시험 52 green.

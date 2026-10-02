@@ -17,7 +17,7 @@ fn fixture(tag: &str) -> (App, PathBuf) {
     ndir_i18n::activate(ndir_i18n::load("en", &dir.join("nowhere")));
     let settings = Settings::from_text(dir.join("settings.conf"), "");
     let font = nexa_font::ui_font(None).expect("OS UI font (CI installs fonts)");
-    (App::new(settings, font.font, dir.clone()), dir)
+    (App::new(settings, font.font, Some(dir.clone()), None), dir)
 }
 
 fn normalize(dump: &str, root: &std::path::Path) -> String {
@@ -315,5 +315,60 @@ fn startup_cmd_vocabulary() {
     assert!(!app.menubar.is_open());
     app.startup_cmd("app.exit");
     assert!(app.exit_requested);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 세션 왕복(T-45): 탭·경로·활성·보기 모드가 `Session`으로 나가고 새 App으로 돌아온다 · 실행 인자 경로가 있으면 세션 무시 ·
+/// 사라진 경로 탭은 건너뛴다 · 더러움은 디바운스 저장기로 모인다.
+#[test]
+fn session_roundtrip_through_app() {
+    let (mut app, dir) = fixture("session");
+    app.layout_for(1200, 800, 1.0);
+    app.command("file.new_tab");
+    app.startup_cmd(&format!("nav:{}", dir.join("sub").display()));
+    app.command("view.mode_flat");
+    app.startup_cmd("panel:1");
+    app.command("file.new_tab");
+    app.startup_cmd(&format!("nav:{}", dir.join("nope").display())); // 실패 = 위치 유지
+    assert!(app.session_save.dirty(), "탭·경로 변경 = 더러움");
+    let s = app.session_snapshot();
+    assert_eq!(s.active_panel, 1);
+    assert_eq!(s.panels[0].tabs, vec![dir.clone(), dir.join("sub")]);
+    assert_eq!(s.panels[0].active, 1);
+    assert_eq!(s.panels[0].modes, vec!["tree", "flat"]);
+    assert_eq!(s.panels[1].tabs.len(), 2);
+    let text = s.serialize();
+    let parsed = Session::parse(&text);
+    // 전부 tree인 modes는 생략 직렬화(dir2 규약) → 파싱은 빈 목록 · 재직렬화는 안정.
+    assert_eq!(parsed.panels[0], s.panels[0]);
+    assert_eq!(parsed.panels[1].tabs, s.panels[1].tabs);
+    assert_eq!(Session::parse(&parsed.serialize()), parsed);
+    // 복원(실행 인자 없음) — 사라진 경로 하나를 끼워 넣어도 건너뛴다.
+    let mut broken = parsed.clone();
+    broken.panels[1].tabs.insert(0, dir.join("gone"));
+    broken.panels[1].active = 2;
+    let settings = Settings::from_text(dir.join("settings2.conf"), "");
+    let font = nexa_font::ui_font(None).expect("font");
+    let mut app2 = App::new(settings, font.font, None, Some(broken));
+    app2.layout_for(1200, 800, 1.0);
+    assert_eq!(app2.active, 1);
+    assert_eq!(app2.panels[0].tab_count(), 2);
+    assert_eq!(app2.panels[0].active_index(), 1);
+    assert!(app2.panels[0].root_path().ends_with("sub"));
+    assert_eq!(app2.panels[0].rows().view_mode(), ViewMode::Flat);
+    assert_eq!(app2.panels[1].tab_count(), 2, "사라진 탭은 건너뜀");
+    assert_eq!(app2.panels[1].active_index(), 1);
+    assert!(!app2.session_save.dirty(), "복원 직후는 깨끗");
+    // 실행 인자가 있으면 세션 무시.
+    let settings = Settings::from_text(dir.join("settings3.conf"), "");
+    let font = nexa_font::ui_font(None).expect("font");
+    let app3 = App::new(settings, font.font, Some(dir.join("sub")), Some(parsed));
+    assert_eq!(app3.panels[0].tab_count(), 1);
+    assert!(app3.panels[0].root_path().ends_with("sub"));
+    // 저장은 폴더가 있을 때만 · flush = 파일.
+    app2.session_dir = Some(dir.join("home"));
+    app2.session_flush();
+    let saved = Session::load(&dir.join("home")).expect("saved");
+    assert_eq!(saved.panels[0].tabs.len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }

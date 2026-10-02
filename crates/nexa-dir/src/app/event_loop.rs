@@ -59,7 +59,9 @@ impl ApplicationHandler<Wake> for App {
         }
         self.window = Some(win);
         self.layout();
-        self.set_active(0);
+        // 복원된 활성 패널을 덮지 않는다(10-03 창 2회 실행 실증: 세션 active_panel=1이 0으로 돌아갔다).
+        let a = self.active;
+        self.set_active(a);
         self.update_status();
         // 자체 캡처·하네스용 기동 명령(`NDIR_STARTUP_CMD=…` · 쉼표 구분 · `@after:<ms>:<명령>`).
         if let Ok(cmds) = std::env::var("NDIR_STARTUP_CMD") {
@@ -133,6 +135,9 @@ impl ApplicationHandler<Wake> for App {
             now + Duration::from_secs(3600)
         };
         if let Some(t) = self.startup_timed.iter().map(|(at, _)| *at).min() {
+            next = next.min(t);
+        }
+        if let Some(t) = self.session_tick(now) {
             next = next.min(t);
         }
         el.set_control_flow(ControlFlow::WaitUntil(next));

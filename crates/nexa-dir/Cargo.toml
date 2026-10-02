@@ -23,6 +23,8 @@ ndir-settings = { workspace = true }
 ndir-license = { workspace = true }
 nexa-gfx = { workspace = true }
 nexa-ctl = { workspace = true }
+# 세션 디바운스 저장(`SaveScheduler` quiet 1 s + max_delay 5 s — dir2 PREFS-051·617).
+nexa-conf = { workspace = true }
 nexa-font = { workspace = true }
 nexa-grid = { workspace = true }
 nexa-explorer = { workspace = true }
