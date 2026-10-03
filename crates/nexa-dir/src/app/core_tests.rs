@@ -2113,3 +2113,58 @@ fn external_drop_moves_or_copies_into_folder_under_cursor() {
     app.primary = false;
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// UIC-310 클립 스택(nexa-ui 112차 · T-31): 패널 그리드는 자기 경계를 `push_clip`하고 짝 맞춰 `pop_clip`한다 —
+/// 백엔드가 교차·복원 규칙대로 쌓으면 그리드 안 호출은 전부 패널 경계 안으로 잘린다(실제 픽셀은 nexa-ctl `clip_tests`).
+#[test]
+fn panel_grid_pushes_its_bounds_as_clip() {
+    #[derive(Default)]
+    struct ClipProbe {
+        stack: Vec<Rect>,
+        pushed: Vec<Rect>,
+        pops: usize,
+        max_depth: usize,
+    }
+    impl nexa_ctl::DrawCtx for ClipProbe {
+        fn fill_rect(&mut self, _r: Rect, _c: nexa_ctl::Color) {}
+        fn text_opaque(
+            &mut self,
+            _x: i32,
+            _y: i32,
+            _clip: Rect,
+            _t: &str,
+            _f: nexa_ctl::Color,
+            _b: nexa_ctl::Color,
+        ) {
+        }
+        fn text(&mut self, _x: i32, _y: i32, _clip: Rect, _t: &str, _f: nexa_ctl::Color) {}
+        fn text_width(&mut self, text: &str) -> i32 {
+            text.chars().count() as i32 * 7
+        }
+        fn push_clip(&mut self, rect: Rect) {
+            let top = self.stack.last().map_or(rect, |t| rect.intersection(t));
+            self.stack.push(top);
+            self.pushed.push(rect);
+            self.max_depth = self.max_depth.max(self.stack.len());
+        }
+        fn pop_clip(&mut self) {
+            assert!(self.stack.pop().is_some(), "pop_clip without push");
+            self.pops += 1;
+        }
+    }
+    let (mut app, dir) = fixture("clip");
+    app.layout_for(1200, 800, 1.0);
+    let mut probe = ClipProbe::default();
+    app.paint_into(&mut probe, 1200, 800, 1.0);
+    assert_eq!(probe.pushed.len(), probe.pops, "push/pop 짝");
+    assert!(probe.stack.is_empty() && probe.max_depth >= 1);
+    for p in 0..2 {
+        let b = app.panels[p].rows().bounds();
+        assert!(
+            probe.pushed.contains(&b),
+            "panel {p} rows bounds {b:?} not pushed: {:?}",
+            probe.pushed
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -19,7 +19,7 @@
 | KEY | 817 | 817 | 751 | 32 | 34 | 0 | 0 |
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
-| N | 15 | 15 | 0 | 15 | 0 | 0 | 0 |
+| N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 0 | 19 | 0 | 0 | 0 |
@@ -34,12 +34,12 @@
 | SKEL | 291 | 291 | 147 | 94 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
-| UIC | 235 | 235 | 1 | 0 | 234 | 0 | 0 |
+| UIC | 235 | 235 | 2 | 0 | 233 | 0 | 0 |
 | UIK | 67 | 67 | 10 | 12 | 45 | 0 | 0 |
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4266 | 4266 | 2342 | 1026 | 756 | 0 | 0 |
+| **합계** | 4266 | 4266 | 2344 | 1025 | 755 | 0 | 0 |
 
 ## 행
 
@@ -96,7 +96,8 @@
 | UIK-207 · GUI-040·046 | TabBar 아이콘·툴팁·가운데 클릭 | nexa-ui `controls/tabbar.rs` | T2 | `icons_tips_and_middle_click` | ✅ | 104차 · press 전환 옵션 보류 |
 | UIK-203 · GUI-080 | StatusBar | nexa-ui `controls/statusbar.rs` | T2 | `set_text_invalidates_only_on_change_and_right_aligns` · `right_text_never_goes_left_of_pad` | ✅ | 104차 |
 | UIK-201·216·217 · PANEL-1F(rows·columns·typeahead) · GUI(fastscroll·edit) | 가상 행 그리드 엔진(가상화·컬럼·정렬·선택·계층·인라인 이름 바꾸기·보기 모드·픽셀/고속 스크롤·타입어헤드) | nexa-ui `crates/nexa-grid` | T1·T2 | dir2 테스트 52(rows 34 · edit 8 · fastscroll 5 · typeahead 4 · columns 1) + `adapt_forwards_to_ctl_ctx` | ✅ G-1 | 아이콘(`draw_icon`)·italic은 G-2/U-5 |
-| UIC-310·311·313·315 | DrawCtx 클립 스택·터미널 셀·italic·List 슬롯 | nexa-grid `draw::Adapt` 우회(`List`→`PeerList` · italic 버림) | — | — | 🚧 | T-31에서 nexa-ctl 보강 |
+| UIC-310 | DrawCtx 클립 스택(`push_clip` 교차 쌓기 · `pop_clip` · 모든 어휘가 꼭대기 안) | nexa-ui 112차 `nexa-ctl/raster.rs` `RasterCtx.clips` · nexa-grid `paint_grid` `push_clip(bounds)` | T2 · T3 | nexa-ctl `clip_tests`(픽셀 2) · `panel_grid_pushes_its_bounds_as_clip` | ✅ | journal §67 · 실기 = 넘친 셀이 패널 경계에서 잘림 |
+| UIC-311·313·315 | 터미널 셀·italic·List 슬롯 | nexa-grid `draw::Adapt` 우회(`List`→`PeerList` · italic 버림) | — | — | 🚧 | T-31 잔여 — nexa-ctl 보강 |
 | GUI(위젯 틱 요청) | `Invalidations::request_tick` | nexa-ui `widget.rs` | T2 | `tick_request_is_idempotent_and_taken_once` | ✅ | 105차 |
 | UIK-202 · GUI-090~101 | PathBar(브레드크럼·편집·자동완성 팝업) | nexa-ui `nexa-explorer/src/pathbar.rs` | T2 | dir2 시험 7 | ✅ | 106차 · 경로 문법·제안은 호스트 |
 | UIK-204 · GUI-110~ | InfoDock(스트립·텍스트/이미지·선택·팝아웃·오버레이 바) | nexa-ui `nexa-explorer/src/dock.rs` | T2 | dir2 시험 13 | ✅ | 106차 · 이미지 그리기는 호스트 `IconImage`(G-2) |
@@ -140,7 +141,8 @@
 | RENDER-001~030 · 045~054 | dir2 렌더링(Direct2D 백버퍼·DPI · DirectWrite 텍스트 · 도형/클립/이미지 · GDI 글꼴 체인·팔레트) | nexa-ui `nexa-gfx`(CPU 래스터) · `nexa-font` · `app/fonts.rs`(em_to_px) | T2 | nexa-gfx/nexa-ctl 시험 · `fonts` 시험 | ⚠ | DR-1 — OS 렌더 API 대신 자체 래스터(3-OS 동일 픽셀) · 사용자 피드백 10-03 글자 크기/전각 수정 |
 | RENDER-031~044 | 아이콘·SVG·자원(툴바 SVG · exe/파일 아이콘 · ico 리소스) | `icons.rs` · nexa-gfx `svg.rs` · `app/launcher_icons.rs` · `build.rs`/`winres.rs` | T1·T2 | `all_embedded_icons_render_masks` · `toolbar_commands_map_to_assets` · 런처 아이콘 시험 | ✅ | 파일 목록 아이콘(PANEL-064) = nexa-fs IconService 후속 |
 | B-001~021 | 렌더 자원 대조표(화면 표면 · 글리프 래스터 · 기본/고정폭 글꼴 · …) | nexa-gfx `Surface` · ab_glyph · nexa-font | T2 | nexa-ui 시험 | ⚠ | DR-1 대체 표 |
-| N-001~015 | "없음 → 추가" 표(클립 스택 · 끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · T-31 잔여 | T2 | nexa-gfx svg 시험 | 🚧 | SVG ✅ · 클립 스택/italic/테마 토큰 = T-31 |
+| N-001 | 클립 스택(가로 스크롤 번짐 차단) | nexa-ui 112차 `RasterCtx.clips` | T2 | nexa-ctl `clip_tests` | ✅ | journal §67 |
+| N-002~015 | "없음 → 추가" 표(끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · T-31 잔여 | T2 | nexa-gfx svg 시험 | 🚧 | SVG ✅ · italic/테마 토큰 = T-31 |
 | L-001~033 | 실측 교훈(위젯 · 패널 · 클라우드) | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
 | O-001~020 | 클라우드 결함·미처리 목록 | — | — | — | ☐ | CLOUD 미이식(M8) |
 | OS-010~028 | 패널/목록 OS 분기 표(타임존 · 휠 줄 수 · 픽셀 스크롤 · 가로 휠 · 파일 아이콘 · …) | `app/input.rs` · `filelist.rs`(format_time) · `platform/` | T3 | `input` 휠 시험 · `format_time` 시험 | 🚧 | 타임존 = 로컬 변환 ✅ · 파일 아이콘 ☐ |
@@ -270,7 +272,7 @@
 | CI-106·107 | 기동 명령(`NDIR_STARTUP_CMD`) · `layout.dump` · `@after` · `ui.*` 포인터 합성 · `key:` · `app.exit` | `nexa-dir/src/app/startup_cmd.rs` | T4 | 실증(덤프 2장 · 종료 1.5 s) | 🚧 | T-46(`assert`·패닉 훅·골든 비교 러너 T-06) |
 | CI-102 | 창 없는 AppCore — `viewport`/`scale` 주입(`layout_for`) · `paint_into(&mut dyn DrawCtx)` · `layout()` 창 무관 | `nexa-dir/src/main.rs` · `app/paint.rs` | T3 | `app/core_tests.rs` 5(`route_and_commands_without_window` · `startup_cmd_vocabulary` …) | ✅ | T-41 · FakePlatform(포트 trait)은 T-50 |
 | CI-105 | 배치 골든(Rect 트리 · 픽셀 아님) + `RecordCtx` 표면 밖 0 · 글자 존재 | `tests/golden/layout-1200x800.txt` · `app/core_tests.rs` | T3 | `layout_golden_1200x800` · `layout_scales_and_stays_inside` · `paint_records_inside_surface` | ✅ | T-41 · 3-OS 동일성은 CI가 판정 |
-| UIC-310(클립) · PANEL(열 폭) | 셀이 패널 경계를 넘침 → 호스트가 이름 열로 폭을 맞춤(임시) | `main.rs` `layout_core` `cols_for` | T3 | `paint_records_inside_surface` | ⚠ | 근본 = T-31 클립 스택 · 열 폭 기억/동기는 T-43 |
+| PANEL(열 폭) | 기본 열이 패널보다 넓으면 이름 열 폭을 맞춤(보이지 않는 열 방지) | `main.rs` `columns_for` | T3 | `paint_records_inside_surface`(RecordCtx = 호출 그대로 · 표면 밖 0) | ⚠ | 넘침 자체는 UIC-310 클립 ✅ · 열 폭 기억/동기는 T-43 |
 | PANEL-001·002 · 031·032 | 패널 = 탭 바 + 네비([홈][←][→][↑]) + 경로 바 + 목록 수직 스택 · 네비 활성 동기 | `nexa-dir/src/panel.rs` | T2·T3 | `layout_stacks_tabbar_navbar_rows`(dir2 수치) · `nav_buttons_and_path_edit` · 골든 | ✅ | T-43 · 글리프는 유니코드(MDL2 → SVG T-30) |
 | PANEL-012·014~017 | 탭 = 독립 뷰 + 히스토리 · 새 탭 복제 · 전환/순환 · 닫기(≥1) · 드래그 재정렬 | `panel.rs` | T2 | `tabs_open_switch_close_keep_at_least_one` · `route_and_commands_without_window` | 🚧 | 잠금·고정·복제·패널 간 이동·stale 재열람은 T-43 잔여 |
 | PANEL-026~029 · 033 · 036 | 탭별 back/forward · 경로 진입(실패 = 위치 유지) · 위로 + 떠난 폴더 자동 선택 · 홈 = 내 PC · 행 활성화 · 무간섭 재열람(캐럿·스크롤) | `nav.rs` · `panel.rs` | T2 | nav 3 · `per_tab_history_and_nav_up_selects_left_folder` · `activate_enters_dir_and_reports_file` | ✅ | 선택 복원·사라진 폴더 폴백(037)은 잔여 |

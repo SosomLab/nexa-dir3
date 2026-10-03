@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 63차 — T-31 클립 스택(nexa-ui 112차 소비)
+
+- **한 일**: nexa-ui `RasterCtx` 클립 스택 실제 구현(91214a5 · 모든 그리기 어휘 · 시험 +2) · nexa-grid `paint_grid` = `push_clip(bounds)` · dir3 T3 `panel_grid_pushes_its_bounds_as_clip` · 매트릭스 UIC-310/N-001 ✅.
+- **지금 상태**: 셀이 패널 경계를 넘치는 실제 렌더 결함 해소(호스트 열 폭 맞춤은 사용성 때문에 유지 · T-43). T-31 잔여 = 터미널 셀 텍스트·italic·List 슬롯·테마 토큰·ICO. 다음 = T-91 · CLOUD 결정 · SHCNE · DnD 2차 · T-32.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정 · CLOUD 이식 여부 결정.
+
+→ [journal/2026-10-03 §67](journal/2026-10-03.md)
+
+---
+
 ## 10-03 62차 — T-90 5차: 원장 전 ID 덮음(묶음 행 28)
 
 - **한 일**: RENDER/B/N/L/O/OS/RT/T/CI/SET/SHELL/소형 묶음 행 · 감사 재생성.

@@ -300,7 +300,8 @@ fn panel_metrics(settings: &Settings, s: f32) -> PanelMetrics {
 }
 
 /// 기본 5열(dir2 docs/port/13 §2-5: 340 · 64 · 96 · 140 · 110) — 패널보다 넓으면 이름 열이 줄어든다
-/// (nexa-grid는 셀을 패널 경계로 자르지 않는다 · 클립 스택 T-31 · 10-03 RecordCtx 시험 적발).
+/// (10-03 RecordCtx 시험 적발 — 넘친 셀은 nexa-ui 112차 클립 스택이 패널 경계로 자르지만, 보이지 않는 열은 쓸모가 없으니
+///  폭 맞춤은 유지 · 열 폭 기억/동기는 T-43).
 fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
     let (ext_w, size_w, mod_w, kind_w) = (px(64.0, s), px(96.0, s), px(140.0, s), px(110.0, s));
     let mut name_w = px(340.0, s);

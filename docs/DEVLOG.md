@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-31 클립 스택**: nexa-ui 112차 `RasterCtx` 클립 스택 실제 구현(모든 어휘) + nexa-grid `paint_grid` 경계 클립 → dir3 T3 `panel_grid_pushes_its_bounds_as_clip` · 매트릭스 UIC-310 ✅ → [journal §67](journal/2026-10-03.md)
 - **T-90 5차**: 남은 접두 묶음 행 28 → 원장 전 ID 덮음 → [journal §66](journal/2026-10-03.md)
 - **T-90 4차**: 접두별 묶음 행 44(✅/🚧/⚠/☐ 사유) → [journal §65](journal/2026-10-03.md)
 - **T-90 3차**: CMD 원장 대조 시험(45 대응) + CMD 묶음 행 9 → 덮음 37 % → [journal §64](journal/2026-10-03.md)
