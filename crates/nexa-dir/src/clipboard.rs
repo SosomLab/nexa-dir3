@@ -13,21 +13,51 @@
 //!
 //! ★ 출처: nexa-sql/crates/nexa-sql/src/clipboard.rs(10-03 복사 · docs/port/40 SKEL-403 — `NSQL_*`→`NDIR_*` · 제품명만 개명 · 로직 불변).
 
+// ★ 시험 빌드(`cargo test`)는 **실제 OS 클립보드를 읽지도 쓰지도 않는다**(CLAUDE.md §5 — 시험이 사용자의 클립보드를 덮어쓰면
+//   안 된다 · 10-03 발견: T3의 복사/잘라내기 명령이 실제 클립보드에 썼다). 스레드별 가짜에 담는다(시험은 스레드마다 독립).
+#[cfg(test)]
+thread_local! {
+    static FAKE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
 /// 클립보드 텍스트(없거나 텍스트가 아니면 `None`).
 pub(crate) fn read_text() -> Option<String> {
-    imp::read()
+    #[cfg(test)]
+    {
+        FAKE.with(|f| f.borrow().clone())
+    }
+    #[cfg(not(test))]
+    {
+        imp::read()
+    }
 }
 
 /// 텍스트 게시. 실패 = `false`.
 pub(crate) fn write_text(text: &str) -> bool {
-    imp::write(text)
+    #[cfg(test)]
+    {
+        FAKE.with(|f| *f.borrow_mut() = Some(text.to_string()));
+        true
+    }
+    #[cfg(not(test))]
+    {
+        imp::write(text)
+    }
 }
 
 /// 텍스트 + HTML(서식 · 구문 색) 동시 게시(사용자 09-14 — PPT/Word에 같은 모양으로 붙여넣기).
 /// Windows = `CF_UNICODETEXT` + 등록 형식 `HTML Format`(CF_HTML) · macOS = osascript(«class HTML» + 문자열) ·
 /// Linux = 텍스트만(CLI 도구가 다중 형식을 못 올린다 — 후속). 실패 = `false`.
 pub(crate) fn write_rich(text: &str, html: &str) -> bool {
-    imp::write_rich(text, html)
+    #[cfg(test)]
+    {
+        let _ = html;
+        write_text(text)
+    }
+    #[cfg(not(test))]
+    {
+        imp::write_rich(text, html)
+    }
 }
 
 /// CF_HTML 컨테이너(헤더 오프셋은 UTF-8 바이트 · 10자리 고정). 부르는 쪽 = Windows `imp`뿐(macOS·Linux는 HTML 클립보드 없음).
@@ -52,6 +82,7 @@ pub(crate) fn cf_html(fragment: &str) -> Vec<u8> {
 }
 
 #[cfg(windows)]
+#[cfg_attr(test, allow(dead_code))]
 mod imp {
     use std::ffi::c_void;
 
@@ -205,6 +236,7 @@ mod imp {
 }
 
 #[cfg(not(windows))]
+#[cfg_attr(test, allow(dead_code))]
 mod imp {
     use std::io::Write as _;
     use std::process::{Command, Stdio};
@@ -297,5 +329,20 @@ mod imp {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod fake_tests {
+    /// 시험 빌드의 클립보드 = 스레드별 가짜(쓰기 → 같은 스레드에서 읽힘 · 처음에는 비어 있음 — 실제 클립보드 내용이 새지 않는다).
+    #[test]
+    fn test_build_never_touches_the_os_clipboard() {
+        assert_eq!(super::read_text(), None);
+        assert!(super::write_text("ndir-test"));
+        assert_eq!(super::read_text().as_deref(), Some("ndir-test"));
+        assert!(super::write_rich("plain", "<b>plain</b>"));
+        assert_eq!(super::read_text().as_deref(), Some("plain"));
+        let other = std::thread::spawn(super::read_text).join().unwrap();
+        assert_eq!(other, None, "다른 시험(스레드)과 섞이지 않는다");
     }
 }
