@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **툴바 토글 켜짐 선 색 = #0000FF**(사용자 "토글 색이 너무 이상해… #0000FF로" · `toolbar.on_color` line · 새 키 `toolbar.on_line_color` · 초록 철회) → [journal 10-04 §6](journal/2026-10-04.md)
 - **툴바 토글 켜짐 정정**(사용자 "배경은 원복하고 선만 초록으로") — 채움 = 강조색 26 % 그대로 · 테두리 + 아이콘 선 = 스위치 초록(해석 확인 대기) · nexa-ui 135 `on_line_color` → [journal 10-04 §5](journal/2026-10-04.md)
 - **툴바 토글 켜짐 = 스위치 초록 채움 + 흰 아이콘**(사용자 A안 · `toolbar.on_color` green|accent · nexa-ui 134 · NEW-026 · 농도 설정은 accent일 때만 풀림) → [journal 10-04 §4](journal/2026-10-04.md)
 - **macOS 휴지통 결함 수정**(T-135 · `trash_outcome` 순수 판정 · 폴백은 원본이 남았을 때만 · 실제 휴지통 시험 = CI 전용) · CI fbb6b62(procload 3-OS 첫 실행) · e73e06a 성공 → [journal 10-04 §3](journal/2026-10-04.md)
