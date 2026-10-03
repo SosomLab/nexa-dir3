@@ -30,6 +30,8 @@ cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자�
 cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용자 자원 필요 항목 SKIP)
 ```
 
+**Linux 개발 세션**(§101): 위 4단계에 더해 push 전 `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4)도 돈다 — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 3개(`ctx-menu` · `launcher` · `selfcheck-win`)의 실패는 제외(T-117).
+
 한 번에: `scripts/check-all.sh`(T-05에서 작성 · nexa-ui → nexa-license → dir3 순으로 fmt·clippy·test → 위 4단계 → `tests/out/summary.txt`).
 
 ## 4. 하네스 7층

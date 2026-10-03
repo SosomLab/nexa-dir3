@@ -59,6 +59,7 @@
 | 1 | `app/settings.rs` `make_tool_dock`(§76) | 툴바 아이콘 둘레 여백(칸 = 아이콘 + 2) | `toolbar.icon_pad`(0~8) | 고급 | (기존) | ✅ |
 | 8 · 26 · 12 · 20 % · 4 px(§80 재조정 · §78은 18/55/12) | `app/settings.rs` `make_tool_dock`(nexa-ctl `SoftStates`) | 툴바 상태 표시 농도(hover 채움 · 켜짐 채움 · 켜짐 테두리 · 단계 · 모서리) | `toolbar.hover_fill_pct` · `toolbar.on_fill_pct` · `toolbar.on_line_pct` · `toolbar.state_step_pct` · `toolbar.state_radius` | 고급 | (기존) | ✅ |
 | off | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected`(§83) | 보호된 운영 체제 파일(숨김 + 시스템 속성 · macOS UF_HIDDEN + SF_RESTRICTED) 표시 — 꺼져 있으면 `list.show_hidden`이 켜져 있어도 숨김(탐색기 규칙) | `list.show_protected` | 설정(일반 · 탐색기 권장값 off · **기본 off = 사용자 확정 10-03** · dir2와 다른 의도된 차이) | (기존) | ✅ |
+| tab(dir2 panel) | `ndir-settings/src/registry.rs` · `migrate.rs` · `app/menus.rs::toggle_view_option`(§102) | 보기 토글(숨김 · Dot · 폴더 우선) 전파 폭 — tab = 활성 탭 · panel = 활성 패널 전 탭 · global = 두 패널 전 탭 | `list.view_scope` | 설정(**기본 tab = 의도된 차이** · 사용자 10-03 "이후는 탭별" · dir2 `settings.cfg` 가져오기는 panel 유지) | (기존) | ✅ |
 | off | `app/settings.rs`(§80) | 켜진 툴바 아이콘을 강조색으로 칠할지(기본 = 본문색 · dir2 규약) | `toolbar.on_icon_accent` | 고급 | (기존) | ✅ |
 | em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
 | +3 px(종전 −4) | `app/fonts.rs` `FALLBACK_CHEVRON_DELTA` · `fallback_chevrons`(§94) | 글자 대체 쉐브론 크기 증분 · 후보 = › ⌄ → › ˅ → ▸ ▾ → > v 중 둘 다 그릴 수 있는 첫 쌍 — **§98부터 선 쉐브론을 끈 경우의 예비**(아이콘 글꼴 없는 OS는 선 쉐브론이 기본) | — | 상수(예비) | — | — |
