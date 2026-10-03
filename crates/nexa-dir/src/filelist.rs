@@ -55,6 +55,13 @@ pub(crate) fn split_shortcut_ext(name: &str) -> Option<(&str, &str)> {
     })
 }
 
+/// Unix "내 PC"의 홈 폴더 행인가(`$HOME`과 같은 경로) — 용량은 보여도 종류는 드라이브가 아니라 폴더.
+fn is_home_dir(name: &str) -> bool {
+    cfg!(unix)
+        && std::env::var_os("HOME")
+            .is_some_and(|h| Path::new(&h) == Path::new(name.trim_end_matches('/')) && name != "/")
+}
+
 /// Windows 바로 가기 파일(`.lnk` · 대소문자 무시)인가 — 대상 해석(GAP-007) 대상.
 pub(crate) fn is_lnk(path: &Path) -> bool {
     path.extension()
@@ -451,7 +458,10 @@ impl RowSource for TreeSource {
             COL_SIZE if r.kind == FileKind::Dir => String::new(),
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time(r.modified_unix_ms),
-            COL_KIND if self.drive_space.contains_key(&r.name) || r.name.ends_with(":\\") => {
+            COL_KIND
+                if (self.drive_space.contains_key(&r.name) || r.name.ends_with(":\\"))
+                    && !is_home_dir(&r.name) =>
+            {
                 ndir_i18n::tr("kind.drive")
             }
             COL_KIND => kind_label(r.kind, &r.name),

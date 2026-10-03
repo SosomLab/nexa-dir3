@@ -159,6 +159,19 @@ pub fn is_virtual_root(path: impl AsRef<Path>) -> bool {
 /// 이름 = `C:\`(절대 경로 형태 — [`MY_PC`] 문서 참조). 볼륨명·용량 데코는 β(Win32).
 pub fn drive_entries() -> Vec<Entry> {
     let mut out = Vec::new();
+    // Unix에는 드라이브 문자가 없다 → "내 PC" = 루트(`/`) · 홈 · 마운트된 볼륨(사용자 10-03 Linux 실기 — 종전에는 빈 목록).
+    #[cfg(unix)]
+    for root in unix_roots() {
+        out.push(Entry {
+            name: root,
+            kind: FileKind::Dir,
+            size: 0,
+            modified: None,
+            attrs: 0,
+            target: None,
+        });
+    }
+    #[cfg(not(unix))]
     for c in b'A'..=b'Z' {
         let root = format!("{}:\\", c as char);
         if fs::metadata(&root).is_ok() {
@@ -173,6 +186,94 @@ pub fn drive_entries() -> Vec<Entry> {
         }
     }
     out
+}
+
+/// Unix "내 PC" 항목(절대 경로 · 순서 = `/` → 홈 → 볼륨 이름순 · 중복 없음): Linux = `/proc/self/mounts`의 실제 볼륨 ·
+/// macOS = `/Volumes/*`(시스템 볼륨을 가리키는 링크 제외).
+#[cfg(unix)]
+fn unix_roots() -> Vec<String> {
+    let home = std::env::var("HOME").ok().filter(|h| h.starts_with('/'));
+    #[cfg(target_os = "macos")]
+    let volumes: Vec<String> = fs::read_dir("/Volumes")
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.path().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    #[cfg(not(target_os = "macos"))]
+    let volumes = unix_mount_points(&fs::read_to_string("/proc/self/mounts").unwrap_or_default());
+    merge_unix_roots(home.as_deref(), volumes)
+}
+
+/// 루트 · 홈 · 볼륨을 합친다(순수): `/` 맨 앞 · 홈(있고 `/`가 아니면) · 나머지 볼륨 이름순 · 중복 제거.
+pub fn merge_unix_roots(home: Option<&str>, volumes: Vec<String>) -> Vec<String> {
+    let mut out = vec!["/".to_string()];
+    if let Some(h) = home {
+        let h = h.trim_end_matches('/');
+        if !h.is_empty() {
+            out.push(h.to_string());
+        }
+    }
+    let mut rest: Vec<String> = volumes.into_iter().filter(|v| !out.contains(v)).collect();
+    rest.sort();
+    rest.dedup();
+    out.extend(rest);
+    out
+}
+
+/// `/proc/self/mounts` 본문 → **사용자가 볼 볼륨**의 마운트 경로(순수 · 순서 = 파일 순서):
+/// 블록 장치(`/dev/…`)나 네트워크 파일 시스템(nfs · cifs · smb3 · sshfs)만 · 시스템용 자리(`/boot` · `/efi` · `/snap` · `/var/…` ·
+/// `/run/…` 중 `/run/media` 제외 · `/proc` · `/sys` · `/dev`)와 스냅 이미지(squashfs)는 뺀다. 경로의 8진 이스케이프(`\040` = 공백)를 푼다.
+pub fn unix_mount_points(mounts: &str) -> Vec<String> {
+    const NET: [&str; 5] = ["nfs", "nfs4", "cifs", "smb3", "fuse.sshfs"];
+    const SKIP: [&str; 8] = [
+        "/boot", "/efi", "/snap", "/var", "/proc", "/sys", "/dev", "/run",
+    ];
+    let mut out = Vec::new();
+    for line in mounts.lines() {
+        let mut it = line.split_whitespace();
+        let (Some(dev), Some(raw), Some(fstype)) = (it.next(), it.next(), it.next()) else {
+            continue;
+        };
+        if fstype == "squashfs" || !(dev.starts_with("/dev/") || NET.contains(&fstype)) {
+            continue;
+        }
+        let path = unescape_mount_path(raw);
+        let system = SKIP
+            .iter()
+            .any(|s| path == *s || path.starts_with(&format!("{s}/")))
+            && !path.starts_with("/run/media/");
+        if system || !path.starts_with('/') || out.contains(&path) {
+            continue;
+        }
+        out.push(path);
+    }
+    out
+}
+
+/// mounts 경로의 8진 이스케이프(`\040` 공백 · `\011` 탭 · `\134` 역슬래시) 풀기.
+fn unescape_mount_path(raw: &str) -> String {
+    let b = raw.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'\\'
+            && i + 3 < b.len()
+            && b[i + 1..i + 4].iter().all(|c| (b'0'..=b'7').contains(c))
+        {
+            let v = (u32::from(b[i + 1] - b'0') << 6)
+                | (u32::from(b[i + 2] - b'0') << 3)
+                | u32::from(b[i + 3] - b'0');
+            out.push(v as u8);
+            i += 4;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// 가상 최상위에 합류할 **추가 루트**(X-36 — 클라우드 연결 등 앱 정의 항목) 전역 등록부.
@@ -350,6 +451,56 @@ mod tests {
         ROOTS_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Unix "내 PC": mounts 해석(실제 볼륨만 · 이스케이프) + 루트/홈/볼륨 합치기.
+    #[test]
+    fn unix_roots_from_mounts() {
+        let mounts = "\
+sysfs /sys sysfs rw 0 0
+proc /proc proc rw 0 0
+/dev/nvme0n1p2 / ext4 rw 0 0
+/dev/nvme0n1p1 /boot/efi vfat rw 0 0
+/dev/loop3 /snap/core22/1 squashfs ro 0 0
+tmpfs /run/user/1000 tmpfs rw 0 0
+/dev/sdb1 /media/kiros33/USB\\040DISK vfat rw 0 0
+/dev/sdc1 /run/media/kiros33/data ext4 rw 0 0
+nas:/share /mnt/nas nfs4 rw 0 0
+/dev/sda1 /home ext4 rw 0 0
+/dev/sdb1 /media/kiros33/USB\\040DISK vfat rw 0 0
+";
+        let v = unix_mount_points(mounts);
+        assert_eq!(
+            v,
+            [
+                "/",
+                "/media/kiros33/USB DISK",
+                "/run/media/kiros33/data",
+                "/mnt/nas",
+                "/home"
+            ]
+        );
+        let all = merge_unix_roots(Some("/home/kiros33/"), v);
+        assert_eq!(
+            all,
+            [
+                "/",
+                "/home/kiros33",
+                "/home",
+                "/media/kiros33/USB DISK",
+                "/mnt/nas",
+                "/run/media/kiros33/data"
+            ]
+        );
+        assert_eq!(merge_unix_roots(None, Vec::new()), ["/"]);
+        assert_eq!(merge_unix_roots(Some("/"), vec!["/".into()]), ["/"]);
+        // 절대 이름이라 센티널과 join하면 부모가 대체된다(진입 = 실제 경로).
+        #[cfg(unix)]
+        {
+            let d = drive_entries();
+            assert_eq!(d[0].name, "/");
+            assert_eq!(Path::new(MY_PC).join(&d[0].name), Path::new("/"));
+        }
     }
 
     #[test]
