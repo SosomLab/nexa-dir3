@@ -170,6 +170,63 @@ impl App {
         }
     }
 
+    /// 탭을 끄는 중 포인터가 **반대 패널** 위에 있으면 놓일 자리 표식을 갱신한다(탭 바 강조 + 삽입선 — `paint_into`가 그린다).
+    fn tab_drag_hint(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
+        let InputEvent::MouseMove { x, y } = *ev else {
+            return;
+        };
+        let hint = self
+            .tab_cross_target(x, y)
+            .map(|(_, dst, _, line)| (dst, line));
+        if hint != self.tab_drop_hint {
+            for h in [hint, self.tab_drop_hint].into_iter().flatten() {
+                inv.push(self.panels[h.0].tabbar_bounds());
+            }
+            self.tab_drop_hint = hint;
+        }
+    }
+
+    /// 패널 간 탭 놓기 대상(순수 판정): 듀얼 · 한 패널에서 탭을 끄는 중 · 포인터가 반대 패널 안 →
+    /// `(원래 패널, 대상 패널, 삽입 자리(None = 끝), 표식 선)`.
+    fn tab_cross_target(&self, x: i32, y: i32) -> Option<(usize, usize, Option<usize>, Rect)> {
+        if !self.dual {
+            return None;
+        }
+        let src = (0..2).find(|i| self.panels[*i].tab_dragging().is_some())?;
+        let dst = 1 - src;
+        if !self.panels[dst].bounds().contains(Point { x, y }) {
+            return None;
+        }
+        let (at, line) = self.panels[dst].tab_drop_target(x, y);
+        Some((src, dst, at, line))
+    }
+
+    /// 탭을 반대 패널에 놓기(사용자 10-03 "탭이 좌우 패널 간 이동도 가능하도록" · dir2 71baf67 `cross_move_tab`): 떼어 내
+    /// 대상 패널의 그 자리에 붙이고 활성 패널을 옮긴다. 마지막 탭 · 잠긴 탭은 옮기지 않는다(제자리). 옮겼으면 `true`.
+    fn tab_cross_drop(&mut self, x: i32, y: i32, inv: &mut Invalidations) -> bool {
+        let Some((src, dst, at, _)) = self.tab_cross_target(x, y) else {
+            if self.tab_drop_hint.take().is_some() {
+                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+            }
+            return false;
+        };
+        self.tab_drop_hint = None;
+        let Some(tab_i) = self.panels[src].tab_dragging() else {
+            return false;
+        };
+        self.panels[src].cancel_tab_drag(inv);
+        inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+        let Some(tab) = self.panels[src].detach_tab(tab_i, inv) else {
+            return true; // 마지막/잠긴 탭 — 드래그만 접고 제자리
+        };
+        // 탭/폴더 범위 = 탭이 지닌 값 그대로 · 그 밖 = 대상 패널 값 채택(메뉴 "반대 패널로 이동"과 같은 규칙).
+        let adopt = matches!(self.view_scope(), "global" | "panel");
+        self.panels[dst].attach_tab(tab, at, adopt, inv);
+        self.set_active(dst);
+        self.update_status();
+        true
+    }
+
     /// 포인터 이동 = 세 스플리터의 hover 갱신. 한 자리에 둘이 겹치면(도크 높이 띠와 세로 띠의 끝) 우선순위가 높은 것만
     /// hover — 나머지는 "벗어남"으로 본다(둘이 함께 밝아지지 않게).
     fn split_hover(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
@@ -243,6 +300,20 @@ impl App {
                 return;
             }
         }
+        // 탭을 끄는 중 Esc = 취소(제자리 · dir2 WINC-116).
+        if let Some(src) = (0..2).find(|i| self.panels[*i].tab_dragging().is_some()) {
+            if let InputEvent::Key {
+                key: nexa_ctl::Key::Escape,
+                ..
+            } = ev
+            {
+                self.panels[src].cancel_tab_drag(inv);
+                self.pressed = None;
+                self.tab_drop_hint = None;
+                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+                return;
+            }
+        }
         // 툴바 그룹을 끄는 중 Esc = 취소(원래 순서·행으로 · nexa-ctl `ToolDock::cancel_drag`).
         if self.toolbar.is_dragging() {
             if let InputEvent::Key {
@@ -266,6 +337,8 @@ impl App {
                 }
                 if let Some(a) = self.pressed {
                     self.send(a, &ev, inv);
+                    // 탭을 끄는 중이면 반대 패널 위의 놓일 자리 표식을 갱신한다(눌린 영역 = 원래 패널이 사건을 받는다).
+                    self.tab_drag_hint(&ev, inv);
                     return;
                 }
                 if self.menubar.is_open() {
@@ -351,6 +424,11 @@ impl App {
                 }
                 if let Some(i) = self.term_focus {
                     self.terms[i].mouse_up();
+                }
+                // 탭을 반대 패널 위에서 놓았다 = 패널 간 이동(위젯보다 먼저 판정 — dir2 WINC-101).
+                if self.tab_cross_drop(x, y, inv) {
+                    self.pressed = None;
+                    return;
                 }
                 if let Some(a) = self.pressed.take() {
                     self.send(a, &ev, inv);

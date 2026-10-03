@@ -2092,6 +2092,108 @@ fn header_sort_marks_trail_and_shift_cycles() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 탭 패널 간 드래그(T-122 · dir2 71baf67 WINC-098/101/116): 탭을 끌어 반대 패널 위에서 놓으면 그 패널로 옮겨 가고(탭 위 = 그
+/// 탭 앞 · 그 밖 = 끝) 활성 패널이 따라간다 · 끄는 동안 놓일 자리 표식 · Esc = 취소 · 마지막 탭은 옮기지 않는다.
+#[test]
+fn tab_drag_moves_between_panels() {
+    let (mut app, dir) = fixture("tabdrag");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.command("file.new_tab");
+    let _ = app.panels[0].navigate_to(sub.clone(), &mut inv);
+    app.update_status();
+    let paint = |app: &mut App| {
+        let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+        app.paint_into(&mut rec, 1200, 800, 1.0);
+        rec
+    };
+    paint(&mut app);
+    assert_eq!(
+        (app.panels[0].tab_count(), app.panels[1].tab_count()),
+        (2, 1)
+    );
+    // 왼쪽 둘째 탭(sub)을 잡아 끈다.
+    let r1 = app.panels[0].tab_rect(1).expect("tab 1");
+    let (gx, gy) = (r1.x + 14, r1.y + r1.h / 2);
+    app.route(down(gx, gy));
+    app.route(InputEvent::MouseMove { x: gx + 30, y: gy });
+    assert_eq!(
+        app.panels[0].tab_dragging(),
+        Some(1),
+        "임계를 넘으면 드래그"
+    );
+    assert_eq!(app.tab_drop_hint, None, "같은 패널 위 = 표식 없음");
+    // 오른쪽 패널 본문 위 = 표식(대상 = 오른쪽 · 끝).
+    let rb = app.panels[1].bounds();
+    let (dx, dy) = (rb.x + rb.w / 2, rb.y + rb.h / 2);
+    app.route(InputEvent::MouseMove { x: dx, y: dy });
+    assert_eq!(app.tab_drop_hint.map(|h| h.0), Some(1));
+    let rec = paint(&mut app);
+    let line = app.tab_drop_hint.unwrap().1;
+    assert!(rec.fills.iter().any(|(r, _)| *r == line), "삽입선 {line:?}");
+    // Esc = 취소(제자리).
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert_eq!(app.panels[0].tab_dragging(), None);
+    assert_eq!(app.tab_drop_hint, None);
+    app.route(InputEvent::MouseUp { x: dx, y: dy });
+    assert_eq!(
+        (app.panels[0].tab_count(), app.panels[1].tab_count()),
+        (2, 1)
+    );
+    // 다시 끌어 오른쪽 본문에 놓는다 → 오른쪽 끝에 붙고 활성 패널 = 오른쪽.
+    paint(&mut app);
+    app.route(down(gx, gy));
+    app.route(InputEvent::MouseMove { x: gx + 30, y: gy });
+    app.route(InputEvent::MouseMove { x: dx, y: dy });
+    app.route(InputEvent::MouseUp { x: dx, y: dy });
+    assert_eq!(
+        (app.panels[0].tab_count(), app.panels[1].tab_count()),
+        (1, 2)
+    );
+    assert_eq!(app.active, 1);
+    assert_eq!(app.panels[1].root_path(), sub, "옮겨 온 탭이 활성");
+    assert_eq!(app.panels[1].active_index(), 1, "끝에 붙는다");
+    assert_eq!(app.panels[0].tab_dragging(), None);
+    assert_eq!(app.pressed, None);
+    // 왼쪽에 하나 남은 탭은 옮기지 않는다(패널이 비지 않게).
+    paint(&mut app);
+    let tb = app.panels[0].tabbar_bounds();
+    let (lx, ly) = (tb.x + 20, tb.y + tb.h / 2);
+    app.route(down(lx, ly));
+    app.route(InputEvent::MouseMove { x: lx + 30, y: ly });
+    app.route(InputEvent::MouseMove { x: dx, y: dy });
+    app.route(InputEvent::MouseUp { x: dx, y: dy });
+    assert_eq!(
+        (app.panels[0].tab_count(), app.panels[1].tab_count()),
+        (1, 2)
+    );
+    // 오른쪽 탭을 왼쪽 탭 바의 첫 탭 위에 놓는다 = 그 탭 앞(자리 0).
+    paint(&mut app);
+    let rr = app.panels[1].tab_rect(1).expect("right tab 1");
+    let (rx, ry) = (rr.x + 14, rr.y + rr.h / 2);
+    app.route(down(rx, ry));
+    app.route(InputEvent::MouseMove { x: rx - 30, y: ry });
+    assert!(app.panels[1].tab_dragging().is_some());
+    app.route(InputEvent::MouseMove { x: lx, y: ly });
+    app.route(InputEvent::MouseUp { x: lx, y: ly });
+    assert_eq!(
+        (app.panels[0].tab_count(), app.panels[1].tab_count()),
+        (2, 1)
+    );
+    assert_eq!(
+        (app.active, app.panels[0].active_index()),
+        (0, 0),
+        "첫 탭 앞에 삽입"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]

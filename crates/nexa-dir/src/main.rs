@@ -185,6 +185,8 @@ struct App {
     /// 패널 ↔ 도크 경계(가로선) · 도크 좌우 경계(세로선) — 좌우 패널 스플리터와 같은 컨트롤 · 같은 모양(T-115).
     dock_split_h: Splitter,
     dock_split_v: Splitter,
+    /// 탭을 끌어 반대 패널 위에 있을 때 놓일 자리(대상 패널, 삽입선) — 그리기용(T-122).
+    tab_drop_hint: Option<(usize, Rect)>,
     active: usize,
     dual: bool,
     statusbar: StatusBar,
@@ -437,6 +439,7 @@ impl App {
             splitter: Splitter::new(SplitAxis::Vertical),
             dock_split_h: Splitter::new(SplitAxis::Horizontal),
             dock_split_v: Splitter::new(SplitAxis::Vertical),
+            tab_drop_hint: None,
             active: 0,
             dual,
             statusbar: StatusBar::new(),

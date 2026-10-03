@@ -1096,6 +1096,48 @@ impl Panel {
         self.navbtns.items()
     }
 
+    /// 지금 끌고 있는 탭(임계를 넘은 드래그만) — 호스트의 패널 간 이동 판정용(dir2 WINC-098/101).
+    pub(crate) fn tab_dragging(&self) -> Option<usize> {
+        self.tabbar.dragging()
+    }
+
+    /// 탭 드래그를 접는다(호스트가 다른 패널로 옮겼거나 Esc) — 눌림 캡처도 푼다.
+    pub(crate) fn cancel_tab_drag(&mut self, inv: &mut Invalidations) {
+        self.tabbar.cancel_drag();
+        if self.pressed == Some(Part::Tabs) {
+            self.pressed = None;
+        }
+        inv.push(self.tabbar.bounds());
+    }
+
+    /// 이 패널에 탭을 놓을 때의 자리: 탭 바의 탭 위 = 그 탭 앞 · 그 밖(탭 바 빈 곳 · 패널 본문) = 맨 끝(`None`).
+    /// 함께 돌려주는 rect = 놓일 자리 표식(탭 왼쪽 가장자리 세로선 · 끝이면 마지막 탭 오른쪽).
+    pub(crate) fn tab_drop_target(&self, x: i32, y: i32) -> (Option<usize>, Rect) {
+        let tb = self.tabbar.bounds();
+        let line = |px: i32, r: Rect| Rect::new(px - 1, r.y, 2, r.h);
+        if let Some(i) = self.tabbar.tab_index_at(x, y) {
+            if let Some(r) = self.tabbar.tab_rect(i) {
+                return (Some(i), line(r.x.max(tb.x + 1), r));
+            }
+        }
+        let last = self.tabs.len().saturating_sub(1);
+        match self.tabbar.tab_rect(last) {
+            Some(r) => (None, line(r.right().min(tb.right() - 1), r)),
+            None => (None, Rect::new(tb.x, tb.y, 2, tb.h)),
+        }
+    }
+
+    /// 탭 `i`의 자리(마지막 그리기 기준 · 시험용).
+    #[cfg(test)]
+    pub(crate) fn tab_rect(&self, i: usize) -> Option<Rect> {
+        self.tabbar.tab_rect(i)
+    }
+
+    /// 탭 바 영역(표식 그리기용).
+    pub(crate) fn tabbar_bounds(&self) -> Rect {
+        self.tabbar.bounds()
+    }
+
     /// 탭 바 모양(설정 `tabs.multiline` · `tabs.scroll_buttons`): 여러 줄(폭을 넘으면 다음 줄) 또는 한 줄 + ◀ ▶(자리 3가지).
     pub(crate) fn set_tab_style(
         &mut self,

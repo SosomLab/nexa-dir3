@@ -47,6 +47,11 @@ impl App {
             self.layout_core();
             self.redraw();
         }
+        // 탭을 반대 패널로 끄는 중: 대상 탭 바를 강조색으로 옅게 덮고 놓일 자리에 세로선(탭 바 안 이동의 표식과 같은 색).
+        if let Some((dst, line)) = self.tab_drop_hint {
+            dc.fill_rect_alpha(self.panels[dst].tabbar_bounds(), th.accent, 0.12);
+            dc.fill_rect(line, th.accent);
+        }
         // 도크 경계 2종(비어 있으면 안 그린다 — 도크 숨김 · 단일 정보).
         self.dock_split_h.paint(dc, &th);
         self.dock_split_v.paint(dc, &th);
