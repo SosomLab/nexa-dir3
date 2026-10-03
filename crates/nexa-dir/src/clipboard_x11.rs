@@ -12,9 +12,13 @@
 //!   → 외부 도구 경로의 고질(넣어 준 `xclip` 프로세스가 죽으면 클립보드가 비는 것)도 같이 사라진다.
 //! - **읽기** = 우리가 소유자면 보관 중인 값을 그대로, 아니면 `ConvertSelection` → `SelectionNotify` → property(필요하면 INCR 수신).
 //! - 스레드는 **처음 복사할 때 한 번** 뜬다(붙여넣기만 하면 안 뜬다 · 부하원 원장 39 §3). 설정 `clipboard.x11_native`로 끄면 종전 CLI 경로.
+//! - **파일 목록**(T-53 · docs/port/19 §4-4): 같은 소유자가 `text/uri-list`(RFC 2483 · `file:///퍼센트-인코딩` · `\r\n`) ·
+//!   `x-special/gnome-copied-files`(`copy|cut\nfile:///a\nfile:///b` — Nautilus·Nemo·Caja·Thunar) · `application/x-kde-cutselection`(`1`=잘라내기)
+//!   을 **동시 게시**하고 텍스트 타깃에는 경로 줄 목록을 준다. 읽기는 gnome → uri-list(+kde cut) 순.
 //!
-//! ★ 출처: nexa-sql/crates/nexa-sql/src/clipboard_x11.rs(10-03 복사 · docs/port/40 SKEL-403 — `NSQL_*`→`NDIR_*` · 제품명만 개명 · 로직 불변).
+//! ★ 출처: nexa-sql/crates/nexa-sql/src/clipboard_x11.rs(10-03 복사 · docs/port/40 SKEL-403 — `NSQL_*`→`NDIR_*` · 제품명만 개명 · 로직 불변 · 파일 타깃은 dir3 추가).
 
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -41,6 +45,9 @@ struct Atoms {
     text_plain: Atom,
     incr: Atom,
     prop: Atom,
+    uri_list: Atom,
+    gnome: Atom,
+    kde_cut: Atom,
 }
 
 fn atoms(conn: &RustConnection) -> Result<Atoms, Box<dyn std::error::Error>> {
@@ -53,8 +60,50 @@ fn atoms(conn: &RustConnection) -> Result<Atoms, Box<dyn std::error::Error>> {
         utf8: a(b"UTF8_STRING")?,
         text_plain: a(b"text/plain;charset=utf-8")?,
         incr: a(b"INCR")?,
-        prop: a(b"NEXA_SQL_CLIP")?,
+        prop: a(b"NEXA_DIR_CLIP")?,
+        uri_list: a(b"text/uri-list")?,
+        gnome: a(b"x-special/gnome-copied-files")?,
+        kde_cut: a(b"application/x-kde-cutselection")?,
     })
+}
+
+/// 소유 중인 내용 — 텍스트는 항상 · 파일 목록이면 uri-list/gnome/kde 표현도 같이 게시한다.
+#[derive(Clone, Default)]
+struct Payload {
+    text: Vec<u8>,
+    files: Option<(Vec<PathBuf>, bool)>,
+    uri_list: Vec<u8>,
+    gnome: Vec<u8>,
+}
+
+impl Payload {
+    fn text(text: &str) -> Self {
+        Payload {
+            text: text.as_bytes().to_vec(),
+            ..Default::default()
+        }
+    }
+
+    fn files(paths: &[PathBuf], cut: bool) -> Self {
+        let uris: Vec<String> = paths.iter().map(|p| file_uri(p)).collect();
+        let text = paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut uri_list = String::new();
+        for u in &uris {
+            uri_list.push_str(u);
+            uri_list.push_str("\r\n");
+        }
+        let gnome = format!("{}\n{}", if cut { "cut" } else { "copy" }, uris.join("\n"));
+        Payload {
+            text: text.into_bytes(),
+            files: Some((paths.to_vec(), cut)),
+            uri_list: uri_list.into_bytes(),
+            gnome: gnome.into_bytes(),
+        }
+    }
 }
 
 /// 1×1 InputOnly 창(화면에 안 보인다 · selection 주고받기용 주소).
@@ -81,31 +130,122 @@ fn helper_window(
     Ok(win)
 }
 
+// ───────────────────────── URI 변환(순수) ─────────────────────────
+
+/// 경로 → `file:///…`(RFC 2483 · 비예약 문자와 `/`만 그대로 · 나머지 바이트는 `%XX`).
+pub(crate) fn file_uri(path: &Path) -> String {
+    let mut s = String::from("file://");
+    let bytes = path.as_os_str().as_encoded_bytes();
+    if !bytes.starts_with(b"/") {
+        s.push('/');
+    }
+    for &b in bytes {
+        let keep = b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~' | b'/');
+        if keep {
+            s.push(b as char);
+        } else {
+            s.push_str(&format!("%{b:02X}"));
+        }
+    }
+    s
+}
+
+/// `file://` URI → 경로(호스트 비움/`localhost`만 · 다른 스킴 = None · `%XX` 복원).
+pub(crate) fn uri_path(uri: &str) -> Option<PathBuf> {
+    let rest = uri.trim().strip_prefix("file://")?;
+    let path = if let Some(p) = rest.strip_prefix("localhost/") {
+        format!("/{p}")
+    } else if rest.starts_with('/') {
+        rest.to_string()
+    } else {
+        return None; // 원격 호스트
+    };
+    let mut out: Vec<u8> = Vec::with_capacity(path.len());
+    let b = path.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
+                out.push(h << 4 | l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    let s = String::from_utf8_lossy(&out).into_owned();
+    (!s.is_empty()).then(|| PathBuf::from(s))
+}
+
+fn hex(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
+    }
+}
+
+/// `text/uri-list` 본문 → 경로들(`#` 주석 · 빈 줄 · 비파일 스킴 제외).
+pub(crate) fn parse_uri_list(bytes: &[u8]) -> Vec<PathBuf> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter_map(uri_path)
+        .collect()
+}
+
+/// `x-special/gnome-copied-files` 본문 → (경로들, 잘라내기). 첫 줄 `cut`/`copy`.
+pub(crate) fn parse_gnome(bytes: &[u8]) -> Option<(Vec<PathBuf>, bool)> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut lines = text.lines();
+    let head = lines.next()?.trim();
+    let cut = match head {
+        "cut" => true,
+        "copy" => false,
+        _ => return None,
+    };
+    let paths: Vec<PathBuf> = lines.map(str::trim).filter_map(uri_path).collect();
+    (!paths.is_empty()).then_some((paths, cut))
+}
+
 // ───────────────────────── 쓰기(소유권 유지 스레드) ─────────────────────────
 
-static OWNER: OnceLock<Option<Sender<Vec<u8>>>> = OnceLock::new();
+static OWNER: OnceLock<Option<Sender<Payload>>> = OnceLock::new();
 /// 지금 우리가 들고 있는 내용 — 우리가 소유자일 때의 읽기는 왕복 없이 여기서.
-static MINE: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+static MINE: Mutex<Option<Payload>> = Mutex::new(None);
 
-/// 텍스트를 CLIPBOARD에 올린다(소유자가 된다). 실패 = `false` → 호출측이 CLI 경로로 폴백.
-pub(crate) fn write(text: &str) -> bool {
+fn publish(payload: Payload, what: &str) -> bool {
     let tx = OWNER.get_or_init(|| spawn_owner().ok());
     let Some(tx) = tx.as_ref() else {
         if std::env::var_os("NDIR_TRACE_CLIP").is_some() {
-            eprintln!("[clip] x11 write: owner thread unavailable → fallback");
+            eprintln!("[clip] x11 write({what}): owner thread unavailable → fallback");
         }
         return false;
     };
-    *MINE.lock().unwrap_or_else(|e| e.into_inner()) = Some(text.as_bytes().to_vec());
-    let sent = tx.send(text.as_bytes().to_vec()).is_ok();
+    let len = payload.text.len();
+    *MINE.lock().unwrap_or_else(|e| e.into_inner()) = Some(payload.clone());
+    let sent = tx.send(payload).is_ok();
     if std::env::var_os("NDIR_TRACE_CLIP").is_some() {
-        eprintln!("[clip] x11 write: {} bytes queued={sent}", text.len());
+        eprintln!("[clip] x11 write({what}): {len} bytes queued={sent}");
     }
     sent
 }
 
-fn spawn_owner() -> Result<Sender<Vec<u8>>, Box<dyn std::error::Error>> {
-    let (tx, rx) = channel::<Vec<u8>>();
+/// 텍스트를 CLIPBOARD에 올린다(소유자가 된다). 실패 = `false` → 호출측이 CLI 경로로 폴백.
+pub(crate) fn write(text: &str) -> bool {
+    publish(Payload::text(text), "text")
+}
+
+/// 파일 목록을 CLIPBOARD에 올린다(uri-list · gnome-copied-files · kde cut · 텍스트 = 경로 줄). 실패 = `false`.
+pub(crate) fn write_files(paths: &[PathBuf], cut: bool) -> bool {
+    publish(Payload::files(paths, cut), "files")
+}
+
+fn spawn_owner() -> Result<Sender<Payload>, Box<dyn std::error::Error>> {
+    let (tx, rx) = channel::<Payload>();
     // 연결·창은 스레드 안에서 만든다(RustConnection은 Send가 아니어도 되게).
     let (ready_tx, ready_rx) = channel::<bool>();
     std::thread::Builder::new()
@@ -120,7 +260,7 @@ fn spawn_owner() -> Result<Sender<Vec<u8>>, Box<dyn std::error::Error>> {
                 return;
             };
             let _ = ready_tx.send(true);
-            let mut data: Vec<u8> = Vec::new();
+            let mut data = Payload::default();
             // 나눠 보내는 중인 요청들(INCR): (요청자 창, property, 남은 자리)
             let mut incr: Vec<(Window, Atom, usize)> = Vec::new();
             loop {
@@ -159,7 +299,7 @@ fn spawn_owner() -> Result<Sender<Vec<u8>>, Box<dyn std::error::Error>> {
                     Some(Event::PropertyNotify(p)) => {
                         // INCR 계속: 상대가 앞 조각을 지웠다 = 다음 조각을 올릴 차례.
                         if p.state == Property::DELETE {
-                            step_incr(&conn, &at, &data, p.window, p.atom, &mut incr);
+                            step_incr(&conn, &at, &data.text, p.window, p.atom, &mut incr);
                         }
                     }
                     Some(Event::Error(e)) => {
@@ -182,7 +322,7 @@ fn spawn_owner() -> Result<Sender<Vec<u8>>, Box<dyn std::error::Error>> {
 fn serve(
     conn: &RustConnection,
     at: &Atoms,
-    data: &[u8],
+    data: &Payload,
     r: &SelectionRequestEvent,
     incr: &mut Vec<(Window, Atom, usize)>,
 ) {
@@ -191,21 +331,45 @@ fn serve(
     } else {
         r.property
     };
+    let has_files = data.files.is_some();
     let ok = if r.target == at.targets {
-        let list = [
+        let mut list = vec![
             at.targets,
             at.utf8,
             at.text_plain,
             u32::from(AtomEnum::STRING),
         ];
+        if has_files {
+            list.extend([at.uri_list, at.gnome, at.kde_cut]);
+        }
         conn.change_property32(PropMode::REPLACE, r.requestor, prop, AtomEnum::ATOM, &list)
+            .is_ok()
+    } else if has_files && r.target == at.uri_list {
+        conn.change_property8(
+            PropMode::REPLACE,
+            r.requestor,
+            prop,
+            r.target,
+            &data.uri_list,
+        )
+        .is_ok()
+    } else if has_files && r.target == at.gnome {
+        conn.change_property8(PropMode::REPLACE, r.requestor, prop, r.target, &data.gnome)
+            .is_ok()
+    } else if has_files && r.target == at.kde_cut {
+        let v: &[u8] = if data.files.as_ref().is_some_and(|(_, cut)| *cut) {
+            b"1"
+        } else {
+            b"0"
+        };
+        conn.change_property8(PropMode::REPLACE, r.requestor, prop, r.target, v)
             .is_ok()
     } else if r.target == at.utf8
         || r.target == at.text_plain
         || r.target == u32::from(AtomEnum::STRING)
     {
-        if data.len() <= CHUNK {
-            conn.change_property8(PropMode::REPLACE, r.requestor, prop, r.target, data)
+        if data.text.len() <= CHUNK {
+            conn.change_property8(PropMode::REPLACE, r.requestor, prop, r.target, &data.text)
                 .is_ok()
         } else {
             // INCR 시작: 전체 크기를 알리고, 상대가 property를 지울 때마다 한 조각씩.
@@ -214,7 +378,7 @@ fn serve(
                 &x11rb::protocol::xproto::ChangeWindowAttributesAux::new()
                     .event_mask(EventMask::PROPERTY_CHANGE),
             );
-            let total = [data.len() as u32];
+            let total = [data.text.len() as u32];
             let ok = conn
                 .change_property32(PropMode::REPLACE, r.requestor, prop, at.incr, &total)
                 .is_ok();
@@ -267,27 +431,70 @@ fn step_incr(
 
 /// CLIPBOARD 텍스트. 우리가 소유자면 보관분을 그대로 돌려준다(왕복 0).
 pub(crate) fn read() -> Option<String> {
-    if let Some(v) = MINE.lock().unwrap_or_else(|e| e.into_inner()).clone() {
-        return String::from_utf8(v).ok();
+    if let Some(p) = MINE.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        return String::from_utf8(p.text).ok();
     }
-    read_from_owner().ok().flatten()
+    read_target(Target::Utf8)
+        .ok()
+        .flatten()
+        .map(|v| String::from_utf8_lossy(&v).into_owned())
 }
 
-fn read_from_owner() -> Result<Option<String>, Box<dyn std::error::Error>> {
+/// CLIPBOARD 파일 목록(gnome-copied-files → uri-list + kde cut). 우리가 소유자면 보관분.
+pub(crate) fn read_files() -> Option<(Vec<PathBuf>, bool)> {
+    if let Some(p) = MINE.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        return p.files;
+    }
+    if let Some(g) = read_target(Target::Gnome).ok().flatten() {
+        if let Some(r) = parse_gnome(&g) {
+            return Some(r);
+        }
+    }
+    let list = read_target(Target::UriList).ok().flatten()?;
+    let paths = parse_uri_list(&list);
+    if paths.is_empty() {
+        return None;
+    }
+    let cut = read_target(Target::KdeCut)
+        .ok()
+        .flatten()
+        .is_some_and(|v| v.first() == Some(&b'1'));
+    Some((paths, cut))
+}
+
+#[derive(Clone, Copy)]
+enum Target {
+    Utf8,
+    UriList,
+    Gnome,
+    KdeCut,
+}
+
+fn target_atom(at: &Atoms, t: Target) -> Atom {
+    match t {
+        Target::Utf8 => at.utf8,
+        Target::UriList => at.uri_list,
+        Target::Gnome => at.gnome,
+        Target::KdeCut => at.kde_cut,
+    }
+}
+
+fn read_target(t: Target) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
     let (conn, screen) = x11rb::connect(None)?;
     let at = atoms(&conn)?;
     if conn.get_selection_owner(at.clipboard)?.reply()?.owner == NONE {
         return Ok(None); // 아무도 안 들고 있다 = 빈 클립보드
     }
     let win = helper_window(&conn, screen)?;
-    conn.convert_selection(win, at.clipboard, at.utf8, at.prop, CURRENT_TIME)?;
+    let target = target_atom(&at, t);
+    conn.convert_selection(win, at.clipboard, target, at.prop, CURRENT_TIME)?;
     conn.flush()?;
     let deadline = Instant::now() + READ_TIMEOUT;
     while Instant::now() < deadline {
         match conn.poll_for_event()? {
             Some(Event::SelectionNotify(n)) => {
                 if n.property == NONE {
-                    return Ok(None); // 상대가 UTF8_STRING을 못 준다
+                    return Ok(None); // 상대가 그 타깃을 못 준다
                 }
                 let r = conn
                     .get_property(true, win, at.prop, AtomEnum::ANY, 0, u32::MAX / 4)?
@@ -295,7 +502,7 @@ fn read_from_owner() -> Result<Option<String>, Box<dyn std::error::Error>> {
                 if r.type_ == at.incr {
                     return recv_incr(&conn, &at, win, deadline);
                 }
-                return Ok(Some(String::from_utf8_lossy(&r.value).into_owned()));
+                return Ok(Some(r.value));
             }
             Some(Event::Error(e)) => {
                 if std::env::var_os("NDIR_TRACE_CLIP").is_some() {
@@ -315,7 +522,7 @@ fn recv_incr(
     at: &Atoms,
     win: Window,
     deadline: Instant,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
+) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
     while Instant::now() < deadline {
         match conn.poll_for_event()? {
@@ -324,7 +531,7 @@ fn recv_incr(
                     .get_property(true, win, at.prop, AtomEnum::ANY, 0, u32::MAX / 4)?
                     .reply()?;
                 if r.value.is_empty() {
-                    return Ok(Some(String::from_utf8_lossy(&buf).into_owned()));
+                    return Ok(Some(buf));
                 }
                 buf.extend_from_slice(&r.value);
             }
@@ -332,15 +539,56 @@ fn recv_incr(
             None => std::thread::sleep(Duration::from_millis(5)),
         }
     }
-    Ok((!buf.is_empty()).then(|| String::from_utf8_lossy(&buf).into_owned()))
+    Ok((!buf.is_empty()).then_some(buf))
 }
 
 #[cfg(test)]
 mod tests {
-    //! 진짜 X 서버가 있어야 도는 왕복 시험(`cargo test -p nexa-dir clipboard_x11 -- --ignored`) — CI(헤드리스)에서는 건너뛴다.
-    //! 상대편은 **다른 프로세스**(python3 Gtk)여야 selection 전송이 실제로 일어난다. 환경 변수:
+    //! 순수 변환 시험은 어디서나 돈다. 진짜 X 서버가 있어야 도는 왕복 시험(`cargo test -p nexa-dir clipboard_x11 -- --ignored`)은
+    //! CI(헤드리스)에서 건너뛴다. 상대편은 **다른 프로세스**(python3 Gtk)여야 selection 전송이 실제로 일어난다. 환경 변수:
     //!   NDIR_CLIP_EXPECT = 다른 프로세스가 미리 올려 둔 글(읽기 시험) · NDIR_CLIP_HOLD_MS = 쓰기 뒤 소유권을 유지할 시간.
     use super::*;
+
+    /// 경로 ↔ file URI(공백·한글·`#` 퍼센트 인코딩 · localhost 호스트 · 비파일 스킴 거부) · uri-list(주석/CRLF) · gnome(cut/copy) 파싱 · Payload 표현.
+    #[test]
+    fn uri_round_trip_and_list_parsing() {
+        let p = PathBuf::from("/home/u/내 문서/a #1.txt");
+        let u = file_uri(&p);
+        assert_eq!(
+            u,
+            "file:///home/u/%EB%82%B4%20%EB%AC%B8%EC%84%9C/a%20%231.txt"
+        );
+        assert_eq!(uri_path(&u), Some(p.clone()));
+        assert_eq!(
+            uri_path("file://localhost/tmp/x"),
+            Some(PathBuf::from("/tmp/x"))
+        );
+        assert_eq!(uri_path("file://host/tmp/x"), None);
+        assert_eq!(uri_path("http://example.com/a"), None);
+        let list = b"# comment\r\nfile:///a/b.txt\r\n\r\nfile:///c%20d\r\nhttp://x/y\r\n";
+        assert_eq!(
+            parse_uri_list(list),
+            vec![PathBuf::from("/a/b.txt"), PathBuf::from("/c d")]
+        );
+        assert_eq!(
+            parse_gnome(b"cut\nfile:///a\nfile:///b"),
+            Some((vec![PathBuf::from("/a"), PathBuf::from("/b")], true))
+        );
+        assert_eq!(parse_gnome(b"copy\nfile:///a").map(|(_, c)| c), Some(false));
+        assert_eq!(parse_gnome(b"move\nfile:///a"), None);
+        let pl = Payload::files(&[PathBuf::from("/a"), p.clone()], true);
+        assert_eq!(
+            pl.uri_list,
+            b"file:///a\r\nfile:///home/u/%EB%82%B4%20%EB%AC%B8%EC%84%9C/a%20%231.txt\r\n".to_vec()
+        );
+        assert!(pl.gnome.starts_with(b"cut\nfile:///a\n"));
+        assert_eq!(
+            String::from_utf8(pl.text).unwrap(),
+            format!("/a\n{}", p.display())
+        );
+        assert_eq!(pl.files, Some((vec![PathBuf::from("/a"), p], true)));
+        assert!(Payload::text("x").files.is_none());
+    }
 
     #[test]
     #[ignore]

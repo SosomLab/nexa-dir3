@@ -522,7 +522,7 @@ impl Platform {
             Box::new(linux::opener()),
             Box::new(linux::NativeDisk),
             Rc::new(linux::FreedesktopTrash::new()),
-            Box::new(Unsupported),
+            Box::new(linux::X11Files),
         );
         #[cfg(windows)]
         let pty: Box<dyn Pty> = Box::new(winpty::ConPty);

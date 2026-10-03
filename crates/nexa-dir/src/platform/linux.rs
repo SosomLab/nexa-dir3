@@ -1,5 +1,5 @@
 //! Linux 구현(T-50·T-51 A): 셸 탐지 · 열기/보기 · **freedesktop 휴지통**(`$XDG_DATA_HOME/Trash` · `.trashinfo` · std만) · **드라이브 용량**(`statvfs` 수동 extern).
-//! uri-list 클립보드 · XDND는 T-53 잔여 · inotify 감시 = `linuxwatch.rs` · PTY = `unixpty.rs`.
+//! 파일 클립보드 = `X11Files`(`clipboard_x11` uri-list · gnome-copied-files · kde cut) · inotify 감시 = `linuxwatch.rs` · PTY = `unixpty.rs` · XDND는 T-53 잔여.
 
 use super::*;
 
@@ -201,6 +201,26 @@ struct StatVfs {
 
 extern "C" {
     fn statvfs(path: *const std::os::raw::c_char, buf: *mut StatVfs) -> i32;
+}
+
+/// X11 CLIPBOARD 파일 목록(T-53 · docs/port/19 §4-4): 소유자 스레드가 `text/uri-list`·`x-special/gnome-copied-files`·`application/x-kde-cutselection`을
+/// 같이 게시 · 읽기는 gnome → uri-list(+kde). 설정 `clipboard.x11_native`가 꺼졌거나 X 연결이 없으면(Wayland 전용 세션) `Unsupported`(앱 내 사본만).
+pub(super) struct X11Files;
+
+impl FileClipboard for X11Files {
+    fn read_files(&self) -> Option<(Vec<PathBuf>, bool)> {
+        if !crate::settings_clip_native() {
+            return None;
+        }
+        crate::clipboard_x11::read_files()
+    }
+    fn write_files(&self, paths: &[PathBuf], cut: bool) -> Result<(), PlatformError> {
+        if crate::settings_clip_native() && crate::clipboard_x11::write_files(paths, cut) {
+            Ok(())
+        } else {
+            Err(PlatformError::Unsupported("x11 file clipboard"))
+        }
+    }
 }
 
 pub(super) struct NativeDisk;

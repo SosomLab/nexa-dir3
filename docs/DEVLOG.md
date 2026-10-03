@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-53 Linux 파일 클립보드**: `clipboard_x11.rs` 다중 타깃(uri-list · gnome-copied-files · kde cut) + `platform/linux.rs::X11Files` · 시험 +1 → [journal §56](journal/2026-10-03.md)
 - **T-52 macOS 파일 클립보드**: `platform/macclip.rs`(NSPasteboard 파일 URL · 앱 전용 cut 타입 + changeCount) · 시험 +1(macOS CI) → [journal §55](journal/2026-10-03.md)
 - **T-52/53 폴더 감시 네이티브**: `platform/linuxwatch.rs`(inotify) · `platform/macwatch.rs`(kqueue) — 비차단 fd + 틱 poll · 폴백 · 소실 재구독 · OS별 시험 +2 → [journal §54](journal/2026-10-03.md)
 - **SHELL-008 새로 만들기 ▸**: 행 메뉴 서브메뉴(폴더 · 텍스트 문서 · OS/사용자 템플릿) · `platform::Templates` 포트(Windows 레지스트리 ShellNew · 사용자 폴더 · XDG) · `create_new_at` + 템플릿 materialize · 시험 +3(160) → [journal §53](journal/2026-10-03.md)
