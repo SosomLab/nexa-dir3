@@ -45,8 +45,7 @@ mod selfcheck;
 mod session;
 mod termview;
 mod theme;
-#[allow(dead_code)]
-mod toast;
+pub(crate) use nexa_ctl::controls::toast; // nexa-ui 114차 승격(T-32 · UIK-213) — 앱 사본 삭제
 mod trashop;
 #[allow(dead_code)]
 mod winfocus;

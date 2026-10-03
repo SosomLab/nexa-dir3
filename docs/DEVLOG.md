@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-32 Toast 승격**: 앱 `toast.rs` → nexa-ui 114차 `nexa_ctl::controls::toast`(DR-2) · FolderTree/FilterBox = dir2에 실체 없음 → 범위 밖 ⚠ → [journal §69](journal/2026-10-03.md)
 - **T-31 B 장식/굵은 셀**: nexa-ui 113차 `select_font_styled`(italic) · dir3 `apply_font_decor`(folder_bold/header_bold/header_italic 적용) · 터미널 SGR 1 굵게 그리기 · T3 +1 · UIC-311/313 ✅ · 315 ⚠ 수용 → [journal §68](journal/2026-10-03.md)
 - **T-31 클립 스택**: nexa-ui 112차 `RasterCtx` 클립 스택 실제 구현(모든 어휘) + nexa-grid `paint_grid` 경계 클립 → dir3 T3 `panel_grid_pushes_its_bounds_as_clip` · 매트릭스 UIC-310 ✅ → [journal §67](journal/2026-10-03.md)
 - **T-90 5차**: 남은 접두 묶음 행 28 → 원장 전 ID 덮음 → [journal §66](journal/2026-10-03.md)

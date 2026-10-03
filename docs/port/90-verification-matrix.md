@@ -35,11 +35,11 @@
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 4 | 0 | 231 | 0 | 0 |
-| UIK | 67 | 67 | 10 | 12 | 45 | 0 | 0 |
+| UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4266 | 4266 | 2346 | 1025 | 753 | 0 | 0 |
+| **합계** | 4266 | 4266 | 2348 | 1022 | 754 | 0 | 0 |
 
 ## 행
 
@@ -211,7 +211,9 @@
 | SKEL-301~350 | 함정·교훈 | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
 | UIC-001~323 | nexa-ctl/gfx/sys/conf 코어 어휘(geom · event · draw · raster · theme · tokens · shape · typeahead · 컨트롤 공용부) | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 — dir3는 소비자 · 갭(UIC-310~323)은 T-31 행 |
 | UIK-001~116 | nexa-ctl 컨트롤 표 · nexa-sql 앱 내 범용 UI | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 |
-| UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | FolderTree 지연 로딩·FilterBox(T-32) ☐ |
+| UIK-107 · 213 | 토스트 `Toasts`(범용 승격) | nexa-ui 114차 `nexa_ctl::controls::toast` · dir3 `main.rs` `use` | T2 · T3 | nexa-ctl toast 시험 3 · `bulk_*`(`toasts.animating`) | ✅ | journal §69 · 앱 사본 삭제(DR-2) |
+| UIK-210 · 214 | FolderTree(지연 로딩) · FilterBox | — | — | — | ⚠ | dir2에 실체 없음(widgets = chrome/dock/menubar/overlaybar/pathbar/rows/tabbar · 검색 상자는 설정 창뿐) → 추가하지 않음(journal §69) |
+| UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |
