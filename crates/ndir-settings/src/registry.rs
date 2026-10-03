@@ -502,6 +502,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 파일 컬럼 순서/표시(T-71 DLG-069 — 별도 편집 창 · 값 문법 = `cols:1[name:1,…]` · 세션이 패널별 실제 값을 따로 둔다).
+    e!(
+        "list.col_layout",
+        CAT_LIST,
+        "pref.colLayout",
+        "pref.colLayout.desc",
+        Text,
+        ""
+    ),
     // ── 파일 목록 › 타입어헤드(①~⑥)
     e!(
         "typeahead.scope",

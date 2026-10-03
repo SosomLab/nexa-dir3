@@ -157,6 +157,11 @@ impl App {
             self.ctx_pick(item.trim());
             return;
         }
+        if let Some(key) = id.strip_prefix("order.open:") {
+            // 순서 편집 창(T-71 · `toolbar.layout` / `list.col_layout` / `ctxmenu.layout`).
+            self.open_order_editor(key.trim());
+            return;
+        }
         if let Some(n) = id.strip_prefix("dlg.pick:") {
             let id = n.trim().parse::<i32>().unwrap_or(0);
             self.dlg_pick(id);
@@ -330,6 +335,7 @@ impl App {
             "archive" => self.archive_win.dump(),
             "progress" => self.progress_win.dump(),
             "bulk" => self.bulk_win.dump(),
+            "order" => self.order_win.dump(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),

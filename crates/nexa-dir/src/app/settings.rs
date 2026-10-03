@@ -102,6 +102,20 @@ impl App {
                 self.layout();
             }
             "launcher.items" | "launcher.seed" => self.rebuild_launcher(),
+            // 순서 편집기(T-71 DLG-073): 툴바 재구성 · 컬럼 = 활성 패널(+동기) · 컨텍스트 메뉴는 다음 열 때 읽는다.
+            "toolbar.layout" => {
+                self.rebuild_toolbar();
+                self.sync_menu_checks();
+                self.layout();
+            }
+            "list.col_layout" => {
+                let v = self
+                    .settings
+                    .get("list.col_layout")
+                    .unwrap_or("")
+                    .to_string();
+                self.apply_col_layout_str(&v);
+            }
             "list.col_width_sync" => {
                 self.sync_menu_checks();
             }

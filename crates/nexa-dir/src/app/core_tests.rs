@@ -1672,3 +1672,113 @@ fn bulk_rename_window_apply_undo_and_presets() {
     let _ = std::fs::remove_file(pdir.join("T71 test.cfg"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-71 순서 편집기: `order.open:` → 창 요청 + 덤프 · 통지 → 툴바 재구성(그룹 숨김·순서) · 컨텍스트 메뉴 항목 표시/순서 · 컬럼 레이아웃(활성 패널 + 동기 ·
+/// 세션 스냅숏 · 정규화 저장).
+#[test]
+fn order_editor_applies_toolbar_ctxmenu_and_columns() {
+    let (mut app, dir) = fixture("order");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.dump_of("order").unwrap().starts_with("none"));
+    app.startup_cmd("order.open:toolbar.layout");
+    assert!(app.open_order);
+    let d = app.dump_of("order").unwrap();
+    assert!(
+        d.contains("key toolbar.layout")
+            && d.contains("[x] Panel Controls")
+            && d.contains("  [x] File Panel Toggle"),
+        "{d}"
+    );
+    app.startup_cmd("order.open:bogus");
+    // 툴바: 기본 = refresh 먼저 · view 그룹 숨김 + show 재배열 → 항목 집합/순서가 따라온다.
+    let ids =
+        |app: &App| -> Vec<String> { app.toolbar.items().iter().map(|t| t.id.clone()).collect() };
+    let before = ids(&app);
+    assert_eq!(before[0], "view.refresh");
+    assert!(before.contains(&"view.mode_tree".to_string()));
+    app.order_changed(
+        "toolbar.layout",
+        "show[dot,hidden]|view:0|refresh|panel[toggle:0]|settings",
+    );
+    let after = ids(&app);
+    assert!(!after.contains(&"view.mode_tree".to_string()), "{after:?}");
+    assert!(
+        !after.contains(&"view.panel_toggle".to_string()),
+        "{after:?}"
+    );
+    // 누락 foldersfirst는 가장 가까운 앞 형제(dot) 뒤로 보충된다(dir2 규칙).
+    assert_eq!(after[0], "view.dot");
+    assert_eq!(after[1], "view.folders_first");
+    assert_eq!(after[2], "view.hidden");
+    assert_eq!(
+        app.settings.get("toolbar.layout").unwrap(),
+        "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1",
+        "정규화 저장"
+    );
+    // 컨텍스트 메뉴: copyName 숨김 · pasteInto 앞 · bg 그룹 숨김 = paste/undo/redo 전부 제외.
+    let mut inv = Invalidations::default();
+    app.panels[0]
+        .rows_mut()
+        .select_program(0, nexa_grid::SelectOp::Single, &mut inv);
+    app.open_row_menu(0);
+    let row = app.dump_of("ctx").unwrap();
+    assert!(
+        row.contains("ctx.copy_name")
+            && row.contains("edit.delete_permanent")
+            && row.contains("file.new_folder"),
+        "{row}"
+    );
+    app.tab_menu.close();
+    app.order_changed("ctxmenu.layout", "row[pasteInto,copyName:0,new:0]|bg:0");
+    app.open_row_menu(0);
+    let row = app.dump_of("ctx").unwrap();
+    assert!(
+        !row.contains("ctx.copy_name")
+            && !row.contains("file.new_folder")
+            && row.contains("ctx.paste_into"),
+        "{row}"
+    );
+    app.tab_menu.close();
+    app.open_bg_menu(0);
+    let bg = app.dump_of("ctx").unwrap();
+    assert!(
+        !bg.contains("edit.undo") && !bg.contains("edit.paste") && bg.contains("view.refresh"),
+        "{bg}"
+    );
+    app.tab_menu.close();
+    // 컬럼: ext 앞 · size 숨김 → 활성 패널 + 동기(기본 on) 반대 패널 · 문자열 왕복 · 세션 스냅숏.
+    assert_eq!(
+        app.order_value_of("list.col_layout"),
+        "cols:1[name:1,ext:1,size:1,modified:1,kind:1]"
+    );
+    app.order_changed("list.col_layout", "cols[ext,name,size:0]");
+    let keys = |app: &App, p: usize| -> Vec<u32> {
+        app.panels[p]
+            .rows()
+            .columns()
+            .iter()
+            .map(|c| c.key)
+            .collect()
+    };
+    assert_eq!(keys(&app, 0), vec![1, 0, 3, 4]);
+    assert_eq!(
+        keys(&app, 1),
+        vec![1, 0, 3, 4],
+        "col_width_sync on → 반대 패널도"
+    );
+    assert_eq!(
+        app.panels[0].col_layout_str(),
+        "cols:1[ext:1,name:1,modified:1,kind:1,size:0]"
+    );
+    assert_eq!(
+        app.session_snapshot().panels[0].col_layout,
+        "cols:1[ext:1,name:1,modified:1,kind:1,size:0]"
+    );
+    // 전부 숨김 = name 강제.
+    app.order_changed(
+        "list.col_layout",
+        "cols[name:0,ext:0,size:0,modified:0,kind:0]",
+    );
+    assert_eq!(keys(&app, 0), vec![0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

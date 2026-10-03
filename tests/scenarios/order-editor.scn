@@ -1,0 +1,12 @@
+# T4 · T-71 순서/표시 편집 창(DLG-069~073): 기동 명령 order.open:toolbar.layout → 창이 뜨고 덤프에 그룹/자식 행 · 설정 창 필드 3개의 [편집…]과 같은 길.
+id: order-editor
+title: 순서 편집 창 — 도구 모음 그룹/자식 행 · 체크 · 값
+settings: ui.lang=en
+cmd: @ready:order.open:toolbar.layout
+cmd: @after:1500:order.dump:<out>/order.txt
+cmd: @after:1600:assert.order:key toolbar.layout
+cmd: @after:1700:quit
+check: order.txt: key toolbar.layout
+check: order.txt: [x] Panel Controls
+check: order.txt:   [x] File Panel Toggle
+check: order.txt: value refresh:1|panel:1[toggle:1,dock:1,info:1,colsync:1,ontop:1]|view:1[tree:1,flat:1,tiles:1]|show:1[hidden:1,dot:1,foldersfirst:1]|settings:1

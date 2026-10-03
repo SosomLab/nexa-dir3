@@ -191,6 +191,18 @@ impl Panel {
             panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
             panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
         }
+        // 열 순서/표시(`cols` · T-71) → 그 위에 열 폭(표시 순으로 저장돼 있다).
+        if !ps.col_layout.is_empty() {
+            let parsed =
+                crate::order::parse_order_with(crate::order::COLUMN_BLOCKS, &ps.col_layout);
+            if let Some((_, _, items)) = parsed.first() {
+                let spec: Vec<(u32, bool)> = items
+                    .iter()
+                    .filter_map(|(k, v)| crate::order::col_key_id(k).map(|id| (id, *v)))
+                    .collect();
+                panel.apply_col_layout(&spec, &mut inv);
+            }
+        }
         if !ps.col_widths.is_empty() {
             panel.apply_col_widths(&ps.col_widths, &mut inv);
         }
@@ -228,6 +240,73 @@ impl Panel {
             tab.rows.set_col_widths(widths, inv);
         }
         self.user_cols = true;
+    }
+
+    /// 현재 열 레이아웃 문자열(`cols:1[name:1,…]` — 표시 열 = 기본 열 순 · 숨김 열 = 정의 순으로 말미 `:0` · dir2 `panel_col_layout`).
+    /// 기본 열(`base_columns`)이 기준이라 가상 최상위(드라이브 열)에서도 사용자 레이아웃이 나온다.
+    pub(crate) fn col_layout_str(&self) -> String {
+        let cols: &[Column] = if self.base_columns.is_empty() {
+            self.rows().columns()
+        } else {
+            &self.base_columns
+        };
+        let mut items: Vec<(String, bool)> = cols
+            .iter()
+            .filter(|c| crate::order::col_key_id(crate::order::col_id_key(c.key)) == Some(c.key))
+            .map(|c| (crate::order::col_id_key(c.key).to_string(), true))
+            .collect();
+        for (_, defs) in crate::order::COLUMN_BLOCKS {
+            for d in *defs {
+                if !items.iter().any(|(k, _)| k == d) {
+                    items.push((d.to_string(), false));
+                }
+            }
+        }
+        crate::order::serialize_order_with(&[("cols".to_string(), true, items)], true)
+    }
+
+    /// 열 레이아웃(key · 표시) 적용 — 현재 폭 보존 · 재표시 열 = 기본 폭 · 전부 숨김이면 첫 정의 열(name) 강제(dir2 `apply_col_layout`).
+    /// 기본 열을 바꾸고 가상 최상위가 아닌 탭에 넣는다(드라이브 열 탭은 `sync_columns_for_root`가 돌아올 때 기본 열을 쓴다).
+    pub(crate) fn apply_col_layout(&mut self, spec: &[(u32, bool)], inv: &mut Invalidations) {
+        let cur: Vec<Column> = self.rows().columns().to_vec();
+        let base = if self.base_columns.is_empty() {
+            cur.clone()
+        } else {
+            self.base_columns.clone()
+        };
+        let mut out: Vec<Column> = Vec::new();
+        for (key, vis) in spec {
+            if !vis {
+                continue;
+            }
+            if let Some(c) = cur.iter().find(|c| c.key == *key) {
+                out.push(c.clone());
+            } else if let Some(c) = base.iter().find(|c| c.key == *key) {
+                out.push(c.clone());
+            }
+        }
+        if out.is_empty() {
+            // 전부 숨김 = name 강제(정의상 첫 열 · 현재 순서가 아니라 key로 찾는다).
+            if let Some(c) = cur
+                .iter()
+                .chain(base.iter())
+                .find(|c| c.key == crate::filelist::COL_NAME)
+                .or_else(|| base.first())
+                .cloned()
+            {
+                out.push(c);
+            }
+        }
+        if out.is_empty() {
+            return;
+        }
+        self.base_columns = out.clone();
+        self.user_cols = true;
+        for tab in &mut self.tabs {
+            if !tab.rows.source().is_virtual_root() {
+                tab.rows.set_columns(out.clone(), inv);
+            }
+        }
     }
 
     pub(crate) fn tab_count(&self) -> usize {

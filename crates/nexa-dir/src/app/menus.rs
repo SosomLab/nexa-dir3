@@ -208,7 +208,8 @@ impl App {
         }
     }
 
-    /// 툴바(dir2 `build_toolbar` 블록 순서 panel · view · refresh · settings · show — 글리프 폴백 · SVG 아이콘은 T-30/T-43).
+    /// 툴바(dir2 `build_toolbar` — **순서/표시 = 설정 `toolbar.layout`**(T-71 `order::TOOLBAR_BLOCKS` 기본 refresh · panel · view · show · settings) ·
+    /// 블록 사이 구분선 · 그룹 숨김 = 통째 · 글리프 폴백 · SVG 아이콘은 T-30).
     pub(crate) fn build_toolbar(settings: &Settings, icon_px: u32) -> Vec<ToolItem> {
         // dir2 SVG 아이콘(T-30 · `icons.rs` · nexa-gfx svg 마스크 → 테마 틴트) · 없으면 글리프(자산 미등록·파싱 실패 격리).
         let g = |id: &str, glyph: &str, tip_key: &str| {
@@ -220,26 +221,51 @@ impl App {
                 );
             ToolItem::new(id, icon).tip(tr(tip_key))
         };
-        let _ = settings;
-        vec![
-            g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
-            g("view.dock", "▂", "menu.view.dock"),
-            g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
-            g("view.info_toggle", "ⓘ", "cmd.infoToggle"),
-            g("view.col_width_sync", "⇔", "menu.view.colWidthSync"),
-            ToolItem::separator(),
-            g("view.mode_tree", "├─", "menu.view.modeTree"),
-            g("view.mode_flat", "☰", "menu.view.modeFlat"),
-            g("view.mode_tiles", "▦", "menu.view.modeTiles"),
-            ToolItem::separator(),
-            g("view.refresh", "⟳", "menu.view.refresh"),
-            ToolItem::separator(),
-            g("file.prefs", "⚙", "menu.file.prefs"),
-            ToolItem::separator(),
-            g("view.hidden", "👁", "menu.view.hidden"),
-            g("view.dot", "…", "menu.view.dot"),
-            g("view.folders_first", "▲", "pref.sortFoldersFirst"),
-        ]
+        let item = |block: &str, key: &str| -> Option<ToolItem> {
+            Some(match (block, key) {
+                ("panel", "toggle") => g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
+                ("panel", "dock") => g("view.dock", "▂", "menu.view.dock"),
+                ("panel", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
+                ("panel", "info") => g("view.info_toggle", "ⓘ", "cmd.infoToggle"),
+                ("panel", "colsync") => g("view.col_width_sync", "⇔", "menu.view.colWidthSync"),
+                ("view", "tree") => g("view.mode_tree", "├─", "menu.view.modeTree"),
+                ("view", "flat") => g("view.mode_flat", "☰", "menu.view.modeFlat"),
+                ("view", "tiles") => g("view.mode_tiles", "▦", "menu.view.modeTiles"),
+                ("refresh", _) => g("view.refresh", "⟳", "menu.view.refresh"),
+                ("settings", _) => g("file.prefs", "⚙", "menu.file.prefs"),
+                ("show", "hidden") => g("view.hidden", "👁", "menu.view.hidden"),
+                ("show", "dot") => g("view.dot", "…", "menu.view.dot"),
+                ("show", "foldersfirst") => g("view.folders_first", "▲", "pref.sortFoldersFirst"),
+                _ => return None,
+            })
+        };
+        let layout = settings.get("toolbar.layout").unwrap_or("");
+        let mut out: Vec<ToolItem> = Vec::new();
+        for (block, bvis, items) in
+            crate::order::parse_order_with(crate::order::TOOLBAR_BLOCKS, layout)
+        {
+            if !bvis {
+                continue;
+            }
+            let start = out.len();
+            if !out.is_empty() {
+                out.push(ToolItem::separator());
+            }
+            if items.is_empty() {
+                out.extend(item(&block, ""));
+            } else {
+                out.extend(
+                    items
+                        .iter()
+                        .filter(|(_, v)| *v)
+                        .filter_map(|(k, _)| item(&block, k)),
+                );
+            }
+            if out.len() == start + 1 && start > 0 {
+                out.pop(); // 전부 숨긴 블록 = 구분선도 없음
+            }
+        }
+        out
     }
 
     /// 선택 항목을 휴지통으로(Trash 포트 · 실패/미지원 = 토스트 한 번) → 히스토리(undo = 복원 · T-51 B-2c) → 그 폴더를 보는 탭 전부 재열람.

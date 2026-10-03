@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 47차 — T-71 완료: 순서/표시 편집 창(툴바 · 컬럼 · 컨텍스트 메뉴 공통)
+
+- **한 일**: `order.rs` · `order_win.rs` · `app/order.rs` · 설정 창 [편집…] 3필드 · `toolbar.layout`/`ctxmenu.layout`/`list.col_layout` 실제 반영 · 세션 `cols` · 시험 +6(154) · `order-editor.scn`.
+- **지금 상태**: T-71 ✅(잔여 = 툴바/헤더 우클릭 진입 · 접기). 다음 = ShellNew 행 메뉴 · T-63 B · T-52/53 · T-90/91.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §50](journal/2026-10-03.md)
+
 ## 10-03 46차 — T-82: 패키징 3-OS(nexa-sql packaging 이식 · release.yml · 동봉 플러그인)
 
 - **한 일**: `packaging/` 트리 전체 + `scripts/third-party-notices.*` · `check-imports.ps1` + `release.yml` + 브랜딩 PNG · §3-4 결정(MSI+zip · 예산 10 MB(실측 5.2) · plugins/ · MIME) · 로컬 MSI/zip 빌드.

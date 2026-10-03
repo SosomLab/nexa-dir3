@@ -22,6 +22,14 @@ impl App {
                 Vec::new()
             };
             s.panels[i].col_widths = p.col_widths();
+            // 열 순서/표시(T-71) — 기본 그대로면 빈 값(직렬화 생략 왕복).
+            let layout = p.col_layout_str();
+            s.panels[i].col_layout =
+                if layout == crate::order::default_order(crate::order::COLUMN_BLOCKS) {
+                    String::new()
+                } else {
+                    layout
+                };
             // 전부 거짓이면 빈 목록(dir2 직렬화는 하나라도 참일 때만 기록 → 파싱 왕복이 같아진다).
             let any = |v: Vec<bool>| if v.iter().any(|x| *x) { v } else { Vec::new() };
             s.panels[i].locked = any(p.session_locked());

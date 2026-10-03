@@ -111,10 +111,15 @@ impl App {
         if !have("edit.delete") {
             items.push(CtxItem::item("edit.delete", tr("menu.edit.delete")));
         }
-        items.push(CtxItem::item(
-            "edit.delete_permanent",
-            tr("ctx.deletePermanent"),
-        ));
+        // 앱 고유 항목(dir2 CTXMENU_BLOCKS `row`) — 순서/표시 = 설정 `ctxmenu.layout`(T-71 DLG-069 · 그룹 숨김 = 전부 제외 · `new`는 하단 고정 섹션).
+        let own = self.ctx_layout("row");
+        let vis = |k: &str| own.iter().any(|(x, v)| x == k && *v);
+        if vis("deletePermanent") {
+            items.push(CtxItem::item(
+                "edit.delete_permanent",
+                tr("ctx.deletePermanent"),
+            ));
+        }
         if !have("edit.rename") {
             items.push(CtxItem::maybe(
                 "edit.rename",
@@ -126,15 +131,25 @@ impl App {
         if !have("ctx.copy_path") {
             items.push(CtxItem::item("ctx.copy_path", tr("ctx.copyPath")));
         }
-        items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
-        items.push(CtxItem::maybe(
-            "ctx.paste_into",
-            tr("ctx.pasteInto"),
-            single_dir && has_clip,
-        ));
-        items.push(CtxItem::Separator);
-        items.push(CtxItem::item("file.new_folder", tr("menu.file.newFolder")));
-        items.push(CtxItem::item("file.new_file", tr("menu.file.newFile")));
+        for (k, v) in &own {
+            if !v {
+                continue;
+            }
+            match k.as_str() {
+                "copyName" => items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName"))),
+                "pasteInto" => items.push(CtxItem::maybe(
+                    "ctx.paste_into",
+                    tr("ctx.pasteInto"),
+                    single_dir && has_clip,
+                )),
+                _ => {}
+            }
+        }
+        if vis("new") {
+            items.push(CtxItem::Separator);
+            items.push(CtxItem::item("file.new_folder", tr("menu.file.newFolder")));
+            items.push(CtxItem::item("file.new_file", tr("menu.file.newFile")));
+        }
         self.open_ctx(CtxKind::Row(panel), items);
     }
 
@@ -165,23 +180,45 @@ impl App {
             items.extend(shell.iter().cloned());
             items.push(CtxItem::Separator);
         }
-        if !have("edit.paste") {
-            items.push(CtxItem::maybe("edit.paste", tr("ctx.paste"), has_clip));
+        // 앱 고유 항목(dir2 CTXMENU_BLOCKS `bg`: paste · undo · redo) — 순서/표시 = 설정 `ctxmenu.layout`(T-71).
+        let own = self.ctx_layout("bg");
+        let mut edit_section = false;
+        for (k, v) in &own {
+            if !v {
+                continue;
+            }
+            match k.as_str() {
+                "paste" if !have("edit.paste") => {
+                    items.push(CtxItem::maybe("edit.paste", tr("ctx.paste"), has_clip));
+                }
+                "undo" => {
+                    if !edit_section {
+                        items.push(CtxItem::Separator);
+                        edit_section = true;
+                    }
+                    items.push(CtxItem::maybe(
+                        "edit.undo",
+                        undo.as_ref()
+                            .map_or_else(|| tr("menu.edit.undo"), |d| trf("ctx.undoOf", &[d])),
+                        undo.is_some(),
+                    ));
+                }
+                "redo" => {
+                    if !edit_section {
+                        items.push(CtxItem::Separator);
+                        edit_section = true;
+                    }
+                    items.push(CtxItem::maybe(
+                        "edit.redo",
+                        redo.as_ref()
+                            .map_or_else(|| tr("menu.edit.redo"), |d| trf("ctx.redoOf", &[d])),
+                        redo.is_some(),
+                    ));
+                }
+                _ => {}
+            }
         }
         items.extend(vec![
-            CtxItem::Separator,
-            CtxItem::maybe(
-                "edit.undo",
-                undo.as_ref()
-                    .map_or_else(|| tr("menu.edit.undo"), |d| trf("ctx.undoOf", &[d])),
-                undo.is_some(),
-            ),
-            CtxItem::maybe(
-                "edit.redo",
-                redo.as_ref()
-                    .map_or_else(|| tr("menu.edit.redo"), |d| trf("ctx.redoOf", &[d])),
-                redo.is_some(),
-            ),
             CtxItem::Separator,
             CtxItem::item("file.new_folder", tr("menu.file.newFolder")),
             CtxItem::item("file.new_file", tr("menu.file.newFile")),
@@ -189,6 +226,17 @@ impl App {
             CtxItem::item("view.refresh", tr("menu.view.refresh")),
         ]);
         self.open_ctx(CtxKind::Bg(panel), items);
+    }
+
+    /// 설정 `ctxmenu.layout`의 블록 자식(key, 표시) — 블록 숨김이면 빈 목록(dir2 07-19 "그룹 숨김 = 고유 항목 전부 제외").
+    fn ctx_layout(&self, block: &str) -> Vec<(String, bool)> {
+        let layout = self.settings.get("ctxmenu.layout").unwrap_or("");
+        crate::order::parse_order_with(crate::order::CTXMENU_BLOCKS, layout)
+            .into_iter()
+            .find(|(b, _, _)| b == block)
+            .filter(|(_, bv, _)| *bv)
+            .map(|(_, _, items)| items)
+            .unwrap_or_default()
     }
 
     /// 메뉴 선택 실행(명령 id는 `command` 한 길 · 고유 항목 · 셸 항목 = 포트 실행 뒤 재열람).

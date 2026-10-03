@@ -51,6 +51,8 @@ pub(crate) enum PrefsAction {
     },
     /// settings.json으로 편집(호스트가 내보내고 열고 감시한다).
     EditJson,
+    /// 순서/표시 편집 창(T-71 DLG-069 · `toolbar.layout` / `list.col_layout` / `ctxmenu.layout`).
+    EditOrder(String),
 }
 
 const PAD: f32 = 12.0;
@@ -144,6 +146,11 @@ fn is_key_key(k: &str) -> bool {
 
 fn is_folder_key(_k: &str) -> bool {
     false
+}
+
+/// 별도 편집 창으로 고치는 순서/표시 값(DLG-069 — 설정 창 필드 3개).
+fn is_order_key(k: &str) -> bool {
+    matches!(k, "toolbar.layout" | "list.col_layout" | "ctxmenu.layout")
 }
 
 impl PrefsWin {
@@ -435,6 +442,8 @@ impl PrefsWin {
                     Some(Button::new(tr("pref.btn.capture")))
                 } else if is_folder_key(sn.entry.key) {
                     Some(Button::new(tr("pref.btn.browse")))
+                } else if is_order_key(sn.entry.key) {
+                    Some(Button::new(tr("pref.btn.edit")))
                 } else {
                     None
                 };
@@ -1248,6 +1257,8 @@ impl PrefsWin {
                             current: c.value.clone(),
                             key,
                         }
+                    } else if is_order_key(&key) {
+                        PrefsAction::EditOrder(key)
                     } else {
                         PrefsAction::OpenKeys
                     };

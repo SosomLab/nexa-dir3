@@ -10,6 +10,7 @@ use crate::dlg_win::DlgAction;
 use crate::file_win::FileWinAction;
 use crate::keys_win::KeysAction;
 use crate::license_win::LicAction;
+use crate::order_win::OrderAction;
 use crate::prefs_win::PrefsAction;
 use crate::preview_win::PvAction;
 use crate::progress_win::ProgAction;
@@ -65,6 +66,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.bulk_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_order) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.order_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_progress) && self.window.is_some() {
             let over = self.main_rect();
@@ -179,6 +186,7 @@ impl App {
                     self.prefs_win.redraw();
                 }
                 PrefsAction::OpenKeys => self.open_keys = true,
+                PrefsAction::EditOrder(key) => self.open_order_editor(&key),
                 PrefsAction::BrowseFolder { key, .. } => {
                     self.open_file_window(app::license::FilePurpose::Setting(key));
                 }
@@ -260,6 +268,21 @@ impl App {
                 }
                 BulkAction::None => {}
                 other => self.bulk_action(other),
+            }
+            return true;
+        }
+        if self.order_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            match self.order_win.handle(event) {
+                OrderAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.order_win.paint(&font, &self.theme, ui_px);
+                }
+                OrderAction::Changed { key, value } => {
+                    self.order_changed(&key, &value);
+                    self.order_win.redraw();
+                }
+                OrderAction::None => {}
             }
             return true;
         }
@@ -388,6 +411,16 @@ impl App {
         if self.bulk_win.is_open() {
             self.bulk_win.redraw();
         }
+        // 편집 창이 다루는 키가 밖에서(설정 창 텍스트 · JSON) 바뀌면 모델을 다시 읽는다 — 창 자신의 통지는 값이 같아 무해.
+        if self.order_win.is_open() && self.order_win.setting_key() == Some(key) {
+            let value = self.order_value_of(key);
+            if self.order_win.value() != value {
+                if let Some(spec) = Self::order_spec_for(key) {
+                    self.order_win.set(spec, &value);
+                }
+            }
+            self.order_win.redraw();
+        }
         if self.file_win.is_open() {
             self.file_win.redraw();
         }
@@ -427,6 +460,9 @@ impl App {
         if self.bulk_win.tick(now_ms) {
             self.bulk_win.redraw();
         }
+        if self.order_win.tick(now_ms) {
+            self.order_win.redraw();
+        }
         if self.file_win.tick(now_ms) {
             self.file_win.redraw();
         }
@@ -440,6 +476,7 @@ impl App {
             || self.preview_win.animating()
             || self.progress_win.animating()
             || self.bulk_win.animating()
+            || self.order_win.animating()
             || self.file_win.animating()
     }
 

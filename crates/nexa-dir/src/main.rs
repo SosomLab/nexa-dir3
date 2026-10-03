@@ -30,6 +30,8 @@ mod keys_win;
 mod launcher;
 mod license_win;
 mod nav;
+mod order;
+mod order_win;
 mod panel;
 mod platform;
 mod prefs_win;
@@ -76,6 +78,7 @@ use nexa_ctl::{InputEvent, Invalidations, Widget};
 use nexa_explorer::InfoDock;
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, RowSource, ScrollAlign, ViewMode};
+use order_win::OrderWin;
 use panel::{Panel, PanelMetrics};
 use platform::Platform;
 use prefs_win::PrefsWin;
@@ -189,6 +192,9 @@ struct App {
     bulk_win: BulkWin,
     open_bulk: bool,
     bulk_pending_preset: Option<String>,
+    /// 순서/표시 편집 창(T-71 DLG-069 · 툴바/컬럼/컨텍스트 메뉴 공통) + 열기 깃발.
+    order_win: OrderWin,
+    open_order: bool,
     /// 압축 미리보기 그리드 창(T-62 C · F3/↗ 결과가 Archive면 텍스트 창 대신) + 열기 깃발.
     archive_win: ArchiveWin,
     open_archive: bool,
@@ -412,6 +418,8 @@ impl App {
             bulk_win: BulkWin::new(),
             open_bulk: false,
             bulk_pending_preset: None,
+            order_win: OrderWin::new(),
+            open_order: false,
             archive_win: ArchiveWin::new(),
             open_archive: false,
             licensing,

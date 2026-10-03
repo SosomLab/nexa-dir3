@@ -9,6 +9,7 @@ pub(crate) mod keywinit;
 pub(crate) mod license;
 mod menus;
 pub(crate) mod ops;
+pub(crate) mod order;
 mod paint;
 mod previewcmd;
 mod sessions;
