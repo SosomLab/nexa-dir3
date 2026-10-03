@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 14 | 14 | 4 | 1 | 0 | 0 | 0 |
+| NEW | 15 | 15 | 5 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4303 | 4303 | 2366 | 1024 | 766 | 0 | 0 |
+| **합계** | 4304 | 4304 | 2367 | 1024 | 766 | 0 | 0 |
 
 ## 행
 
@@ -228,6 +228,7 @@
 | NEW-012 | Windows Terminal 설정 따르기 1차(글꼴 목록 · 크기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal`) | `platform/mod.rs::{parse_wt_settings, windows_terminal_profile}` · `app/fonts.rs` · `app/term.rs` · `termview.rs` | T1 | `wt_settings_parse_default_profile` · `icon_glyph_overflows_into_following_blank_cell` | 🚧 | §79 · §80 이탤릭(`sgr_italic_on_off` · `italic_cells_select_italic_font`) · 줄 높이 · 글꼴 매칭 Regular(nexa-ui 119 `family_rank_prefers_regular_face`) ✅ · 남은 2차 = 색 구성표 · 커서/여백 · 줄바꿈 · 실기(WT 대조) 사용자 |
 | NEW-013 | 창 투명도 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(DR-22) |
 | NEW-014 | 보호된 운영 체제 파일 숨기기(`list.show_protected` · 기본 숨김 · 탐색기 규칙) | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected` · `filelist.rs` · `panel.rs` · `app/settings.rs` | T1 | ndir-vfs 판정 MC/DC · `protected_os_items_follow_their_own_switch` | ✅ | §83 · 의도된 차이(Windows 루트 보호 항목 기본 숨김 — dir2는 표시 · 기본 off = 사용자 확정 10-03 §91) · 실기(macOS UF_HIDDEN · Windows C:\) 사용자 |
+| NEW-015 | Unix "내 PC" = `/` · 홈 · 마운트된 볼륨(Linux mounts · macOS /Volumes) · 홈 행 종류 = 폴더 · Windows 불변 | ndir-vfs `drive_entries` · `unix_mount_points` · `merge_unix_roots` · `filelist.rs::is_home_dir` | T1 + 실기 | `unix_roots_from_mounts` | ✅ | §95 · 실기 필요(Linux · macOS — 볼륨 라벨 미표시 · 용량 열 statvfs 미확인 · 사용자 T-103) |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | GAP-006 · SHORTCUT-EXT | 바로 가기 확장자 숨김(`.lnk` `.url` `.appref-ms` · 이름 칸만 · 확장자 열 유지 · 폴더 예외 · 이름 바꾸기 때 복원 · Windows만) | `filelist.rs::{split_shortcut_ext, display_name, restore_shortcut_ext}` · `platform::hides_shortcut_ext` · `app/ops.rs` | T1·T3 | `shortcut_ext_is_hidden_and_restored_on_rename` | ✅ | §84 · dir2 source.rs:456-465 · win.rs:4036-4045 |
 | GAP-007 · LNK-NAV | 폴더를 가리키는 바로 가기(`.lnk`) 활성화 = 앱 안 이동(Explorer 동작 · dir2에 없던 개선) · 파일 대상/해석 불가 = OS 열기 · macOS/Linux 무변화(`link_target` 기본 `None`) | `platform/mod.rs::Opener::link_target` · `platform/windows.rs::shell_link_target`(IShellLinkW::GetPath · `Resolve` 안 부름) · `app/input.rs::open_external` · `filelist.rs::is_lnk` | T1(Windows)·T3 | `folder_shortcut_navigates_inside_the_app` · `shell_link_target_reads_a_real_lnk` | ✅ | §89 · 미구현 = 깨진 대상 수정/삭제 안내(OS 열기에 맡김) · 남은 링크 갭 = GAP-008 |

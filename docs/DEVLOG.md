@@ -4,6 +4,9 @@
 
 ## 2026-10-03
 
+- **10-03 마감 · Linux에서 이어가기**: STATUS 맨 위 "Linux에서 이어갈 때" 절 · TODO "다음 세션" 표(T-103~T-109) · 마감 게이트 17/17 → [journal §96](journal/2026-10-03.md)
+- **Unix "내 PC"**: `/` · 홈 · 마운트된 볼륨(Linux mounts · macOS /Volumes · 시스템 자리 제외) · 홈 행 종류 = 폴더 · NEW-015 · 실기 대기 → [journal §95](journal/2026-10-03.md)
+- **Linux 첫 실기 결함 2건**: 경로 바 Unix 구분자·세그먼트 경로(nexa-ui 122차) · 대체 쉐브론 크기 +3 · 그릴 수 있는 쌍 고르기 · 런처/행 아이콘은 후속(T-104) → [journal §94](journal/2026-10-03.md)
 - **⚠ 목록 Enter · Alt+↓ 무반응 수정**: 키맵이 `nav.activate`로 가로챘는데 분기가 없었음 → `key_chord` 분리 · `nav.activate` = 캐럿 행 활성화 · 메뉴 열림 = 통과 · T3가 키맵 경로 그대로 · 실기(`ui.key`) Enter/Alt+↓/.lnk 진입 ✅ · Alt+←→↑ 실기는 사용자 확인 대기 → [journal §93](journal/2026-10-03.md)
 - **링크 화살표 · 종류 "바로가기"**: nexa-ui 121차 `set_link_overlay`(SHGFI_LINKOVERLAY · 기본 꺼짐 · nexa-sql 시험 729) · dir3 앱 시작 때 켬 · 정션/심링크 행 경로 키 조회 · .lnk 종류 "바로가기" · 캡처 ✅(.lnk · 정션 · C:\Documents and Settings) · GAP-008 해소 → [journal §92](journal/2026-10-03.md)
 - **사용자 결정**: `list.show_protected` 기본 off(숨김) 유지 확정 — dir2와 다른 의도된 차이 · docs/22 · 23 · 매트릭스 반영 → [journal §91](journal/2026-10-03.md)
