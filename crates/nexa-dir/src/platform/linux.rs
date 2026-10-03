@@ -1,5 +1,5 @@
 //! Linux 구현(T-50·T-51 A): 셸 탐지 · 열기/보기 · **freedesktop 휴지통**(`$XDG_DATA_HOME/Trash` · `.trashinfo` · std만) · **드라이브 용량**(`statvfs` 수동 extern).
-//! uri-list 클립보드 · XDND · inotify · openpty는 T-53.
+//! uri-list 클립보드 · XDND는 T-53 잔여 · inotify 감시 = `linuxwatch.rs` · PTY = `unixpty.rs`.
 
 use super::*;
 

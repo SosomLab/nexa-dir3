@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 51차 — T-52/53: 폴더 감시 네이티브(inotify · kqueue)
+
+- **한 일**: `linuxwatch.rs` · `macwatch.rs` · `Platform::native` 분기 · OS별 시험 +2(CI 러너가 실행).
+- **지금 상태**: 폴더 감시 3-OS 네이티브 완료. T-52/53 잔여 = 파일 클립보드(NSPasteboard · uri-list) · DnD(NSDragging · XDND) · mac trashItem. 다음 = T-90/91 · T-63 매니저 · 클립보드.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §54](journal/2026-10-03.md)
+
 ## 10-03 50차 — SHELL-008: 행 메뉴 "새로 만들기 ▸"(3-OS 템플릿 포트)
 
 - **한 일**: `platform::Templates`(+`wintemplates.rs` 레지스트리 · `UserTemplates` · XDG) · `create_new_at`/`NewKind` · 행 메뉴 서브메뉴 · 덤프 자식 표기 · 시험 +3(160).

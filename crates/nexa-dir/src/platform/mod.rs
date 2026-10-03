@@ -18,8 +18,12 @@ use std::time::SystemTime;
 pub(crate) mod fake;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod linux;
+#[cfg(target_os = "linux")]
+mod linuxwatch;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+mod macwatch;
 #[cfg(unix)]
 mod unixpty;
 #[cfg(windows)]
@@ -528,7 +532,11 @@ impl Platform {
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(Unsupported);
         #[cfg(windows)]
         let watcher: Box<dyn Watcher> = Box::new(winwatch::NativeWatcher::new());
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        let watcher: Box<dyn Watcher> = Box::new(linuxwatch::InotifyWatcher::new());
+        #[cfg(target_os = "macos")]
+        let watcher: Box<dyn Watcher> = Box::new(macwatch::KqueueWatcher::new());
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         let watcher: Box<dyn Watcher> = Box::new(PollWatcher::default());
         #[cfg(windows)]
         let templates: Box<dyn Templates> = Box::new(wintemplates::ShellNewTemplates::new());
