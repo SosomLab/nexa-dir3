@@ -565,11 +565,13 @@ impl App {
         self.redraw();
     }
 
-    /// 열 폭 동기 — `from` 패널의 폭을 반대 패널에.
+    /// 열 폭 동기 — `from` 패널 활성 탭의 폭을 **열 종류(key)별로** 반대 패널의 모든 탭과 같은 패널의 다른 탭에
+    /// (사용자 10-03 점검: 종전 = 자리(순서)로 복사해 열 순서·표시가 다르면 엉뚱한 열에 들어갔고 · 같은 패널의 다른 탭은 그대로였다).
     pub(crate) fn sync_col_widths_from(&mut self, from: usize) {
-        let widths = self.panels[from].col_widths_now();
+        let widths = self.panels[from].col_widths_by_key();
         let mut inv = Invalidations::default();
-        self.panels[1 - from].apply_col_widths(&widths, &mut inv);
+        self.panels[from].apply_col_widths_by_key(&widths, &mut inv);
+        self.panels[1 - from].apply_col_widths_by_key(&widths, &mut inv);
         self.redraw();
     }
 

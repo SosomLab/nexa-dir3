@@ -1920,6 +1920,65 @@ fn nav_buttons_use_vector_icons_and_dock_tabs_hover() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 열 폭 동기(사용자 10-03 점검): 켜는 순간(툴바 명령 · 설정 창 어느 길이든) 활성 패널 기준으로 맞춘다 · 폭은 **열 종류별로**
+/// 옮긴다(열 순서가 달라도 같은 열끼리) · 반대 패널의 모든 탭과 같은 패널의 다른 탭도 따라온다 · 꺼져 있으면 독립.
+#[test]
+fn col_width_sync_matches_by_column_key() {
+    let (mut app, dir) = fixture("colsync");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let widths = |app: &App, p: usize| app.panels[p].col_widths_by_key();
+    let w_of = |v: &[(u32, i32)], key: u32| v.iter().find(|(k, _)| *k == key).map(|(_, w)| *w);
+    let (name, size) = (filelist::COL_NAME, filelist::COL_SIZE);
+    // 꺼 둔 채 왼쪽만 바꾼다 → 오른쪽은 그대로.
+    let _ = app.settings.set("list.col_width_sync", "off");
+    app.after_setting_changed("list.col_width_sync");
+    let right0 = widths(&app, 1);
+    app.panels[0].apply_col_widths_by_key(&[(name, 333), (size, 111)], &mut inv);
+    assert_eq!(widths(&app, 1), right0, "꺼짐 = 독립");
+    // 오른쪽 열 순서를 바꿔 둔다(크기 열을 맨 앞쪽으로) — 자리로 복사하면 엉뚱한 열에 들어가는 조건.
+    app.set_active(1);
+    app.apply_col_layout_str("cols:1[name:1,size:1,ext:1,modified:1,kind:1]");
+    app.set_active(0);
+    // 설정 창 길로 켠다 → 즉시 활성(왼쪽) 기준으로 · 같은 열끼리.
+    let _ = app.settings.set("list.col_width_sync", "on");
+    app.after_setting_changed("list.col_width_sync");
+    let r = widths(&app, 1);
+    assert_eq!(
+        (w_of(&r, name), w_of(&r, size)),
+        (Some(333), Some(111)),
+        "{r:?}"
+    );
+    assert_ne!(
+        r.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+        widths(&app, 0).iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+        "열 순서는 각자"
+    );
+    // 새 탭과 같은 패널의 다른 탭도 같은 폭.
+    app.command("file.new_tab");
+    app.panels[0].apply_col_widths_by_key(&[(name, 400)], &mut inv);
+    app.sync_col_widths_from(0);
+    app.command("tab.prev");
+    assert_eq!(
+        w_of(&widths(&app, 0), name),
+        Some(400),
+        "같은 패널의 다른 탭"
+    );
+    assert_eq!(w_of(&widths(&app, 1), name), Some(400));
+    // 툴바 명령으로 껐다 켜도 같은 규칙(기준 = 활성 패널).
+    app.command("view.col_width_sync");
+    app.panels[1].apply_col_widths_by_key(&[(size, 77)], &mut inv);
+    assert_eq!(w_of(&widths(&app, 0), size), Some(111));
+    app.set_active(1);
+    app.command("view.col_width_sync");
+    assert_eq!(
+        w_of(&widths(&app, 0), size),
+        Some(77),
+        "켜는 순간 활성(오른쪽) 기준"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]

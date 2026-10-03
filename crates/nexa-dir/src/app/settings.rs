@@ -151,6 +151,10 @@ impl App {
             }
             "list.col_width_sync" => {
                 self.sync_menu_checks();
+                // 설정 창에서 켜도 툴바·메뉴로 켤 때와 같이 즉시 맞춘다(기준 = 활성 패널 · 종전 = 체크만 바뀌었다).
+                if self.dual && self.settings.flag("list.col_width_sync") {
+                    self.sync_col_widths_from(self.active);
+                }
             }
             "term.wrap" | "term.cols" | "term.theme" | "term.theme_dark" | "term.theme_light"
             | "term.copy_format" | "term.shell" => {

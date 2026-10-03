@@ -861,8 +861,56 @@ impl Panel {
     }
 
     /// 지금 열 폭(표시 순 · 사용자 변경 여부와 무관) — 반대 패널 동기용.
+    #[cfg(test)]
     pub(crate) fn col_widths_now(&self) -> Vec<i32> {
         self.rows().columns().iter().map(|c| c.width).collect()
+    }
+
+    /// 지금 열 폭을 **열 종류(key)별로**(활성 탭) — 패널 사이 동기는 자리(순서)가 아니라 key로 맞춘다(두 패널의 열 순서 ·
+    /// 표시 열이 다르거나 한쪽이 내 PC(드라이브 열)를 보고 있어도 같은 열끼리만 폭이 옮겨 간다).
+    pub(crate) fn col_widths_by_key(&self) -> Vec<(u32, i32)> {
+        self.rows()
+            .columns()
+            .iter()
+            .map(|c| (c.key, c.width))
+            .collect()
+    }
+
+    /// key별 열 폭을 **이 패널의 모든 탭**에(없는 열은 건너뜀 · 기본 열에도 반영해 새 탭 · 내 PC 열이 그 폭을 잇는다).
+    /// 바뀐 것이 있으면 `true`. 이후 배치가 기본 열로 덮지 않는다.
+    pub(crate) fn apply_col_widths_by_key(
+        &mut self,
+        widths: &[(u32, i32)],
+        inv: &mut Invalidations,
+    ) -> bool {
+        let of = |key: u32, cur: i32| {
+            widths
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map_or(cur, |(_, w)| *w)
+        };
+        let mut changed = false;
+        for tab in &mut self.tabs {
+            let cur: Vec<i32> = tab.rows.columns().iter().map(|c| c.width).collect();
+            let new: Vec<i32> = tab
+                .rows
+                .columns()
+                .iter()
+                .map(|c| of(c.key, c.width))
+                .collect();
+            if new != cur {
+                tab.rows.set_col_widths(&new, inv);
+                changed = true;
+            }
+        }
+        for c in &mut self.base_columns {
+            c.width = of(c.key, c.width).max(c.min_width);
+        }
+        if changed {
+            self.user_cols = true;
+            self.session_dirty = true;
+        }
+        changed
     }
 
     /// 사용자가 열 폭을 바꿨는가(1회성 · 호스트가 동기에 쓴다).
