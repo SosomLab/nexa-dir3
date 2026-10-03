@@ -1529,3 +1529,28 @@ fn trash_delete_is_undoable_via_restore() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 사용자 피드백 10-03: 설정 숫자(em · dir2 DIP)는 그대로, 글리프 크기는 em→높이 변환(≥ em · 맑은 고딕 12 → ≈16) · 영역별 prefs가 설정을 따른다 ·
+/// 배치 지표(메뉴 높이 · 행 높이)는 em 숫자 그대로(골든 불변) · Windows/macOS/Linux 기본 고정폭 글꼴이 로드된다.
+#[test]
+fn font_sizes_use_em_convention_and_mono_font_loads() {
+    let (mut app, dir) = fixture("fonts");
+    let em = app.settings.font_px("ui.font_size");
+    assert_eq!(em, 12.0, "dir2와 같은 기본 숫자");
+    let px = app.font_px("ui.font_size");
+    assert!(px >= em && px <= em * 1.6, "em→높이 변환: {px}");
+    assert_eq!(px, app.ui_font.em_to_px(em));
+    let p = app.font_prefs();
+    assert_eq!(p.status.size, app.font_px("statusbar.font_size"));
+    assert_eq!(p.peerlist.size, app.font_px("list.font_size"));
+    let _ = app.settings.set("list.font_size", "20");
+    assert_eq!(app.font_prefs().peerlist.size, app.ui_font.em_to_px(20.0));
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(
+        app.menubar.bounds().h,
+        23,
+        "메뉴 높이 = em 12 + 11(배치는 변환 없음)"
+    );
+    assert!(app.mono_font.is_some(), "OS 기본 고정폭 글꼴");
+    let _ = std::fs::remove_dir_all(&dir);
+}

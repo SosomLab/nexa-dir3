@@ -53,8 +53,8 @@ impl App {
 
     /// 표시 설정(dir2 X-3): `term.font_size`(Mono 슬롯 = 상태줄 크기 기준 증분) · `term.wrap` · `term.cols`.
     pub(crate) fn term_style(&self) -> TermStyle {
-        let want = self.settings.font_px("term.font_size");
-        let base = self.settings.font_px("statusbar.font_size");
+        let want = self.font_px("term.font_size");
+        let base = self.font_px("statusbar.font_size");
         TermStyle {
             font_delta: if want > 0.0 && base > 0.0 {
                 want - base

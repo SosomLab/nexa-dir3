@@ -2,6 +2,7 @@
 
 pub(crate) mod dialogs;
 mod event_loop;
+mod fonts;
 mod input;
 pub(crate) mod keywinit;
 pub(crate) mod license;

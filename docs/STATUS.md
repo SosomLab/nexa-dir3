@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 42차 — 사용자 피드백(글꼴 크기 em 변환 · 고정폭 글꼴) · T-62 C-3 드래그 선택
+
+- **한 일**: nexa-ui 110차 `em_to_px` · dir3 `app/fonts.rs`(font_px/font_prefs/mono) · 미리보기 창 드래그 선택 · 시험 +2(144).
+- **지금 상태**: T-62 완료(A·B·C). 사용자 재확인 대기 = 크기(12 em → 16 px) · 터미널 셀 폭(Consolas). 다음 = T-82 패키징 · ShellNew · T-52/53 포트 잔여.
+- **걸린 것**: Info 도크의 "전각" 보고는 Mono 슬롯 미사용이라 원인이 다를 수 있음 — 수정 뒤 캡처로 재확인.
+
+→ [journal/2026-10-03 §44·§45](journal/2026-10-03.md)
+
 ## 10-03 41차 — T-51 B-2c: 휴지통 복원(삭제 undo · Windows/Linux)
 
 - **한 일**: `Trash::restore` 포트 · winrecycle · Linux .trashinfo · `TrashOp` · selfcheck 왕복 · 시험 +3(142).

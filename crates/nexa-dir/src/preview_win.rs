@@ -9,8 +9,9 @@ use nexa_ctl::geom::Rect;
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, Theme};
 use nexa_gfx::{Font, Surface};
+use std::collections::HashMap;
 use std::rc::Rc;
-use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
@@ -71,7 +72,18 @@ pub(crate) struct PreviewWin {
     line_h: i32,
     max_w: i32,
     vis: i32,
+    /// 드래그 문자 선택(dir2 PLUG-057): 커서 · `(앵커, 현재)` = (줄, 문자 경계) · 드래그 중 · 줄별 문자 경계 x 오프셋(paint 캐시 · `[0, w1, w1+w2, …]`) ·
+    /// 평균 글자 폭(캐시 없는 줄의 근사) · 마지막 자동 스크롤 틱.
+    cursor: (i32, i32),
+    sel: Option<((usize, usize), (usize, usize))>,
+    drag: bool,
+    offsets: HashMap<usize, Vec<i32>>,
+    char_w: i32,
+    last_auto_ms: u64,
 }
+
+/// 자동 스크롤 틱(ms · dir2 TIMER_DRAG 50).
+const AUTO_SCROLL_MS: u64 = 50;
 
 impl PreviewWin {
     pub(crate) fn new() -> Self {
@@ -89,7 +101,178 @@ impl PreviewWin {
             line_h: 20,
             max_w: 0,
             vis: 1,
+            cursor: (0, 0),
+            sel: None,
+            drag: false,
+            offsets: HashMap::new(),
+            char_w: 7,
+            last_auto_ms: 0,
         }
+    }
+
+    fn pad_x(&self) -> i32 {
+        (PAD_X * self.scale).round() as i32
+    }
+
+    fn pad_top(&self) -> i32 {
+        (PAD_TOP * self.scale).round() as i32
+    }
+
+    /// 줄의 문자 경계 x 오프셋(paint 캐시 · 없으면 평균 글자 폭 근사 — 자동 스크롤로 보이면 다음 paint가 채운다).
+    fn offsets_of(&self, line: usize) -> Vec<i32> {
+        if let Some(o) = self.offsets.get(&line) {
+            return o.clone();
+        }
+        let n = self.text.get(line).map_or(0, |t| t.chars().count());
+        (0..=n).map(|i| i as i32 * self.char_w).collect()
+    }
+
+    /// 점 → (줄, 최근접 문자 경계)(dir2 `hit` · 마지막 줄 아래 = 마지막 줄).
+    pub(crate) fn hit(&self, x: i32, y: i32) -> (usize, usize) {
+        if self.text.is_empty() {
+            return (0, 0);
+        }
+        let row = self.top + (y - self.pad_top()).div_euclid(self.line_h.max(1));
+        let line = row.clamp(0, self.text.len() as i32 - 1) as usize;
+        let rel = x - self.pad_x() + self.left;
+        let offs = self.offsets_of(line);
+        let mut best = 0usize;
+        let mut bd = i32::MAX;
+        for (i, o) in offs.iter().enumerate() {
+            let d = (o - rel).abs();
+            if d < bd {
+                bd = d;
+                best = i;
+            }
+        }
+        (line, best)
+    }
+
+    /// 정렬된 선택 구간.
+    fn sel_range(&self) -> Option<((usize, usize), (usize, usize))> {
+        let (a, c) = self.sel?;
+        Some(if a <= c { (a, c) } else { (c, a) })
+    }
+
+    /// 선택 텍스트(줄 구분 `\r\n` · 이미지/패드 줄 제외 · 빈 선택 = None).
+    pub(crate) fn selected_text(&self) -> Option<String> {
+        let (lo, hi) = self.sel_range()?;
+        if lo == hi || lo.0 >= self.text.len() {
+            return None;
+        }
+        let chars_of = |l: usize| -> Vec<char> {
+            if matches!(self.kinds.get(l), Some(&KIND_IMG) | Some(&KIND_PAD)) {
+                Vec::new()
+            } else {
+                self.text[l].chars().collect()
+            }
+        };
+        let (ll, lc) = lo;
+        let (hl, hc) = (hi.0.min(self.text.len() - 1), hi.1);
+        let mut out: Vec<String> = Vec::new();
+        for l in ll..=hl {
+            let cs = chars_of(l);
+            let s = if l == ll { lc.min(cs.len()) } else { 0 };
+            let e = if l == hl { hc.min(cs.len()) } else { cs.len() };
+            out.push(cs[s..e].iter().collect());
+        }
+        let text = out.join("\r\n");
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// 전체 선택(Ctrl+A · dir2 `select_all`).
+    pub(crate) fn select_all(&mut self) {
+        if self.text.is_empty() {
+            return;
+        }
+        let last = self.text.len() - 1;
+        let end = if matches!(self.kinds[last], KIND_IMG | KIND_PAD) {
+            0
+        } else {
+            self.text[last].chars().count()
+        };
+        self.sel = Some(((0, 0), (last, end)));
+        self.drag = false;
+        self.redraw();
+    }
+
+    /// 누름 = 앵커(시험·입력 공용).
+    pub(crate) fn begin_drag(&mut self, x: i32, y: i32) {
+        let pos = self.hit(x, y);
+        self.sel = Some((pos, pos));
+        self.drag = true;
+        self.redraw();
+    }
+
+    /// 이동 = 확장 + 경계 밖이면 스크롤(dir2 `drag_track`).
+    pub(crate) fn drag_to(&mut self, x: i32, y: i32) {
+        if !self.drag {
+            return;
+        }
+        let (w, h) = self
+            .window
+            .as_ref()
+            .map_or((i32::MAX / 2, i32::MAX / 2), |w| {
+                let s = w.inner_size();
+                (s.width as i32, s.height as i32)
+            });
+        if y < 0 {
+            self.top -= 1;
+        } else if y >= h {
+            self.top += 1;
+        }
+        if x < 0 {
+            self.left -= (24.0 * self.scale) as i32;
+        } else if x >= w {
+            self.left += (24.0 * self.scale) as i32;
+        }
+        self.clamp();
+        let pos = self.hit(x, y);
+        if let Some((a, cur)) = self.sel {
+            if cur != pos {
+                self.sel = Some((a, pos));
+            }
+        }
+        self.redraw();
+    }
+
+    /// 뗌 = 확정(이동 없는 클릭 = 선택 없음 — 도크 규약).
+    pub(crate) fn end_drag(&mut self) {
+        if !self.drag {
+            return;
+        }
+        self.drag = false;
+        if let Some((a, c)) = self.sel {
+            if a == c {
+                self.sel = None;
+            }
+        }
+        self.redraw();
+    }
+
+    /// 틱: 드래그 중 커서가 창 밖이면 50 ms마다 계속 스크롤(dir2 TIMER_DRAG). 다시 그려야 하면 true.
+    pub(crate) fn tick(&mut self, now_ms: u64) -> bool {
+        if !self.drag
+            || self.window.is_none()
+            || now_ms.saturating_sub(self.last_auto_ms) < AUTO_SCROLL_MS
+        {
+            return false;
+        }
+        self.last_auto_ms = now_ms;
+        let (x, y) = self.cursor;
+        let (w, h) = self.window.as_ref().map_or((0, 0), |w| {
+            let s = w.inner_size();
+            (s.width as i32, s.height as i32)
+        });
+        if x < 0 || y < 0 || x >= w || y >= h {
+            self.drag_to(x, y);
+            return true;
+        }
+        false
+    }
+
+    pub(crate) fn animating(&self) -> bool {
+        self.drag && self.window.is_some()
     }
 
     /// 내용 교체(태그 → 종류 · 탭 4칸 · 마커 줄은 빈 텍스트로 보관).
@@ -113,6 +296,9 @@ impl PreviewWin {
         self.top = 0;
         self.left = 0;
         self.max_w = 0;
+        self.sel = None;
+        self.drag = false;
+        self.offsets.clear();
         if let Some(w) = &self.window {
             w.set_title(&format!(
                 "{} — {}",
@@ -313,6 +499,20 @@ impl PreviewWin {
                 self.redraw();
                 return PvAction::None;
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor = (position.x as i32, position.y as i32);
+                if self.drag {
+                    self.drag_to(self.cursor.0, self.cursor.1);
+                }
+                return PvAction::None;
+            }
+            WindowEvent::MouseInput { state, button, .. } if *button == MouseButton::Left => {
+                match state {
+                    ElementState::Pressed => self.begin_drag(self.cursor.0, self.cursor.1),
+                    ElementState::Released => self.end_drag(),
+                }
+                return PvAction::None;
+            }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
                 match kev.logical_key.as_ref() {
                     Key::Named(NamedKey::Escape) => self.close(),
@@ -328,7 +528,13 @@ impl PreviewWin {
                     Key::Named(NamedKey::ArrowLeft) => self.left -= (24.0 * self.scale) as i32,
                     Key::Named(NamedKey::ArrowRight) => self.left += (24.0 * self.scale) as i32,
                     Key::Character(t) if self.primary && t.eq_ignore_ascii_case("c") => {
-                        return PvAction::Copy(self.all_text());
+                        // 선택이 있으면 선택만(dir2 PLUG-057) · 없으면 전체.
+                        return PvAction::Copy(
+                            self.selected_text().unwrap_or_else(|| self.all_text()),
+                        );
+                    }
+                    Key::Character(t) if self.primary && t.eq_ignore_ascii_case("a") => {
+                        self.select_all();
                     }
                     _ => {}
                 }
@@ -342,7 +548,8 @@ impl PreviewWin {
         PvAction::None
     }
 
-    pub(crate) fn paint(&mut self, ui: &Font, th: &Theme, font_px: f32) {
+    pub(crate) fn paint(&mut self, ui: &Font, mono: Option<&Font>, th: &Theme, font_px: f32) {
+        let sel_range = self.sel_range();
         let (Some(win), Some(surface)) = (self.window.clone(), self.surface.as_mut()) else {
             return;
         };
@@ -355,12 +562,22 @@ impl PreviewWin {
         let pad_x = (PAD_X * s).round() as i32;
         let pad_top = (PAD_TOP * s).round() as i32;
         let mut max_w = 0;
+        let mut new_offsets: Vec<(usize, Vec<i32>)> = Vec::new();
         {
             let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
             let prefs = FontPrefs::with_base(font_px);
-            let mut dc = RasterCtx::new(&mut gfx, ui, s).with_fonts(prefs);
+            // 코드/모노 줄(kind 4·6)은 고정폭 글꼴(없으면 UI 글꼴).
+            let fonts = nexa_ctl::raster::FontSet {
+                base: ui,
+                peerlist: None,
+                message: None,
+                status: None,
+                mono,
+            };
+            let mut dc = RasterCtx::with_font_set(&mut gfx, fonts, s).with_fonts(prefs);
             dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
             dc.select_font(FontSlot::Base, false);
+            self.char_w = dc.text_width("M").max(1);
             let lh = dc.text_height() + (3.0 * s).round() as i32;
             self.line_h = lh.max(12);
             self.vis = ((hi - pad_top) / self.line_h).max(1);
@@ -408,8 +625,33 @@ impl PreviewWin {
                         }
                         dc.select_font(slot, bold);
                         let fg = if kind == 5 { th.text_dim } else { th.text };
+                        // 문자 경계 오프셋 캐시(선택 히트·배경) — 가시 줄만 · 줄 수 상한 안에서는 비용 무시.
+                        let offs: Vec<i32> = {
+                            let mut v = Vec::with_capacity(text.chars().count() + 1);
+                            let mut prefix = String::new();
+                            v.push(0);
+                            for c in text.chars() {
+                                prefix.push(c);
+                                v.push(dc.text_width(&prefix));
+                            }
+                            v
+                        };
+                        if let Some(((ll, lc), (hl, hc))) = sel_range {
+                            if ll <= i && i <= hl {
+                                let last = offs.len() - 1;
+                                let s = if i == ll { lc.min(last) } else { 0 };
+                                let e = if i == hl { hc.min(last) } else { last };
+                                if e > s {
+                                    dc.fill_rect(
+                                        Rect::new(x0 + offs[s], y, offs[e] - offs[s], self.line_h),
+                                        th.sel_bg,
+                                    );
+                                }
+                            }
+                        }
                         dc.text(x0, y + 1, clip, text, fg);
                         max_w = max_w.max(dc.text_width(text));
+                        new_offsets.push((i, offs));
                         if kind == 5 {
                             dc.fill_rect(
                                 Rect::new(2, y + 2, 3, (self.line_h - 4).max(1)),
@@ -426,6 +668,9 @@ impl PreviewWin {
         }
         if max_w > self.max_w {
             self.max_w = max_w;
+        }
+        for (i, o) in new_offsets {
+            self.offsets.insert(i, o);
         }
         let _ = buf.present();
     }
@@ -461,5 +706,51 @@ mod tests {
             .starts_with("closed a.md lines 4 top 0 images 1\nTitle\n[img x.bmp]\na    b\n"));
         w.scroll_lines(5);
         assert_eq!(w.top, 3, "가시 1줄 기준 상한 = 줄 수 - 1");
+    }
+
+    /// T-62 C-3 드래그 문자 선택(창 없이 · 평균 글자 폭 7 · 행 20 · PAD 8/4): 앵커 → 확장 → 확정 · 이동 없는 클릭 = 없음 · 여러 줄 · 이미지 줄 제외 · Ctrl+A.
+    #[test]
+    fn drag_selection_without_window() {
+        let mut w = PreviewWin::new();
+        w.set_lines(
+            "t",
+            vec![
+                "hello world".into(),
+                "\u{1}img|x.bmp".into(),
+                "second".into(),
+            ],
+        );
+        w.top = 0;
+        assert_eq!(w.hit(8 + 7 * 3, 4), (0, 3));
+        assert_eq!(
+            w.hit(8 + 7 * 2 + 3, 4 + 20 * 2),
+            (2, 2),
+            "최근접 경계 · 셋째 줄"
+        );
+        assert_eq!(w.hit(0, 4 + 20 * 9), (2, 0), "마지막 줄 아래 = 마지막 줄");
+        w.begin_drag(8 + 7 * 3, 4);
+        w.end_drag();
+        assert!(w.selected_text().is_none(), "이동 없는 클릭 = 선택 없음");
+        w.begin_drag(8 + 7 * 3, 4);
+        w.drag_to(8 + 7 * 8, 4);
+        assert_eq!(w.selected_text().as_deref(), Some("lo wo"));
+        w.drag_to(8 + 7 * 3, 4 + 20 * 2);
+        w.end_drag();
+        assert_eq!(
+            w.selected_text().as_deref(),
+            Some("lo world\r\n\r\nsec"),
+            "여러 줄 · 이미지 줄은 빈 줄"
+        );
+        w.begin_drag(8 + 7 * 8, 4);
+        w.drag_to(8 + 7 * 3, 4);
+        w.end_drag();
+        assert_eq!(w.selected_text().as_deref(), Some("lo wo"), "역방향 드래그");
+        w.select_all();
+        assert_eq!(
+            w.selected_text().as_deref(),
+            Some("hello world\r\n\r\nsecond")
+        );
+        w.set_lines("u", vec!["x".into()]);
+        assert!(w.selected_text().is_none(), "내용 교체 = 선택 초기화");
     }
 }

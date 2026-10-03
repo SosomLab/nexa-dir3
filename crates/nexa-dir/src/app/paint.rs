@@ -17,10 +17,12 @@ impl App {
         if let Some(mut buf) = surface.frame(size) {
             {
                 let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
-                let ui_px = self.settings.font_px("ui.font_size");
+                let prefs = self.font_prefs();
                 let font = Rc::clone(&self.ui_font);
+                let mono = self.mono_font.clone();
                 let mut dc =
-                    RasterCtx::new(&mut gfx, &font, s).with_fonts(FontPrefs::with_base(ui_px));
+                    RasterCtx::with_font_set(&mut gfx, self.font_set(&font, mono.as_deref()), s)
+                        .with_fonts(prefs);
                 self.paint_into(&mut dc, wi, hi, s);
             }
             let _ = buf.present();

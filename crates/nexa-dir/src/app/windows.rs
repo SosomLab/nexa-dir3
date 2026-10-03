@@ -129,7 +129,7 @@ impl App {
     /// 보조 창의 사건을 그 창의 처리기로. 처리했으면 `true`(메인 창 처리로 가지 않는다).
     pub(crate) fn aux_window_event(&mut self, id: WindowId, event: &WindowEvent) -> bool {
         if self.prefs_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.prefs_win.handle(event) {
                 PrefsAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -179,7 +179,7 @@ impl App {
             return true;
         }
         if self.keys_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.keys_win.handle(event) {
                 KeysAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -204,11 +204,13 @@ impl App {
             return true;
         }
         if self.preview_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.preview_win.handle(event) {
                 PvAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
-                    self.preview_win.paint(&font, &self.theme, ui_px);
+                    let mono = self.mono_font.clone();
+                    self.preview_win
+                        .paint(&font, mono.as_deref(), &self.theme, ui_px);
                 }
                 PvAction::Copy(text) => {
                     let _ = clipboard::write_text(&text);
@@ -218,7 +220,7 @@ impl App {
             return true;
         }
         if self.dlg.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.dlg.handle(event) {
                 DlgAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -236,7 +238,7 @@ impl App {
             return true;
         }
         if self.archive_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.archive_win.handle(event) {
                 ArcAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -250,7 +252,7 @@ impl App {
             return true;
         }
         if self.license_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.license_win.handle(event) {
                 LicAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -284,7 +286,7 @@ impl App {
             return true;
         }
         if self.file_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.file_win.handle(event) {
                 FileWinAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -306,7 +308,7 @@ impl App {
             return true;
         }
         if self.check_win.is(id) {
-            let ui_px = self.settings.font_px("ui.font_size");
+            let ui_px = self.font_px("ui.font_size");
             match self.check_win.handle(event) {
                 CheckAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
@@ -379,6 +381,9 @@ impl App {
         if self.archive_win.tick(now_ms) {
             self.archive_win.redraw();
         }
+        if self.preview_win.tick(now_ms) {
+            self.preview_win.redraw();
+        }
         if self.file_win.tick(now_ms) {
             self.file_win.redraw();
         }
@@ -389,6 +394,7 @@ impl App {
             || self.dlg.animating()
             || self.license_win.animating()
             || self.archive_win.animating()
+            || self.preview_win.animating()
             || self.file_win.animating()
     }
 
