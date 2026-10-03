@@ -11,6 +11,7 @@ use crate::keys_win::KeysAction;
 use crate::license_win::LicAction;
 use crate::prefs_win::PrefsAction;
 use crate::preview_win::PvAction;
+use crate::progress_win::ProgAction;
 use crate::*;
 
 impl App {
@@ -57,6 +58,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.preview_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_progress) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.progress_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_archive) && self.window.is_some() {
             let over = self.main_rect();
@@ -237,6 +244,14 @@ impl App {
             }
             return true;
         }
+        if self.progress_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            if self.progress_win.handle(event) == ProgAction::Paint {
+                let font = Rc::clone(&self.ui_font);
+                self.progress_win.paint(&font, &self.theme, ui_px);
+            }
+            return true;
+        }
         if self.archive_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.archive_win.handle(event) {
@@ -384,6 +399,9 @@ impl App {
         if self.preview_win.tick(now_ms) {
             self.preview_win.redraw();
         }
+        if self.progress_win.tick(now_ms) {
+            self.progress_win.redraw();
+        }
         if self.file_win.tick(now_ms) {
             self.file_win.redraw();
         }
@@ -395,6 +413,7 @@ impl App {
             || self.license_win.animating()
             || self.archive_win.animating()
             || self.preview_win.animating()
+            || self.progress_win.animating()
             || self.file_win.animating()
     }
 

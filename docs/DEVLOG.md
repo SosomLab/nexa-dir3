@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-70 전송 진행 창**: nexa-ui 111차 `SegProgress`(세그먼트 바) · `progress_win.rs`(취소 · 닫기 카운트다운) · 워커 항목별 진행 공유 · 시험 +2(146) → [journal §46](journal/2026-10-03.md)
 - **사용자 피드백 — 글자 크기·전각 현상**: nexa-ui 110차 `Font::em_to_px` + `app/fonts.rs`(설정 em → 높이 px · 슬롯별 prefs · 고정폭 글꼴 `FontSet.mono`) → [journal §45](journal/2026-10-03.md)
 - **T-62 C-3 미리보기 창 드래그 문자 선택**: 앵커/확장/확정 · 자동 스크롤 · 선택 배경 · Ctrl+C/A → [journal §44](journal/2026-10-03.md)
 - **T-51 B-2c 휴지통 복원(삭제 undo)**: `Trash::restore` · `winrecycle.rs`(셸 undelete) · Linux `.trashinfo` 복원 · `TrashOp` 히스토리 · selfcheck 왕복 · 시험 +3(142) → [journal §43](journal/2026-10-03.md)

@@ -11,8 +11,9 @@
 use crate::platform::PlatformError;
 use crate::*;
 use ndir_ops::history::{CopyBatchOp, MoveBatchOp, OpError, OperationHistory};
-use ndir_ops::{Conflict, Event, Op, Outcome};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use ndir_ops::{Conflict, Event, ItemStatus, Op, Outcome};
+use nexa_ctl::{SegItem, SegStatus};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 /// 전송 중 공유 상태(작업 스레드 ↔ UI 틱).
@@ -21,6 +22,10 @@ pub(crate) struct TransferShared {
     pub done: AtomicU64,
     pub total: AtomicU64,
     pub outcome: Mutex<Option<Outcome>>,
+    /// 항목별 세그먼트(계획 뒤 채워짐 · 진행 창 바 · dir2 OPS-216).
+    pub items: Mutex<Vec<SegItem>>,
+    /// 현재 항목 번호(1부터 · 0 = 아직).
+    pub current: AtomicUsize,
 }
 
 /// 충돌 결정(UI → 작업 스레드).
@@ -149,7 +154,14 @@ impl App {
             done: AtomicU64::new(0),
             total: AtomicU64::new(0),
             outcome: Mutex::new(None),
+            items: Mutex::new(Vec::new()),
+            current: AtomicUsize::new(0),
         });
+        // 진행 창(dir2 DLG-059: `transfer.close_ms > 0`일 때만).
+        if self.settings.int("transfer.close_ms") > 0 {
+            self.progress_win.reset(&tr("ops.progressLabel"));
+            self.open_progress = true;
+        }
         let sh = Arc::clone(&shared);
         let count = sources.len();
         let (req_tx, conflict_rx) = mpsc::channel::<ConflictReq>();
@@ -183,11 +195,51 @@ impl App {
                     }
                 },
                 &mut |ev| match ev {
-                    Event::Plan { total_bytes, .. } => {
-                        sh.total.store(total_bytes, Ordering::Relaxed)
+                    Event::Plan { sizes, total_bytes } => {
+                        sh.total.store(total_bytes, Ordering::Relaxed);
+                        if let Ok(mut it) = sh.items.lock() {
+                            *it = sizes
+                                .iter()
+                                .map(|&size| SegItem {
+                                    size,
+                                    done: 0,
+                                    status: SegStatus::Pending,
+                                })
+                                .collect();
+                        }
                     }
-                    Event::Bytes(p) => sh.done.store(p.done_bytes, Ordering::Relaxed),
-                    _ => {}
+                    Event::ItemStart { index, .. } => {
+                        sh.current.store(index + 1, Ordering::Relaxed);
+                        if let Ok(mut it) = sh.items.lock() {
+                            if let Some(i) = it.get_mut(index) {
+                                i.status = SegStatus::Active;
+                            }
+                        }
+                    }
+                    Event::Bytes(p) => {
+                        sh.done.store(p.done_bytes, Ordering::Relaxed);
+                        // 항목 내 진행 = 전체 누적 − 앞 항목 크기 합(세그먼트 부분 채움).
+                        if let Ok(mut it) = sh.items.lock() {
+                            let before: u64 = it.iter().take(p.item_index).map(|i| i.size).sum();
+                            if let Some(i) = it.get_mut(p.item_index) {
+                                i.done = p.done_bytes.saturating_sub(before).min(i.size);
+                            }
+                        }
+                    }
+                    Event::ItemEnd { index, status } => {
+                        if let Ok(mut it) = sh.items.lock() {
+                            if let Some(i) = it.get_mut(index) {
+                                i.status = match status {
+                                    ItemStatus::Done => SegStatus::Done,
+                                    ItemStatus::Skipped => SegStatus::Skipped,
+                                    ItemStatus::Failed => SegStatus::Failed,
+                                };
+                                if i.status == SegStatus::Done {
+                                    i.done = i.size;
+                                }
+                            }
+                        }
+                    }
                 },
                 &sh.cancel,
             );
@@ -234,6 +286,23 @@ impl App {
                     job.shared.done.load(Ordering::Relaxed),
                     job.shared.total.load(Ordering::Relaxed),
                 );
+                // 진행 창(dir2 DLG-059/062): 스냅숏 갱신 · [취소]/X 폴링 → 워커 취소 플래그.
+                if self.progress_win.take_cancelled() {
+                    job.shared.cancel.store(true, Ordering::Relaxed);
+                }
+                let items = job
+                    .shared
+                    .items
+                    .lock()
+                    .map(|v| v.clone())
+                    .unwrap_or_default();
+                self.progress_win.update(
+                    done,
+                    total,
+                    items,
+                    job.shared.current.load(Ordering::Relaxed),
+                    job.count,
+                );
                 let pct = (done.min(total) * 100)
                     .checked_div(total)
                     .unwrap_or(0)
@@ -249,6 +318,25 @@ impl App {
 
     /// 완료: 재열람 · 히스토리 · 토스트 · 잘라내기면 앱 내 클립보드 비움.
     fn finish_transfer(&mut self, job: TransferJob, out: Outcome) {
+        // 진행 창 마감(DLG-061): 결과 한 줄 + [닫기 (N)] 카운트다운(`transfer.close_ms` · 진행값은 그대로).
+        if self.progress_win.is_active() {
+            let ms = self.settings.int("transfer.close_ms").max(0) as u64;
+            let now = self.started.elapsed().as_millis() as u64;
+            let items = job
+                .shared
+                .items
+                .lock()
+                .map(|v| v.clone())
+                .unwrap_or_default();
+            self.progress_win.update(
+                job.shared.done.load(Ordering::Relaxed),
+                job.shared.total.load(Ordering::Relaxed),
+                items,
+                job.count,
+                job.count,
+            );
+            self.progress_win.set_done(&tr("ops.doneClosing"), ms, now);
+        }
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.reopen(&mut inv);

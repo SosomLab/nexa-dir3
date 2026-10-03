@@ -37,6 +37,7 @@ mod prefs_win;
 mod present;
 mod preview;
 mod preview_win;
+mod progress_win;
 mod selfcheck;
 mod session;
 mod termview;
@@ -77,6 +78,7 @@ use panel::{Panel, PanelMetrics};
 use platform::Platform;
 use prefs_win::PrefsWin;
 use preview_win::PreviewWin;
+use progress_win::ProgressWin;
 use session::Session;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -178,6 +180,9 @@ struct App {
     /// 독립 미리보기 창(F3 · ↗ · T-62 B) + 열기 요청.
     preview_win: PreviewWin,
     open_preview: bool,
+    /// 전송 진행 창(T-70 · `transfer.close_ms > 0`일 때만) + 열기 깃발.
+    progress_win: ProgressWin,
+    open_progress: bool,
     /// 압축 미리보기 그리드 창(T-62 C · F3/↗ 결과가 Archive면 텍스트 창 대신) + 열기 깃발.
     archive_win: ArchiveWin,
     open_archive: bool,
@@ -396,6 +401,8 @@ impl App {
             open_check: false,
             preview_win: PreviewWin::new(),
             open_preview: false,
+            progress_win: ProgressWin::new(),
+            open_progress: false,
             archive_win: ArchiveWin::new(),
             open_archive: false,
             licensing,

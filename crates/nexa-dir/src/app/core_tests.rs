@@ -1554,3 +1554,51 @@ fn font_sizes_use_em_convention_and_mono_font_loads() {
     assert!(app.mono_font.is_some(), "OS 기본 고정폭 글꼴");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-70 진행 창: 복사 시작 = 창 열기 요청(`transfer.close_ms` 기본 2000) · 틱마다 항목 세그먼트/파일 n/m 갱신 · 완료 = [닫기 (N)] 카운트다운 ·
+/// `transfer.close_ms=0` = 창 없음(제목줄 %만 — dir2).
+#[test]
+fn transfer_progress_window_updates_and_closes() {
+    let (mut app, dir) = fixture("progress");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::write(dir.join("big.bin"), vec![7u8; 300_000]).unwrap();
+    app.start_transfer(
+        vec![dir.join("a.txt"), dir.join("big.bin")],
+        dir.join("sub"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    assert!(app.open_progress, "close_ms > 0 = 진행 창");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.ops_tick() {
+        assert!(std::time::Instant::now() < deadline, "전송이 끝나지 않음");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let d = app.dump_of("progress").unwrap();
+    assert!(
+        d.contains("Done - closing shortly")
+            && d.contains("file 2/2")
+            && d.contains("done,done")
+            && d.contains("100%"),
+        "{d}"
+    );
+    assert!(dir.join("sub").join("big.bin").is_file());
+    // 창이 없으니 닫기 모드도 창 없이 — 2000 ms 뒤 만료.
+    assert!(app.progress_win.is_closing());
+    assert!(app.progress_win.tick(10_000_000));
+    assert!(!app.progress_win.is_closing());
+    // close_ms = 0 → 진행 창 열지 않음.
+    let _ = app.settings.set("transfer.close_ms", "0");
+    app.open_progress = false;
+    app.start_transfer(
+        vec![dir.join("b.md")],
+        dir.join("sub"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    assert!(!app.open_progress);
+    while app.ops_tick() {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

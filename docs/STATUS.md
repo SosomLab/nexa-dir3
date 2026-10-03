@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 43차 — T-70: 전송 진행 창(세그먼트 바 · 취소 · 닫기 카운트다운)
+
+- **한 일**: nexa-ui `SegProgress` · `progress_win.rs` · 워커 항목 진행 · 시험 +2(146).
+- **지금 상태**: T-29 완료 · T-70 잔여 = 삭제 잠금 프로브(WINB-024). 다음 = T-71 일괄 이름 변경 창 · T-82 패키징 · ShellNew.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §46](journal/2026-10-03.md)
+
 ## 10-03 42차 — 사용자 피드백(글꼴 크기 em 변환 · 고정폭 글꼴) · T-62 C-3 드래그 선택
 
 - **한 일**: nexa-ui 110차 `em_to_px` · dir3 `app/fonts.rs`(font_px/font_prefs/mono) · 미리보기 창 드래그 선택 · 시험 +2(144).
