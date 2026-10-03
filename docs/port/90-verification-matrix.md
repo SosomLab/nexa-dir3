@@ -40,8 +40,8 @@
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 35 | 139 | 0 | 0 | 0 |
-| **합계** | 4314 | 4314 | 2395 | 1007 | 766 | 0 | 0 |
+| WINC | 174 | 174 | 37 | 137 | 0 | 0 | 0 |
+| **합계** | 4314 | 4314 | 2397 | 1005 | 766 | 0 | 0 |
 
 ## 행
 
@@ -239,6 +239,8 @@
 | NEW-023 | 설정 상하/종속 UX — 전이 잠금 · AND · Ne/OneOf · 이유 덧줄 · 잠긴 카드 초기화 막기 · 강제 값 표시(사용자 값 보관) | ndir-settings `locked_by` · `dependencies` · `DEPENDS` · `prefs_win.rs::set_forced` · `App::prefs_forced` | T1 · T2 · T3 + 실기 | `locks_follow_parents_transitively_and_all_conditions` · `dependent_cards_lock_and_unlock_with_parent` · `forced_settings_show_effective_value_and_keep_user_value` | 🚧 | §115 1단계 · 2단계 T-130(범위 결합 · FORCES · 성능 향상 모드) · 실기(잠금 흐림 · 이유 덧줄 · 터미널 글꼴 강제) 사용자 |
 | NEW-024 | "상태" 열(클라우드 속성 · 네트워크 위치 → 아이콘) · 기본 열 = 이름 · 상태 · 크기 · 수정한 날짜(확장자 · 종류 기본 숨김) · 세션 열 폭 key 이주 | ndir-vfs `cloud_status` · `is_network_path` · filelist `status_of` · `cell_icon` · order `DEFAULT_HIDDEN` · `saved_visible_keys` · nexa-ui 132 | T1 · T3 · T4 + 실기 | `cloud_status_link_and_network_rules` · `columns_default_hidden_and_saved_width_keys` · `status_column_defaults_icons_and_session_migration` · `nav-up-select.scn` | ✅ | §116 · 실기 필요(Windows OneDrive 상태 아이콘 3종 · Linux 네트워크 마운트 · 옛 세션 colw 이주 — 격리 세션으로 확인 중) |
 | NEW-025 | Linux 우클릭 메뉴 통합 1차(기본 앱 · 다른 앱 ▸ · 압축 · 속성) | `platform/xdgapps.rs` · `platform/linux.rs::XdgMenu` · `platform/mod.rs` | T1 + 실기 | `desktop_app_name_exec_and_hidden` · `mime_apps_default_first_then_cache` · `exec_field_codes` · `xdg_menu_lists_apps_and_properties` | 🚧 | §117 · 실기 필요(앱 실행 · 속성 창 · 폴더 메뉴 — 사용자) · 2차 T-131(순서 편집 · 배경 메뉴 · 아이콘 · selfcheck · T4) |
+| WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |
+| PTR-GONE · COL-RESIZE | 열 폭/열 순서를 끄는 중 포인터가 창을 벗어나도 끌던 값 유지(`pointer_gone`이 끄는 패널 건너뜀) | `app/input.rs::pointer_gone` · `panel.rs::is_pressed` | T3 | `column_resize_survives_pointer_leaving_window` | ✅ | §118 결함 수정(종전 = 40으로 축소 · 동기면 반대 패널까지) |
 | PANEL-131 · CLOUD-096 | 기본 열(dir2 이름 · 확장자 · 크기 · 수정한 날짜 · 종류) · 상태 열 β | `main.rs::all_columns_for` · `order.rs` | T3 | `status_column_defaults_icons_and_session_migration` | ✅ | §116 · **의도된 차이**(확장자 · 종류 기본 숨김 · 상태 열 추가 — 사용자 10-03) · CLOUD-096 = 1차(동기화 중 · pin/unpin · cldapi 후속 T-129) |
 | SET-016 · T-120 | 종속 잠금 `DEPENDS` + `Dep`(nexa-sql SET-016 · dir3 확장: Ne · OneOf · 여러 줄 AND · 전이 · 이유) | `ndir-settings/src/{lib,registry}.rs` | T1 | `locks_follow_parents_transitively_and_all_conditions` | ✅ | §115 · DEPENDS 19줄 · 종전 첫 행만 · 전이 없음(`fast_hud_pos` 버그) 수정 |
 | GAP-017 · SORT-EXT | 확장자 열 정렬 = `SortKey::Ext`(dir2 PANEL-065 · 종전 dir3는 Kind로 잘못 매핑) | `filelist.rs::sort_key_of` | T3 | `header_sort_marks_trail_and_shift_cycles`(sort_key_of 단언) | ✅ | §112 · 이식 실수 회귀 수정 |
