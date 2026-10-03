@@ -229,6 +229,8 @@ fn run(scn: &Scenario, bin: &Path, out_root: &Path) -> Outcome {
         .current_dir(&root)
         .env("NDIR_HOME", &home)
         .env("NDIR_NO_ACTIVATE", "1")
+        // 시나리오의 복사/잘라내기가 사용자의 실제 OS 클립보드를 덮어쓰지 않게(프로세스 안 가짜 — CLAUDE.md §5).
+        .env("NDIR_FAKE_CLIPBOARD", "1")
         .env("NDIR_PLUGINS_DIR", plugins_dir())
         .env("NDIR_STARTUP_CMD", cmds.join(","))
         .stdin(Stdio::null())

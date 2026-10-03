@@ -20,6 +20,10 @@ thread_local! {
     static FAKE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
+/// 실행 파일용 가짜(환경 변수 `NDIR_FAKE_CLIPBOARD` — [`crate::platform::fake_clipboard`]): 프로세스 안 메모리.
+#[cfg(not(test))]
+static MEMORY: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 /// 클립보드 텍스트(없거나 텍스트가 아니면 `None`).
 pub(crate) fn read_text() -> Option<String> {
     #[cfg(test)]
@@ -28,6 +32,9 @@ pub(crate) fn read_text() -> Option<String> {
     }
     #[cfg(not(test))]
     {
+        if crate::platform::fake_clipboard() {
+            return MEMORY.lock().ok().and_then(|m| m.clone());
+        }
         imp::read()
     }
 }
@@ -41,6 +48,12 @@ pub(crate) fn write_text(text: &str) -> bool {
     }
     #[cfg(not(test))]
     {
+        if crate::platform::fake_clipboard() {
+            return MEMORY
+                .lock()
+                .map(|mut m| *m = Some(text.to_string()))
+                .is_ok();
+        }
         imp::write(text)
     }
 }
@@ -56,6 +69,9 @@ pub(crate) fn write_rich(text: &str, html: &str) -> bool {
     }
     #[cfg(not(test))]
     {
+        if crate::platform::fake_clipboard() {
+            return write_text(text);
+        }
         imp::write_rich(text, html)
     }
 }

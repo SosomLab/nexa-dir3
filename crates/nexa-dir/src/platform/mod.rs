@@ -573,6 +573,33 @@ impl Opener for CommandOpener {
     }
 }
 
+/// 환경 변수 `NDIR_FAKE_CLIPBOARD`(값이 있고 `0`이 아님) — 이 프로세스는 **OS 클립보드를 읽지도 쓰지도 않는다**(텍스트 + 파일 ·
+/// 프로세스 안 메모리로 대신). 시나리오 시험(T4 `ndir-check`)과 캡처용 실행이 사용자의 클립보드를 덮어쓰지 않게 하는 스위치
+/// (CLAUDE.md §5 · 10-03 발견: copy-paste.scn · ctx-menu.scn이 실제 CF_HDROP을 게시했다).
+pub(crate) fn fake_clipboard() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| fake_clipboard_value(std::env::var_os("NDIR_FAKE_CLIPBOARD").as_deref()))
+}
+
+/// 스위치 값 해석(순수): 없음 · 빈 값 · `0` = 꺼짐 / 그 밖 = 켜짐.
+fn fake_clipboard_value(v: Option<&std::ffi::OsStr>) -> bool {
+    v.is_some_and(|v| !v.is_empty() && v != "0")
+}
+
+/// 프로세스 안 파일 클립보드([`fake_clipboard`]) — 같은 프로세스의 복사 → 붙여넣기는 그대로 이어진다.
+#[derive(Default)]
+struct MemoryFiles(std::cell::RefCell<Option<(Vec<PathBuf>, bool)>>);
+
+impl FileClipboard for MemoryFiles {
+    fn read_files(&self) -> Option<(Vec<PathBuf>, bool)> {
+        self.0.borrow().clone()
+    }
+    fn write_files(&self, paths: &[PathBuf], cut: bool) -> Result<(), PlatformError> {
+        *self.0.borrow_mut() = Some((paths.to_vec(), cut));
+        Ok(())
+    }
+}
+
 impl Platform {
     /// 운영 플랫폼(이 OS 모듈 + 공용 폴백).
     pub(crate) fn native() -> Platform {
@@ -620,6 +647,11 @@ impl Platform {
         let templates: Box<dyn Templates> = Box::new(wintemplates::ShellNewTemplates::new());
         #[cfg(not(windows))]
         let templates: Box<dyn Templates> = Box::new(UserTemplates::new(os_template_dirs()));
+        let clipboard: Box<dyn FileClipboard> = if fake_clipboard() {
+            Box::new(MemoryFiles::default())
+        } else {
+            clipboard
+        };
         Platform {
             shell,
             pty,
@@ -964,5 +996,19 @@ mod tests {
         assert_eq!(p.commandline.as_deref(), Some("cmd.exe /k"));
         assert!(parse_wt_settings("not json").is_none());
         assert!(parse_wt_settings("{}").is_none(), "profiles 없음");
+    }
+
+    /// `NDIR_FAKE_CLIPBOARD` 값 해석(없음 · 빈 값 · 0 = 꺼짐) + 프로세스 안 파일 클립보드는 쓴 것을 그대로 돌려준다.
+    #[test]
+    fn fake_clipboard_switch_and_memory_files() {
+        use std::ffi::OsStr;
+        assert!(!fake_clipboard_value(None));
+        assert!(!fake_clipboard_value(Some(OsStr::new(""))));
+        assert!(!fake_clipboard_value(Some(OsStr::new("0"))));
+        assert!(fake_clipboard_value(Some(OsStr::new("1"))));
+        let m = MemoryFiles::default();
+        assert_eq!(m.read_files(), None);
+        m.write_files(&[PathBuf::from("a.txt")], true).unwrap();
+        assert_eq!(m.read_files(), Some((vec![PathBuf::from("a.txt")], true)));
     }
 }
