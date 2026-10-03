@@ -2323,6 +2323,37 @@ fn status_segments_and_tab_status_bar() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 툴바 켜짐 색(사용자 10-04 권장안 A): 기본 = 설정 창 스위치와 같은 초록으로 켜진 버튼을 채운다 · `toolbar.on_color=accent` =
+/// 종전 강조색(초록 없음) · 농도 설정은 강조색일 때만 풀린다.
+#[test]
+fn toolbar_on_color_matches_switch_green() {
+    let (mut app, dir) = fixture("oncolor");
+    app.layout_for(1200, 800, 1.0);
+    let green = nexa_ctl::controls::SWITCH_ON;
+    let greens = |app: &mut App| {
+        let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+        app.paint_into(&mut rec, 1200, 800, 1.0);
+        let tb = app.toolbar.bounds();
+        rec.round_rects
+            .iter()
+            .filter(|(r, _, c)| *c == green && r.y >= tb.y && r.bottom() <= tb.bottom())
+            .count()
+    };
+    assert!(greens(&mut app) >= 1, "켜진 보기 모드 버튼 = 초록");
+    let locked = |app: &App| {
+        ndir_settings::locked_by("toolbar.on_fill_pct", &|k| {
+            app.settings.get(k).unwrap_or("").to_string()
+        })
+        .is_some()
+    };
+    assert!(locked(&app));
+    let _ = app.settings.set("toolbar.on_color", "accent");
+    app.after_setting_changed("toolbar.on_color");
+    assert_eq!(greens(&mut app), 0, "강조색 모드 = 초록 없음");
+    assert!(!locked(&app));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

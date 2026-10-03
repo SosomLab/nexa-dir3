@@ -894,6 +894,9 @@ mod tests {
             if *child == "tabs.scroll_buttons" {
                 continue; // 기본 = 여러 줄 → 버튼 자리는 잠김(의도)
             }
+            if child.starts_with("toolbar.on_") {
+                continue; // 기본 = 초록(스위치와 통일) → 강조색 농도 설정은 잠김(의도)
+            }
             assert_eq!(locked_by(child, &d), None, "{child}");
         }
         // 전이: 고속 스크롤을 끄면 배지(켜져 있어도)의 하위 설정까지 잠기고 원인 = scroll.fast.

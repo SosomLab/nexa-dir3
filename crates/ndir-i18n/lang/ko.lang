@@ -870,3 +870,7 @@ pref.statusInterval = 상태줄 부하 갱신 주기(ms)
 pref.statusInterval.desc = CPU · 메모리 · 디스크 I/O를 다시 읽는 간격입니다.
 pref.tabStatusbar = 탭 상태바
 pref.tabStatusbar.desc = 패널마다 아래에 상태바를 두어 현재 폴더의 항목 수와 Git 브랜치를 보여 줍니다.
+pref.toolbarOnColor = 툴바: 켜짐 색
+pref.toolbarOnColor.desc = 켜진 툴바 버튼의 모양입니다. 초록 = 스위치와 같은 초록으로 채우고 아이콘은 흰색. 강조색 = 강조색 옅은 채움(아래 농도 설정이 적용됩니다).
+pref.toolbarOnColor.green = 초록(스위치와 같게)
+pref.toolbarOnColor.accent = 강조색(옅은 채움)

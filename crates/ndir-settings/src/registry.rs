@@ -18,6 +18,10 @@ const TOOLBAR_SIZE_OPTS: &[(&str, &str)] = &[
     ("24", "pref.toolbarSize.24"),
     ("32", "pref.toolbarSize.32"),
 ];
+const TOOLBAR_ON_COLOR_OPTS: &[(&str, &str)] = &[
+    ("green", "pref.toolbarOnColor.green"),
+    ("accent", "pref.toolbarOnColor.accent"),
+];
 const VIEW_SCOPE_OPTS: &[(&str, &str)] = &[
     ("global", "pref.viewScope.global"),
     ("panel", "pref.viewScope.panel"),
@@ -244,6 +248,16 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarHoverFill.desc",
         Int { min: 0, max: 100 },
         "8"
+    ),
+    // 켜짐 색(사용자 10-04 "토글 On = 스위치와 통일"): green = 스위치와 같은 초록 진한 채움 + 흰 아이콘(기본) ·
+    // accent = 종전(강조색 옅은 채움 — 아래 농도 설정이 이때만 쓰인다).
+    e!(
+        "toolbar.on_color",
+        CAT_APPEARANCE,
+        "pref.toolbarOnColor",
+        "pref.toolbarOnColor.desc",
+        Choice(TOOLBAR_ON_COLOR_OPTS),
+        "green"
     ),
     e!(
         "toolbar.on_fill_pct",
@@ -1480,6 +1494,13 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
+    ("toolbar.on_fill_pct", "toolbar.on_color", Dep::Eq("accent")),
+    ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
+    (
+        "toolbar.on_icon_accent",
+        "toolbar.on_color",
+        Dep::Eq("accent"),
+    ),
     // 배치(사용자 10-03 "상위를 끄면 하위는 설정 불가"): 단일 패널이면 좌우 분할·정보 배치가 무의미 · 도크를 숨기면 도크 크기가
     // 무의미 · 도크 좌우 분할은 도크 표시 ∧ 듀얼 패널 ∧ 듀얼 정보일 때만(여러 줄 = AND).
     ("layout.info_mode", "layout.panel_mode", Dep::Eq("dual")),
