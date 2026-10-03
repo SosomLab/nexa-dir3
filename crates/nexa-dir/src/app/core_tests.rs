@@ -16,9 +16,11 @@ fn fixture(tag: &str) -> (App, PathBuf) {
     // 상태줄 문구가 OS 언어에 따라 달라지지 않게 영어 고정.
     ndir_i18n::activate(ndir_i18n::load("en", &dir.join("nowhere")));
     // 런처 시드는 OS마다 달라 골든이 흔들린다 → 픽스처는 끔(런처 시험이 명시적으로 켠다).
+    // 테마 기본값 = system이라 OS 테마(러너마다 다르다 — CI windows·macos = light · ubuntu = dark)에 따라 덤프가 달라진다
+    // → 픽스처는 dark 고정(10-03 CI 빨강 273b462 · 기본값 자체는 ndir-settings 시험이 본다).
     let settings = Settings::from_text(
         dir.join("settings.conf"),
-        "launcher.visible=off\nlauncher.seed=2\n",
+        "launcher.visible=off\nlauncher.seed=2\nui.theme=dark\n",
     );
     let font = nexa_font::ui_font(None).expect("OS UI font (CI installs fonts)");
     (
@@ -245,14 +247,14 @@ fn route_and_commands_without_window() {
     assert_eq!(app.settings.flag("list.show_hidden"), before);
     assert_eq!(app.menubar.is_checked("view.hidden"), Some(!before));
     assert_eq!(app.toolbar.item_checked("view.hidden"), !before);
-    // 테마: 기본 = system(사용자 10-03) · 순환 system → light → dark → system.
+    // 테마 순환 dark(픽스처 고정) → system → light → dark.
+    assert_eq!(app.settings.theme_mode(), ThemeMode::Dark);
+    app.command("view.theme_cycle");
     assert_eq!(app.settings.theme_mode(), ThemeMode::System);
     app.command("view.theme_cycle");
     assert_eq!(app.settings.theme_mode(), ThemeMode::Light);
     app.command("view.theme_cycle");
     assert_eq!(app.settings.theme_mode(), ThemeMode::Dark);
-    app.command("view.theme_cycle");
-    assert_eq!(app.settings.theme_mode(), ThemeMode::System);
     app.command("view.theme_light");
     assert!(!app.theme.is_dark);
     // 보기 모드는 활성 탭에 즉시.
