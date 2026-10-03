@@ -49,6 +49,8 @@
 | 3.0 · 20.0 · 200.0 | `main.rs:107-109` | 스플리터 두께(+ 히트 반폭) · 50 % 자석 스냅 · 패널 최소 폭 | — | 고급 | `layout.splitter_px` · `layout.snap_px` · `layout.min_panel_w` | ☐ |
 | 20 | `main.rs:111` | 툴바 아이콘 기본 크기 | `toolbar.icon_size` | 설정 | (기존) | ✅ |
 | 4 | `app/settings.rs:193` | 툴바 그룹 간격 기본 | `toolbar.group_gap` | 고급 | (기존) | ✅ |
+| 1 | `app/settings.rs` `make_tool_dock`(§76) | 툴바 아이콘 둘레 여백(칸 = 아이콘 + 2) | `toolbar.icon_pad`(0~8) | 고급 | (기존) | ✅ |
+| 3줄 고정 | `app/input.rs`(터미널) · `preview_win.rs`(F3) | 휠 1노치 줄 수 → §76부터 OS 값(`SPI_GETWHEELSCROLLLINES`) | — | 상수(OS 값 따름) | — | ✅ |
 | 20 / 글꼴+6 / ≥14 | `main.rs:308` | 목록 행 높이 | — | 설정 | `list.row_h`(0 = 글꼴 기준 자동) | ☐ |
 | 6 · 16 | `main.rs:309-310` | 행 좌우 여백 · 트리 들여쓰기 | — | 고급 · 설정 | `list.pad_x` · `list.indent_w` | ☐ |
 | 22 · 24 | `main.rs:311-312` | 탭 바 높이 · 경로/네비 바 높이 | — | 고급 | `tabs.height` · `list.bar_h` | ☐ |
