@@ -330,6 +330,8 @@ pref.tbo.infoToggle = Info Panes Toggle
 pref.editBtn = Edit...
 pref.colLayout = File Columns
 pref.colLayout.desc = Show/hide and reorder file list columns in a separate window (applies to the focused panel; follows column sync).
+pref.iconOverrides = Custom Icons
+pref.iconOverrides.desc = Your own icons for the file list, highest priority. Rules separated by ';' in the form kind:pattern=image - kind is path (full path), name (file or folder name), dir (folder name) or ext (extension). Images: PNG/BMP/GIF/JPEG; relative paths are looked up in the icons folder of the settings folder. Example: ext:rs=rust.png; dir:node_modules=nm.png
 pref.ctxMenuOrder = Context Menu Items
 pref.ctxMenuOrder.desc = Show/hide and reorder the app's own context menu items (shell verbs are not affected).
 pref.ctxm.grpRow = Item Menu

@@ -111,6 +111,7 @@ impl App {
             "list.folder_bold" | "list.header_bold" | "list.header_italic" => {
                 self.apply_font_decor();
             }
+            "list.icon_overrides" => self.apply_icon_overrides(),
             "list.col_layout" => {
                 let v = self
                     .settings

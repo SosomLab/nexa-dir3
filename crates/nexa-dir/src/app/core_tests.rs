@@ -2422,3 +2422,99 @@ fn icon_glyph_choice_never_yields_tofu() {
         ui.chain
     );
 }
+
+/// 무간섭 재열람(dir2 PANEL-036 · GAP-005): 폴더가 밖에서 바뀌어 다시 열려도 **선택 · 펼친 폴더 · 정렬 키**가 그대로다 —
+/// 사라진 항목만 선택에서 빠진다(종전 = 선택이 전부 풀려 "메뉴가 채워진 뒤 복사가 무반응"이던 원인).
+#[test]
+fn reopen_keeps_selection_expansion_and_sort() {
+    let (mut app, dir) = fixture("reopenkeep");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::write(dir.join("sub").join("inner.txt"), b"x").unwrap();
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    // 정렬 = 이름 내림차순 · sub 펼침 · a.txt + sub/inner.txt 선택.
+    assert!(app.panels[0].rows_mut().source_mut().set_sort(&[(0, true)]));
+    let rows = app.panels[0].rows_mut();
+    let sub = (0..rows.source().len())
+        .find(|&i| {
+            rows.source()
+                .row_path(i)
+                .is_some_and(|p| p.ends_with("sub"))
+        })
+        .expect("sub row");
+    assert!(rows.source_mut().toggle(sub), "sub 펼침");
+    let idx = |app: &App, name: &str| {
+        let s = app.panels[0].rows().source();
+        (0..s.len()).find(|&i| s.row_path(i).is_some_and(|p| p.ends_with(name)))
+    };
+    let (ia, ii) = (idx(&app, "a.txt").unwrap(), idx(&app, "inner.txt").unwrap());
+    let src = app.panels[0].rows_mut().source_mut();
+    src.select(ia, nexa_grid::SelectOp::Single);
+    src.select(ii, nexa_grid::SelectOp::Toggle);
+    let order_before: Vec<_> = {
+        let s = app.panels[0].rows().source();
+        (0..s.len()).filter_map(|i| s.row_path(i)).collect()
+    };
+    let mut sel_before = app.panels[0].selected_paths();
+    sel_before.sort();
+    assert_eq!(sel_before.len(), 2);
+    // 밖에서 파일이 하나 생기고 → 재열람.
+    std::fs::write(dir.join("zz-new.txt"), b"x").unwrap();
+    app.panels[0].reopen(&mut inv);
+    let mut sel_after = app.panels[0].selected_paths();
+    sel_after.sort();
+    assert_eq!(sel_after, sel_before, "선택 유지");
+    assert!(
+        idx(&app, "inner.txt").is_some(),
+        "펼침 유지(sub 안 항목이 보인다)"
+    );
+    let order_after: Vec<_> = {
+        let s = app.panels[0].rows().source();
+        (0..s.len()).filter_map(|i| s.row_path(i)).collect()
+    };
+    let without_new: Vec<_> = order_after
+        .iter()
+        .filter(|p| !p.ends_with("zz-new.txt"))
+        .cloned()
+        .collect();
+    assert_eq!(without_new, order_before, "정렬(이름 내림차순) 유지");
+    // 선택된 파일이 사라지면 그 항목만 빠진다.
+    std::fs::remove_file(dir.join("a.txt")).unwrap();
+    app.panels[0].reopen(&mut inv);
+    let sel = app.panels[0].selected_paths();
+    assert_eq!(sel.len(), 1);
+    assert!(sel[0].ends_with("inner.txt"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 행 아이콘 키(dir2 PANEL-064 · GAP-003): 폴더 = `dir` · 확장자 = 그 확장자 · 확장자 없음 = `file` · 파일별(exe 등) = 소문자 전체 경로 —
+/// 그리드는 이름 앞에 아이콘 칸을 두고 호스트 리졸버(`app::row_icons`)에 묻는다.
+#[test]
+fn rows_expose_dir2_icon_keys() {
+    use crate::filelist::icon_key;
+    use std::path::Path;
+    assert_eq!(icon_key(true, Path::new("C:/x/sub"), false), "dir");
+    assert_eq!(icon_key(false, Path::new("C:/x/a.TXT"), false), "txt");
+    assert_eq!(icon_key(false, Path::new("C:/x/README"), false), "file");
+    assert_eq!(
+        icon_key(false, Path::new("C:/X/App.EXE"), false),
+        "c:/x/app.exe"
+    );
+    assert_eq!(
+        icon_key(true, Path::new("D:/"), true),
+        "d:/",
+        "가상 최상위 항목 = 경로별"
+    );
+    let (app, dir) = fixture("iconkeys");
+    let s = app.panels[0].rows().source();
+    let keys: Vec<String> = (0..s.len())
+        .filter_map(|i| nexa_grid::RowSource::icon(s, i))
+        .map(|(k, _)| k)
+        .collect();
+    assert!(
+        keys.contains(&"dir".to_string()) && keys.contains(&"txt".to_string()),
+        "{keys:?}"
+    );
+    assert_eq!(keys.len(), s.len(), "모든 행이 아이콘 키를 준다");
+    let _ = std::fs::remove_dir_all(&dir);
+}

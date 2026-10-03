@@ -242,6 +242,8 @@ struct App {
     launcher_last: String,
     /// 런처 exe 아이콘 비동기 로딩(T-30 B): 조회 중 깃발 + 마지막으로 본 IconService 버전.
     launcher_icons_pending: bool,
+    /// 행 아이콘 서비스 버전(조회 중이던 아이콘 도착 감지 · GAP-003).
+    row_icon_ver: u64,
     launcher_icon_ver: u64,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
@@ -482,6 +484,7 @@ impl App {
             launcher_items,
             launcher_last: String::new(),
             launcher_icons_pending,
+            row_icon_ver: 0,
             launcher_icon_ver: nexa_fs::shell::IconService::global().version(),
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
@@ -499,6 +502,7 @@ impl App {
             );
         }
         app.apply_window_sizes();
+        app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)
         app.apply_font_decor(); // dir2 X-12 폴더 굵게 · 헤더 굵게/이탤릭(KEY-061~063)
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
@@ -847,6 +851,7 @@ fn run_gui() -> ExitCode {
         eprintln!("nexa-dir: no usable UI font");
         return ExitCode::FAILURE;
     };
+    app::row_icons::install(); // 패널 행 셸 아이콘(GAP-003 · dir2 M1-7)
     app::fonts::init_icon_glyphs(&ui.font); // 네비·쉐브론 글리프(MDL2 있으면 dir2 모양 · 없으면 유니코드 — 두부 방지)
                                             // Linux: 창 백엔드 = X11 우선(모달 창을 메인의 transient로 붙이려면 · Wayland 경로는 winit 0.30이 부모 창을 지원하지 않는다).
     let built = {

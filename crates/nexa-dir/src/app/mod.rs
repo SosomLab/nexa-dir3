@@ -15,6 +15,7 @@ pub(crate) mod order;
 mod paint;
 pub(crate) mod plugins;
 mod previewcmd;
+pub(crate) mod row_icons;
 mod sessions;
 mod settings;
 mod startup_cmd;

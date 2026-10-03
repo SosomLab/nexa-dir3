@@ -12,7 +12,8 @@ cmd: @ready:ui.press:escape
 cmd: @ready:list.dump:<out>/list.txt
 cmd: @ready:list.select:0
 cmd: @ready:cmd.contextMenu
-# 행 메뉴는 자체 항목만 검사하므로 기다리지 않는다(10-03 적발: 셸 항목으로 다시 채운 뒤 ctx.pick:edit.copy가 clip none — 소스 확인 대상).
+# 행 메뉴도 셸 항목이 찰 때까지 기다린다 — 그 사이 감시 재열람이 돌아도 선택이 남아야 한다(GAP-005 회귀 시험 · §73).
+cmd: @ready:ctx.wait
 cmd: @ready:ctx.dump:<out>/row.txt
 cmd: @ready:ctx.pick:edit.copy
 cmd: @ready:assert.ops:clip 1 copy

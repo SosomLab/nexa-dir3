@@ -90,15 +90,43 @@ impl TreeSource {
         true
     }
 
-    /// 같은 경로를 다시 읽는다(F5 · 옵션 변경).
+    /// 같은 경로를 다시 읽는다(F5 · 옵션 변경 · 폴더 감시) — **무간섭 재열람**(dir2 PANEL-036 `reopen_filtered`):
+    /// 정렬 키 · 펼친 폴더 · 선택을 스냅샷해 새 트리에 경로로 되돌린다(사라진 항목은 조용히 빠진다). 종전에는 새 트리를 기본 정렬로
+    /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
+        let (keys, expanded, selected) = match &self.tree {
+            Some(t) => {
+                let expanded: Vec<String> = (0..t.visible_len())
+                    .filter_map(|i| t.visible_id(i))
+                    .filter(|&id| t.is_expanded(id) == Some(true))
+                    .filter_map(|id| t.node_path(id))
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                let selected: Vec<String> = t
+                    .selected_paths()
+                    .into_iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                (t.sort_spec().keys.clone(), expanded, selected)
+            }
+            None => (vec![(SortKey::Name, false)], Vec::new(), Vec::new()),
+        };
         match Tree::open_filtered(&self.path, self.opts.show_hidden, self.opts.show_dotfiles) {
             Ok(mut t) => {
                 t.set_sort(SortSpec {
-                    keys: vec![(SortKey::Name, false)],
+                    keys,
                     folders_first: self.opts.folders_first,
                     case_sensitive: self.opts.case_sensitive,
                 });
+                // 펼침은 가시 순서(부모 먼저)로 모았으므로 그대로 다시 펼치면 된다 · 없어진 폴더는 건너뛴다.
+                for dir in &expanded {
+                    let _ = t.expand_path(dir);
+                }
+                for path in &selected {
+                    if let Some(id) = t.index_of_path(path).and_then(|i| t.visible_id(i)) {
+                        t.select(id, ndir_tree::SelectMode::Toggle);
+                    }
+                }
                 self.tree = Some(t);
                 self.error = None;
             }
@@ -273,9 +301,46 @@ fn kind_label(kind: FileKind, name: &str) -> String {
     }
 }
 
+/// 파일마다 아이콘이 다른 확장자(dir2 `icons.rs:8-36` · PANEL-064) — 키 = 소문자 전체 경로.
+const PER_FILE_ICON_EXTS: [&str; 7] = ["exe", "lnk", "ico", "cur", "msi", "scr", "appref-ms"];
+
+/// 행 아이콘 키(dir2 `icons::icon_key` · PANEL-064): 폴더 = `dir` · 확장자 없음 = `file` · 파일별 확장자 = 소문자 전체 경로 · 그 외 = 확장자.
+/// 드라이브 루트 같은 **가상 최상위의 항목**은 경로마다 고유 아이콘(셸이 경로를 본다) → 경로 키.
+pub(crate) fn icon_key(is_dir: bool, path: &Path, per_path: bool) -> String {
+    let lower = || path.to_string_lossy().to_lowercase();
+    if per_path {
+        return lower();
+    }
+    if is_dir {
+        return "dir".into();
+    }
+    match path.extension().and_then(|e| e.to_str()) {
+        None => "file".into(),
+        Some(ext) => {
+            let ext = ext.to_ascii_lowercase();
+            if PER_FILE_ICON_EXTS.contains(&ext.as_str()) {
+                lower()
+            } else {
+                ext
+            }
+        }
+    }
+}
+
 impl RowSource for TreeSource {
     fn len(&self) -> usize {
         self.tree.as_ref().map_or(0, Tree::visible_len)
+    }
+
+    /// 행 아이콘 `(키, 경로)`(dir2 `source.rs:426-432` · M1-7 셸 아이콘) — 그리는 쪽(nexa-grid `Adapt::draw_icon`)이 호스트 리졸버에 묻는다.
+    fn icon(&self, index: usize) -> Option<(String, String)> {
+        let is_dir = self.tree.as_ref()?.row(index)?.kind == FileKind::Dir;
+        let path = self.row_path(index)?;
+        let per_path = ndir_vfs::is_virtual_root(&self.path);
+        Some((
+            icon_key(is_dir, &path, per_path),
+            path.to_string_lossy().into_owned(),
+        ))
     }
 
     /// 잘라내기 대기 행 = 흐림(nexa-grid X-32 · 집합이 비어 있으면 경로 계산도 하지 않는다 — dir2 `has_cut_marks` 선판정).

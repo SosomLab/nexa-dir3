@@ -511,6 +511,15 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    // 행 아이콘 계층 1 — 직접 설정한 아이콘(dir3 신규 · 사용자 10-03): `종류:패턴=이미지` · `;` 구분 · 종류 = path|name|dir|ext.
+    e!(
+        "list.icon_overrides",
+        CAT_LIST,
+        "pref.iconOverrides",
+        "pref.iconOverrides.desc",
+        Text,
+        ""
+    ),
     // ── 파일 목록 › 타입어헤드(①~⑥)
     e!(
         "typeahead.scope",

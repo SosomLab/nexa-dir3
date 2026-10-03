@@ -330,6 +330,8 @@ pref.tbo.infoToggle = 情報ペイン切替
 pref.editBtn = 編集...
 pref.colLayout = ファイル一覧の列
 pref.colLayout.desc = ファイル一覧の列の表示/非表示と並べ替えを別ウィンドウで行います (フォーカス中のパネルに適用・列同期に従います)。
+pref.iconOverrides = カスタムアイコン
+pref.iconOverrides.desc = ファイル一覧で使う独自アイコン（最優先）。ルールは ';' で区切り、形式は 種類:パターン=画像 - 種類は path（フルパス）· name（ファイル/フォルダー名）· dir（フォルダー名）· ext（拡張子）。画像は PNG/BMP/GIF/JPEG、相対パスは設定フォルダーの icons フォルダーから探します。例: ext:rs=rust.png; dir:node_modules=nm.png
 pref.ctxMenuOrder = コンテキストメニュー項目
 pref.ctxMenuOrder.desc = アプリ独自のコンテキストメニュー項目の表示/非表示と並べ替え (シェル動詞には影響しません)。
 pref.ctxm.grpRow = 項目メニュー
