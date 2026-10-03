@@ -55,6 +55,12 @@ pub(crate) fn split_shortcut_ext(name: &str) -> Option<(&str, &str)> {
     })
 }
 
+/// Windows 바로 가기 파일(`.lnk` · 대소문자 무시)인가 — 대상 해석(GAP-007) 대상.
+pub(crate) fn is_lnk(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("lnk"))
+}
+
 /// 목록·이름 바꾸기에 보이는 이름(GAP-006 · dir2 `source.rs:456-465`): `hide`(= 이 OS가 바로 가기 확장자를 숨기는가)이고
 /// 폴더가 아닌 바로 가기 파일이면 확장자를 뺀다(확장자 열은 `lnk` 그대로).
 pub(crate) fn display_name(name: &str, is_dir: bool, hide: bool) -> &str {

@@ -78,6 +78,32 @@ impl Opener for NativeOpener {
     fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
         self.reveal.reveal(path)
     }
+    fn link_target(&self, path: &Path) -> Option<PathBuf> {
+        shell_link_target(path)
+    }
+}
+
+/// `.lnk`의 대상 경로(IShellLinkW::GetPath — 대상을 찾아 헤매는 `Resolve`는 부르지 않는다: UI 스레드를 막지 않고 저장된 경로만).
+/// 대상이 파일 시스템 경로가 아니면(제어판 항목 등) 빈 문자열 → `None`.
+fn shell_link_target(path: &Path) -> Option<PathBuf> {
+    use ::windows::core::{Interface, PCWSTR};
+    use ::windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER,
+        COINIT_APARTMENTTHREADED, STGM_READ,
+    };
+    use ::windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    let file = wide(path);
+    // SAFETY: COM 호출 — UI 스레드(STA · 이미 초기화돼 있으면 S_FALSE) · 버퍼는 호출 동안 살아 있다 · 인터페이스는 Drop에서 Release.
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).ok()?;
+        let persist: IPersistFile = link.cast().ok()?;
+        persist.Load(PCWSTR(file.as_ptr()), STGM_READ).ok()?;
+        let mut buf = [0u16; 1024];
+        link.GetPath(&mut buf, std::ptr::null_mut(), 0).ok()?;
+        let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        (len > 0).then(|| PathBuf::from(std::ffi::OsString::from_wide(&buf[..len])))
+    }
 }
 
 fn wide(p: &Path) -> Vec<u16> {
@@ -413,5 +439,40 @@ mod tests {
         assert_eq!(NativeTrash.trash(std::slice::from_ref(&f)), Ok(1));
         assert!(!f.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GAP-007: 임시 폴더에 실제 `.lnk`를 만들어(IShellLinkW::SetPath + IPersistFile::Save) 대상 경로를 되읽는다 ·
+    /// `.lnk`가 아닌 파일 = `None`. 사용자 파일은 건드리지 않는다.
+    #[test]
+    fn shell_link_target_reads_a_real_lnk() {
+        use ::windows::core::{Interface, PCWSTR};
+        use ::windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER,
+            COINIT_APARTMENTTHREADED,
+        };
+        use ::windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+        let dir = std::env::temp_dir().join(format!("ndir-lnk-{}", std::process::id()));
+        let target = dir.join("대상 폴더");
+        std::fs::create_dir_all(&target).unwrap();
+        let lnk = dir.join("to.lnk");
+        // SAFETY: 시험 스레드에서 COM 초기화 뒤 표준 호출 · 버퍼는 호출 동안 살아 있다.
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let link: IShellLinkW =
+                CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).expect("ShellLink");
+            link.SetPath(PCWSTR(wide(&target).as_ptr()))
+                .expect("SetPath");
+            let persist: IPersistFile = link.cast().expect("IPersistFile");
+            persist
+                .Save(PCWSTR(wide(&lnk).as_ptr()), true)
+                .expect("Save");
+        }
+        let got = shell_link_target(&lnk);
+        let plain = dir.join("plain.txt");
+        std::fs::write(&plain, b"not a link").unwrap();
+        let none = shell_link_target(&plain);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(got.as_deref(), Some(target.as_path()));
+        assert_eq!(none, None);
     }
 }

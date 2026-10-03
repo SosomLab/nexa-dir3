@@ -456,6 +456,25 @@ impl App {
 
     /// 파일 활성화 — 연결 프로그램으로 열기(platform 층 T-6x). 지금은 토스트.
     pub(crate) fn open_external(&mut self, path: &std::path::Path) {
+        // 폴더를 가리키는 바로 가기(.lnk) = 앱 안에서 그 폴더로 이동(탐색기와 같음 · GAP-007) — 파일 대상·해석 실패는 OS 열기로.
+        if crate::filelist::is_lnk(path) {
+            if let Some(dir) = self
+                .platform
+                .opener
+                .link_target(path)
+                .filter(|t| t.is_dir())
+            {
+                let a = self.active;
+                let mut inv = Invalidations::default();
+                if let Some(why) = self.panels[a].navigate_to(dir, &mut inv) {
+                    self.toasts
+                        .push(toast::ToastKind::Warn, tr("cmd.activate"), why);
+                }
+                self.update_status();
+                self.redraw();
+                return;
+            }
+        }
         if let Err(e) = self.platform.opener.open(path) {
             self.toasts
                 .push(toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());

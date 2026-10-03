@@ -2907,3 +2907,39 @@ fn path_edit_right_click_opens_text_menu() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// GAP-007: 폴더를 가리키는 `.lnk` 활성화 = 앱 안 이동(OS 열기 호출 없음) · 대상이 파일/해석 불가 = OS 열기 · `.lnk`가 아니면 해석하지 않는다.
+#[test]
+fn folder_shortcut_navigates_inside_the_app() {
+    let (mut app, dir) = fixture("lnknav");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let lnk = dir.join("To Sub.lnk");
+    std::fs::write(&lnk, b"fake").unwrap();
+    let opens = |log: &std::rc::Rc<std::cell::RefCell<crate::platform::fake::FakeLog>>| {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("open:"))
+            .count()
+    };
+    // ① 대상 = 폴더 → 이동.
+    log.borrow_mut().link_target = Some(dir.join("sub"));
+    app.open_external(&lnk);
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"));
+    assert_eq!(opens(&log), 0, "OS 열기 없음");
+    // ② 대상 = 파일 → OS 열기(바로 가기 자체를 넘긴다).
+    log.borrow_mut().link_target = Some(dir.join("a.txt"));
+    app.open_external(&lnk);
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"));
+    assert_eq!(opens(&log), 1);
+    // ③ 해석 불가 → OS 열기 · ④ `.lnk`가 아닌 파일은 대상이 주입돼 있어도 그냥 연다.
+    log.borrow_mut().link_target = None;
+    app.open_external(&lnk);
+    assert_eq!(opens(&log), 2);
+    log.borrow_mut().link_target = Some(dir.clone());
+    app.open_external(&dir.join("a.txt"));
+    assert_eq!(opens(&log), 3);
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

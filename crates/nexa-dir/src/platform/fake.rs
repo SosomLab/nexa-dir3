@@ -15,6 +15,8 @@ pub(crate) struct FakeLog {
     pub clipboard: Option<(Vec<PathBuf>, bool)>,
     pub changed: Vec<PathBuf>,
     pub open_fails: bool,
+    /// 주입: 바로 가기 대상(`link_target`이 돌려줄 값).
+    pub link_target: Option<PathBuf>,
     pub watched: Vec<PathBuf>,
 }
 
@@ -192,6 +194,9 @@ impl Opener for FakeOpen {
     fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
         note(&self.0, format!("reveal:{}", path.display()));
         Ok(())
+    }
+    fn link_target(&self, _path: &Path) -> Option<PathBuf> {
+        self.0.borrow().link_target.clone()
     }
 }
 

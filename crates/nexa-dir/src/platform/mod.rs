@@ -243,6 +243,11 @@ pub(crate) trait Opener {
     fn open(&self, path: &Path) -> Result<(), PlatformError>;
     /// 파일 관리자에서 보기(선택 상태).
     fn reveal(&self, path: &Path) -> Result<(), PlatformError>;
+    /// 바로 가기 파일(Windows `.lnk`)이 가리키는 대상 경로 — 해석할 수 없거나 이 OS에 그런 파일이 없으면 `None`(GAP-007 ·
+    /// 호출부는 대상이 폴더일 때 앱 안에서 이동하고, 아니면 [`Self::open`]으로 연다).
+    fn link_target(&self, _path: &Path) -> Option<PathBuf> {
+        None
+    }
 }
 
 pub(crate) trait Disk {
