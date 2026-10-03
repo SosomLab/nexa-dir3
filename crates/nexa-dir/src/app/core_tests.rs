@@ -1641,9 +1641,18 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
         .toolbar
         .all_items()
         .iter()
-        .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 20, h: 20, .. }))
+        .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 18, h: 18, .. }))
         .count();
-    // 14개 명령 = SVG 마스크(20px) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 13개.
+    // 토글 표시: 누르면 끝나는 동작(새로 고침 · 설정)만 토글이 아니다(hover 때 배경을 칠하지 않는다).
+    let plain: Vec<String> = app
+        .toolbar
+        .all_items()
+        .iter()
+        .filter(|it| !it.toggle)
+        .map(|it| it.id.clone())
+        .collect();
+    assert_eq!(plain, ["view.refresh", "file.prefs"]);
+    // 14개 명령 = SVG 마스크(칸 20px · 그림은 90 % = 18px — `toolbar.icon_scale_pct`) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 13개.
     let dot = usize::from(platform::has_dotfile_toggle());
     assert_eq!(masks, 13 + dot);
     // 대소문자 구분 정렬 토글 = 폴더 우선 바로 다음 · 누르면 전역 설정과 체크가 함께 바뀐다.
@@ -1711,7 +1720,7 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
             .all_items()
             .iter()
             .all(|it| it.separator
-                || matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 40, h: 40, .. }))
+                || matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 36, h: 36, .. }))
     );
     assert_eq!(App::toolbar_icon_px(1.5), 30);
     let _ = std::fs::remove_dir_all(&dir);

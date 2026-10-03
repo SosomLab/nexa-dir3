@@ -208,7 +208,9 @@ impl App {
                     || ToolIcon::Glyph(glyph.to_string()),
                     |(w, h, alpha)| ToolIcon::Mask { w, h, alpha },
                 );
-            ToolItem::new(id, icon).tip(tr(tip_key))
+            // 토글(켜고 끄기 · 택일 묶음) = hover 때 옅은 배경까지 · 누르면 끝나는 동작(새로 고침 · 설정)은 아이콘 색만.
+            let toggle = !matches!(id, "view.refresh" | "file.prefs");
+            ToolItem::new(id, icon).tip(tr(tip_key)).toggle(toggle)
         };
         let scope = settings
             .get("list.view_scope")

@@ -117,6 +117,7 @@ impl App {
             "toolbar.icon_size"
             | "toolbar.icon_pad"
             | "toolbar.hover_fill_pct"
+            | "toolbar.icon_scale_pct"
             | "toolbar.on_color"
             | "toolbar.on_line_color"
             | "toolbar.on_fill_pct"
@@ -265,7 +266,12 @@ impl App {
     pub(crate) fn make_tool_dock(settings: &Settings, scale: f32) -> ToolDock {
         let logical = App::toolbar_icon_logical(settings);
         let icon_px = (logical as f32 * scale).round().max(8.0) as u32;
-        let mut dock = ToolDock::new(App::build_tool_groups(settings, icon_px));
+        // 그림만 줄인다(사용자 10-04 "버튼 크기는 그대로 · 이미지만 90 %"): 마스크를 줄인 크기로 만들어 확대·축소 없이 또렷하게.
+        let icon_scale =
+            App::setting_px(settings, "toolbar.icon_scale_pct", 90, 100).max(50) as f32 / 100.0;
+        let draw_px = Toolbar::icon_draw_px(icon_px as i32, icon_scale).max(8) as u32;
+        let mut dock = ToolDock::new(App::build_tool_groups(settings, draw_px));
+        dock.set_icon_scale(icon_scale);
         dock.set_icon_size(logical);
         // 아이콘 둘레 여백(`toolbar.icon_pad` · 기본 1 = 상하좌우 1px → 칸 22 · 아이콘 사이 2 · 툴바 높이 30) + 양끝/위아래 4.
         dock.set_padding(App::setting_px(settings, "toolbar.icon_pad", 1, 8), 4);
@@ -291,6 +297,9 @@ impl App {
             step: pct("toolbar.state_step_pct", 20),
             radius: App::setting_px(settings, "toolbar.state_radius", 4, 12),
             on_icon_accent: !green && settings.flag("toolbar.on_icon_accent"),
+            // hover(사용자 10-04 · nexa-sql 툴바와 같게): 아이콘을 강조색(파란 계통)으로 · 토글 버튼은 옅은 회색 배경도.
+            hover_icon_accent: true,
+            hover_fill_toggle_only: true,
             on_color: None,
             on_icon: green.then_some(line_color),
             on_line_color: green.then_some(line_color),

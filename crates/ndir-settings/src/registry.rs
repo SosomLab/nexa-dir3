@@ -234,6 +234,14 @@ pub const REGISTRY: &[Entry] = &[
         "20"
     ),
     e!(
+        "toolbar.icon_scale_pct",
+        CAT_APPEARANCE,
+        "pref.toolbarIconScale",
+        "pref.toolbarIconScale.desc",
+        Int { min: 50, max: 100 },
+        "90"
+    ),
+    e!(
         "toolbar.icon_pad",
         CAT_APPEARANCE,
         "pref.toolbarIconPad",
@@ -1574,6 +1582,7 @@ pub const HIDDEN: &[&str] = &[
 
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
+    "toolbar.icon_scale_pct",
     "statusbar.load_interval_ms",
     "toolbar.icon_pad",
     "toolbar.hover_fill_pct",

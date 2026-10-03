@@ -876,3 +876,5 @@ pref.toolbarOnColor.line = 선 색
 pref.toolbarOnColor.accent = 강조색
 pref.toolbarOnLineColor = 툴바: 켜짐 선 색
 pref.toolbarOnLineColor.desc = 켜진 버튼의 테두리와 아이콘 선 색입니다(#RRGGBB).
+pref.toolbarIconScale = 툴바: 아이콘 그림 크기(%)
+pref.toolbarIconScale.desc = 툴바 버튼 안 아이콘 그림의 크기입니다. 버튼 크기는 그대로입니다.
