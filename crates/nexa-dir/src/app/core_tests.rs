@@ -135,7 +135,7 @@ fn paint_records_inside_surface() {
         "outside surface — fills {bad_fills:?} texts {bad_texts:?}"
     );
     for needle in [
-        "Name", "Size", "Ext", "sub", "a.txt", "b.md", "3 items", "Tab 1/1", "File", "\u{2190}",
+        "Name", "Size", "Ext", "sub", "a.txt", "b.md", "3 items", "Tab 1/1", "File",
     ] {
         assert!(
             rec.drew_text(needle),
@@ -143,6 +143,17 @@ fn paint_records_inside_surface() {
             rec.strings().collect::<Vec<_>>()
         );
     }
+    // 네비 버튼: 아이콘 글꼴이 있으면 MDL2 글리프(글자) · 없으면 SVG 마스크(그림 — 글자로는 안 나온다).
+    // (판정은 이 앱의 버튼으로 — 전역 깃발은 다른 시험 스레드가 바꿀 수 있다.)
+    let glyph_nav = app.panels[0]
+        .nav_items()
+        .iter()
+        .all(|it| matches!(it.icon, nexa_ctl::ToolIcon::Glyph(_)));
+    assert_eq!(rec.drew_text("\u{E72B}"), glyph_nav, "뒤로 버튼");
+    assert!(
+        !rec.drew_text("\u{2190}"),
+        "유니코드 화살표 대체는 더 이상 쓰지 않는다"
+    );
     // 메뉴를 열면 드롭다운 항목(단축키 열 포함)이 최상위 층에 그려진다.
     let mut inv = Invalidations::default();
     app.menubar.open_menu_index(0, &mut inv);
@@ -1861,6 +1872,51 @@ fn view_options_follow_folders_by_default() {
     let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
     app.update_status();
     assert_eq!(view(&app, 0), (false, true, true), "탭 범위 = 탭이 지닌 값");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 네비 버튼 모양(사용자 10-03 "윈도우 기준으로 일치"): 아이콘 글꼴(MDL2)이 있으면 글리프 · 없으면 SVG 마스크(배율만큼 큰 그림) ·
+/// 도크 머리의 종류 칸은 마우스를 올리면 hover 표시 · 창을 벗어나면 풀린다.
+#[test]
+fn nav_buttons_use_vector_icons_and_dock_tabs_hover() {
+    let (mut app, dir) = fixture("navicons");
+    app.layout_for(1200, 800, 1.0);
+    // 판정은 이 앱의 버튼으로(전역 "아이콘 글꼴 있음" 깃발은 다른 시험 스레드가 바꿀 수 있다): 네 개가 전부 마스크이거나 전부 글리프.
+    let masks = app.panels[0]
+        .nav_items()
+        .iter()
+        .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 14, h: 14, .. }))
+        .count();
+    assert!(masks == 4 || masks == 0, "{masks}");
+    let vector = masks == 4;
+    #[cfg(target_os = "linux")]
+    assert!(vector, "Linux에는 Segoe MDL2가 없다 → SVG 마스크");
+    app.layout_for(2400, 1600, 2.0);
+    let big = app.panels[0]
+        .nav_items()
+        .iter()
+        .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 28, h: 28, .. }))
+        .count();
+    if vector {
+        assert_eq!(big, 4, "배율 2 = 28 px 마스크");
+    }
+    // 도크 종류 칸 hover.
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let (db, cr) = (app.docks[0].bounds(), app.docks[0].content_rect());
+    let y = (db.y + cr.y) / 2;
+    let mut seen = std::collections::BTreeSet::new();
+    for x in (db.x + 4..db.x + 300).step_by(6) {
+        app.route(InputEvent::MouseMove { x, y });
+        if let Some(i) = app.docks[0].strip_hover() {
+            seen.insert(i);
+        }
+    }
+    assert!(seen.len() >= 3, "종류 칸마다 hover: {seen:?}");
+    assert_eq!(app.docks[1].strip_hover(), None);
+    app.pointer_gone();
+    assert_eq!(app.docks[0].strip_hover(), None, "창 밖 = 해제");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -591,6 +591,12 @@ impl App {
         for p in &mut self.panels {
             p.on_event(&away, &mut inv);
         }
+        // 도크 머리의 종류 칸 hover(nexa-ui 127차)도 푼다.
+        for d in &mut self.docks {
+            if d.bounds().h > 0 {
+                d.on_event(&away, &mut inv);
+            }
+        }
         if !inv.is_empty() {
             self.redraw();
         }

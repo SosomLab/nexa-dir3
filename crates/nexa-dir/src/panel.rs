@@ -80,6 +80,8 @@ pub(crate) struct Panel {
     /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
     pending_path_menu: bool,
     session_dirty: bool,
+    /// 네비 아이콘을 만든 배율(바뀌면 다시 만든다).
+    m_icon_scale: f32,
     /// 활성 탭이 다른 폴더로 들어갔다(또는 새 탭이 열렸다) — 호스트가 폴더별 보기 옵션을 맞출 계기([`Self::take_navigated`]).
     navigated: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
@@ -102,21 +104,46 @@ pub(crate) fn nav_glyphs() -> [char; 4] {
     [set[0], set[1], set[2], set[3]]
 }
 
+/// 네비 버튼의 SVG 자산(아이콘 글꼴이 없는 OS — Windows의 MDL2 글리프와 같은 모양으로 그린다 · 사용자 10-03
+/// "내 PC, 이전, 이후, 상위 버튼의 모양이 윈도우와 다르다").
+const NAV_ASSETS: [(&str, &str); 4] = [
+    (BTN_HOME, "nav-home"),
+    (BTN_BACK, "nav-back"),
+    (BTN_FORWARD, "nav-forward"),
+    (BTN_UP, "nav-up"),
+];
+
+/// 네비 버튼 아이콘 크기(논리 px · 툴바 아이콘 칸과 같다 — MDL2 em 13의 잉크와 비슷한 크기).
+const NAV_ICON: i32 = 14;
+
+/// 네비 버튼 아이콘 4개(순서 = 홈 · 뒤로 · 앞으로 · 위로): 아이콘 글꼴이 있으면 MDL2 글리프(dir2 그대로) · 없으면 SVG 마스크
+/// (배율 반영 · 마스크를 못 만들면 유니코드 글리프).
+fn nav_icons(scale: f32) -> [ToolIcon; 4] {
+    let g = nav_glyphs();
+    let px = ((NAV_ICON as f32) * scale).round().max(8.0) as u32;
+    let vector = !crate::app::fonts::icon_font_available();
+    std::array::from_fn(|i| {
+        vector
+            .then(|| crate::icons::toolbar_mask(NAV_ASSETS[i].1, px))
+            .flatten()
+            .map_or_else(
+                || ToolIcon::Glyph(g[i].to_string()),
+                |(w, h, alpha)| ToolIcon::Mask { w, h, alpha },
+            )
+    })
+}
+
 /// [홈][←][→][↑] — 순서·폭(`nav_btn_w` × 4 · 틈 없음)은 dir2 그대로.
 fn nav_buttons() -> Toolbar {
-    let g = nav_glyphs();
-    let items = [
-        (BTN_HOME, g[0], "nav.mypc"),
-        (BTN_BACK, g[1], "cmd.navBack"),
-        (BTN_FORWARD, g[2], "cmd.navForward"),
-        (BTN_UP, g[3], "cmd.navUp"),
-    ]
-    .into_iter()
-    .map(|(id, g, tip)| ToolItem::new(id, ToolIcon::Glyph(g.to_string())).tip(ndir_i18n::tr(tip)))
-    .collect();
+    let tips = ["nav.mypc", "cmd.navBack", "cmd.navForward", "cmd.navUp"];
+    let items = nav_icons(1.0)
+        .into_iter()
+        .enumerate()
+        .map(|(i, icon)| ToolItem::new(NAV_ASSETS[i].0, icon).tip(ndir_i18n::tr(tips[i])))
+        .collect();
     let mut t = Toolbar::new(items);
     // dir2 배치(panel.rs:392-399 · 1546-1548): 버튼 폭 26(= 14 + 6×2) · 4개가 틈 없이 왼쪽 끝부터 · 경로 바가 바로 붙는다.
-    t.set_icon_size(14);
+    t.set_icon_size(NAV_ICON);
     t.set_padding(6, 0);
     t.set_side_margin(0);
     t.set_item_gap(0);
@@ -161,6 +188,7 @@ impl Panel {
             pending_ctx: None,
             pending_path_menu: false,
             session_dirty: false,
+            m_icon_scale: 1.0,
             navigated: false,
             col_changed: false,
         };
@@ -471,6 +499,13 @@ impl Panel {
         self.m = m;
         self.tabbar.set_scale(m.scale);
         self.tabbar.set_metrics(m.tab_h, m.pad_x + 4, inv);
+        // 배율이 바뀌면 SVG 네비 아이콘을 그 크기로 다시 만든다(글리프면 그대로).
+        if (self.m_icon_scale - m.scale).abs() > f32::EPSILON {
+            self.m_icon_scale = m.scale;
+            for (i, icon) in nav_icons(m.scale).into_iter().enumerate() {
+                self.navbtns.set_item_icon(NAV_ASSETS[i].0, icon, inv);
+            }
+        }
         self.navbtns.set_scale(m.scale);
         self.pathbar.set_metrics(m.bar_h, m.pad_x, inv);
         for tab in &mut self.tabs {
@@ -995,6 +1030,12 @@ impl Panel {
         }
         self.sync_chrome(inv);
         inv.push(self.bounds);
+    }
+
+    /// 네비 버튼 항목(시험 · 덤프용).
+    #[cfg(test)]
+    pub(crate) fn nav_items(&self) -> &[ToolItem] {
+        self.navbtns.items()
     }
 
     /// 활성 탭의 폴더가 바뀌었는가(1회성).

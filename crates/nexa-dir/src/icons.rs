@@ -44,6 +44,14 @@ pub(crate) const EMBEDDED_SVG: &[(&str, &str)] = &[
         "case-sensitive",
         include_str!("../assets/toolbar/case-sensitive.svg"),
     ),
+    // 네비 버튼 4종(아이콘 글꼴 Segoe MDL2가 없는 OS용 — MDL2 HomeSolid · Back · Forward · Up 모양 · dir3 신규 10-03).
+    ("nav-home", include_str!("../assets/toolbar/nav-home.svg")),
+    ("nav-back", include_str!("../assets/toolbar/nav-back.svg")),
+    (
+        "nav-forward",
+        include_str!("../assets/toolbar/nav-forward.svg"),
+    ),
+    ("nav-up", include_str!("../assets/toolbar/nav-up.svg")),
     // 도크 미리보기 ↗ "크게"(dir2 07-26) — InfoDock 버튼은 nexa-explorer가 글리프로 그린다 · 등록만.
     ("popout", include_str!("../assets/toolbar/popout.svg")),
 ];
