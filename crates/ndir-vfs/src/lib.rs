@@ -70,6 +70,23 @@ pub fn classify_kind(is_dir: bool, is_symlink: bool, attrs: u32) -> FileKind {
     }
 }
 
+/// Unix 심볼릭 링크 → Windows와 같은 뜻의 비트(GAP-009): 링크 표식([`ATTR_REPARSE_POINT`]) + **대상이 폴더면**
+/// [`ATTR_DIRECTORY`](대상 추적 `fs::metadata` — 링크일 때만 한 번). 종전에는 Unix에서 속성이 0이라 폴더 심볼릭 링크가
+/// `Symlink`(파일 취급)로 분류돼 들어가거나 펼칠 수 없었다. 깨진 링크는 표식만(종류 `Symlink` 유지).
+#[cfg(unix)]
+fn unix_link_attrs(dirent: &fs::DirEntry, is_symlink: bool) -> u32 {
+    if !is_symlink {
+        return 0;
+    }
+    let dir = fs::metadata(dirent.path()).is_ok_and(|m| m.is_dir());
+    ATTR_REPARSE_POINT | if dir { ATTR_DIRECTORY } else { 0 }
+}
+
+#[cfg(not(unix))]
+fn unix_link_attrs(_dirent: &fs::DirEntry, _is_symlink: bool) -> u32 {
+    0
+}
+
 /// 열거 메타데이터에서 Windows 파일 속성 비트를 꺼낸다(비Windows=0).
 #[cfg(windows)]
 fn file_attrs(m: &fs::Metadata) -> u32 {
@@ -113,6 +130,7 @@ pub fn read_dir_entries(
             Ok(m) => (m.len(), m.modified().ok(), file_attrs(&m)),
             Err(_) => (0, None, 0),
         };
+        let attrs = attrs | unix_link_attrs(&dirent, file_type.is_symlink());
         let kind = classify_kind(file_type.is_dir(), file_type.is_symlink(), attrs);
         Ok(Entry {
             name: dirent.file_name().to_string_lossy().into_owned(),
@@ -514,6 +532,29 @@ mod tests {
         assert_eq!(file.size, 5);
         let sub = entries.iter().find(|e| e.name == "sub").unwrap();
         assert_eq!(sub.kind, FileKind::Dir);
+    }
+
+    /// GAP-009: Unix 폴더 심볼릭 링크 = `Dir` + 링크 표식(들어갈 수 있다) · 파일 링크/깨진 링크 = `Symlink` + 표식.
+    #[cfg(unix)]
+    #[test]
+    fn unix_dir_symlink_is_an_enterable_dir() {
+        let base = std::env::temp_dir().join(format!("nexa_vfs_symlink_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(base.join("real")).unwrap();
+        fs::write(base.join("f.txt"), b"x").unwrap();
+        std::os::unix::fs::symlink(base.join("real"), base.join("to-dir")).unwrap();
+        std::os::unix::fs::symlink(base.join("f.txt"), base.join("to-file")).unwrap();
+        std::os::unix::fs::symlink(base.join("gone"), base.join("broken")).unwrap();
+        let entries: Vec<Entry> = read_dir_entries(&base)
+            .unwrap()
+            .filter_map(Result::ok)
+            .collect();
+        fs::remove_dir_all(&base).unwrap();
+        let get = |n: &str| entries.iter().find(|e| e.name == n).unwrap();
+        assert!(get("to-dir").kind == FileKind::Dir && get("to-dir").is_link());
+        assert!(get("to-file").kind == FileKind::Symlink && get("to-file").is_link());
+        assert!(get("broken").kind == FileKind::Symlink && get("broken").is_link());
+        assert!(get("real").kind == FileKind::Dir && !get("real").is_link());
     }
 
     /// A31: 종류 판정 표 — 폴더 우선, 링크 표식은 속성 비트로 분리.
