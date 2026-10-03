@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Nexa Dir
+GenericName=File Manager
+GenericName[ko]=파일 탐색기
+Comment=Cross-platform lightweight dual-panel file explorer
+Comment[ko]=크로스플랫폼 경량 듀얼 패널 파일 탐색기
+Exec=nexa-dir %f
+Icon=nexa-dir
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;
+MimeType=inode/directory;
+Keywords=file;manager;explorer;dual;panel;
+StartupWMClass=nexa-dir

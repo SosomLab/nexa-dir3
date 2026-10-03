@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 46차 — T-82: 패키징 3-OS(nexa-sql packaging 이식 · release.yml · 동봉 플러그인)
+
+- **한 일**: `packaging/` 트리 전체 + `scripts/third-party-notices.*` · `check-imports.ps1` + `release.yml` + 브랜딩 PNG · §3-4 결정(MSI+zip · 예산 10 MB(실측 5.2) · plugins/ · MIME) · 로컬 MSI/zip 빌드.
+- **지금 상태**: 릴리스 태그는 아직 안 찍음(사용자 결정) · deb/rpm/pkg/dmg는 CI에서 첫 실행 때 검증. 다음 = ShellNew 행 메뉴 · T-63 B · T-52/53 · T-71 순서 편집기 · T-90/91.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기.
+
+→ [journal/2026-10-03 §49](journal/2026-10-03.md)
+
 ## 10-03 45차 — T-71: 일괄 이름 변경 창(카드 파이프라인 · 미리보기 · 프리셋)
 
 - **한 일**: `bulk_win.rs` · `app/bulk.rs` · `edit.bulk_rename` · 시험 +2(148).

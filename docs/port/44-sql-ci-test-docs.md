@@ -240,7 +240,12 @@
 
 쓰지 않는 것: AppImage(`docs/33:60`) · 포터블(DR-27 · `docs/33:11` — D-78 재검토 중) · winget/choco(`docs/33:74`, `:119-124`).
 
-### 3-4. dir3 패키징에서 정해야 할 것(결정 대기)
+### 3-4. dir3 패키징에서 정해야 할 것 — **결정(10-03 · T-82 · journal §49)**
+
+> ① **MSI + 포터블 zip**(둘 다 · 같은 스테이징 · choco/winget/brew 등록은 후속) ② **예산 = 단일 exe ≤ 10 MB**(dir2 B2 유지 · 실측 5.2 MB) + 임포트 화이트리스트(`scripts/check-imports.ps1`) ③ 동봉 플러그인 = `plugins/*.wasm` → `stage_common` `plugins/`(Windows `%ProgramFiles%\Nexa Dir\plugins` · macOS `Resources/plugins` · Linux `/usr/share/nexa-dir/plugins`) ④ `.desktop` `MimeType=inode/directory;` + `Categories=System;FileTools;FileManager;`.
+
+원래의 질문(기록용):
+
 
 1. **Windows 채널**: MSI(nexa-sql 기준) vs 포터블 exe + Inno + ZIP + Chocolatey(dir2 현행 · `nexa-dir2/.github/workflows/release.yml:48-161`). 사용자 요청은 "기술구조는 nexa-sql 기준 · 자원은 dir2 그대로"라 어느 쪽인지 명시가 없다 → **추정: MSI로 통일하되 dir2의 choco/winget 등록 자산은 별도 결정**.
 2. **예산 게이트**: dir2 CI는 "단일 exe ≤ 10 MB"(B2)와 임포트 화이트리스트(B3)를 건다(`nexa-dir2/.github/workflows/ci.yml` 예산 단계). nexa-sql 예산은 30 MB(`docs/71:159`). winit·softbuffer·wasmi가 들어가면 10 MB를 넘을 수 있다(추정) → 예산 수치를 다시 정한다.

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  nexa-dir.wxs — Windows 설치본(MSI · WiX v4 · nexa-sql D-49 차용 · nexa-dir3 T-82 · 포터블 zip은 build-zip.ps1).
+
+  빌드 = packaging/windows/build-msi.ps1 이 -d 로 넘기는 전처리 변수:
+    Version  = MSI ProductVersion(숫자 3자리 · 사전 릴리스 접미사는 ps1이 뗀다)
+    Staging  = 스테이징 폴더(nexa-dir.exe · plugins\ · LICENSE.md · THIRD-PARTY-NOTICES.txt · license.rtf)
+    Branding = packaging\branding (nexa-dir.ico)
+    Arch     = x64 | arm64
+
+  설계 의도(docs/33 §2)
+  - 기계 단위(Program Files\Nexa Dir · HKLM) — 기업 배포·GPO·`msiexec /qn` 조용한 설치. 사용자 데이터는 %APPDATA%\nexa-dir(설치기는 손대지 않는다).
+  - exe 1개: nexa-dir.exe(GUI · selfcheck 등 명령줄 겸용) · plugins\ = 동봉 WASM 플러그인.
+  - 기능(Feature): Main(필수) · PathEnv(PATH 추가 · 기본 켬 · `ADDLOCAL`/`REMOVE`로 조정).
+  - UpgradeCode 고정 → 같은 코드의 새 버전은 MajorUpgrade로 교체 설치(다운그레이드 차단).
+  - 서명은 ps1의 자리(signtool · 시크릿 있을 때만 · DR-20).
+
+  조용한 설치/제거 검증 절차(build-msi.ps1 주석 참고):
+    msiexec /i nexa-dir-<ver>-windows-x64.msi /qn /l*v install.log
+    "%ProgramFiles%\Nexa Dir\nexa-dir.exe" -\-version
+    msiexec /x nexa-dir-<ver>-windows-x64.msi /qn
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <?ifndef Version ?><?define Version = "0.0.1" ?><?endif?>
+  <?ifndef Staging ?><?define Staging = "..\..\target\packaging\windows\stage" ?><?endif?>
+  <?ifndef Branding ?><?define Branding = "..\branding" ?><?endif?>
+  <?ifndef Arch ?><?define Arch = "x64" ?><?endif?>
+
+  <Package Name="Nexa Dir"
+           Manufacturer="SosomLab"
+           Version="$(var.Version)"
+           UpgradeCode="7D1F7E3A-5C2B-4F0E-9A61-3B9D2C8E4F10"
+           Language="1033"
+           Codepage="65001"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="Nexa Dir — cross-platform lightweight dual-panel file explorer"
+                        Manufacturer="SosomLab" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Nexa Dir is already installed."
+                  AllowSameVersionUpgrades="yes" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- 프로그램 추가/제거 표시 -->
+    <Icon Id="AppIcon.ico" SourceFile="$(var.Branding)\nexa-dir.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/SosomLab/nexa-dir3" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/SosomLab/nexa-dir3" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <!-- MSI 검색으로 이전 설치 폴더를 이어 쓴다(레지스트리 InstallDir). -->
+    <Property Id="INSTALLFOLDER">
+      <RegistrySearch Id="PrevInstallDir" Root="HKLM" Key="Software\SosomLab\Nexa Dir" Name="InstallDir" Type="raw" />
+    </Property>
+
+    <!-- 설치 UI: 기능 트리(PATH 선택) + 라이선스(RTF는 ps1이 LICENSE.md에서 만든다). /qn 에서는 전부 건너뛴다. -->
+    <ui:WixUI Id="WixUI_FeatureTree" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.Staging)\license.rtf" />
+    <!-- 배너/대화상자 비트맵(WixUIBannerBmp 493×58 · WixUIDialogBmp 493×312)은 후속 — 없으면 WiX 기본 그림. -->
+
+    <!-- 레이아웃: %ProgramFiles%\Nexa Dir\{nexa-dir.exe, plugins\, LICENSE…} -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Nexa Dir">
+        <Directory Id="PluginsFolder" Name="plugins" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="Nexa Dir" />
+    </StandardDirectory>
+
+    <!-- ── 필수 파일 ── -->
+    <ComponentGroup Id="MainFiles" Directory="INSTALLFOLDER">
+      <Component Id="GuiExe" Guid="8AD254C2-0B57-4824-887D-A01A820D42F7">
+        <File Id="NexaDirExe" Source="$(var.Staging)\nexa-dir.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuGui" Directory="AppMenuFolder" Name="Nexa Dir" WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon.ico" Advertise="yes" Description="Nexa Dir" />
+        </File>
+      </Component>
+      <Component Id="Docs" Guid="3EA7048D-1375-4387-8636-F9BED6F72FF9">
+        <File Source="$(var.Staging)\LICENSE.md" KeyPath="yes" />
+        <File Source="$(var.Staging)\LICENSE.ko.md" />
+        <File Source="$(var.Staging)\README.md" />
+        <File Source="$(var.Staging)\THIRD-PARTY-NOTICES.txt" />
+      </Component>
+      <Component Id="InstallDirReg" Guid="4804844A-DBA2-4C64-8564-EB587CB9DF27">
+        <RegistryValue Root="HKLM" Key="Software\SosomLab\Nexa Dir" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\SosomLab\Nexa Dir" Name="Version" Type="string" Value="$(var.Version)" />
+        <!-- 시작 메뉴 폴더는 파일 키패스가 없으므로 여기서 지운다. -->
+        <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
+        <!-- 설치 폴더 자체도 제거 목록에 명시(v0.1.0 첫 릴리스 스모크 = 제거 뒤 `%ProgramFiles%\Nexa Dir` 잔여). 비어 있을 때만 지워진다. -->
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- 동봉 플러그인(plugins\) — 폴더는 늘 만들고 .wasm 전부 담는다(런타임 로더 exe/plugins). -->
+    <ComponentGroup Id="PluginsFiles" Directory="PluginsFolder">
+      <Component Id="PluginsDir" Guid="9C4B2E6F-1A3D-4E8B-B7C2-5F0A6D9E1B23">
+        <CreateFolder />
+        <RemoveFolder Id="RemovePluginsFolder" On="uninstall" />
+      </Component>
+      <Files Include="$(var.Staging)\plugins\**" />
+    </ComponentGroup>
+
+    <!-- ── 선택: PATH 추가(nexa-dir를 어느 콘솔에서나) ── -->
+    <ComponentGroup Id="PathEnvFiles" Directory="INSTALLFOLDER">
+      <Component Id="PathEnv" Guid="2DB6334C-9C33-46E5-9507-E1E279C96AE7">
+        <RegistryValue Root="HKLM" Key="Software\SosomLab\Nexa Dir" Name="PathAdded" Type="integer" Value="1" KeyPath="yes" />
+        <Environment Id="PathEntry" Name="PATH" Value="[INSTALLFOLDER]" Part="last" Action="set" Permanent="no" System="yes" />
+      </Component>
+    </ComponentGroup>
+
+
+    <Feature Id="Main" Title="Nexa Dir" Description="Nexa Dir (nexa-dir.exe) and bundled plugins" Level="1" AllowAbsent="no" AllowAdvertise="no" Display="expand">
+      <ComponentGroupRef Id="MainFiles" />
+      <ComponentGroupRef Id="PluginsFiles" />
+      <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'nexa-dir --selfcheck' works in any console." Level="1" AllowAdvertise="no">
+        <ComponentGroupRef Id="PathEnvFiles" />
+      </Feature>
+    </Feature>
+  </Package>
+</Wix>

@@ -58,6 +58,18 @@ jobs:
       - name: scenarios (T4 · windows)
         if: runner.os == 'Windows'
         run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
+      # 예산 게이트(dir2 B2/B3 · docs/port/44 §3-4 ② · T-82): 릴리스 exe ≤ 10 MB(실측 10-03 5.2 MB) + 임포트 = OS 인박스 DLL만(정적 CRT).
+      - name: budget (release exe ≤ 10 MB · imports inbox only · windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build -q --release -p nexa-dir
+          if ($LASTEXITCODE -ne 0) { throw "release build 실패" }
+          $exe = Get-Item target\release\nexa-dir.exe
+          "nexa-dir.exe {0:N0} bytes" -f $exe.Length
+          if ($exe.Length -gt 10MB) { throw ("예산 초과: {0:N0} > 10 MB" -f $exe.Length) }
+          pwsh -NoProfile -File scripts/check-imports.ps1 $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "임포트 게이트 실패" }
 
   # T-07 · CI-113: 동봉 플러그인 소스(plugins/sdk)가 wasm32로 빌드되고, 그 산출물을 앱이 로드해 nx_meta id가 맞는지(자가 점검 plugin 그룹).
   # 바이트 동일성은 묻지 않는다(툴체인 차이) — 동봉본(plugins/*.wasm)은 dir2 dist 무수정이 회귀 기준(DR-7).

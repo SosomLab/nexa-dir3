@@ -92,7 +92,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | T-80 | 라이선스 창 · Help ▸ 라이선스… · About 상태 줄 · i18n(ja 신규) · 기동 명령 `license.*` | P0 | 중 | T-16 · T-40 | LIC-158~164 | ✅ 10-03 journal §36(상태줄 배지 ⓒ 보류 · CLI = GUI만) |
 | T-81 | nexa-license 발급기 보강(`mail_text` 제품 분기 · `--id-prefix` 기본 · E2E `nexa-dir`) → push + 태그 | P1 | 소 | — | LIC-165~170 | ✅ 10-03 journal §40(태그 `nexa-dir3/t81-2026-10-03`) |
-| T-82 | 패키징 3-OS(rc·MSI·포터블 zip·pkg·dmg·deb·rpm) · `release.yml` · 동봉 플러그인 · 라이선스 고지 | P0 | 대 | M5 | CI-114 · PROC | ☐ |
+| T-82 | 패키징 3-OS(rc·MSI·포터블 zip·pkg·dmg·deb·rpm) · `release.yml` · 동봉 플러그인 · 라이선스 고지 | P0 | 대 | M5 | CI-114 · PROC | 🚧 10-03(스크립트·release.yml·고지·플러그인 ✅ journal §49 · 태그 릴리스 실행 ☐ · ci 예산 단계 ☐) |
 
 ## M8 교차 검증
 
