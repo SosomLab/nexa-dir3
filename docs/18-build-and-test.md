@@ -106,6 +106,6 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
   - `--selfcheck --with-clipboard`(opt-in)만 사용자가 명시로 켤 때 실제 클립보드를 쓴다.
 - **키 주입 경로를 구분한다**(§93): 기동 명령 `ui.press:<키>`는 **키맵을 우회**해 컨트롤에 키 사건을 직접 넣는다 — 키맵이 가로채는 키(Enter · Alt+↓ 등)의 실제 동작은 검증되지 않는다. 키맵 경로는 `ui.key:<조합>`(키맵 조회 → 명령 · 타이핑/메뉴 통과 규칙은 미적용)으로, T3는 `App::key_chord`로 넣는다. 다음 하네스 = 실제 경로 전체(`key_chord`)를 타는 기동 명령.
 - **경로 비교 시험은 양쪽을 `fs::canonicalize` 뒤 비교**한다(§90): CI 러너의 `TEMP`는 8.3 짧은 이름(`C:\Users\RUNNER~1\…`)이라 OS API가 돌려주는 긴 이름과 문자열이 다르다 — 로컬(TEMP = 긴 이름)에서는 통과하고 CI에서만 깨진다. 지우기 전에 계산.
-- **OS 상태를 타는 기본값은 픽스처에 고정**(§106): 테마(`system`) · 로캘 · 런처 시드처럼 OS 설정으로 풀리는 기본값을 바꾸면 헤드리스 시험 픽스처에 고정값을 넣는다(예: `ui.theme=dark`) — 이 PC(Linux · dark)에서 통과해도 windows · macos 러너는 light라 골든이 깨졌다. 기본값 자체는 설정 단위 시험이 본다.
+- **OS 상태를 타는 값은 시험에서 먼저 고정**(§106 · §116 — 같은 유형 2번): 테마(`system`) · Windows Terminal 프로필(`app.wt_profile`) · 로캘 · 런처 시드 · 아이콘 테마처럼 OS 설정으로 풀리는 값에 기대는 단언은 시험 시작에서 그 값을 고정한다(예: `ui.theme=dark` · `wt_profile = None`) — 이 PC(Linux · dark · WT 없음)에서 통과해도 windows · macos 러너는 다르다. 기본값 자체는 설정 단위 시험이 본다. **Windows 분기/Windows 상태는 이 PC에서 검증되지 않으므로 push 뒤 CI windows 결과 확인을 게이트로 본다.**
 - **OS 분기 안의 단언은 이 PC에서 돌지 않는다**(§106): `platform::has_dotfile_toggle()` 같은 분기로 OS마다 기대값이 다른 시험을 건드리면 두 분기를 손으로 따져 보고, push 뒤 CI windows/macos 결과를 확인한다(e5790ca — Linux 게이트 녹색 · CI windows 빨강).
 - **프로세스 전역을 시험하지 않는다**(§90): nexa-grid/nexa-ctl 고속 스크롤처럼 프로세스 공유 전역은 병렬 시험(다른 시험의 `App` 생성)이 덮어쓴다 → 구성 계산을 순수 함수로 떼어 그것을 확인한다(`App::scroll_configs`).

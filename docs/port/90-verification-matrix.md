@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
 | CI | 119 | 119 | 90 | 29 | 0 | 0 | 0 |
-| CLOUD | 99 | 99 | 0 | 0 | 0 | 0 | 0 |
+| CLOUD | 99 | 99 | 1 | 0 | 0 | 0 | 0 |
 | CMD | 430 | 430 | 176 | 144 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
@@ -20,11 +20,11 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 23 | 23 | 12 | 2 | 0 | 0 | 0 |
+| NEW | 24 | 24 | 13 | 2 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
-| PANEL | 138 | 138 | 130 | 8 | 0 | 0 | 0 |
+| PANEL | 138 | 138 | 131 | 7 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 35 | 139 | 0 | 0 | 0 |
-| **합계** | 4312 | 4312 | 2392 | 1007 | 766 | 0 | 0 |
+| **합계** | 4313 | 4313 | 2395 | 1006 | 766 | 0 | 0 |
 
 ## 행
 
@@ -237,10 +237,12 @@
 | NEW-021 | 정렬 표시 = 칸 오른쪽 끝 · 순번은 다중 정렬일 때만(PANEL-077 `▲ 이름 ①`과 의도된 차이) | nexa-ui 130 `set_sort_mark_trailing` · `panel.rs` | T2 · T3 + 실기 | `trailing_sort_mark_and_shift_cycle` · `header_sort_marks_trail_and_shift_cycles` | ✅ | §112 · 실기(머리 모양 · Shift 다중 정렬) 사용자 · 도형 화살표 · gap = T-128 |
 | NEW-022 | 컬럼 이동 표식(끄는 동안 놓일 열 자리 강조 · 좌우 1 px 선 · dir2는 고스트만) | nexa-ui 131 `set_col_drag_marker` · `panel.rs` | T2 · T3 + 실기 | `col_drag_marker_follows_live_slot_and_cancel_restores` · `column_reorder_shows_marker_propagates_and_cancels` | ✅ | §114 · 실기(표식 모양) 사용자 |
 | NEW-023 | 설정 상하/종속 UX — 전이 잠금 · AND · Ne/OneOf · 이유 덧줄 · 잠긴 카드 초기화 막기 · 강제 값 표시(사용자 값 보관) | ndir-settings `locked_by` · `dependencies` · `DEPENDS` · `prefs_win.rs::set_forced` · `App::prefs_forced` | T1 · T2 · T3 + 실기 | `locks_follow_parents_transitively_and_all_conditions` · `dependent_cards_lock_and_unlock_with_parent` · `forced_settings_show_effective_value_and_keep_user_value` | 🚧 | §115 1단계 · 2단계 T-130(범위 결합 · FORCES · 성능 향상 모드) · 실기(잠금 흐림 · 이유 덧줄 · 터미널 글꼴 강제) 사용자 |
+| NEW-024 | "상태" 열(클라우드 속성 · 네트워크 위치 → 아이콘) · 기본 열 = 이름 · 상태 · 크기 · 수정한 날짜(확장자 · 종류 기본 숨김) · 세션 열 폭 key 이주 | ndir-vfs `cloud_status` · `is_network_path` · filelist `status_of` · `cell_icon` · order `DEFAULT_HIDDEN` · `saved_visible_keys` · nexa-ui 132 | T1 · T3 · T4 + 실기 | `cloud_status_link_and_network_rules` · `columns_default_hidden_and_saved_width_keys` · `status_column_defaults_icons_and_session_migration` · `nav-up-select.scn` | ✅ | §116 · 실기 필요(Windows OneDrive 상태 아이콘 3종 · Linux 네트워크 마운트 · 옛 세션 colw 이주 — 격리 세션으로 확인 중) |
+| PANEL-131 · CLOUD-096 | 기본 열(dir2 이름 · 확장자 · 크기 · 수정한 날짜 · 종류) · 상태 열 β | `main.rs::all_columns_for` · `order.rs` | T3 | `status_column_defaults_icons_and_session_migration` | ✅ | §116 · **의도된 차이**(확장자 · 종류 기본 숨김 · 상태 열 추가 — 사용자 10-03) · CLOUD-096 = 1차(동기화 중 · pin/unpin · cldapi 후속 T-129) |
 | SET-016 · T-120 | 종속 잠금 `DEPENDS` + `Dep`(nexa-sql SET-016 · dir3 확장: Ne · OneOf · 여러 줄 AND · 전이 · 이유) | `ndir-settings/src/{lib,registry}.rs` | T1 | `locks_follow_parents_transitively_and_all_conditions` | ✅ | §115 · DEPENDS 19줄 · 종전 첫 행만 · 전이 없음(`fast_hud_pos` 버그) 수정 |
 | GAP-017 · SORT-EXT | 확장자 열 정렬 = `SortKey::Ext`(dir2 PANEL-065 · 종전 dir3는 Kind로 잘못 매핑) | `filelist.rs::sort_key_of` | T3 | `header_sort_marks_trail_and_shift_cycles`(sort_key_of 단언) | ✅ | §112 · 이식 실수 회귀 수정 |
 | WINB-100 · WINC-098 · 101 · 116 · TAB-DND | 탭을 끌어 좌우 패널 사이로 이동(놓을 때 · 탭 위 = 그 앞 · 그 밖 = 끝 · 활성 이동 · Esc 취소 · 마지막/잠긴 탭 거부 · 보기 옵션 채택 규칙 = 메뉴 경로와 같음) | `app/input.rs::tab_cross_drop` · `App.tab_drop_hint` · `app/paint.rs` · `panel.rs::{tab_dragging, cancel_tab_drag, tab_drop_target, tabbar_bounds}` | T3 | `tab_drag_moves_between_panels` | ✅ | §113 · **의도된 차이**: WINC-098 끄는 중 미리 보기 이동 대신 놓을 때 이동 + 끄는 중 대상 탭 바 강조 · 2 px 삽입선(dir2에 없던 표식) · 실기(끌기 · 표식 · Esc) 사용자 |
-| GAP-018 · CLOUD-LINK | 클라우드 플레이스홀더를 링크로 보지 않기 | 예정 = ndir-vfs `is_link` · `filelist.rs` | — | — | ☐ | §113 · T-129 · Windows 실기 필요 |
+| GAP-018 · CLOUD-LINK | 클라우드 플레이스홀더를 링크로 보지 않기(REPARSE ∧ 클라우드 비트 없음만 링크) | ndir-vfs `is_link_attrs` · `filelist.rs` | T1 | `cloud_status_link_and_network_rules` | ✅ | §113 발견 · §116 해소(6965a76) · 실기(Windows OneDrive 폴더에 링크 화살표 없음) 사용자 |
 | GAP-019 · SHELL-085 | 클라우드 전용 파일 = 미리보기 · 상세 · 할당 크기 생략(다운로드 유발 방지) | 예정 = `dockinfo.rs` · ndir-vfs 판정 함수 | — | — | ☐ | §113 · dir2 fileinfo.rs:414 시험 · T-129 · Windows OneDrive 실기 필요 |
 | GAP-020 · COL-LAYOUT-BOOT | `list.col_layout` 기동 적용(또는 세션 우선 문서화) | `app/settings.rs:145-151` · `main.rs` 기동 | — | — | ☐ | §113 · 의도 확인 대기(T-126과 함께) |
 | PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) → §104에서 기본 dir(NEW-018) · §105 대소문자 구분 정렬이 4번째 보기 옵션으로 합류(`list.sort_case_sensitive` = 새 탭 기본값 · 보호 항목만 전역) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
