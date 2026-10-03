@@ -2141,11 +2141,14 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
         // 누락 foldersfirst는 가장 가까운 앞 형제(dot) 뒤로 보충된다(dir2 규칙).
         assert_eq!(after[0], "view.dot");
         assert_eq!(after[1], "view.folders_first");
-        assert_eq!(after[2], "view.hidden");
+        // 누락 casesensitive도 앞 형제(foldersfirst) 뒤로 보충된다 → hidden은 그 다음.
+        assert_eq!(after[2], "view.case_sensitive");
+        assert_eq!(after[3], "view.hidden");
     } else {
         // 점 파일 토글이 없는 OS: dot은 모르는 토큰으로 버려지고 foldersfirst는 앞 형제(hidden) 뒤로 보충된다.
         assert_eq!(after[0], "view.hidden");
         assert_eq!(after[1], "view.folders_first");
+        assert_eq!(after[2], "view.case_sensitive");
         assert!(!after.contains(&"view.dot".to_string()));
     }
     assert_eq!(
