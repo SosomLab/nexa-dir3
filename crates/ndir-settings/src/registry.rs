@@ -249,7 +249,8 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 100 },
         "8"
     ),
-    // 켜짐 표시(사용자 10-04 "배경은 원복하고 선만" → 색 "#0000FF"): line = 강조색 옅은 채움 + **선(테두리 · 아이콘) =
+    // 켜짐 표시 — **기본 = accent(처음 모양: 아이콘 색은 그대로 · 강조색 옅은 배경만)** — 사용자 10-04 최종 "처음처럼 색은 두고
+    // 배경색만"(초록 채움 → 선만 초록 → 선 #0000FF 시안을 거쳐 원복 · 선 색 모양은 선택지로 남긴다): line = 강조색 옅은 채움 + **선(테두리 · 아이콘) =
     // `toolbar.on_line_color`**(기본) · accent = 종전(테두리 · 아이콘도 강조색 규칙 — 테두리 농도 · 아이콘 강조색 설정이 이때만).
     e!(
         "toolbar.on_color",
@@ -257,7 +258,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarOnColor",
         "pref.toolbarOnColor.desc",
         Choice(TOOLBAR_ON_COLOR_OPTS),
-        "line"
+        "accent"
     ),
     e!(
         "toolbar.on_line_color",

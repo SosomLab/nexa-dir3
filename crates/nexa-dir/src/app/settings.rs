@@ -275,7 +275,7 @@ impl App {
         // 켜짐 표시(사용자 10-04): line = 배경은 종전(강조색 옅은 채움) 그대로 · **선만 `toolbar.on_line_color`**(기본 #0000FF —
         // 초록은 "너무 이상하다"로 정정 · 테두리 또렷하게 +
         // 아이콘 선) — 처음엔 초록으로 꽉 채웠다가 "배경은 원복하고 선만 초록"으로 정정 · accent = 종전(강조색 테두리 · 농도 설정).
-        let green = settings.get("toolbar.on_color").unwrap_or("line") != "accent";
+        let green = settings.get("toolbar.on_color").unwrap_or("accent") == "line";
         let line_color = nexa_ctl::theme::color_from_hex(
             settings.get("toolbar.on_line_color").unwrap_or("").trim(),
         )

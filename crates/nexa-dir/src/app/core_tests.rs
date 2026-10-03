@@ -2323,12 +2323,31 @@ fn status_segments_and_tab_status_bar() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 툴바 켜짐 색(사용자 10-04 "배경은 원복하고 선만 초록"): 기본 = 배경은 강조색 옅은 채움 그대로 · 테두리(선)만 스위치와 같은
-/// 초록 · `toolbar.on_color=accent` = 종전 강조색(초록 없음) · 테두리 농도 설정은 강조색일 때만 풀린다.
+/// 툴바 켜짐 표시(사용자 10-04 최종 "처음처럼 색은 두고 배경색만"): 기본 = 강조색 옅은 배경만(선 색 없음 · 아이콘 색 그대로) ·
+/// `toolbar.on_color=line`이면 테두리 · 아이콘 선 = `toolbar.on_line_color`(기본 #0000FF) · 설정 잠금이 모드를 따른다.
 #[test]
-fn toolbar_on_line_color_default_blue() {
+fn toolbar_on_default_is_accent_background_only() {
     let (mut app, dir) = fixture("oncolor");
     app.layout_for(1200, 800, 1.0);
+    {
+        let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+        app.paint_into(&mut rec, 1200, 800, 1.0);
+        let tb = app.toolbar.bounds();
+        let (accent, blue) = (app.theme.accent, nexa_ctl::theme::Color(0x0000_00FF));
+        let inside = |r: &Rect| r.y >= tb.y && r.bottom() <= tb.bottom();
+        assert!(
+            rec.round_rects
+                .iter()
+                .any(|(r, _, c)| *c == accent && inside(r)),
+            "기본 = 강조색 배경"
+        );
+        assert!(
+            !rec.strokes.iter().any(|(r, _, c)| *c == blue && inside(r)),
+            "기본 = 선 색 없음"
+        );
+    }
+    let _ = app.settings.set("toolbar.on_color", "line");
+    app.after_setting_changed("toolbar.on_color");
     let green = nexa_ctl::theme::Color(0x0000_00FF); // 기본 선 색 #0000FF
     let greens = |app: &mut App| {
         let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);

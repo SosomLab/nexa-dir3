@@ -894,8 +894,8 @@ mod tests {
             if *child == "tabs.scroll_buttons" {
                 continue; // 기본 = 여러 줄 → 버튼 자리는 잠김(의도)
             }
-            if child.starts_with("toolbar.on_") {
-                continue; // 기본 = 초록 선(스위치와 통일) → 강조색 테두리 · 아이콘 설정은 잠김(의도)
+            if *child == "toolbar.on_line_color" {
+                continue; // 기본 = 강조색 배경(처음 모양) → 선 색 설정은 잠김(의도)
             }
             assert_eq!(locked_by(child, &d), None, "{child}");
         }
