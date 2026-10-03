@@ -23,6 +23,7 @@ cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
 ## 3. push 전 게이트(순서 고정 — 빨강이면 push 금지)
 
 ```bash
+scripts/check-all.sh [--quick]                  # ★ push 전 전체 게이트(T-05): 형제 저장소 → dir3 fmt·clippy·test → check-3os → smoke → selfcheck → 시나리오 → target/check-all/summary.txt
 scripts/check-3os.sh                            # T0: fmt + 호스트 clippy + 다른 두 OS clippy(-D warnings)
 cargo test --workspace                          # T1~T3
 cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자원·글꼴·플러그인 런타임·라이선스 루트 키

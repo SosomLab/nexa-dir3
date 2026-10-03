@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 44차 — T-05: `check-all.sh` 전체 게이트
+
+- **한 일**: `scripts/check-all.{sh,ps1}` · summary.txt · 문서 규약 갱신.
+- **지금 상태**: push 전 = `check-all.sh`(또는 `--quick` + 시나리오). 다음 = T-71 일괄 이름 변경 창(dir2 bulkrename 2,252줄 · 코어 `ndir-ops::batch_rename` 이미 이식) · T-82 · ShellNew.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §47](journal/2026-10-03.md)
+
 ## 10-03 43차 — T-70: 전송 진행 창(세그먼트 바 · 취소 · 닫기 카운트다운)
 
 - **한 일**: nexa-ui `SegProgress` · `progress_win.rs` · 워커 항목 진행 · 시험 +2(146).

@@ -10,7 +10,7 @@
 | T-02 | 워크스페이스(`Cargo.toml` · toolchain · `.cargo` · lints · 프로필) + `nexa-dir` bin 뼈대(`--version` `--smoke` `--selfcheck` 틀) | P0 | 소 | T-01 | SKEL-401~405 | ✅ 10-03 |
 | T-03 | CI 3-OS(`ci.yml` · 형제 체크아웃 · fmt/clippy/test/smoke/selfcheck) | P0 | 소 | T-02 | CI-113 | ✅ 10-03 |
 | T-04 | 이식 원장 색인 `port/00-index.md` + 검증 매트릭스 틀 `port/90` | P0 | 소 | — | CI-116 | ✅ 10-03 |
-| T-05 | `scripts/check-all.sh`(형제 → dir3 · 게이트 4단계 · summary) | P1 | 소 | T-02 | CI-115 | ☐ |
+| T-05 | `scripts/check-all.sh`(형제 → dir3 · 게이트 4단계 · summary) | P1 | 소 | T-02 | CI-115 | ✅ 10-03 journal §47 |
 | T-06 | `ndir-check` 시나리오 러너(`.scn` · 격리 홈 · 샘플 트리 · 검사식) | P1 | 중 | M3 | CI-108 | ✅ 10-03(journal §17 · 시나리오 5 · CI Windows 단계 · Linux xvfb/macOS는 후속) |
 | T-70 | M6 파일 작업 배선(복사/잘라내기/붙여넣기 · 전송 작업 스레드 · undo/redo · 새 폴더/새 파일 · 인라인 이름 바꾸기) | P0 | 중 | T-50 | OPS-001~039 | ✅ 10-03 journal §28·§29(잔여: 확인/진행 창 T-29 · 일괄 이름 변경 창 · 영구 삭제) |
 | T-07 | CI에 `wasm32` 플러그인 빌드 검증 + Windows 임포트 화이트리스트·용량 측정 | P1 | 소 | M5 | CI-113 | 🚧 10-03 journal §26(wasm32 빌드·로드 검증 ✅ · 임포트 화이트리스트·용량 측정 = M7) |

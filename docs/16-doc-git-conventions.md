@@ -121,7 +121,7 @@ release: 0.23.0 승격(크로스플랫폼 1차) — GitHub Release 초안
 | 항목 | 원문(nexa-sql) | dir3 |
 | --- | --- | --- |
 | push | 사용자가 말할 때만 | 슬라이스 완료 + 게이트 green이면 push(사용자 10-03 지시 · DR-12) |
-| push 전 게이트 | `check-3os.sh` | `check-3os.sh` + test + `--smoke` + `--selfcheck --ci` |
+| push 전 게이트 | `check-3os.sh` | **`check-all.sh`**(= 형제 fmt/clippy/test + check-3os + test + `--smoke` + `--selfcheck --ci` + `ndir-check --ci` · `--quick` 가능 · T-05) |
 | 형제 저장소 | nexa-ui | nexa-ui · nexa-license — 의존 변경은 형제 먼저 push |
 | ID 구획 | D-/T- 한 줄 | 조사·이식 항목은 접두 ID(`docs/port/`) · DR-/T-는 병합 지점에서 |
 
