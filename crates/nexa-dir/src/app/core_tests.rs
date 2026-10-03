@@ -2277,6 +2277,8 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
     let (mut app, dir) = fixture("forced");
     app.layout_for(1200, 800, 1.0);
     let _ = app.settings.set("term.font_face", "My Mono");
+    // 시험이 PC 상태를 타지 않게 프로필을 비운다(Windows 러너에는 실제 Windows Terminal 프로필이 있다 — CI d49644c 적발).
+    app.wt_profile = None;
     assert!(app.prefs_forced().is_empty(), "프로필 없음 = 강제 없음");
     app.wt_profile = Some(platform::WtProfile {
         faces: vec!["System Mono".into()],
