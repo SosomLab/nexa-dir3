@@ -212,8 +212,8 @@ impl App {
         };
         let scope = settings
             .get("list.view_scope")
-            .filter(|s| matches!(*s, "global" | "panel"))
-            .unwrap_or("tab");
+            .filter(|s| matches!(*s, "global" | "panel" | "tab"))
+            .unwrap_or("dir");
         let scoped = |it: ToolItem, label_key: &str| {
             it.tip(format!(
                 "{} — {}",
@@ -371,11 +371,57 @@ impl App {
         }
     }
 
-    /// 보기 옵션 토글의 적용 범위(설정 `list.view_scope` — `tab` 활성 탭 · `panel` 활성 패널 전 탭 · `global` 두 패널 전 탭).
+    /// 보기 옵션 관리 방법(설정 `list.view_scope` · 사용자 10-03 4택): `global` 전체 통일 · `panel` 좌/우 패널별(패널 안 전 탭) ·
+    /// `tab` 탭별 · `dir` 폴더별(같은 폴더를 보는 탭은 좌우 어디든 공통 · 폴더마다 기억 — **기본**).
     pub(crate) fn view_scope(&self) -> &str {
         match self.settings.get("list.view_scope") {
-            Some(s @ ("global" | "panel")) => s,
-            _ => "tab",
+            Some(s @ ("global" | "panel" | "tab")) => s,
+            _ => "dir",
+        }
+    }
+
+    /// 폴더의 보기 옵션(범위 "폴더"): 기억된 값 · 없으면 설정 기본값.
+    pub(crate) fn dir_view_of(&self, dir: &std::path::Path) -> (bool, bool, bool) {
+        self.session_keep
+            .dir_views
+            .iter()
+            .find(|(p, _)| p == dir)
+            .map_or_else(
+                || list_opts(&self.settings).view(),
+                |(_, f)| filelist::ListOpts::view_of_flags(*f),
+            )
+    }
+
+    /// 폴더의 보기 옵션 기억(설정 기본값과 같으면 지운다 — 기본을 따르는 폴더는 적어 두지 않는다 · 상한 초과 = 오래된 것부터).
+    fn remember_dir_view(&mut self, dir: &std::path::Path, view: (bool, bool, bool)) {
+        let base = list_opts(&self.settings);
+        let v = &mut self.session_keep.dir_views;
+        v.retain(|(p, _)| p != dir);
+        if view != base.view() {
+            v.push((dir.to_path_buf(), base.with_view(view).view_flags()));
+            if v.len() > crate::session::DIR_VIEWS_MAX {
+                let cut = v.len() - crate::session::DIR_VIEWS_MAX;
+                v.drain(..cut);
+            }
+        }
+        self.session_save.mark(Instant::now());
+    }
+
+    /// 범위 "폴더": 방금 폴더를 옮긴(또는 새로 열린) 활성 탭을 그 폴더의 보기 옵션에 맞춘다 — 같은 폴더를 보는 다른 탭이
+    /// 있으면 그 값(이미 공통) · 없으면 기억된 값 · 그것도 없으면 설정 기본값. `update_status` 길목이 부른다.
+    pub(crate) fn sync_dir_views(&mut self) {
+        let dir_scope = self.view_scope() == "dir";
+        let mut inv = Invalidations::default();
+        for pi in 0..self.panels.len() {
+            if !self.panels[pi].take_navigated() || !dir_scope {
+                continue;
+            }
+            let dir = self.panels[pi].root_path();
+            let view = self.dir_view_of(&dir);
+            self.panels[pi].set_view(false, view, &mut inv);
+        }
+        if !inv.is_empty() {
+            self.redraw();
         }
     }
 
@@ -389,16 +435,26 @@ impl App {
             _ => folders = !folders,
         }
         let scope = self.view_scope().to_string();
-        let targets: &[usize] = if scope == "global" {
-            &[0, 1]
-        } else if self.active == 0 {
-            &[0]
-        } else {
-            &[1]
-        };
+        let view = (hidden, dot, folders);
         let mut inv = Invalidations::default();
-        for &pi in targets {
-            self.panels[pi].set_view(scope != "tab", (hidden, dot, folders), &mut inv);
+        if scope == "dir" {
+            // 폴더별: 그 폴더를 보는 탭 전부(좌우 모두) + 폴더에 기억.
+            let dir = self.panels[self.active].root_path();
+            for p in &mut self.panels {
+                p.set_view_for_dir(&dir, view, &mut inv);
+            }
+            self.remember_dir_view(&dir, view);
+        } else {
+            let targets: &[usize] = if scope == "global" {
+                &[0, 1]
+            } else if self.active == 0 {
+                &[0]
+            } else {
+                &[1]
+            };
+            for &pi in targets {
+                self.panels[pi].set_view(scope != "tab", view, &mut inv);
+            }
         }
         self.sync_menu_checks();
         self.update_status();

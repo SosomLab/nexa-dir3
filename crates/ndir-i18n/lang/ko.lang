@@ -375,11 +375,12 @@ pref.sortFoldersFirst = 폴더 우선 정렬
 pref.sortFoldersFirst.desc = 정렬 방향과 무관하게 폴더를 파일보다 앞에 모읍니다. 새 탭의 기본값입니다 — 이미 열린 탭은 도구 모음의 토글로 탭마다 바꿉니다.
 pref.hideEmptyGlyph = 빈 폴더의 펼침 글리프 숨김
 pref.hideEmptyGlyph.desc = 현재 보기(숨김/점 파일 필터)로 보여줄 내용이 없는 폴더는 트리 펼침 글리프를 그리지 않습니다. 보기 옵션 변경으로 내용이 보이면 다시 표시됩니다.
-pref.viewScope = 보기 옵션 적용 범위
-pref.viewScope.desc = 도구 모음·보기 메뉴의 숨김 파일·Dot 파일·폴더 우선 토글이 적용되는 범위입니다. 값은 탭마다 따로 기억합니다. 설정 창의 체크박스는 새 탭의 기본값만 정합니다.
-pref.viewScope.global = 전체
+pref.viewScope = 보기 옵션 관리 방법
+pref.viewScope.desc = 도구 모음·보기 메뉴의 숨김 파일·Dot 파일·폴더 우선 토글을 어디까지 함께 적용할지 정합니다. 전체 통일 = 두 패널의 모든 탭 · 좌/우 패널 = 그 패널의 모든 탭 · 탭 = 그 탭만 · 폴더 = 같은 폴더를 보는 탭은 좌우 어디든 함께 바뀌고 폴더마다 기억합니다. 설정 창의 체크박스는 새 탭(기억이 없는 폴더)의 기본값만 정합니다.
+pref.viewScope.global = 전체 통일
 pref.viewScope.panel = 좌/우 패널
-pref.viewScope.tab = 활성 탭
+pref.viewScope.tab = 탭
+pref.viewScope.dir = 폴더
 pref.termWrap = 터미널 줄 바꿈
 pref.termWrap.desc = 뷰 폭에 맞춰 줄을 바꿉니다. 끄면 고정 열+가로 스크롤.
 pref.termCols = 터미널 열 수(80~1000)

@@ -245,7 +245,11 @@ fn route_and_commands_without_window() {
     assert_eq!(app.settings.flag("list.show_hidden"), before);
     assert_eq!(app.menubar.is_checked("view.hidden"), Some(!before));
     assert_eq!(app.toolbar.item_checked("view.hidden"), !before);
-    // 테마 순환: dark → system → light → dark.
+    // 테마: 기본 = system(사용자 10-03) · 순환 system → light → dark → system.
+    assert_eq!(app.settings.theme_mode(), ThemeMode::System);
+    app.command("view.theme_cycle");
+    assert_eq!(app.settings.theme_mode(), ThemeMode::Light);
+    app.command("view.theme_cycle");
     assert_eq!(app.settings.theme_mode(), ThemeMode::Dark);
     app.command("view.theme_cycle");
     assert_eq!(app.settings.theme_mode(), ThemeMode::System);
@@ -1685,7 +1689,8 @@ fn view_options_belong_to_tabs() {
     app.layout_for(1200, 800, 1.0);
     let mut inv = Invalidations::default();
     let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
-    assert_eq!(app.view_scope(), "tab", "기본 범위 = 활성 탭");
+    assert_eq!(app.view_scope(), "dir", "기본 = 폴더별");
+    let _ = app.settings.set("list.view_scope", "tab");
     let view = |app: &App, p: usize| app.panels[p].active_view_values();
     assert_eq!(view(&app, 0), (true, true, true));
     // 탭 0에서 폴더 우선을 끈다 → 새 탭(설정 기본값)은 켜져 있고 · 탭을 오가면 체크가 따라간다.
@@ -1742,6 +1747,65 @@ fn view_options_belong_to_tabs() {
     let i = app.panels[0].active_index();
     app.panels[0].duplicate_tab(i, &mut inv);
     assert_eq!(view(&app, 0), src);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 보기 옵션 관리 방법 "폴더"(기본 · 사용자 10-03 4택): 같은 폴더를 보는 탭은 좌우 어디든 함께 바뀌고 · 폴더마다 기억해
+/// 다시 들어가면 그 값 · 기억이 없는 폴더 = 설정 기본값 · 세션에 남는다.
+#[test]
+fn view_options_follow_folders_by_default() {
+    let (mut app, dir) = fixture("dirview");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let _ = app.panels[1].navigate_to(dir.clone(), &mut inv);
+    app.update_status();
+    assert_eq!(app.view_scope(), "dir");
+    let view = |app: &App, p: usize| app.panels[p].active_view_values();
+    // 왼쪽에서 폴더 우선을 끄면 같은 폴더를 보는 오른쪽도 함께 꺼진다.
+    app.command("view.folders_first");
+    assert_eq!(view(&app, 0), (true, true, false));
+    assert_eq!(view(&app, 1), (true, true, false), "같은 폴더 = 공통");
+    assert_eq!(app.dir_view_of(&dir), (true, true, false));
+    assert!(
+        app.settings.flag("list.folders_first"),
+        "설정 기본값은 불변"
+    );
+    // 다른 폴더로 들어가면 그 폴더의 값(기억 없음 = 설정 기본값) · 돌아오면 기억된 값.
+    let _ = app.panels[0].navigate_to(sub.clone(), &mut inv);
+    app.update_status();
+    assert_eq!(view(&app, 0), (true, true, true), "기억 없는 폴더 = 기본값");
+    assert!(app.toolbar.item_checked("view.folders_first"));
+    assert_eq!(
+        view(&app, 1),
+        (true, true, false),
+        "다른 폴더를 보는 탭은 그대로"
+    );
+    app.panels[0].nav_back(&mut inv);
+    app.update_status();
+    assert_eq!(view(&app, 0), (true, true, false), "돌아오면 그 폴더의 값");
+    // 새 탭(같은 폴더) = 그 폴더의 값.
+    app.command("file.new_tab");
+    assert_eq!(view(&app, 0), (true, true, false));
+    // sub에서 숨김을 끈다 → sub만 · 세션에 두 폴더가 기억된다.
+    let _ = app.panels[0].navigate_to(sub.clone(), &mut inv);
+    app.update_status();
+    app.command("view.hidden");
+    assert_eq!(view(&app, 0), (false, true, true));
+    assert_eq!(view(&app, 1), (true, true, false));
+    let snap = app.session_snapshot();
+    assert_eq!(snap.dir_views, vec![(dir.clone(), 3), (sub, 6)]);
+    assert_eq!(Session::parse(&snap.serialize()).dir_views, snap.dir_views);
+    // 기본값으로 되돌리면 기억에서 빠진다.
+    app.command("view.hidden");
+    assert_eq!(app.session_snapshot().dir_views, vec![(dir.clone(), 3)]);
+    // 범위를 탭으로 바꾸면 폴더를 옮겨도 탭 값이 따라간다(폴더 기억을 쓰지 않는다).
+    let _ = app.settings.set("list.view_scope", "tab");
+    app.command("view.hidden");
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.update_status();
+    assert_eq!(view(&app, 0), (false, true, true), "탭 범위 = 탭이 지닌 값");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -553,7 +553,8 @@ impl App {
             "tab.move_other" if self.dual => {
                 if let Some(t) = self.panels[panel].detach_tab(tab, &mut inv) {
                     let other = 1 - panel;
-                    let adopt = self.view_scope() != "tab";
+                    // 탭/폴더 범위 = 탭이 지닌 값 그대로(폴더 범위는 같은 폴더끼리 이미 같다) · 그 밖 = 대상 패널 값 채택.
+                    let adopt = matches!(self.view_scope(), "global" | "panel");
                     self.panels[other].attach_tab(t, None, adopt, &mut inv);
                     self.set_active(other);
                 }

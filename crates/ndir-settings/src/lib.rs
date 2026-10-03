@@ -832,11 +832,11 @@ mod tests {
         }
     }
 
-    /// dir2 기본값 계승(DR-3 · PREFS-101~): 테마 dark · 언어 system · 숨김 on · 고속 스크롤 3/16 · 타입어헤드 좌하 · 전송 2000 ms.
+    /// dir2 기본값 계승(DR-3 · PREFS-101~): 테마 = **system**(dir2 dark에서 바꿈 — 사용자 10-03 "테마는 시스템을 기본값으로") · 언어 system · 숨김 on · 고속 스크롤 3/16 · 타입어헤드 좌하 · 전송 2000 ms.
     #[test]
     fn defaults_follow_dir2() {
         let s = Settings::open(tmp("defaults"));
-        assert_eq!(s.theme_mode(), ThemeMode::Dark);
+        assert_eq!(s.theme_mode(), ThemeMode::System);
         assert_eq!(s.lang_setting(), "system");
         assert!(
             s.flag("list.show_hidden")
@@ -891,7 +891,7 @@ mod tests {
         );
         assert!(!text.contains("ui.lang"), "기본값은 쓰지 않는다");
         // 기본값으로 돌아오면 줄이 사라진다.
-        s.set("ui.theme", "dark").unwrap();
+        s.set("ui.theme", "system").unwrap();
         assert!(!s.is_modified("ui.theme"));
         s.save().unwrap();
         assert!(!std::fs::read_to_string(&p).unwrap().contains("ui.theme"));
@@ -902,7 +902,7 @@ mod tests {
     fn corrupt_value_falls_back_and_unknown_keys_survive() {
         let p = tmp("corrupt");
         let s = Settings::from_text(p.clone(), "\u{feff}_schema=1\nui.theme=blue\nscroll.fast_step=abc\nfuture.key=42\nterm.cols=500\n");
-        assert_eq!(s.theme_mode(), ThemeMode::Dark, "손상 값 = 기본값");
+        assert_eq!(s.theme_mode(), ThemeMode::System, "손상 값 = 기본값");
         assert_eq!(s.int("scroll.fast_step"), 3);
         assert_eq!(s.int("term.cols"), 500);
         assert_eq!(

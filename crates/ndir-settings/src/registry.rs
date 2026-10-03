@@ -22,6 +22,7 @@ const VIEW_SCOPE_OPTS: &[(&str, &str)] = &[
     ("global", "pref.viewScope.global"),
     ("panel", "pref.viewScope.panel"),
     ("tab", "pref.viewScope.tab"),
+    ("dir", "pref.viewScope.dir"),
 ];
 const ALIGN_OPTS: &[(&str, &str)] = &[
     ("top", "pref.align.top"),
@@ -131,7 +132,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.theme",
         "pref.theme.desc",
         Choice(THEME_OPTS),
-        "dark"
+        "system"
     ),
     e!(
         "window.always_on_top",
@@ -605,7 +606,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.viewScope",
         "pref.viewScope.desc",
         Choice(VIEW_SCOPE_OPTS),
-        "tab"
+        "dir"
     ),
     e!(
         "list.nav_up_align",

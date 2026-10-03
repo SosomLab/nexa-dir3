@@ -379,10 +379,11 @@ pref.sortFoldersFirst.desc = Group folders before files regardless of sort order
 pref.hideEmptyGlyph = Hide expand glyph for empty folders
 pref.hideEmptyGlyph.desc = Hide the tree expand glyph when a folder has nothing to show under the current view (hidden/dot filters). Re-appears when the view options reveal content.
 pref.viewScope = View options scope
-pref.viewScope.desc = Where the hidden/dot/folders-first toggles in the toolbar and View menu apply. Each tab remembers its own values. The checkboxes in this window only set the default for new tabs.
-pref.viewScope.global = All panels
+pref.viewScope.desc = How far the hidden/dot/folders-first toggles in the toolbar and View menu reach. All = every tab in both panels; Left/right panel = every tab in that panel; Tab = that tab only; Folder = tabs showing the same folder change together in either panel, and each folder remembers its own values. The checkboxes in this window only set the default for new tabs (folders with nothing remembered).
+pref.viewScope.global = All
 pref.viewScope.panel = Left/right panel
-pref.viewScope.tab = Active tab
+pref.viewScope.tab = Tab
+pref.viewScope.dir = Folder
 pref.termWrap = Terminal word wrap
 pref.termWrap.desc = Wrap lines to the view width. Off = fixed columns with horizontal scroll.
 pref.termCols = Terminal columns (80~1000)

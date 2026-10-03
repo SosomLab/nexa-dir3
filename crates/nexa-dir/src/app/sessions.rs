@@ -8,6 +8,7 @@ use crate::*;
 impl App {
     /// 지금 상태의 세션(탭 경로 · 활성 탭 · 보기 모드 · 열 폭 · 활성 패널). dir2가 쓰는 다른 키는 복원 때 받은 값을 보존한다.
     pub(crate) fn session_snapshot(&self) -> Session {
+        // 폴더별 보기 옵션 기억(`dir_views`)은 `session_keep`에 산다 — 그대로 실려 나간다.
         let mut s = self.session_keep.clone();
         s.active_panel = self.active;
         for (i, p) in self.panels.iter().enumerate() {

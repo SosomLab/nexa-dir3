@@ -80,6 +80,8 @@ pub(crate) struct Panel {
     /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
     pending_path_menu: bool,
     session_dirty: bool,
+    /// 활성 탭이 다른 폴더로 들어갔다(또는 새 탭이 열렸다) — 호스트가 폴더별 보기 옵션을 맞출 계기([`Self::take_navigated`]).
+    navigated: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
 }
@@ -159,6 +161,7 @@ impl Panel {
             pending_ctx: None,
             pending_path_menu: false,
             session_dirty: false,
+            navigated: false,
             col_changed: false,
         };
         p.set_metrics(m, &mut inv);
@@ -637,6 +640,7 @@ impl Panel {
             pinned: false,
         });
         self.active = self.tabs.len() - 1;
+        self.navigated = true;
         self.session_dirty = true;
         self.set_bounds(self.bounds, inv);
         self.sync_chrome(inv);
@@ -837,6 +841,7 @@ impl Panel {
     fn apply_source(&mut self, src: TreeSource, inv: &mut Invalidations) {
         self.tabs[self.active].rows.replace_source(src, inv);
         self.session_dirty = true;
+        self.navigated = true;
         self.sync_columns_for_root(inv);
         self.sync_chrome(inv);
     }
@@ -982,6 +987,39 @@ impl Panel {
         }
         self.sync_chrome(inv);
         inv.push(self.bounds);
+    }
+
+    /// 활성 탭의 폴더가 바뀌었는가(1회성).
+    pub(crate) fn take_navigated(&mut self) -> bool {
+        std::mem::take(&mut self.navigated)
+    }
+
+    /// 그 폴더를 보고 있는 **모든 탭**에 보기 옵션 기입(보기 범위 "폴더" — 같은 폴더는 공통) · 바뀐 탭은 무간섭 재열람.
+    pub(crate) fn set_view_for_dir(
+        &mut self,
+        dir: &Path,
+        view: (bool, bool, bool),
+        inv: &mut Invalidations,
+    ) {
+        let mut changed = false;
+        for tab in &mut self.tabs {
+            if tab.rows.source().path() != dir {
+                continue;
+            }
+            let opts = tab.rows.source().opts().with_view(view);
+            if tab.rows.source().opts() == opts {
+                continue;
+            }
+            let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
+            tab.rows.source_mut().set_opts(opts);
+            tab.rows.restore_view(caret, sr, sx, inv);
+            changed = true;
+        }
+        if changed {
+            self.session_dirty = true;
+            self.sync_chrome(inv);
+            inv.push(self.bounds);
+        }
     }
 
     /// 세션 저장 — 탭별 보기 옵션 플래그(dir2 `panel{i}.views`).

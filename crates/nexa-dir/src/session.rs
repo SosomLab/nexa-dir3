@@ -32,7 +32,13 @@ pub(crate) struct PanelSession {
 pub(crate) struct Session {
     pub active_panel: usize,
     pub panels: [PanelSession; 2],
+    /// 폴더별 보기 옵션 기억(`dirview=<플래그>|<경로>` 줄 · 보기 범위 "폴더" — bit0 숨김 · bit1 Dot · bit2 폴더 우선 ·
+    /// 뒤가 최근 · 상한 [`DIR_VIEWS_MAX`]). 설정 기본값과 같은 폴더는 기록하지 않는다.
+    pub dir_views: Vec<(PathBuf, u8)>,
 }
+
+/// 폴더별 보기 옵션 기억 상한(넘으면 오래된 것부터 버린다).
+pub(crate) const DIR_VIEWS_MAX: usize = 300;
 
 /// `key=value` 줄(주석 `#` · 빈 줄 무시 · 첫 `=` 기준).
 fn kv_lines(text: &str) -> impl Iterator<Item = (&str, &str)> {
@@ -100,6 +106,9 @@ impl Session {
                 out.push_str(&format!("panel{i}.colw={}\n", ws.join(",")));
             }
         }
+        for (path, flags) in &self.dir_views {
+            out.push_str(&format!("dirview={flags}|{}\n", path.to_string_lossy()));
+        }
         out
     }
 
@@ -114,6 +123,14 @@ impl Session {
             else {
                 if k == "active_panel" {
                     s.active_panel = v.parse().unwrap_or(0).min(1);
+                } else if k == "dirview" {
+                    if let Some((f, path)) = v.split_once('|') {
+                        if let (Ok(f), false) = (f.trim().parse::<u8>(), path.is_empty()) {
+                            if s.dir_views.len() < DIR_VIEWS_MAX {
+                                s.dir_views.push((PathBuf::from(path), f & 0x7));
+                            }
+                        }
+                    }
                 }
                 continue;
             };
@@ -236,8 +253,15 @@ mod tests {
                     ..PanelSession::default()
                 },
             ],
+            // 폴더별 보기 옵션 기억(경로에 `|`가 있어도 첫 `|`만 구분자) · 순서 보존.
+            dir_views: vec![
+                (PathBuf::from("/home/u/src"), 3),
+                (PathBuf::from("D:\\b c\\d"), 6),
+                (PathBuf::from("/tmp/a|b"), 0),
+            ],
         };
         let text = s.serialize();
+        assert!(text.contains("dirview=3|/home/u/src\n") && text.contains("dirview=0|/tmp/a|b\n"));
         assert!(text.starts_with("# nexa-dir session v1\nactive_panel=1\n"));
         let parsed = Session::parse(&text);
         assert_eq!(parsed, s);

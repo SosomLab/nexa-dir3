@@ -378,11 +378,12 @@ pref.sortFoldersFirst = フォルダーを先に並べ替え
 pref.sortFoldersFirst.desc = 並び順に関係なくフォルダーをファイルより前にまとめます。新しいタブの既定値です。開いているタブはツールバーのトグルでタブごとに切り替えます。
 pref.hideEmptyGlyph = 空のフォルダーの展開グリフを隠す
 pref.hideEmptyGlyph.desc = 現在の表示（隠し/ドットファイルのフィルター）で表示する内容がないフォルダーは、ツリーの展開グリフを描画しません。表示オプションで内容が見えるようになると再表示されます。
-pref.viewScope = 表示オプションの適用範囲
-pref.viewScope.desc = ツールバー・表示メニューの隠しファイル・Dot ファイル・フォルダー優先トグルの適用範囲です。値はタブごとに記憶します。この画面のチェックボックスは新しいタブの既定値だけを決めます。
+pref.viewScope = 表示オプションの管理方法
+pref.viewScope.desc = ツールバー・表示メニューの隠しファイル・Dot ファイル・フォルダー優先トグルをどこまで一緒に適用するかを決めます。全体 = 両パネルのすべてのタブ・左右パネル = そのパネルのすべてのタブ・タブ = そのタブのみ・フォルダー = 同じフォルダーを表示しているタブは左右どちらでも一緒に変わり、フォルダーごとに記憶します。この画面のチェックボックスは新しいタブ（記憶のないフォルダー）の既定値だけを決めます。
 pref.viewScope.global = 全体
 pref.viewScope.panel = 左右パネル
-pref.viewScope.tab = アクティブタブ
+pref.viewScope.tab = タブ
+pref.viewScope.dir = フォルダー
 pref.termWrap = ターミナルの折り返し
 pref.termWrap.desc = 表示幅で行を折り返します。オフ = 固定列 + 水平スクロール。
 pref.termCols = ターミナルの列数 (80~1000)
