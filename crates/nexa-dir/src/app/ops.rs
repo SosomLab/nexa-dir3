@@ -121,12 +121,29 @@ impl App {
         }
         let n = paths.len().to_string();
         self.clip = Some((paths, cut));
+        self.sync_cut_marks();
         let mut inv = Invalidations::default();
         self.statusbar.set_left(
             &trf(if cut { "clip.cut" } else { "clip.copied" }, &[&n]),
             &mut inv,
         );
         self.redraw();
+    }
+
+    /// 잘라내기 흐림 동기(dir2 SHELL-044 `sync_cut_marks` — WM_CLIPBOARDUPDATE 대신 잘라내기/복사/붙여넣기 완료/창 포커스 때):
+    /// 클립보드(OS 우선 · 앱 사본)가 **잘라내기** 파일 목록이면 그 경로 집합, 아니면 빈 집합 → 양 패널 전 탭 · 바뀐 목록만 다시 그린다.
+    pub(crate) fn sync_cut_marks(&mut self) {
+        let marks: std::collections::HashSet<PathBuf> = match self.clip_sources() {
+            Some((paths, true)) => paths.into_iter().collect(),
+            _ => std::collections::HashSet::new(),
+        };
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.set_cut_marks(&marks, &mut inv);
+        }
+        if !inv.is_empty() {
+            self.redraw();
+        }
     }
 
     /// 붙여넣기 대상(dir2 `paste_dest`): 선택 1개가 폴더면 그 폴더 · 파일이면 부모 · 그 외 활성 패널 폴더.
@@ -402,6 +419,7 @@ impl App {
         if job.cut && job.op == Op::Move {
             self.clip = None;
         }
+        self.sync_cut_marks();
         let mut parts = vec![trf("ops.done", &[&out.transferred.len().to_string()])];
         if !out.skipped.is_empty() {
             parts.push(trf("ops.skipped", &[&out.skipped.len().to_string()]));

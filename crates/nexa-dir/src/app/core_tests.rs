@@ -1997,3 +1997,53 @@ fn plugin_manager_install_and_remove() {
     preview::set_user_plugin_dir(None);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// SHELL-044 잘라내기 흐림: Ctrl+X = 그 행 is_ghosted · Ctrl+C = 해제 · 클립보드 비움 + 동기 = 해제 · 다른 탭에도 적용.
+#[test]
+fn cut_marks_ghost_rows_until_clipboard_changes() {
+    let (mut app, dir) = fixture("cutmarks");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let row_of = |app: &App, name: &str| {
+        (0..app.panels[0].rows().source().len())
+            .find(|&i| app.panels[0].rows().source().row(i).text == name)
+            .expect("row")
+    };
+    let a = row_of(&app, "a.txt");
+    app.panels[0]
+        .rows_mut()
+        .select_program(a, nexa_grid::SelectOp::Single, &mut inv);
+    app.command("edit.cut");
+    assert!(
+        app.panels[0].rows().source().is_ghosted(a),
+        "잘라내기 = 흐림"
+    );
+    let b = row_of(&app, "b.md");
+    assert!(!app.panels[0].rows().source().is_ghosted(b));
+    // 같은 폴더를 보는 다른 패널에도.
+    assert!(app.panels[1]
+        .rows()
+        .source()
+        .is_ghosted(row_of(&app, "a.txt")));
+    app.command("edit.copy");
+    assert!(
+        !app.panels[0].rows().source().is_ghosted(a),
+        "복사 = 흐림 해제"
+    );
+    app.command("edit.cut");
+    assert!(app.panels[0].rows().source().is_ghosted(a));
+    // OS 클립보드(가짜)가 1순위 — 둘 다 비워야 해제된다.
+    app.clip = None;
+    app.platform
+        .log
+        .as_ref()
+        .expect("fake")
+        .borrow_mut()
+        .clipboard = None;
+    app.sync_cut_marks();
+    assert!(
+        !app.panels[0].rows().source().is_ghosted(a),
+        "클립보드 비움 + 동기 = 해제"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

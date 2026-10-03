@@ -897,6 +897,19 @@ impl Panel {
         self.sync_chrome(inv);
     }
 
+    /// 잘라내기 표식(SHELL-044) 전 탭 적용 — 바뀐 탭의 목록만 무효화.
+    pub(crate) fn set_cut_marks(
+        &mut self,
+        marks: &std::collections::HashSet<PathBuf>,
+        inv: &mut Invalidations,
+    ) {
+        for tab in &mut self.tabs {
+            if tab.rows.source_mut().set_cut_marks(marks.clone()) {
+                inv.push(tab.rows.bounds());
+            }
+        }
+    }
+
     pub(crate) fn set_view_mode(&mut self, mode: ViewMode, inv: &mut Invalidations) {
         self.tabs[self.active].rows.set_view_mode(mode, inv);
     }

@@ -62,6 +62,8 @@ pub(crate) struct TreeSource {
     error: Option<String>,
     /// 드라이브 이름(`C:\`) → (전체, 여유) — 가상 최상위에서만 · 호스트가 Disk 포트로 채운다.
     drive_space: std::collections::HashMap<String, (u64, u64)>,
+    /// 잘라내기 대기 경로(dir2 SHELL-044/X-32 — 그 행은 흐리게 · 호스트가 클립보드와 동기).
+    cut_marks: std::collections::HashSet<PathBuf>,
 }
 
 impl TreeSource {
@@ -73,9 +75,19 @@ impl TreeSource {
             opts,
             error: None,
             drive_space: std::collections::HashMap::new(),
+            cut_marks: std::collections::HashSet::new(),
         };
         s.reload();
         s
+    }
+
+    /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
+    pub(crate) fn set_cut_marks(&mut self, marks: std::collections::HashSet<PathBuf>) -> bool {
+        if self.cut_marks == marks {
+            return false;
+        }
+        self.cut_marks = marks;
+        true
     }
 
     /// 같은 경로를 다시 읽는다(F5 · 옵션 변경).
@@ -264,6 +276,14 @@ fn kind_label(kind: FileKind, name: &str) -> String {
 impl RowSource for TreeSource {
     fn len(&self) -> usize {
         self.tree.as_ref().map_or(0, Tree::visible_len)
+    }
+
+    /// 잘라내기 대기 행 = 흐림(nexa-grid X-32 · 집합이 비어 있으면 경로 계산도 하지 않는다 — dir2 `has_cut_marks` 선판정).
+    fn is_ghosted(&self, index: usize) -> bool {
+        !self.cut_marks.is_empty()
+            && self
+                .row_path(index)
+                .is_some_and(|p| self.cut_marks.contains(&p))
     }
 
     fn row(&self, index: usize) -> RowItem {

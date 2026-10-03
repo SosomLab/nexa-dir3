@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 56차 — SHELL-044: 잘라낸 항목 흐림(3-OS)
+
+- **한 일**: `TreeSource.cut_marks`/`is_ghosted` · `Panel::set_cut_marks` · `App::sync_cut_marks`(4 시점) · 시험 +1(162).
+- **지금 상태**: T-51 B-2 잔여 = OLE DnD · SHCNE. 다음 = T-90/91(매트릭스 전수 · QA 표) · DnD 1차(winit DroppedFile 수신).
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §60](journal/2026-10-03.md)
+
 ## 10-03 55차 — T-63 매니저 1차: 플러그인 설치/삭제(무재시작)
 
 - **한 일**: `app/plugins.rs` · `preview` 캐시 무효화/사용자 폴더/검증 · 설정 창 [설치…]/[삭제] · `FilePurpose::Plugin` · i18n 8키 · 시험 +1(161).

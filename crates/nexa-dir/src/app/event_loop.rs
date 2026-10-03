@@ -198,7 +198,10 @@ impl ApplicationHandler<Wake> for App {
             }
             WindowEvent::Focused(on) => {
                 self.main_active = *on;
-                if !on {
+                if *on {
+                    // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
+                    self.sync_cut_marks();
+                } else {
                     self.pointer_gone();
                 }
                 self.redraw();
