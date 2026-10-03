@@ -1,0 +1,100 @@
+# 23 · 값 분류와 설정 추출 원장(상수 · 고급 설정 · 일반 설정)
+
+> 작성 2026-10-03(초안). 결정 = [10](10-decision-record.md) **DR-19**(값 분류 원칙 · 사용자 10-03 지시). 이 표는 [22](22-dir3-features.md) NEW-008(성능 향상 모드)의 **선행 작업 목록**이기도 하다 — 덮어쓸 대상이 먼저 설정 키여야 한다.
+> 범위 = `crates/nexa-dir/src/**` · `crates/ndir-*/src/**`(ndir-check · `#[cfg(test)]` 제외). 줄 번호는 **10-03 조사 시점** 기준이라 이후 편집으로 몇 줄 밀릴 수 있다(값·이름으로 찾는다).
+> 분류: **상수** = 바뀌지 않는 고정값(포맷 · OS · 프로토콜 한계 · 정합성 불변식) / **고급** = 바꾸면 위치·속도가 달라지지만 자주 안 바꾸거나 다른 곳에 영향(폴링 · 캐시 상한 · 임계 · 타임아웃 · 내부 레이아웃 지표 · 샌드박스 한도) → REGISTRY `ADVANCED`(드물면 `HIDDEN`) / **설정** = 자주 바꾸거나 취향(보이는 크기 · 체감 시간 · 켜고 끄기).
+> 상태 칸: ☐ 미추출 · ✅ 추출됨(키 존재). 추출하면 값을 키 기본값으로 옮기고 코드는 키를 읽는다(i18n 라벨 · 설명 = DR-14).
+
+## 0. 먼저 고칠 불일치(설정 범위 ↔ 코드 클램프)
+
+| 키 | REGISTRY 범위 | 코드 클램프 | 조치 제안 |
+| --- | --- | --- | --- |
+| `layout.dock_height_pct` | 15..50 | `main.rs` `clamp(5, 50)` | 코드를 키 범위(15..50)로 맞춘다 |
+| `layout.dock_split_pct` | 15..85 | `main.rs` `clamp(10, 90)` | 코드를 키 범위(15..85)로 맞춘다 |
+
+- 키가 없는데 주석·문서에 이름만 있는 것: 토스트 `ui.toast_*`(nexa-ctl `configure_progress` 문서 주석) · 복사 버튼 `copy_feedback_ms`(`prefs_win.rs`가 `DEFAULT_FEEDBACK_MS` 고정).
+- 예시로 거론됐으나 코드에 없는 것: `WATCH_CAP 64`(감시 대상 = 두 패널의 활성 폴더뿐) · 별도 디바운스 250 ms 상수(통지 감시자의 `poll_interval_ms()` 반환 250이 그 역할).
+
+## 1. 원장
+
+| 값 | 위치 | 뜻 | 기존 키 | 분류 | 제안 키 | 상태 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **감시** | | | | | | |
+| 1000 ms | `platform/mod.rs:237` | 폴링 감시 기본 간격(폴백) | — | 고급 | `watch.poll_ms` | ☐ |
+| 250 / 1000 ms | `platform/winwatch.rs:278,280` · `linuxwatch.rs:218,220` · `macwatch.rs:250,252` | 통지 감시 틱(디바운스) / 폴백이 섞이면 1000 | — | 고급 | `watch.notify_ms`(+ `watch.poll_ms`) | ☐ |
+| 1000 ms | `platform/winwatch.rs:114` | 감시 스레드 무장 대기 상한 | — | 상수 | — | — |
+| 8 KiB · 64 KiB · 64 | `winwatch.rs:142` · `linuxwatch.rs:113` · `macwatch.rs:144` | OS 감시 읽기 버퍼 · kevent 배열 | — | 상수 | — | — |
+| **아이콘** | | | | | | |
+| 150 ms | `app/row_icons.rs:23` | 행 아이콘 결과 폴링 | — | 고급 | `list.icon_poll_ms` | ☐ |
+| 512 | `app/row_icons.rs:25` | 행 아이콘 캐시 상한 | — | 고급 | `list.icon_cache_max` | ☐ |
+| 150 ms | `app/launcher_icons.rs:9` | 런처 아이콘 폴링 | — | 고급 | `launcher.icon_poll_ms` | ☐ |
+| 14 / 여백 4 | `panel.rs:112-113` | 네비 버튼 글리프 크기·여백 | — | 고급 | `list.nav_icon_size` | ☐ |
+| 8..256 · 32/64 | `icons.rs:78` · `icon.rs:85,89` | SVG 래스터 클램프 · 창 아이콘 크기(OS) | — | 상수 | — | — |
+| **셸 메뉴** | | | | | | |
+| 300 ms | `app/ctxmenu.rs:57` | 선행 구축 머무름(`CTX_PREBUILD_MS` · dir2 값) | — | 고급 | `ctxmenu.prebuild_ms` | ☐ |
+| 256 | `app/ctxmenu.rs:59` | 선행 구축 대상 선택 수 상한 | — | 고급 | `ctxmenu.prebuild_max` | ☐ |
+| 30 ms | `app/ctxmenu.rs:61` | 구축/실행 대기 틱 | — | 고급 | `ctxmenu.poll_ms` | ☐ |
+| 240 px · 220 px | `app/ctxmenu.rs:83` · `app/input.rs:451` | 컨텍스트 메뉴 · 탭 메뉴 텍스트 폭 | — | 고급 | `ctxmenu.text_w` · `tabs.menu_text_w` | ☐ |
+| 2 | `platform/winshell.rs:52` | 셸 서브메뉴 열거 깊이 | — | 고급 | `ctxmenu.shell_depth` | ☐ |
+| 64 px | `platform/winshell.rs:54` | 셸 항목 아이콘 최대 변 | — | 상수 | — | — |
+| 30 s · 25 ms | `platform/winshell.rs:56,58` | 메뉴 스레드 동기 대기 상한 · 펌프 주기 | — | 고급 | `ctxmenu.sync_timeout_ms` · `ctxmenu.pump_ms` | ☐ |
+| 10회 × 20 ms | `platform/winshell.rs:282,779` | 새로 만들기 뒤 신규 항목 감지 재시도 | — | 고급 | `ctxmenu.detect_retries` | ☐ |
+| **파일 작업** | | | | | | |
+| 100 ms | `app/ops.rs:53` | 전송 진행 폴링 | — | 고급 | `transfer.poll_ms` | ☐ |
+| 4 MiB | `ndir-ops/src/lib.rs:42` | 복사 버퍼(`COPY_BUF`) | — | 고급 | `transfer.copy_buf_kb`(M9 전략 계층과 함께 · NEW-007) | ☐ |
+| 100 | `ndir-ops/src/history.rs:58` | 실행 취소 기록 상한 | — | 고급 | `history.max` | ☐ |
+| 64 | `app/bulk.rs:51` | 일괄 이름 바꾸기 프리셋 상한 | — | 고급 | `bulk.preset_max` | ☐ |
+| 10×10 · 3×15 · 5×10 ms | `platform/windows.rs:185,191,293,298` · `clipboard.rs:82,87` | 클립보드 열기·HDROP 재시도 | — | 상수 | — | — |
+| **배치·레이아웃** | | | | | | |
+| 3.0 · 20.0 · 200.0 | `main.rs:107-109` | 스플리터 두께(+ 히트 반폭) · 50 % 자석 스냅 · 패널 최소 폭 | — | 고급 | `layout.splitter_px` · `layout.snap_px` · `layout.min_panel_w` | ☐ |
+| 20 | `main.rs:111` | 툴바 아이콘 기본 크기 | `toolbar.icon_size` | 설정 | (기존) | ✅ |
+| 4 | `app/settings.rs:193` | 툴바 그룹 간격 기본 | `toolbar.group_gap` | 고급 | (기존) | ✅ |
+| 20 / 글꼴+6 / ≥14 | `main.rs:308` | 목록 행 높이 | — | 설정 | `list.row_h`(0 = 글꼴 기준 자동) | ☐ |
+| 6 · 16 | `main.rs:309-310` | 행 좌우 여백 · 트리 들여쓰기 | — | 고급 · 설정 | `list.pad_x` · `list.indent_w` | ☐ |
+| 22 · 24 | `main.rs:311-312` | 탭 바 높이 · 경로/네비 바 높이 | — | 고급 | `tabs.height` · `list.bar_h` | ☐ |
+| 340/64/96/140/110 · 120/8 | `main.rs:321-325` · `panel.rs:473-489` | 기본 열 폭(+ 내 PC 열) · 이름 열 최소/여유 | (`list.col_layout`이 사용자 폭 기억) | 고급 | `list.col_default_w` · `list.col_name_min` | ☐ |
+| 글꼴+11 · 24 · 22 | `main.rs:630,640,648` | 메뉴 바 · 퀵 런처 바 · 상태 바 높이 | — | 고급 | `ui.menubar_pad` · `launcher.bar_h` · `statusbar.height` | ☐(런처는 개발 세션 진행 중) |
+| row_h × 3 | `main.rs:660` | 도크 최소 높이 | — | 고급 | `dock.min_rows` | ☐ |
+| 3000 ms · 85 % | `main.rs:359` | 토스트 표시 시간 · 불투명도 | — | 설정 | `ui.toast_ms` · `ui.toast_alpha` | ☐ |
+| 클램프 10..90 · 100..2000 · 80..1000 | `main.rs:616,722` · `app/input.rs:20` · `termview.rs:162` | 키 범위와 같은 클램프 | `layout.panel_split_pct` · `ui.dblclick_ms` · `term.cols` | 상수 | — | — |
+| **이벤트 루프·세션** | | | | | | |
+| 16 ms | `app/event_loop.rs:137` | 애니메이션 프레임 간격 | — | 고급 | `ui.frame_ms` | ☐ |
+| 250 ms · 1000/5000 ms | `app/sessions.rs:61` · `main.rs:430` | 세션 dirty 틱 · 저장 디바운스(조용/최대) | — | 고급 | `session.tick_ms` · `session.save_quiet_ms` · `session.save_max_ms` | ☐ |
+| 200 | `session.rs:66` | 탭당 펼친 노드 저장 상한 | — | 고급 | `session.expanded_max` | ☐ |
+| 3600 s · 64 · 200×150~10000 | `app/event_loop.rs:139` · `session.rs:161` · `wingeom.rs:13` | 유휴 최대 대기 · 손상 방어 · 창 크기 유효 범위 | — | 상수 | — | — |
+| **터미널** | | | | | | |
+| 530 ms | `termview.rs:18` | 캐럿 깜빡임 | — | 설정 | `term.caret_blink_ms` | ☐ |
+| 30 ms | `termview.rs:20` | 출력 폴링 | — | 고급 | `term.poll_ms` | ☐ |
+| 3줄 · 4열 /노치 | `app/input.rs:319,326` | 세로·가로 휠 이동량 | — | 설정 | `term.wheel_lines` · `term.hwheel_cols` | ☐ |
+| 800 | `ndir-term/src/lib.rs:48` | 스크롤백 줄 상한(`MAX_SCROLLBACK`) | — | 설정 | `term.scrollback` | ☐ |
+| 80×24 · 8192 · 4096 · 65535 · 5 ms | `termview.rs:119,223` · `winpty.rs:290` · `ndir-term/src/lib.rs:807` · `unixpty.rs:151` | 초기 PTY 크기 · 읽기 버퍼 · CSI 상한 · 재시도 | — | 상수 | — | — |
+| **클립보드(X11)** | | | | | | |
+| 1200 ms | `clipboard_x11.rs:39` | 붙여넣기 응답 대기 | — | 고급 | `clipboard.x11_timeout_ms` | ☐ |
+| 128 KiB · 15 ms · 2 s · 5 ms | `clipboard_x11.rs:37,311,315,513,539` | INCR 경계 · 스레드 sleep/준비 · 폴링 | — | 상수 | — | — |
+| **기동·자가 점검** | | | | | | |
+| 20 s | `app/startup_cmd.rs:532` | `ctx.wait` 보류 상한 | — | 고급(HIDDEN) | `startup.ctx_wait_ms` | ☐ |
+| 120 · 3 | `app/startup_cmd.rs:15,243,251` | 휠 1노치 delta · assert 실패 종료 코드 | — | 상수 | — | — |
+| 30 · 20 · 5 · 50 ms · 30 s · ×4 | `selfcheck.rs:554-632` | 점검 대기·폴링·"즉시" 임계 | — | 상수(시험 하네스) | — | — |
+| **미리보기·플러그인·압축** | | | | | | |
+| 16 KiB · 200줄 | `preview/mod.rs:45-46` | 텍스트 미리보기 읽기 · 줄 상한 | — | 고급 · 설정 | `preview.text_read_kb` · `preview.text_lines` | ☐ |
+| 256 KiB · 2000 px | `preview/mod.rs:107,135` | SVG 입력 · 한 변 상한 | — | 고급 | `preview.svg_max_kb` · `preview.svg_max_px` | ☐ |
+| 60 | `dockinfo.rs:120` | 도크 압축 요약 항목 상한 | — | 설정 | `dock.archive_rows` | ☐ |
+| 2억 · 64 MiB · 256 KiB · 1 MiB · 4/64 MiB · 1500 ms · 3 · 8 MiB · 1000줄/4096자 | `preview/wasm.rs:21-43,393-394` | WASM 연료 · 메모리 · 입출력 · read_at · 호출 타임아웃 · 격리 횟수 · 모듈 크기 · 출력 자르기 | — | 고급(HIDDEN · DR-7 격리 수치) | `plugins.fuel` · `plugins.mem_mb` · `plugins.read_kb` · `plugins.out_kb` · `plugins.read_at_mb` · `plugins.call_timeout_ms` · `plugins.breaker_limit` · `plugins.module_mb` · `plugins.out_lines` | ☐ |
+| 50,000 | `ndir-vfs/src/archive/mod.rs:39` · `preview/wasm.rs:37` | 압축 목록 항목 상한 | — | 고급 | `archive.max_entries` | ☐ |
+| 1000/64 · 20만/1만 · 4096 · 압축 포맷 상한 | `preview/wasm.rs:33-35,110-262` · `ndir-vfs/src/archive/*` | 연료 비용 · 문자열 버퍼 · 포맷 고정값 | — | 상수 | — | — |
+| **보조 창·위젯** | | | | | | |
+| 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |
+| 1200 / 700 ms | `license_win.rs:49-50` | 플래시 유지 · 페이드 | — | 고급 | `ui.flash_hold_ms` · `ui.flash_fade_ms` | ☐ |
+| 50 ms · 12행 · 5 px | `preview_win.rs:86` · `order_win.rs:59-60` | 드래그 자동 스크롤 틱 · 순서 목록 행 · 드래그 시작 임계 | — | 고급 | `preview.autoscroll_ms` · `ui.order_rows` · `ui.drag_threshold` | ☐ |
+| 32 | `launcher.rs:13` | 런처 항목 상한 | — | 고급 | `launcher.max_items` | ☐ |
+| 900×640 · 960×640(소유자 0.75 비례) | `preview_win.rs:406-409` · `archive_win.rs:422-424` | 미리보기·압축 창 기본 크기 | — | 고급 | `window.preview_size` · `window.archive_size` | ☐ |
+| 대화상자 PAD/BTN/ROW/열 폭 묶음 | `dlg_win.rs:89-93` · `bulk_win.rs:542-548` · `check_win.rs:31-38` · `keys_win.rs:37-42` · `order_win.rs:52-58` · `prefs_win.rs:61-68` · `progress_win.rs:26-28` · `archive_win.rs:34` · `preview_win.rs:28-29` · `license_win.rs:423-532` | 보조 창 레이아웃 지표 | — | 고급(묶음 · 1차 = 상수 유지 권장) | `ui.dialog_metrics`(후속) | ☐ |
+| 120 ms · 2 · row_h≥20/8/16 | `copybtn.rs:13` · `launcher.rs:11` · `archive_win.rs:315` | 눌림 효과 · 런처 시드 버전 · VirtualRows 인자(8·16 뜻 확인 필요) | — | 상수(마지막은 확인 필요) | — | — |
+
+## 2. 집계 · 추출 순서 제안
+
+- 분류(행 기준 · 원조사): 상수 52 · 고급 70 · 설정 13. 이미 키가 있는 것 = `toolbar.icon_size` · `toolbar.group_gap` 2건.
+- **1차(NEW-008 성능 향상 모드의 덮을 대상)**: `watch.poll_ms`/`watch.notify_ms` · `list.icon_poll_ms`/`list.icon_cache_max` · `term.scrollback` · `ui.frame_ms` · `ui.toast_ms` · `preview.text_lines` · (신설 on/off) 행 셸 아이콘 · 메뉴 아이콘.
+- **2차(사용자 체감 설정)**: `list.row_h` · `list.indent_w` · `term.caret_blink_ms` · `term.wheel_lines`/`hwheel_cols` · `ui.copy_feedback_ms` · `dock.archive_rows`.
+- **3차(고급 · HIDDEN 다수)**: 셸 메뉴 · 전송 · 세션 · 플러그인 샌드박스 · 레이아웃 지표 · 보조 창 지표(묶음).
+- 상수로 남기는 것은 이유(포맷 · OS · 불변식 · 시험 하네스)를 코드 주석에 한 줄 남긴다.

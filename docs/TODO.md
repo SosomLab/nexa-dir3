@@ -53,7 +53,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | T-40 | 호스트 껍질 복사(present·winhost·wingeom·winfocus·theme·icon·input·clipboard·toast) + `App`/`Focus`/`layout` + 이벤트 루프 + 깨움·타이머 표 | P0 | 대 | M1·M2 | SKEL-001~167 | ✅ 10-03(journal §12 · 창 실증 · 깨움 표는 T-46) |
 | T-41 | AppCore/Shell 분리 + FakePlatform + `layout.dump` 골든 1장 | P0 | 중 | T-40 | CI-102·105 | ✅ 10-03(journal §13 · 최소 분리 · 골든 1장 · 시험 5 · FakePlatform은 T-50) |
-| T-42 | 메뉴바(5 메뉴 · 체크 상태 동기) · 툴바 13버튼 · 런처 · 명령 디스패치 `menu_action` | P0 | 중 | T-22·23 | WINA · CMD | 🚧 10-03(메뉴 5·툴바 13 글리프·`command` 한 길·런처 바 ✅ journal §35 · SVG/exe 아이콘 = T-30) |
+| T-42 | 메뉴바(5 메뉴 · 체크 상태 동기) · 툴바 13버튼 · 런처 · 명령 디스패치 `menu_action` | P0 | 중 | T-22·23 | WINA · CMD | 🚧 10-03(메뉴 5·툴바 13 글리프·`command` 한 길·런처 바 ✅ journal §35 · SVG/exe 아이콘 = T-30 · 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 ✅ §74 · 잔여: 떼어 낸 그룹 플로팅 창 · 배치 초기화 명령) |
 | T-43 | 탭바(패널별) · 경로바 · 듀얼 패널 파일 목록 · 스플리터 · 상태바 · 폴더 트리 · 포커스 순환 · 선택 모델 · 정렬 · 열 | P0 | 대 | T-25·26 | PANEL · WINA~C | ✅ 10-03 3차(journal §14·§19 — 패널 구조 · 탭별 히스토리 · 스플리터 · 탭 잠금/고정/복제/메뉴 · 패널 간 이동 · 열 폭 기억/동기 ✅ · 폴더 트리 = T-32 · 내 PC 용량 열 ✅ 10-03 journal §22 · 네비 버튼 dir2 MDL2 글리프 + 쉐브론 두부 수정 ✅ §72 · 행 셸 아이콘 GAP-003 + 아이콘 계층 ✅ §73 · 감시 재열람 선택·펼침·정렬 복원 GAP-005 ✅ §73 · 잔여: FilePicker 최근/숨김 주입 GAP-004) |
 | T-44 | 설정 창(prefs_win 복사 → dir2 페이지 구성 WIDGETS 힌트) · 단축키 창 · 키맵 · `apply_setting` 조각 + 적용 누락 감시 시험 | P0 | 대 | T-14·17 | SET-060~097 · PREFS-3xx | ✅ 10-03(journal §18 · JSON 편집·폴더 찾아보기·순서 편집 창은 잔여) |
 | T-45 | 세션 복원(탭·경로·열·스플리터) · 창 기하 기억 · 테마/언어 즉시 전환 · 고속 스크롤 설정 연동 | P1 | 중 | T-43 | PREFS-2xx | ✅ 10-03(journal §15 · dir2 session.cfg 형식 · 디바운스 1 s/5 s · 창 기하·테마·언어는 T-40 — 펼침 집합·고속 스크롤 연동은 T-44/T-32로) |
@@ -109,6 +109,7 @@
 | T-93 | 메모리 모니터 — `memstat`/`mem_win`/`memtrim`/`app/memory.rs` 복제 + dir3 카테고리 | P1 | 중 | T-92 | NEW-002 · DR-15 | ☐ |
 | T-94 | 상태줄 우측 칸 [탭 n/m][메모리][라이선스] — nexa-ctl `StatusBar` 클릭 가능한 세그먼트(nexa-ui 추가) | P1 | 소 | T-93 | NEW-003 · DR-15 | ☐ |
 | T-95 | 탭 상태바 + `DirInfoProvider` + 폴더 상태(`FolderStats` · 1번 칸) + Git 공급자(2번 칸 · 1차 읽기 전용) | P1 | 중 | T-94 | NEW-004 · NEW-005 · DR-16 | ☐ |
+| T-100 | 값 추출 1차(DR-19 · [23](23-settings-extraction.md) §2 1차 — 감시 · 아이콘 폴링/캐시 · 스크롤백 · 프레임 · 토스트 · 미리보기 줄 + 범위 불일치 2 정렬) | P1 | 중 | — | DR-19 | ☐ |
 | T-99 | 성능 향상 모드 — `perf.boost` + `BOOST` 표(읽을 때 덮어쓰기) · 설정 창 잠금 표시 · 덮을 동작의 설정 키 먼저 신설(아이콘 · 폴링 · 애니메이션 · 스크롤백 …) | P2 | 중 | T-93 | NEW-008 · DR-18 | ☐ |
 
 ## M9 고성능 전송(FastCopy/robocopy류 내장 · 원장 = [22](22-dir3-features.md))

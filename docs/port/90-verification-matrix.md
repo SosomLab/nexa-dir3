@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 9 | 9 | 1 | 0 | 0 | 0 | 0 |
+| NEW | 10 | 10 | 2 | 0 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4298 | 4298 | 2362 | 1023 | 766 | 0 | 0 |
+| **합계** | 4299 | 4299 | 2363 | 1023 | 766 | 0 | 0 |
 
 ## 행
 
@@ -224,6 +224,7 @@
 | UIX-002~004 · 022 · 023 · 025 · 030~032 · 034~036 | nexa-ui 보조 API 중 dir3 미사용 — 편집기 기능 · 편집 명령(TextBox 내부 간접) · 클릭 정책 · FilePicker 다중/저장/시험 보조 · nexa-fs 목록/드라이브/외부 열기/감시/경로·시간 | nexa-ui(DR-2) · dir3 대체 = ndir-vfs/ndir-tree · `platform::{Opener, Watcher}` · `dockinfo.rs` | — | — | ⚠ | DR-2/DR-5 — nexa-sql 전용이거나 dir2 이식 크레이트·`platform/`이 대신 · [52](52-nexa-ui-dlg-fs-status.md) |
 | UIX-021 | FilePicker 상태 주입(최근 목록 · 숨김 파일) | `file_win.rs:160~163` | — | — | 🚧 | GAP-004 · [52](52-nexa-ui-dlg-fs-status.md) §5 |
 | UIX-033 | 셸 아이콘(IconService) — 런처 · 템플릿 `kind_name` · **패널 행 아이콘**(§73) | `app/launcher_icons.rs` · `platform/wintemplates.rs` · `app/row_icons.rs` | T1·T3 | 위 PANEL-064 행 시험 | ✅ | GAP-003 해소 |
+| NEW-010 | 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 7(즉시 반영) | `app/settings.rs` · `app/input.rs` · `app/paint.rs` · `app/launcher_icons.rs` · nexa-ui 117차 | T2·T3 | `toolbar_groups_move_by_drag_and_size_gap_settings_apply_live` · `launcher_bar_size_and_gap_settings_apply_live` · `gaps_and_padding_are_configurable` | ✅ | §74 · 플로팅 창 · 배치 초기화 명령 = 잔여 · 실기(크기·간격 모양) 사용자 |
 | NEW-001~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 메모리 모니터 · 상태줄 우측 칸 · 탭 상태바 · Git 공급자 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |

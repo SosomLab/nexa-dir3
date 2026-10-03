@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **툴바 그룹 도크 · 크기/간격 설정 · 값 분류 원칙**: nexa-ui 117차 소비 · 툴바 = `ToolDock` 5그룹(손잡이 드래그 이동 · 배치 저장) · `toolbar.icon_size/item_gap/group_gap/row_gap` · `launcher.icon_size/item_gap` 즉시 반영 · 도크 `::PC::` → 내 PC · 시험 +3(176) · docs/23 값 분류 원장(상수 52 · 고급 70 · 설정 13) + DR-19 · DR-20 1초 규칙 → [journal §74](journal/2026-10-03.md)
 - **행 셸 아이콘 · 재열람 선택 복원 · 신규 기능 원장**: nexa-ui 116차 `set_icon_resolver` 소비 · `RowSource::icon`(dir2 아이콘 키) + `app/row_icons.rs` 아이콘 계층(직접 설정 `list.icon_overrides` → 파일 → 확장자 → 시스템 → 자체) · `TreeSource::reload` 정렬·펼침·선택 복원 · 시험 +5(173) · GAP-003/005 해소 · docs/22 NEW-001~009 · DR-15~18 · M9 · matrix-audit가 NEW도 감사 → [journal §73](journal/2026-10-03.md)
 - **네비 MDL2 · 쉐브론 두부 · ctx.wait**: nexa-ui 115차(아이콘 글꼴 체인 · `set_marker_glyphs`) 소비 · `app/fonts.rs::init_icon_glyphs`(MDL2 있으면 dir2 PUA · 없으면 유니코드 대체) · 네비 dir2 글리프 · 기동 명령 `ctx.wait`(고정 대기 제거) · 시험 +1(168) · GAP-005 적발(감시 재열람이 선택을 안 살림 · PANEL-036 🚧) → [journal §72](journal/2026-10-03.md)
 - **우클릭 가속 + 메뉴 아이콘**: dir2 X-61 이식 — 전용 메뉴 STA 스레드 `ndir-ctxmenu` · 선택 300 ms 머묾 선행 구축(배경 포함 · 감시 변경 무효화) · 즉시 열림 + "불러오는 중" 뒤 채움 · `invoke_async` · `hbmpItem` 아이콘 칸 · 구축 1.2~1.4 s → 캐시 조회 µs · 시험 +4(167) · SHELL-014~016 ✅ · 011 🚧 · GAP-003/004 등재 → [journal §71](journal/2026-10-03.md)
