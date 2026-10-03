@@ -186,8 +186,36 @@ fn fallback(is_dir: bool) -> Rc<nexa_gfx::IconImage> {
     })
 }
 
+thread_local! {
+    /// 테마 아이콘 파일 → 디코드한 이미지(실패도 기억 · 파일 수는 테마의 아이콘 종류 수로 묶인다).
+    static THEME_IMAGES: RefCell<HashMap<PathBuf, Option<Rc<nexa_gfx::IconImage>>>> = RefCell::new(HashMap::new());
+}
+
+/// 계층 2~4의 Linux 판: 아이콘 테마(폴더 · 홈 · 다운로드 같은 사용자 폴더 · 파일 종류)의 PNG. 조회는 nexa-fs가 캐시하고
+/// (폴더와 확장자 있는 파일은 디스크를 건드리지 않는다) 디코드는 파일마다 한 번.
+fn theme_icon(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage>> {
+    let bare = key.strip_prefix("L|").unwrap_or(key);
+    let path = std::path::Path::new(hint);
+    let is_dir = bare == "dir" || (bare.contains(['\\', '/', ':']) && path.is_dir());
+    let file = nexa_fs::icontheme::icon_file(path, is_dir, size.max(1) as u32)?;
+    THEME_IMAGES.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > CACHE_MAX {
+            c.clear();
+        }
+        c.entry(file)
+            .or_insert_with_key(|f| {
+                std::fs::read(f)
+                    .ok()
+                    .and_then(|b| nexa_gfx::image::decode(&b, 1024 * 1024).ok())
+                    .map(Rc::new)
+            })
+            .clone()
+    })
+}
+
 /// 리졸버 본체 — 항상 이미지를 준다(셸 아이콘 · 없으면 자체 그림).
-pub(crate) fn resolve(key: &str, hint: &str, _size: i32) -> Option<Rc<nexa_gfx::IconImage>> {
+pub(crate) fn resolve(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage>> {
     // 계층 1 — 직접 설정한 아이콘(규칙이 없으면 비용 0).
     if RULES.with(|r| !r.borrow().is_empty()) {
         let bare = key.strip_prefix("L|").unwrap_or(key);
@@ -196,6 +224,10 @@ pub(crate) fn resolve(key: &str, hint: &str, _size: i32) -> Option<Rc<nexa_gfx::
         if let Some(img) = user_icon(hint, is_dir) {
             return Some(img);
         }
+    }
+    // Linux = 아이콘 테마의 그림 파일(nexa-ui 124차 `nexa_fs::icontheme` — 다른 OS는 즉시 None · 테마에 없으면 아래 계층으로).
+    if let Some(img) = theme_icon(key, hint, size) {
+        return Some(img);
     }
     let svc = IconService::global();
     let ver = svc.version();
@@ -271,6 +303,38 @@ mod tests {
     use super::*;
 
     /// 키 해석: dir/file/확장자 = 종류 · 경로 = 파일별 · `L|` = 큰 아이콘.
+    /// Linux 아이콘 테마: 테마가 설치돼 있으면 폴더·파일 행이 테마 PNG(디코드 성공 · 정사각)를 받는다 — 폴더와 파일은 다른 그림.
+    /// 테마가 없는 환경(최소 CI 이미지)에서는 None이라 자체 그림으로 내려간다(실패 아님).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_rows_use_icon_theme_images() {
+        let Some(theme) = nexa_fs::icontheme::theme_name() else {
+            eprintln!("icon theme 없음 — 건너뜀");
+            return;
+        };
+        let dir = theme_icon("dir", "/usr", 16);
+        let file = theme_icon("txt", "/tmp/nexa-dir-no-such.txt", 16);
+        eprintln!(
+            "theme {theme} · dir {:?} · file {:?}",
+            dir.as_ref().map(|i| (i.w, i.h)),
+            file.as_ref().map(|i| (i.w, i.h))
+        );
+        for img in [&dir, &file].into_iter().flatten() {
+            assert!(img.w == img.h && img.w >= 16);
+            assert_eq!(img.rgba.len(), (img.w * img.h * 4) as usize);
+        }
+        if let (Some(d), Some(f)) = (&dir, &file) {
+            assert_ne!(d.rgba, f.rgba);
+            // 같은 파일은 디코드한 이미지를 공유한다.
+            let again = theme_icon("dir", "/usr", 16).expect("cached");
+            assert!(Rc::ptr_eq(d, &again));
+        }
+        // 리졸버 전체 경로도 같은 그림을 준다.
+        if let Some(d) = &dir {
+            assert!(Rc::ptr_eq(d, &resolve("dir", "/usr", 16).expect("resolve")));
+        }
+    }
+
     #[test]
     fn service_key_maps_dir2_icon_keys() {
         assert_eq!(
