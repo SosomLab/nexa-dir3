@@ -13,7 +13,7 @@ cmd: @ready:assert.launcher:last Shell launched
 cmd: @ready:view.launcher
 cmd: @ready:layout.dump:<out>/layout2.txt
 cmd: @ready:quit
-check: layout.txt: launcher 0,51 1200x24 items 1
-check: layout2.txt: launcher 0,51 1200x0
+check: layout.txt: launcher 0,53 1200x24 items 1
+check: layout2.txt: launcher 0,53 1200x0
 check: launcher.txt: last Shell launched
 check: launcher.txt: Shell|cmd.exe|/c exit

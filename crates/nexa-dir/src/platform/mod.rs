@@ -641,6 +641,32 @@ impl Platform {
     }
 }
 
+/// 시스템 "휠 한 번에 스크롤할 줄 수"(Windows `SPI_GETWHEELSCROLLLINES` · 페이지 단위 = -1 → 호출자가 상한으로 해석) —
+/// 다른 OS는 `None`(nexa-ctl 기본 3줄 유지 · dir2 `sync_wheel_lines` win.rs:6325).
+pub(crate) fn wheel_lines() -> Option<i32> {
+    #[cfg(windows)]
+    {
+        use ::windows::Win32::UI::WindowsAndMessaging::{
+            SystemParametersInfoW, SPI_GETWHEELSCROLLLINES, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+        };
+        let mut n: u32 = 3;
+        // SAFETY: 출력 버퍼는 u32 하나(SPI 규약) · 플래그 0.
+        let ok = unsafe {
+            SystemParametersInfoW(
+                SPI_GETWHEELSCROLLLINES,
+                0,
+                Some(std::ptr::from_mut(&mut n).cast()),
+                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+            )
+        };
+        ok.is_ok().then(|| i32::try_from(n).unwrap_or(-1))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

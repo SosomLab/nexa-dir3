@@ -224,6 +224,14 @@ pub const REGISTRY: &[Entry] = &[
         "20"
     ),
     e!(
+        "toolbar.icon_pad",
+        CAT_APPEARANCE,
+        "pref.toolbarIconPad",
+        "pref.toolbarIconPad.desc",
+        Int { min: 0, max: 8 },
+        "1"
+    ),
+    e!(
         "toolbar.item_gap",
         CAT_APPEARANCE,
         "pref.toolbarItemGap",
@@ -1374,6 +1382,7 @@ pub const HIDDEN: &[&str] = &[
 
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
+    "toolbar.icon_pad",
     "toolbar.item_gap",
     "term.fallback_fonts",
     "launcher.item_gap",

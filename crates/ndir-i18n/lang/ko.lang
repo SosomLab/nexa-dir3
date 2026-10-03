@@ -338,6 +338,8 @@ pref.toolbarSize.16 = 16 (작게)
 pref.toolbarSize.20 = 20 (기본)
 pref.toolbarSize.24 = 24 (크게)
 pref.toolbarSize.32 = 32 (아주 크게)
+pref.toolbarIconPad = 툴바: 아이콘 둘레 여백(px)
+pref.toolbarIconPad.desc = 툴바 아이콘마다 상하좌우에 두는 여백입니다. 1 = 아이콘 사이 2px · 툴바 높이 +2px.
 pref.toolbarItemGap = 툴바: 아이콘 사이 간격(px)
 pref.toolbarItemGap.desc = 툴바 그룹 안에서 아이콘과 아이콘 사이의 간격입니다. 0 = 붙여서 배치.
 pref.toolbarGroupGap = 툴바: 그룹 사이 간격(px)

@@ -2543,8 +2543,9 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
         app.toolbar.item_rect("view.mode_tree").unwrap(),
         app.toolbar.item_rect("view.mode_flat").unwrap(),
     );
-    assert_eq!(a.right(), b.x, "아이콘 사이 간격 0");
-    assert_eq!(a.w, 20, "기본 아이콘 크기 20");
+    assert_eq!(a.right(), b.x, "칸 사이 추가 간격 0(item_gap)");
+    assert_eq!(a.w, 22, "아이콘 20 + 둘레 여백 1×2 → 아이콘 사이 2px");
+    assert_eq!(app.toolbar.bounds().h, 30, "툴바 높이 = 20 + (1 + 4)×2");
     // ① 그룹 이동: `view` 그룹의 손잡이(그룹 툴바 왼쪽 10px)를 잡아 맨 앞으로 끈다.
     let vb = app.toolbar.bar("view").unwrap().bounds();
     let (gx, gy) = (vb.x - 5, vb.y + vb.h / 2);
@@ -2592,7 +2593,7 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
     let (h20, panel_y20) = (app.toolbar.bounds().h, app.panels[0].bounds().y);
     let _ = app.settings.set("toolbar.icon_size", "32");
     app.after_setting_changed("toolbar.icon_size");
-    assert_eq!(app.toolbar.item_rect("view.mode_tree").unwrap().w, 32);
+    assert_eq!(app.toolbar.item_rect("view.mode_tree").unwrap().w, 34);
     assert_eq!(app.toolbar.bounds().h, h20 + 12);
     assert_eq!(app.panels[0].bounds().y, panel_y20 + 12);
     assert_eq!(ids(&app)[0], "view", "크기 변경에도 배치 유지");
@@ -2694,4 +2695,48 @@ fn terminal_font_chain_covers_nerd_glyphs_when_installed() {
     }
     // 본문 글자·한글은 언제나.
     assert!(font.covers('A') && font.covers('한'));
+}
+
+/// dir2 스크롤 조치(X-63 · 7d8b1e9 · eb29089 · e230f36) 호스트 반영: `scroll.*` 설정이 nexa-grid/nexa-ctl 전역 고속 스크롤에 닿고
+/// (파일 그리드 = 한 단계 더 빠르게) · 터미널 휠은 분수 delta를 누적해 줄 단위로 환산한다(종전 = 120 미만은 0으로 버림).
+#[test]
+fn scroll_settings_reach_controls_and_terminal_wheel_accumulates() {
+    let (mut app, dir) = fixture("scrollcfg");
+    let _ = app.settings.set("scroll.fast_step", "5");
+    let _ = app.settings.set("scroll.fast_max", "9");
+    let _ = app.settings.set("scroll.fast_hud", "off");
+    app.after_setting_changed("scroll.fast_step");
+    let g = nexa_grid::fastscroll::fast_scroll();
+    assert_eq!((g.enabled, g.step, g.max, g.hud), (true, 5, 9, false));
+    let grid = nexa_grid::fastscroll::fast_scroll_grid();
+    assert_eq!(
+        (grid.step, grid.max),
+        (4, 18),
+        "그리드 = 한 단계 더 빠르게(step-1 · max×2)"
+    );
+    let c = nexa_ctl::fast_scroll();
+    assert_eq!((c.enabled, c.step, c.max), (true, 5, 9));
+    let _ = app.settings.set("scroll.fast", "off");
+    app.after_setting_changed("scroll.fast");
+    assert!(!nexa_grid::fastscroll::fast_scroll().enabled && !nexa_ctl::fast_scroll().enabled);
+    // 기본값으로 되돌려 다른 시험에 영향 없게(전역).
+    for k in [
+        "scroll.fast",
+        "scroll.fast_step",
+        "scroll.fast_max",
+        "scroll.fast_hud",
+    ] {
+        let _ = app.settings.reset(k);
+    }
+    app.apply_scroll_settings();
+    // 휠 누적기: 30씩 4번 = 노치 1개 = 시스템 줄 수만큼.
+    let mut acc = nexa_ctl::WheelAccum::default();
+    let lines: i32 = (0..4).map(|_| acc.add(30, 3)).sum();
+    assert_eq!(lines, 3);
+    assert_eq!(
+        app.terms[0].wheel.add(60, 4),
+        2,
+        "터미널 누적기 = 분수 delta도 반영"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

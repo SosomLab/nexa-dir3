@@ -106,6 +106,7 @@ impl App {
             }
             // 순서 편집기(T-71 DLG-073): 툴바 재구성 · 컬럼 = 활성 패널(+동기) · 컨텍스트 메뉴는 다음 열 때 읽는다.
             "toolbar.icon_size"
+            | "toolbar.icon_pad"
             | "toolbar.item_gap"
             | "toolbar.group_gap"
             | "toolbar.row_gap"
@@ -124,6 +125,7 @@ impl App {
                 self.apply_font_decor();
             }
             "list.icon_overrides" => self.apply_icon_overrides(),
+            k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {
                 let v = self
                     .settings
@@ -164,6 +166,42 @@ impl App {
         self.toolbar = App::make_tool_dock(&self.settings, self.scale);
     }
 
+    /// 스크롤 설정 적용(dir2 X-63 f986415 · 7d8b1e9 — 호스트 누락분): `scroll.fast*` → nexa-grid(목록·도크·그리드 창) +
+    /// nexa-ctl(설정 창 등 `ScrollBars`) 전역 고속 스크롤 · 파일 그리드 한 단계 더 빠르게 · 시스템 "한 번에 스크롤할 줄 수".
+    pub(crate) fn apply_scroll_settings(&self) {
+        let s = &self.settings;
+        let int = |k: &str, lo: i64, hi: i64| s.int(k).clamp(lo, hi);
+        let pos = s.position_index("scroll.fast_hud_pos").min(8);
+        let grid = nexa_grid::fastscroll::FastScroll {
+            enabled: s.flag("scroll.fast"),
+            step: int("scroll.fast_step", 1, 50) as u32,
+            max: int("scroll.fast_max", 1, 32) as i32,
+            window_ms: int("scroll.fast_window_ms", 20, 2000) as u64,
+            hud: s.flag("scroll.fast_hud"),
+            hud_pos: pos as u8,
+            hud_hold_ms: int("scroll.fast_hud_hold_ms", 0, 10_000) as u64,
+            hud_fade_ms: int("scroll.fast_hud_fade_ms", 0, 10_000) as u64,
+        };
+        nexa_grid::fastscroll::set_fast_scroll(grid);
+        nexa_grid::fastscroll::set_fast_scroll_grid(
+            s.flag("scroll.fast_grid_extra")
+                .then(|| nexa_grid::fastscroll::grid_extra_of(&grid)),
+        );
+        nexa_ctl::set_fast_scroll(nexa_ctl::FastScroll {
+            enabled: grid.enabled,
+            step: grid.step,
+            max: grid.max,
+            window_ms: grid.window_ms,
+            hud: grid.hud,
+            hud_pos: nexa_ctl::HudPos::parse(s.get("scroll.fast_hud_pos").unwrap_or("top_right")),
+            hud_hold_ms: grid.hud_hold_ms,
+            hud_fade_ms: grid.hud_fade_ms,
+        });
+        if let Some(n) = platform::wheel_lines() {
+            nexa_ctl::set_wheel_lines(n);
+        }
+    }
+
     /// 설정 `toolbar.icon_size`(16/20/24/32 · 그 밖 = 20).
     pub(crate) fn toolbar_icon_logical(settings: &Settings) -> i32 {
         match settings.get("toolbar.icon_size").unwrap_or("20") {
@@ -189,7 +227,8 @@ impl App {
         let icon_px = (logical as f32 * scale).round().max(8.0) as u32;
         let mut dock = ToolDock::new(App::build_tool_groups(settings, icon_px));
         dock.set_icon_size(logical);
-        dock.set_padding(0, 4); // 칸 여백 0(아이콘 맞닿음) · 양끝/위아래 4 = 툴바 높이는 종전(dir2 28 = 20 + 8) 그대로
+        // 아이콘 둘레 여백(`toolbar.icon_pad` · 기본 1 = 상하좌우 1px → 칸 22 · 아이콘 사이 2 · 툴바 높이 30) + 양끝/위아래 4.
+        dock.set_padding(App::setting_px(settings, "toolbar.icon_pad", 1, 8), 4);
         dock.set_item_gap(App::setting_px(settings, "toolbar.item_gap", 0, 16));
         dock.set_gaps(
             App::setting_px(settings, "toolbar.group_gap", 4, 32),

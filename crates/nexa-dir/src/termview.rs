@@ -85,6 +85,11 @@ impl Utf8Chunker {
 type Sel = ((usize, usize), (usize, usize));
 
 pub(crate) struct TermView {
+    /// 휠 누적기(dir2 eb29089 · 7d8b1e9): 세로 스크롤백 · 가로 열 · TUI 마우스 보고 — 트랙패드의 작은 delta를 잃지 않고
+    /// 노치(120) 단위로 환산한다.
+    pub(crate) wheel: nexa_ctl::WheelAccum,
+    pub(crate) hwheel: nexa_ctl::WheelAccum,
+    pub(crate) tui_wheel: nexa_ctl::WheelAccum,
     /// 읽을 출력이 남았다(시간 예산으로 끊음) — 호스트가 곧바로 다시 펌프한다.
     pub(crate) backlog: bool,
     /// 셸이 첫 출력을 냈다(그 전에는 "시작 중" 문구 — 프로필이 무거운 셸은 프롬프트까지 몇 초 걸린다).
@@ -121,6 +126,9 @@ impl Default for TermView {
 impl TermView {
     pub(crate) fn new() -> Self {
         TermView {
+            wheel: nexa_ctl::WheelAccum::default(),
+            hwheel: nexa_ctl::WheelAccum::default(),
+            tui_wheel: nexa_ctl::WheelAccum::default(),
             backlog: false,
             got_output: false,
             session: None,
@@ -238,7 +246,6 @@ impl TermView {
             if n == 0 {
                 break;
             }
-            self.got_output = true;
             if let Some(text) = self.chunker.push(&buf[..n]) {
                 self.screen.feed(&text);
                 changed = true;
@@ -252,6 +259,11 @@ impl TermView {
         if !self.exited && !s.alive() {
             self.exited = true;
             changed = true;
+        }
+        // "시작 중" 해제 = **보이는 글자가 찍혔을 때**(ConPTY는 셸 프로필이 끝나기 전에 커서 숨김·화면 지우기 같은 제어 시퀀스를
+        // 먼저 보낸다 — 바이트가 왔다는 것만으로 끄면 문구가 곧바로 사라져 빈 화면으로 몇 초를 기다리게 된다 · 10-03 캡처 검토).
+        if !self.got_output && changed && !self.screen_text().trim().is_empty() {
+            self.got_output = true;
         }
         changed
     }
@@ -825,6 +837,10 @@ mod tests {
         let shell = p.shell.default_shell();
         assert!(t.start(&p, shell, Path::new("."), 80, 24));
         assert!(!t.got_output && !t.backlog);
+        // 제어 시퀀스만 온 동안은 아직 "시작 중"(보이는 글자가 없다).
+        t.write("[?25l[2J[H");
+        t.pump();
+        assert!(!t.got_output, "ESC 시퀀스뿐 = 시작 중 유지");
         // 가짜 PTY는 쓴 것을 그대로 돌려준다 — 수 MB를 흘린다.
         let line = "0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\r\n";
         let big = line.repeat(60_000);

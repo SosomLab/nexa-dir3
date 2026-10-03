@@ -67,6 +67,8 @@ pub(crate) struct PreviewWin {
     text: Vec<String>,
     /// 첫 가시 줄 · 가로 픽셀 오프셋.
     top: i32,
+    /// 세로 휠 분수 누적(줄).
+    wheel_acc: f32,
     left: i32,
     /// paint가 잰 행 높이 · 최장 줄 폭(가로 상한) · 가시 줄 수.
     line_h: i32,
@@ -97,6 +99,7 @@ impl PreviewWin {
             kinds: Vec::new(),
             text: Vec::new(),
             top: 0,
+            wheel_acc: 0.0,
             left: 0,
             line_h: 20,
             max_w: 0,
@@ -493,7 +496,11 @@ impl PreviewWin {
                     let d = if self.shift { dy } else { dx };
                     self.left -= (d * 24.0 * 5.0 * self.scale).round() as i32;
                 } else {
-                    self.top -= (dy * 3.0).round() as i32;
+                    // 시스템 줄 수/노치 · 트랙패드의 작은 delta는 누적(종전 `(dy*3).round()`는 0.16줄 미만을 버렸다 — dir2 7d8b1e9).
+                    self.wheel_acc += dy * nexa_ctl::wheel_lines() as f32;
+                    let lines = self.wheel_acc.trunc();
+                    self.wheel_acc -= lines;
+                    self.top -= lines as i32;
                 }
                 self.clamp();
                 self.redraw();

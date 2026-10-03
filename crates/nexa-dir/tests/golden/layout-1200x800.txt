@@ -1,18 +1,18 @@
 window 1200x800 scale 1.00 theme dark dual true active 0
 menubar 0,0 1200x23
-toolbar 0,23 1200x28
-launcher 0,51 1200x0 items 0
-panel0 0,51 599x509 tabs 1 active 0 path <root>
-panel0.tabs 0,51 599x22
-panel0.nav 0,73 104x24
-panel0.path 104,73 495x24 text <root>
-panel0.list 0,97 599x463 rows 3 caret None
-panel1 602,51 598x509 tabs 1 active 0 path <root>
-panel1.tabs 602,51 598x22
-panel1.nav 602,73 104x24
-panel1.path 706,73 494x24 text <root>
-panel1.list 602,97 598x463 rows 3 caret None
-dock0 0,563 599x215 kind 0
-dock1 602,563 598x215 kind 0
-splitter 597,51 7x509
+toolbar 0,23 1200x30
+launcher 0,53 1200x0 items 0
+panel0 0,53 599x508 tabs 1 active 0 path <root>
+panel0.tabs 0,53 599x22
+panel0.nav 0,75 104x24
+panel0.path 104,75 495x24 text <root>
+panel0.list 0,99 599x462 rows 3 caret None
+panel1 602,53 598x508 tabs 1 active 0 path <root>
+panel1.tabs 602,53 598x22
+panel1.nav 602,75 104x24
+panel1.path 706,75 494x24 text <root>
+panel1.list 602,99 598x462 rows 3 caret None
+dock0 0,564 599x214 kind 0
+dock1 602,564 598x214 kind 0
+splitter 597,53 7x508
 statusbar 0,778 1200x22 left 3 items right Tab 1/1

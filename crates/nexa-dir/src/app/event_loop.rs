@@ -92,6 +92,12 @@ impl ApplicationHandler<Wake> for App {
         for p in &mut self.panels {
             p.tick(now_ms, &mut inv);
         }
+        // 도크의 오버레이 스크롤 막대 자동 숨김 · 속도 배지 사라짐(dir2 e230f36 — 틱이 없으면 그대로 남는다).
+        for d in &mut self.docks {
+            if d.bounds().h > 0 {
+                d.tick(&mut inv);
+            }
+        }
         let mut redraw = !inv.is_empty();
         if self.splitter.tick(now_ms) {
             redraw = true;
@@ -210,6 +216,10 @@ impl ApplicationHandler<Wake> for App {
                 if *on {
                     // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
                     self.sync_cut_marks();
+                    // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
+                    if let Some(n) = platform::wheel_lines() {
+                        nexa_ctl::set_wheel_lines(n);
+                    }
                 } else {
                     self.pointer_gone();
                 }
