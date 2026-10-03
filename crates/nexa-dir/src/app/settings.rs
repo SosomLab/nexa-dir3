@@ -129,6 +129,11 @@ impl App {
             "list.folder_bold" | "list.header_bold" | "list.header_italic" => {
                 self.apply_font_decor();
             }
+            "term.follow_windows_terminal" => {
+                // 크기는 즉시 · 글꼴 얼굴은 다음 실행부터(안내는 설정 설명에).
+                self.wt_profile = App::load_wt_profile(&self.settings);
+                self.layout();
+            }
             "list.icon_overrides" => self.apply_icon_overrides(),
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {

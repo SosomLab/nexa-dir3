@@ -53,8 +53,20 @@ impl App {
 
     /// 표시 설정(dir2 X-3): `term.font_size`(Mono 슬롯 = 상태줄 크기 기준 증분) · `term.wrap` · `term.cols`.
     pub(crate) fn term_style(&self) -> TermStyle {
-        let want = self.font_px("term.font_size");
         let base = self.font_px("statusbar.font_size");
+        // Windows Terminal 따라가기: 글꼴 크기 pt → DIP(×96/72) → **그 고정폭 글꼴의** px. nexa-ctl의 Mono 슬롯은 숫자 높이를
+        // 본문 글꼴에 맞추는 광학 보정(0.75~1.15배)을 곱하므로 그만큼 나눠 실제 크기가 Windows Terminal과 같게 한다.
+        let wt_px = self
+            .wt_profile
+            .as_ref()
+            .zip(self.mono_font.as_ref())
+            .map(|(wt, mono)| {
+                let target = mono.em_to_px(wt.size_pt * 96.0 / 72.0);
+                let mult =
+                    (self.ui_font.digit_height(100.0) / mono.digit_height(100.0)).clamp(0.75, 1.15);
+                target / mult
+            });
+        let want = wt_px.unwrap_or_else(|| self.font_px("term.font_size"));
         TermStyle {
             font_delta: if want > 0.0 && base > 0.0 {
                 want - base

@@ -869,6 +869,15 @@ pub const REGISTRY: &[Entry] = &[
         Choice(TERM_COPY_OPTS),
         "text"
     ),
+    // Windows Terminal 따라가기(dir3 신규 · DR-21): 켜면 그 기본 프로필의 글꼴 목록·크기를 터미널 도크에 쓴다(Windows · 없으면 무시).
+    e!(
+        "term.follow_windows_terminal",
+        CAT_TERMINAL,
+        "pref.termFollowWt",
+        "pref.termFollowWt.desc",
+        Bool,
+        "on"
+    ),
     // 터미널 폴백 글꼴(dir3 신규 · 고급): 주 글꼴에 없는 글자(프롬프트 아이콘 등)를 그릴 글꼴 · 쉼표 구분 · 비우면 설치된 Nerd Font 자동.
     e!(
         "term.fallback_fonts",

@@ -18,6 +18,11 @@ use std::path::{Path, PathBuf};
 pub(crate) const CARET_BLINK_MS: u64 = 530;
 /// 출력 폴링 간격(ms) — 세션이 살아 있는 동안만 깬다.
 pub(crate) const POLL_MS: u64 = 30;
+/// 아이콘 글꼴 글리프인가(사용자 영역 U+E000~F8FF · 보충 사용자 영역 U+F0000~) — Nerd Fonts · Terminal-Icons · 프롬프트 테마.
+pub(crate) fn is_icon_glyph(c: char) -> bool {
+    matches!(c, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{10FFFD}')
+}
+
 /// 한 번의 펌프가 UI 스레드를 잡는 상한(ms) — 출력이 폭주해도 입력(Ctrl+C)·그리기가 끼어들 수 있게 나눠 읽는다.
 const PUMP_BUDGET_MS: u64 = 6;
 
@@ -605,7 +610,11 @@ impl TermView {
                     if ch == '\0' || ch == ' ' {
                         continue;
                     }
-                    let wide = line.get(i + 1).is_some_and(|n| n.ch == '\0');
+                    // 폭 2칸: 전각 글자(다음 칸 = 연속 표식) · **아이콘 글리프 뒤가 빈 칸**(Windows Terminal처럼 한 칸보다 넓은
+                    // Nerd Font 아이콘을 다음 칸까지 넘쳐 그린다 — 칸 안에서 자르면 아이콘이 잘리고 뒤 공백이 넓어 보인다).
+                    let wide = line
+                        .get(i + 1)
+                        .is_some_and(|n| n.ch == '\0' || (is_icon_glyph(ch) && n.ch == ' '));
                     let cx = rc.x + 2 + (i - c0) as i32 * cell_w;
                     let cclip = Rect::new(cx, y, if wide { 2 } else { 1 } * cell_w, row_h);
                     let mut buf = [0u8; 4];
@@ -861,5 +870,37 @@ mod tests {
             rounds += 1;
         }
         assert!(!t.backlog && rounds > 1, "나눠 읽어 끝난다: {rounds}");
+    }
+
+    /// Windows Terminal과 같게: 아이콘 글리프(사용자 영역) 뒤가 빈 칸이면 2칸 폭으로 그린다(넘쳐 그리기) · 글자가 이어지면 1칸.
+    #[test]
+    fn icon_glyph_overflows_into_following_blank_cell() {
+        assert!(is_icon_glyph('\u{F07B}') && is_icon_glyph('\u{E0A0}') && !is_icon_glyph('A'));
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        assert!(t.start(&p, p.shell.default_shell(), Path::new("."), 40, 5));
+        t.screen.feed("\u{F07B}  docs\r\n\u{F07B}x");
+        let mut rec = nexa_ctl::RecordCtx::with_surface(400, 120);
+        t.paint(
+            &mut rec,
+            Rect::new(0, 0, 400, 120),
+            &Theme::dark(),
+            &TermPalette::dark(),
+            false,
+            20,
+            &TermStyle::default(),
+        );
+        let widths: Vec<i32> = rec
+            .texts
+            .iter()
+            .filter(|t| t.3 == "\u{F07B}")
+            .map(|t| t.2.w)
+            .collect();
+        assert_eq!(widths.len(), 2);
+        assert_eq!(
+            widths[0],
+            widths[1] * 2,
+            "뒤가 공백 = 2칸 · 뒤가 글자 = 1칸: {widths:?}"
+        );
     }
 }

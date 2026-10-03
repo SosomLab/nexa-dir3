@@ -99,13 +99,36 @@ impl App {
     }
 
     /// 고정폭 글꼴 로드(`term.font_face` → 없으면 OS 기본) — 실패 = None(Mono 슬롯은 기본 얼굴로).
-    pub(crate) fn load_mono_font(settings: &Settings) -> Option<Rc<Font>> {
+    pub(crate) fn load_mono_font(
+        settings: &Settings,
+        wt: Option<&platform::WtProfile>,
+    ) -> Option<Rc<Font>> {
+        let extra = settings.get("term.fallback_fonts").unwrap_or("");
+        // Windows Terminal 따라가기(DR-21): 그 글꼴 목록의 첫 글꼴 = 주 글꼴 · 나머지 = 대체 글꼴(순서 그대로).
+        if let Some(wt) = wt.filter(|w| !w.faces.is_empty()) {
+            let rest = wt.faces[1..].join(",");
+            let extra = if extra.trim().is_empty() {
+                rest
+            } else {
+                format!("{rest},{extra}")
+            };
+            if let Some(f) = mono_chain(Some(&wt.faces[0]), &extra) {
+                return Some(Rc::new(f));
+            }
+        }
         let face = settings
             .get("term.font_face")
             .map(str::trim)
             .filter(|f| !f.is_empty());
-        let extra = settings.get("term.fallback_fonts").unwrap_or("");
         mono_chain(face, extra).map(Rc::new)
+    }
+
+    /// 설정 `term.follow_windows_terminal`이 켜져 있으면 이 PC의 Windows Terminal 기본 프로필(없으면 `None`).
+    pub(crate) fn load_wt_profile(settings: &Settings) -> Option<platform::WtProfile> {
+        settings
+            .flag("term.follow_windows_terminal")
+            .then(platform::windows_terminal_profile)
+            .flatten()
     }
 }
 

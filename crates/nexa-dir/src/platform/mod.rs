@@ -667,6 +667,160 @@ pub(crate) fn wheel_lines() -> Option<i32> {
     }
 }
 
+/// Windows Terminal 기본 프로필에서 터미널 도크가 따라갈 값(DR-21 · 사용자 10-03 "기본 터미널과 동일하게").
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WtProfile {
+    /// 글꼴 이름 목록(`font.face`의 쉼표 구분 순서 = 대체 글꼴 순서).
+    pub faces: Vec<String>,
+    /// 글꼴 크기(pt · Windows Terminal 기본 12).
+    pub size_pt: f32,
+    /// 색 구성표 이름(없으면 Windows Terminal 기본 = Campbell).
+    pub scheme: Option<String>,
+    /// 시작 명령(`commandline` · 없으면 프로필 원천의 기본).
+    pub commandline: Option<String>,
+}
+
+/// JSON 주석 제거(`// …` · `/* … */` — 문자열 안은 그대로). Windows Terminal의 settings.json은 주석을 허용한다.
+fn strip_json_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut it = text.chars().peekable();
+    let (mut in_str, mut esc) = (false, false);
+    while let Some(c) = it.next() {
+        if in_str {
+            out.push(c);
+            if esc {
+                esc = false;
+            } else if c == '\\' {
+                esc = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match (c, it.peek()) {
+            ('"', _) => {
+                in_str = true;
+                out.push(c);
+            }
+            ('/', Some('/')) => {
+                for d in it.by_ref() {
+                    if d == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            ('/', Some('*')) => {
+                it.next();
+                let mut prev = ' ';
+                for d in it.by_ref() {
+                    if prev == '*' && d == '/' {
+                        break;
+                    }
+                    prev = d;
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// settings.json 본문 → 기본 프로필 값(순수 · 3-OS 시험 가능). 값 우선순위 = 기본 프로필 > `profiles.defaults` > 내장 기본.
+/// 옛 형식(`fontFace`/`fontSize`)도 읽는다.
+pub(crate) fn parse_wt_settings(text: &str) -> Option<WtProfile> {
+    use ndir_settings::json::Json;
+    fn get<'a>(v: &'a Json, key: &str) -> Option<&'a Json> {
+        match v {
+            Json::Obj(items) => items.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+    fn text_of(v: Option<&Json>) -> Option<String> {
+        match v {
+            Some(Json::Str(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+            _ => None,
+        }
+    }
+    fn num_of(v: Option<&Json>) -> Option<f32> {
+        match v {
+            Some(Json::Num(n)) => Some(*n as f32),
+            _ => None,
+        }
+    }
+    let root = ndir_settings::json::parse(&strip_json_comments(text)).ok()?;
+    let profiles = get(&root, "profiles")?;
+    let default_guid = text_of(get(&root, "defaultProfile"));
+    let (defaults, list): (Option<&Json>, Option<&Json>) = match profiles {
+        Json::Arr(_) => (None, Some(profiles)),
+        _ => (get(profiles, "defaults"), get(profiles, "list")),
+    };
+    let profile = match list {
+        Some(Json::Arr(items)) => default_guid
+            .as_deref()
+            .and_then(|g| {
+                items.iter().find(|p| {
+                    text_of(get(p, "guid")).is_some_and(|x| x.eq_ignore_ascii_case(g))
+                        || text_of(get(p, "name")).is_some_and(|x| x == g)
+                })
+            })
+            .or_else(|| items.first()),
+        _ => None,
+    };
+    let pick = |f: &dyn Fn(&Json) -> Option<String>| -> Option<String> {
+        profile.and_then(f).or_else(|| defaults.and_then(f))
+    };
+    let face = pick(&|p| {
+        text_of(get(p, "font").and_then(|f| get(f, "face"))).or_else(|| text_of(get(p, "fontFace")))
+    });
+    let size = profile
+        .and_then(|p| {
+            num_of(get(p, "font").and_then(|f| get(f, "size")))
+                .or_else(|| num_of(get(p, "fontSize")))
+        })
+        .or_else(|| {
+            defaults.and_then(|p| {
+                num_of(get(p, "font").and_then(|f| get(f, "size")))
+                    .or_else(|| num_of(get(p, "fontSize")))
+            })
+        });
+    Some(WtProfile {
+        faces: face
+            .map(|f| {
+                f.split(',')
+                    .map(|x| x.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default(),
+        size_pt: size.filter(|s| (4.0..=96.0).contains(s)).unwrap_or(12.0),
+        scheme: pick(&|p| text_of(get(p, "colorScheme"))),
+        commandline: pick(&|p| text_of(get(p, "commandline"))),
+    })
+}
+
+/// 이 PC의 Windows Terminal 설정에서 기본 프로필을 읽는다(정식 → 프리뷰 → 비패키지 순 · 없으면 `None`). 다른 OS = `None`.
+pub(crate) fn windows_terminal_profile() -> Option<WtProfile> {
+    #[cfg(windows)]
+    {
+        let local = PathBuf::from(std::env::var_os("LOCALAPPDATA")?);
+        [
+            "Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json",
+            "Packages/Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe/LocalState/settings.json",
+            "Microsoft/Windows Terminal/settings.json",
+        ]
+        .iter()
+        .find_map(|rel| {
+            let text = std::fs::read_to_string(local.join(rel)).ok()?;
+            parse_wt_settings(text.trim_start_matches('\u{feff}'))
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -771,5 +925,38 @@ mod tests {
         let cwd = std::env::current_dir().unwrap();
         let (total, free) = p.disk.space(&cwd).expect("drive space (3-OS)");
         assert!(total >= free && total > 0);
+    }
+
+    /// Windows Terminal settings.json 해석: 주석 허용 · 기본 프로필 > defaults > 내장 기본(12pt) · 글꼴 목록은 쉼표 순서 · 옛 키.
+    #[test]
+    fn wt_settings_parse_default_profile() {
+        let text = r#"{
+            // 주석 한 줄
+            "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+            "profiles": {
+                "defaults": { "font": { "face": "D2Coding, JetBrainsMono Nerd Font" }, "opacity": 80 },
+                "list": [
+                    { "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}", "name": "cmd", "font": { "size": 9 } },
+                    /* 기본 프로필 */
+                    { "guid": "{574E775E-4F2A-5B96-AC1E-A2962A402336}", "name": "PowerShell", "colorScheme": "One Half Dark" }
+                ]
+            },
+            "url": "https://example.com/a//b"
+        }"#;
+        let p = parse_wt_settings(text).expect("profile");
+        assert_eq!(p.faces, ["D2Coding", "JetBrainsMono Nerd Font"]);
+        assert_eq!(p.size_pt, 12.0, "지정 없음 = Windows Terminal 기본 12pt");
+        assert_eq!(p.scheme.as_deref(), Some("One Half Dark"));
+        assert_eq!(p.commandline, None);
+        // 프로필 값이 defaults보다 우선 · 옛 키.
+        let old = r#"{"defaultProfile":"x","profiles":[{"name":"x","fontFace":"Consolas","fontSize":10,"commandline":"cmd.exe /k"}]}"#;
+        let p = parse_wt_settings(old).expect("old format");
+        assert_eq!(
+            (p.faces.as_slice(), p.size_pt),
+            (&["Consolas".to_string()][..], 10.0)
+        );
+        assert_eq!(p.commandline.as_deref(), Some("cmd.exe /k"));
+        assert!(parse_wt_settings("not json").is_none());
+        assert!(parse_wt_settings("{}").is_none(), "profiles 없음");
     }
 }

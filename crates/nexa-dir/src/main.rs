@@ -137,6 +137,8 @@ struct App {
     ui_font: Rc<Font>,
     /// 고정폭 글꼴(터미널 · 코드 줄 — `FontSet.mono` · 없으면 Mono 슬롯은 UI 글꼴).
     mono_font: Option<Rc<Font>>,
+    /// Windows Terminal 기본 프로필(설정 `term.follow_windows_terminal` · Windows만 · 없으면 None) — 터미널 글꼴·크기를 따라간다.
+    wt_profile: Option<platform::WtProfile>,
     theme: Theme,
     scale: f32,
     /// 창 안쪽 크기(장치 px) — 창이 있으면 `layout()`이 창에서 읽고, 시험은 `layout_for`로 넣는다.
@@ -390,7 +392,8 @@ impl App {
                 p.set_view_mode(mode, &mut inv);
             }
         }
-        let mono_font = App::load_mono_font(&settings);
+        let wt_profile = App::load_wt_profile(&settings);
+        let mono_font = App::load_mono_font(&settings, wt_profile.as_ref());
         let mut app = App {
             window: None,
             surface: None,
@@ -405,6 +408,7 @@ impl App {
             settings,
             keymap,
             mono_font,
+            wt_profile,
             ui_font: {
                 let f = Rc::new(ui_font);
                 // 플러그인 `render_svg`(Mermaid 다이어그램)의 텍스트 글꼴(T-62 C-2).
