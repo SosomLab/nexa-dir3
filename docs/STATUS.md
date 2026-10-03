@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 76차 — 캡처 판정 반영(글꼴 Regular · 툴바 농도 · 네비 26 · 터미널 이탤릭/줄 높이) · 소비자 기록 원칙
+
+- **한 일**: nexa-ui 119차 · 툴바/네비/터미널 판정 반영 · 시험(nexa-dir 184) · DR-24 + nexa-ui·nexa-license `CONSUMER-CHANGES.md`(소급 · nexa-sql 시험 729 · nexa-license 시험 29).
+- **지금 상태**: 형제 저장소 변경은 이제 소비자 영향·검증 상태가 그 저장소에 남는다. 터미널 줄바꿈 원인(PTY 열 수)은 덤프 보강 대기. 다음(개발 세션) = PTY cols 덤프 · `NDIR_TERM_TRACE` · `ops.wait` · 경로 바 GAP-012~014 · .lnk/링크 GAP-006~010.
+- **걸린 것**: CLAUDE.md §5에 소비자 기록 규칙을 넣을지(사용자) · dir2 링크 결함 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 여부 · 실기 확인 · 릴리스 태그 · CLOUD.
+
+→ [journal/2026-10-03 §80](journal/2026-10-03.md)
+
+---
+
 ## 10-03 75차 — 터미널 Windows Terminal 따라가기 1차 · 디자인 캡처 판정
 
 - **한 일**: WT 설정(글꼴 목록 · 크기) 따라가기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal` · 시험 +2(182) · 툴바/네비 dir2 비교 캡처 · 터미널 WT 비교 캡처 · copy-paste 20회 반복(20/20).
