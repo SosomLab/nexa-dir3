@@ -86,6 +86,8 @@ pub(crate) struct Panel {
     navigated: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
+    /// 사용자가 컬럼 순서를 바꿨다(호스트가 수거해 전 탭 · 반대 패널에 전파).
+    col_order_changed: bool,
 }
 
 /// 네비 버튼 1개 폭(고정 — 배치가 측정 없이 계산 · dir2 `nav_btn_w`).
@@ -166,6 +168,7 @@ impl Panel {
         let mut rows = VirtualRows::new(TreeSource::open(path, opts), m.row_h, m.pad_x, m.indent_w);
         rows.set_columns(columns, &mut inv);
         rows.set_sort_mark_trailing(true, &mut inv); // 정렬 표시 = 칸 오른쪽 끝(nexa-sql 모양 · 사용자 10-03)
+        rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
         let mut p = Panel {
@@ -196,6 +199,7 @@ impl Panel {
             m_icon_scale: 1.0,
             navigated: false,
             col_changed: false,
+            col_order_changed: false,
         };
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
@@ -675,6 +679,7 @@ impl Panel {
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
+        rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.rows().view_mode(), inv);
         self.tabs.push(Tab {
@@ -802,6 +807,7 @@ impl Panel {
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
+        rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
         self.tabs.insert(
@@ -921,6 +927,47 @@ impl Panel {
             self.session_dirty = true;
         }
         changed
+    }
+
+    /// 활성 탭에 **지금 보이는 순서**의 열 레이아웃 `(key, 표시)`: 보이는 열 = 현재 순서 · 안 보이는 정의 열 = 뒤에 숨김으로.
+    /// (`col_layout_str`은 기본 열 기준이라 방금 끌어 바꾼 순서를 아직 모른다.)
+    pub(crate) fn col_order_spec(&self) -> Vec<(u32, bool)> {
+        let mut spec: Vec<(u32, bool)> = self
+            .rows()
+            .columns()
+            .iter()
+            .filter(|c| crate::order::col_key_id(crate::order::col_id_key(c.key)) == Some(c.key))
+            .map(|c| (c.key, true))
+            .collect();
+        for (_, defs) in crate::order::COLUMN_BLOCKS {
+            for d in *defs {
+                if let Some(id) = crate::order::col_key_id(d) {
+                    if !spec.iter().any(|(k, _)| *k == id) {
+                        spec.push((id, false));
+                    }
+                }
+            }
+        }
+        spec
+    }
+
+    /// 사용자가 컬럼을 끌어 순서를 바꿨는가(1회성 · 호스트가 전파에 쓴다).
+    pub(crate) fn take_col_order_changed(&mut self) -> bool {
+        std::mem::take(&mut self.col_order_changed)
+    }
+
+    /// 컬럼 드래그 중이면 접는다(Esc — 원래 순서로 · dir2 WINC-031) · 접었으면 `true`.
+    pub(crate) fn cancel_col_drag(&mut self, inv: &mut Invalidations) -> bool {
+        let done = self.tabs[self.active].rows.cancel_col_drag(inv);
+        if done && self.pressed == Some(Part::List) {
+            self.pressed = None;
+        }
+        done
+    }
+
+    /// 지금 컬럼을 끌고 있는가.
+    pub(crate) fn col_dragging(&self) -> bool {
+        self.rows().col_dragging()
     }
 
     /// 사용자가 열 폭을 바꿨는가(1회성 · 호스트가 동기에 쓴다).
@@ -1447,6 +1494,15 @@ impl Panel {
         if self.tabs[self.active].rows.take_col_resized() {
             self.user_cols = true;
             self.col_changed = true;
+        }
+        // 컬럼을 끌어 순서를 바꿨다(GAP-016 — 종전에는 활성 탭에만 남았다): 호스트가 같은 패널의 모든 탭 · (동기화면)
+        // 반대 패널 · 세션에 반영한다. 내 PC(드라이브 열)는 열 구성이 달라 전파하지 않는다.
+        if self.tabs[self.active].rows.take_col_reordered()
+            && !self.rows().source().is_virtual_root()
+        {
+            self.user_cols = true;
+            self.session_dirty = true;
+            self.col_order_changed = true;
         }
     }
 }

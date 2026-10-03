@@ -314,6 +314,22 @@ impl App {
                 return;
             }
         }
+        // 컬럼을 끄는 중 Esc = 취소(원래 순서 · dir2 WINC-031).
+        if matches!(
+            ev,
+            InputEvent::Key {
+                key: nexa_ctl::Key::Escape,
+                ..
+            }
+        ) && self.panels.iter().any(panel::Panel::col_dragging)
+        {
+            for p in &mut self.panels {
+                let _ = p.cancel_col_drag(inv);
+            }
+            self.pressed = None;
+            inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+            return;
+        }
         // 툴바 그룹을 끄는 중 Esc = 취소(원래 순서·행으로 · nexa-ctl `ToolDock::cancel_drag`).
         if self.toolbar.is_dragging() {
             if let InputEvent::Key {
@@ -529,6 +545,11 @@ impl App {
                 self.open_tab_menu(i, t);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
+            // 컬럼 순서(GAP-016): 끌어 바꾼 순서를 같은 패널의 모든 탭에 · 동기화가 켜져 있으면 반대 패널에도(세션에는 패널
+            // 더러움으로 저장된다).
+            if self.panels[i].take_col_order_changed() {
+                self.sync_col_layout_from(i);
+            }
             // 열 폭 동기(`list.col_width_sync` · dir2 07-18): 사용자가 한쪽 열 폭을 바꾸면 반대 패널도.
             if self.panels[i].take_col_changed()
                 && self.dual
@@ -640,6 +661,18 @@ impl App {
             _ => {}
         }
         self.update_status();
+        self.redraw();
+    }
+
+    /// 컬럼 순서/표시 전파 — `from` 패널 활성 탭의 레이아웃을 같은 패널의 모든 탭에 · 동기화(`list.col_width_sync`)가 켜져
+    /// 있으면 반대 패널에도(설정 창 순서 편집과 같은 규약 — app/order.rs `apply_col_layout_str`).
+    pub(crate) fn sync_col_layout_from(&mut self, from: usize) {
+        let spec = self.panels[from].col_order_spec();
+        let mut inv = Invalidations::default();
+        self.panels[from].apply_col_layout(&spec, &mut inv);
+        if self.dual && self.settings.flag("list.col_width_sync") {
+            self.panels[1 - from].apply_col_layout(&spec, &mut inv);
+        }
         self.redraw();
     }
 

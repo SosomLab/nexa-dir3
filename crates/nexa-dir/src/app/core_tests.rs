@@ -2194,6 +2194,76 @@ fn tab_drag_moves_between_panels() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 컬럼 이동(T-123 + GAP-016): 끄는 동안 놓일 자리 표식 · 놓으면 순서가 같은 패널의 모든 탭 · (동기화면) 반대 패널 ·
+/// 세션에 반영 · Esc = 원래 순서.
+#[test]
+fn column_reorder_shows_marker_propagates_and_cancels() {
+    let (mut app, dir) = fixture("coldrag");
+    app.layout_for(1200, 800, 1.0);
+    app.command("file.new_tab");
+    app.command("tab.prev");
+    let keys = |app: &App, p: usize| -> Vec<u32> {
+        app.panels[p]
+            .col_widths_by_key()
+            .iter()
+            .map(|c| c.0)
+            .collect()
+    };
+    let orig = keys(&app, 0);
+    let b = app.panels[0].rows().bounds();
+    let w: Vec<i32> = app.panels[0]
+        .col_widths_by_key()
+        .iter()
+        .map(|c| c.1)
+        .collect();
+    // 둘째 열(확장자) 머리를 잡아 넷째 열 너머로 끈다.
+    let (x0, y) = (b.x + w[0] + w[1] / 2, b.y + 5);
+    let x1 = b.x + w[0] + w[1] + w[2] + w[3] / 2 + 20;
+    app.route(down(x0, y));
+    app.route(InputEvent::MouseMove { x: x1, y });
+    assert!(app.panels[0].col_dragging());
+    let slot = app.panels[0]
+        .rows()
+        .col_drag_slot()
+        .expect("놓일 자리 표식");
+    assert_eq!(slot.h, b.h, "머리 + 본문 전체");
+    // Esc = 취소(원래 순서).
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(!app.panels[0].col_dragging());
+    app.route(InputEvent::MouseUp { x: x1, y });
+    assert_eq!(keys(&app, 0), orig, "Esc = 원래 순서");
+    // 다시 끌어 놓는다 → 순서 변경이 같은 패널의 다른 탭과(동기화 기본 on) 반대 패널에.
+    app.route(down(x0, y));
+    app.route(InputEvent::MouseMove { x: x1, y });
+    app.route(InputEvent::MouseUp { x: x1, y });
+    let moved = keys(&app, 0);
+    assert_ne!(moved, orig);
+    assert!(app.settings.flag("list.col_width_sync"));
+    assert_eq!(keys(&app, 1), moved, "반대 패널도 같은 순서");
+    app.command("tab.next");
+    assert_eq!(keys(&app, 0), moved, "같은 패널의 다른 탭");
+    // 세션: 기본과 다른 열 레이아웃이 저장된다.
+    let snap = app.session_snapshot();
+    assert!(
+        snap.panels[0].col_layout.starts_with("cols:1["),
+        "{}",
+        snap.panels[0].col_layout
+    );
+    assert_eq!(snap.panels[0].col_layout, snap.panels[1].col_layout);
+    // 동기화를 끄면 반대 패널은 그대로.
+    let _ = app.settings.set("list.col_width_sync", "off");
+    app.route(down(x0, y));
+    app.route(InputEvent::MouseMove { x: x1, y });
+    app.route(InputEvent::MouseUp { x: x1, y });
+    assert_ne!(keys(&app, 0), moved);
+    assert_eq!(keys(&app, 1), moved, "동기화 꺼짐 = 독립");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]
