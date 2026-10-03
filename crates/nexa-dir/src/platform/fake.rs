@@ -133,6 +133,10 @@ impl Trash for FakeTrash {
         note(&self.0, format!("trash:{}", paths.len()));
         Ok(paths.len())
     }
+    fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
+        note(&self.0, format!("trash.restore:{}", original.len()));
+        Ok(original.len())
+    }
 }
 
 impl FileClipboard for FakeClip {

@@ -27,6 +27,8 @@ mod windows;
 #[cfg(windows)]
 mod winpty;
 #[cfg(windows)]
+mod winrecycle;
+#[cfg(windows)]
 mod winshell;
 #[cfg(windows)]
 mod winwatch;
@@ -118,6 +120,10 @@ pub(crate) trait ContextMenuProvider {
 pub(crate) trait Trash {
     /// 휴지통으로 — 옮긴 개수.
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError>;
+    /// 휴지통에서 **원래 경로**로 복원(삭제 undo · dir2 SHELL-049) — 복원한 개수(없으면 0). 기본 = 미지원.
+    fn restore(&self, _original: &[PathBuf]) -> Result<usize, PlatformError> {
+        Err(PlatformError::Unsupported("trash.restore"))
+    }
 }
 
 pub(crate) trait FileClipboard {

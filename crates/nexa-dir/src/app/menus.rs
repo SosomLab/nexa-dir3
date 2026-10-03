@@ -242,7 +242,7 @@ impl App {
         ]
     }
 
-    /// 선택 항목을 휴지통으로(Trash 포트 · 확인창은 T-29 뒤 · 실패/미지원 = 토스트 한 번) → 그 폴더를 보는 탭 전부 재열람.
+    /// 선택 항목을 휴지통으로(Trash 포트 · 실패/미지원 = 토스트 한 번) → 히스토리(undo = 복원 · T-51 B-2c) → 그 폴더를 보는 탭 전부 재열람.
     pub(crate) fn delete_to_trash(&mut self) {
         let paths = self.panels[self.active].selected_paths();
         if paths.is_empty() {
@@ -251,6 +251,11 @@ impl App {
         let mut inv = Invalidations::default();
         match self.platform.trash.trash(&paths) {
             Ok(n) => {
+                self.history.push(Box::new(trashop::TrashOp::new(
+                    paths.clone(),
+                    trf("del.recycleOp", &[&n.to_string()]),
+                    Rc::clone(&self.platform.trash),
+                )));
                 self.toasts.push(
                     toast::ToastKind::Info,
                     tr("menu.edit.delete"),

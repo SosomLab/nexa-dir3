@@ -1489,3 +1489,43 @@ fn background_menu_merges_shell_items_and_handles_created() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-51 B-2c 휴지통 undo: Delete(휴지통) → 히스토리 설명 `recycle 1 item(s)` → Ctrl+Z = 포트 `restore(원래 경로)` → Ctrl+Y = 다시 `trash`.
+#[test]
+fn trash_delete_is_undoable_via_restore() {
+    let (mut app, dir) = fixture("trashundo");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let row = (0..app.panels[0].rows().source().len())
+        .find(|&i| app.panels[0].rows().source().row(i).text == "a.txt")
+        .expect("a.txt");
+    app.panels[0]
+        .rows_mut()
+        .select_program(row, nexa_grid::SelectOp::Single, &mut inv);
+    app.delete_to_trash();
+    assert_eq!(app.history.undo_description(), Some("recycle 1 item(s)"));
+    // 가짜 휴지통은 파일을 실제로 옮기지 않는다 → 복원 호출을 받으려면 없는 상태로 만든다.
+    std::fs::remove_file(dir.join("a.txt")).unwrap();
+    app.command("edit.undo");
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(
+        log.borrow().calls.iter().any(|c| c == "trash.restore:1"),
+        "{:?}",
+        log.borrow().calls
+    );
+    assert_eq!(app.history.redo_description(), Some("recycle 1 item(s)"));
+    std::fs::write(dir.join("a.txt"), b"back").unwrap();
+    app.command("edit.redo");
+    assert!(
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.as_str() == "trash:1")
+            .count()
+            >= 2,
+        "redo = 다시 휴지통: {:?}",
+        log.borrow().calls
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

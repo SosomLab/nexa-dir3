@@ -43,6 +43,7 @@ mod termview;
 mod theme;
 #[allow(dead_code)]
 mod toast;
+mod trashop;
 #[allow(dead_code)]
 mod winfocus;
 #[allow(dead_code)]

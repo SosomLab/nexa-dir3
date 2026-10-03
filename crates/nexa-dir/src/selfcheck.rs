@@ -481,6 +481,39 @@ fn probe_writable(dir: &std::path::Path) -> Result<String, String> {
     Ok(dir.display().to_string())
 }
 
+/// 휴지통 왕복(T-51 B-2c `Trash::restore`): 임시 파일 삭제 → 원래 경로로 복원(Windows 셸 undelete · Linux .trashinfo · macOS 미지원 = SKIP).
+fn check_trash_round_trip(r: &mut Report, ci: bool) {
+    timed(r, "trash", "trash → restore round trip", || {
+        if ci {
+            return (Verdict::Skip, "needs user trash (not in --ci)".into());
+        }
+        let p = crate::platform::Platform::native();
+        let dir = std::env::temp_dir().join(format!("ndir-selfcheck-restore-{}", unique_tag()));
+        let _ = std::fs::create_dir_all(&dir);
+        let f = dir.join("restore-me.txt");
+        if std::fs::write(&f, b"restore").is_err() {
+            return (Verdict::Fail, "cannot write temp file".into());
+        }
+        let out = match p.trash.trash(std::slice::from_ref(&f)) {
+            Ok(1) if !f.exists() => match p.trash.restore(std::slice::from_ref(&f)) {
+                Ok(1) if f.exists() => (Verdict::Pass, "restored to original path".into()),
+                Ok(n) => (
+                    Verdict::Warn,
+                    format!("restored {n} · exists {}", f.exists()),
+                ),
+                Err(crate::platform::PlatformError::Unsupported(_)) => {
+                    (Verdict::Skip, "restore unsupported on this OS".into())
+                }
+                Err(e) => (Verdict::Fail, e.to_string()),
+            },
+            Ok(n) => (Verdict::Warn, format!("trash returned {n}")),
+            Err(e) => (Verdict::Fail, e.to_string()),
+        };
+        let _ = std::fs::remove_dir_all(&dir);
+        out
+    });
+}
+
 /// 셸 탐지(T-50 `Shell` 포트 · SKEL-425): 기본 셸이 있고 실행 파일이 존재한다 · 후보 목록.
 fn check_shell(r: &mut Report) {
     let p = crate::platform::Platform::native();
@@ -702,6 +735,7 @@ fn check_fs(r: &mut Report) {
 
 /// 휴지통(T-51 `Trash` 포트): 샌드박스 임시 파일 하나를 실제 휴지통으로(사용자 휴지통에 1개 남는다 → `--ci`는 SKIP).
 fn check_trash(r: &mut Report, ci: bool) {
+    check_trash_round_trip(r, ci);
     timed(r, "trash", "trash one temp file", || {
         if ci {
             return (Verdict::Skip, "needs user trash (not in --ci)".into());

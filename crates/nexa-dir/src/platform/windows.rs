@@ -135,6 +135,10 @@ fn double_null_list(paths: &[PathBuf]) -> Vec<u16> {
 }
 
 impl Trash for NativeTrash {
+    fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
+        super::winrecycle::restore_by_original_paths(original)
+    }
+
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
         if paths.is_empty() {
             return Ok(0);

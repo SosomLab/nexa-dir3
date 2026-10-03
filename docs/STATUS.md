@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 41차 — T-51 B-2c: 휴지통 복원(삭제 undo · Windows/Linux)
+
+- **한 일**: `Trash::restore` 포트 · winrecycle · Linux .trashinfo · `TrashOp` · selfcheck 왕복 · 시험 +3(142).
+- **지금 상태**: T-51 B-2 잔여 = 행 메뉴 ShellNew · OLE DnD · SHCNE 통지. 다음 = T-62 C-3(도크/창 드래그 문자 선택) · T-82 패키징 · ShellNew.
+- **걸린 것**: macOS 휴지통 복원은 메타데이터가 없어 미지원(undo 실패 안내) — T-52 `trashItem` 되돌리기와 함께.
+
+→ [journal/2026-10-03 §43](journal/2026-10-03.md)
+
 ## 10-03 40차 — T-51 B-2b: Windows 폴더 감시(ReadDirectoryChangesW) + 폴링 폴백
 
 - **한 일**: `winwatch.rs` · 포트 간격 메서드 · selfcheck 감시 항목 · 시험 +2(139).
