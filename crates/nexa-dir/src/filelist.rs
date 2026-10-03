@@ -20,17 +20,23 @@ pub(crate) const COL_KIND: u32 = 4;
 pub(crate) const COL_TOTAL: u32 = 5;
 pub(crate) const COL_FREE: u32 = 6;
 
-/// 탭 제목(dir2 PANEL-013): 가상 최상위 = `nav.mypc` · 일반 = 마지막 경로 요소 · 드라이브 루트 = `D:`(후행 구분자 제거).
+/// 탭 제목(dir2 PANEL-013): 가상 최상위 = `nav.mypc` · 일반 = 마지막 경로 요소 · 드라이브 루트 = `D:`(후행 구분자 제거) ·
+/// Unix 루트 = `/`(구분자를 떼면 빈 글자가 되던 것 — 사용자 10-03 "/ 위치의 탭 이름이 공백").
 pub(crate) fn title_of(p: &Path) -> String {
     if ndir_vfs::is_virtual_root(p) {
         return ndir_i18n::tr("nav.mypc");
     }
     match p.file_name() {
         Some(n) if !n.is_empty() => n.to_string_lossy().into_owned(),
-        _ => p
-            .to_string_lossy()
-            .trim_end_matches(['\\', '/'])
-            .to_string(),
+        _ => {
+            let full = p.to_string_lossy();
+            let cut = full.trim_end_matches(['\\', '/']);
+            if cut.is_empty() && !full.is_empty() {
+                "/".to_string()
+            } else {
+                cut.to_string()
+            }
+        }
     }
 }
 
@@ -689,6 +695,10 @@ mod tests {
         assert_eq!(src.cell(1, COL_EXT), "txt");
         assert_eq!(src.cell(0, COL_EXT), "");
         assert_eq!(title_of(&dir.join("sub")), "sub");
+        // Unix 루트 = `/`(공백 아님) · 드라이브 루트 = `D:`.
+        assert_eq!(title_of(Path::new("/")), "/");
+        #[cfg(windows)]
+        assert_eq!(title_of(Path::new("D:\\")), "D:");
         assert_eq!(
             title_of(Path::new(ndir_vfs::MY_PC)),
             ndir_i18n::tr("nav.mypc")

@@ -18,10 +18,41 @@ pub(crate) fn fallback_glyph(label: &str) -> String {
     }
 }
 
+thread_local! {
+    /// 앱 아이콘 파일 → 디코드한 이미지(실패도 기억 · 런처 항목 수만큼만 생긴다).
+    static APP_ICONS: std::cell::RefCell<std::collections::HashMap<PathBuf, Option<Rc<nexa_gfx::IconImage>>>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// 아이콘 테마의 앱 아이콘(Linux — `nexa_fs::icontheme::app_icon_file`) · 파일마다 한 번 디코드.
+fn theme_app_icon(exe: &std::path::Path, px: u32) -> Option<Rc<nexa_gfx::IconImage>> {
+    let file = nexa_fs::icontheme::app_icon_file(exe, px)?;
+    APP_ICONS.with(|c| {
+        c.borrow_mut()
+            .entry(file)
+            .or_insert_with_key(|f| {
+                std::fs::read(f)
+                    .ok()
+                    .and_then(|b| nexa_gfx::image::decode(&b, 4 * 1024 * 1024).ok())
+                    .map(Rc::new)
+            })
+            .clone()
+    })
+}
+
 /// 항목 아이콘 — `(아이콘, 조회 중인가)`. 실행 파일을 PATH로 풀어 셸에 묻는다(없으면 즉시 글리프).
 pub(crate) fn launcher_icon(item: &launcher::LauncherItem, large: bool) -> (ToolIcon, bool) {
     let glyph = ToolIcon::Glyph(fallback_glyph(&item.label));
-    let Some(path) = launcher::exe_path(&item.exe) else {
+    let found = launcher::exe_path(&item.exe);
+    // Linux = 설치된 앱의 아이콘(`.desktop`의 Icon → 아이콘 테마 · pixmaps) · 못 찾으면 일반 실행 파일 아이콘 — 글자 두 개 대신
+    // 버튼으로 보인다(사용자 10-03 "아이콘이 없는 경우 기본 아이콘을 입혀서" · nexa-ui 128차 · 다른 OS는 즉시 None).
+    let exe = found
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(item.exe.trim()));
+    if let Some(img) = theme_app_icon(&exe, if large { 32 } else { 16 }) {
+        return (ToolIcon::Image(img), false);
+    }
+    let Some(path) = found else {
         return (glyph, false);
     };
     match IconService::global().icon(&IconKey::Path(path), large) {
@@ -149,7 +180,12 @@ mod tests {
             args: String::new(),
         };
         let (icon, pending) = launcher_icon(&it, false);
-        assert!(matches!(icon, ToolIcon::Glyph(ref g) if g == "Ba"));
+        // 없는 exe: 아이콘 테마가 있는 Linux = 일반 실행 파일 아이콘(버튼으로 보인다) · 그 밖 = 라벨 앞 2자 글리프.
+        if nexa_fs::icontheme::theme_name().is_some() {
+            assert!(matches!(icon, ToolIcon::Image(_)));
+        } else {
+            assert!(matches!(icon, ToolIcon::Glyph(ref g) if g == "Ba"));
+        }
         assert!(!pending);
     }
 }

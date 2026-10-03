@@ -1463,7 +1463,10 @@ fn launcher_bar_layout_and_launch() {
     let ld = app.dump_of("launcher").unwrap();
     assert_eq!(ld.lines().count(), 5, "{ld}");
     // T-30 B 아이콘: 없는 exe = 즉시 글리프 `Ba` · 자기 exe = Windows면 셸 아이콘(비동기 → 폴링 후 image) · 다른 OS = 글리프 `Se`.
-    assert!(ld.contains("launch:2=glyph:Ba"), "{ld}");
+    // 아이콘 테마가 있는 Linux = 둘 다 그림(앱 아이콘 · 못 찾으면 일반 실행 파일 아이콘 — 사용자 10-03).
+    let themed = nexa_fs::icontheme::theme_name().is_some();
+    assert_eq!(ld.contains("launch:2=glyph:Ba"), !themed, "{ld}");
+    assert_eq!(ld.contains("launch:2=image"), themed, "{ld}");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while app.launcher_icons_tick(std::time::Instant::now()).is_some()
         && std::time::Instant::now() < deadline
@@ -1474,6 +1477,11 @@ fn launcher_bar_layout_and_launch() {
     if cfg!(windows) {
         assert!(
             icons.iter().any(|s| s.starts_with("launch:0=image 16x16")),
+            "{icons:?}"
+        );
+    } else if themed {
+        assert!(
+            icons.iter().any(|s| s.starts_with("launch:0=image")),
             "{icons:?}"
         );
     } else {
