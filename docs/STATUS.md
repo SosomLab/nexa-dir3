@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 60차 — T-90 3차: CMD 원장 대조 + 묶음 행(덮음 37 %)
+
+- **한 일**: `dir2_catalog_menu_commands_map_to_dir3_ids` · CMD 묶음 행 9 · 감사 재생성.
+- **지금 상태**: 덮음 1,603/4,266. 다음 = PREFS/SET/SKEL/UIC/WINB/WINC 묶음 행 · CLOUD/PROC 사유 행 · T-91.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §64](journal/2026-10-03.md)
+
 ## 10-03 59차 — T-90 2차: 원장 기반 전수 시험 + 집단 행(덮음 29 %)
 
 - **한 일**: `dir2_catalog_i18n_keys_present_in_all_langs` · `dir2_catalog_settings_keys_are_mapped` · 매트릭스 집단 행 4 · 감사 재생성.

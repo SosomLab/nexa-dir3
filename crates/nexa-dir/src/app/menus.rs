@@ -540,4 +540,104 @@ mod tests {
         let tools = App::build_toolbar(&s, 20);
         assert!(tools.len() >= 13);
     }
+
+    /// 원장 전수(T-90 · docs/port/30 §1 CMD-001~067): dir2 명령 상수/탭 메뉴 함수가 적힌 행마다 dir3 문자열 id 대응이 있고 그 id가
+    /// 명령 표(COMMANDS) 또는 메뉴/탭 어휘에 있다. 동적(`+ i`)·클라우드(미이식 M8)·설명만 있는 행은 대상 밖(개수만 센다).
+    #[test]
+    fn dir2_catalog_menu_commands_map_to_dir3_ids() {
+        const MAP: &[(&str, &str)] = &[
+            ("CMD_NEW_TAB", "file.new_tab"),
+            ("CMD_CLOSE_TAB", "file.close_tab"),
+            ("CMD_NEW_FOLDER", "file.new_folder"),
+            ("CMD_NEW_FILE", "file.new_file"),
+            ("CMD_PREFS", "file.prefs"),
+            ("CMD_EXIT", "file.exit"),
+            ("CMD_UNDO", "edit.undo"),
+            ("CMD_REDO", "edit.redo"),
+            ("CMD_CUT", "edit.cut"),
+            ("CMD_COPY", "edit.copy"),
+            ("CMD_PASTE", "edit.paste"),
+            ("CMD_SELECT_ALL", "edit.select_all"),
+            ("CMD_BULK_RENAME", "edit.bulk_rename"),
+            ("CMD_VIEW_TREE", "view.mode_tree"),
+            ("CMD_VIEW_FLAT", "view.mode_flat"),
+            ("CMD_VIEW_TILES", "view.mode_tiles"),
+            ("CMD_PANEL_DUAL", "view.panel_dual"),
+            ("CMD_PANEL_SINGLE", "view.panel_single"),
+            ("CMD_PANEL_TOGGLE", "view.panel_toggle"),
+            ("CMD_INFO_DUAL", "view.info_dual"),
+            ("CMD_INFO_SINGLE", "view.info_single"),
+            ("CMD_INFO_TOGGLE", "view.info_toggle"),
+            ("CMD_COLW_SYNC", "view.col_width_sync"),
+            ("CMD_TOGGLE_HIDDEN", "view.hidden"),
+            ("CMD_TOGGLE_DOTFILES", "view.dot"),
+            ("CMD_TOGGLE_FOLDERS_FIRST", "view.folders_first"),
+            ("CMD_TOGGLE_DOCK", "view.dock"),
+            ("CMD_TOGGLE_LAUNCHER", "view.launcher"),
+            ("CMD_TOGGLE_TOPMOST", "view.always_on_top"),
+            ("CMD_REFRESH", "view.refresh"),
+            ("CMD_THEME_SYSTEM", "view.theme_system"),
+            ("CMD_THEME_LIGHT", "view.theme_light"),
+            ("CMD_THEME_DARK", "view.theme_dark"),
+            ("CMD_LANG_SYSTEM", "view.lang_system"),
+            ("CMD_ABOUT", "help.about"),
+            ("toggle_tab_lock", "tab.lock"),
+            ("toggle_tab_pin", "tab.pin"),
+            ("duplicate_tab", "tab.duplicate"),
+            ("new_tab(Ctrl+T · [+] 동일 경로)", "tab.new"),
+            ("close_tab", "tab.close"),
+        ];
+        const TAB_IDS: &[&str] = &[
+            "tab.lock",
+            "tab.pin",
+            "tab.duplicate",
+            "tab.new",
+            "tab.close",
+        ];
+        let doc = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/port/30-catalog-commands-shortcuts.md"
+        ))
+        .expect("docs/port/30");
+        let known = |id: &str| {
+            COMMANDS.iter().any(|c| c.id == id) || MENU_IDS.contains(&id) || TAB_IDS.contains(&id)
+        };
+        let (mut mapped, mut skipped, mut problems) = (Vec::new(), 0usize, Vec::new());
+        for line in doc.lines() {
+            if !line.starts_with("| CMD-0") && !line.starts_with("| CMD-1") {
+                continue;
+            }
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            if cells.len() < 7 {
+                continue;
+            }
+            let id = cells[1];
+            let num: u32 = id.trim_start_matches("CMD-").parse().unwrap_or(999);
+            if num > 67 {
+                break; // §1-5부터(컨텍스트 메뉴 이후)는 다른 묶음 행
+            }
+            let what = cells[5].trim_matches('`');
+            let is_const =
+                what.starts_with("CMD_") && !what.contains('+') && !what.contains("CLOUD");
+            let is_tab_fn = MAP
+                .iter()
+                .any(|(k, _)| *k == what && !k.starts_with("CMD_"));
+            if !is_const && !is_tab_fn {
+                skipped += 1;
+                continue;
+            }
+            match MAP.iter().find(|(k, _)| *k == what) {
+                Some((_, dir3)) if known(dir3) => mapped.push(id.to_string()),
+                Some((_, dir3)) => problems.push(format!("{id} {what} → {dir3}: dir3 어휘에 없음")),
+                None => problems.push(format!("{id} {what}: 대응표에 없음")),
+            }
+        }
+        assert!(problems.is_empty(), "{problems:?}");
+        assert!(
+            mapped.len() >= 45,
+            "대응 {} · 건너뜀(동적/클라우드/설명) {}",
+            mapped.len(),
+            skipped
+        );
+    }
 }
