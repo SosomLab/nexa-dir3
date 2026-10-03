@@ -99,7 +99,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 
 - 격리: `NDIR_HOME=<임시>`로 띄우고 **격리 폴더의 `settings.conf` 수정 시각**과 실제 설정 폴더 불변을 확인.
 - 입력 주입·포커스 탈취 금지(사용자가 자리에 있을 때) — 기동 명령으로 몰고 창 단위 캡처(Windows `PrintWindow` · macOS `screencapture -l`).
-- 프로세스는 내가 띄운 PID만 종료(예외: 이 저장소 `target/` 아래 `nexa-dir.exe`).
+- 프로세스는 내가 띄운 PID만 종료(예외: 이 저장소 `target/` 아래 `nexa-dir.exe`). **이름으로 죽이지 않는다**(`pkill -x nexa-dir` 금지) — 같은 PC에서 `ndir-check --ci`(T4)가 같은 이름의 시나리오 프로세스를 띄우므로 함께 죽어 시나리오가 exit로 실패한다(10-04 §10 · 협업 세션 재시작 사고). 띄운 PID를 파일에 적어 두고 그 PID만 `kill`.
 - 사용자 클립보드를 덮어쓰는 명령은 자동 시험에 넣지 않는다.
   - **텍스트 클립보드 = 시험 빌드에서 가짜**(§87): `clipboard::{read_text, write_text, write_rich}`는 `#[cfg(test)]`에서 스레드별 가짜(`thread_local FAKE`)만 쓴다 — T1~T3(`cargo test`)은 OS 클립보드를 읽지도 쓰지도 않는다(시험 `test_build_never_touches_the_os_clipboard`). 파일 클립보드는 `platform` 가짜 포트.
   - **T4(실제 exe) = env 가짜 클립보드**(§88 · §87 적발 해소): `ndir-check`가 시나리오 프로세스에 `NDIR_FAKE_CLIPBOARD=1`을 넣어, `copy-paste.scn` · `ctx-menu.scn`의 `edit.copy`도 프로세스 안 `MemoryFiles`/`MEMORY`로만 간다. 검증 = 게이트 전후 `GetClipboardSequenceNumber`(읽기만) 비교 — journal §88에 수치.
