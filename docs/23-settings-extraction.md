@@ -58,7 +58,7 @@
 | 4 | `app/settings.rs:193` | 툴바 그룹 간격 기본 | `toolbar.group_gap` | 고급 | (기존) | ✅ |
 | 1 | `app/settings.rs` `make_tool_dock`(§76) | 툴바 아이콘 둘레 여백(칸 = 아이콘 + 2) | `toolbar.icon_pad`(0~8) | 고급 | (기존) | ✅ |
 | 8 · 26 · 12 · 20 % · 4 px(§80 재조정 · §78은 18/55/12) | `app/settings.rs` `make_tool_dock`(nexa-ctl `SoftStates`) | 툴바 상태 표시 농도(hover 채움 · 켜짐 채움 · 켜짐 테두리 · 단계 · 모서리) | `toolbar.hover_fill_pct` · `toolbar.on_fill_pct` · `toolbar.on_line_pct` · `toolbar.state_step_pct` · `toolbar.state_radius` | 고급 | (기존) | ✅ |
-| off | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected`(§83) | 보호된 운영 체제 파일(숨김 + 시스템 속성 · macOS UF_HIDDEN + SF_RESTRICTED) 표시 — 꺼져 있으면 `list.show_hidden`이 켜져 있어도 숨김(탐색기 규칙) | `list.show_protected` | 설정(일반 · 탐색기 권장값 off) | (기존) | ✅ |
+| off | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected`(§83) | 보호된 운영 체제 파일(숨김 + 시스템 속성 · macOS UF_HIDDEN + SF_RESTRICTED) 표시 — 꺼져 있으면 `list.show_hidden`이 켜져 있어도 숨김(탐색기 규칙) | `list.show_protected` | 설정(일반 · 탐색기 권장값 off · **기본 off = 사용자 확정 10-03** · dir2와 다른 의도된 차이) | (기존) | ✅ |
 | off | `app/settings.rs`(§80) | 켜진 툴바 아이콘을 강조색으로 칠할지(기본 = 본문색 · dir2 규약) | `toolbar.on_icon_accent` | 고급 | (기존) | ✅ |
 | em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
 | 3줄 고정 | `app/input.rs`(터미널) · `preview_win.rs`(F3) | 휠 1노치 줄 수 → §76부터 OS 값(`SPI_GETWHEELSCROLLLINES`) | — | 상수(OS 값 따름) | — | ✅ |

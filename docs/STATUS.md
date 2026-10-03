@@ -6,7 +6,7 @@
 
 - **한 일**: .lnk 시험 경로 비교를 canonicalize로(windows CI 8.3 짧은 이름) · 고속 스크롤 시험을 순수 계산으로(전역 경쟁 제거) · 명령 `cmd.activate` 추가.
 - **지금 상태**: 흔들리는 시험 없음(개발 세션 15/15). .lnk/링크 남은 갭 = GAP-008 · 경로 바 GAP-014(IME).
-- **걸린 것**: 경로 제안 열거 UI 스레드 `read_dir` · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · `list.show_protected` 기본값 · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+- **걸린 것**: 경로 제안 열거 UI 스레드 `read_dir` · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
 
 → [journal/2026-10-03 §90](journal/2026-10-03.md)
 
