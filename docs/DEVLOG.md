@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **경로 자동완성**: dir2 `pathinput.rs` 그대로 이식(expand_env · suggest_folders) · 입력마다 폴더 제안(최대 20) · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 %VAR%/$env:VAR 확장 · GAP-013 해소 · GAP-009 CI(ubuntu·macos) 통과 확인 → [journal §85](journal/2026-10-03.md)
 - **바로 가기 확장자 숨김 · Unix 폴더 심링크 진입**: .lnk/.url/.appref-ms를 이름 칸에서 숨김(확장자 열 유지 · 이름 바꾸기 때 복원 · Windows만 · GAP-006) · Unix 폴더 심볼릭 링크를 폴더로 열거해 들어갈 수 있게(GAP-009 · CI에서 시험) → [journal §84](journal/2026-10-03.md)
 - **보호된 OS 파일 숨기기 · ShellExecuteW**: `list.show_protected`(기본 숨김 · 숨김+시스템 = 보호 · macOS UF_HIDDEN/SF_RESTRICTED · Linux 해당 없음 · NEW-014) · Windows 열기를 `cmd /C start` → ShellExecuteW(GAP-010 · 이름의 & ^ % 위험 제거) → [journal §83](journal/2026-10-03.md)
 - **키보드 메뉴 캐럿 자리 · 가짜 가로 막대 · 아이콘 칸 결론**: Shift+F10 행 메뉴 = 캐럿 행 옆(SHELL-003) · nexa-ui 120차 ContextMenu 폭 수정(소비자 기록 · nexa-sql 시험 729) · conhost는 Nerd 아이콘 1칸 → dir3 1칸 + 넘쳐 그리기 유지 → [journal §82](journal/2026-10-03.md)

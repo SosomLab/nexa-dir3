@@ -9,7 +9,7 @@
 | `crates/nexa-app/src/about.rs` | 394 | 38 | ✅ |
 | `crates/nexa-app/src/archivewnd.rs` | 430 | 29 | ✅ |
 | `crates/nexa-app/src/bulkrename.rs` | 2252 | 114 | ✅ |
-| `crates/nexa-app/src/clipboard.rs` | 1387 | 98 | ✅ |
+| `crates/nexa-app/src/clipboard.rs` | 1387 | 99 | ✅ |
 | `crates/nexa-app/src/cloud.rs` | 273 | 14 | ✅ |
 | `crates/nexa-app/src/cloudfs.rs` | 1764 | 65 | ✅ |
 | `crates/nexa-app/src/config.rs` | 1689 | 147 | ✅ |
@@ -31,7 +31,7 @@
 | `crates/nexa-app/src/ctl/segmented.rs` | 356 | 5 | ✅ |
 | `crates/nexa-app/src/ctl/spin.rs` | 378 | 4 | ✅ |
 | `crates/nexa-app/src/ctl/style.rs` | 119 | 6 | ✅ |
-| `crates/nexa-app/src/ctl/textbox.rs` | 287 | 4 | ✅ |
+| `crates/nexa-app/src/ctl/textbox.rs` | 287 | 5 | ✅ |
 | `crates/nexa-app/src/ctldemo.rs` | 512 | 11 | ✅ |
 | `crates/nexa-app/src/dialog.rs` | 792 | 32 | ✅ |
 | `crates/nexa-app/src/dnd.rs` | 632 | 10 | ✅ |
@@ -72,7 +72,7 @@
 | `crates/nexa-core/src/secret.rs` | 164 | 3 | ✅ |
 | `crates/nexa-gui/src/columns.rs` | 58 | 23 | ✅ |
 | `crates/nexa-gui/src/draw.rs` | 127 | 30 | ✅ |
-| `crates/nexa-gui/src/edit.rs` | 466 | 7 | ✅ |
+| `crates/nexa-gui/src/edit.rs` | 466 | 8 | ✅ |
 | `crates/nexa-gui/src/event.rs` | 134 | 24 | ✅ |
 | `crates/nexa-gui/src/fastscroll.rs` | 495 | 27 | ✅ |
 | `crates/nexa-gui/src/geom.rs` | 112 | 3 | ✅ |
@@ -85,8 +85,8 @@
 | `crates/nexa-gui/src/widgets/menubar.rs` | 637 | 2 | ✅ |
 | `crates/nexa-gui/src/widgets/mod.rs` | 16 | 0 | ☐ 미참조 |
 | `crates/nexa-gui/src/widgets/overlaybar.rs` | 406 | 2 | ✅ |
-| `crates/nexa-gui/src/widgets/pathbar.rs` | 751 | 2 | ✅ |
-| `crates/nexa-gui/src/widgets/rows.rs` | 3548 | 169 | ✅ |
+| `crates/nexa-gui/src/widgets/pathbar.rs` | 751 | 3 | ✅ |
+| `crates/nexa-gui/src/widgets/rows.rs` | 3548 | 170 | ✅ |
 | `crates/nexa-gui/src/widgets/tabbar.rs` | 522 | 5 | ✅ |
 | `crates/nexa-ops/src/batch_rename.rs` | 1438 | 19 | ✅ |
 | `crates/nexa-ops/src/history.rs` | 535 | 23 | ✅ |
@@ -127,10 +127,10 @@
 | GAP-006 | **.lnk 표시 회귀** — Explorer·dir2는 이름에서 ".lnk"를 숨기고(확장자 열은 lnk 유지) 이름 바꾸기 때 .lnk를 다시 붙인다(dir2 `nexa-app/src/source.rs:456-465` · `win.rs:4036-4045`) · .url/.appref-ms도 숨김 대상 | dir3 `filelist.rs:373` `text: r.name`(".lnk" 그대로 표시) · 이름 바꾸기 복원 없음 · 10-03 §77 업무 30 조사 | ✅ 해소 10-03 §84(`display_name`/`restore_shortcut_ext` · Windows만 · 시험 `shortcut_ext_is_hidden_and_restored_on_rename`) |
 | GAP-007 | **.lnk 열기** — Explorer = 폴더 대상이면 같은 창에서 이동 · 파일 대상 = 열기 · 깨진 대상 = 수정/삭제 안내 · 인자/작업 폴더 반영 | dir2·dir3 모두 IShellLink 해석 없음(폴더 바로가기 = 새 탐색기 창) · dir3 `panel.rs:883-892` → `pending_open` → opener · 해결 = IShellLinkW::GetPath → 폴더면 `navigate_to` | 🚧 수정 예정(dir2에도 없는 Explorer 동작 — 개선) |
 | GAP-008 | **링크 오버레이·종류** — Explorer = .lnk/.url/심볼릭 링크/정션에 화살표 오버레이 · 종류 "바로 가기" | dir2·dir3 모두 `SHGFI_LINKOVERLAY` 없음(nexa-fs `shell.rs:707`) · dir3는 `ndir-vfs` `is_link()`를 nexa-dir에서 쓰지 않음 · 종류 = "LNK"/"link" | 🚧 수정 예정(nexa-fs 추가 + 종류 `SHGFI_TYPENAME`) |
-| GAP-009 | **Unix 폴더 심볼릭 링크 진입 불가** — `ndir-vfs/src/lib.rs:37-58`이 Unix에서 attrs 0 + `DirEntry::file_type`(비추적)으로 판정 → 폴더 심링크가 `Symlink`로 분류돼 들어갈 수 없다 | dir3 전용(dir2는 Windows 전용) · 해결 = Unix에서 `fs::metadata` 폴백 | 🚧 수정됨 10-03 §84(`unix_link_attrs` · 시험 `unix_dir_symlink_is_an_enterable_dir` = cfg(unix) → **CI ubuntu·macos 통과 확인 뒤 ✅**) |
+| GAP-009 | **Unix 폴더 심볼릭 링크 진입 불가** — `ndir-vfs/src/lib.rs:37-58`이 Unix에서 attrs 0 + `DirEntry::file_type`(비추적)으로 판정 → 폴더 심링크가 `Symlink`로 분류돼 들어갈 수 없다 | dir3 전용(dir2는 Windows 전용) · 해결 = Unix에서 `fs::metadata` 폴백 | ✅ 해소 10-03 §84 · §85 CI 확인(`unix_link_attrs` · 시험 `unix_dir_symlink_is_an_enterable_dir` — run 37110558207 ubuntu · macos 실행·통과) |
 | GAP-011 | **⚠ 경로 바 편집 중 Ctrl+C/X/V/Z가 파일 명령으로 실행** — dir2는 편집 중 do_clip ①로 글자 편집(nexa-app/src/win.rs:7246-7286 · 8706-8728) | dir3 `event_loop.rs:346` Ctrl 조합 → keymap → `command()`에 경로 바 분기 없음 → `edit.paste` = 파일 전송 시작 · `edit.undo` = 파일 작업 되돌림(10-03 §78 업무 35 조사) | ✅ 해소 10-03 §78(`App::path_edit` · 시험 `path_edit_shortcuts_edit_text_not_files`) |
-| GAP-012 | **경로 바 편집 우클릭 메뉴 · 더블클릭** — dir2 = 편집 중 우클릭 놓기 → 6항목(CMD-086~091 실행 취소/잘라내기/복사/붙여넣기/삭제/모두 선택 · A/win.rs:7472-7532) · 편집 필드 더블클릭 = 전체 선택(A/win.rs:8638-8647) | dir3 우클릭 Released 사건 없음(input.rs:47-49) · `edit_menu_state` 호출 0 · DoubleClick 분기 없음 · `begin_path_edit` dead code(panel.rs:1080-1083) | 🚧 수정 예정(경로 바 슬라이스 · + Esc = 팝업만 닫기 · `path.edit` F4/Ctrl+L) |
-| GAP-013 | **경로 자동완성 미연결** — dir2 = 편집할 때마다 `update_path_suggest`(A/win.rs:7199-7206) · 제안 클릭 = 이동(A/win.rs:8000-8007) | dir3 `set_suggestions` · `suggest_click` 호출 0 → 팝업이 안 열림 · 팝업 자리 클릭은 목록으로 가 편집 취소(panel.rs:977-978) | 🚧 수정 예정(`suggest_folders` 이식 포함) |
+| GAP-012 | **경로 바 편집 우클릭 메뉴 · 더블클릭** — dir2 = 편집 중 우클릭 놓기 → 6항목(CMD-086~091 실행 취소/잘라내기/복사/붙여넣기/삭제/모두 선택 · A/win.rs:7472-7532) · 편집 필드 더블클릭 = 전체 선택(A/win.rs:8638-8647) | dir3 우클릭 Released 사건 없음(input.rs:47-49) · `edit_menu_state` 호출 0 · DoubleClick 분기 없음 · `begin_path_edit` dead code(panel.rs:1080-1083) | 🚧 수정 예정(경로 바 슬라이스 · `path.edit` F4/Ctrl+L) · Esc = 팝업만 닫기는 §85 해소 |
+| GAP-013 | **경로 자동완성 미연결** — dir2 = 편집할 때마다 `update_path_suggest`(A/win.rs:7199-7206) · 제안 클릭 = 이동(A/win.rs:8000-8007) | dir3 `set_suggestions` · `suggest_click` 호출 0 → 팝업이 안 열림 · 팝업 자리 클릭은 목록으로 가 편집 취소(panel.rs:977-978) | ✅ 해소 10-03 §85(dir2 `pathinput.rs` 그대로 이식 · `update_path_suggest` · 제안 클릭 이동 · 시험 `nav_buttons_and_path_edit` 확장 + 이식 4) · 한계: 제안 열거가 UI 스레드 `read_dir`(느린 네트워크 경로 — DR-20 후속 후보) |
 | GAP-014 | **경로 바 IME 조합 창 위치** — dir2 A/win.rs:4792가 `edit_info`로 조합 창을 캐럿에 맞춤 | dir3 `edit_info`(nexa-explorer pathbar.rs:119) 호출 0 | 🚧 수정 예정 |
 | GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | ✅ 해소 10-03 §83(`NativeOpener` open = `ShellExecuteW(0, "open", path, null, 부모 폴더, SW_SHOWNORMAL)` · reveal = `explorer.exe /select,` · `cmd /C start` 제거 · 자동 시험 없음 = 실기 필요) |
 

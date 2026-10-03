@@ -39,6 +39,7 @@
 | 300 ms | `app/ctxmenu.rs:57` | 선행 구축 머무름(`CTX_PREBUILD_MS` · dir2 값) | — | 고급 | `ctxmenu.prebuild_ms` | ☐ |
 | 256 | `app/ctxmenu.rs:59` | 선행 구축 대상 선택 수 상한 | — | 고급 | `ctxmenu.prebuild_max` | ☐ |
 | 30 ms | `app/ctxmenu.rs:61` | 구축/실행 대기 틱 | — | 고급 | `ctxmenu.poll_ms` | ☐ |
+| 20 | `panel.rs` `PATH_SUGGEST_MAX`(§85 · dir2 win.rs:7199-7206) | 경로 자동완성 제안 개수 상한 | — | 상수(dir2 고정값) | — | — |
 | 3000 ms | `app/ctxmenu.rs` `CTX_WAIT_MAX_MS`(§81) | 우클릭 메뉴를 셸 항목과 함께 열기 위해 기다리는 상한(넘으면 자체 항목만) | — | 상수(DR-20 1초 규칙과 짝 · 상태줄 `ctx.loading` 표시) | — | — |
 | 240 px · 220 px | `app/ctxmenu.rs:83` · `app/input.rs:451` | 컨텍스트 메뉴 · 탭 메뉴 텍스트 폭 | — | 고급 | `ctxmenu.text_w` · `tabs.menu_text_w` | ☐ |
 | 2 | `platform/winshell.rs:52` | 셸 서브메뉴 열거 깊이 | — | 고급 | `ctxmenu.shell_depth` | ☐ |

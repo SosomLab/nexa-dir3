@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 81차 — 경로 자동완성 연결(GAP-013) · Esc = 팝업만 닫기 · GAP-009 CI 확인
+
+- **한 일**: dir2 `pathinput.rs` 이식 · 경로 바 폴더 제안 팝업 · 제안 클릭 이동 · Esc 단계 처리 · 제출 시 환경 변수 확장 · GAP-009 ✅(CI ubuntu·macos 통과).
+- **지금 상태**: 경로 바 남은 갭 = GAP-012(편집 우클릭 6항목 메뉴 · 더블클릭 전체 선택) · GAP-014(IME 위치). .lnk/링크 남은 갭 = GAP-007 · 008.
+- **걸린 것**: 경로 제안 열거가 UI 스레드에서 글자마다 `read_dir`(느린 네트워크 경로에서 입력 끊김 가능 · DR-20 후속 후보) · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · `list.show_protected` 기본값 확인 · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+
+→ [journal/2026-10-03 §85](journal/2026-10-03.md)
+
+---
+
 ## 10-03 80차 — 바로 가기 확장자 숨김(GAP-006) · Unix 폴더 심볼릭 링크 진입(GAP-009)
 
 - **한 일**: 이름 칸에서 `.lnk` `.url` `.appref-ms` 숨김(확장자 열 유지 · 이름 바꾸기 복원 · Windows만) · Unix에서 폴더 심링크를 폴더로 열거.
