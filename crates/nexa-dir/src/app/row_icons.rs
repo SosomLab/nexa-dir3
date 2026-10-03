@@ -214,8 +214,60 @@ fn theme_icon(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage
     })
 }
 
+/// 상태 아이콘 캐시: (이름, px) → 색 입힌 이미지(실패도 기억).
+type StatusImages = HashMap<(String, i32), Option<Rc<nexa_gfx::IconImage>>>;
+
+thread_local! {
+    static STATUS_IMAGES: RefCell<StatusImages> = RefCell::new(HashMap::new());
+}
+
+/// 상태 아이콘 색(RGB): 온라인 전용 = 파랑 · 로컬에 있음/항상 유지 = 초록 · 네트워크 = 회색(탐색기 상태 열 색).
+pub(crate) fn status_color(name: &str) -> Option<(u8, u8, u8)> {
+    Some(match name {
+        "cloud" => (0x3B, 0x9B, 0xF4),
+        "local" | "pinned" => (0x2E, 0xA0, 0x43),
+        "network" => (0x8A, 0x91, 0x9C),
+        _ => return None,
+    })
+}
+
+/// 상태 아이콘: `status-<이름>.svg` 마스크에 색을 입힌 `size`×`size` 그림("항상 유지"는 채운 원 위에 흰 체크).
+fn status_icon(name: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage>> {
+    STATUS_IMAGES.with(|c| {
+        c.borrow_mut()
+            .entry((name.to_string(), size))
+            .or_insert_with(|| {
+                let (r, g, b) = status_color(name)?;
+                let px = size.clamp(8, 256) as u32;
+                let (w, h, alpha) = crate::icons::toolbar_mask(&format!("status-{name}"), px)?;
+                let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+                for a in alpha {
+                    rgba.extend_from_slice(&[r, g, b, *a]);
+                }
+                if name == "pinned" {
+                    // 채운 원 위에 흰 체크 = "로컬에 있음" 마스크의 체크 선만 겹친다(원 테두리는 같은 자리라 묻힌다).
+                    if let Some((_, _, check)) = crate::icons::toolbar_mask("status-check", px) {
+                        for (i, a) in check.iter().enumerate() {
+                            let k = f32::from(*a) / 255.0;
+                            for ch in 0..3 {
+                                let v = f32::from(rgba[i * 4 + ch]);
+                                rgba[i * 4 + ch] = (v + (255.0 - v) * k).round() as u8;
+                            }
+                        }
+                    }
+                }
+                Some(Rc::new(nexa_gfx::IconImage { w, h, rgba }))
+            })
+            .clone()
+    })
+}
+
 /// 리졸버 본체 — 항상 이미지를 준다(셸 아이콘 · 없으면 자체 그림).
 pub(crate) fn resolve(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage>> {
+    // 상태 열 아이콘(`status:<이름>` — 파일 아이콘 계층과 무관한 색 입힌 SVG 마스크).
+    if let Some(name) = key.strip_prefix("status:") {
+        return status_icon(name, size);
+    }
     // 계층 1 — 직접 설정한 아이콘(규칙이 없으면 비용 0).
     if RULES.with(|r| !r.borrow().is_empty()) {
         let bare = key.strip_prefix("L|").unwrap_or(key);

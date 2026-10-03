@@ -356,17 +356,35 @@ fn panel_metrics(settings: &Settings, s: f32) -> PanelMetrics {
 /// (10-03 RecordCtx 시험 적발 — 넘친 셀은 nexa-ui 112차 클립 스택이 패널 경계로 자르지만, 보이지 않는 열은 쓸모가 없으니
 ///  폭 맞춤은 유지 · 열 폭 기억/동기는 T-43).
 fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
-    let (ext_w, size_w, mod_w, kind_w) = (px(64.0, s), px(96.0, s), px(140.0, s), px(110.0, s));
+    all_columns_for(panel_w, s)
+        .into_iter()
+        .filter(|c| order::default_visible("cols", order::col_id_key(c.key)))
+        .collect()
+}
+
+/// 열 정의 전부(기본 숨김 열 포함 · 정의 순 = 이름 · 상태 · 크기 · 수정한 날짜 · 확장자 · 종류) — 숨긴 열을 순서 편집에서 다시
+/// 켤 때 이 폭으로 나타난다. 이름 폭은 **기본 표시 열**의 합이 패널을 넘지 않게 줄인다.
+fn all_columns_for(panel_w: i32, s: f32) -> Vec<Column> {
+    let (status_w, ext_w, size_w, mod_w, kind_w) = (
+        px(56.0, s),
+        px(64.0, s),
+        px(96.0, s),
+        px(140.0, s),
+        px(110.0, s),
+    );
     let mut name_w = px(340.0, s);
-    let total = name_w + ext_w + size_w + mod_w + kind_w;
-    if total > panel_w {
-        name_w = (panel_w - ext_w - size_w - mod_w - kind_w - px(8.0, s)).max(px(120.0, s));
+    let shown = status_w + size_w + mod_w;
+    if name_w + shown > panel_w {
+        name_w = (panel_w - shown - px(8.0, s)).max(px(120.0, s));
     }
+    let mut status = Column::new(filelist::COL_STATUS, tr("col.status"), status_w);
+    status.sortable = false; // 상태로는 정렬하지 않는다(정렬 키 없음)
     vec![
         Column::new(filelist::COL_NAME, tr("col.name"), name_w),
-        Column::new(filelist::COL_EXT, tr("col.ext"), ext_w),
+        status,
         Column::new(filelist::COL_SIZE, tr("col.size"), size_w).right_aligned(),
         Column::new(filelist::COL_MODIFIED, tr("col.modified"), mod_w),
+        Column::new(filelist::COL_EXT, tr("col.ext"), ext_w),
         Column::new(filelist::COL_KIND, tr("col.kind"), kind_w),
     ]
 }
@@ -413,7 +431,14 @@ impl App {
         let mut panels = match &session {
             Some(s) => [0usize, 1].map(|i| {
                 let ps = &s.panels[i];
-                Panel::restore(ps, &start_dir, opts, m, columns_for(600, 1.0))
+                Panel::restore(
+                    ps,
+                    &start_dir,
+                    opts,
+                    m,
+                    columns_for(600, 1.0),
+                    all_columns_for(600, 1.0),
+                )
             }),
             None => [
                 Panel::new(&start_dir, opts, m, columns_for(600, 1.0)),
@@ -776,7 +801,7 @@ impl App {
         }
         for (p, r) in self.panels.iter_mut().zip(rects) {
             p.set_metrics(m, &mut inv);
-            p.set_default_columns(columns_for(r.w, s), &mut inv);
+            p.set_default_columns(columns_for(r.w, s), all_columns_for(r.w, s), &mut inv);
             p.set_bounds(r, &mut inv);
         }
     }
@@ -1081,7 +1106,21 @@ mod tests {
         assert_eq!(wide[0].width, 340);
         let narrow = columns_for(500, 1.0);
         assert!(narrow[0].width >= 120 && narrow[0].width < 340);
-        assert_eq!(narrow.len(), 5);
+        // 기본 표시 = 이름 · 상태 · 크기 · 수정한 날짜 · 정의 전부 = + 확장자 · 종류(숨김 · 다시 켤 때의 폭).
+        let keys: Vec<u32> = narrow.iter().map(|c| c.key).collect();
+        assert_eq!(
+            keys,
+            [
+                filelist::COL_NAME,
+                filelist::COL_STATUS,
+                filelist::COL_SIZE,
+                filelist::COL_MODIFIED
+            ]
+        );
+        let all = all_columns_for(1000, 1.0);
+        assert_eq!(all.len(), 6);
+        assert!(!all[1].sortable, "상태 열은 정렬하지 않는다");
+        assert_eq!((all[4].width, all[5].width), (64, 110));
         assert_eq!(view_mode_of("tiles"), ViewMode::Tiles);
         assert_eq!(view_mode_of("x"), ViewMode::Tree);
     }

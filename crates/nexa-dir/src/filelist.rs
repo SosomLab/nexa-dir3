@@ -19,6 +19,32 @@ pub(crate) const COL_KIND: u32 = 4;
 /// 내 PC 전용 열(dir2 X-17 · PANEL-044): 전체 크기 · 여유 공간 — 값은 `Disk` 포트가 채운다(`set_drive_space`).
 pub(crate) const COL_TOTAL: u32 = 5;
 pub(crate) const COL_FREE: u32 = 6;
+/// 상태 열(dir3 신규 10-03 — 클라우드/네트워크 파일 상태 · 아이콘 셀 · dir2 CLOUD-096 β 제안).
+pub(crate) const COL_STATUS: u32 = 7;
+
+/// 상태 → 아이콘 키(`status:<이름>` — 리졸버 `app/row_icons.rs`가 색 입힌 그림을 준다) · 표시할 것이 없으면 `None`.
+pub(crate) fn status_icon_key(st: ndir_vfs::FileStatus) -> Option<&'static str> {
+    use ndir_vfs::FileStatus as S;
+    Some(match st {
+        S::None => return None,
+        S::CloudOnly => "status:cloud",
+        S::AvailableLocally => "status:local",
+        S::AlwaysKeep => "status:pinned",
+        S::Network => "status:network",
+    })
+}
+
+/// 상태 → 글(아이콘을 못 그릴 때의 폴백 · 정보 표시).
+pub(crate) fn status_label(st: ndir_vfs::FileStatus) -> String {
+    use ndir_vfs::FileStatus as S;
+    match st {
+        S::None => String::new(),
+        S::CloudOnly => ndir_i18n::tr("status.cloudOnly"),
+        S::AvailableLocally => ndir_i18n::tr("status.availableLocally"),
+        S::AlwaysKeep => ndir_i18n::tr("status.alwaysKeep"),
+        S::Network => ndir_i18n::tr("status.network"),
+    }
+}
 
 /// 탭 제목(dir2 PANEL-013): 가상 최상위 = `nav.mypc` · 일반 = 마지막 경로 요소 · 드라이브 루트 = `D:`(후행 구분자 제거) ·
 /// Unix 루트 = `/`(구분자를 떼면 빈 글자가 되던 것 — 사용자 10-03 "/ 위치의 탭 이름이 공백").
@@ -158,6 +184,8 @@ pub(crate) struct TreeSource {
     tree: Option<Tree>,
     path: PathBuf,
     opts: ListOpts,
+    /// 이 폴더가 네트워크 위치(NFS · SMB 마운트 · UNC) 아래인가 — 열 때 한 번 판정(상태 열).
+    on_network: bool,
     /// 열기 실패 사유(상태줄에 · 빈 목록).
     error: Option<String>,
     /// 드라이브 이름(`C:\`) → (전체, 여유) — 가상 최상위에서만 · 호스트가 Disk 포트로 채운다.
@@ -173,6 +201,7 @@ impl TreeSource {
             tree: None,
             path: path.to_path_buf(),
             opts,
+            on_network: !ndir_vfs::is_virtual_root(path) && ndir_vfs::is_network_path(path),
             error: None,
             drive_space: std::collections::HashMap::new(),
             cut_marks: std::collections::HashSet::new(),
@@ -239,6 +268,17 @@ impl TreeSource {
                 self.tree = None;
                 self.error = Some(e.to_string());
             }
+        }
+    }
+
+    /// 행의 저장 상태(상태 열): 클라우드 속성이 있으면 그것 · 없고 네트워크 위치면 네트워크 · 그 밖 = 없음.
+    pub(crate) fn status_of(&self, index: usize) -> ndir_vfs::FileStatus {
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+            return ndir_vfs::FileStatus::None;
+        };
+        match ndir_vfs::cloud_status(r.attrs) {
+            ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
+            st => st,
         }
     }
 
@@ -449,14 +489,21 @@ impl RowSource for TreeSource {
         self.tree.as_ref().map_or(0, Tree::visible_len)
     }
 
+    /// 상태 열 = 아이콘 셀(nexa-ui 132차 `cell_icon`) — 표시할 상태가 없으면 빈 칸.
+    fn cell_icon(&self, index: usize, key: u32) -> Option<(String, String)> {
+        if key != COL_STATUS {
+            return None;
+        }
+        status_icon_key(self.status_of(index)).map(|k| (k.to_string(), String::new()))
+    }
+
     /// 행 아이콘 `(키, 경로)`(dir2 `source.rs:426-432` · M1-7 셸 아이콘) — 그리는 쪽(nexa-grid `Adapt::draw_icon`)이 호스트 리졸버에 묻는다.
     fn icon(&self, index: usize) -> Option<(String, String)> {
         let row = self.tree.as_ref()?.row(index)?;
         let is_dir = row.kind == FileKind::Dir;
         let path = self.row_path(index)?;
         // 링크(심볼릭 링크 · 정션)는 경로로 조회해야 셸이 화살표 오버레이를 얹는다(GAP-008 — 종류별 아이콘에는 링크 정보가 없다).
-        let per_path =
-            ndir_vfs::is_virtual_root(&self.path) || row.attrs & ndir_vfs::ATTR_REPARSE_POINT != 0;
+        let per_path = ndir_vfs::is_virtual_root(&self.path) || ndir_vfs::is_link_attrs(row.attrs);
         Some((
             icon_key(is_dir, &path, per_path),
             path.to_string_lossy().into_owned(),
@@ -509,6 +556,7 @@ impl RowSource for TreeSource {
                 Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_string(),
                 _ => String::new(),
             },
+            COL_STATUS => status_label(self.status_of(index)),
             COL_SIZE if r.kind == FileKind::Dir => String::new(),
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time(r.modified_unix_ms),

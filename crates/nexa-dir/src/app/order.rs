@@ -49,6 +49,7 @@ fn tbo_label(block: &str, item: Option<&str>) -> String {
 fn col_label(_block: &str, item: Option<&str>) -> String {
     match item {
         Some("name") => tr("col.name"),
+        Some("status") => tr("col.status"),
         Some("ext") => tr("col.ext"),
         Some("size") => tr("col.size"),
         Some("modified") => tr("col.modified"),

@@ -99,6 +99,11 @@ col.ext = 확장자
 col.size = 크기
 col.modified = 수정한 날짜
 col.kind = 종류
+col.status = 상태
+status.cloudOnly = 온라인 전용
+status.availableLocally = 이 장치에 있음
+status.alwaysKeep = 항상 이 장치에 유지
+status.network = 네트워크
 
 # ── 종류 셀 ──
 kind.folder = 폴더

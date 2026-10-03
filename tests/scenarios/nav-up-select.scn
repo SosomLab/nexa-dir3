@@ -20,4 +20,4 @@ check: panel.txt: selected 1 caret Some(0)
 check: panel.txt: back true forward false
 check: list.txt: 0 d0 Collapsed *sub |
 check: list.txt: 1 d0 Collapsed zeta |
-check: list.txt: a.txt | txt | 5 B |
+check: list.txt: a.txt |  | 5 B |

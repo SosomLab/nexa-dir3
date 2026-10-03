@@ -52,6 +52,27 @@ pub(crate) const EMBEDDED_SVG: &[(&str, &str)] = &[
         include_str!("../assets/toolbar/nav-forward.svg"),
     ),
     ("nav-up", include_str!("../assets/toolbar/nav-up.svg")),
+    // 상태 열 아이콘(온라인 전용 · 로컬에 있음 · 항상 유지 · 네트워크 — dir3 신규 10-03).
+    (
+        "status-cloud",
+        include_str!("../assets/toolbar/status-cloud.svg"),
+    ),
+    (
+        "status-local",
+        include_str!("../assets/toolbar/status-local.svg"),
+    ),
+    (
+        "status-pinned",
+        include_str!("../assets/toolbar/status-pinned.svg"),
+    ),
+    (
+        "status-check",
+        include_str!("../assets/toolbar/status-check.svg"),
+    ),
+    (
+        "status-network",
+        include_str!("../assets/toolbar/status-network.svg"),
+    ),
     // 도크 미리보기 ↗ "크게"(dir2 07-26) — InfoDock 버튼은 nexa-explorer가 글리프로 그린다 · 등록만.
     ("popout", include_str!("../assets/toolbar/popout.svg")),
 ];

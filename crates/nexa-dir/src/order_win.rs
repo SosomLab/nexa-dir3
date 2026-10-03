@@ -969,15 +969,22 @@ mod tests {
             },
             "cols:1[ext:1,name:1,size:0]",
         );
-        assert_eq!(w.rows().len(), 5, "평면 = 그룹 헤더 없음");
-        assert_eq!(w.value(), "cols:1[ext:1,name:1,size:0,modified:1,kind:1]");
-        assert!(!w.toggle_row(1), "name 잠금");
-        assert!(w.toggle_row(2));
+        assert_eq!(w.rows().len(), 6, "평면 = 그룹 헤더 없음");
+        // 저장값에 없던 항목은 정의상 앞 형제 뒤에 **기본 표시 여부**로 보충된다(상태 = 표시 · 종류 = 숨김).
+        assert_eq!(
+            w.value(),
+            "cols:1[ext:1,kind:0,name:1,status:1,size:0,modified:1]"
+        );
+        assert!(!w.toggle_row(2), "name 잠금");
+        assert!(w.toggle_row(4));
         assert!(w.value().contains("size:1"));
         // 드래그: 행 0(ext)을 행 3 자리로 = 아래로 3칸.
         w.select_single(0);
         assert!(w.apply_drag_to(3));
-        assert_eq!(w.value(), "cols:1[name:1,size:1,modified:1,ext:1,kind:1]");
+        assert_eq!(
+            w.value(),
+            "cols:1[kind:0,name:1,status:1,ext:1,size:1,modified:1]"
+        );
         assert_eq!(w.sel, vec![3]);
         assert!(!w.apply_drag_to(3), "자기 자리 = 무동작");
         assert!(!w

@@ -55,8 +55,107 @@ impl Entry {
     /// 링크형 항목(심볼릭 링크·정션)인가 — [`ATTR_REPARSE_POINT`] 단독 판정.
     /// 종류와 독립: 폴더 정션은 `kind == Dir && is_link()`. 비Windows·메타데이터 실패 시 `false`.
     pub fn is_link(&self) -> bool {
-        self.attrs & ATTR_REPARSE_POINT != 0
+        is_link_attrs(self.attrs)
     }
+}
+
+/// 링크형 항목인가(속성만으로): REPARSE 표식이 있고 **클라우드 플레이스홀더가 아닌** 것. OneDrive 같은 클라우드 파일도
+/// REPARSE 비트를 달고 있어(실측 = ARCHIVE|SPARSE|REPARSE|OFFLINE|RECALL_ON_DATA_ACCESS) 종전에는 링크로 잘못 취급됐다
+/// (링크 화살표 · 경로별 아이콘 조회 · 링크 이동 안전 경로 — GAP-018).
+#[must_use]
+pub fn is_link_attrs(attrs: u32) -> bool {
+    attrs & ATTR_REPARSE_POINT != 0 && attrs & ATTR_CLOUD_MASK == 0
+}
+
+/// 클라우드 파일 속성(Windows `FILE_ATTRIBUTE_*` 원값 · macOS는 `SF_DATALESS`를 [`ATTR_RECALL_ON_DATA_ACCESS`]로 옮긴다).
+pub const ATTR_OFFLINE: u32 = 0x1000;
+pub const ATTR_RECALL_ON_OPEN: u32 = 0x4_0000;
+pub const ATTR_PINNED: u32 = 0x8_0000;
+pub const ATTR_UNPINNED: u32 = 0x10_0000;
+pub const ATTR_RECALL_ON_DATA_ACCESS: u32 = 0x40_0000;
+/// 클라우드 동기화 폴더의 항목임을 알려 주는 비트 묶음.
+pub const ATTR_CLOUD_MASK: u32 =
+    ATTR_OFFLINE | ATTR_RECALL_ON_OPEN | ATTR_PINNED | ATTR_UNPINNED | ATTR_RECALL_ON_DATA_ACCESS;
+
+/// 파일의 저장 상태("상태" 열 · 사용자 10-03 — 탐색기 OneDrive 폴더의 상태 열에 해당).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileStatus {
+    /// 표시할 것 없음(평범한 로컬 항목).
+    None,
+    /// 온라인 전용 — 열면 내려받는다(파란 구름).
+    CloudOnly,
+    /// 이 장치에 내려받아져 있음(공간이 필요하면 다시 온라인 전용이 될 수 있다 — 초록 체크 테두리).
+    AvailableLocally,
+    /// 항상 이 장치에 유지(채운 초록 체크).
+    AlwaysKeep,
+    /// 네트워크 위치(NFS · SMB 등 마운트 아래 · UNC 경로).
+    Network,
+}
+
+/// 속성 비트 → 클라우드 상태(순수 · 위가 우선): 항상 유지 → 온라인 전용 → 로컬에 있음 → 없음.
+/// "동기화 중"은 속성만으로 알 수 없어 다루지 않는다(Windows cldapi 필요 — 후속).
+#[must_use]
+pub fn cloud_status(attrs: u32) -> FileStatus {
+    if attrs & ATTR_PINNED != 0 {
+        FileStatus::AlwaysKeep
+    } else if attrs & (ATTR_RECALL_ON_DATA_ACCESS | ATTR_RECALL_ON_OPEN | ATTR_OFFLINE) != 0 {
+        FileStatus::CloudOnly
+    } else if attrs & ATTR_UNPINNED != 0 {
+        FileStatus::AvailableLocally
+    } else {
+        FileStatus::None
+    }
+}
+
+/// 이 경로가 네트워크 위치인가: Windows = UNC(`\\서버\…`) · Linux = 네트워크 파일 시스템 마운트 아래(`/proc/self/mounts`) ·
+/// 그 밖 = 알 수 없음(false).
+#[must_use]
+pub fn is_network_path(path: &Path) -> bool {
+    let s = path.to_string_lossy();
+    if s.starts_with("\\\\") && !s.starts_with("\\\\?\\") {
+        return true;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mounts = fs::read_to_string("/proc/self/mounts").unwrap_or_default();
+        network_mount_covers(&mounts, &s)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// `/proc/self/mounts` 본문에서 `path`를 덮는 **가장 긴** 마운트가 네트워크 파일 시스템인가(순수).
+#[must_use]
+pub fn network_mount_covers(mounts: &str, path: &str) -> bool {
+    const NET: [&str; 8] = [
+        "nfs",
+        "nfs4",
+        "cifs",
+        "smb3",
+        "smbfs",
+        "fuse.sshfs",
+        "davfs",
+        "fuse.rclone",
+    ];
+    let mut best: Option<(usize, bool)> = None;
+    for line in mounts.lines() {
+        let mut it = line.split_whitespace();
+        let (Some(_dev), Some(raw), Some(fstype)) = (it.next(), it.next(), it.next()) else {
+            continue;
+        };
+        let mp = unescape_mount_path(raw);
+        let covers = path == mp
+            || mp == "/"
+            || path
+                .strip_prefix(mp.as_str())
+                .is_some_and(|rest| rest.starts_with('/'));
+        if covers && best.is_none_or(|(len, _)| mp.len() >= len) {
+            best = Some((mp.len(), NET.contains(&fstype)));
+        }
+    }
+    best.is_some_and(|(_, net)| net)
 }
 
 /// 열거 항목의 종류 판정(순수 — A31). **폴더 우선**: `is_dir` 또는 속성에
@@ -109,6 +208,10 @@ fn file_attrs(m: &fs::Metadata) -> u32 {
     }
     if f & 0x0008_0000 != 0 {
         a |= ATTR_SYSTEM;
+    }
+    // SF_DATALESS(iCloud 등에서 내용이 내려받아지지 않은 파일) → 온라인 전용.
+    if f & 0x4000_0000 != 0 {
+        a |= ATTR_RECALL_ON_DATA_ACCESS;
     }
     a
 }
@@ -455,6 +558,63 @@ mod tests {
         ROOTS_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// 상태 열 판정(순수): 클라우드 속성 → 상태(위가 우선) · 클라우드 플레이스홀더는 링크가 아니다(GAP-018) ·
+    /// 네트워크 마운트 = 그 경로를 덮는 가장 긴 마운트의 파일 시스템 종류.
+    #[test]
+    fn cloud_status_link_and_network_rules() {
+        use FileStatus as S;
+        assert_eq!(cloud_status(0), S::None);
+        assert_eq!(cloud_status(0x20), S::None, "ARCHIVE만 = 평범한 파일");
+        assert_eq!(cloud_status(ATTR_RECALL_ON_DATA_ACCESS), S::CloudOnly);
+        assert_eq!(cloud_status(ATTR_OFFLINE), S::CloudOnly);
+        assert_eq!(cloud_status(ATTR_RECALL_ON_OPEN), S::CloudOnly);
+        assert_eq!(cloud_status(ATTR_UNPINNED), S::AvailableLocally);
+        assert_eq!(cloud_status(ATTR_PINNED), S::AlwaysKeep);
+        assert_eq!(
+            cloud_status(ATTR_PINNED | ATTR_RECALL_ON_DATA_ACCESS),
+            S::AlwaysKeep,
+            "항상 유지가 먼저"
+        );
+        assert_eq!(
+            cloud_status(ATTR_UNPINNED | ATTR_OFFLINE),
+            S::CloudOnly,
+            "온라인 전용이 로컬보다 먼저"
+        );
+        // OneDrive 플레이스홀더 실측 속성(ARCHIVE|SPARSE|REPARSE|OFFLINE|RECALL_ON_DATA_ACCESS).
+        let placeholder =
+            0x20 | 0x200 | ATTR_REPARSE_POINT | ATTR_OFFLINE | ATTR_RECALL_ON_DATA_ACCESS;
+        assert!(!is_link_attrs(placeholder), "클라우드 파일은 링크가 아니다");
+        assert!(
+            is_link_attrs(ATTR_REPARSE_POINT) && is_link_attrs(ATTR_REPARSE_POINT | ATTR_DIRECTORY)
+        );
+        assert!(!is_link_attrs(0) && !is_link_attrs(ATTR_REPARSE_POINT | ATTR_PINNED));
+        // 네트워크 마운트.
+        let mounts = "\
+/dev/sda2 / ext4 rw 0 0
+nas:/share /mnt/nas nfs4 rw 0 0
+//srv/pub /mnt/smb\\040share cifs rw 0 0
+/dev/sdb1 /mnt/nas/local ext4 rw 0 0
+user@host: /home/u/remote fuse.sshfs rw 0 0
+";
+        assert!(!network_mount_covers(mounts, "/home/u"));
+        assert!(network_mount_covers(mounts, "/mnt/nas"));
+        assert!(network_mount_covers(mounts, "/mnt/nas/docs/a"));
+        assert!(
+            !network_mount_covers(mounts, "/mnt/nas/local/x"),
+            "더 긴 로컬 마운트가 이긴다"
+        );
+        assert!(
+            !network_mount_covers(mounts, "/mnt/nasty"),
+            "접두사만 같은 다른 폴더"
+        );
+        assert!(
+            network_mount_covers(mounts, "/mnt/smb share/x"),
+            "이스케이프 푼 경로"
+        );
+        assert!(network_mount_covers(mounts, "/home/u/remote/p"));
+        assert!(is_network_path(Path::new("\\\\server\\share\\a")), "UNC");
     }
 
     /// Unix "내 PC": mounts 해석(실제 볼륨만 · 이스케이프) + 루트/홈/볼륨 합치기.

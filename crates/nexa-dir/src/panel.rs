@@ -86,6 +86,8 @@ pub(crate) struct Panel {
     navigated: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
+    /// 열 정의 전부(숨김 열 포함 · 다시 표시할 때의 기본 폭).
+    pool_columns: Vec<Column>,
     /// 사용자가 컬럼 순서를 바꿨다(호스트가 수거해 전 탭 · 반대 패널에 전파).
     col_order_changed: bool,
 }
@@ -199,6 +201,7 @@ impl Panel {
             m_icon_scale: 1.0,
             navigated: false,
             col_changed: false,
+            pool_columns: Vec::new(),
             col_order_changed: false,
         };
         p.set_metrics(m, &mut inv);
@@ -214,6 +217,7 @@ impl Panel {
         opts: ListOpts,
         m: PanelMetrics,
         columns: Vec<Column>,
+        pool: Vec<Column>,
     ) -> Panel {
         let mut valid: Vec<(usize, PathBuf)> = ps
             .tabs
@@ -227,6 +231,7 @@ impl Panel {
         }
         let (_, first) = &valid[0];
         let mut panel = Panel::new(first, opts, m, columns);
+        panel.pool_columns = pool; // 저장된 레이아웃이 기본 숨김 열(확장자 · 종류)을 켜 두었을 때 그 열의 원형
         let mut inv = Invalidations::default();
         for (_, p) in valid.iter().skip(1) {
             panel.new_tab(&mut inv);
@@ -275,8 +280,18 @@ impl Panel {
                 panel.apply_col_layout(&spec, &mut inv);
             }
         }
+        // 열 폭은 저장 당시의 표시 순서대로 적혀 있다 → 그때의 열 종류에 맞춰 넣는다(기본 열 구성이 바뀌어도 · 저장값에
+        // 없던 열이 끼어들어도 폭이 엉뚱한 열로 밀리지 않게 — 10-03 상태 열 추가).
         if !ps.col_widths.is_empty() {
-            panel.apply_col_widths(&ps.col_widths, &mut inv);
+            let keys = crate::order::saved_visible_keys(&ps.col_layout, ps.col_widths.len());
+            let by_key: Vec<(u32, i32)> = keys
+                .iter()
+                .zip(&ps.col_widths)
+                .filter_map(|(k, w)| crate::order::col_key_id(k).map(|id| (id, *w)))
+                .collect();
+            if !panel.apply_col_widths_by_key(&by_key, &mut inv) {
+                panel.user_cols = true; // 폭이 기본과 같아도 저장된 폭이 있었다 = 사용자 폭
+            }
         }
         panel.session_dirty = false;
         panel.sync_chrome(&mut inv);
@@ -301,17 +316,6 @@ impl Panel {
             return Vec::new();
         }
         self.rows().columns().iter().map(|c| c.width).collect()
-    }
-
-    /// 세션의 열 폭을 모든 탭에(개수가 다르면 앞부분만) · 이후 배치가 기본 열을 덮지 않게.
-    pub(crate) fn apply_col_widths(&mut self, widths: &[i32], inv: &mut Invalidations) {
-        if widths.is_empty() {
-            return;
-        }
-        for tab in &mut self.tabs {
-            tab.rows.set_col_widths(widths, inv);
-        }
-        self.user_cols = true;
     }
 
     /// 현재 열 레이아웃 문자열(`cols:1[name:1,…]` — 표시 열 = 기본 열 순 · 숨김 열 = 정의 순으로 말미 `:0` · dir2 `panel_col_layout`).
@@ -351,9 +355,12 @@ impl Panel {
             if !vis {
                 continue;
             }
-            if let Some(c) = cur.iter().find(|c| c.key == *key) {
-                out.push(c.clone());
-            } else if let Some(c) = base.iter().find(|c| c.key == *key) {
+            if let Some(c) = cur
+                .iter()
+                .chain(base.iter())
+                .chain(self.pool_columns.iter())
+                .find(|c| c.key == *key)
+            {
                 out.push(c.clone());
             }
         }
@@ -526,11 +533,18 @@ impl Panel {
     }
 
     /// 기본 열(패널 폭에 맞춘 것) — 사용자가 열 폭을 바꾼 뒤에는 넣지 않는다.
-    pub(crate) fn set_default_columns(&mut self, cols: Vec<Column>, inv: &mut Invalidations) {
-        self.base_columns = cols.clone();
+    /// `pool` = 숨김 열까지 포함한 정의 전부(다시 표시할 때의 기본 폭 · [`Self::apply_col_layout`]).
+    pub(crate) fn set_default_columns(
+        &mut self,
+        cols: Vec<Column>,
+        pool: Vec<Column>,
+        inv: &mut Invalidations,
+    ) {
+        self.pool_columns = pool;
         if self.user_cols {
-            return;
+            return; // 사용자 레이아웃(순서 · 표시 · 폭)은 배치가 덮지 않는다
         }
+        self.base_columns = cols.clone();
         for tab in &mut self.tabs {
             tab.rows.set_columns(cols.clone(), inv);
         }
@@ -1769,7 +1783,7 @@ mod tests {
         let dir = tree("mypc");
         let mut p = Panel::new(&dir, opts(), m(), cols());
         let mut inv = Invalidations::default();
-        p.set_default_columns(cols(), &mut inv);
+        p.set_default_columns(cols(), cols(), &mut inv);
         p.set_bounds(Rect::new(0, 0, 400, 400), &mut inv);
         assert_eq!(p.rows().columns().len(), 2);
         p.nav_home(&mut inv);

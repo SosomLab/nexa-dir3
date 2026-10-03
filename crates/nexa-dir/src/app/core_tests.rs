@@ -135,7 +135,7 @@ fn paint_records_inside_surface() {
         "outside surface — fills {bad_fills:?} texts {bad_texts:?}"
     );
     for needle in [
-        "Name", "Size", "Ext", "sub", "a.txt", "b.md", "3 items", "Tab 1/1", "File",
+        "Name", "Size", "Status", "sub", "a.txt", "b.md", "3 items", "Tab 1/1", "File",
     ] {
         assert!(
             rec.drew_text(needle),
@@ -575,7 +575,8 @@ fn startup_ready_assert_and_dumps() {
     let list = app.dump_of("list").unwrap();
     assert!(list.starts_with("list panel0 rows 3 viewport 0+"), "{list}");
     assert!(
-        list.contains("0 d0 Collapsed sub |") && list.contains("a.txt | txt | 5 B |"),
+        // 덤프 = 이름 뒤 표시 열(상태 · 크기 · 수정한 날짜) — 로컬 파일의 상태는 빈 칸.
+        list.contains("0 d0 Collapsed sub |") && list.contains("a.txt |  | 5 B |"),
         "{list}"
     );
     let panel = app.dump_of("panel").unwrap();
@@ -730,11 +731,11 @@ fn tab_menu_and_column_sync() {
     app.set_active(0);
     app.panels[0]
         .rows_mut()
-        .set_col_widths(&[200, 50, 60, 70, 80], &mut inv);
+        .set_col_widths(&[200, 50, 60, 70], &mut inv);
     let _ = app.settings.set("list.col_width_sync", "off");
     app.command("view.col_width_sync");
     assert!(app.settings.flag("list.col_width_sync"));
-    assert_eq!(app.panels[1].col_widths_now(), vec![200, 50, 60, 70, 80]);
+    assert_eq!(app.panels[1].col_widths_now(), vec![200, 50, 60, 70]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -824,7 +825,11 @@ fn my_pc_drive_columns_from_disk_port() {
         assert!(log.borrow().calls.iter().any(|c| c.starts_with("disk:")));
     }
     app.command("nav.back");
-    assert_eq!(app.panels[0].rows().columns().len(), 5);
+    assert_eq!(
+        app.panels[0].rows().columns().len(),
+        4,
+        "기본 표시 열로 복귀"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2317,6 +2322,117 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 상태 열(T-126 · 사용자 10-03): 기본 열 = 이름 · 상태 · 크기 · 수정한 날짜 · 상태 칸은 아이콘 셀 · 아이콘은 색 입힌 그림 ·
+/// 옛 세션의 열 폭(상태 열이 없던 때의 5개)은 열 종류에 맞춰 옮겨진다.
+#[test]
+fn status_column_defaults_icons_and_session_migration() {
+    let (mut app, dir) = fixture("statuscol");
+    app.layout_for(1200, 800, 1.0);
+    let keys: Vec<u32> = app.panels[0]
+        .rows()
+        .columns()
+        .iter()
+        .map(|c| c.key)
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            filelist::COL_NAME,
+            filelist::COL_STATUS,
+            filelist::COL_SIZE,
+            filelist::COL_MODIFIED
+        ]
+    );
+    // 로컬 폴더의 평범한 파일 = 상태 없음(빈 칸 · 아이콘 없음).
+    let src = app.panels[0].rows().source();
+    assert_eq!(src.status_of(0), ndir_vfs::FileStatus::None);
+    assert_eq!(
+        nexa_grid::RowSource::cell_icon(src, 0, filelist::COL_STATUS),
+        None
+    );
+    assert_eq!(
+        nexa_grid::RowSource::cell_icon(src, 0, filelist::COL_SIZE),
+        None
+    );
+    // 상태 → 아이콘 키 · 글(폴백) · 리졸버가 색 입힌 그림을 준다(온라인 전용 = 파랑 · 항상 유지 = 초록 원 + 흰 체크).
+    use ndir_vfs::FileStatus as S;
+    assert_eq!(filelist::status_icon_key(S::None), None);
+    for (st, key, name) in [
+        (S::CloudOnly, "status:cloud", "cloud"),
+        (S::AvailableLocally, "status:local", "local"),
+        (S::AlwaysKeep, "status:pinned", "pinned"),
+        (S::Network, "status:network", "network"),
+    ] {
+        assert_eq!(filelist::status_icon_key(st), Some(key));
+        assert!(!filelist::status_label(st).is_empty());
+        let img = app::row_icons::resolve(key, "", 16).expect("status icon");
+        assert_eq!((img.w, img.h), (16, 16));
+        let (r, g, b) = app::row_icons::status_color(name).unwrap();
+        let ink = img.rgba.chunks(4).filter(|p| p[3] > 128).count();
+        assert!(ink >= 20, "{name}: 잉크 {ink}");
+        if name != "pinned" {
+            assert!(
+                img.rgba.chunks(4).all(|p| (p[0], p[1], p[2]) == (r, g, b)),
+                "{name}: 단색"
+            );
+        } else {
+            assert!(
+                img.rgba
+                    .chunks(4)
+                    .any(|p| p[3] > 128 && p[0] > 230 && p[1] > 230),
+                "흰 체크"
+            );
+        }
+    }
+    assert!(app::row_icons::resolve("status:nope", "", 16).is_none());
+    // 세션 이행: 옛 세션(레이아웃 없음 · 폭 5개 = 이름 · 확장자 · 크기 · 수정한 날짜 · 종류).
+    let ps = crate::session::PanelSession {
+        tabs: vec![dir.clone()],
+        col_widths: vec![300, 55, 90, 150, 120],
+        ..Default::default()
+    };
+    let mut p = Panel::restore(
+        &ps,
+        &dir,
+        list_opts(&app.settings),
+        panel_metrics(&app.settings, 1.0),
+        columns_for(600, 1.0),
+        all_columns_for(600, 1.0),
+    );
+    let w = p.col_widths_by_key();
+    let of = |k: u32| w.iter().find(|c| c.0 == k).map(|c| c.1);
+    assert_eq!(
+        (
+            of(filelist::COL_NAME),
+            of(filelist::COL_SIZE),
+            of(filelist::COL_MODIFIED)
+        ),
+        (Some(300), Some(90), Some(150)),
+        "폭이 열 종류에 맞게: {w:?}"
+    );
+    assert_eq!(of(filelist::COL_STATUS), Some(56), "새 열 = 기본 폭");
+    // 기본 숨김 열을 다시 켜면 옛 세션의 폭이 아니라 정의의 기본 폭(숨긴 열의 폭은 보관하지 않는다).
+    let mut inv = Invalidations::default();
+    p.apply_col_layout(
+        &[
+            (filelist::COL_NAME, true),
+            (filelist::COL_EXT, true),
+            (filelist::COL_KIND, true),
+        ],
+        &mut inv,
+    );
+    let w2: Vec<(u32, i32)> = p.col_widths_by_key();
+    assert_eq!(
+        w2,
+        vec![
+            (filelist::COL_NAME, 300),
+            (filelist::COL_EXT, 64),
+            (filelist::COL_KIND, 110)
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]
@@ -2644,12 +2760,21 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
         "{bg}"
     );
     app.tab_menu.close();
-    // 컬럼: ext 앞 · size 숨김 → 활성 패널 + 동기(기본 on) 반대 패널 · 문자열 왕복 · 세션 스냅숏.
+    // 컬럼: 기본 = 이름 · 상태 · 크기 · 수정한 날짜(확장자 · 종류 숨김 — 사용자 10-03) · ext 앞 · size 숨김 → 활성 패널 +
+    // 동기(기본 on) 반대 패널 · 문자열 왕복 · 세션 스냅숏. 숨겨 둔 열을 켜면 정의의 기본 폭으로 나타난다.
     assert_eq!(
         app.order_value_of("list.col_layout"),
-        "cols:1[name:1,ext:1,size:1,modified:1,kind:1]"
+        "cols:1[name:1,status:1,size:1,modified:1,ext:0,kind:0]"
     );
-    app.order_changed("list.col_layout", "cols[ext,name,size:0]");
+    assert_eq!(
+        app.session_snapshot().panels[0].col_layout,
+        "",
+        "기본 그대로 = 세션에 쓰지 않는다"
+    );
+    app.order_changed(
+        "list.col_layout",
+        "cols[ext,name,status:0,size:0,modified,kind]",
+    );
     let keys = |app: &App, p: usize| -> Vec<u32> {
         app.panels[p]
             .rows()
@@ -2666,16 +2791,18 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     );
     assert_eq!(
         app.panels[0].col_layout_str(),
-        "cols:1[ext:1,name:1,modified:1,kind:1,size:0]"
+        "cols:1[ext:1,name:1,modified:1,kind:1,status:0,size:0]"
     );
     assert_eq!(
         app.session_snapshot().panels[0].col_layout,
-        "cols:1[ext:1,name:1,modified:1,kind:1,size:0]"
+        "cols:1[ext:1,name:1,modified:1,kind:1,status:0,size:0]"
     );
+    // 다시 켠 확장자 열 = 정의의 기본 폭(64).
+    assert_eq!(app.panels[0].rows().columns()[0].width, 64);
     // 전부 숨김 = name 강제.
     app.order_changed(
         "list.col_layout",
-        "cols[name:0,ext:0,size:0,modified:0,kind:0]",
+        "cols[name:0,status:0,ext:0,size:0,modified:0,kind:0]",
     );
     assert_eq!(keys(&app, 0), vec![0]);
     let _ = std::fs::remove_dir_all(&dir);

@@ -100,6 +100,11 @@ col.ext = Ext
 col.size = Size
 col.modified = Date modified
 col.kind = Kind
+col.status = Status
+status.cloudOnly = Online only
+status.availableLocally = On this device
+status.alwaysKeep = Always keep on this device
+status.network = Network
 
 # ── Kind cells (original kind.* keys) ──
 kind.folder = Folder

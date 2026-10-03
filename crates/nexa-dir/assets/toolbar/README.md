@@ -20,4 +20,5 @@ nexa-ctl `ToolIcon::Mask`(테마 기준색 틴트 · hover/pressed = accent · �
 | `hidden.svg` · `dotfiles.svg` · `folders-first.svg` | `view.hidden` · `view.dot` · `view.folders_first` |
 | `case-sensitive.svg` | `view.case_sensitive`(dir3 신규 10-03 — "Aa" · 대소문자 구분 정렬 토글) |
 | `nav-home.svg` · `nav-back.svg` · `nav-forward.svg` · `nav-up.svg` | 패널 네비 버튼(내 PC · 뒤로 · 앞으로 · 위로) — 아이콘 글꼴(Segoe MDL2)이 없는 OS에서 글리프 대신(dir3 신규 10-03 · MDL2 HomeSolid/Back/Forward/Up 모양) |
+| `status-cloud.svg` · `status-local.svg` · `status-pinned.svg` · `status-network.svg` | 파일 목록 "상태" 열 아이콘(온라인 전용 = 파란 구름 · 로컬에 있음 = 초록 체크 테두리 · 항상 유지 = 채운 초록 원 · 네트워크 = 회색 모니터 — dir3 신규 10-03 · `app/row_icons.rs`가 색을 입힌다) |
 | `popout.svg` | 도크 ↗(등록만 — nexa-explorer InfoDock은 글리프) |

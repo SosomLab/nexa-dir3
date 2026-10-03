@@ -41,8 +41,52 @@ pub(crate) fn toolbar_blocks() -> OrderDefs {
 }
 
 /// 파일 목록 컬럼(key 순서 = 기본 표시 순서 · `name` = 상시 표시).
-pub(crate) const COLUMN_BLOCKS: OrderDefs =
-    &[("cols", &["name", "ext", "size", "modified", "kind"])];
+/// 기본 표시 = 이름 · 상태 · 크기 · 수정한 날짜(사용자 10-03 — 탐색기 클라우드 폴더 모양) · 확장자 · 종류는 기본 숨김
+/// ([`DEFAULT_HIDDEN`] — 순서 편집에서 켠다). dir2 기본(이름 · 확장자 · 크기 · 수정한 날짜 · 종류 PANEL-131)과 다른 의도된 차이.
+pub(crate) const COLUMN_BLOCKS: OrderDefs = &[(
+    "cols",
+    &["name", "status", "size", "modified", "ext", "kind"],
+)];
+
+/// 기본으로 숨기는 항목 `(블록, 항목)` — 빈 설정값 · 저장값에 빠진 항목을 보충할 때 숨김으로 넣는다.
+pub(crate) const DEFAULT_HIDDEN: &[(&str, &str)] = &[("cols", "ext"), ("cols", "kind")];
+
+/// 저장된 열 레이아웃 문자열에 **적혀 있던** 표시 열의 key(적힌 순서) — 세션의 열 폭(`colw` = 그때의 표시 순서대로)을
+/// 열 종류에 다시 맞추는 데 쓴다. 문자열이 비어 있으면 그 무렵의 기본 표시 열: 폭이 5개면 옛 기본(이름 · 확장자 · 크기 ·
+/// 수정한 날짜 · 종류 — 상태 열이 생기기 전) · 그 밖은 지금 기본.
+pub(crate) fn saved_visible_keys(layout: &str, width_count: usize) -> Vec<&'static str> {
+    const OLD_DEFAULT: [&str; 5] = ["name", "ext", "size", "modified", "kind"];
+    let Some((_, defs)) = COLUMN_BLOCKS.first() else {
+        return Vec::new();
+    };
+    let inner = layout
+        .split_once('[')
+        .map(|(_, rest)| rest.trim_end_matches(']'));
+    match inner {
+        Some(inner) => inner
+            .split(',')
+            .filter_map(|it| {
+                let (k, vis) = match it.trim().split_once(':') {
+                    Some((k, v)) => (k.trim(), v.trim() != "0"),
+                    None => (it.trim(), true),
+                };
+                vis.then(|| defs.iter().copied().find(|d| *d == k))
+                    .flatten()
+            })
+            .collect(),
+        None if width_count == OLD_DEFAULT.len() => OLD_DEFAULT.to_vec(),
+        None => defs
+            .iter()
+            .copied()
+            .filter(|d| default_visible("cols", d))
+            .collect(),
+    }
+}
+
+/// 그 항목의 기본 표시 여부.
+pub(crate) fn default_visible(block: &str, item: &str) -> bool {
+    !DEFAULT_HIDDEN.contains(&(block, item))
+}
 
 /// 앱 고유 컨텍스트 메뉴 항목(셸 제공 동사는 대상 아님 · `new` = 하단 고정 섹션 표시 여부만).
 pub(crate) const CTXMENU_BLOCKS: OrderDefs = &[
@@ -59,7 +103,10 @@ pub(crate) fn default_order(defs: OrderDefs) -> String {
                 (
                     b.to_string(),
                     true,
-                    items.iter().map(|i| (i.to_string(), true)).collect(),
+                    items
+                        .iter()
+                        .map(|i| (i.to_string(), default_visible(b, i)))
+                        .collect(),
                 )
             })
             .collect::<Vec<_>>(),
@@ -136,7 +183,7 @@ pub(crate) fn parse_order_with(defs: OrderDefs, s: &str) -> Vec<OrderBlock> {
                     .rev()
                     .find_map(|prev| items.iter().position(|(x, _)| x == prev).map(|p| p + 1))
                     .unwrap_or(0);
-                items.insert(pos, (d.to_string(), true));
+                items.insert(pos, (d.to_string(), default_visible(name, d)));
             }
         }
         out.push((name.to_string(), bvis, items));
@@ -146,7 +193,10 @@ pub(crate) fn parse_order_with(defs: OrderDefs, s: &str) -> Vec<OrderBlock> {
             out.push((
                 b.to_string(),
                 true,
-                def_items.iter().map(|i| (i.to_string(), true)).collect(),
+                def_items
+                    .iter()
+                    .map(|i| (i.to_string(), default_visible(b, i)))
+                    .collect(),
             ));
         }
     }
@@ -184,6 +234,7 @@ pub(crate) fn shift_range<T>(v: &mut [T], sel: &[usize], up: bool) -> bool {
 pub(crate) fn col_key_id(key: &str) -> Option<u32> {
     Some(match key {
         "name" => crate::filelist::COL_NAME,
+        "status" => crate::filelist::COL_STATUS,
         "ext" => crate::filelist::COL_EXT,
         "size" => crate::filelist::COL_SIZE,
         "modified" => crate::filelist::COL_MODIFIED,
@@ -194,6 +245,7 @@ pub(crate) fn col_key_id(key: &str) -> Option<u32> {
 
 pub(crate) fn col_id_key(id: u32) -> &'static str {
     match id {
+        crate::filelist::COL_STATUS => "status",
         crate::filelist::COL_EXT => "ext",
         crate::filelist::COL_SIZE => "size",
         crate::filelist::COL_MODIFIED => "modified",
@@ -205,6 +257,44 @@ pub(crate) fn col_id_key(id: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 열 정의: 상태 열 추가 · 확장자/종류 기본 숨김 · 옛 저장값 이행(없던 상태 = 표시로 · 적혀 있던 열은 그대로) ·
+    /// 세션 열 폭의 주인(저장 당시의 표시 열).
+    #[test]
+    fn columns_default_hidden_and_saved_width_keys() {
+        assert_eq!(
+            default_order(COLUMN_BLOCKS),
+            "cols:1[name:1,status:1,size:1,modified:1,ext:0,kind:0]"
+        );
+        assert_eq!(normalize(COLUMN_BLOCKS, ""), default_order(COLUMN_BLOCKS));
+        // 옛 기본을 명시해 저장한 사용자: 확장자·종류는 켠 그대로 · 상태만 이름 뒤에 추가된다.
+        assert_eq!(
+            normalize(
+                COLUMN_BLOCKS,
+                "cols:1[name:1,ext:1,size:1,modified:1,kind:1]"
+            ),
+            "cols:1[name:1,status:1,ext:1,size:1,modified:1,kind:1]"
+        );
+        assert_eq!(col_key_id("status"), Some(crate::filelist::COL_STATUS));
+        assert_eq!(col_id_key(crate::filelist::COL_STATUS), "status");
+        // 열 폭의 주인.
+        assert_eq!(
+            saved_visible_keys("", 5),
+            ["name", "ext", "size", "modified", "kind"],
+            "레이아웃 없음 + 폭 5개 = 옛 기본"
+        );
+        assert_eq!(
+            saved_visible_keys("", 4),
+            ["name", "status", "size", "modified"]
+        );
+        assert_eq!(
+            saved_visible_keys("cols:1[ext:1,name:1,modified:1,kind:1,size:0]", 4),
+            ["ext", "name", "modified", "kind"],
+            "적혀 있던 표시 열만 · 적힌 순서"
+        );
+        assert!(default_visible("cols", "name") && !default_visible("cols", "kind"));
+        assert!(default_visible("show", "dot"), "다른 블록은 영향 없음");
+    }
 
     /// 점 파일 토글이 없는 OS의 도구 모음 정의 = 전체에서 `show/dot`만 뺀 것(나머지 블록·순서 동일).
     #[test]
