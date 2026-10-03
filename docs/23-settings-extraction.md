@@ -5,6 +5,11 @@
 > 분류: **상수** = 바뀌지 않는 고정값(포맷 · OS · 프로토콜 한계 · 정합성 불변식) / **고급** = 바꾸면 위치·속도가 달라지지만 자주 안 바꾸거나 다른 곳에 영향(폴링 · 캐시 상한 · 임계 · 타임아웃 · 내부 레이아웃 지표 · 샌드박스 한도) → REGISTRY `ADVANCED`(드물면 `HIDDEN`) / **설정** = 자주 바꾸거나 취향(보이는 크기 · 체감 시간 · 켜고 끄기).
 > 상태 칸: ☐ 미추출 · ✅ 추출됨(키 존재). 추출하면 값을 키 기본값으로 옮기고 코드는 키를 읽는다(i18n 라벨 · 설명 = DR-14).
 
+## 0-1. 내부 전용 설정(INTERNAL · §81)
+
+- 사용자에게 **절대 보이면 안 되는 키**는 `ndir_settings::INTERNAL`(+ `is_internal`)에 둔다 — 설정 창(고급 포함) · 검색 · JSON 내보내기에서 빠지고, 가져오기에서는 알 수 없는 키로 보고된다. `HIDDEN`(설정 창에는 안 보이지만 고급/JSON으로는 다룰 수 있음)과 다르다.
+- 현재: `license.gates`(라이선스 기능 게이트 자리 · DR-4 · 사용자 10-03 "라이선스 게이트는 보이면 안 됨"). 시험 `internal_keys_never_surface`.
+
 ## 0. 먼저 고칠 불일치(설정 범위 ↔ 코드 클램프)
 
 | 키 | REGISTRY 범위 | 코드 클램프 | 조치 제안 |
@@ -34,6 +39,7 @@
 | 300 ms | `app/ctxmenu.rs:57` | 선행 구축 머무름(`CTX_PREBUILD_MS` · dir2 값) | — | 고급 | `ctxmenu.prebuild_ms` | ☐ |
 | 256 | `app/ctxmenu.rs:59` | 선행 구축 대상 선택 수 상한 | — | 고급 | `ctxmenu.prebuild_max` | ☐ |
 | 30 ms | `app/ctxmenu.rs:61` | 구축/실행 대기 틱 | — | 고급 | `ctxmenu.poll_ms` | ☐ |
+| 3000 ms | `app/ctxmenu.rs` `CTX_WAIT_MAX_MS`(§81) | 우클릭 메뉴를 셸 항목과 함께 열기 위해 기다리는 상한(넘으면 자체 항목만) | — | 상수(DR-20 1초 규칙과 짝 · 상태줄 `ctx.loading` 표시) | — | — |
 | 240 px · 220 px | `app/ctxmenu.rs:83` · `app/input.rs:451` | 컨텍스트 메뉴 · 탭 메뉴 텍스트 폭 | — | 고급 | `ctxmenu.text_w` · `tabs.menu_text_w` | ☐ |
 | 2 | `platform/winshell.rs:52` | 셸 서브메뉴 열거 깊이 | — | 고급 | `ctxmenu.shell_depth` | ☐ |
 | 64 px | `platform/winshell.rs:54` | 셸 항목 아이콘 최대 변 | — | 상수 | — | — |

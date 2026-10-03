@@ -49,9 +49,10 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | 이름 | 뜻 |
 | --- | --- |
 | `NDIR_HOME` | 설정·세션·라이선스·플러그인 폴더 재지정(격리) |
-| `NDIR_STARTUP_CMD` | 쉼표 구분 명령: `<명령id>` · `@ready:<명령>`(첫 프레임 + 초기 열거 뒤) · `@idle:<명령>`(작업 큐 빈 뒤) · `@after:<ms>:<명령>` · `quit[:코드]` · `assert.<대상>:<식>` · `ui.click:@<영역>`/`ui.key:<조합>` · `ui.type:<text>`(`\b` = Backspace) · `ui.press:<enter|escape|up|down|left|right|home|end|pageup|pagedown|delete|space>` · `list.select:<n>` · `dock.kind:<n>` · `term.focus` · `term.send:<text>` · `ops.cancel` · `dlg.pick:<id>`/`dlg.type:<text>` · `ctx.pick:<id>` · `ctx.wait`(열린 메뉴의 셸 항목이 채워질 때까지 뒤 `@ready` 명령 보류 · 대상 없으면 통과 · 20 s 상한) · `prefs.search:<q>`/`prefs.cat:<키>` · `<영역>.dump:<파일>`(layout·panel·list·tabs·status·menu·prefs·dock·preview·term·ops·dlg·pvwin·ctx·check) |
+| `NDIR_STARTUP_CMD` | 쉼표 구분 명령: `<명령id>` · `@ready:<명령>`(첫 프레임 + 초기 열거 뒤) · `@idle:<명령>`(작업 큐 빈 뒤) · `@after:<ms>:<명령>` · `quit[:코드]` · `assert.<대상>:<식>` · `ui.click:@<영역>`/`ui.key:<조합>` · `ui.type:<text>`(`\b` = Backspace) · `ui.press:<enter|escape|up|down|left|right|home|end|pageup|pagedown|delete|space>` · `list.select:<n>` · `dock.kind:<n>` · `term.focus` · `term.send:<text>` · `ops.cancel` · `dlg.pick:<id>`/`dlg.type:<text>` · `ctx.pick:<id>` · `ctx.wait`(우클릭 메뉴가 셸 항목과 함께 열릴 때까지 — §81부터 메뉴는 준비된 뒤 한 번만 열린다 — 뒤 `@ready` 명령 보류 · 대상 없으면 통과 · 20 s 상한 = 대기 명령만 건너뛰고 진행) · `ops.wait`(진행 중인 전송이 끝날 때까지 뒤 `@ready` 보류 · 같은 상한 · §81) · `prefs.search:<q>`/`prefs.cat:<키>` · `<영역>.dump:<파일>`(layout·panel·list·tabs·status·menu·prefs·dock·preview·term·ops·dlg·pvwin·ctx·check) |
 | `NDIR_NO_ACTIVATE` | 창을 앞으로 가져오지 않음(사용자 작업 방해 금지) |
 | `NDIR_TRACE_FRAMES` / `_IME` / `_CLIP` / `_WINDOW` | 추적 로그 |
+| `NDIR_TERM_TRACE` | `<파일>` — 터미널 PTY에서 읽은 **원시 바이트**를 그 파일에 덧붙인다(conhost가 보내는 이스케이프·커서 이동·글자 폭 진단 · §81). `term.dump` 끝에는 PTY에 마지막으로 준 크기 `pty CxR`가 찍힌다 |
 | 덤프 어휘 | `layout` · `panel` · `list` · `tree` · `tabs` · `status` · `menu` · `ops` · `term` · `preview` · `prefs` · `plugin` · `license` · `log` — 컨트롤·패널마다 `dump()` 하나가 구현 요건 |
 
 ## 6. 자가 점검(`--selfcheck`) 항목

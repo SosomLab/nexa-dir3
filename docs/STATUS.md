@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 77차 — 우클릭 메뉴 1회 표시 · 구분선 · 메뉴 스크롤 · 내부 전용 설정 · 터미널 진단
+
+- **한 일**: 우클릭 메뉴를 셸 항목이 준비된 뒤 한 번만 연다(대기 중 상태줄 표시 · 3 s 상한) · 빈 구분선 정리 · 긴 메뉴 스크롤 · `license.gates` 내부 전용(INTERNAL) · `NDIR_TERM_TRACE` · `pty CxR` · 하네스 `ops.wait`(copy-paste 흔들림 해소).
+- **지금 상태**: 사용자 보고(메뉴 2번 · 빈 구분선 · 하단 잘림 · 라이선스 게이트 노출) 반영. 다음(개발 세션) = Nerd 아이콘 2칸 처리(conhost 원시 출력 근거 수집 중) · 경로 바 GAP-012~014 · .lnk/링크 GAP-006~010.
+- **걸린 것**: CLAUDE.md §5 소비자 기록 규칙 추가 여부 · dir2 링크 결함 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 여부 · 실기 확인 · 릴리스 태그 · CLOUD.
+
+→ [journal/2026-10-03 §81](journal/2026-10-03.md)
+
+---
+
 ## 10-03 76차 — 캡처 판정 반영(글꼴 Regular · 툴바 농도 · 네비 26 · 터미널 이탤릭/줄 높이) · 소비자 기록 원칙
 
 - **한 일**: nexa-ui 119차 · 툴바/네비/터미널 판정 반영 · 시험(nexa-dir 184) · DR-24 + nexa-ui·nexa-license `CONSUMER-CHANGES.md`(소급 · nexa-sql 시험 729 · nexa-license 시험 29).
