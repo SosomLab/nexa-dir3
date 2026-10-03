@@ -39,9 +39,9 @@
 | UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
-| WINB | 125 | 125 | 58 | 60 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 32 | 142 | 0 | 0 | 0 |
-| **합계** | 4310 | 4310 | 2387 | 1010 | 766 | 0 | 0 |
+| WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
+| WINC | 174 | 174 | 35 | 139 | 0 | 0 | 0 |
+| **합계** | 4310 | 4310 | 2391 | 1006 | 766 | 0 | 0 |
 
 ## 행
 
@@ -236,6 +236,10 @@
 | NEW-020 | 탭 여러 줄 기본(`tabs.multiline` · dir2와 같음) · 한 줄 옵션의 ◀ ▶ 자리 3택(`tabs.scroll_buttons` · DEPENDS) · 줄 수 변경 재배치 · 탭 바 배율(논리 px) | nexa-ui 129 · `app/settings.rs::apply_tab_style` · `panel.rs::{set_tab_style, take_tab_lines_changed}` · `app/paint.rs::paint_into` | T2 · T3 + 실기 | `scroll_buttons_placement_start_and_split` · `tabs_wrap_into_lines_by_default` | ✅ | §111 · 실기 필요(여러 줄 감김 · 한 줄 버튼 자리 · HiDPI 탭 여백 — Windows 배율 ≠ 1 포함) |
 | NEW-021 | 정렬 표시 = 칸 오른쪽 끝 · 순번은 다중 정렬일 때만(PANEL-077 `▲ 이름 ①`과 의도된 차이) | nexa-ui 130 `set_sort_mark_trailing` · `panel.rs` | T2 · T3 + 실기 | `trailing_sort_mark_and_shift_cycle` · `header_sort_marks_trail_and_shift_cycles` | ✅ | §112 · 실기(머리 모양 · Shift 다중 정렬) 사용자 · 도형 화살표 · gap = T-128 |
 | GAP-017 · SORT-EXT | 확장자 열 정렬 = `SortKey::Ext`(dir2 PANEL-065 · 종전 dir3는 Kind로 잘못 매핑) | `filelist.rs::sort_key_of` | T3 | `header_sort_marks_trail_and_shift_cycles`(sort_key_of 단언) | ✅ | §112 · 이식 실수 회귀 수정 |
+| WINB-100 · WINC-098 · 101 · 116 · TAB-DND | 탭을 끌어 좌우 패널 사이로 이동(놓을 때 · 탭 위 = 그 앞 · 그 밖 = 끝 · 활성 이동 · Esc 취소 · 마지막/잠긴 탭 거부 · 보기 옵션 채택 규칙 = 메뉴 경로와 같음) | `app/input.rs::tab_cross_drop` · `App.tab_drop_hint` · `app/paint.rs` · `panel.rs::{tab_dragging, cancel_tab_drag, tab_drop_target, tabbar_bounds}` | T3 | `tab_drag_moves_between_panels` | ✅ | §113 · **의도된 차이**: WINC-098 끄는 중 미리 보기 이동 대신 놓을 때 이동 + 끄는 중 대상 탭 바 강조 · 2 px 삽입선(dir2에 없던 표식) · 실기(끌기 · 표식 · Esc) 사용자 |
+| GAP-018 · CLOUD-LINK | 클라우드 플레이스홀더를 링크로 보지 않기 | 예정 = ndir-vfs `is_link` · `filelist.rs` | — | — | ☐ | §113 · T-129 · Windows 실기 필요 |
+| GAP-019 · SHELL-085 | 클라우드 전용 파일 = 미리보기 · 상세 · 할당 크기 생략(다운로드 유발 방지) | 예정 = `dockinfo.rs` · ndir-vfs 판정 함수 | — | — | ☐ | §113 · dir2 fileinfo.rs:414 시험 · T-129 · Windows OneDrive 실기 필요 |
+| GAP-020 · COL-LAYOUT-BOOT | `list.col_layout` 기동 적용(또는 세션 우선 문서화) | `app/settings.rs:145-151` · `main.rs` 기동 | — | — | ☐ | §113 · 의도 확인 대기(T-126과 함께) |
 | PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) → §104에서 기본 dir(NEW-018) · §105 대소문자 구분 정렬이 4번째 보기 옵션으로 합류(`list.sort_case_sensitive` = 새 탭 기본값 · 보호 항목만 전역) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | GAP-006 · SHORTCUT-EXT | 바로 가기 확장자 숨김(`.lnk` `.url` `.appref-ms` · 이름 칸만 · 확장자 열 유지 · 폴더 예외 · 이름 바꾸기 때 복원 · Windows만) | `filelist.rs::{split_shortcut_ext, display_name, restore_shortcut_ext}` · `platform::hides_shortcut_ext` · `app/ops.rs` | T1·T3 | `shortcut_ext_is_hidden_and_restored_on_rename` | ✅ | §84 · dir2 source.rs:456-465 · win.rs:4036-4045 |
