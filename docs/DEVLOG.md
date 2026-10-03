@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **키보드 메뉴 캐럿 자리 · 가짜 가로 막대 · 아이콘 칸 결론**: Shift+F10 행 메뉴 = 캐럿 행 옆(SHELL-003) · nexa-ui 120차 ContextMenu 폭 수정(소비자 기록 · nexa-sql 시험 729) · conhost는 Nerd 아이콘 1칸 → dir3 1칸 + 넘쳐 그리기 유지 → [journal §82](journal/2026-10-03.md)
 - **우클릭 1회 표시 · 구분선 · 메뉴 스크롤 · 내부 설정**: 셸 항목 준비 뒤 완성 메뉴 한 번(대기 중 상태줄 표시 · 3 s 상한) · 빈 구분선 정리 · 창보다 긴 메뉴 스크롤 · `license.gates` = INTERNAL(설정 창·검색·JSON 제외) · `NDIR_TERM_TRACE` · `pty CxR` 덤프 · `ops.wait`(copy-paste.scn 흔들림 해소) → [journal §81](journal/2026-10-03.md)
 - **캡처 판정 반영 · 소비자 기록 원칙**: nexa-ui 119차(글꼴 매칭 Regular 우선 · ⚠ 동작 변경 · nexa-sql 시험 729) · 툴바 기본 농도 26/12/20 % · 네비 폭 26 · 터미널 이탤릭 · 줄 높이 = 글꼴 줄 높이 · DR-24 + nexa-ui/nexa-license `docs/CONSUMER-CHANGES.md` 신설 → [journal §80](journal/2026-10-03.md)
 - **터미널 WT 따라가기 1차 · 디자인 판정**: WT settings.json 글꼴 목록·크기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal` · 시험 +2(182) · 캡처 판정(칸 폭 일치 · 줄 높이 큼 · 아이콘 작음 · 긴 이름 줄바꿈) · 글꼴 매칭이 Bold 파일을 잡는 문제 · 네비 간격 22 vs 26 · 툴바 테두리 사슬 → [journal §79](journal/2026-10-03.md)

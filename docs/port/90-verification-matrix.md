@@ -31,7 +31,7 @@
 | RENDER | 54 | 54 | 14 | 0 | 40 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
 | SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
-| SHELL | 75 | 75 | 40 | 11 | 11 | 0 | 0 |
+| SHELL | 75 | 75 | 41 | 11 | 11 | 0 | 0 |
 | SKEL | 291 | 291 | 147 | 94 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4302 | 4302 | 2364 | 1024 | 766 | 0 | 0 |
+| **합계** | 4302 | 4302 | 2365 | 1024 | 766 | 0 | 0 |
 
 ## 행
 
@@ -267,7 +267,8 @@
 | PLUG-070~077 | 압축 그리드 창(F3/↗ Archive → 그리드 · 컬럼 8 · 정렬 · 선택 · TSV 복사 · 상태 줄 · Esc) | `archive_win.rs` · `app/previewcmd.rs` | T2·T4 | `cells_follow_column_order_and_blank_dirs` · `sort_numeric_and_path_fallback` · `source_selection_sort_and_tsv` · `archive_grid_window_from_preview` · `archive-grid.scn` | ✅ | 헤더 드래그 리사이즈 실기(nexa-grid 규약) |
 | SHELL §2-1 · §2-2 | 파일 행 메뉴(열기 · 편집 · 삭제/완전 삭제/이름 바꾸기 · 경로/이름 복사 · 폴더에 붙여넣기 · 새로 만들기) · 배경 메뉴(붙여넣기 · undo/redo 설명 · 새로 만들기 · 새로 고침) · 우클릭/Shift+F10 · 비활성 패널 활성화 | `app/ctxmenu.rs` · `panel.rs::pending_ctx` | T2·T4 | `row_and_background_context_menus` · `ctx-menu.scn` | ✅ | 셸 항목(IContextMenu) 합류 = T-51 B · `ctx_menu_order` 설정 = T-51 B |
 | SHELL-001 · 002 · 005 · 006 · 012 · 013 | 셸 컨텍스트 메뉴(PIDL · 공통 부모 축소 · IContextMenu · HMENU 열거 · 서브메뉴 2단 · verb 가로채기 · InvokeCommand 뒤 재열람 · id 대역 `shell:1..0x6FFF`) | `platform/winshell.rs` · `app/ctxmenu.rs::shell_to_ctx` | T2(실기)·T5 | `shell_menu_lists_items_for_temp_file` · `row_and_background_context_menus`(가짜 포트) | ✅ | Windows만 · 네이티브 HMENU 대신 nexa-ctl 그림 |
-| SHELL-003 · 004 · 007 · 008 · 009 · 019 | 키보드 앵커 위치 · Shift+우클릭 확장 동사 · 고유 항목 앵커 삽입 · 새로 만들기 ▸ ShellNew · 배경 셸 메뉴 · `ctx_menu_order` | — | — | — | ☐ | T-51 B-2 · 011·014·015는 아래 개별 행(journal §71) |
+| SHELL-004 · 007 · 008 · 009 · 019 | Shift+우클릭 확장 동사 · 고유 항목 앵커 삽입 · 새로 만들기 ▸ ShellNew · 배경 셸 메뉴 · `ctx_menu_order` | — | — | — | ☐ | T-51 B-2 · 003은 아래 개별 행(§82) · 011·014·015는 아래 개별 행(journal §71) |
+| SHELL-003 | 키보드로 연 행 메뉴(Shift+F10 · `cmd.contextMenu`)의 앵커 = 캐럿 행 자리(캐럿이 화면 밖이면 목록 왼쪽 위) · 마우스 우클릭은 커서 자리 | `app/ctxmenu.rs::open_row_menu_at_caret` · `App.ctx_anchor_next` · `app/menus.rs` · nexa-grid `row_anchor` | T3 | `keyboard_context_menu_opens_at_the_caret_row` | ✅ | §82(업무 42 캡처: 종전엔 창 왼쪽 위 모서리에 열림) · 실기(위치) 사용자 |
 | SHELL-011 | 셸 확장 항목 아이콘(메뉴 아이콘 칸) | `platform/winshell.rs`(MIIM_BITMAP `hbmpItem` → GetDIBits 32bpp → `bgra_to_rgba` · 예약 핸들 -1..=11만 거름 · 최상위 메뉴 `HandleMenuMsg(WM_INITMENUPOPUP)`) · `app/ctxmenu.rs::shell_to_ctx`(`MenuIcon::from_rgba`) | T1·T3 | `bgra_premultiplied_to_straight_rgba` · `shell_item_icons_reach_context_menu` | 🚧 | hbmpItem ✅ · owner-draw(`HBMMENU_CALLBACK` · WM_DRAWITEM 2-패스 알파) · 표시 중에만 채워지는 비트맵 = 잔여 · 실기(아이콘 칸) 사용자 |
 | SHELL-014 · 015 · 016 | 전용 메뉴 STA 스레드(`ndir-ctxmenu` · 구축→열거→InvokeCommand 전 생애 · 밀린 Prepare는 마지막 것만) · 선행 구축(선택 300 ms 머묾 `CTX_PREBUILD_MS` · 대상 ≤ 256 · 없으면 배경 · 감시 변경 = invalidate) · §81부터 **준비된 뒤 완성 메뉴 1회 표시**(대기 중 상태줄 `ctx.loading` · `CTX_WAIT_MAX_MS` 3 s 넘으면 자체 항목만 · 대기 중 클릭/키 = 취소 — §71의 "즉시 열고 같은 자리 채움"은 사용자에게 두 번 뜨는 것으로 보였다) · 빈 구분선 정리(`tidy_separators`) · 창보다 긴 메뉴 스크롤(`set_max_rows`) · `invoke_async` · 동기 폴백(포트 기본 구현) | `platform/{mod,winshell,fake}.rs`(`ContextMenuProvider::{prepare, try_items, invoke_async, poll, invalidate, busy}`) · `app/ctxmenu.rs::{ctx_shell_tick, ctx_invoked, tidy_separators, ctx_rows_that_fit}` · `app/input.rs` · `app/event_loop.rs` · `app/watch.rs` · `selfcheck.rs` | T1·T3·T4·T5 | `try_items_is_non_blocking_and_prepare_makes_it_instant`(실제 셸) · `context_menu_opens_once_when_shell_items_are_ready` · `separators_collapse_and_rows_fit_the_window` · `ctx-menu.scn` · selfcheck `prepared menu is instant` | ✅ | dir2 차이: 표시(TrackPopupMenuEx)는 스레드 밖(dir3 = 자체 그리기) · 배경 선행 · FS 무효화는 dir3 보강. 실기(체감 속도) 사용자 |
 | PLUG-122 · EXT-417 | 플러그인 빌드 스크립트 3-OS(`plugins.list` 단일 출처 · `--out-dir`/`--skip-dist`) | `scripts/plugin-build.{sh,ps1}` | T4(CI) | CI `plugins` 잡 · 로컬 실기 §26 | ✅ | |

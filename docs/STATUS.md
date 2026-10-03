@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 78차 — 키보드로 연 메뉴 = 캐럿 행 · 메뉴 가짜 가로 막대 제거 · 터미널 아이콘 칸 결론
+
+- **한 일**: Shift+F10 행 메뉴를 캐럿 행 자리에(SHELL-003 ✅) · nexa-ui 120차(ContextMenu 폭 · CONSUMER-CHANGES 기록) · 터미널 원시 바이트로 conhost 아이콘 1칸 확인(2칸 처리 안 함).
+- **지금 상태**: 우클릭 메뉴 관련 사용자 보고가 모두 반영됐다. 다음(개발 세션) = 보호된 OS 파일 숨기기(NEW-014) · 경로 바 GAP-012~014 · .lnk/링크 GAP-006~010.
+- **걸린 것**: CLAUDE.md §5 소비자 기록 규칙 추가 여부 · dir2 링크 결함 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 여부 · 실기 확인 · 릴리스 태그 · CLOUD.
+
+→ [journal/2026-10-03 §82](journal/2026-10-03.md)
+
+---
+
 ## 10-03 77차 — 우클릭 메뉴 1회 표시 · 구분선 · 메뉴 스크롤 · 내부 전용 설정 · 터미널 진단
 
 - **한 일**: 우클릭 메뉴를 셸 항목이 준비된 뒤 한 번만 연다(대기 중 상태줄 표시 · 3 s 상한) · 빈 구분선 정리 · 긴 메뉴 스크롤 · `license.gates` 내부 전용(INTERNAL) · `NDIR_TERM_TRACE` · `pty CxR` · 하네스 `ops.wait`(copy-paste 흔들림 해소).
