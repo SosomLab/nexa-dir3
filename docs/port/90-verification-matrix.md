@@ -16,7 +16,7 @@
 | DLG | 88 | 21 | 21 | 0 | 0 | 0 | 67 |
 | EXT | 213 | 11 | 11 | 0 | 0 | 0 | 202 |
 | GUI | 95 | 32 | 30 | 0 | 2 | 0 | 63 |
-| KEY | 817 | 85 | 85 | 0 | 0 | 0 | 732 |
+| KEY | 817 | 683 | 663 | 20 | 0 | 0 | 134 |
 | L | 33 | 0 | 0 | 0 | 0 | 0 | 33 |
 | LIC | 149 | 26 | 26 | 0 | 0 | 0 | 123 |
 | N | 15 | 0 | 0 | 0 | 0 | 0 | 15 |
@@ -39,7 +39,7 @@
 | WINA | 96 | 4 | 4 | 0 | 0 | 0 | 92 |
 | WINB | 125 | 0 | 0 | 0 | 0 | 0 | 125 |
 | WINC | 174 | 1 | 1 | 0 | 0 | 0 | 173 |
-| **합계** | 4266 | 692 | 645 | 40 | 7 | 0 | 3574 |
+| **합계** | 4266 | 1290 | 1223 | 60 | 7 | 0 | 2976 |
 
 ## 행
 
@@ -128,6 +128,10 @@
 | DLG-074~077 · 079~083 · 086 · 088 | 일괄 이름 변경 창(880×620 · 카드 스택 6종 · 수확 규칙 · 실시간 미리보기 · 충돌 · 적용 토글 · 정렬 · 프리셋 메뉴/저장/불러오기 · [Rename] 순차 + undo 1건 · 선택 수집) | `bulk_win.rs` · `app/bulk.rs` · `ndir-ops/batch_rename.rs` | T2 | `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` · ndir-ops 코어 14 | ✅ | 관리 팝업(084) · 포맷 도움말(085) · 썸(078) · 라벨 실측(087) · TZ |
 | CI-114 · CI-052~066 · T-82 | 패키징 3-OS(`packaging/lib.sh` 공용 · deb/rpm FHS · Universal 2 .app + pkg/dmg · MSI(WiX v4 · Main+PathEnv) + 포터블 zip · 동봉 `plugins/` · THIRD-PARTY-NOTICES · 임포트 게이트 · `release.yml` 설치 스모크) | `packaging/**` · `scripts/third-party-notices.*` · `scripts/check-imports.ps1` · `.github/workflows/release.yml` | T0·T5 | 로컬: `stage_common` · `check-imports` 15종 인박스 · `build-msi.ps1`/`build-zip.ps1` · CI: release.yml 설치→`--version`·`--smoke`→제거 잔여 0 | 🚧 | 태그 릴리스 첫 실행 전 · deb/rpm/pkg/dmg는 CI 몫 |
 | DLG-069 · 070 · 071 · 072 · 073 · T-13 | 순서/표시 편집 창(어댑터 3종 · 블록/자식 이동 규칙 · 표시 체크(잠금·그룹 통째) · 키보드 · 실시간 적용 통지) + 툴바/컨텍스트 메뉴/컬럼 반영 · 세션 `cols` | `order.rs` · `order_win.rs` · `app/order.rs` · `app/menus.rs::build_toolbar` · `app/ctxmenu.rs::ctx_layout` · `panel.rs::apply_col_layout` | T1·T2·T3·T4 | `order::tests` 3 · `order_win::tests` 2 · `order_editor_applies_toolbar_ctxmenu_and_columns` · `order-editor.scn` | ✅ | 우클릭 팝업 진입 ☐ · 셰브론 접기 생략 |
+| KEY-1001~1498 | dir2 i18n 키 전수(498) = dir3 en/ko/ja 내장 카탈로그에 전부 존재(자원 유지) | `crates/ndir-i18n/lang/*.lang` | T1 | `dir2_catalog_i18n_keys_present_in_all_langs`(원장 §2-6을 읽어 대조) | ✅ | 사문 61키(§2-4)도 유지 |
+| KEY-001~071 | dir2 `settings.cfg` 키 전수(66) = 변환표 옛 이름 또는 레지스트리 키 | `ndir-settings/src/migrate.rs::MAP` · `registry.rs` | T1 | `dir2_catalog_settings_keys_are_mapped`(원장 §1-1 대조) · `map_targets_exist_and_dir2_defaults_validate` | ✅ | ⚠ KEY-065 `launcher_count` = `launcher.items` 목록이 대신(DR-3) |
+| KEY-141~150 | 이름 변경 프리셋 필드(`renames/*.cfg` 10) | `ndir-ops/src/batch_rename.rs`(serialize_ops/parse_ops) | T1 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` | ✅ | |
+| KEY-121~140 | 값 안의 하위 문법 토큰(도구모음·컨텍스트 메뉴·컬럼 순서 · 런처 항목 · 터미널 스킴) | `order.rs` · `launcher.rs` · `term` 테마 | T1 | `order::tests` 3 · `parse_encode_round_trip_and_separator` | 🚧 | 가상 경로 토큰(`::PC::` 등)은 ndir-vfs 시험 · 터미널 스킴 토큰 ☐ |
 | SHELL-060 · 061 · 062 · 068(1차) | 외부 드롭 수신 — winit DroppedFile 모아 틱 처리 · 대상 = 폴더 행/패널 폴더 · Ctrl 복사·Shift 이동·볼륨 기본 · 자기/하위·전송 중 거부 · 전송 엔진 합류 | `app/dnd.rs` · `app/event_loop.rs` | T3 | `external_drop_moves_or_copies_into_folder_under_cursor` | ✅ | 발신·OLE 완전·자동 스크롤·가상 파일 = 2차 · 드롭 좌표 실기 확인 |
 | SHELL-044 · WINC-165 · X-32 | 잘라낸 항목 흐림 — 클립보드가 잘라내기 파일 목록이면 그 행 이름 text_dim · 동기 = 잘라내기/복사/전송 완료/포커스 복귀 | `filelist.rs::TreeSource::is_ghosted` · `panel.rs::set_cut_marks` · `app/ops.rs::sync_cut_marks` | T3 | `cut_marks_ghost_rows_until_clipboard_changes` | ✅ | 클립보드 변경 통지 대신 포커스 복귀 1회 동기(3-OS 공통) |
 | EXT-415(1차) · EXT-409 · T-63 | 플러그인 매니저 — [설치…](파일 창 → 검증 → 사용자 폴더 복사) · [삭제](사용자분) · 공급자 캐시 무재시작 재구성 · 동봉분 안내 | `app/plugins.rs` · `preview/mod.rs::invalidate/user_plugin_dir/validate_plugin` · `prefs_win.rs` | T3 | `plugin_manager_install_and_remove` | ✅ | 원격 저장소/업데이트 = 2단계 보류 |

@@ -281,6 +281,53 @@ mod tests {
         }
     }
 
+    /// 원장 전수(T-90 · docs/port/31 §2-6 KEY-1001~1498): dir2 i18n 키 **전부**가 세 언어 내장 카탈로그에 있다(자원 유지 — CLAUDE.md §1).
+    /// 원장 표 행 = `| KEY-NNNN | `키` | en | ko | 비고 |`.
+    #[test]
+    fn dir2_catalog_i18n_keys_present_in_all_langs() {
+        let doc = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/port/31-catalog-settings-i18n.md"
+        ))
+        .expect("docs/port/31");
+        let mut keys: Vec<String> = Vec::new();
+        let mut in_sec = false;
+        for line in doc.lines() {
+            if line.starts_with("### 2-6.") {
+                in_sec = true;
+                continue;
+            }
+            if in_sec && line.starts_with("## 3.") {
+                break;
+            }
+            if !in_sec || !line.starts_with("| KEY-1") {
+                continue;
+            }
+            let mut cells = line.split('|').map(str::trim);
+            let _ = cells.next();
+            let _ = cells.next();
+            if let Some(k) = cells.next() {
+                let k = k.trim_matches('`');
+                if !k.is_empty() {
+                    keys.push(k.to_string());
+                }
+            }
+        }
+        assert!(keys.len() >= 490, "원장 i18n 행 수: {}", keys.len());
+        for (code, text) in [("en", BUILTIN_EN), ("ko", BUILTIN_KO), ("ja", BUILTIN_JA)] {
+            let l = parse(text);
+            let missing: Vec<&String> = keys
+                .iter()
+                .filter(|k| !l.strings.contains_key(k.as_str()))
+                .collect();
+            assert!(
+                missing.is_empty(),
+                "{code}.lang에 원장 키 누락 {}개: {missing:?}",
+                missing.len()
+            );
+        }
+    }
+
     /// port/31 §2-3 결함 수정 확인: `del.lockedMsg`/`del.failMsg`의 `{1}`이 값 안에 있다.
     #[test]
     fn locked_and_fail_messages_carry_list_placeholder() {

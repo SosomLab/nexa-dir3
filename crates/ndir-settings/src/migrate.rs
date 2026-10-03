@@ -249,6 +249,54 @@ mod tests {
     use super::*;
     use crate::{entry, normalize, Settings};
 
+    /// 원장 전수(T-90 · docs/port/31 §1-1 KEY-001~071): dir2 `settings.cfg` 키 **전부**가 변환표의 옛 이름이거나 레지스트리 키 그대로다.
+    /// 의도된 예외 = `launcher_count`(dir3는 `launcher.items` 목록이 개수를 대신한다 · ⚠).
+    #[test]
+    fn dir2_catalog_settings_keys_are_mapped() {
+        let doc = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/port/31-catalog-settings-i18n.md"
+        ))
+        .expect("docs/port/31");
+        let mut keys: Vec<String> = Vec::new();
+        let mut in_sec = false;
+        for line in doc.lines() {
+            if line.starts_with("### 1-1.") {
+                in_sec = true;
+                continue;
+            }
+            if in_sec && line.starts_with("### 1-2.") {
+                break;
+            }
+            if !in_sec || !line.starts_with("| KEY-0") {
+                continue;
+            }
+            let mut cells = line.split('|').map(str::trim);
+            let _ = cells.next();
+            let _ = cells.next();
+            if let Some(k) = cells.next() {
+                // 칸 = `키` + 설명 꼬리(구 키 표기 등) → 첫 백틱 쌍 안만. 머리 주석 행·동적 키 군(`launcher<N>` …)은 변환기가 패턴으로 다룬다.
+                let k = k.trim_start_matches('`');
+                let k = k.split('`').next().unwrap_or("");
+                if !k.is_empty() && !k.starts_with('#') && !k.contains('<') && !k.contains(' ') {
+                    keys.push(k.to_string());
+                }
+            }
+        }
+        assert!(keys.len() >= 60, "원장 settings 행 수: {}", keys.len());
+        // 의도된 예외: `launcher_count`(목록이 개수를 대신) · `transfer_close_secs`(구 키 · dir2도 읽기 전용 호환 — 변환표에 있으면 무해).
+        const DROPPED: &[&str] = &["launcher_count", "transfer_close_secs"];
+        let unmapped: Vec<&String> = keys
+            .iter()
+            .filter(|k| {
+                !MAP.iter().any(|(old, _, _)| old == k)
+                    && entry(k).is_none()
+                    && !DROPPED.contains(&k.as_str())
+            })
+            .collect();
+        assert!(unmapped.is_empty(), "대응 없는 dir2 키: {unmapped:?}");
+    }
+
     /// 변환표 전수: 새 키가 레지스트리에 있고, dir2 기본값(PREFS-101~)을 넣으면 전부 검증을 통과한다.
     #[test]
     fn map_targets_exist_and_dir2_defaults_validate() {

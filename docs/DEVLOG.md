@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-90 2차**: 원장을 읽는 전수 시험 2종(i18n 키 498 · settings 키 66) + 집단 행 4 → 덮음 29 % → [journal §63](journal/2026-10-03.md)
 - **T-90 1차 매트릭스 전수 감사**: `scripts/matrix-audit.py`(원장 4,266 ID ↔ 매트릭스 대조 · 90 집계 생성 · 91 미착수 전수 생성 · `--check` 게이트) — 첫 실측 덮음 16 % → [journal §62](journal/2026-10-03.md)
 - **DnD 1차 수신**: `app/dnd.rs`(winit DroppedFile → 틱 처리 · 폴더 행/패널 폴더 대상 · Ctrl/Shift/볼륨 판정 · 거부 규칙 · 전송 엔진) · 시험 +1(163) → [journal §61](journal/2026-10-03.md)
 - **SHELL-044 잘라내기 흐림**: `TreeSource::is_ghosted` + `sync_cut_marks`(잘라내기/복사/전송 완료/포커스 복귀) · 시험 +1(162) → [journal §60](journal/2026-10-03.md)
