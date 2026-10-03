@@ -104,6 +104,10 @@ pub(crate) fn nav_glyphs() -> [char; 4] {
     [set[0], set[1], set[2], set[3]]
 }
 
+/// 탭 바 지표(논리 px · dir2: 줄 높이 22 · 좌우 여백 6 + 4).
+const TAB_ROW_LOGICAL: i32 = 22;
+const TAB_PAD_LOGICAL: i32 = 10;
+
 /// 네비 버튼의 SVG 자산(아이콘 글꼴이 없는 OS — Windows의 MDL2 글리프와 같은 모양으로 그린다 · 사용자 10-03
 /// "내 PC, 이전, 이후, 상위 버튼의 모양이 윈도우와 다르다").
 const NAV_ASSETS: [(&str, &str); 4] = [
@@ -498,7 +502,10 @@ impl Panel {
     pub(crate) fn set_metrics(&mut self, m: PanelMetrics, inv: &mut Invalidations) {
         self.m = m;
         self.tabbar.set_scale(m.scale);
-        self.tabbar.set_metrics(m.tab_h, m.pad_x + 4, inv);
+        // TabBar는 줄 높이·여백을 **논리 px**로 받아 배율을 스스로 곱한다(장치 px를 넘기면 배율 ≠ 1에서 여백이 두 배 ·
+        // 여러 줄일 때 둘째 줄이 잘린다 — 10-03 적발). 줄 높이의 장치 px는 `m.tab_h`(= 22 × 배율)와 같아진다.
+        self.tabbar
+            .set_metrics(TAB_ROW_LOGICAL, TAB_PAD_LOGICAL, inv);
         // 배율이 바뀌면 SVG 네비 아이콘을 그 크기로 다시 만든다(글리프면 그대로).
         if (self.m_icon_scale - m.scale).abs() > f32::EPSILON {
             self.m_icon_scale = m.scale;
@@ -1084,6 +1091,29 @@ impl Panel {
     #[cfg(test)]
     pub(crate) fn nav_items(&self) -> &[ToolItem] {
         self.navbtns.items()
+    }
+
+    /// 탭 바 모양(설정 `tabs.multiline` · `tabs.scroll_buttons`): 여러 줄(폭을 넘으면 다음 줄) 또는 한 줄 + ◀ ▶(자리 3가지).
+    pub(crate) fn set_tab_style(
+        &mut self,
+        multiline: bool,
+        buttons: nexa_ctl::controls::ScrollButtons,
+        inv: &mut Invalidations,
+    ) {
+        self.tabbar.set_multiline(multiline);
+        self.tabbar.set_scroll_buttons(buttons);
+        inv.push(self.bounds);
+    }
+
+    /// 탭 바 줄 수가 바뀌었는가(그리기가 측정 · 1회성) — 참이면 호스트가 다시 배치한다(dir2 win.rs:4941).
+    pub(crate) fn take_tab_lines_changed(&self) -> bool {
+        self.tabbar.take_lines_changed()
+    }
+
+    /// 탭 바 줄 수(시험 · 덤프).
+    #[cfg(test)]
+    pub(crate) fn tab_lines(&self) -> usize {
+        self.tabbar.lines()
     }
 
     /// 활성 탭의 폴더가 바뀌었는가(1회성).

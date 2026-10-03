@@ -414,6 +414,13 @@ ops.doneClosing = Done - closing shortly
 pref.cat.tabs = Tabs
 pref.tabDblclick = Tab double-click action
 pref.tabDblclick.desc = What double-clicking a tab does. More options later.
+pref.tabMultiline = Multi-line tabs
+pref.tabMultiline.desc = Wrap tabs onto more lines when they exceed the panel width, so all are visible. Off = keep one line and scroll with the ◀ ▶ buttons.
+pref.tabScrollButtons = Tab scroll button position
+pref.tabScrollButtons.desc = Where the ◀ ▶ buttons go when tabs use a single line (only when multi-line tabs are off).
+pref.tabScrollButtons.end = Right end
+pref.tabScrollButtons.start = Left end
+pref.tabScrollButtons.split = Previous at left end, next at right end
 pref.tabDbl.close = Close tab
 pref.tabDbl.pin = Pin tab
 pref.tabDbl.lock = Lock tab

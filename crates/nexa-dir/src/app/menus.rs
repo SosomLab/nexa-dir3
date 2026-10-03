@@ -341,6 +341,23 @@ impl App {
     }
 
     /// 보기 옵션(숨김 · Dot · 폴더 우선) 변경 → 두 패널 전 탭 무간섭 재열람.
+    /// 탭 바 모양 설정(`tabs.multiline` 기본 on · `tabs.scroll_buttons` end/start/split) → 두 패널.
+    pub(crate) fn apply_tab_style(&mut self) {
+        use nexa_ctl::controls::ScrollButtons;
+        let multiline = self.settings.flag("tabs.multiline");
+        let buttons = match self.settings.get("tabs.scroll_buttons") {
+            Some("start") => ScrollButtons::Start,
+            Some("split") => ScrollButtons::Split,
+            _ => ScrollButtons::End,
+        };
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.set_tab_style(multiline, buttons, &mut inv);
+        }
+        self.layout();
+        self.redraw();
+    }
+
     /// 글꼴 장식 설정(dir2 X-12 · `list.folder_bold`/`list.header_bold`/`list.header_italic`) → 두 패널 그리드.
     pub(crate) fn apply_font_decor(&mut self) {
         let (fb, hb, hi) = (

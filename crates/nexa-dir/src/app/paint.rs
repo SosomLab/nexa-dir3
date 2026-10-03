@@ -40,6 +40,13 @@ impl App {
             self.panels[1].paint(dc, &th);
             self.splitter.paint(dc, &th);
         }
+        // 탭 바 줄 수가 바뀌었으면(여러 줄 — 그리기가 측정한다) 다시 배치하고 한 번 더 그린다(dir2 win.rs:4941-4947).
+        let l0 = self.panels[0].take_tab_lines_changed();
+        let l1 = self.panels[1].take_tab_lines_changed();
+        if l0 || l1 {
+            self.layout_core();
+            self.redraw();
+        }
         // 도크 경계 2종(비어 있으면 안 그린다 — 도크 숨김 · 단일 정보).
         self.dock_split_h.paint(dc, &th);
         self.dock_split_v.paint(dc, &th);

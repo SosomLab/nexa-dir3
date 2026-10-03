@@ -546,6 +546,7 @@ impl App {
         app.apply_window_sizes();
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)
+        app.apply_tab_style(); // 탭 여러 줄(기본) · 한 줄일 때 ◀ ▶ 자리
         app.apply_font_decor(); // dir2 X-12 폴더 굵게 · 헤더 굵게/이탤릭(KEY-061~063)
         app.sync_menu_shortcuts();
         app.sync_menu_checks();

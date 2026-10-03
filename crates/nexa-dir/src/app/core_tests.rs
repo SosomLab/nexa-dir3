@@ -1987,6 +1987,67 @@ fn col_width_sync_matches_by_column_key() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 탭 여러 줄(T-121 · 사용자 10-03 "Multi-line 기본 · Single-line은 옵션 · 한 줄일 때 ◀ ▶ 자리 3가지"): 기본 = 폭을 넘으면
+/// 다음 줄(그리기가 줄 수를 재고 다시 배치 → 목록이 내려간다) · 끄면 한 줄 · 배율 2에서도 줄 높이 = 22 × 2(논리 px 전달).
+#[test]
+fn tabs_wrap_into_lines_by_default() {
+    let (mut app, dir) = fixture("tablines");
+    app.layout_for(1200, 800, 1.0);
+    app.apply_tab_style();
+    assert!(app.settings.flag("tabs.multiline"), "기본 = 여러 줄");
+    let paint = |app: &mut App, w: i32, h: i32, s: f32| {
+        // 줄 수는 그리기가 잰다 → 바뀌면 다시 배치(실제 앱은 다음 프레임 · 시험은 한 번 더 그린다).
+        for _ in 0..2 {
+            let mut rec = nexa_ctl::RecordCtx::with_surface(w, h);
+            app.paint_into(&mut rec, w, h, s);
+        }
+    };
+    paint(&mut app, 1200, 800, 1.0);
+    assert_eq!(app.panels[0].tab_lines(), 1);
+    let list_y1 = app.panels[0].rows().bounds().y;
+    for _ in 0..14 {
+        app.command("file.new_tab");
+    }
+    paint(&mut app, 1200, 800, 1.0);
+    let lines = app.panels[0].tab_lines();
+    assert!(lines >= 2, "탭 15개 = 여러 줄: {lines}");
+    let list_y2 = app.panels[0].rows().bounds().y;
+    assert_eq!(
+        list_y2 - list_y1,
+        22 * (lines as i32 - 1),
+        "목록이 줄 수만큼 내려간다"
+    );
+    assert_eq!(app.panels[1].tab_lines(), 1, "반대 패널은 그대로");
+    // 배율 2: 줄 높이 = 44(장치 px) — 줄 수가 같으면 탭 바 높이 = 44 × 줄 수.
+    app.layout_for(2400, 1600, 2.0);
+    paint(&mut app, 2400, 1600, 2.0);
+    let l2 = app.panels[0].tab_lines() as i32;
+    let tab_h = app.panels[0].rows().bounds().y - app.panels[0].bounds().y - 48;
+    assert_eq!(tab_h, 44 * l2, "배율 2 탭 바 높이(네비 줄 48 제외)");
+    // 한 줄 옵션 + 버튼 자리.
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("tabs.multiline", "off");
+    let _ = app.settings.set("tabs.scroll_buttons", "split");
+    app.after_setting_changed("tabs.multiline");
+    paint(&mut app, 1200, 800, 1.0);
+    assert_eq!(app.panels[0].tab_lines(), 1);
+    assert_eq!(
+        app.panels[0].rows().bounds().y,
+        list_y1,
+        "한 줄 = 원래 자리"
+    );
+    assert_eq!(
+        app.panels[0].tabbar.scroll_buttons(),
+        nexa_ctl::controls::ScrollButtons::Split
+    );
+    // 버튼 자리 설정은 여러 줄을 끈 경우에만 쓸 수 있다(종속).
+    assert_eq!(
+        ndir_settings::dependency("tabs.scroll_buttons").map(|d| d.0),
+        Some("tabs.multiline")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]

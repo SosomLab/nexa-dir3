@@ -39,6 +39,11 @@ const TAB_DBL_OPTS: &[(&str, &str)] = &[
     ("pin", "pref.tabDbl.pin"),
     ("lock", "pref.tabDbl.lock"),
 ];
+const TAB_SCROLL_BTN_OPTS: &[(&str, &str)] = &[
+    ("end", "pref.tabScrollButtons.end"),
+    ("start", "pref.tabScrollButtons.start"),
+    ("split", "pref.tabScrollButtons.split"),
+];
 const TERM_COPY_OPTS: &[(&str, &str)] = &[
     ("text", "pref.termCopy.text"),
     ("html", "pref.termCopy.html"),
@@ -813,6 +818,25 @@ pub const REGISTRY: &[Entry] = &[
         Choice(TAB_DBL_OPTS),
         "close"
     ),
+    // 탭 여러 줄(dir3 · 사용자 10-03 "탭 구성은 Multi-line을 기본 · Single-line은 옵션"): 켜면 폭을 넘는 탭이 다음 줄로(dir2는 늘
+    // 여러 줄) · 끄면 한 줄 + ◀ ▶ 스크롤.
+    e!(
+        "tabs.multiline",
+        CAT_TABS,
+        "pref.tabMultiline",
+        "pref.tabMultiline.desc",
+        Bool,
+        "on"
+    ),
+    // 한 줄일 때 ◀ ▶ 버튼 자리: 오른쪽 끝(기본) · 왼쪽 끝 · 양 끝(◀ 왼쪽 · ▶ 오른쪽).
+    e!(
+        "tabs.scroll_buttons",
+        CAT_TABS,
+        "pref.tabScrollButtons",
+        "pref.tabScrollButtons.desc",
+        Choice(TAB_SCROLL_BTN_OPTS),
+        "end"
+    ),
     // ── 하단 도크 › 하단 도크
     e!(
         "dock.visible",
@@ -1428,6 +1452,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
+    ("tabs.scroll_buttons", "tabs.multiline", Dep::Eq("off")),
 ];
 
 /// **내부 전용**(사용자 10-03 "라이선스 게이트처럼 라이선스로 기능을 켜고 끄는 것은 보이면 안 된다") — 고급 토글을 켜도 설정 창에

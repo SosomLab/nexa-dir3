@@ -414,6 +414,13 @@ ops.doneClosing = 完了 — まもなく閉じます
 pref.cat.tabs = タブ
 pref.tabDblclick = タブのダブルクリック動作
 pref.tabDblclick.desc = タブをダブルクリックしたときの動作です。オプションは今後追加されます。
+pref.tabMultiline = タブを複数行に
+pref.tabMultiline.desc = タブがパネル幅を超えたら次の行に折り返してすべて表示します。オフ = 1 行のままで ◀ ▶ ボタンでスクロールします。
+pref.tabScrollButtons = タブスクロールボタンの位置
+pref.tabScrollButtons.desc = タブを 1 行で使うときの ◀ ▶ ボタンの位置です（複数行をオフにした場合のみ）。
+pref.tabScrollButtons.end = 右端
+pref.tabScrollButtons.start = 左端
+pref.tabScrollButtons.split = 前は左端・次は右端
 pref.tabDbl.close = タブを閉じる
 pref.tabDbl.pin = タブをピン留め
 pref.tabDbl.lock = タブをロック
