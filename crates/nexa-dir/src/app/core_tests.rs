@@ -2248,10 +2248,10 @@ fn shell_item_icons_reach_context_menu() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 우클릭 가속(사용자 10-03 · dir2 X-61 · SHELL-014/015): 셸 항목이 구축 중이면 메뉴는 **즉시**(자체 항목 + "불러오는 중") 열리고,
-/// 통지가 오면 같은 자리에서 셸 항목으로 채워진다 · 선택이 300 ms 머물면 선행 구축을 건다 · 비동기 실행 결과는 틱에서 반영.
+/// 우클릭 가속(사용자 10-03 · dir2 X-61 · SHELL-014/015): 셸 항목이 준비돼 있으면 즉시 · 아니면 UI를 막지 않고 기다렸다가
+/// **완성된 메뉴를 한 번** 연다(두 번 뜨지 않는다 · 상태줄에 진행 표시 · 3 s 초과 = 자체 항목만 · 다른 입력 = 취소) · 선택이 300 ms 머물면 선행 구축을 건다 · 비동기 실행 결과는 틱에서 반영.
 #[test]
-fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
+fn context_menu_opens_once_when_shell_items_are_ready() {
     use crate::platform::{
         ContextMenuProvider, MenuEvent, MenuTarget, PlatformError, ShellMenuItem,
     };
@@ -2317,20 +2317,15 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
         1,
         "같은 선택은 다시 걸지 않는다"
     );
-    // ② 우클릭: 셸 항목이 아직 없어도 즉시 열린다(자체 항목 + 불러오는 중).
+    // ② 우클릭: 셸 항목이 아직 없으면 메뉴를 **열지 않고** 기다린다(상태줄에 진행 · 메뉴가 두 번 뜨지 않게).
     app.cursor = (320, 240);
     app.open_row_menu(0);
-    assert!(app.tab_menu.is_open());
-    let d = app.dump_of("ctx").unwrap();
-    assert!(
-        d.starts_with("row ") && d.contains("cmd.activate") && d.contains("ctx.loading"),
-        "{d}"
-    );
-    assert!(d.contains("edit.copy") && d.contains("edit.delete"), "{d}");
+    assert!(!app.tab_menu.is_open(), "준비 전에는 메뉴 없음");
+    assert!(app.ctx_wait.is_some());
+    assert_eq!(app.statusbar.left(), tr("ctx.loading"));
     assert_eq!(shared.borrow().asked, vec![target.clone()]);
-    let at = (app.tab_menu.bounds().x, app.tab_menu.bounds().y);
     assert!(app.ctx_shell_tick(t1).is_some(), "기다리는 동안 틱 유지");
-    // ③ 다른 대상의 통지는 무시 · 같은 대상의 통지 = 같은 자리에서 채움.
+    // ③ 다른 대상의 통지는 무시 · 같은 대상의 통지 = 완성된 메뉴가 **한 번** 연 자리에 열린다.
     let shell_items = vec![ShellMenuItem {
         id: "shell:7".into(),
         label: "Open With Fake".into(),
@@ -2342,19 +2337,24 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
         items: shell_items.clone(),
     });
     let _ = app.ctx_shell_tick(t1);
-    assert!(app.dump_of("ctx").unwrap().contains("ctx.loading"));
+    assert!(!app.tab_menu.is_open() && app.ctx_wait.is_some());
     shared.borrow_mut().events.push_back(MenuEvent::Items {
         target,
         items: shell_items,
     });
     let _ = app.ctx_shell_tick(t1);
+    assert!(app.tab_menu.is_open() && app.ctx_wait.is_none());
     let d = app.dump_of("ctx").unwrap();
-    assert!(d.contains("shell:7") && !d.contains("ctx.loading"), "{d}");
-    assert!(app.tab_menu.is_open());
-    assert_eq!(
-        (app.tab_menu.bounds().x, app.tab_menu.bounds().y),
-        at,
-        "같은 자리"
+    assert!(
+        d.starts_with("row ") && d.contains("shell:7") && !d.contains("ctx.loading"),
+        "{d}"
+    );
+    assert!(d.contains("edit.copy") && d.contains("edit.delete"), "{d}");
+    assert_ne!(app.statusbar.left(), tr("ctx.loading"), "상태줄 복구");
+    let b = app.tab_menu.bounds();
+    assert!(
+        (b.x - 320).abs() <= 2 && (b.y - 240).abs() <= 2,
+        "연 자리: {b:?}"
     );
     // ④ 셸 항목 실행 = 비동기 접수 → 결과(오류)는 틱에서 토스트.
     app.startup_cmd("ctx.pick:shell:7");
@@ -2368,7 +2368,37 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
     assert!(app.ctx_shell_tick(t2).is_some());
     let _ = app.ctx_shell_tick(t2 + Duration::from_millis(301));
     assert_eq!(shared.borrow().prepared.len(), 2);
-    // ⑥ 하네스 `ctx.wait`: 기다릴 것이 없으면 지나가고, 대기 중이면 나머지 `@ready` 명령을 보류했다가 채워진 뒤 이어 돈다.
+    // ⑥ 기다리는 동안 다른 클릭 = 취소(메뉴는 뜨지 않는다) · 3 s 넘게 안 오면 자체 항목만으로 연다.
+    app.tab_menu.close();
+    app.set_active(0);
+    app.open_bg_menu(0);
+    assert!(app.ctx_wait.is_some() && !app.tab_menu.is_open());
+    let r0 = app.panels[0].rows().bounds();
+    app.route(down(r0.x + 20, r0.bottom() - 6));
+    assert!(
+        app.ctx_wait.is_none() && !app.tab_menu.is_open(),
+        "클릭 = 취소"
+    );
+    app.route(InputEvent::MouseUp {
+        x: r0.x + 20,
+        y: r0.bottom() - 6,
+    });
+    app.open_bg_menu(0);
+    let t4 = Instant::now();
+    let _ = app.ctx_shell_tick(t4 + Duration::from_millis(2900));
+    assert!(!app.tab_menu.is_open(), "3 s 전에는 계속 기다린다");
+    let _ = app.ctx_shell_tick(t4 + Duration::from_millis(3100));
+    assert!(
+        app.tab_menu.is_open() && app.ctx_wait.is_none(),
+        "시간 초과 = 자체 항목만"
+    );
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        d.starts_with("bg ") && !d.contains("ctx.loading") && d.contains("view.refresh"),
+        "{d}"
+    );
+    app.tab_menu.close();
+    // ⑦ 하네스 `ctx.wait`: 기다릴 것이 없으면 지나가고, 대기 중이면 나머지 `@ready` 명령을 보류했다가 메뉴가 뜬 뒤 이어 돈다.
     let tabs0 = app.panels[0].tab_count();
     app.startup_ready = vec!["ctx.wait".into(), "file.new_tab".into()];
     app.ready_fired = false;
@@ -2380,8 +2410,7 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
     );
     app.set_active(0);
     app.open_bg_menu(0);
-    assert!(app.ctx_pending.is_some());
-    let pending = app.ctx_pending.clone().unwrap();
+    let (_, waiting, _) = app.ctx_wait.clone().expect("waiting");
     app.startup_ready = vec!["ctx.wait".into(), "file.new_tab".into()];
     app.ready_fired = false;
     app.fire_ready();
@@ -2390,7 +2419,7 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
     let t3 = Instant::now();
     assert!(app.ctx_shell_tick(t3).is_some(), "보류 중에는 틱 유지");
     shared.borrow_mut().events.push_back(MenuEvent::Items {
-        target: pending,
+        target: waiting,
         items: Vec::new(),
     });
     let _ = app.ctx_shell_tick(t3);
@@ -2398,7 +2427,7 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
     assert_eq!(
         app.panels[0].tab_count(),
         tabs0 + 2,
-        "채워진 뒤 이어서 실행"
+        "메뉴가 뜬 뒤 이어서 실행"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -10,11 +10,13 @@ cmd: @ready:edit.copy
 cmd: @ready:assert.ops:clip 1 copy
 cmd: @ready:nav:<root>/sub
 cmd: @ready:edit.paste
-cmd: @after:1500:ops.dump:<out>/ops.txt
-cmd: @after:1500:list.dump:<out>/list.txt
-cmd: @after:1600:assert.ops:transfer idle
-cmd: @after:1600:assert.ops:undo true
-cmd: @after:1700:quit
+# 전송이 끝날 때까지 뒤 @ready 보류(§81 · 고정 @after:1500은 전체 묶음 부하에서 목록이 비어 흔들렸다 — §78/§79).
+cmd: @ready:ops.wait
+cmd: @ready:ops.dump:<out>/ops.txt
+cmd: @ready:list.dump:<out>/list.txt
+cmd: @ready:assert.ops:transfer idle
+cmd: @ready:assert.ops:undo true
+cmd: @ready:quit
 check: ops.txt: transfer idle
 check: ops.txt: undo true
 check: list.txt: a.txt

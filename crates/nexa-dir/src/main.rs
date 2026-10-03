@@ -227,6 +227,8 @@ struct App {
     ctx_items: Vec<CtxItem>,
     /// 셸 항목을 기다리는 열린 메뉴의 대상(비차단 조회 · dir2 X-61) — `Items`가 오면 같은 자리에서 메뉴를 다시 채운다.
     ctx_pending: Option<platform::MenuTarget>,
+    /// 셸 항목을 기다리는 중(메뉴는 아직 안 열림 — 준비되면 **완성된 메뉴를 한 번** 연다 · dir2 방식): (종류, 대상, 시작 시각).
+    ctx_wait: Option<(app::ctxmenu::CtxKind, platform::MenuTarget, Instant)>,
     /// 메뉴를 연 자리(다시 채울 때 같은 자리).
     ctx_anchor: (i32, i32),
     /// 비동기 셸 실행을 건 패널(`Invoked` 통지 처리용).
@@ -472,6 +474,7 @@ impl App {
             ctx_templates: Vec::new(),
             ctx_items: Vec::new(),
             ctx_pending: None,
+            ctx_wait: None,
             ctx_anchor: (0, 0),
             ctx_invoke_panel: None,
             ctx_dwell_target: None,

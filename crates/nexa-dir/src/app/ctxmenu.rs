@@ -59,6 +59,46 @@ const CTX_PREBUILD_MS: u64 = 300;
 const CTX_PREBUILD_MAX: usize = 256;
 /// 구축/실행을 기다리는 동안의 틱 간격.
 const CTX_POLL_MS: u64 = 30;
+/// 셸 항목을 이만큼 기다려도 안 오면 자체 항목만으로 연다(느린 셸 확장 · 네트워크 경로).
+const CTX_WAIT_MAX_MS: u64 = 3000;
+
+/// 메뉴 행 높이(논리 px · nexa-ctl 메뉴의 행 = 글자 16 + 여백 10) · 위아래 안쪽 여백 — 창 높이에 들어가는 행 수 계산용.
+const CTX_ROW_H: f32 = 26.0;
+const CTX_PAD_V: f32 = 5.0;
+
+/// 구분선 정리(사용자 10-03 "속성 밑에 내용이 없는 구분자 2개"): 셸이 이미 준 동사를 빼고 나면 구분선만 연달아 남는다 →
+/// 맨 앞·맨 뒤·연속 구분선을 걷는다(하위 메뉴도).
+fn tidy_separators(items: Vec<CtxItem>) -> Vec<CtxItem> {
+    let mut out: Vec<CtxItem> = Vec::with_capacity(items.len());
+    for it in items {
+        match it {
+            CtxItem::Separator => {
+                if !matches!(out.last(), None | Some(CtxItem::Separator)) {
+                    out.push(CtxItem::Separator);
+                }
+            }
+            mut it => {
+                if let CtxItem::Item { children, .. } = &mut it {
+                    *children = tidy_separators(std::mem::take(children));
+                }
+                out.push(it);
+            }
+        }
+    }
+    if matches!(out.last(), Some(CtxItem::Separator)) {
+        out.pop();
+    }
+    out
+}
+
+/// 창 높이 `viewport_h`(물리 px)에 온전히 들어가는 메뉴 행 수(구분선은 행보다 낮으므로 행 높이로 세면 항상 안전 쪽).
+fn ctx_rows_that_fit(viewport_h: i32, scale: f32) -> usize {
+    let row = px(CTX_ROW_H, scale).max(1);
+    let pad = px(CTX_PAD_V, scale) * 2;
+    usize::try_from((viewport_h - pad) / row)
+        .unwrap_or(0)
+        .max(3)
+}
 
 fn has_id(items: &[CtxItem], id: &str) -> bool {
     items.iter().any(|c| match c {
@@ -82,6 +122,10 @@ impl App {
         let host = Rect::new(0, 0, self.viewport.0, self.viewport.1);
         let text_w = px(240.0, self.scale);
         let (x, y) = self.ctx_anchor;
+        let items = tidy_separators(items);
+        // 창보다 긴 메뉴(셸 확장이 많은 PC)는 아래가 잘렸다 → 창에 들어가는 행 수까지만 보이고 나머지는 스크롤(휠 · 키 · 오른쪽 표시).
+        self.tab_menu
+            .set_max_rows(Some(ctx_rows_that_fit(self.viewport.1, self.scale)));
         self.ctx_items = items.clone();
         self.tab_menu.open_at(x, y, items, host, text_w);
         self.redraw();
@@ -104,10 +148,46 @@ impl App {
         }
         self.ctx_set_owner();
         let target = MenuTarget::Rows(sel.clone());
-        let shell = self.platform.ctxmenu.try_items(&target);
-        let items = self.row_menu_items(&sel, shell.as_deref());
-        self.ctx_pending = shell.is_none().then_some(target);
-        self.open_ctx(CtxKind::Row(panel), items);
+        match self.platform.ctxmenu.try_items(&target) {
+            Some(shell) => {
+                let items = self.row_menu_items(&sel, Some(&shell));
+                self.open_ctx(CtxKind::Row(panel), items);
+            }
+            None => self.ctx_begin_wait(CtxKind::Row(panel), target),
+        }
+    }
+
+    /// 셸 항목이 아직 없다 → 메뉴를 열지 않고 기다린다(사용자 10-03 "우클릭하면 메뉴가 두 번 뜬다" — 종전은 자체 항목으로 먼저
+    /// 열고 도착하면 다시 채웠다). UI는 멈추지 않고 상태줄에 진행을 알린다(DR-20) · 준비되면 [`Self::ctx_shell_tick`]이 한 번 연다.
+    fn ctx_begin_wait(&mut self, kind: CtxKind, target: MenuTarget) {
+        self.ctx_anchor = self.cursor;
+        self.ctx_pending = None;
+        self.ctx_wait = Some((kind, target, Instant::now()));
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&tr("ctx.loading"), &mut inv);
+        self.redraw();
+    }
+
+    /// 기다리던 메뉴 취소(다른 곳 클릭 · Esc · 키 입력).
+    pub(crate) fn ctx_cancel_wait(&mut self) -> bool {
+        if self.ctx_wait.take().is_some() {
+            self.update_status();
+            self.redraw();
+            return true;
+        }
+        false
+    }
+
+    /// 기다림이 끝났다 — 연 자리(`ctx_anchor`)에 완성된 메뉴를 한 번 연다.
+    fn ctx_open_waited(&mut self, kind: CtxKind, target: &MenuTarget, shell: &[ShellMenuItem]) {
+        let items = match (kind, target) {
+            (CtxKind::Row(_), MenuTarget::Rows(sel)) => self.row_menu_items(sel, Some(shell)),
+            _ => self.bg_menu_items(Some(shell)),
+        };
+        self.update_status();
+        self.ctx_kind = Some(kind);
+        self.tab_menu_at = None;
+        self.reopen_ctx(items);
     }
 
     /// 행 메뉴 항목 조립 — `shell` = 셸 항목(`None` = 구축 중).
@@ -214,17 +294,17 @@ impl App {
     pub(crate) fn open_bg_menu(&mut self, panel: usize) {
         // 셸 배경 메뉴(실경로 폴더만 · 가상 최상위는 자체 항목만).
         let dir = self.panels[panel].root_path();
-        let (shell, pending) = if ndir_vfs::is_virtual_root(&dir) {
-            (Some(Vec::new()), None)
+        let shell = if ndir_vfs::is_virtual_root(&dir) {
+            Vec::new()
         } else {
             self.ctx_set_owner();
             let target = MenuTarget::Bg(dir);
-            let shell = self.platform.ctxmenu.try_items(&target);
-            let pending = shell.is_none().then_some(target);
-            (shell, pending)
+            match self.platform.ctxmenu.try_items(&target) {
+                Some(shell) => shell,
+                None => return self.ctx_begin_wait(CtxKind::Bg(panel), target),
+            }
         };
-        let items = self.bg_menu_items(shell.as_deref());
-        self.ctx_pending = pending;
+        let items = self.bg_menu_items(Some(&shell));
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
@@ -298,6 +378,13 @@ impl App {
         while let Some(ev) = self.platform.ctxmenu.poll() {
             match ev {
                 MenuEvent::Items { target, items } => {
+                    // 기다리던 메뉴의 셸 항목 도착 → 완성된 메뉴를 한 번 연다.
+                    if self.ctx_wait.as_ref().is_some_and(|w| w.1 == target) {
+                        if let Some((kind, t, _)) = self.ctx_wait.take() {
+                            self.ctx_open_waited(kind, &t, &items);
+                        }
+                        continue;
+                    }
                     if self.ctx_pending.as_ref() != Some(&target) {
                         continue;
                     }
@@ -329,6 +416,16 @@ impl App {
         }
         if self.ctx_pending.is_some() && !self.tab_menu.is_open() {
             self.ctx_pending = None; // 채우기 전에 닫힘 — 결과는 캐시에 남아 다음 우클릭이 즉시 뜬다.
+        }
+        // 셸이 너무 오래 걸리면 자체 항목만으로 연다(뒤늦게 다시 채우지 않는다 — 결과는 캐시에 남아 다음 우클릭에 쓰인다).
+        if self
+            .ctx_wait
+            .as_ref()
+            .is_some_and(|w| now.duration_since(w.2) >= Duration::from_millis(CTX_WAIT_MAX_MS))
+        {
+            if let Some((kind, t, _)) = self.ctx_wait.take() {
+                self.ctx_open_waited(kind, &t, &[]);
+            }
         }
         let mut wake: Option<Instant> = None;
         if !self.tab_menu.is_open() {
@@ -366,6 +463,7 @@ impl App {
             return Some(now);
         }
         if self.ctx_pending.is_some()
+            || self.ctx_wait.is_some()
             || self.platform.ctxmenu.busy()
             || !self.startup_blocked.is_empty()
         {
@@ -555,5 +653,42 @@ impl App {
         }
         self.update_status();
         self.redraw();
+    }
+}
+
+#[cfg(test)]
+mod tidy_tests {
+    use super::*;
+
+    /// 구분선 정리 · 창 높이에 맞춘 행 수(사용자 10-03 "속성 밑에 빈 구분자 2개 · 하단 메뉴 잘림").
+    #[test]
+    fn separators_collapse_and_rows_fit_the_window() {
+        let it = |id: &str| CtxItem::item(id, id);
+        let sub = CtxItem::submenu(
+            "s",
+            "s",
+            vec![CtxItem::Separator, it("x"), CtxItem::Separator],
+        );
+        let out = tidy_separators(vec![
+            CtxItem::Separator,
+            it("a"),
+            CtxItem::Separator,
+            CtxItem::Separator,
+            sub,
+            CtxItem::Separator,
+        ]);
+        let shape: Vec<bool> = out
+            .iter()
+            .map(|c| matches!(c, CtxItem::Separator))
+            .collect();
+        assert_eq!(shape, [false, true, false]);
+        let CtxItem::Item { children, .. } = &out[2] else {
+            panic!("submenu");
+        };
+        assert_eq!(children.len(), 1, "하위 메뉴도 정리");
+        // 높이 800 · 배율 1: (800 − 10) / 26 = 30행 · 배율 1.5: (800 − 16) / 39 = 20행 · 아주 낮은 창도 3행은 보인다.
+        assert_eq!(ctx_rows_that_fit(800, 1.0), 30);
+        assert_eq!(ctx_rows_that_fit(800, 1.5), 20);
+        assert_eq!(ctx_rows_that_fit(40, 1.0), 3);
     }
 }

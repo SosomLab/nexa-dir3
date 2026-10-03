@@ -417,6 +417,10 @@ impl App {
             "list panel{i} rows {} viewport {first}+{count}\n",
             src.len()
         );
+        // 열기 실패(0행의 원인 구분 — 10-03 copy-paste 흔들림): 오류 문구를 한 줄로.
+        if let Some(e) = src.error() {
+            out.push_str(&format!("error {e}\n"));
+        }
         for r in first..(first + count).min(src.len()) {
             let it = src.row(r);
             let cells: Vec<String> = rows
@@ -512,8 +516,9 @@ impl App {
     fn run_ready(&mut self, cmds: Vec<String>) {
         let mut it = cmds.into_iter();
         while let Some(id) = it.next() {
-            if id == "ctx.wait" {
-                if self.ctx_pending.is_some() {
+            // 결정적 대기: `ctx.wait` = 우클릭 메뉴의 셸 항목 도착까지 · `ops.wait` = 진행 중인 전송이 끝날 때까지(끝나면 목록도 갱신돼 있다).
+            if id == "ctx.wait" || id == "ops.wait" {
+                if self.startup_wait_busy(&id) {
                     self.startup_blocked = std::iter::once(id).chain(it).collect();
                     self.startup_blocked_since = Instant::now();
                     return;
@@ -530,12 +535,32 @@ impl App {
             return;
         }
         let timed_out = now.duration_since(self.startup_blocked_since) > Duration::from_secs(20);
+        let busy = self
+            .startup_blocked
+            .first()
+            .cloned()
+            .is_some_and(|id| self.startup_wait_busy(&id));
         if timed_out {
+            // 응답 없는 대기는 풀고 진행(하네스가 멈추지 않게) — 대기 명령 자체는 건너뛴다.
             self.ctx_pending = None;
-        }
-        if self.ctx_pending.is_none() {
+            self.ctx_wait = None;
+            let mut cmds = std::mem::take(&mut self.startup_blocked);
+            if !cmds.is_empty() {
+                cmds.remove(0);
+            }
+            self.run_ready(cmds);
+        } else if !busy {
             let cmds = std::mem::take(&mut self.startup_blocked);
             self.run_ready(cmds);
+        }
+    }
+
+    /// 대기 명령이 아직 기다려야 하는가.
+    fn startup_wait_busy(&self, id: &str) -> bool {
+        match id {
+            "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
+            "ops.wait" => self.transfer.is_some(),
+            _ => false,
         }
     }
 

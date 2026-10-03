@@ -189,6 +189,30 @@ impl App {
                 return;
             }
         }
+        // 셸 항목을 기다리는 우클릭 메뉴: 다른 클릭·키 입력이 오면 그 메뉴는 열지 않는다(늦게 떠서 엉뚱한 곳을 덮지 않게).
+        if self.ctx_wait.is_some()
+            && matches!(
+                ev,
+                InputEvent::MouseDown { .. }
+                    | InputEvent::RightDown { .. }
+                    | InputEvent::MiddleDown { .. }
+                    | InputEvent::DoubleClick { .. }
+                    | InputEvent::Key { .. }
+                    | InputEvent::Char { .. }
+            )
+        {
+            let esc = matches!(
+                ev,
+                InputEvent::Key {
+                    key: nexa_ctl::Key::Escape,
+                    ..
+                }
+            );
+            self.ctx_cancel_wait();
+            if esc {
+                return;
+            }
+        }
         // 툴바 그룹을 끄는 중 Esc = 취소(원래 순서·행으로 · nexa-ctl `ToolDock::cancel_drag`).
         if self.toolbar.is_dragging() {
             if let InputEvent::Key {

@@ -18,6 +18,28 @@ use std::path::{Path, PathBuf};
 pub(crate) const CARET_BLINK_MS: u64 = 530;
 /// 출력 폴링 간격(ms) — 세션이 살아 있는 동안만 깬다.
 pub(crate) const POLL_MS: u64 = 30;
+/// 진단: 환경 변수 `NDIR_TERM_TRACE=<파일>`이 있으면 PTY에서 읽은 **원시 바이트**를 그 파일에 덧붙인다(이스케이프 시퀀스 분석용 ·
+/// 설정되지 않으면 원자 읽기 한 번뿐 — 파일 I/O 없음).
+fn trace_bytes(bytes: &[u8]) {
+    use std::io::Write as _;
+    static TRACE: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> =
+        std::sync::OnceLock::new();
+    let t = TRACE.get_or_init(|| {
+        let path = std::env::var_os("NDIR_TERM_TRACE")?;
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()
+            .map(std::sync::Mutex::new)
+    });
+    if let Some(f) = t {
+        if let Ok(mut f) = f.lock() {
+            let _ = f.write_all(bytes);
+        }
+    }
+}
+
 /// 아이콘 글꼴 글리프인가(사용자 영역 U+E000~F8FF · 보충 사용자 영역 U+F0000~) — Nerd Fonts · Terminal-Icons · 프롬프트 테마.
 pub(crate) fn is_icon_glyph(c: char) -> bool {
     matches!(c, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{10FFFD}')
@@ -98,6 +120,8 @@ pub(crate) struct TermView {
     pub(crate) wheel: nexa_ctl::WheelAccum,
     pub(crate) hwheel: nexa_ctl::WheelAccum,
     pub(crate) tui_wheel: nexa_ctl::WheelAccum,
+    /// PTY에 마지막으로 알린 크기(열, 행) — 화면 버퍼 크기와 다르면 줄바꿈이 어긋난다(진단용 · `term` 덤프에).
+    pub(crate) pty_size: (usize, usize),
     /// 읽을 출력이 남았다(시간 예산으로 끊음) — 호스트가 곧바로 다시 펌프한다.
     pub(crate) backlog: bool,
     /// 셸이 첫 출력을 냈다(그 전에는 "시작 중" 문구 — 프로필이 무거운 셸은 프롬프트까지 몇 초 걸린다).
@@ -137,6 +161,7 @@ impl TermView {
             wheel: nexa_ctl::WheelAccum::default(),
             hwheel: nexa_ctl::WheelAccum::default(),
             tui_wheel: nexa_ctl::WheelAccum::default(),
+            pty_size: (0, 0),
             backlog: false,
             got_output: false,
             session: None,
@@ -210,6 +235,7 @@ impl TermView {
         ) {
             Ok(s) => {
                 self.session = Some(s);
+                self.pty_size = (c, r);
                 self.got_output = false;
                 self.backlog = false;
                 self.screen = VtScreen::new(c, r);
@@ -254,6 +280,7 @@ impl TermView {
             if n == 0 {
                 break;
             }
+            trace_bytes(&buf[..n]);
             if let Some(text) = self.chunker.push(&buf[..n]) {
                 self.screen.feed(&text);
                 changed = true;
@@ -289,10 +316,14 @@ impl TermView {
         if self.screen.cols() != cols || self.screen.rows() != rows {
             self.screen.resize(cols, rows);
             if let Some(s) = self.session.as_mut() {
-                let _ = s.resize(
+                if s.resize(
                     u16::try_from(cols).unwrap_or(u16::MAX),
                     u16::try_from(rows).unwrap_or(u16::MAX),
-                );
+                )
+                .is_ok()
+                {
+                    self.pty_size = (cols, rows);
+                }
             }
         }
     }
@@ -488,12 +519,14 @@ impl TermView {
             "alive"
         };
         format!(
-            "{st} {}x{} view {} x {} sel {}",
+            "{st} {}x{} view {} x {} sel {} pty {}x{}",
             self.screen.cols(),
             self.screen.rows(),
             self.view_off,
             self.view_x,
-            self.sel.is_some()
+            self.sel.is_some(),
+            self.pty_size.0,
+            self.pty_size.1
         )
     }
 
