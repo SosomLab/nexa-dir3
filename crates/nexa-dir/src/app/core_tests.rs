@@ -2269,7 +2269,19 @@ fn status_segments_and_tab_status_bar() {
             .map(|s| s.id.clone())
             .collect()
     };
-    assert_eq!(ids(&app), ["tab", "cpu", "mem", "io", "net", "license"]);
+    assert_eq!(ids(&app), ["tab", "cpu", "mem", "disk", "net", "license"]);
+    // 메모리 · 디스크 · 네트워크 칸은 안의 항목을 순서대로 잇는다(메모리 = 이 프로그램 · 시스템).
+    let text = |app: &App, id: &str| {
+        app.statusbar
+            .segments()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.text.clone())
+            .unwrap()
+    };
+    assert_eq!(text(&app, "mem"), "Dir – · Sys –% (–)");
+    assert_eq!(text(&app, "disk"), "Disk W – · R –");
+    assert_eq!(text(&app, "net"), "Down – · Up –");
     assert!(app.statusbar.segments()[0].text.contains("1/1"));
     // 부하: 첫 틱 = 메모리만 · 주기 전 재조회 없음.
     let t0 = Instant::now();
@@ -2277,10 +2289,19 @@ fn status_segments_and_tab_status_bar() {
     assert!(next > t0);
     assert!(app.load.is_some_and(|l| l.mem_total > 0 && l.mem_used > 0));
     assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
+    assert!(text(&app, "mem").starts_with("Dir ") && !text(&app, "mem").contains("Dir –"));
+    // 항목 순서/표시: 디스크 = 읽기만 · 네트워크 = 업 → 다운.
+    app.order_changed(
+        "statusbar.layout",
+        "tab:1|cpu:1|mem:1[system:1,app:0]|disk:1[read:1,write:0]|net:1[upload:1,download:1]|license:1",
+    );
+    assert!(text(&app, "mem").starts_with("Sys "));
+    assert!(text(&app, "disk").starts_with("Disk R ") && !text(&app, "disk").contains("W "));
+    assert!(text(&app, "net").starts_with("Up "));
     // 순서 편집 창이 값을 바꾼다(툴바 순서 편집과 같은 길) — 숨긴 칸은 빠지고 순서가 따른다.
     app.order_changed(
         "statusbar.layout",
-        "status:1[license:1,tab:1,cpu:0,mem:0,io:0,net:0]",
+        "license:1|tab:1|cpu:0|mem:0|disk:0|net:0",
     );
     assert_eq!(ids(&app), ["license", "tab"]);
     // 상태줄 우클릭 = 순서 편집 창 요청.

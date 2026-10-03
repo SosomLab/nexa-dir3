@@ -20,6 +20,8 @@ pub(crate) struct SysSample {
     /// 메모리 — 쓰는 양 · 전체(바이트).
     pub mem_used: u64,
     pub mem_total: u64,
+    /// **이 프로그램**이 쓰는 물리 메모리(바이트 · nexa-sql 상태줄의 메모리 칸과 같은 뜻).
+    pub mem_app: Option<u64>,
     /// 디스크 읽기 · 쓰기 누적 바이트(모든 디스크 합).
     pub disk: Option<(u64, u64)>,
     /// 네트워크 받기 · 보내기 누적 바이트(루프백 제외).
@@ -33,6 +35,8 @@ pub(crate) struct SysLoad {
     pub cpu_pct: f32,
     pub mem_used: u64,
     pub mem_total: u64,
+    /// 이 프로그램의 메모리(바이트).
+    pub mem_app: Option<u64>,
     /// 디스크 읽기 · 쓰기 바이트/초.
     pub disk_bps: Option<(u64, u64)>,
     /// 네트워크 받기(다운로드) · 보내기(업로드) 바이트/초.
@@ -76,6 +80,7 @@ pub(crate) fn load_between(prev: SysSample, cur: SysSample, dt: Duration) -> Sys
         cpu_pct,
         mem_used: cur.mem_used,
         mem_total: cur.mem_total,
+        mem_app: cur.mem_app,
         disk_bps: pair(prev.disk, cur.disk),
         net_bps: pair(prev.net, cur.net),
     }
@@ -100,17 +105,21 @@ pub(crate) fn parse_proc_stat_cpu(text: &str) -> Option<(u64, u64)> {
     Some((total.saturating_sub(idle), total))
 }
 
+/// `키:  값 kB` 꼴 본문에서 그 키의 숫자(순수 · `/proc/meminfo` · `/proc/self/status`).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) fn parse_meminfo_key(text: &str, key: &str) -> Option<u64> {
+    text.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        (k.trim() == key)
+            .then(|| v.split_whitespace().next()?.parse().ok())
+            .flatten()
+    })
+}
+
 /// `/proc/meminfo` → `(쓰는 바이트, 전체 바이트)`(순수): 쓰는 양 = MemTotal − MemAvailable(없으면 MemFree).
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn parse_meminfo(text: &str) -> Option<(u64, u64)> {
-    let kb = |key: &str| -> Option<u64> {
-        text.lines().find_map(|l| {
-            let (k, v) = l.split_once(':')?;
-            (k.trim() == key)
-                .then(|| v.split_whitespace().next()?.parse().ok())
-                .flatten()
-        })
-    };
+    let kb = |key: &str| parse_meminfo_key(text, key);
     let total = kb("MemTotal")?;
     let avail = kb("MemAvailable").or_else(|| kb("MemFree"))?;
     Some((total.saturating_sub(avail) * 1024, total * 1024))
@@ -195,11 +204,17 @@ mod imp {
         let net = std::fs::read_to_string("/proc/net/dev")
             .ok()
             .map(|t| parse_net_dev(&t));
+        // 이 프로그램의 메모리 = `/proc/self/status`의 VmRSS(kB).
+        let mem_app = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|t| parse_meminfo_key(&t, "VmRSS"))
+            .map(|kb| kb * 1024);
         Some(SysSample {
             cpu_busy,
             cpu_total,
             mem_used,
             mem_total,
+            mem_app,
             disk,
             net,
         })
@@ -255,6 +270,22 @@ mod imp {
         storage_manager_name: [u16; 8],
     }
 
+    /// `PROCESS_MEMORY_COUNTERS`(psapi.h).
+    #[repr(C)]
+    #[derive(Default)]
+    struct Pmc {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+
     const IOCTL_DISK_PERFORMANCE: u32 = 0x0007_0020;
     const FILE_SHARE_READ_WRITE: u32 = 0x1 | 0x2;
     const OPEN_EXISTING: u32 = 3;
@@ -270,6 +301,8 @@ mod imp {
     extern "system" {
         fn GetSystemTimes(idle: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
         fn GlobalMemoryStatusEx(status: *mut MemoryStatusEx) -> i32;
+        fn GetCurrentProcess() -> *mut c_void;
+        fn K32GetProcessMemoryInfo(process: *mut c_void, counters: *mut Pmc, cb: u32) -> i32;
         fn CreateFileW(
             name: *const u16,
             access: u32,
@@ -414,6 +447,15 @@ mod imp {
                 return None;
             }
         }
+        let mut pmc = Pmc {
+            cb: std::mem::size_of::<Pmc>() as u32,
+            ..Pmc::default()
+        };
+        // SAFETY: 현재 프로세스의 의사 핸들 + 크기가 맞는 출력 구조체.
+        let mem_app = unsafe {
+            (K32GetProcessMemoryInfo(GetCurrentProcess(), &mut pmc, pmc.cb) != 0)
+                .then_some(pmc.working_set_size as u64)
+        };
         // 커널 시간에는 쉰 시간이 들어 있다.
         let total = kernel.ticks().saturating_add(user.ticks());
         Some(SysSample {
@@ -421,6 +463,7 @@ mod imp {
             cpu_total: total,
             mem_used: mem.total_phys.saturating_sub(mem.avail_phys),
             mem_total: mem.total_phys,
+            mem_app,
             disk: disks(),
             net: net(),
         })
@@ -479,6 +522,32 @@ mod imp {
         family: u8,
     }
 
+    /// `rusage_info_v2`(sys/resource.h) — resident_size만 쓴다.
+    #[repr(C)]
+    #[derive(Default)]
+    struct RusageInfoV2 {
+        uuid: [u8; 16],
+        user_time: u64,
+        system_time: u64,
+        pkg_idle_wkups: u64,
+        interrupt_wkups: u64,
+        pageins: u64,
+        wired_size: u64,
+        resident_size: u64,
+        phys_footprint: u64,
+        proc_start_abstime: u64,
+        proc_exit_abstime: u64,
+        child_user_time: u64,
+        child_system_time: u64,
+        child_pkg_idle_wkups: u64,
+        child_interrupt_wkups: u64,
+        child_pageins: u64,
+        child_elapsed_abstime: u64,
+        diskio_bytesread: u64,
+        diskio_byteswritten: u64,
+    }
+    const RUSAGE_INFO_V2: i32 = 2;
+
     const HOST_CPU_LOAD_INFO: i32 = 3;
     const HOST_VM_INFO64: i32 = 4;
     const AF_LINK: u8 = 18;
@@ -500,6 +569,8 @@ mod imp {
             newlen: usize,
         ) -> i32;
         fn sysconf(name: i32) -> i64;
+        fn getpid() -> i32;
+        fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut c_void) -> i32;
         fn getifaddrs(out: *mut *mut IfAddrs) -> i32;
         fn freeifaddrs(list: *mut IfAddrs);
     }
@@ -578,11 +649,19 @@ mod imp {
                 + u64::from(vm.wire_count)
                 + u64::from(vm.compressor_page_count))
                 * page;
+            let mut ru = RusageInfoV2::default();
+            let mem_app = (proc_pid_rusage(
+                getpid(),
+                RUSAGE_INFO_V2,
+                (&mut ru as *mut RusageInfoV2).cast(),
+            ) == 0)
+                .then_some(ru.resident_size);
             Some(SysSample {
                 cpu_busy: busy,
                 cpu_total: total,
                 mem_used: used.min(mem_total),
                 mem_total,
+                mem_app,
                 disk: None, // 디스크 누적 바이트는 IOKit이 필요하다 — 후속
                 net: net(),
             })
@@ -611,6 +690,7 @@ mod tests {
             cpu_total: 1000,
             mem_used: 1,
             mem_total: 8,
+            mem_app: None,
             disk: Some((1000, 500)),
             net: None,
         };
@@ -619,12 +699,13 @@ mod tests {
             cpu_total: 1200,
             mem_used: 2,
             mem_total: 8,
+            mem_app: Some(77),
             disk: Some((5000, 500)),
             net: Some((10, 10)),
         };
         let l = load_between(a, b, Duration::from_secs(2));
         assert!((l.cpu_pct - 25.0).abs() < 0.01, "{l:?}");
-        assert_eq!((l.mem_used, l.mem_total), (2, 8));
+        assert_eq!((l.mem_used, l.mem_total, l.mem_app), (2, 8, Some(77)));
         assert!((l.mem_pct() - 25.0).abs() < 0.01);
         assert_eq!(l.disk_bps, Some((2000, 0)));
         assert_eq!(l.net_bps, Some((0, 0)), "직전에 없던 항목 = 0부터");
@@ -668,6 +749,10 @@ mod tests {
             let a = sample().expect("sample");
             assert!(a.mem_total > 0 && a.mem_used <= a.mem_total, "{a:?}");
             assert!(a.cpu_total > 0 && a.cpu_busy <= a.cpu_total, "{a:?}");
+            assert!(
+                a.mem_app.is_some_and(|m| m > 0 && m <= a.mem_total),
+                "{a:?}"
+            );
             let b = sample().expect("sample");
             assert!(b.cpu_total >= a.cpu_total);
             if cfg!(target_os = "linux") {

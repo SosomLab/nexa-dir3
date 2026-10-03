@@ -10,16 +10,25 @@ use crate::platform::sysload::{self, SysLoad};
 use crate::*;
 use nexa_ctl::StatusSeg;
 
-/// 설정값(`status:1[tab:1,cpu:0,…]`) → 표시할 칸 id(순서대로 · 숨긴 칸 제외 · 빈 값 = 전부 · 블록을 숨기면 없음 · 순수).
-pub(crate) fn status_items_of(value: &str) -> Vec<&'static str> {
+/// 칸 하나 = `(블록 id, 그 안에 보일 항목 id들)`.
+pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
+
+/// 설정값(`tab:1|cpu:1|mem:1[app:1,system:1]|…`) → 표시할 칸과 그 안의 항목(순서대로 · 숨긴 것 제외 · 빈 값 = 전부 ·
+/// 항목이 있는 칸에서 항목을 전부 끄면 그 칸도 빠진다 · 순수).
+pub(crate) fn status_items_of(value: &str) -> Vec<StatusBlock> {
     let defs = crate::order::STATUSBAR_BLOCKS;
-    let all = defs[0].1;
     crate::order::parse_order_with(defs, value)
         .into_iter()
         .filter(|(_, vis, _)| *vis)
-        .flat_map(|(_, _, items)| items)
-        .filter(|(_, vis)| *vis)
-        .filter_map(|(k, _)| all.iter().copied().find(|d| *d == k))
+        .filter_map(|(b, _, items)| {
+            let (block, kids) = defs.iter().copied().find(|(d, _)| *d == b)?;
+            let shown: Vec<&'static str> = items
+                .iter()
+                .filter(|(_, vis)| *vis)
+                .filter_map(|(k, _)| kids.iter().copied().find(|d| *d == k))
+                .collect();
+            (kids.is_empty() || !shown.is_empty()).then_some((block, shown))
+        })
         .collect()
 }
 
@@ -33,13 +42,11 @@ impl App {
     pub(crate) fn status_segments(&self) -> Vec<StatusSeg> {
         let dash = || "–".to_string();
         let load: Option<SysLoad> = self.load;
-        let rates = |pair: Option<(u64, u64)>| match pair {
-            Some((a, b)) => (fmt_rate(a), fmt_rate(b)),
-            None => (dash(), dash()),
-        };
+        // 항목이 있는 칸 = 보이는 항목을 순서대로 ` · `로 잇는다.
+        let join = |parts: Vec<String>| parts.join(" · ");
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
-            .map(|id| match id {
+            .map(|(id, kids)| match id {
                 "tab" => {
                     let p = &self.panels[self.active];
                     StatusSeg::label(
@@ -60,23 +67,61 @@ impl App {
                         &[&load.map_or_else(dash, |l| format!("{:.1}", l.cpu_pct))],
                     ),
                 ),
+                // 메모리 = 이 프로그램(nexa-sql 상태줄과 같은 뜻) · 시스템 사용률.
                 "mem" => StatusSeg::label(
                     id,
-                    trf(
-                        "status.mem",
-                        &[
-                            &load.map_or_else(dash, |l| format!("{:.0}", l.mem_pct())),
-                            &load.map_or_else(dash, |l| filelist::format_size(l.mem_used)),
-                        ],
+                    join(
+                        kids.iter()
+                            .map(|k| match *k {
+                                "app" => trf(
+                                    "status.mem.app",
+                                    &[&load
+                                        .and_then(|l| l.mem_app)
+                                        .map_or_else(dash, filelist::format_size)],
+                                ),
+                                _ => trf(
+                                    "status.mem.sys",
+                                    &[
+                                        &load.map_or_else(dash, |l| format!("{:.0}", l.mem_pct())),
+                                        &load.map_or_else(dash, |l| {
+                                            filelist::format_size(l.mem_used)
+                                        }),
+                                    ],
+                                ),
+                            })
+                            .collect(),
                     ),
                 ),
-                "io" => {
-                    let (r, w) = rates(load.and_then(|l| l.disk_bps));
-                    StatusSeg::label(id, trf("status.io", &[&r, &w]))
+                "disk" => {
+                    let d = load.and_then(|l| l.disk_bps);
+                    let parts = kids
+                        .iter()
+                        .map(|k| match *k {
+                            "write" => trf(
+                                "status.disk.write",
+                                &[&d.map_or_else(dash, |v| fmt_rate(v.1))],
+                            ),
+                            _ => trf(
+                                "status.disk.read",
+                                &[&d.map_or_else(dash, |v| fmt_rate(v.0))],
+                            ),
+                        })
+                        .collect();
+                    StatusSeg::label(id, trf("status.disk", &[&join(parts)]))
                 }
                 "net" => {
-                    let (down, up) = rates(load.and_then(|l| l.net_bps));
-                    StatusSeg::label(id, trf("status.net", &[&down, &up]))
+                    let n = load.and_then(|l| l.net_bps);
+                    let parts = kids
+                        .iter()
+                        .map(|k| match *k {
+                            "download" => trf(
+                                "status.net.down",
+                                &[&n.map_or_else(dash, |v| fmt_rate(v.0))],
+                            ),
+                            _ => trf("status.net.up", &[&n.map_or_else(dash, |v| fmt_rate(v.1))]),
+                        })
+                        .collect();
+                    StatusSeg::label(id, join(parts))
                 }
                 _ => StatusSeg::new(id, self.license_badge()),
             })
@@ -87,7 +132,7 @@ impl App {
     fn status_wants_load(&self) -> bool {
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .iter()
-            .any(|k| matches!(*k, "cpu" | "mem" | "io" | "net"))
+            .any(|(k, _)| matches!(*k, "cpu" | "mem" | "disk" | "net"))
     }
 
     /// 유휴 틱 — 주기가 됐으면 부하를 조회해 칸을 갱신하고 다음 조회 시각을 돌려준다(부하 칸이 없으면 `None` = 깨우지 않음).
@@ -187,14 +232,35 @@ mod tests {
 
     #[test]
     fn status_items_parse_order_and_drop_unknown() {
-        let all = ["tab", "cpu", "mem", "io", "net", "license"];
-        assert_eq!(status_items_of(""), all, "빈 값 = 기본(전부)");
+        let ids = |v: &str| -> Vec<String> {
+            status_items_of(v)
+                .into_iter()
+                .map(|(b, k)| {
+                    if k.is_empty() {
+                        b.to_string()
+                    } else {
+                        format!("{b}[{}]", k.join(","))
+                    }
+                })
+                .collect()
+        };
         assert_eq!(
-            status_items_of("status:1[license:1,nope:1,tab:1,cpu:0]"),
-            ["license", "tab", "mem", "io", "net"],
-            "적힌 순서 · 숨김 제외 · 빠진 칸은 정의 순으로 보충"
+            ids(""),
+            [
+                "tab",
+                "cpu",
+                "mem[app,system]",
+                "disk[write,read]",
+                "net[download,upload]",
+                "license"
+            ],
+            "빈 값 = 기본(전부)"
         );
-        assert!(status_items_of("status:0[tab:1]").is_empty(), "블록 숨김");
+        assert_eq!(
+            ids("license:1|net:1[upload:1,download:0]|disk:1[read:1,write:1]|cpu:0|mem:1[app:0,system:0]"),
+            ["license", "net[upload]", "disk[read,write]", "tab"],
+            "적힌 순서 · 숨김 제외 · 항목을 전부 끈 칸은 빠짐 · 빠진 칸은 정의 순으로 보충"
+        );
         assert_eq!(fmt_rate(0), "0 B/s");
         assert_eq!(fmt_rate(1536), "1.5 KB/s");
     }

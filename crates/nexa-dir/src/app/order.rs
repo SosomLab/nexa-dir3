@@ -59,15 +59,21 @@ fn col_label(_block: &str, item: Option<&str>) -> String {
     }
 }
 
-fn status_label(_block: &str, item: Option<&str>) -> String {
-    match item {
-        Some("tab") => tr("pref.sbo.tab"),
-        Some("cpu") => tr("pref.sbo.cpu"),
-        Some("mem") => tr("pref.sbo.mem"),
-        Some("io") => tr("pref.sbo.io"),
-        Some("net") => tr("pref.sbo.net"),
-        Some("license") => tr("pref.sbo.license"),
-        _ => tr("pref.statusLayout"),
+fn status_label(block: &str, item: Option<&str>) -> String {
+    match (block, item) {
+        ("tab", _) => tr("pref.sbo.tab"),
+        ("cpu", _) => tr("pref.sbo.cpu"),
+        ("license", _) => tr("pref.sbo.license"),
+        ("mem", None) => tr("pref.sbo.mem"),
+        ("mem", Some("app")) => tr("pref.sbo.mem.app"),
+        ("mem", Some("system")) => tr("pref.sbo.mem.system"),
+        ("disk", None) => tr("pref.sbo.disk"),
+        ("disk", Some("write")) => tr("pref.sbo.disk.write"),
+        ("disk", Some("read")) => tr("pref.sbo.disk.read"),
+        ("net", None) => tr("pref.sbo.net"),
+        ("net", Some("download")) => tr("pref.sbo.net.download"),
+        ("net", Some("upload")) => tr("pref.sbo.net.upload"),
+        (b, i) => i.unwrap_or(b).to_string(),
     }
 }
 
@@ -114,7 +120,7 @@ impl App {
                 key: key.into(),
                 defs,
                 with_vis: true,
-                flat: true,
+                flat: false,
                 locked: &[],
                 label: status_label,
             },
