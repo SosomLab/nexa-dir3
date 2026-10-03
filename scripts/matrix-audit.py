@@ -109,7 +109,8 @@ def main():
     rank = {"✅": 4, "⚠": 3, "🖐": 2, "🚧": 1, "☐": 0}
     for ids, st in rows:
         for i in ids:
-            if i in led and rank[st] > rank.get(covered.get(i, "☐"), -1):
+            # ☐(사유 행)도 "덮음"이다 — 아직 아무 행도 없을 때(None = -1)보다 높다.
+            if i in led and rank[st] > rank.get(covered.get(i), -1):
                 covered[i] = st
     prefixes = sorted({p for p, _ in led})
     lines = ["| 접두 | 원장 | 덮음 | ✅ | 🚧 | ⚠ | 🖐 | 미착수 |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]

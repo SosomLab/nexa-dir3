@@ -10,36 +10,36 @@
 | 접두 | 원장 | 덮음 | ✅ | 🚧 | ⚠ | 🖐 | 미착수 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | B | 21 | 0 | 0 | 0 | 0 | 0 | 21 |
-| CI | 119 | 32 | 13 | 19 | 0 | 0 | 87 |
-| CLOUD | 99 | 0 | 0 | 0 | 0 | 0 | 99 |
+| CI | 119 | 33 | 13 | 19 | 0 | 0 | 86 |
+| CLOUD | 99 | 99 | 0 | 0 | 0 | 0 | 0 |
 | CMD | 430 | 423 | 172 | 141 | 110 | 0 | 7 |
-| DLG | 88 | 21 | 21 | 0 | 0 | 0 | 67 |
-| EXT | 213 | 11 | 11 | 0 | 0 | 0 | 202 |
-| GUI | 95 | 32 | 30 | 0 | 2 | 0 | 63 |
+| DLG | 88 | 84 | 30 | 0 | 54 | 0 | 4 |
+| EXT | 213 | 191 | 126 | 45 | 19 | 0 | 22 |
+| GUI | 95 | 88 | 30 | 28 | 30 | 0 | 7 |
 | KEY | 817 | 683 | 663 | 20 | 0 | 0 | 134 |
 | L | 33 | 0 | 0 | 0 | 0 | 0 | 33 |
-| LIC | 149 | 26 | 26 | 0 | 0 | 0 | 123 |
+| LIC | 149 | 147 | 134 | 13 | 0 | 0 | 2 |
 | N | 15 | 0 | 0 | 0 | 0 | 0 | 15 |
 | O | 20 | 0 | 0 | 0 | 0 | 0 | 20 |
-| OPS | 162 | 18 | 18 | 0 | 0 | 0 | 144 |
+| OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 0 | 0 | 0 | 0 | 0 | 19 |
-| PANEL | 138 | 23 | 19 | 4 | 0 | 0 | 115 |
-| PLUG | 100 | 68 | 67 | 0 | 1 | 0 | 32 |
-| PREFS | 256 | 81 | 81 | 0 | 0 | 0 | 175 |
-| PROC | 105 | 0 | 0 | 0 | 0 | 0 | 105 |
+| PANEL | 138 | 138 | 130 | 8 | 0 | 0 | 0 |
+| PLUG | 100 | 88 | 83 | 0 | 1 | 0 | 12 |
+| PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
+| PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
 | RENDER | 54 | 0 | 0 | 0 | 0 | 0 | 54 |
 | RT | 28 | 0 | 0 | 0 | 0 | 0 | 28 |
 | SET | 104 | 86 | 83 | 0 | 3 | 0 | 18 |
-| SHELL | 75 | 22 | 22 | 0 | 0 | 0 | 53 |
-| SKEL | 291 | 42 | 36 | 6 | 0 | 0 | 249 |
+| SHELL | 75 | 29 | 22 | 0 | 0 | 0 | 46 |
+| SKEL | 291 | 273 | 147 | 76 | 50 | 0 | 18 |
 | T | 48 | 5 | 5 | 0 | 0 | 0 | 43 |
-| TERM | 90 | 10 | 10 | 0 | 0 | 0 | 80 |
-| UIC | 235 | 5 | 1 | 3 | 1 | 0 | 230 |
-| UIK | 67 | 10 | 10 | 0 | 0 | 0 | 57 |
-| WINA | 96 | 4 | 4 | 0 | 0 | 0 | 92 |
-| WINB | 125 | 0 | 0 | 0 | 0 | 0 | 125 |
-| WINC | 174 | 1 | 1 | 0 | 0 | 0 | 173 |
-| **합계** | 4266 | 1603 | 1293 | 193 | 117 | 0 | 2663 |
+| TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
+| UIC | 235 | 235 | 1 | 0 | 234 | 0 | 0 |
+| UIK | 67 | 67 | 10 | 12 | 45 | 0 | 0 |
+| WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
+| WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
+| WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
+| **합계** | 4266 | 3677 | 2136 | 814 | 608 | 0 | 589 |
 
 ## 행
 
@@ -128,6 +128,49 @@
 | DLG-074~077 · 079~083 · 086 · 088 | 일괄 이름 변경 창(880×620 · 카드 스택 6종 · 수확 규칙 · 실시간 미리보기 · 충돌 · 적용 토글 · 정렬 · 프리셋 메뉴/저장/불러오기 · [Rename] 순차 + undo 1건 · 선택 수집) | `bulk_win.rs` · `app/bulk.rs` · `ndir-ops/batch_rename.rs` | T2 | `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` · ndir-ops 코어 14 | ✅ | 관리 팝업(084) · 포맷 도움말(085) · 썸(078) · 라벨 실측(087) · TZ |
 | CI-114 · CI-052~066 · T-82 | 패키징 3-OS(`packaging/lib.sh` 공용 · deb/rpm FHS · Universal 2 .app + pkg/dmg · MSI(WiX v4 · Main+PathEnv) + 포터블 zip · 동봉 `plugins/` · THIRD-PARTY-NOTICES · 임포트 게이트 · `release.yml` 설치 스모크) | `packaging/**` · `scripts/third-party-notices.*` · `scripts/check-imports.ps1` · `.github/workflows/release.yml` | T0·T5 | 로컬: `stage_common` · `check-imports` 15종 인박스 · `build-msi.ps1`/`build-zip.ps1` · CI: release.yml 설치→`--version`·`--smoke`→제거 잔여 0 | 🚧 | 태그 릴리스 첫 실행 전 · deb/rpm/pkg/dmg는 CI 몫 |
 | DLG-069 · 070 · 071 · 072 · 073 · T-13 | 순서/표시 편집 창(어댑터 3종 · 블록/자식 이동 규칙 · 표시 체크(잠금·그룹 통째) · 키보드 · 실시간 적용 통지) + 툴바/컨텍스트 메뉴/컬럼 반영 · 세션 `cols` | `order.rs` · `order_win.rs` · `app/order.rs` · `app/menus.rs::build_toolbar` · `app/ctxmenu.rs::ctx_layout` · `panel.rs::apply_col_layout` | T1·T2·T3·T4 | `order::tests` 3 · `order_win::tests` 2 · `order_editor_applies_toolbar_ctxmenu_and_columns` · `order-editor.scn` | ✅ | 우클릭 팝업 진입 ☐ · 셰브론 접기 생략 |
+| CLOUD-001~099 | 클라우드(동기화 폴더 링크 · OAuth · 가상 FS · 전송) 전체 | — | — | — | ☐ | **미이식 보류(M8)** — dir2 X-36/37 · 네트워크 기능은 `plugins.*`/`cloud.*` 게이트 뒤 · 결정 필요(DR 후보) |
+| PROC-001~034 | 프로젝트 관리·개발·문서·커밋 규칙(dir2 계승) | `CLAUDE.md` · `docs/15` · `docs/16` · `docs/18` | — | CI-119 행 · `check-all.sh` | ✅ | 규칙 문서 dir3판 |
+| PROC-040~057 | 라이선스 정책(전 기능 무료 · 상업 유료 · 게이트 0 · 제품 id) | `ndir-license` · `app/license.rs` · nexa-license `presets` | T1·T3·T5 | `ndir-license` 시험 · T-80 core 시험 · T-81 E2E(`nexa-license`) | ✅ | DR-4 |
+| PROC-060~081 | 빌드·테스트·점검(audit)·UI QA 하네스 | `scripts/check-all.sh` · `check-3os.sh` · `ci.yml` · `selfcheck.rs` · `ndir-check` · `matrix-audit.py` | T0~T5 | CI 3-OS · `--selfcheck --ci` · 시나리오 20 | ✅ | T-05 · T-54 · T-90 |
+| PROC-090~109 | 배포 채널·패키징(MSI·zip·pkg·dmg·deb·rpm · 고지 · 임포트 게이트) | `packaging/**` · `release.yml` · `scripts/third-party-notices.*` · `check-imports.ps1` | T0·T5 | CI-114 행 · 로컬 MSI/zip | ✅ | T-82 · choco/winget/brew 등록 ☐ |
+| PROC-120~130 | 크로스플랫폼 검토 결론(dir2 docs/23) | `docs/10-decision-record.md` DR-1~12 | — | — | ⚠ | 결정 기록으로 흡수 |
+| WINA-001~096 | dir2 `win.rs` A(진입·상수·테마·메뉴/툴바/런처 구성·상태 구조체·기동 순서·레이아웃·클립보드·도크·조작 대상·DnD 훅) | `main.rs`(App) · `app/*.rs` · `platform/` | T3 | `layout_core`·`route_and_commands_without_window`·`launcher_bar_layout_and_launch`·`dock`/`clip` core 시험 | 🚧 | 구조 설명 원장 — 기능별 행(SKEL/CMD/SHELL)이 실제 대조 · WINA-029·054·065 별도 ✅ |
+| WINB-009~013 · 022~035 · 043~052 · 066~092 | 실행 취소/다시 실행 · 삭제 · 이름 바꾸기/새로 만들기 · 로컬 전송 UI · 명령 디스패처 | `ndir-ops/history.rs` · `app/ops.rs` · `app/menus.rs::command` | T1·T3 | `history` 시험 · `new_folder_rename_and_undo` · `dialogs_delete_permanent_and_paste_conflict` · `copy_paste` core · `route_and_commands_without_window` | ✅ | |
+| WINB-001~008 · 014~021 · 053~065 · 093~125 | DnD 수신 훅 · 폴더 감시/프로브 · IME/페인트/상태바 · 테마/언어 · 툴팁/탭 교차 이동/포커스 · 터미널 보조/스플리터/휠 · 우클릭 팝업/편집 창 | `app/dnd.rs` · `app/watch.rs` · `app/event_loop.rs` · `app/input.rs` | T3 | `external_drop_…` · `watch` core 시험 · `splitter`/`term` 시험 | 🚧 | IME(SKEL-098~108)·툴팁 실기 |
+| WINB-036~042 | 클라우드 전송 | — | — | — | ☐ | CLOUD 미이식 |
+| WINC-001~025 | 설정 값 적용 `apply_prefs`(실시간 · 멱등) | `app/settings.rs::apply_setting` | T3 | `every_registry_key_is_applied_or_declared_restart` | ✅ | 레지스트리 전 키 적용 감시 |
+| WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) |
+| PANEL-001~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
+| PANEL-054~068 | 데이터 어댑터 `TreeSource` | `filelist.rs` | T1·T3 | `filelist::tests` · `my_pc_drive_columns_from_disk_port` · `cut_marks_ghost_rows_…` | ✅ | |
+| PANEL-069~118 | 목록 위젯 `VirtualRows`(열·타입어헤드·고속 스크롤·선택·드래그 열) | nexa-ui `nexa-grid`(dir2 `rows.rs` 승격 · DR-2) | T2 | nexa-grid 시험(nexa-ui) · `fixed_columns…` | ✅ | 컨트롤은 nexa-ui 소유 — 변경은 nexa-ui에서 |
+| PANEL-119~130 | 트리 코어 `nexa-tree` | `ndir-tree` | T1 | `ndir-tree` 시험(dir2 이식 · DR-11) | ✅ | |
+| PANEL-131~138 | 호스트 접점(목록 동작 배선) | `app/input.rs` · `app/menus.rs` | T3 | `route_and_commands_without_window` | 🚧 | |
+| OPS-001~039 · 090~099 · 110~118 · 130~142 | 전송 엔진 · 실행 취소 · 가상 파일시스템 · 인라인 트리 코어 · 공용 타입 · 빌드 구성 | `ndir-ops` · `ndir-vfs` · `ndir-tree` · `ndir-core` | T1 | 각 크레이트 시험(dir2 이식 · DR-11) · `copy_paste` core | ✅ | |
+| OPS-050~083 | 일괄 이름 변경 코어 + 대화상자 로직 | `ndir-ops/batch_rename.rs` · `bulk_win.rs` · `app/bulk.rs` | T1·T3 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 순서 편집기 = order_win |
+| OPS-150~153 · 401~416 | 문서 규약 · 실측 교훈/결함 이력 | `docs/10` · `docs/15` | — | — | ⚠ | 규약/교훈은 문서로 계승 |
+| OPS-201~218 · 301~315 · 501~525 | nexa-ui 매핑(진행 창 SegProgress 등) · OS 분기점 · 회귀 테스트 후보 | `progress_win.rs` · `platform/` | T2·T3 | T-70 시험 · platform 시험 | 🚧 | 회귀 후보 25건 중 미작성분 = 91 목록 |
+| TERM-001~033 · 040~052 · 070~087 · 100~125 | VT 파서/셀 그리드 · 테마 · PTY · 키/마우스 · 도크 통합·cwd · 설정 · 퀵 런처 | `ndir-term` · `platform/winpty.rs`·`unixpty.rs` · `termview.rs` · `app/term.rs` · `launcher.rs` | T1·T3·T4 | `ndir-term` 시험(이식) · `lifecycle_with_fake_pty` · `fixed_columns_…mouse_report` · `term-echo.scn` · 런처 시험 | ✅ | |
+| TERM-060~068 · 090~095 · 130~131 | 렌더 세부 · 클립보드/컨텍스트 메뉴 · 품질 자산 | `termview.rs` | T2 | HTML 복사 시험 | 🚧 | 셀 텍스트/italic(T-31) · 터미널 우클릭 메뉴 ☐ |
+| PLUG-090~105 | 압축 목록 리더 | `preview/archive.rs` | T1 | `archive::tests`(zip 생성·암호·중첩) | ✅ | |
+| PREFS-001~032 · 040~079 · 201~211 | 설정 창 · 설정/세션 영속 · i18n · session 키 | `prefs_win.rs` · `ndir-settings` · `session.rs` · `ndir-i18n` | T1·T3·T4 | prefs core 시험 · `prefs-open.scn` · settings/keymap/session/i18n 시험 | ✅ | DR-3 구조 차용 |
+| PREFS-401~423 · 501~521 · 701~732 | nexa-ui 매핑 · OS 분기점 · 회귀 테스트 후보 | `prefs_win.rs` · `platform/` | — | — | 🚧 | 회귀 후보 32건 중 미작성분 = 91 |
+| PREFS-601~633 | 실측 교훈·결함 이력 | `docs/15` · 코드 주석 | — | — | ⚠ | 교훈은 문서/주석으로 계승 |
+| DLG-001~055 | dir2 자체 컨트롤 15종(ctl/) | nexa-ui `nexa-ctl` 컨트롤로 대체 | T2 | nexa-ctl 시험(nexa-ui) | ⚠ | DR-2 — dir2 ctl/은 이식하지 않고 nexa-ctl 사용(NxOrderTree = `order_win`) |
+| DLG-056~068 | 공통 대화상자 · 암호 입력 · About | `dlg_win.rs` · `app/dialogs.rs` · `app/license.rs::about_ask` | T3 | `dialogs_delete_permanent_and_paste_conflict` · archive 암호 시험 · About 시험 | ✅ | |
+| GUI-001~036 | 위젯 기반 · 한 줄 편집 모델 · 고속 스크롤 · 오버레이 스크롤바 | nexa-ui `nexa-ctl`/`nexa-grid`(TextBox · ScrollAccel · ScrollBars) | T2 | nexa-ui 시험 | ⚠ | DR-2 nexa-ui 소유 |
+| GUI-040~051 · 110~151 | 탭 바 · 하단 도크 · 경로 입력/셸 경로/툴팁 | `panel.rs`(tabbar) · `dockinfo.rs` · `pathbar` · nexa-ctl `Tooltip` | T3 | `tabs_and_panels` · `dock` 시험 · `pathbar` 시험 | 🚧 | 툴팁 실기 |
+| LIC-001~079 · 131~144 · 165~178 | nexa-license 라이브러리 · 발급기 · 앱 층 · dir2 정책 · 변경 필요분 | `../nexa-license` · `ndir-license` · `app/license.rs` | T1·T3 | nexa-license 시험 + E2E · `ndir-license` 시험 · T-80 core 시험 | ✅ | DR-4 · T-81 |
+| LIC-091~118 | GUI·배선(라이선스 창 · 배지 · 파일 창) | `license_win.rs` · `file_win.rs` · `app/license.rs` | T3·T4 | T-80 시험 · `license.scn` | ✅ | |
+| LIC-181~197 | OS 분기 지점 · 위험/불일치 | `ndir-license`(기기 ID) · `docs/42` | — | — | 🚧 | 기기 ID 3-OS 실기 |
+| EXT-001~061 · 096~140 · 421~430 | i18n 기준/이관 · 호스트 API · WASM 런타임 · SDK · dir2 플러그인 런타임 · ABI 체크리스트 | `ndir-i18n` · `preview/wasm.rs` · `plugins/sdk` · `scripts/plugin-build.*` | T1·T3·T4 | i18n 시험 · `wasm::tests` · `preview_plugin.scn` · CI plugins 잡 | ✅ | DR-7 ABI 바이트 호환 |
+| EXT-062~095 · 441~456 | 확장 매니저·관리 UI(2단계 원격) · 단계/하네스 | `app/plugins.rs` · `prefs_win.rs` | T3 | `plugin_manager_install_and_remove` | 🚧 | 1차 설치/삭제 ✅ · 원격 저장소 보류 |
+| EXT-301~309 · 501~510 | OS 분기점 · 위험/결정 | `preview/mod.rs`(svg · 경로) · `docs/43` | — | — | ⚠ | 결정은 docs/10에 |
+| SKEL-016~060 · 086~097 · 109~167 | 메인/보조/모달 창 · 이벤트 루프/재그리기 · 배치/그리기/팝업 · 클립보드 · DPI/창 기하 · present · 워커/통지 · 아이콘/테마/메뉴/툴바 · 빌드/리소스 · 자체 검증 | `main.rs` · `app/event_loop.rs` · `app/windows.rs` · `app/paint.rs` · `present.rs` · `icon.rs` · `selfcheck.rs` | T3·T4·T5 | `layout_core` 골든 · 보조 창 시험 전부 · `scale` 시험 · 시나리오 20 · `--selfcheck` | ✅ | nexa-sql 골격 이식 |
+| SKEL-061~085 · 098~108 · 201~234 | 입력 변환/라우팅/포커스 · IME · OS별 분기 목록 | `app/input.rs` · `app/keywinit.rs` · `platform/` | T3 | `route_and_commands_without_window` · keymap 시험 | 🚧 | IME 실기(ko/ja) · OS 분기는 platform 행 |
+| SKEL-301~350 | 함정·교훈 | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
+| UIC-001~323 | nexa-ctl/gfx/sys/conf 코어 어휘(geom · event · draw · raster · theme · tokens · shape · typeahead · 컨트롤 공용부) | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 — dir3는 소비자 · 갭(UIC-310~323)은 T-31 행 |
+| UIK-001~116 | nexa-ctl 컨트롤 표 · nexa-sql 앱 내 범용 UI | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 |
+| UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | FolderTree 지연 로딩·FilterBox(T-32) ☐ |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |

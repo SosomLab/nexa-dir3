@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 61차 — T-90 4차: 접두별 묶음 행 44
+
+- **한 일**: PROC/WINA/WINB/WINC/PANEL/OPS/TERM/PLUG/PREFS/DLG/GUI/LIC/EXT/SKEL/UIC/UIK/CLOUD 묶음 행 · 감사 재생성.
+- **지금 상태**: 덮음 3,677/4,266(86 %) · ✅ 2,136. 남은 미착수 589 = 렌더링(RENDER/B)·OS 분기(OS/L/N/O)·위험(RT/T) 원장 + 세부 ID. 남은 미착수 = 세부 ID(회귀 후보·메시지 단위) → T-91 QA 표와 함께. 다음 = T-91 · CLOUD 결정(DR) · SHCNE · DnD 2차.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정 · CLOUD 이식 여부 결정.
+
+→ [journal/2026-10-03 §65](journal/2026-10-03.md)
+
 ## 10-03 60차 — T-90 3차: CMD 원장 대조 + 묶음 행(덮음 37 %)
 
 - **한 일**: `dir2_catalog_menu_commands_map_to_dir3_ids` · CMD 묶음 행 9 · 감사 재생성.
