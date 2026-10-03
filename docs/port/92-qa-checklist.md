@@ -1,0 +1,41 @@
+# port/92 · dir2 대조 실기 QA 표(생성물 — `scripts/qa-checklist.py`)
+
+> 항목 20. 원천 = [90](90-verification-matrix.md)에서 🖐 또는 "실기"가 적힌 행. 표는 재생성되므로 손으로 고치지 않는다 —
+> 실기 결과는 아래 `## 결과 기록` 절(보존)에 날짜 · OS · 항목 ID · 결과(✓/✗ + 증상)로 적고, 실기가 끝나 자동 시험으로 바뀐 행은 90에서 "실기"를 지운다.
+> 실기 절차 공통: `NDIR_HOME` 격리 폴더 + dir2(`../nexa-dir2` `0.22.0`)를 나란히 띄워 **같은 폴더 · 같은 조작**으로 비교(docs/18 §4). 입력 주입·포커스 탈취 금지.
+
+| # | ID | 기능 | 구현 | 자동 시험(있으면) | 확인 방법 / 왜 실기인가 | OS |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | UIC-310 | DrawCtx 클립 스택(`push_clip` 교차 쌓기 · `pop_clip` · 모든 어휘가 꼭대기 안) | nexa-ui 112차 `nexa-ctl/raster.rs` `RasterCtx.clips` · nexa-grid `paint_grid` `push_clip(bounds)` | nexa-ctl `clip_tests`(픽셀 2) · `panel_grid_pushes_its_bounds_as_clip` | journal §67 · 실기 = 넘친 셀이 패널 경계에서 잘림 | 3-OS |
+| 2 | TERM-01 · DR-5 | Pty 포트 구현 3-OS(ConPTY · forkpty) · 비차단 읽기 · 리사이즈 · 종료 감지 | `platform/winpty.rs` · `platform/unixpty.rs` | `conpty_runs_cmd_echo` · `forkpty_runs_sh_echo` | 실기 교훈: STARTF_USESTDHANDLES · 종료 flush(§24) | win |
+| 3 | LIC-105 · 106 · 107 · 108 · 109 · 115 · 116 · 158 · 160 · 161 · 164 | 라이선스 창(표 · 요청 코드 · 이메일 링크 복사 · 파일 열기 → 설치 · 제거 · 틱 재판정) · About 대화상자(라이선스 줄 + [라이선스…]) · Help ▸ 라이선스… 토글 · 기동 명령 `license.install:` · `license.dump` | `license_win.rs` · `app/license.rs` · `file_win.rs` · `app/menus.rs` · `app/dialogs.rs` | `license_view_about_install_rejects_garbage` · `note_and_close_without_window` · `labels_and_license_filters` · `license.scn` | 상태줄 배지(LIC-104 · ⓒ 보류) · 유효 파일 설치 실기(루트 키 뒤) | 3-OS |
+| 4 | LIC-163 · 165 · 166 · 169 · 170 | LICENSE 파일/Cargo/README(dir3) · 발급기 mail_text 제품 분기(nexa-dir GUI 안내) · ID 접두 NDL · 문서 정정 · E2E nexa-dir 발급→verify | nexa-license `nexa-license-tool/src/presets.rs` · `main.rs::cmd_issue` · `tests/e2e.rs` | `id_prefix_per_product` · `mail_text_branches_by_product` · `issue_nexa_dir_product_prefix_and_mail` | 실기 발급(루트 키 keygen · ROOT_KEYS 임베드) | 3-OS |
+| 5 | SHELL-049 · OPS 삭제 undo | 휴지통 삭제 Ctrl+Z = 원래 경로로 복원(Windows 셸 undelete · Linux .trashinfo) · Ctrl+Y = 다시 휴지통 · 설명 `recycle N item(s)` · 부분 실패 집계 | `platform/winrecycle.rs` · `platform/linux.rs::FreedesktopTrash::restore` · `trashop.rs` · `app/menus.rs::delete_to_trash` · `selfcheck.rs::check_trash_round_trip` | `undo_restores_missing_and_redo_trashes_present` · `trash_delete_is_undoable_via_restore` · `restore_unknown_path_is_zero` · `recycle_round_trip_restores_original`(ignored · 실기) | macOS 복원(T-52) | win·mac·linux |
+| 6 | RENDER 글꼴 크기 · TERM 셀 폭(사용자 10-03) | 설정 `*.font_size`(em · dir2 DIP)를 nexa-gfx 높이 px로 변환해 dir2와 같은 시각 크기 · 슬롯별 prefs · 고정폭 글꼴 `FontSet.mono`(터미널·코드 줄) | `app/fonts.rs` · nexa-ui `nexa-gfx/text.rs::em_to_px` | `font_sizes_use_em_convention_and_mono_font_loads` · `em_to_px_ratio` | 실기 캡처 비교(사용자) | 3-OS |
+| 7 | DLG-059 · 060 · 061 · 062 · OPS-216 | 전송 진행 창(비모달 400 · 라벨 · 진행/전체/% · 파일 n/m · 세그먼트 바 크기 비례/5색/최소 3px · [취소] = 워커 취소 · 완료 = [닫기 (N)] 카운트다운 · close_ms 0 = 창 없음) | `progress_win.rs` · `app/ops.rs::{start_transfer, ops_tick, finish_transfer}` · nexa-ui `nexa-ctl/controls/progress.rs` | `update_cancel_and_countdown_without_window` · `transfer_progress_window_updates_and_closes` · `allocate_widths_proportional_with_min_width` · `control_snapshot_percent_and_paint` | 실기 캡처 비교 | 3-OS |
+| 8 | WINB-001~008 · 014~021 · 053~065 · 093~125 | DnD 수신 훅 · 폴더 감시/프로브 · IME/페인트/상태바 · 테마/언어 · 툴팁/탭 교차 이동/포커스 · 터미널 보조/스플리터/휠 · 우클릭 팝업/편집 창 | `app/dnd.rs` · `app/watch.rs` · `app/event_loop.rs` · `app/input.rs` | `external_drop_…` · `watch` core 시험 · `splitter`/`term` 시험 | IME(SKEL-098~108)·툴팁 실기 | 3-OS |
+| 9 | GUI-040~051 · 110~151 | 탭 바 · 하단 도크 · 경로 입력/셸 경로/툴팁 | `panel.rs`(tabbar) · `dockinfo.rs` · `pathbar` · nexa-ctl `Tooltip` | `tabs_and_panels` · `dock` 시험 · `pathbar` 시험 | 툴팁 실기 | 3-OS |
+| 10 | LIC-181~197 | OS 분기 지점 · 위험/불일치 | `ndir-license`(기기 ID) · `docs/42` | — | 기기 ID 3-OS 실기 | 3-OS |
+| 11 | SKEL-061~085 · 098~108 · 201~234 | 입력 변환/라우팅/포커스 · IME · OS별 분기 목록 | `app/input.rs` · `app/keywinit.rs` · `platform/` | `route_and_commands_without_window` · keymap 시험 | IME 실기(ko/ja) · OS 분기는 platform 행 | 3-OS |
+| 12 | CMD-068~082 | 행/배경 컨텍스트 메뉴 항목(셸 실행 · 삭제 · 이름 바꾸기 · 잘라내기/복사 · 경로/이름 복사 · 완전 삭제 · 폴더에 붙여넣기 · 새로 만들기 · 배경 붙여넣기 · undo/redo) | `app/ctxmenu.rs` | `row_and_background_context_menus` · `row_menu_new_submenu_creates_from_template` · `dialogs_delete_permanent_and_paste_conflict` | 076(폴더에 붙여넣기)·080 실기 | 3-OS |
+| 13 | CMD-086~096 | 텍스트 편집 컨텍스트 팝업(경로바·이름 바꾸기·도크 텍스트·터미널 — 되돌리기/잘라내기/복사/붙여넣기/삭제/전체 선택/서식 복사) | nexa-ctl `EditCtxAction`(TextBox) · `termview` 복사 | nexa-ctl TextBox 시험 · `fixed_columns_horizontal_scroll_and_mouse_report`(HTML 복사) | 도크 텍스트 선택/복사 ✅(T-62 C-3) · 터미널 붙여넣기 CR 변환 실기 | 3-OS |
+| 14 | SHELL-060 · 061 · 062 · 068(1차) | 외부 드롭 수신 — winit DroppedFile 모아 틱 처리 · 대상 = 폴더 행/패널 폴더 · Ctrl 복사·Shift 이동·볼륨 기본 · 자기/하위·전송 중 거부 · 전송 엔진 합류 | `app/dnd.rs` · `app/event_loop.rs` | `external_drop_moves_or_copies_into_folder_under_cursor` | 발신·OLE 완전·자동 스크롤·가상 파일 = 2차 · 드롭 좌표 실기 확인 | win |
+| 15 | SHELL-040 · 041 · 043(Linux) · T-53 | 파일 클립보드 — X11 CLIPBOARD 소유자 다중 타깃(uri-list · gnome-copied-files · kde cut) 쓰기/읽기 · 텍스트 타깃 = 경로 줄 | `clipboard_x11.rs`(Payload · read_files · 변환) · `platform/linux.rs::X11Files` | `uri_round_trip_and_list_parsing`(ubuntu CI) · X 서버 왕복 `#[ignore]` 3종(실기) | Wayland 전용 세션 = Unsupported(앱 내 사본) | linux |
+| 16 | PLUG-070~077 | 압축 그리드 창(F3/↗ Archive → 그리드 · 컬럼 8 · 정렬 · 선택 · TSV 복사 · 상태 줄 · Esc) | `archive_win.rs` · `app/previewcmd.rs` | `cells_follow_column_order_and_blank_dirs` · `sort_numeric_and_path_fallback` · `source_selection_sort_and_tsv` · `archive_grid_window_from_preview` · `archive-grid.scn` | 헤더 드래그 리사이즈 실기(nexa-grid 규약) | 3-OS |
+| 17 | SHELL-001 · 002 · 005 · 006 · 012 · 013 | 셸 컨텍스트 메뉴(PIDL · 공통 부모 축소 · IContextMenu · HMENU 열거 · 서브메뉴 2단 · verb 가로채기 · InvokeCommand 뒤 재열람 · id 대역 `shell:1..0x6FFF`) | `platform/winshell.rs` · `app/ctxmenu.rs::shell_to_ctx` | `shell_menu_lists_items_for_temp_file` · `row_and_background_context_menus`(가짜 포트) | Windows만 · 네이티브 HMENU 대신 nexa-ctl 그림 | win |
+| 18 | SHELL-011 | 셸 확장 항목 아이콘(메뉴 아이콘 칸) | `platform/winshell.rs`(MIIM_BITMAP `hbmpItem` → GetDIBits 32bpp → `bgra_to_rgba` · 예약 핸들 -1..=11만 거름 · 최상위 메뉴 `HandleMenuMsg(WM_INITMENUPOPUP)`) · `app/ctxmenu.rs::shell_to_ctx`(`MenuIcon::from_rgba`) | `bgra_premultiplied_to_straight_rgba` · `shell_item_icons_reach_context_menu` | hbmpItem ✅ · owner-draw(`HBMMENU_CALLBACK` · WM_DRAWITEM 2-패스 알파) · 표시 중에만 채워지는 비트맵 = 잔여 · 실기(아이콘 칸) 사용자 | win |
+| 19 | SHELL-014 · 015 · 016 | 전용 메뉴 STA 스레드(`ndir-ctxmenu` · 구축→열거→InvokeCommand 전 생애 · 밀린 Prepare는 마지막 것만) · 선행 구축(선택 300 ms 머묾 `CTX_PREBUILD_MS` · 대상 ≤ 256 · 없으면 배경 · 감시 변경 = invalidate) · 즉시 열림 + "불러오는 중" 뒤 같은 자리 채움 · `invoke_async` · 동기 폴백(포트 기본 구현) | `platform/{mod,winshell,fake}.rs`(`ContextMenuProvider::{prepare, try_items, invoke_async, poll, invalidate, busy}`) · `app/ctxmenu.rs::{ctx_shell_tick, ctx_invoked}` · `app/event_loop.rs` · `app/watch.rs` · `selfcheck.rs` | `try_items_is_non_blocking_and_prepare_makes_it_instant`(실제 셸) · `context_menu_opens_immediately_and_fills_when_shell_items_arrive` · selfcheck `prepared menu is instant` | dir2 차이: 표시(TrackPopupMenuEx)는 스레드 밖(dir3 = 자체 그리기) · 배경 선행 · FS 무효화는 dir3 보강. 실기(체감 속도) 사용자 | win |
+| 20 | PLUG-122 · EXT-417 | 플러그인 빌드 스크립트 3-OS(`plugins.list` 단일 출처 · `--out-dir`/`--skip-dist`) | `scripts/plugin-build.{sh,ps1}` | CI `plugins` 잡 · 로컬 실기 §26 |  | 3-OS |
+
+## 실기 순서(권장)
+
+1. 셸·OS 자원(컨텍스트 메뉴 · 휴지통 · 클립보드 · DnD · 감시) — OS마다 1회.
+2. 렌더(글꼴 크기 · 전각 · 테마 · 고DPI) — dir2 스크린샷과 나란히.
+3. 라이선스 발급→설치→제거 E2E · 플러그인 설치/삭제.
+4. 패키지 설치/제거(MSI · zip · pkg/dmg · deb/rpm) — release.yml 산출물.
+
+
+## 결과 기록
+
+| 날짜 | OS | # / ID | 결과 | 비고 |
+| --- | --- | --- | --- | --- |

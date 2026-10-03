@@ -74,6 +74,9 @@ fi
 step "nexa-dir --selfcheck --ci" "$ROOT" cargo run -q -p nexa-dir -- --selfcheck --ci
 # 검증 매트릭스 집계가 원장과 맞는가(T-90 · docs/port/90 집계는 생성물 — 틀리면 `python scripts/matrix-audit.py`로 다시 생성).
 step "matrix-audit --check" "$ROOT" python scripts/matrix-audit.py --check
+# dir2 파일 커버리지(docs/port/99) · 실기 QA 표(docs/port/92)도 생성물 — 틀리면 각 스크립트로 재생성(T-91).
+step "coverage-files --check" "$ROOT" python scripts/coverage-files.py --check
+step "qa-checklist --check" "$ROOT" python scripts/qa-checklist.py --check
 if [[ $QUICK -eq 0 ]]; then
     step "ndir-check --ci" "$ROOT" cargo run -q -p ndir-check -- --ci
 fi

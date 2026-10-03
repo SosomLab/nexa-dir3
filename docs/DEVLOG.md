@@ -4,6 +4,8 @@
 
 ## 2026-10-03
 
+- **우클릭 가속 + 메뉴 아이콘**: dir2 X-61 이식 — 전용 메뉴 STA 스레드 `ndir-ctxmenu` · 선택 300 ms 머묾 선행 구축(배경 포함 · 감시 변경 무효화) · 즉시 열림 + "불러오는 중" 뒤 채움 · `invoke_async` · `hbmpItem` 아이콘 칸 · 구축 1.2~1.4 s → 캐시 조회 µs · 시험 +4(167) · SHELL-014~016 ✅ · 011 🚧 · GAP-003/004 등재 → [journal §71](journal/2026-10-03.md)
+- **T-91 누락 문서·QA 표·성능 기준선**: port/52(UIX 23 · 빈칸 2 = FilePicker 주입 · 패널 행 아이콘) · 92(실기 QA 18 · OS 칸 오탐 보정) · 98(dir2 릴리스 대조) · 99(커버리지 96 %) · `perf-baseline.sh` 버그 3 수정 · 기동 2,935 ms(ctxmenu 1,884) · exe 5.06 MiB · 감사 4,289 덮음 100 % → [journal §70](journal/2026-10-03.md)
 - **T-32 Toast 승격**: 앱 `toast.rs` → nexa-ui 114차 `nexa_ctl::controls::toast`(DR-2) · FolderTree/FilterBox = dir2에 실체 없음 → 범위 밖 ⚠ → [journal §69](journal/2026-10-03.md)
 - **T-31 B 장식/굵은 셀**: nexa-ui 113차 `select_font_styled`(italic) · dir3 `apply_font_decor`(folder_bold/header_bold/header_italic 적용) · 터미널 SGR 1 굵게 그리기 · T3 +1 · UIC-311/313 ✅ · 315 ⚠ 수용 → [journal §68](journal/2026-10-03.md)
 - **T-31 클립 스택**: nexa-ui 112차 `RasterCtx` 클립 스택 실제 구현(모든 어휘) + nexa-grid `paint_grid` 경계 클립 → dir3 T3 `panel_grid_pushes_its_bounds_as_clip` · 매트릭스 UIC-310 ✅ → [journal §67](journal/2026-10-03.md)

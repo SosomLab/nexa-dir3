@@ -32,7 +32,7 @@
 | [51 nexa-ui 컨트롤 API](51-ui-controls.md) | UIK | controls 21종 + nexa-sql 앱 내 범용 UI | ~222 | 없는 컨트롤 22(UIK-201~222 · 권장 API · 구현 순서) |
 | [90 검증 매트릭스](90-verification-matrix.md) | — | 원장 ID ↔ 구현 ↔ 시험 | — | 마일스톤마다 갱신 |
 
-**미작성(조사 중단 — T-91)**: 52(nexa-ctl TextBox·gridedit · nexa-dlg FilePicker · nexa-fs OS 분기 현황) · 98(dir2 릴리스 기능 ↔ 인벤토리 대조) · 99(파일 커버리지 · GAP 보충).
+**T-91(10-03)로 작성**: [52](52-nexa-ui-dlg-fs-status.md)(nexa-ctl TextBox·nexa-grid edit · nexa-dlg FilePicker · nexa-fs OS 분기 현황) · [92](92-qa-checklist.md)(dir2 대조 실기 QA 표 — 생성물 `scripts/qa-checklist.py`) · [98](98-dir2-release-parity.md)(dir2 릴리스 기능(로드맵 M0~M5) ↔ dir3 대조) · [99](99-coverage-gaps.md)(dir2 파일 커버리지 · GAP — 생성물 `scripts/coverage-files.py`).
 
 ## 2. 교차 검증에 쓰는 법
 

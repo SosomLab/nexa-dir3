@@ -23,23 +23,24 @@
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 0 | 19 | 0 | 0 | 0 |
-| PANEL | 138 | 138 | 130 | 8 | 0 | 0 | 0 |
+| PANEL | 138 | 138 | 129 | 9 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
 | RENDER | 54 | 54 | 14 | 0 | 40 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
 | SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
-| SHELL | 75 | 75 | 38 | 10 | 11 | 0 | 0 |
+| SHELL | 75 | 75 | 40 | 11 | 11 | 0 | 0 |
 | SKEL | 291 | 291 | 147 | 94 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 4 | 0 | 231 | 0 | 0 |
 | UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
+| UIX | 23 | 23 | 9 | 2 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4266 | 4266 | 2348 | 1022 | 754 | 0 | 0 |
+| **합계** | 4289 | 4289 | 2358 | 1026 | 766 | 0 | 0 |
 
 ## 행
 
@@ -156,10 +157,11 @@
 | CI-041~051 | CI 워크플로(3-OS 매트릭스 · 캐시 · 폰트 · 플러그인 잡) | `.github/workflows/ci.yml` | T0 | CI 자체 | ✅ | CI-113 |
 | CI-075~093 | 테스트 하네스 7층 · 자동 시험 진입점(스모크 · 기동 명령 · 환경 변수) | `app/startup_cmd.rs` · `ndir-check` · `selfcheck.rs` · `docs/18` | T3~T5 | 시나리오 20 · `--smoke` · `--selfcheck --ci` | ✅ | DR-10 |
 | CI-094~099 · 101~120 | 절차서(성능 · 코드 건강) · 제안 요소 표 | `docs/18` · `scripts/check-all.sh` | — | — | 🚧 | 성능 절차서/기준선 = T-91 |
+| CI-118 · T-08 | 성능 간소 절차 1차 — ① 기동(`--smoke` 중앙값) · 자가 점검 그룹별 ms · exe 크기(+ `--only fs` 벽시계) | `scripts/perf-baseline.sh` | T6 | 실측 표(journal 10-03 §70) | 🚧 | 10-03 기준선: 기동 2,935 ms · ctxmenu 그룹 1,884 ms · exe 5,307,392 B. 미측정 = ② 대량 폴더 1만/10만(헤드리스 경로 없음) · ③ 듀얼+탭 8 · ④ 터미널 대량 출력 · ⑤ 미리보기 전환 · ⑥ 복사 중 프레임 · RSS/누수 · fps |
 | SET-039 · 054 · 100~115 | 도메인 접근자 · 프로젝트 파일 · CLI `nsql config`/명명 규칙/미구현 안 | `ndir-settings/lib.rs` | T1 | registry 시험 | ⚠ | projfile/CLI는 nexa-sql 전용(dir3 = `--smoke`/`--selfcheck`) · 명명 규칙 채택 |
 | SET-120~137 | 차용 테스트 · 상속 금지 결함 | `ndir-settings` 시험 | T1 | `registry_defaults_are_valid_and_keys_unique` · `every_command_has_key_entry_and_label`(SET-130) · `renamed_and_rescaled_tables_are_consistent` | ✅ | |
-| SHELL-012 · 016 · 017 · 021 | 셸 명령 실행 후 재로드 · 동기 폴백 · 우클릭 판정 순서 · 포워딩 해제 | `platform/winshell.rs` · `app/input.rs` · `app/ctxmenu.rs` | T1·T3 | winshell 시험 · `row_and_background_context_menus` | ✅ | 016/021 = dir3 구조상 불필요(메뉴 스레드 없음) |
-| SHELL-010 · 013 · 018 · 090~100 | 내 PC 클라우드 메뉴 · 숫자 ID 대역 · 진단 계측 · 접근성(UIA) · 비밀/코어 공용 · 예제 | — | — | — | ⚠ | 010 = CLOUD ☐ · 013 = 문자열 id · 018 = `NDIR_TRACE_*` 환경 변수 · 접근성 = nexa-ui 범위 밖(후속 결정) |
+| SHELL-012 · 016 · 017 · 021 | 셸 명령 실행 후 재로드 · 동기 폴백 · 우클릭 판정 순서 · 포워딩 해제 | `platform/winshell.rs` · `app/input.rs` · `app/ctxmenu.rs` | T1·T3 | winshell 시험 · `row_and_background_context_menus` | ✅ | 016 = 동기 폴백(아래 SHELL-014~016 행 · journal §71) · 021 = dir3 구조상 불필요 |
+| SHELL-010 · 013 · 018 · 090~100 | 내 PC 클라우드 메뉴 · 숫자 ID 대역 · 진단 계측 · 접근성(UIA) · 비밀/코어 공용 · 예제 | — | — | — | ⚠ | 010 = CLOUD ☐ · 013 = 문자열 id · 018 = 단계 계측 로그(dir2 `NEXA_CTX_TIMING` → `%TEMP%` append)는 미이식 — `--selfcheck --only ctxmenu`(구축 ms · `prepared menu is instant` · 아이콘 수)가 대신(§71) · 접근성 = nexa-ui 범위 밖(후속 결정) |
 | SHELL-034~038 | 셸 수준 통지(SHCNE) · 프로브 스윕 · 감시 자가 치유 | `platform/winwatch.rs` · `PollWatcher` | T1 | winwatch 시험 | 🚧 | SHCNE(034) ☐ · 프로브/치유 ✅ |
 | SHELL-045 · 050~052 | 클립보드 열기 재시도 · 텍스트/서식 복사 · 포커스 문맥 디스패치 | `platform/windows.rs::ClipGuard` · `clipboard.rs` · `app/input.rs` | T1·T3 | windows 클립보드 시험 · `fixed_columns…`(HTML 복사) | ✅ | |
 | SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | ☐ | DnD 2차(docs/port/19 §4-7 2~4차) |
@@ -182,7 +184,9 @@
 | WINC-001~025 | 설정 값 적용 `apply_prefs`(실시간 · 멱등) | `app/settings.rs::apply_setting` | T3 | `every_registry_key_is_applied_or_declared_restart` | ✅ | 레지스트리 전 키 적용 감시 |
 | WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) |
 | PANEL-001~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
-| PANEL-054~068 | 데이터 어댑터 `TreeSource` | `filelist.rs` | T1·T3 | `filelist::tests` · `my_pc_drive_columns_from_disk_port` · `cut_marks_ghost_rows_…` | ✅ | |
+| PANEL-064 · GAP-003 | 아이콘 키 → 행 셸 아이콘(dir2 `icons.rs` ShellIconCache LRU) | `filelist.rs:276` `TreeSource`에 `icon` 없음(nexa-grid 기본 `None`) | — | — | 🚧 | 구현 예정(개발 세션 다음 슬라이스 · [99](99-coverage-gaps.md) GAP-003) |
+| UIX-021 · GAP-004 | FilePicker 최근 목록 · 숨김 파일 설정 주입 | `file_win.rs:160~163`(`set_show_dot`만) | — | — | 🚧 | 구현 예정(GAP-003 뒤) |
+| PANEL-054~063 · 065~068 | 데이터 어댑터 `TreeSource` | `filelist.rs` | T1·T3 | `filelist::tests` · `my_pc_drive_columns_from_disk_port` · `cut_marks_ghost_rows_…` | ✅ | |
 | PANEL-069~118 | 목록 위젯 `VirtualRows`(열·타입어헤드·고속 스크롤·선택·드래그 열) | nexa-ui `nexa-grid`(dir2 `rows.rs` 승격 · DR-2) | T2 | nexa-grid 시험(nexa-ui) · `fixed_columns…` | ✅ | 컨트롤은 nexa-ui 소유 — 변경은 nexa-ui에서 |
 | PANEL-119~130 | 트리 코어 `nexa-tree` | `ndir-tree` | T1 | `ndir-tree` 시험(dir2 이식 · DR-11) | ✅ | |
 | PANEL-131~138 | 호스트 접점(목록 동작 배선) | `app/input.rs` · `app/menus.rs` | T3 | `route_and_commands_without_window` | 🚧 | |
@@ -214,6 +218,9 @@
 | UIK-107 · 213 | 토스트 `Toasts`(범용 승격) | nexa-ui 114차 `nexa_ctl::controls::toast` · dir3 `main.rs` `use` | T2 · T3 | nexa-ctl toast 시험 3 · `bulk_*`(`toasts.animating`) | ✅ | journal §69 · 앱 사본 삭제(DR-2) |
 | UIK-210 · 214 | FolderTree(지연 로딩) · FilterBox | — | — | — | ⚠ | dir2에 실체 없음(widgets = chrome/dock/menubar/overlaybar/pathbar/rows/tabbar · 검색 상자는 설정 창뿐) → 추가하지 않음(journal §69) |
 | UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 |
+| UIX-001 · 005 · 010~014 · 020 · 024 | nexa-ui 보조 크레이트 중 dir3가 쓰는 것 — TextBox(한 줄) · 기록기 · nexa-grid `EditState`(이름 바꾸기 · 경로 바) · FilePicker(Open/Folder · 틱) | `prefs_win.rs` · `bulk_win.rs` · `dlg_win.rs` · `file_win.rs` · `license_win.rs` · `app/ops.rs::begin_rename` | T2·T3 | `new_folder_rename_and_undo` · `bulk_rename_window_apply_undo_and_presets` · nexa-grid `edit.rs` 단위 | ✅ | [52](52-nexa-ui-dlg-fs-status.md) §1~§3 |
+| UIX-002~004 · 022 · 023 · 025 · 030~032 · 034~036 | nexa-ui 보조 API 중 dir3 미사용 — 편집기 기능 · 편집 명령(TextBox 내부 간접) · 클릭 정책 · FilePicker 다중/저장/시험 보조 · nexa-fs 목록/드라이브/외부 열기/감시/경로·시간 | nexa-ui(DR-2) · dir3 대체 = ndir-vfs/ndir-tree · `platform::{Opener, Watcher}` · `dockinfo.rs` | — | — | ⚠ | DR-2/DR-5 — nexa-sql 전용이거나 dir2 이식 크레이트·`platform/`이 대신 · [52](52-nexa-ui-dlg-fs-status.md) |
+| UIX-021 · 033 | FilePicker 상태 주입(최근 목록 · 숨김 파일) · 셸 아이콘(IconService — 런처·템플릿 ✅ · **패널 행 아이콘 없음**) | `file_win.rs:160~163` · `app/launcher_icons.rs` · `platform/wintemplates.rs` · `filelist.rs:276`(`TreeSource`에 `icon` 없음) | — | — | 🚧 | 빈칸 2 — 개발 세션 확인 대상([52](52-nexa-ui-dlg-fs-status.md) §5 · [98](98-dir2-release-parity.md) M1) |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |
@@ -252,7 +259,9 @@
 | PLUG-070~077 | 압축 그리드 창(F3/↗ Archive → 그리드 · 컬럼 8 · 정렬 · 선택 · TSV 복사 · 상태 줄 · Esc) | `archive_win.rs` · `app/previewcmd.rs` | T2·T4 | `cells_follow_column_order_and_blank_dirs` · `sort_numeric_and_path_fallback` · `source_selection_sort_and_tsv` · `archive_grid_window_from_preview` · `archive-grid.scn` | ✅ | 헤더 드래그 리사이즈 실기(nexa-grid 규약) |
 | SHELL §2-1 · §2-2 | 파일 행 메뉴(열기 · 편집 · 삭제/완전 삭제/이름 바꾸기 · 경로/이름 복사 · 폴더에 붙여넣기 · 새로 만들기) · 배경 메뉴(붙여넣기 · undo/redo 설명 · 새로 만들기 · 새로 고침) · 우클릭/Shift+F10 · 비활성 패널 활성화 | `app/ctxmenu.rs` · `panel.rs::pending_ctx` | T2·T4 | `row_and_background_context_menus` · `ctx-menu.scn` | ✅ | 셸 항목(IContextMenu) 합류 = T-51 B · `ctx_menu_order` 설정 = T-51 B |
 | SHELL-001 · 002 · 005 · 006 · 012 · 013 | 셸 컨텍스트 메뉴(PIDL · 공통 부모 축소 · IContextMenu · HMENU 열거 · 서브메뉴 2단 · verb 가로채기 · InvokeCommand 뒤 재열람 · id 대역 `shell:1..0x6FFF`) | `platform/winshell.rs` · `app/ctxmenu.rs::shell_to_ctx` | T2(실기)·T5 | `shell_menu_lists_items_for_temp_file` · `row_and_background_context_menus`(가짜 포트) | ✅ | Windows만 · 네이티브 HMENU 대신 nexa-ctl 그림 |
-| SHELL-003 · 004 · 007 · 008 · 009 · 011 · 014 · 015 · 019 | 키보드 앵커 위치 · Shift+우클릭 확장 동사 · 고유 항목 앵커 삽입 · 새로 만들기 ▸ ShellNew · 배경 셸 메뉴 · 동적 아이콘 · 메뉴 스레드 · 선행 구축 · `ctx_menu_order` | — | — | — | ☐ | T-51 B-2(일부는 dir3 구조상 불필요 — 011·014·015) |
+| SHELL-003 · 004 · 007 · 008 · 009 · 019 | 키보드 앵커 위치 · Shift+우클릭 확장 동사 · 고유 항목 앵커 삽입 · 새로 만들기 ▸ ShellNew · 배경 셸 메뉴 · `ctx_menu_order` | — | — | — | ☐ | T-51 B-2 · 011·014·015는 아래 개별 행(journal §71) |
+| SHELL-011 | 셸 확장 항목 아이콘(메뉴 아이콘 칸) | `platform/winshell.rs`(MIIM_BITMAP `hbmpItem` → GetDIBits 32bpp → `bgra_to_rgba` · 예약 핸들 -1..=11만 거름 · 최상위 메뉴 `HandleMenuMsg(WM_INITMENUPOPUP)`) · `app/ctxmenu.rs::shell_to_ctx`(`MenuIcon::from_rgba`) | T1·T3 | `bgra_premultiplied_to_straight_rgba` · `shell_item_icons_reach_context_menu` | 🚧 | hbmpItem ✅ · owner-draw(`HBMMENU_CALLBACK` · WM_DRAWITEM 2-패스 알파) · 표시 중에만 채워지는 비트맵 = 잔여 · 실기(아이콘 칸) 사용자 |
+| SHELL-014 · 015 · 016 | 전용 메뉴 STA 스레드(`ndir-ctxmenu` · 구축→열거→InvokeCommand 전 생애 · 밀린 Prepare는 마지막 것만) · 선행 구축(선택 300 ms 머묾 `CTX_PREBUILD_MS` · 대상 ≤ 256 · 없으면 배경 · 감시 변경 = invalidate) · 즉시 열림 + "불러오는 중" 뒤 같은 자리 채움 · `invoke_async` · 동기 폴백(포트 기본 구현) | `platform/{mod,winshell,fake}.rs`(`ContextMenuProvider::{prepare, try_items, invoke_async, poll, invalidate, busy}`) · `app/ctxmenu.rs::{ctx_shell_tick, ctx_invoked}` · `app/event_loop.rs` · `app/watch.rs` · `selfcheck.rs` | T1·T3·T5 | `try_items_is_non_blocking_and_prepare_makes_it_instant`(실제 셸) · `context_menu_opens_immediately_and_fills_when_shell_items_arrive` · selfcheck `prepared menu is instant` | ✅ | dir2 차이: 표시(TrackPopupMenuEx)는 스레드 밖(dir3 = 자체 그리기) · 배경 선행 · FS 무효화는 dir3 보강. 실기(체감 속도) 사용자 |
 | PLUG-122 · EXT-417 | 플러그인 빌드 스크립트 3-OS(`plugins.list` 단일 출처 · `--out-dir`/`--skip-dist`) | `scripts/plugin-build.{sh,ps1}` | T4(CI) | CI `plugins` 잡 · 로컬 실기 §26 | ✅ | |
 | PLUG-123 · CI-113 · T-07 | CI wasm32 빌드 → 갓 빌드한 .wasm 로드 검증(`--selfcheck --only plugin`) | `.github/workflows/ci.yml` | T4 | `plugins` 잡 | ✅ | 바이트 동일성은 묻지 않음(툴체인) |
 | PLUG-125 · EXT-414 · EXT-129 | 설정 창 플러그인 페이지 — 플러그인당 체크박스 `이름 (id) — ext…`(해제 = `plugins.disabled`) · 없으면 안내 · 로드 오류 줄 | `prefs_win.rs`(plugin_page/plugin_boxes) · `app/windows.rs::plugin_rows` | T3·T4 | `plugins_page_checkboxes_edit_disabled` · `prefs-open.scn` | ✅ | 매니저 = EXT-415 ☐ |

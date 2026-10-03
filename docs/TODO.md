@@ -14,7 +14,7 @@
 | T-06 | `ndir-check` 시나리오 러너(`.scn` · 격리 홈 · 샘플 트리 · 검사식) | P1 | 중 | M3 | CI-108 | ✅ 10-03(journal §17 · 시나리오 5 · CI Windows 단계 · Linux xvfb/macOS는 후속) |
 | T-70 | M6 파일 작업 배선(복사/잘라내기/붙여넣기 · 전송 작업 스레드 · undo/redo · 새 폴더/새 파일 · 인라인 이름 바꾸기) | P0 | 중 | T-50 | OPS-001~039 | ✅ 10-03 journal §28·§29(잔여: 확인/진행 창 T-29 · 일괄 이름 변경 창 · 영구 삭제) |
 | T-07 | CI에 `wasm32` 플러그인 빌드 검증 + Windows 임포트 화이트리스트·용량 측정 | P1 | 소 | M5 | CI-113 | 🚧 10-03 journal §26(wasm32 빌드·로드 검증 ✅ · 임포트 화이트리스트·용량 측정 = M7) |
-| T-08 | 성능 스크립트(`perf-*` · 기동 · 대량 폴더 · 누수) | P2 | 중 | M3 | CI-118 | ☐ |
+| T-08 | 성능 스크립트(`perf-*` · 기동 · 대량 폴더 · 누수) | P2 | 중 | M3 | CI-118 | 🚧 10-03 journal §70(`scripts/perf-baseline.sh` 1차 = 기동 `--smoke` 중앙값 · 자가 점검 그룹별 ms · exe 크기 ✅ · 대량 폴더 1만/10만(헤드리스 측정 경로 필요) · RSS/누수 · fps ☐) |
 
 ## M1 기반 크레이트
 
@@ -64,7 +64,7 @@
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-50 | 포트 trait 8종 + Fake + ADR-0001 | P0 | 중 | T-41 | DR-5 · CI-103 | ✅ 10-03(journal §20 · 9종(+Disk) · 폴링 감시·외부 열기·Windows 용량 · selfcheck shell/open/fs) |
-| T-51 | Windows: 셸 메뉴(IContextMenu + 메뉴 스레드) · 휴지통 · CF_HDROP 클립보드 · OLE DnD · 폴더 감시 · 셸 통지 · ShellExecute · ConPTY | P0 | 대 | T-50 | SHELL · TERM | 🚧 10-03 journal §21·§33(A 휴지통·클립보드·용량 ✅ · B-1 셸 컨텍스트 메뉴 ✅ · B-2a 배경 셸 메뉴 + 생성 감지 ✅ journal §41 · B-2b 폴더 감시 ReadDirectoryChangesW ✅ journal §42 · B-2c 휴지통 복원 ✅ journal §43 · B-2d 새로 만들기 ▸ 템플릿 ✅ journal §53 · DnD 수신 1차(winit) ✅ journal §61 · B-2 잔여: OLE DnD 완전(발신·자동 스크롤)·SHCNE 통지) |
+| T-51 | Windows: 셸 메뉴(IContextMenu + 메뉴 스레드) · 휴지통 · CF_HDROP 클립보드 · OLE DnD · 폴더 감시 · 셸 통지 · ShellExecute · ConPTY | P0 | 대 | T-50 | SHELL · TERM | 🚧 10-03 journal §21·§33(A 휴지통·클립보드·용량 ✅ · B-1 셸 컨텍스트 메뉴 ✅ · B-2a 배경 셸 메뉴 + 생성 감지 ✅ journal §41 · B-2b 폴더 감시 ReadDirectoryChangesW ✅ journal §42 · B-2c 휴지통 복원 ✅ journal §43 · B-2d 새로 만들기 ▸ 템플릿 ✅ journal §53 · DnD 수신 1차(winit) ✅ journal §61 · 메뉴 스레드+선행 구축+아이콘 ✅ 10-03 §71(SHELL-014~016 · 011 hbmpItem) · B-2 잔여: OLE DnD 완전(발신·자동 스크롤)·SHCNE 통지·메뉴 owner-draw 아이콘·Shift 확장 동사) |
 | T-52 | macOS: 자체 메뉴 + 연결 프로그램 · trashItem · NSPasteboard 파일 URL · NSDragging · FSEvents · open · forkpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | 🚧 10-03(open/open -R · $SHELL · statvfs · ~/.Trash 이동 · forkpty(unixpty) · kqueue 감시 journal §54 · NSPasteboard 파일 클립보드 journal §55 · trashItem 휴지통+복원 journal §57 ✅ / NSDragging ☐) |
 | T-53 | Linux: 자체 메뉴 + xdg/MimeApps · freedesktop Trash · gnome-copied-files/text/uri-list · XDND · inotify · xdg-open · openpty/$SHELL | P0 | 대 | T-50 | SHELL §4 | 🚧 10-03(xdg-open · $SHELL · statvfs · freedesktop Trash(복원 포함) · openpty(unixpty) · inotify 감시 journal §54 · XDG 템플릿 §53 · uri-list 파일 클립보드 journal §56 ✅ / XDND ☐) |
 | T-54 | `--selfcheck` 실제 항목(fs·trash·shell·pty·ctxmenu·clipboard·open) · Help ▸ 자가 점검 창 | P0 | 중 | T-51~53 | CI-110·111 | 🚧 10-03 journal §27(창 ✅ · 실제 항목 fs/trash/shell/open/plugin/license ✅ · ctxmenu ✅ journal §41 · pty/clipboard/dnd = 해당 슬라이스에서) |
@@ -99,4 +99,4 @@
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-90 | 검증 매트릭스 전수(원장 ID ↔ 구현 ↔ 시험) · 누락 보충 · 의도된 차이 등재 | P0 | 대 | M3~M7 | CI-116 | 🚧 10-03(1차 감사 스크립트 + 91 전수 journal §62 · 2차 원장 기반 시험 + 집단 행 journal §63 · 3차 CMD 대조 journal §64 · 4차 묶음 행 44 journal §65 · 5차 잔여 접두 28 journal §66 = **원장 전 ID 덮음** · 세부 ✅화 = T-91과 함께) |
-| T-91 | dir2 대조 실기 QA 표 · 성능 기준선 · 누락 문서(port/52 nexa-dlg·fs · 98 릴리스 대조 · 99 커버리지) | P1 | 중 | — | — | ☐ |
+| T-91 | dir2 대조 실기 QA 표 · 성능 기준선 · 누락 문서(port/52 nexa-dlg·fs · 98 릴리스 대조 · 99 커버리지) | P1 | 중 | — | — | ✅ 10-03 journal §70(문서 52·92·98·99 + 생성 스크립트 `qa-checklist.py`·`coverage-files.py` + `perf-baseline.sh` 1차 기준선 · check-all 단계 2 · 실기 QA 수행 = 사용자 · 성능 잔여 = T-08) |
