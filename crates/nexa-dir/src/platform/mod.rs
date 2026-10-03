@@ -513,7 +513,7 @@ impl Platform {
             Box::new(macos::NativeShell),
             Box::new(macos::opener()),
             Box::new(macos::NativeDisk),
-            Rc::new(macos::HomeTrash::new()),
+            Rc::new(macos::SystemTrash::new()),
             Box::new(macclip::PasteboardFiles::new()),
         );
         #[cfg(all(unix, not(target_os = "macos")))]

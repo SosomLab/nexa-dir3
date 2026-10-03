@@ -1,4 +1,4 @@
-//! macOS 구현(T-50·T-51 A): 셸 탐지 · 열기/보기 · **휴지통(`~/.Trash`로 이동 · 되돌리기 정보는 T-52 `trashItem`)** · **드라이브 용량**(`statvfs`).
+//! macOS 구현(T-50·T-51 A·T-52): 셸 탐지 · 열기/보기 · **휴지통(`NSFileManager trashItemAtURL` = Finder 되돌리기와 같은 길 · 복원 = 이번 세션 기록으로 `moveItem` · 실패 = `~/.Trash` 이동 폴백)** · **드라이브 용량**(`statvfs`).
 //! 파일 클립보드 = `macclip.rs`(NSPasteboard) · 폴더 감시 = `macwatch.rs`(kqueue) · PTY = `unixpty.rs` · NSDragging은 T-52 잔여.
 
 use super::*;
@@ -79,6 +79,96 @@ impl Trash for HomeTrash {
     }
 }
 
+/// 시스템 휴지통(T-52 · dir2 SHELL-049 복원 대응): `trashItemAtURL:resultingItemURL:`가 돌려주는 휴지통 안 경로를 **원래 경로 → 휴지통 경로**로 기억해
+/// `restore`(삭제 undo)가 `moveItemAtURL`로 되돌린다(이번 프로세스가 버린 것만 · Finder가 비우면 실패 = `Failed`). AppKit 아님(Foundation) — 어느 스레드든.
+pub(super) struct SystemTrash {
+    home: HomeTrash,
+    trashed: RefCell<HashMap<PathBuf, PathBuf>>,
+}
+
+impl SystemTrash {
+    pub(super) fn new() -> Self {
+        SystemTrash {
+            home: HomeTrash::new(),
+            trashed: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// 항목 하나를 시스템 휴지통으로 — 성공 = 휴지통 안 경로.
+    fn trash_one(p: &Path) -> Result<PathBuf, String> {
+        use objc2_foundation::{NSFileManager, NSString, NSURL};
+        // SAFETY: Foundation 호출 — 살아 있는 NSURL · 출력 슬롯은 Option.
+        unsafe {
+            let url = NSURL::fileURLWithPath(&NSString::from_str(&p.to_string_lossy()));
+            let mut out: Option<objc2::rc::Retained<NSURL>> = None;
+            NSFileManager::defaultManager()
+                .trashItemAtURL_resultingItemURL_error(&url, Some(&mut out))
+                .map_err(|e| e.localizedDescription().to_string())?;
+            out.and_then(|u| u.path().map(|s| PathBuf::from(s.to_string())))
+                .ok_or_else(|| "no resulting URL".to_string())
+        }
+    }
+}
+
+impl Trash for SystemTrash {
+    fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
+        let mut n = 0;
+        let mut fallback: Vec<PathBuf> = Vec::new();
+        for p in paths {
+            match Self::trash_one(p) {
+                Ok(t) => {
+                    self.trashed.borrow_mut().insert(p.clone(), t);
+                    n += 1;
+                }
+                Err(_) => fallback.push(p.clone()),
+            }
+        }
+        if !fallback.is_empty() {
+            n += self.home.trash(&fallback)?;
+        }
+        Ok(n)
+    }
+
+    fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
+        use objc2_foundation::{NSFileManager, NSString, NSURL};
+        let mut n = 0;
+        for o in original {
+            let Some(t) = self.trashed.borrow().get(o).cloned() else {
+                continue;
+            };
+            if !t.exists() {
+                return Err(PlatformError::Failed(format!(
+                    "gone from trash: {}",
+                    o.display()
+                )));
+            }
+            if let Some(parent) = o.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            // SAFETY: Foundation 호출 — 두 URL 모두 살아 있다.
+            let moved = unsafe {
+                NSFileManager::defaultManager().moveItemAtURL_toURL_error(
+                    &NSURL::fileURLWithPath(&NSString::from_str(&t.to_string_lossy())),
+                    &NSURL::fileURLWithPath(&NSString::from_str(&o.to_string_lossy())),
+                )
+            };
+            match moved {
+                Ok(()) => {
+                    self.trashed.borrow_mut().remove(o);
+                    n += 1;
+                }
+                Err(e) => {
+                    return Err(PlatformError::Failed(format!("{}: {e:?}", o.display())));
+                }
+            }
+        }
+        if n == 0 && !original.is_empty() {
+            return Err(PlatformError::Unsupported("trash.restore"));
+        }
+        Ok(n)
+    }
+}
+
 /// Darwin `struct statvfs`(`fsblkcnt_t`/`fsfilcnt_t` = u32 · `unsigned long` = u64).
 #[repr(C)]
 struct StatVfs {
@@ -144,5 +234,24 @@ mod tests {
             .space(Path::new("/"))
             .is_some_and(|(t, f)| t >= f && t > 0));
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 시스템 휴지통 왕복(macOS 러너): 임시 파일 → trashItemAtURL(원본 사라짐 · 기록) → restore(원래 경로로 복원) · 모르는 경로 복원 = Unsupported.
+    #[test]
+    fn system_trash_round_trip() {
+        let dir = std::env::temp_dir().join(format!("ndir-mactrash-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let f = dir.join("restore-me.txt");
+        std::fs::write(&f, b"restore").unwrap();
+        let t = SystemTrash::new();
+        assert_eq!(t.trash(std::slice::from_ref(&f)), Ok(1));
+        assert!(!f.exists(), "원본은 휴지통으로");
+        assert_eq!(t.restore(std::slice::from_ref(&f)), Ok(1));
+        assert_eq!(std::fs::read(&f).unwrap(), b"restore");
+        assert_eq!(
+            t.restore(&[dir.join("never.txt")]),
+            Err(PlatformError::Unsupported("trash.restore"))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

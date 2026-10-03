@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 54차 — T-52: macOS 시스템 휴지통 + 복원
+
+- **한 일**: `SystemTrash`(trashItemAtURL · moveItem 복원 · 폴백) · Cargo objc2-foundation NSFileManager/NSError · 시험 +1(macOS CI).
+- **지금 상태**: 휴지통 복원 3-OS(Windows undelete · macOS trashItem · Linux trashinfo) ✅. T-52/53 잔여 = DnD(NSDragging · XDND) · SHELL-044. 다음 = T-90/91 · T-63 매니저.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §57](journal/2026-10-03.md)
+
 ## 10-03 53차 — T-53: Linux 파일 클립보드(X11 uri-list) → 파일 클립보드 3-OS 완료
 
 - **한 일**: `clipboard_x11.rs` Payload/파일 타깃/`read_files` · `X11Files` · `Platform::native` Linux 교체 · 시험 +1(ubuntu CI).
