@@ -43,6 +43,45 @@ pub(crate) fn display_path(p: &Path) -> String {
     }
 }
 
+/// 바로 가기 확장자(탐색기가 이름에서 늘 숨기는 것 · 소문자).
+const SHORTCUT_EXTS: [&str; 3] = [".lnk", ".url", ".appref-ms"];
+
+/// `name`이 바로 가기 파일이면 `(확장자 뺀 이름, 확장자(점 포함 · 원래 대소문자))`(순수 · 대소문자 무시 · 이름이 확장자뿐이면 `None`).
+pub(crate) fn split_shortcut_ext(name: &str) -> Option<(&str, &str)> {
+    SHORTCUT_EXTS.iter().find_map(|ext| {
+        let cut = name.len().checked_sub(ext.len())?;
+        (cut > 0 && name.is_char_boundary(cut) && name[cut..].eq_ignore_ascii_case(ext))
+            .then(|| name.split_at(cut))
+    })
+}
+
+/// 목록·이름 바꾸기에 보이는 이름(GAP-006 · dir2 `source.rs:456-465`): `hide`(= 이 OS가 바로 가기 확장자를 숨기는가)이고
+/// 폴더가 아닌 바로 가기 파일이면 확장자를 뺀다(확장자 열은 `lnk` 그대로).
+pub(crate) fn display_name(name: &str, is_dir: bool, hide: bool) -> &str {
+    if hide && !is_dir {
+        if let Some((stem, _)) = split_shortcut_ext(name) {
+            return stem;
+        }
+    }
+    name
+}
+
+/// 이름 바꾸기 확정 이름(dir2 `win.rs:4036-4045`): 원래 이름이 숨겨진 바로 가기 확장자를 가졌고 새 이름에 그 확장자가 없으면
+/// 다시 붙인다(사용자가 본 것은 확장자 없는 이름 — 붙이지 않으면 바로 가기가 깨진다).
+pub(crate) fn restore_shortcut_ext(old: &str, new: &str, is_dir: bool, hide: bool) -> String {
+    if hide && !is_dir {
+        if let Some((_, ext)) = split_shortcut_ext(old) {
+            let has = new.len() > ext.len()
+                && new.is_char_boundary(new.len() - ext.len())
+                && new[new.len() - ext.len()..].eq_ignore_ascii_case(ext);
+            if !has && !new.is_empty() {
+                return format!("{new}{ext}");
+            }
+        }
+    }
+    new.to_string()
+}
+
 /// 열람 옵션(설정 `list.*`에서) — 다시 열 때 그대로 쓴다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ListOpts {
@@ -377,7 +416,12 @@ impl RowSource for TreeSource {
             } else {
                 Marker::Collapsed
             },
-            text: r.name,
+            text: display_name(
+                &r.name,
+                r.kind == FileKind::Dir,
+                crate::platform::hides_shortcut_ext(),
+            )
+            .to_string(),
         }
     }
 
@@ -635,5 +679,48 @@ mod tests {
         assert!(src.error().is_some());
         assert!(!src.status_text().is_empty());
         assert_eq!(src.row(0).text, "");
+    }
+
+    /// GAP-006: 바로 가기 확장자 숨김/복원(순수 · MC/DC — 숨기는 OS × 폴더 여부 × 확장자 유무).
+    #[test]
+    fn shortcut_ext_is_hidden_and_restored_on_rename() {
+        assert_eq!(split_shortcut_ext("Chrome.lnk"), Some(("Chrome", ".lnk")));
+        assert_eq!(split_shortcut_ext("Site.URL"), Some(("Site", ".URL")));
+        assert_eq!(
+            split_shortcut_ext("App.appref-ms"),
+            Some(("App", ".appref-ms"))
+        );
+        assert_eq!(split_shortcut_ext(".lnk"), None, "이름이 확장자뿐");
+        assert_eq!(split_shortcut_ext("메모.txt"), None);
+        assert_eq!(display_name("Chrome.lnk", false, true), "Chrome");
+        assert_eq!(
+            display_name("Chrome.lnk", false, false),
+            "Chrome.lnk",
+            "숨기지 않는 OS"
+        );
+        assert_eq!(
+            display_name("folder.lnk", true, true),
+            "folder.lnk",
+            "폴더는 그대로"
+        );
+        assert_eq!(
+            display_name("한글 바로 가기.lnk", false, true),
+            "한글 바로 가기"
+        );
+        assert_eq!(
+            restore_shortcut_ext("Chrome.lnk", "Browser", false, true),
+            "Browser.lnk"
+        );
+        assert_eq!(
+            restore_shortcut_ext("Chrome.lnk", "Browser.LNK", false, true),
+            "Browser.LNK"
+        );
+        assert_eq!(
+            restore_shortcut_ext("Chrome.lnk", "Browser", false, false),
+            "Browser"
+        );
+        assert_eq!(restore_shortcut_ext("a.txt", "b", false, true), "b");
+        assert_eq!(restore_shortcut_ext("d.lnk", "e", true, true), "e");
+        assert_eq!(restore_shortcut_ext("Chrome.lnk", "", false, true), "");
     }
 }

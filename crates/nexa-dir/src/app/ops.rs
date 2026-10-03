@@ -595,6 +595,13 @@ impl App {
         if name.is_empty() {
             return;
         }
+        // 편집기에는 목록에 보이는 이름 그대로(바로 가기 확장자 숨김 — 확정 때 다시 붙인다 · GAP-006).
+        let name = crate::filelist::display_name(
+            &name,
+            path.is_dir(),
+            crate::platform::hides_shortcut_ext(),
+        )
+        .to_string();
         let mut inv = Invalidations::default();
         self.panels[a].rows_mut().begin_rename(row, &name, &mut inv);
         self.redraw();
@@ -605,6 +612,12 @@ impl App {
         let Some(path) = self.panels[panel].rows().source().row_path(row) else {
             return;
         };
+        let new_name = &crate::filelist::restore_shortcut_ext(
+            &ndir_ops::leaf_name(&path),
+            new_name,
+            path.is_dir(),
+            crate::platform::hides_shortcut_ext(),
+        );
         let mut inv = Invalidations::default();
         match ndir_ops::rename(&path, new_name) {
             Ok(new_path) => {

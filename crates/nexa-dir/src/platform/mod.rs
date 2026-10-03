@@ -641,6 +641,12 @@ impl Platform {
     }
 }
 
+/// 바로 가기 파일의 확장자를 이름에서 숨기는 OS인가(GAP-006) — Windows 탐색기는 `.lnk` · `.url` · `.appref-ms`를
+/// "확장명 표시" 설정과 무관하게 늘 숨긴다. 다른 OS에서는 평범한 파일이라 그대로 보인다.
+pub(crate) fn hides_shortcut_ext() -> bool {
+    cfg!(windows)
+}
+
 /// 시스템 "휠 한 번에 스크롤할 줄 수"(Windows `SPI_GETWHEELSCROLLLINES` · 페이지 단위 = -1 → 호출자가 상한으로 해석) —
 /// 다른 OS는 `None`(nexa-ctl 기본 3줄 유지 · dir2 `sync_wheel_lines` win.rs:6325).
 pub(crate) fn wheel_lines() -> Option<i32> {
