@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 85차 — 폴더 바로 가기(.lnk) = 앱 안 이동(GAP-007)
+
+- **한 일**: .lnk 대상이 폴더면 탐색기처럼 같은 패널에서 이동(Windows · IShellLinkW) · 파일 대상은 종전대로 OS 열기 · 시험 2 · 실기(Enter) 확인.
+- **지금 상태**: .lnk/링크 남은 갭 = GAP-008(링크 오버레이 · 종류 "바로 가기") · 경로 바 GAP-014(IME). ⚠ 흔들리는 시험 `scroll_settings_reach_controls_and_terminal_wheel_accumulates`(전역 고속 스크롤 경쟁 추정) — 개발 세션 확인 중.
+- **걸린 것**: 흔들리는 시험 · 경로 제안 열거 UI 스레드 `read_dir` · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · `list.show_protected` 기본값 · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+
+→ [journal/2026-10-03 §89](journal/2026-10-03.md)
+
+---
+
 ## 10-03 84차 — T4 가짜 클립보드(`NDIR_FAKE_CLIPBOARD`) · 시험 클립보드 접촉 완전 해소
 
 - **한 일**: T4 시나리오 프로세스를 env 가짜 클립보드로(텍스트 + 파일 · 프로세스 안) · 게이트 전후 OS 클립보드 순번 10592 → 10592로 무변화 확인.
