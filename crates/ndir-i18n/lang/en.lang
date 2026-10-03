@@ -244,6 +244,7 @@ pref.dlgFont = Dialog font
 pref.dlgFontSize = Dialog font size (7-24)
 menu.file.prefs = Preferences...
 ctx.copyName = Copy as name
+ctx.loading = Loading shell items…
 pref.cat.appearance = Appearance
 pref.cat.fonts = Fonts
 pref.cat.terminal = Terminal

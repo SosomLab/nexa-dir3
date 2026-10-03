@@ -87,6 +87,40 @@ pub(crate) struct ShellMenuItem {
     pub verb: String,
     pub children: Vec<ShellMenuItem>,
     pub separator: bool,
+    /// 항목 아이콘(셸 확장이 준 비트맵 · dir2 SHELL-011) — 없으면 `None`(아이콘 칸은 메뉴가 하나라도 있으면 전 행에 예약).
+    pub icon: Option<ShellIcon>,
+}
+
+/// 셸 메뉴 항목 아이콘 — straight RGBA(`w*h*4`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ShellIcon {
+    pub w: u32,
+    pub h: u32,
+    pub rgba: Vec<u8>,
+}
+
+/// 셸 메뉴의 대상(선행 구축 · 재사용 판정의 열쇠 — dir2 `MenuReq::same_menu`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum MenuTarget {
+    /// 선택 항목들.
+    Rows(Vec<PathBuf>),
+    /// 폴더 배경.
+    Bg(PathBuf),
+}
+
+/// 셸 메뉴 비동기 통지(`ContextMenuProvider::poll`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum MenuEvent {
+    /// 구축 끝 — 항목 목록(실패 = 빈 목록).
+    Items {
+        target: MenuTarget,
+        items: Vec<ShellMenuItem>,
+    },
+    /// 실행 끝 — 배경 메뉴가 항목을 정확히 1개 만들었으면 그 경로.
+    Invoked {
+        target: MenuTarget,
+        result: Result<Option<PathBuf>, String>,
+    },
 }
 
 /// PTY 세션(M5 터미널이 쓴다) — 읽기/쓰기/크기/종료.
@@ -134,6 +168,36 @@ pub(crate) trait ContextMenuProvider {
         Err(PlatformError::Failed(format!(
             "not a background item: {id}"
         )))
+    }
+
+    // ── 비차단 경로(dir2 X-61 "우클릭 가속" · SHELL-014/015) — 기본 구현 = 동기 경로 그대로(가짜 · 다른 OS) ──
+
+    /// **선행 구축**: 선택이 머물면 호스트가 미리 시킨다(비차단 · 결과는 구현 쪽 캐시). 기본 = 아무것도 안 함.
+    fn prepare(&self, _target: &MenuTarget) {}
+    /// **비차단 조회**: `Some` = 지금 줄 수 있음 · `None` = 구축 중(끝나면 `poll`이 `Items`를 준다 — 호스트는 자체 항목만 먼저 띄운다).
+    /// 기본 = 동기 `items`/`bg_items`.
+    fn try_items(&self, target: &MenuTarget) -> Option<Vec<ShellMenuItem>> {
+        Some(
+            match target {
+                MenuTarget::Rows(paths) => self.items(paths),
+                MenuTarget::Bg(dir) => self.bg_items(dir),
+            }
+            .unwrap_or_default(),
+        )
+    }
+    /// **비차단 실행**: true = 접수(결과는 `poll`의 `Invoked`) · false = 미지원(호출자가 동기 `invoke`/`invoke_bg`). 기본 = false.
+    fn invoke_async(&self, _id: &str, _target: &MenuTarget) -> bool {
+        false
+    }
+    /// 비동기 통지 1건(없으면 `None`). 호스트가 틱에서 비울 때까지 부른다.
+    fn poll(&self) -> Option<MenuEvent> {
+        None
+    }
+    /// 준비분 폐기(폴더 내용이 바뀜). 기본 = 무시.
+    fn invalidate(&self) {}
+    /// 진행 중인 구축/실행이 있는가(호스트가 틱을 유지). 기본 = 없음.
+    fn busy(&self) -> bool {
+        false
     }
 }
 

@@ -243,6 +243,7 @@ pref.dlgFont = 대화상자 글꼴
 pref.dlgFontSize = 대화상자 글꼴 크기(7~24)
 menu.file.prefs = 설정...
 ctx.copyName = 이름 복사
+ctx.loading = 셸 항목 불러오는 중…
 pref.cat.appearance = 모양
 pref.cat.fonts = 글꼴
 pref.cat.terminal = 터미널

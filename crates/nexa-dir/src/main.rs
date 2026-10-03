@@ -219,6 +219,16 @@ struct App {
     ctx_templates: Vec<platform::NewTemplate>,
     /// 행/배경 메뉴를 열 때의 항목 트리 사본(덤프 `ctx`가 서브메뉴 자식을 보여주기 위해 — nexa-ctl 메뉴는 id 목록만 준다).
     ctx_items: Vec<CtxItem>,
+    /// 셸 항목을 기다리는 열린 메뉴의 대상(비차단 조회 · dir2 X-61) — `Items`가 오면 같은 자리에서 메뉴를 다시 채운다.
+    ctx_pending: Option<platform::MenuTarget>,
+    /// 메뉴를 연 자리(다시 채울 때 같은 자리).
+    ctx_anchor: (i32, i32),
+    /// 비동기 셸 실행을 건 패널(`Invoked` 통지 처리용).
+    ctx_invoke_panel: Option<usize>,
+    /// 선행 구축(선택 머무름 300 ms · dir2 `CTX_PREBUILD_MS`): 지금 대상 · 머문 시작 · 구축 요청함.
+    ctx_dwell_target: Option<platform::MenuTarget>,
+    ctx_dwell_since: Instant,
+    ctx_dwell_done: bool,
     /// 외부 끌어다 놓기 1차(winit HoveredFile/DroppedFile · 틱에서 처리).
     dnd_hover: Vec<PathBuf>,
     dnd_drop: Vec<PathBuf>,
@@ -450,6 +460,12 @@ impl App {
             ctx_new_dir: None,
             ctx_templates: Vec::new(),
             ctx_items: Vec::new(),
+            ctx_pending: None,
+            ctx_anchor: (0, 0),
+            ctx_invoke_panel: None,
+            ctx_dwell_target: None,
+            ctx_dwell_since: Instant::now(),
+            ctx_dwell_done: false,
             dnd_hover: Vec::new(),
             dnd_drop: Vec::new(),
             platform,

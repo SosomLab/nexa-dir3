@@ -101,6 +101,11 @@ impl ContextMenuProvider for FakeMenu {
             id: "fake.open".into(),
             label: "Fake Open".into(),
             enabled: true,
+            icon: Some(ShellIcon {
+                w: 2,
+                h: 2,
+                rgba: vec![255; 16],
+            }),
             ..Default::default()
         }])
     }

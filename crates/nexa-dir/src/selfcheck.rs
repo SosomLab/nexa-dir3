@@ -596,13 +596,52 @@ fn check_ctxmenu(r: &mut Report) {
                     .filter(|i| !i.verb.is_empty())
                     .map(|i| i.verb.to_ascii_lowercase())
                     .collect::<Vec<_>>();
+                let icons = v.iter().filter(|i| i.icon.is_some()).count();
                 (
                     Verdict::Pass,
-                    format!("{} items · verbs {}", v.len(), verbs.join(",")),
+                    format!(
+                        "{} items · {icons} icons · verbs {}",
+                        v.len(),
+                        verbs.join(",")
+                    ),
                 )
             }
             Ok(_) => (Verdict::Warn, "no items".into()),
             Err(e) => (Verdict::Fail, e.to_string()),
+        }
+    });
+    // 우클릭 가속(dir2 X-61): 선행 구축된 같은 대상의 재조회는 캐시에서 즉시(구축 시간 = 위 항목의 ms).
+    timed(r, "ctxmenu", "prepared menu is instant", || {
+        let target = crate::platform::MenuTarget::Rows(vec![file.clone()]);
+        p.ctxmenu.prepare(&target);
+        let t0 = std::time::Instant::now();
+        let mut got = None;
+        while t0.elapsed() < std::time::Duration::from_secs(30) {
+            while p.ctxmenu.poll().is_some() {}
+            if !p.ctxmenu.busy() {
+                let t1 = std::time::Instant::now();
+                got = p
+                    .ctxmenu
+                    .try_items(&target)
+                    .map(|v| (v.len(), t1.elapsed()));
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        match got {
+            Some((n, d)) if d < std::time::Duration::from_millis(50) => (
+                Verdict::Pass,
+                format!(
+                    "{n} items in {} µs after {} ms prebuild",
+                    d.as_micros(),
+                    t0.elapsed().as_millis()
+                ),
+            ),
+            Some((n, d)) => (
+                Verdict::Warn,
+                format!("{n} items but lookup took {} ms", d.as_millis()),
+            ),
+            None => (Verdict::Fail, "prebuild did not finish".into()),
         }
     });
     timed(r, "ctxmenu", "background menu items", || {

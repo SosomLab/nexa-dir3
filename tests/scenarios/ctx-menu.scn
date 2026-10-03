@@ -3,17 +3,19 @@ id: ctx-menu
 title: 행/배경 컨텍스트 메뉴 · 항목 실행
 tree: file a.txt 3
 settings: ui.lang=en
+# 셸 항목은 메뉴 스레드가 비동기로 채운다(§71 — 즉시 열림 + ctx.loading 뒤 같은 자리 채움 · 배경 구축 실측 0.6~0.9 s) → 배경 덤프는 기다린 뒤(CI 러너 여유 포함 6 s).
+# `@after`는 준비 시점 기준 절대 ms라 뒤 명령도 전부 시각을 단다(@ready로 두면 기다리는 명령보다 먼저 돈다). 행 메뉴 검사는 자체 항목뿐이라 기다리지 않는다.
 cmd: @ready:ui.rclick:@panel0.list
-cmd: @ready:ctx.dump:<out>/bg.txt
-cmd: @ready:ctx.pick:file.new_folder
-cmd: @ready:ui.press:escape
-cmd: @ready:list.dump:<out>/list.txt
-cmd: @ready:list.select:0
-cmd: @ready:cmd.contextMenu
-cmd: @ready:ctx.dump:<out>/row.txt
-cmd: @ready:ctx.pick:edit.copy
-cmd: @ready:assert.ops:clip 1 copy
-cmd: @ready:quit
+cmd: @after:6000:ctx.dump:<out>/bg.txt
+cmd: @after:6100:ctx.pick:file.new_folder
+cmd: @after:6200:ui.press:escape
+cmd: @after:6400:list.dump:<out>/list.txt
+cmd: @after:6500:list.select:0
+cmd: @after:6600:cmd.contextMenu
+cmd: @after:6700:ctx.dump:<out>/row.txt
+cmd: @after:6800:ctx.pick:edit.copy
+cmd: @after:6900:assert.ops:clip 1 copy
+cmd: @after:7000:quit
 check: bg.txt: bg shell:
 check: bg.txt: edit.paste
 check: bg.txt: file.new_folder

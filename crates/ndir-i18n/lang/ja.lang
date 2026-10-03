@@ -244,6 +244,7 @@ pref.dlgFont = ダイアログフォント
 pref.dlgFontSize = ダイアログフォントサイズ (7-24)
 menu.file.prefs = 環境設定...
 ctx.copyName = 名前としてコピー
+ctx.loading = シェル項目を読み込み中…
 pref.cat.appearance = 外観
 pref.cat.fonts = フォント
 pref.cat.terminal = ターミナル

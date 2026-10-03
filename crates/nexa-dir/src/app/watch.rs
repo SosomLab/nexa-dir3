@@ -30,6 +30,10 @@ impl App {
                     p.reopen(&mut inv);
                 }
             }
+            // 준비해 둔 셸 메뉴는 옛 폴더 상태 기준 — 버리고 머무름부터 다시(선행 구축 무효화).
+            self.platform.ctxmenu.invalidate();
+            self.ctx_dwell_done = false;
+            self.ctx_dwell_since = now;
             self.update_status();
             self.redraw();
         }

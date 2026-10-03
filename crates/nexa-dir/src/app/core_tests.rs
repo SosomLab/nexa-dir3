@@ -2208,3 +2208,160 @@ fn panel_grid_pushes_its_bounds_as_clip() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 우클릭 메뉴 아이콘 칸(사용자 10-03 "아이콘 표시 공간이 없다" · SHELL-011): 셸 항목이 아이콘을 주면 메뉴 항목에 실리고
+/// (nexa-ctl 메뉴는 하나라도 있으면 **전 행**에 아이콘 칸을 예약한다) 메뉴 폭이 그만큼 넓어진다.
+#[test]
+fn shell_item_icons_reach_context_menu() {
+    let (mut app, dir) = fixture("ctxicon");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.cursor = (300, 300);
+    app.open_row_menu(0);
+    assert!(app.tab_menu.is_open());
+    let with_icon = app
+        .ctx_items
+        .iter()
+        .any(|it| matches!(it, CtxItem::Item { id, icon: Some(_), .. } if id == "fake.open"));
+    assert!(with_icon, "가짜 셸 항목의 아이콘이 메뉴 항목에 실린다");
+    let w_icons = app.tab_menu.bounds().w;
+    // 같은 항목에서 아이콘만 뺀 메뉴보다 넓다(아이콘 칸 예약).
+    let plain: Vec<CtxItem> = app
+        .ctx_items
+        .iter()
+        .cloned()
+        .map(|it| it.with_icon(None))
+        .collect();
+    let host = Rect::new(0, 0, 1200, 800);
+    app.tab_menu.open_at(300, 300, plain, host, 240);
+    assert!(
+        w_icons > app.tab_menu.bounds().w,
+        "아이콘 칸만큼 넓다: {w_icons} vs {}",
+        app.tab_menu.bounds().w
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 우클릭 가속(사용자 10-03 · dir2 X-61 · SHELL-014/015): 셸 항목이 구축 중이면 메뉴는 **즉시**(자체 항목 + "불러오는 중") 열리고,
+/// 통지가 오면 같은 자리에서 셸 항목으로 채워진다 · 선택이 300 ms 머물면 선행 구축을 건다 · 비동기 실행 결과는 틱에서 반영.
+#[test]
+fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
+    use crate::platform::{
+        ContextMenuProvider, MenuEvent, MenuTarget, PlatformError, ShellMenuItem,
+    };
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    #[derive(Default)]
+    struct Shared {
+        asked: Vec<MenuTarget>,
+        prepared: Vec<MenuTarget>,
+        invoked: Vec<String>,
+        events: VecDeque<MenuEvent>,
+    }
+    struct SlowMenu(Rc<RefCell<Shared>>);
+    impl ContextMenuProvider for SlowMenu {
+        fn items(&self, _p: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError> {
+            panic!("UI 경로는 동기 items를 부르지 않는다");
+        }
+        fn invoke(&self, _id: &str, _p: &[PathBuf]) -> Result<(), PlatformError> {
+            panic!("UI 경로는 동기 invoke를 부르지 않는다");
+        }
+        fn prepare(&self, t: &MenuTarget) {
+            self.0.borrow_mut().prepared.push(t.clone());
+        }
+        fn try_items(&self, t: &MenuTarget) -> Option<Vec<ShellMenuItem>> {
+            self.0.borrow_mut().asked.push(t.clone());
+            None
+        }
+        fn invoke_async(&self, id: &str, t: &MenuTarget) -> bool {
+            let mut s = self.0.borrow_mut();
+            s.invoked.push(id.to_string());
+            s.events.push_back(MenuEvent::Invoked {
+                target: t.clone(),
+                result: Err("boom".into()),
+            });
+            true
+        }
+        fn poll(&self) -> Option<MenuEvent> {
+            self.0.borrow_mut().events.pop_front()
+        }
+        fn busy(&self) -> bool {
+            !self.0.borrow().events.is_empty()
+        }
+    }
+    let (mut app, dir) = fixture("ctxfast");
+    app.layout_for(1200, 800, 1.0);
+    let shared = Rc::new(RefCell::new(Shared::default()));
+    app.platform.ctxmenu = Box::new(SlowMenu(shared.clone()));
+    let mut inv = Invalidations::default();
+    let a = dir.join("a.txt");
+    app.panels[0].select_path(&a, &mut inv);
+    let target = MenuTarget::Rows(vec![a.clone()]);
+    // ① 선행 구축: 머무름 전에는 안 걸고(다음 깨움 = 기한) 300 ms 뒤 한 번만 건다.
+    let t0 = Instant::now();
+    let wake = app.ctx_shell_tick(t0);
+    assert!(wake.is_some_and(|w| w > t0), "머무름 기한에 깨어난다");
+    assert!(shared.borrow().prepared.is_empty());
+    let t1 = t0 + Duration::from_millis(301);
+    assert_eq!(app.ctx_shell_tick(t1), None);
+    assert_eq!(shared.borrow().prepared, vec![target.clone()]);
+    let _ = app.ctx_shell_tick(t1 + Duration::from_millis(50));
+    assert_eq!(
+        shared.borrow().prepared.len(),
+        1,
+        "같은 선택은 다시 걸지 않는다"
+    );
+    // ② 우클릭: 셸 항목이 아직 없어도 즉시 열린다(자체 항목 + 불러오는 중).
+    app.cursor = (320, 240);
+    app.open_row_menu(0);
+    assert!(app.tab_menu.is_open());
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        d.starts_with("row ") && d.contains("cmd.activate") && d.contains("ctx.loading"),
+        "{d}"
+    );
+    assert!(d.contains("edit.copy") && d.contains("edit.delete"), "{d}");
+    assert_eq!(shared.borrow().asked, vec![target.clone()]);
+    let at = (app.tab_menu.bounds().x, app.tab_menu.bounds().y);
+    assert!(app.ctx_shell_tick(t1).is_some(), "기다리는 동안 틱 유지");
+    // ③ 다른 대상의 통지는 무시 · 같은 대상의 통지 = 같은 자리에서 채움.
+    let shell_items = vec![ShellMenuItem {
+        id: "shell:7".into(),
+        label: "Open With Fake".into(),
+        enabled: true,
+        ..Default::default()
+    }];
+    shared.borrow_mut().events.push_back(MenuEvent::Items {
+        target: MenuTarget::Rows(vec![dir.join("b.md")]),
+        items: shell_items.clone(),
+    });
+    let _ = app.ctx_shell_tick(t1);
+    assert!(app.dump_of("ctx").unwrap().contains("ctx.loading"));
+    shared.borrow_mut().events.push_back(MenuEvent::Items {
+        target,
+        items: shell_items,
+    });
+    let _ = app.ctx_shell_tick(t1);
+    let d = app.dump_of("ctx").unwrap();
+    assert!(d.contains("shell:7") && !d.contains("ctx.loading"), "{d}");
+    assert!(app.tab_menu.is_open());
+    assert_eq!(
+        (app.tab_menu.bounds().x, app.tab_menu.bounds().y),
+        at,
+        "같은 자리"
+    );
+    // ④ 셸 항목 실행 = 비동기 접수 → 결과(오류)는 틱에서 토스트.
+    app.startup_cmd("ctx.pick:shell:7");
+    assert_eq!(shared.borrow().invoked, vec!["shell:7".to_string()]);
+    assert!(!app.toasts.animating());
+    let _ = app.ctx_shell_tick(t1);
+    assert!(app.toasts.animating(), "실행 오류 = 토스트");
+    // ⑤ 메뉴가 열려 있는 동안에는 선행 구축을 걸지 않고, 닫힌 뒤 선택이 바뀌면 다시 머무름부터.
+    app.panels[0].select_path(&dir.join("b.md"), &mut inv);
+    let t2 = t1 + Duration::from_secs(1);
+    assert!(app.ctx_shell_tick(t2).is_some());
+    let _ = app.ctx_shell_tick(t2 + Duration::from_millis(301));
+    assert_eq!(shared.borrow().prepared.len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

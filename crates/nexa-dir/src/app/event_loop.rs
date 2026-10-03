@@ -148,6 +148,9 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.launcher_icons_tick(now) {
             next = next.min(t);
         }
+        if let Some(t) = self.ctx_shell_tick(now) {
+            next = next.min(t);
+        }
         if let Some(d) = self.term_wake(term_live) {
             next = next.min(now + d);
         }
