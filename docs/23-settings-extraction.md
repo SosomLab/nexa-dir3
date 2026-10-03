@@ -61,7 +61,8 @@
 | off | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected`(§83) | 보호된 운영 체제 파일(숨김 + 시스템 속성 · macOS UF_HIDDEN + SF_RESTRICTED) 표시 — 꺼져 있으면 `list.show_hidden`이 켜져 있어도 숨김(탐색기 규칙) | `list.show_protected` | 설정(일반 · 탐색기 권장값 off · **기본 off = 사용자 확정 10-03** · dir2와 다른 의도된 차이) | (기존) | ✅ |
 | off | `app/settings.rs`(§80) | 켜진 툴바 아이콘을 강조색으로 칠할지(기본 = 본문색 · dir2 규약) | `toolbar.on_icon_accent` | 고급 | (기존) | ✅ |
 | em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
-| +3 px(종전 −4) | `app/fonts.rs` `FALLBACK_CHEVRON_DELTA` · `fallback_chevrons`(§94) | 아이콘 글꼴(MDL2)이 없는 OS(macOS · Linux)의 대체 쉐브론 크기 증분 · 후보 = › ⌄ → › ˅ → ▸ ▾ → > v 중 둘 다 그릴 수 있는 첫 쌍 | — | 상수(Linux 실기 10-03 "쉐브론이 깨진다" · 크기는 실기 재확인 대기) | — | — |
+| +3 px(종전 −4) | `app/fonts.rs` `FALLBACK_CHEVRON_DELTA` · `fallback_chevrons`(§94) | 글자 대체 쉐브론 크기 증분 · 후보 = › ⌄ → › ˅ → ▸ ▾ → > v 중 둘 다 그릴 수 있는 첫 쌍 — **§98부터 선 쉐브론을 끈 경우의 예비**(아이콘 글꼴 없는 OS는 선 쉐브론이 기본) | — | 상수(예비) | — | — |
+| 칸 16 → 닫힘 4×8 · 열림 8×4 · 굵기 1 | nexa-ui `nexa-grid/src/rows.rs` `marker_chevron_points` · dir3 `app/fonts.rs`(`set_marker_vector` · §98) | 선 쉐브론 크기(긴 변 = 칸 폭 절반 짝수 · 짧은 변 = 그 절반 · Segoe MDL2 em 9 잉크 추정값) · 아이콘 글꼴(MDL2) 없는 OS만 | — | 상수(사용자 "해결" 10-03) | — | — |
 | 3줄 고정 | `app/input.rs`(터미널) · `preview_win.rs`(F3) | 휠 1노치 줄 수 → §76부터 OS 값(`SPI_GETWHEELSCROLLLINES`) | — | 상수(OS 값 따름) | — | ✅ |
 | 20 / 글꼴+6 / ≥14 | `main.rs:308` | 목록 행 높이 | — | 설정 | `list.row_h`(0 = 글꼴 기준 자동) | ☐ |
 | 6 · 16 | `main.rs:309-310` | 행 좌우 여백 · 트리 들여쓰기 | — | 고급 · 설정 | `list.pad_x` · `list.indent_w` | ☐ |
@@ -81,6 +82,8 @@
 | 30 ms | `termview.rs:20` | 출력 폴링 | — | 고급 | `term.poll_ms` | ☐ |
 | 6 ms | `termview.rs` `PUMP_BUDGET_MS`(§75) | 펌프 1회 시간 예산(넘으면 backlog → 1 ms 뒤 재개) | — | 고급(HIDDEN) | `term.pump_budget_ms` | ☐ |
 | 256 KiB | `platform/winpty.rs` `BACKLOG_CAP`(§75) | ConPTY 읽기 버퍼 상한(넘으면 읽기 쉼 = 셸 역압) | — | 고급(HIDDEN) | `term.backlog_kb` | ☐ |
+| DejaVu Sans Mono · (Noto Sans CJK, Noto Sans Mono CJK KR) | `app/fonts.rs` `MONO_FALLBACK_FAMILIES` · `MONO_CJK_FACE`(§98) | 터미널 고정폭 폴백(➜ ✗ 한 칸 폭 · TTC 안 고정폭 한글 얼굴) — 한글 UI 글꼴 앞 · 폴백 em 맞춤(`term_fallback_em_match` = Windows 밖) | — | 상수(후보 목록) | — | — |
+| 16자 평균 반올림 | `termview.rs::grid_dims`(§98) | 터미널 칸 폭(종전 "M" 1자 올림 → 8.21 px가 9 px) — 전 OS 공통 · ⚠ Windows 실기 필요 | — | 상수 | — | — |
 | 12종 · U+E0A0/F07B/E0B0 | `app/fonts.rs` `NERD_FAMILIES` · `NERD_PROBE`(§75) | 자동 폴백 Nerd Font 후보 · 판정 글리프 | `term.fallback_fonts`(사용자 지정 폴백 · 고급 · §75) | 상수(후보 목록) | — | ✅(사용자 지정은 키로) |
 | 3줄 · 4열 /노치 | `app/input.rs:319,326` | 세로·가로 휠 이동량 | — | 설정 | `term.wheel_lines` · `term.hwheel_cols` | ☐ |
 | 800 | `ndir-term/src/lib.rs:48` | 스크롤백 줄 상한(`MAX_SCROLLBACK`) | — | 설정 | `term.scrollback` | ☐ |

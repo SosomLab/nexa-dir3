@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 15 | 15 | 5 | 1 | 0 | 0 | 0 |
+| NEW | 16 | 16 | 6 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4304 | 4304 | 2367 | 1024 | 766 | 0 | 0 |
+| **합계** | 4305 | 4305 | 2368 | 1024 | 766 | 0 | 0 |
 
 ## 행
 
@@ -223,12 +223,13 @@
 | UIX-001 · 005 · 010~014 · 020 · 024 | nexa-ui 보조 크레이트 중 dir3가 쓰는 것 — TextBox(한 줄) · 기록기 · nexa-grid `EditState`(이름 바꾸기 · 경로 바) · FilePicker(Open/Folder · 틱) | `prefs_win.rs` · `bulk_win.rs` · `dlg_win.rs` · `file_win.rs` · `license_win.rs` · `app/ops.rs::begin_rename` | T2·T3 | `new_folder_rename_and_undo` · `bulk_rename_window_apply_undo_and_presets` · nexa-grid `edit.rs` 단위 | ✅ | [52](52-nexa-ui-dlg-fs-status.md) §1~§3 |
 | UIX-002~004 · 022 · 023 · 025 · 030~032 · 034~036 | nexa-ui 보조 API 중 dir3 미사용 — 편집기 기능 · 편집 명령(TextBox 내부 간접) · 클릭 정책 · FilePicker 다중/저장/시험 보조 · nexa-fs 목록/드라이브/외부 열기/감시/경로·시간 | nexa-ui(DR-2) · dir3 대체 = ndir-vfs/ndir-tree · `platform::{Opener, Watcher}` · `dockinfo.rs` | — | — | ⚠ | DR-2/DR-5 — nexa-sql 전용이거나 dir2 이식 크레이트·`platform/`이 대신 · [52](52-nexa-ui-dlg-fs-status.md) |
 | UIX-021 | FilePicker 상태 주입(최근 목록 · 숨김 파일) | `file_win.rs:160~163` | — | — | 🚧 | GAP-004 · [52](52-nexa-ui-dlg-fs-status.md) §5 |
-| UIX-033 | 셸 아이콘(IconService) — 런처 · 템플릿 `kind_name` · **패널 행 아이콘**(§73) | `app/launcher_icons.rs` · `platform/wintemplates.rs` · `app/row_icons.rs` | T1·T3 | 위 PANEL-064 행 시험 | ✅ | GAP-003 해소 |
+| UIX-033 | 셸 아이콘(IconService) — 런처 · 템플릿 `kind_name` · **패널 행 아이콘**(§73) | `app/launcher_icons.rs` · `platform/wintemplates.rs` · `app/row_icons.rs` | T1·T3 | 위 PANEL-064 행 시험 · Linux `linux_rows_use_icon_theme_images` · nexa-ui 124 icontheme 시험 5 | ✅ | GAP-003 해소 · §97 Linux 행 아이콘 = freedesktop 아이콘 테마(PNG · 실기 Yaru 사용자 "완료") · Linux 런처 바 아이콘 잔여(T-104) · macOS NSWorkspace 잔여(T-114) |
 | NEW-011 | 터미널 응답성(펌프 시간 예산 · 역압) · 첫 출력 전 "시작 중…" · 고정폭 체인 Nerd Font 자동 폴백 + `term.fallback_fonts` | `termview.rs` · `platform/winpty.rs` · `app/term.rs` · `app/fonts.rs::mono_chain` | T1·T3 | `pump_is_time_boxed_and_reports_backlog` · `terminal_font_chain_covers_nerd_glyphs_when_installed` | ✅ | §75 · §76 시작 표시 = 보이는 글자 기준(ConPTY 선행 제어 시퀀스 무시) · 실기(Ctrl+C · 시작 표시 · 아이콘) 사용자 |
-| NEW-012 | Windows Terminal 설정 따르기 1차(글꼴 목록 · 크기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal`) | `platform/mod.rs::{parse_wt_settings, windows_terminal_profile}` · `app/fonts.rs` · `app/term.rs` · `termview.rs` | T1 | `wt_settings_parse_default_profile` · `icon_glyph_overflows_into_following_blank_cell` | 🚧 | §79 · §80 이탤릭(`sgr_italic_on_off` · `italic_cells_select_italic_font`) · 줄 높이 · 글꼴 매칭 Regular(nexa-ui 119 `family_rank_prefers_regular_face`) ✅ · 남은 2차 = 색 구성표 · 커서/여백 · 줄바꿈 · 실기(WT 대조) 사용자 |
+| NEW-012 | Windows Terminal 설정 따르기 1차(글꼴 목록 · 크기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal`) | `platform/mod.rs::{parse_wt_settings, windows_terminal_profile}` · `app/fonts.rs` · `app/term.rs` · `termview.rs` | T1 | `wt_settings_parse_default_profile` · `icon_glyph_overflows_into_following_blank_cell` · `font_spec_splits_family_and_size` · `mono_chain_matches_fallback_em_per_platform` | 🚧 | §98 Linux 확장(gsettings 고정폭 글꼴 이름 · 크기 = `term.font_size` · 한글 폴백 em nexa-ui 125 `fallback_size_matches_main_em` · `collection_face_lookup` · 넓은 기호 넘쳐 그리기 · 탭 클릭 포커스 T3 단언 · 사용자 한글 "해결" · 크기 확인 대기) · ⚠ 칸 폭 반올림 전 OS 공통 = Windows 실기 필요(1 px 감소 가능) · §79 · §80 이탤릭(`sgr_italic_on_off` · `italic_cells_select_italic_font`) · 줄 높이 · 글꼴 매칭 Regular(nexa-ui 119 `family_rank_prefers_regular_face`) ✅ · 남은 2차 = 색 구성표 · 커서/여백 · 줄바꿈 · 실기(WT 대조) 사용자 |
 | NEW-013 | 창 투명도 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(DR-22) |
 | NEW-014 | 보호된 운영 체제 파일 숨기기(`list.show_protected` · 기본 숨김 · 탐색기 규칙) | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected` · `filelist.rs` · `panel.rs` · `app/settings.rs` | T1 | ndir-vfs 판정 MC/DC · `protected_os_items_follow_their_own_switch` | ✅ | §83 · 의도된 차이(Windows 루트 보호 항목 기본 숨김 — dir2는 표시 · 기본 off = 사용자 확정 10-03 §91) · 실기(macOS UF_HIDDEN · Windows C:\) 사용자 |
 | NEW-015 | Unix "내 PC" = `/` · 홈 · 마운트된 볼륨(Linux mounts · macOS /Volumes) · 홈 행 종류 = 폴더 · Windows 불변 | ndir-vfs `drive_entries` · `unix_mount_points` · `merge_unix_roots` · `filelist.rs::is_home_dir` | T1 + 실기 | `unix_roots_from_mounts` | ✅ | §95 · 실기 필요(Linux · macOS — 볼륨 라벨 미표시 · 용량 열 statvfs 미확인 · 사용자 T-103) |
+| NEW-016 | Unix 점 파일 = 숨김(`list.show_hidden`이 점 파일까지 · `list.show_dotfiles`/`view.dot`은 Windows에만 · Windows 불변) | ndir-vfs `DOT_IS_HIDDEN` · ndir-tree `Filter::allows_on` · ndir-settings `WINDOWS_ONLY`/`is_internal_on` · `platform::has_dotfile_toggle` · `menus::menu_has` · `order::toolbar_blocks` | T1·T3 + 실기 | `dot_files_follow_os_convention` · `hidden_toggle_covers_dot_files_on_unix` · `toolbar_blocks_without_dot_match_full_set` · `order_editor_applies_toolbar_ctxmenu_and_columns` | ✅ | §99 · 실기 필요(Linux 메뉴/툴바에 점 파일 없음 · H 토글로 점 파일 숨김 — 사용자 확인 대기 · macOS T-114) · 편집 없이 둔 `toolbar.layout` 저장값의 dot 토큰은 파일에 남음(툴바엔 안 나옴 · 다음 순서 저장 때 정리 · 동작 영향 없음) · 파일 대화상자 점 파일 옵션 범위 밖 |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | GAP-006 · SHORTCUT-EXT | 바로 가기 확장자 숨김(`.lnk` `.url` `.appref-ms` · 이름 칸만 · 확장자 열 유지 · 폴더 예외 · 이름 바꾸기 때 복원 · Windows만) | `filelist.rs::{split_shortcut_ext, display_name, restore_shortcut_ext}` · `platform::hides_shortcut_ext` · `app/ops.rs` | T1·T3 | `shortcut_ext_is_hidden_and_restored_on_rename` | ✅ | §84 · dir2 source.rs:456-465 · win.rs:4036-4045 |
 | GAP-007 · LNK-NAV | 폴더를 가리키는 바로 가기(`.lnk`) 활성화 = 앱 안 이동(Explorer 동작 · dir2에 없던 개선) · 파일 대상/해석 불가 = OS 열기 · macOS/Linux 무변화(`link_target` 기본 `None`) | `platform/mod.rs::Opener::link_target` · `platform/windows.rs::shell_link_target`(IShellLinkW::GetPath · `Resolve` 안 부름) · `app/input.rs::open_external` · `filelist.rs::is_lnk` | T1(Windows)·T3 | `folder_shortcut_navigates_inside_the_app` · `shell_link_target_reads_a_real_lnk` | ✅ | §89 · 미구현 = 깨진 대상 수정/삭제 안내(OS 열기에 맡김) · 남은 링크 갭 = GAP-008 |

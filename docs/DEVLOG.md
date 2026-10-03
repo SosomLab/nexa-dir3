@@ -4,6 +4,10 @@
 
 ## 2026-10-03
 
+- **Linux PC 세션 분담**: 개발 세션(코드 · 커밋 · push) + 협업 세션(문서 · 빌드 · 재시작 · 사전 분석) · 같은 트리 규칙 · Wayland 앱 아이콘 = 사용자 영역 .desktop · 다음 슬라이스 T-110~T-114 → [journal §100](journal/2026-10-03.md)
+- **Unix 점 파일 = 숨김**: 숨김 토글이 점 파일까지 · "점 파일 표시"는 Windows에만(설정 창 · 보기 메뉴 · 툴바) · NEW-016 · 화면 확인 대기 → [journal §99](journal/2026-10-03.md)
+- **터미널 Linux 맞춤**: 선 쉐브론(nexa-ui 123 · T-109) · 시스템 고정폭 글꼴(이름만 · 크기 = `term.font_size`) · 한글 폴백 em(nexa-ui 125) · 칸 폭 반올림(⚠ Windows 실기 필요) · ➜ 넘쳐 그리기 · 탭 클릭 포커스 → [journal §98](journal/2026-10-03.md)
+- **Linux 행 아이콘 = 아이콘 테마**: nexa-ui 124차 `icontheme`(freedesktop · PNG) · Yaru 실기 "완료" · 런처 바 아이콘은 잔여(T-104) → [journal §97](journal/2026-10-03.md)
 - **10-03 마감 · Linux에서 이어가기**: STATUS 맨 위 "Linux에서 이어갈 때" 절 · TODO "다음 세션" 표(T-103~T-109) · 마감 게이트 17/17 → [journal §96](journal/2026-10-03.md)
 - **Unix "내 PC"**: `/` · 홈 · 마운트된 볼륨(Linux mounts · macOS /Volumes · 시스템 자리 제외) · 홈 행 종류 = 폴더 · NEW-015 · 실기 대기 → [journal §95](journal/2026-10-03.md)
 - **Linux 첫 실기 결함 2건**: 경로 바 Unix 구분자·세그먼트 경로(nexa-ui 122차) · 대체 쉐브론 크기 +3 · 그릴 수 있는 쌍 고르기 · 런처/행 아이콘은 후속(T-104) → [journal §94](journal/2026-10-03.md)
