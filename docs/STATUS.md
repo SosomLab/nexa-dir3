@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 39차 — T-51 B-2a: Windows 배경 셸 메뉴 · 생성 감지 · selfcheck ctxmenu
+
+- **한 일**: 포트 계약 2 메서드(기본 구현) · winshell 배경 메뉴 · ctxmenu 합류/실행 · fake · selfcheck · 시험 +2(137).
+- **지금 상태**: T-51 B-2 잔여 = 행 메뉴 새로 만들기 ▸(ShellNew) · OLE DnD · ReadDirectoryChangesW · 휴지통 복원. 다음 = ShellNew 행 메뉴 또는 T-62 C-3 또는 T-82.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §41](journal/2026-10-03.md)
+
 ## 10-03 38차 — T-81: nexa-license 발급기 제품 분기(NDL · GUI 안내 · E2E)
 
 - **한 일**: nexa-license `presets`/`main`/E2E/문서(태그 `nexa-dir3/t81-2026-10-03`) · dir3 LIC-163 확인.

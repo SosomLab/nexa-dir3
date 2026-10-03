@@ -1,4 +1,4 @@
-# T4 · 컨텍스트 메뉴: 목록 빈 영역 우클릭 = 배경 메뉴(붙여넣기·undo·새 폴더·새로 고침) → ctx.pick 새 폴더 → 목록에 New Folder · 행 메뉴 = Shift+F10 명령.
+# T4 · 컨텍스트 메뉴: 목록 빈 영역 우클릭 = 배경 메뉴(Windows 셸 배경 항목 상단 + 붙여넣기·undo·새 폴더·새로 고침) → ctx.pick 새 폴더 → 목록에 New Folder · 행 메뉴 = Shift+F10 명령.
 id: ctx-menu
 title: 행/배경 컨텍스트 메뉴 · 항목 실행
 tree: file a.txt 3
@@ -14,9 +14,10 @@ cmd: @ready:ctx.dump:<out>/row.txt
 cmd: @ready:ctx.pick:edit.copy
 cmd: @ready:assert.ops:clip 1 copy
 cmd: @ready:quit
-check: bg.txt: bg edit.paste
+check: bg.txt: bg shell:
+check: bg.txt: edit.paste
 check: bg.txt: file.new_folder
 check: list.txt: New Folder
-check: row.txt: row 
+check: row.txt: row
 check: row.txt: edit.cut
 check: row.txt: ctx.copy_path

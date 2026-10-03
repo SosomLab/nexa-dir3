@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-51 B-2a 배경 셸 메뉴**: 포트 `bg_items`/`invoke_bg` · winshell `CreateViewObject` + 생성 감지 · 빈 영역 우클릭 = 셸 배경 항목 상단 + 고유 항목 · 새로 만들기 → 선택 + 이름 바꾸기 · selfcheck ctxmenu → [journal §41](journal/2026-10-03.md)
 - **T-81 nexa-license 발급기 보강**: `mail_text` 제품 분기(nexa-dir = GUI 안내) · `id_prefix_for`(NDL) · E2E nexa-dir · 문서 정정(LIC-169) · 태그 → [journal §40](journal/2026-10-03.md)
 - **T-30 A 툴바 SVG 아이콘**: dir2 `assets/toolbar` 13종 그대로 · `icons.rs`(nexa-ui 109차 `render_mask` → `ToolIcon::Mask` 테마 틴트 · 배율별 재렌더) · 글리프 폴백 · 시험 +3(135) → [journal §39](journal/2026-10-03.md)
 - **T-62 C-2 SVG 래스터·인라인 이미지**: nexa-ui 108차(`nexa-gfx::svg` CPU 래스터 · `draw_image_hint` 캐시 · Adapt 전달) · `render_svg_impl` 3-OS(BMP 해시 파일) · preview_win 인라인 이미지 · `tree: text` · 시나리오 `mermaid` → [journal §38](journal/2026-10-03.md)

@@ -107,6 +107,25 @@ impl ContextMenuProvider for FakeMenu {
         note(&self.0, format!("menu.invoke:{id}:{}", paths.len()));
         Ok(())
     }
+    fn bg_items(&self, dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
+        note(&self.0, format!("menu.bg_items:{}", dir.display()));
+        Ok(vec![ShellMenuItem {
+            id: "fake.bgopen".into(),
+            label: "Fake Background".into(),
+            enabled: true,
+            ..Default::default()
+        }])
+    }
+    fn invoke_bg(&self, id: &str, dir: &Path) -> Result<Option<PathBuf>, PlatformError> {
+        note(&self.0, format!("menu.invoke_bg:{id}"));
+        // `fake.bgnew` = 새로 만들기 흉내(파일 하나 생성 → 생성 경로 보고).
+        if id == "fake.bgnew" {
+            let p = dir.join("New Fake.txt");
+            std::fs::write(&p, b"").map_err(|e| PlatformError::Failed(e.to_string()))?;
+            return Ok(Some(p));
+        }
+        Ok(None)
+    }
 }
 
 impl Trash for FakeTrash {

@@ -183,6 +183,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "resources" => check_resources(&mut r),
             "license" => check_license(&mut r),
             "shell" => check_shell(&mut r),
+            "ctxmenu" => check_ctxmenu(&mut r),
             "open" => check_open(&mut r),
             "fs" => check_fs(&mut r),
             "trash" => check_trash(&mut r, opts.ci),
@@ -504,6 +505,58 @@ fn check_shell(r: &mut Report) {
                 .join(" · "),
         )
     });
+}
+
+/// 셸 컨텍스트 메뉴(T-51 B `ContextMenuProvider` 포트): 임시 파일의 행 메뉴 · 임시 폴더의 배경 메뉴를 **실제로 구축**해 항목 수를 본다
+/// (실행은 하지 않는다). Windows 외 OS는 자체 메뉴만이라 SKIP.
+fn check_ctxmenu(r: &mut Report) {
+    if !cfg!(windows) {
+        r.items.push(Item {
+            group: "ctxmenu",
+            name: "shell menu".into(),
+            verdict: Verdict::Skip,
+            detail: "app menu only on this OS".into(),
+            ms: 0,
+        });
+        return;
+    }
+    let p = crate::platform::Platform::native();
+    let dir = std::env::temp_dir().join(format!("ndir-selfcheck-ctx-{}", unique_tag()));
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("probe.txt");
+    let _ = std::fs::write(&file, b"x");
+    timed(r, "ctxmenu", "row menu items", || {
+        match p.ctxmenu.items(std::slice::from_ref(&file)) {
+            Ok(v) if !v.is_empty() => {
+                let verbs = v
+                    .iter()
+                    .filter(|i| !i.verb.is_empty())
+                    .map(|i| i.verb.to_ascii_lowercase())
+                    .collect::<Vec<_>>();
+                (
+                    Verdict::Pass,
+                    format!("{} items · verbs {}", v.len(), verbs.join(",")),
+                )
+            }
+            Ok(_) => (Verdict::Warn, "no items".into()),
+            Err(e) => (Verdict::Fail, e.to_string()),
+        }
+    });
+    timed(r, "ctxmenu", "background menu items", || {
+        match p.ctxmenu.bg_items(&dir) {
+            Ok(v) if !v.is_empty() => (
+                Verdict::Pass,
+                format!(
+                    "{} items · {} submenus",
+                    v.len(),
+                    v.iter().filter(|i| !i.children.is_empty()).count()
+                ),
+            ),
+            Ok(_) => (Verdict::Warn, "no items".into()),
+            Err(e) => (Verdict::Fail, e.to_string()),
+        }
+    });
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 열기 수단(T-50 `Opener` 포트): 실행은 하지 않고 명령 존재만(CI 안전).

@@ -4,6 +4,8 @@
 //! 서브메뉴는 `IContextMenu2::HandleMenuMsg(WM_INITMENUPOPUP)`로 채운 뒤 2단까지 열거(보내기 · 연결 프로그램). verb(`GetCommandString`)는
 //! 호출부가 가로채기(cut/copy/paste/delete/rename/copyaspath → 앱 경로)에 쓴다. 선택 = `InvokeCommand`(UI 스레드 · 포그라운드 양도는 후속).
 //! `windows` crate(DR-8 허용 목록 OS 바인딩). 마지막으로 만든 메뉴(COM 객체 · PIDL · HMENU)는 다음 `items`/`invoke`까지 보유.
+//! 배경 메뉴(SHELL-009 · T-51 B-2): `SHGetDesktopFolder` → `BindToObject` → `CreateViewObject::<IContextMenu>` — 실행 뒤 폴더 이름 diff로
+//! **정확히 1개** 신규면 생성 경로를 보고(dir2 `detect_created` · 20ms×10 재시도) → 호스트가 선택 + 인라인 이름 바꾸기.
 
 use super::*;
 use ::windows::core::{Interface, PCWSTR, PSTR, PWSTR};
@@ -11,8 +13,8 @@ use ::windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use ::windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED};
 use ::windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use ::windows::Win32::UI::Shell::{
-    IContextMenu, IContextMenu2, IShellFolder, SHBindToParent, SHParseDisplayName, CMF_NORMAL,
-    CMINVOKECOMMANDINFO, CMINVOKECOMMANDINFOEX, GCS_VERBW,
+    IContextMenu, IContextMenu2, IShellFolder, SHBindToParent, SHGetDesktopFolder,
+    SHParseDisplayName, CMF_NORMAL, CMINVOKECOMMANDINFO, CMINVOKECOMMANDINFOEX, GCS_VERBW,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, GetMenuItemCount, GetMenuItemInfoW, HMENU, MENUITEMINFOW,
@@ -28,13 +30,22 @@ const CMIC_MASK_UNICODE: u32 = 0x4000;
 /// 서브메뉴 열거 깊이(보내기 ▸ · 연결 프로그램 ▸).
 const MAX_DEPTH: u32 = 2;
 
+/// 메뉴 종류(행 선택 · 폴더 배경).
+#[derive(Clone, PartialEq, Eq)]
+enum Key {
+    Rows(Vec<PathBuf>),
+    Bg(PathBuf),
+}
+
 /// 만든 메뉴 1벌(COM 수명 = 이 구조체).
 struct Built {
-    paths: Vec<PathBuf>,
+    key: Key,
     icm: IContextMenu,
     hmenu: HMENU,
     pidls: Vec<*mut ITEMIDLIST>,
     _folder: IShellFolder,
+    /// 실행 때 쓸 소유 창.
+    hwnd_owner: *mut core::ffi::c_void,
 }
 
 impl Drop for Built {
@@ -120,12 +131,98 @@ impl NativeShellMenu {
             return Err(PlatformError::Failed(format!("QueryContextMenu: {hr}")));
         }
         Ok(Built {
-            paths: paths.to_vec(),
+            key: Key::Rows(paths.to_vec()),
             icm,
             hmenu,
             pidls,
             _folder: folder,
+            hwnd_owner: self.owner.get() as *mut core::ffi::c_void,
         })
+    }
+
+    /// 폴더 배경 메뉴(SHELL-009): 폴더 PIDL → `IShellFolder` → `CreateViewObject::<IContextMenu>` → QueryContextMenu.
+    unsafe fn build_bg(&self, dir: &Path) -> Result<Built, PlatformError> {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let wide: Vec<u16> = dir
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+        if SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut pidl, 0, None).is_err() {
+            return Err(PlatformError::Failed(format!(
+                "not a shell folder: {}",
+                dir.display()
+            )));
+        }
+        let free = || CoTaskMemFree(Some(pidl as *const core::ffi::c_void));
+        let folder = match SHGetDesktopFolder()
+            .and_then(|d| d.BindToObject::<_, IShellFolder>(pidl, None))
+        {
+            Ok(f) => f,
+            Err(e) => {
+                free();
+                return Err(PlatformError::Failed(format!("BindToObject: {e}")));
+            }
+        };
+        let icm = match folder.CreateViewObject::<IContextMenu>(self.hwnd()) {
+            Ok(i) => i,
+            Err(e) => {
+                free();
+                return Err(PlatformError::Failed(format!("CreateViewObject: {e}")));
+            }
+        };
+        let hmenu = match CreatePopupMenu() {
+            Ok(h) => h,
+            Err(e) => {
+                free();
+                return Err(PlatformError::Failed(format!("CreatePopupMenu: {e}")));
+            }
+        };
+        let hr = icm.QueryContextMenu(hmenu, 0, ID_FIRST, ID_LAST, CMF_NORMAL);
+        if hr.is_err() {
+            let _ = DestroyMenu(hmenu);
+            free();
+            return Err(PlatformError::Failed(format!("QueryContextMenu: {hr}")));
+        }
+        Ok(Built {
+            key: Key::Bg(dir.to_path_buf()),
+            icm,
+            hmenu,
+            pidls: vec![pidl],
+            _folder: folder,
+            hwnd_owner: self.owner.get() as *mut core::ffi::c_void,
+        })
+    }
+
+    /// `shell:<id>` → 명령 오프셋(범위 검사).
+    fn offset_of(id: &str) -> Result<u32, PlatformError> {
+        let Some(n) = id
+            .strip_prefix("shell:")
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            return Err(PlatformError::Failed(format!("not a shell item: {id}")));
+        };
+        if !(ID_FIRST..=ID_LAST).contains(&n) {
+            return Err(PlatformError::Failed(format!("id out of range: {id}")));
+        }
+        Ok(n - ID_FIRST)
+    }
+
+    /// InvokeCommand(오프셋 · 유니코드 · SW_SHOWNORMAL).
+    unsafe fn invoke_offset(b: &Built, offset: u32) -> Result<(), PlatformError> {
+        let inv = CMINVOKECOMMANDINFOEX {
+            cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
+            fMask: CMIC_MASK_UNICODE,
+            hwnd: HWND(b.hwnd_owner),
+            lpVerb: ::windows::core::PCSTR(offset as usize as *const u8),
+            lpVerbW: PCWSTR(offset as usize as *const u16),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        b.icm
+            .InvokeCommand(&inv as *const _ as *const CMINVOKECOMMANDINFO)
+            .map_err(|e| PlatformError::Failed(format!("InvokeCommand: {e}")))
     }
 
     /// HMENU 열거 → 항목 트리(서브메뉴는 `HandleMenuMsg(WM_INITMENUPOPUP)` 뒤).
@@ -230,20 +327,12 @@ impl ContextMenuProvider for NativeShellMenu {
     }
 
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
-        let Some(n) = id
-            .strip_prefix("shell:")
-            .and_then(|s| s.parse::<u32>().ok())
-        else {
-            return Err(PlatformError::Failed(format!("not a shell item: {id}")));
-        };
-        if !(ID_FIRST..=ID_LAST).contains(&n) {
-            return Err(PlatformError::Failed(format!("id out of range: {id}")));
-        }
+        let offset = Self::offset_of(id)?;
         let same = self
             .built
             .borrow()
             .as_ref()
-            .is_some_and(|b| b.paths == paths);
+            .is_some_and(|b| b.key == Key::Rows(paths.to_vec()));
         if !same {
             // SAFETY: 위와 같음.
             let built = unsafe { self.build(paths)? };
@@ -253,23 +342,70 @@ impl ContextMenuProvider for NativeShellMenu {
         let Some(b) = b.as_ref() else {
             return Err(PlatformError::Failed("menu not built".into()));
         };
-        let offset = n - ID_FIRST;
-        let inv = CMINVOKECOMMANDINFOEX {
-            cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
-            fMask: CMIC_MASK_UNICODE,
-            hwnd: self.hwnd(),
-            lpVerb: ::windows::core::PCSTR(offset as usize as *const u8),
-            lpVerbW: PCWSTR(offset as usize as *const u16),
-            nShow: SW_SHOWNORMAL.0,
-            ..Default::default()
-        };
-        // SAFETY: inv는 유효 구조체 · icm은 살아 있는 COM 객체.
-        unsafe {
-            b.icm
-                .InvokeCommand(&inv as *const _ as *const CMINVOKECOMMANDINFO)
-        }
-        .map_err(|e| PlatformError::Failed(format!("InvokeCommand: {e}")))
+        // SAFETY: icm은 살아 있는 COM 객체 · 오프셋은 범위 검사됨.
+        unsafe { Self::invoke_offset(b, offset) }
     }
+
+    fn bg_items(&self, dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
+        // SAFETY: COM/셸 API — 산출 핸들은 `Built`가 수명 관리.
+        let built = unsafe { self.build_bg(dir)? };
+        let items = unsafe { Self::enumerate(&built.icm, built.hmenu, 0) };
+        *self.built.borrow_mut() = Some(built);
+        Ok(items)
+    }
+
+    fn invoke_bg(&self, id: &str, dir: &Path) -> Result<Option<PathBuf>, PlatformError> {
+        let offset = Self::offset_of(id)?;
+        let same = self
+            .built
+            .borrow()
+            .as_ref()
+            .is_some_and(|b| b.key == Key::Bg(dir.to_path_buf()));
+        if !same {
+            // SAFETY: 위와 같음.
+            let built = unsafe { self.build_bg(dir)? };
+            *self.built.borrow_mut() = Some(built);
+        }
+        let before = dir_names(dir);
+        {
+            let b = self.built.borrow();
+            let Some(b) = b.as_ref() else {
+                return Err(PlatformError::Failed("menu not built".into()));
+            };
+            // SAFETY: 위와 같음.
+            unsafe { Self::invoke_offset(b, offset)? };
+        }
+        Ok(detect_created(dir, &before, 10))
+    }
+}
+
+/// 폴더의 항목 이름 스냅샷(생성 감지용 · dir2 `dir_names`).
+fn dir_names(dir: &Path) -> std::collections::HashSet<std::ffi::OsString> {
+    std::fs::read_dir(dir)
+        .map(|it| it.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default()
+}
+
+/// invoke 뒤 신규 항목 감지 — **정확히 1개**일 때만(압축 해제 등 다건 오탐 방지) · `retries`×20ms(생성이 늦게 보이는 경우).
+fn detect_created(
+    dir: &Path,
+    before: &std::collections::HashSet<std::ffi::OsString>,
+    retries: u32,
+) -> Option<PathBuf> {
+    for i in 0..=retries {
+        if i > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let now = dir_names(dir);
+        let mut fresh = now.difference(before);
+        if let Some(first) = fresh.next() {
+            if fresh.next().is_none() {
+                return Some(dir.join(first));
+            }
+            return None;
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -299,6 +435,35 @@ mod tests {
         // 모르는 id · 범위 밖 = 오류(실행 없음).
         assert!(m.invoke("edit.copy", std::slice::from_ref(&f)).is_err());
         assert!(m.invoke("shell:70000", std::slice::from_ref(&f)).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 실제 셸: 임시 폴더의 **배경** 메뉴에 항목이 있고(보기·새로 만들기·붙여넣기·속성 …) 서브메뉴가 하나는 채워진다 ·
+    /// 생성 감지는 정확히 1개일 때만 · 범위 밖 id = 오류.
+    #[test]
+    fn background_menu_lists_items_and_detects_single_creation() {
+        let dir = std::env::temp_dir().join(format!("ndir-shellbg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let m = NativeShellMenu::new();
+        let items = m.bg_items(&dir).expect("background menu");
+        assert!(items.len() >= 3, "{items:?}");
+        assert!(
+            items.iter().any(|i| !i.children.is_empty()),
+            "서브메뉴(보기/정렬/새로 만들기) 하나는 채워진다"
+        );
+        assert!(m.invoke_bg("shell:70000", &dir).is_err());
+        assert!(m.invoke_bg("edit.paste", &dir).is_err());
+        let before = dir_names(&dir);
+        assert_eq!(detect_created(&dir, &before, 0), None);
+        std::fs::write(dir.join("one.txt"), b"").unwrap();
+        assert_eq!(detect_created(&dir, &before, 0), Some(dir.join("one.txt")));
+        std::fs::write(dir.join("two.txt"), b"").unwrap();
+        assert_eq!(
+            detect_created(&dir, &before, 0),
+            None,
+            "2개 이상 = 새로 만들기 아님"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1437,3 +1437,55 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
     assert_eq!(App::toolbar_icon_px(1.5), 30);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
+/// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
+#[test]
+fn background_menu_merges_shell_items_and_handles_created() {
+    let (mut app, dir) = fixture("bgmenu");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.open_bg_menu(0);
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        d.starts_with("bg fake.bgopen "),
+        "셸 배경 항목이 맨 앞: {d}"
+    );
+    assert!(
+        d.contains("edit.paste") && d.contains("file.new_folder") && d.contains("view.refresh"),
+        "{d}"
+    );
+    app.startup_cmd("ctx.pick:fake.bgopen");
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(
+        log.borrow()
+            .calls
+            .iter()
+            .any(|c| c == "menu.invoke_bg:fake.bgopen"),
+        "{:?}",
+        log.borrow().calls
+    );
+    // 생성 보고 → 선택 + 이름 바꾸기 진입.
+    app.open_bg_menu(0);
+    app.startup_cmd("ctx.pick:fake.bgnew");
+    assert!(dir.join("New Fake.txt").is_file());
+    assert_eq!(
+        app.panels[0].selected_paths(),
+        vec![dir.join("New Fake.txt")]
+    );
+    assert!(
+        app.panels[0].rows().is_renaming(),
+        "생성 직후 인라인 이름 바꾸기"
+    );
+    // 가상 최상위 = 셸 항목 없이 자체 항목만.
+    app.panels[0].rows_mut().cancel_rename(&mut inv);
+    let _ = app.panels[0].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    app.open_bg_menu(0);
+    let d = app.dump_of("ctx").unwrap();
+    assert!(
+        !d.contains("fake.bgopen") && d.contains("edit.paste"),
+        "{d}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

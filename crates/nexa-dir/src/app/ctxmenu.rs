@@ -1,7 +1,8 @@
 //! 파일 행 · 배경 컨텍스트 메뉴(dir2 docs/port/19 §2-1·§2-2 구성): **셸 항목**(ContextMenuProvider 포트 · Windows IContextMenu · T-51 B)이 상단에,
 //! 그 아래 앱 고유 항목. 셸 verb cut/copy/paste/delete/rename/copyaspath는 **앱 경로로 가로채기**(SHELL-005/006 — undo 기록·인라인 이름 바꾸기·교차 폴더).
 //! 행 = 열기 · 잘라내기/복사/붙여넣기 · 삭제/완전 삭제/이름 바꾸기 · 경로 복사/이름 복사 · 폴더에 붙여넣기(단일 폴더 + 클립보드) · 새로 만들기.
-//! 배경 = 붙여넣기 · 실행 취소/다시 실행(설명 포함) · 새 폴더/새 파일 · 새로 고침. 탭 메뉴와 같은 `ContextMenu` 인스턴스를 쓴다.
+//! 배경 = **셸 배경 메뉴**(SHELL-009 · 보기·새로 만들기·속성 … · Windows) + 붙여넣기 · 실행 취소/다시 실행(설명 포함) · 새 폴더/새 파일 · 새로 고침.
+//! 셸 배경 항목이 폴더에 항목을 1개 만들면(새로 만들기) 선택 + 인라인 이름 바꾸기(SHELL-008/009 `Created`). 탭 메뉴와 같은 `ContextMenu` 인스턴스를 쓴다.
 
 use crate::platform::ShellMenuItem;
 use crate::*;
@@ -142,8 +143,32 @@ impl App {
         let has_clip = self.clip_sources().is_some();
         let undo = self.history.undo_description().map(str::to_string);
         let redo = self.history.redo_description().map(str::to_string);
-        let items = vec![
-            CtxItem::maybe("edit.paste", tr("ctx.paste"), has_clip),
+        // 셸 배경 메뉴(실경로 폴더만 · 가상 최상위는 자체 항목만).
+        let dir = self.panels[panel].root_path();
+        let shell: Vec<CtxItem> = if ndir_vfs::is_virtual_root(&dir) {
+            Vec::new()
+        } else {
+            if let Some(w) = &self.window {
+                if let Some(h) = winfocus::hwnd(w) {
+                    self.platform.ctxmenu.set_owner(h);
+                }
+            }
+            self.platform
+                .ctxmenu
+                .bg_items(&dir)
+                .map(|v| v.iter().map(shell_to_ctx).collect())
+                .unwrap_or_default()
+        };
+        let have = |id: &str| has_id(&shell, id);
+        let mut items: Vec<CtxItem> = Vec::new();
+        if !shell.is_empty() {
+            items.extend(shell.iter().cloned());
+            items.push(CtxItem::Separator);
+        }
+        if !have("edit.paste") {
+            items.push(CtxItem::maybe("edit.paste", tr("ctx.paste"), has_clip));
+        }
+        items.extend(vec![
             CtxItem::Separator,
             CtxItem::maybe(
                 "edit.undo",
@@ -162,7 +187,7 @@ impl App {
             CtxItem::item("file.new_file", tr("menu.file.newFile")),
             CtxItem::Separator,
             CtxItem::item("view.refresh", tr("menu.view.refresh")),
-        ];
+        ]);
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
@@ -218,12 +243,23 @@ impl App {
             }
             other if ndir_settings::command(other).is_none() => {
                 // 셸 항목(`shell:<id>` · 가짜 `fake.*`) = 플랫폼 포트 실행 → FS가 바뀌었을 수 있어 재열람(SHELL-012).
-                let sel = self.panels[panel].selected_paths();
-                match self.platform.ctxmenu.invoke(other, &sel) {
-                    Ok(()) => {
+                // 배경 메뉴면 폴더 기준 실행 · 정확히 1개 생성(새로 만들기)이면 선택 + 인라인 이름 바꾸기(SHELL-009 Created).
+                let result = if matches!(kind, CtxKind::Bg(_)) {
+                    let dir = self.panels[panel].root_path();
+                    self.platform.ctxmenu.invoke_bg(other, &dir)
+                } else {
+                    let sel = self.panels[panel].selected_paths();
+                    self.platform.ctxmenu.invoke(other, &sel).map(|()| None)
+                };
+                match result {
+                    Ok(created) => {
                         let mut inv = Invalidations::default();
                         for p in &mut self.panels {
                             p.reopen(&mut inv);
+                        }
+                        if let Some(path) = created {
+                            self.panels[panel].select_path(&path, &mut inv);
+                            self.begin_rename();
                         }
                         self.update_status();
                     }

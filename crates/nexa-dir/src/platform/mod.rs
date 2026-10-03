@@ -101,6 +101,16 @@ pub(crate) trait ContextMenuProvider {
     fn set_owner(&self, _hwnd: isize) {}
     fn items(&self, paths: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError>;
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError>;
+    /// 폴더 **배경** 메뉴(dir2 SHELL-009 · 보기·새로 만들기·붙여넣기·속성). 기본 = 없음(자체 항목만).
+    fn bg_items(&self, _dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
+        Ok(Vec::new())
+    }
+    /// 배경 항목 실행 — 셸이 그 폴더에 항목을 **정확히 1개** 만들었으면(새로 만들기) 그 경로(호스트가 선택 + 이름 바꾸기).
+    fn invoke_bg(&self, id: &str, _dir: &Path) -> Result<Option<PathBuf>, PlatformError> {
+        Err(PlatformError::Failed(format!(
+            "not a background item: {id}"
+        )))
+    }
 }
 
 pub(crate) trait Trash {
