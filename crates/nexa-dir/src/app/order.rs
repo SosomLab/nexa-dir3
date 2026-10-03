@@ -11,6 +11,7 @@ pub(crate) fn order_defs_of(key: &str) -> Option<OrderDefs> {
         "toolbar.layout" => order::toolbar_blocks(),
         "list.col_layout" => order::COLUMN_BLOCKS,
         "ctxmenu.layout" => order::CTXMENU_BLOCKS,
+        "statusbar.layout" => order::STATUSBAR_BLOCKS,
         _ => return None,
     })
 }
@@ -58,6 +59,18 @@ fn col_label(_block: &str, item: Option<&str>) -> String {
     }
 }
 
+fn status_label(_block: &str, item: Option<&str>) -> String {
+    match item {
+        Some("tab") => tr("pref.sbo.tab"),
+        Some("cpu") => tr("pref.sbo.cpu"),
+        Some("mem") => tr("pref.sbo.mem"),
+        Some("io") => tr("pref.sbo.io"),
+        Some("net") => tr("pref.sbo.net"),
+        Some("license") => tr("pref.sbo.license"),
+        _ => tr("pref.statusLayout"),
+    }
+}
+
 fn ctxm_label(block: &str, item: Option<&str>) -> String {
     match (block, item) {
         ("row", None) => tr("pref.ctxm.grpRow"),
@@ -95,6 +108,15 @@ impl App {
                 flat: true,
                 locked: &["name"],
                 label: col_label,
+            },
+            "statusbar.layout" => OrderSpec {
+                title: tr("pref.statusLayout"),
+                key: key.into(),
+                defs,
+                with_vis: true,
+                flat: true,
+                locked: &[],
+                label: status_label,
             },
             _ => OrderSpec {
                 title: tr("pref.ctxMenuOrder"),

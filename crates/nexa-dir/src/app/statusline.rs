@@ -1,29 +1,26 @@
 //! App — 상태줄 구성(docs/22 NEW-003 · DR-23) + 탭 상태바 메뉴(NEW-004 1차).
 //!
-//! 창 아래 상태줄의 오른쪽 칸 = `statusbar.items`에 적힌 순서(기본 `tab,cpu,mem,io,license`): 탭 n/m · **이 프로세스**의
-//! CPU % · 메모리 · 디스크 읽기/쓰기 속도 · 라이선스(클릭 = 라이선스 창). 부하는 `statusbar.load_interval_ms`마다
-//! [`platform::procload::sample`]로 조회한다(부하 칸이 하나도 없으면 조회도 · 깨우기도 없다).
+//! 창 아래 상태줄의 오른쪽 칸 = `statusbar.layout`의 순서/표시(순서 편집 창 · 기본 = 탭 · CPU · 메모리 · 디스크 · 네트워크 · 라이선스): 탭 n/m · **시스템(PC 전체)**의
+//! CPU % · 메모리 · 디스크 읽기/쓰기 속도 · 네트워크 다운로드/업로드 속도(사용자 10-04 "시스템 상태값 · 네트워크 추가") ·
+//! 라이선스(클릭 = 라이선스 창). 부하는 `statusbar.load_interval_ms`마다 [`platform::sysload::sample`]로 조회한다
+//! (부하 칸이 하나도 없으면 조회도 · 깨우기도 없다).
 
 use crate::app::ctxmenu::CtxKind;
-use crate::platform::procload::{self, Load};
+use crate::platform::sysload::{self, SysLoad};
 use crate::*;
 use nexa_ctl::StatusSeg;
 
-/// 상태줄 칸 id(설정 `statusbar.items`의 어휘).
-pub(crate) const STATUS_ITEMS: &[&str] = &["tab", "cpu", "mem", "io", "license"];
-
-/// 설정값 → 표시할 칸 id(적힌 순서 · 모르는 것 · 중복은 버림 · 순수).
+/// 설정값(`status:1[tab:1,cpu:0,…]`) → 표시할 칸 id(순서대로 · 숨긴 칸 제외 · 빈 값 = 전부 · 블록을 숨기면 없음 · 순수).
 pub(crate) fn status_items_of(value: &str) -> Vec<&'static str> {
-    let mut out: Vec<&'static str> = Vec::new();
-    for part in value.split(',') {
-        let key = part.trim().to_ascii_lowercase();
-        if let Some(k) = STATUS_ITEMS.iter().copied().find(|k| *k == key) {
-            if !out.contains(&k) {
-                out.push(k);
-            }
-        }
-    }
-    out
+    let defs = crate::order::STATUSBAR_BLOCKS;
+    let all = defs[0].1;
+    crate::order::parse_order_with(defs, value)
+        .into_iter()
+        .filter(|(_, vis, _)| *vis)
+        .flat_map(|(_, _, items)| items)
+        .filter(|(_, vis)| *vis)
+        .filter_map(|(k, _)| all.iter().copied().find(|d| *d == k))
+        .collect()
 }
 
 /// 바이트/초 → 짧은 속도 글(`0 B/s` · `1.2 MB/s`).
@@ -35,8 +32,12 @@ impl App {
     /// 상태줄 오른쪽 칸(지금 값으로).
     pub(crate) fn status_segments(&self) -> Vec<StatusSeg> {
         let dash = || "–".to_string();
-        let load: Option<Load> = self.load;
-        status_items_of(self.settings.get("statusbar.items").unwrap_or(""))
+        let load: Option<SysLoad> = self.load;
+        let rates = |pair: Option<(u64, u64)>| match pair {
+            Some((a, b)) => (fmt_rate(a), fmt_rate(b)),
+            None => (dash(), dash()),
+        };
+        status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
             .map(|id| match id {
                 "tab" => {
@@ -63,19 +64,20 @@ impl App {
                     id,
                     trf(
                         "status.mem",
-                        &[&load.map_or_else(dash, |l| filelist::format_size(l.rss))],
-                    ),
-                ),
-                "io" => StatusSeg::label(
-                    id,
-                    trf(
-                        "status.io",
                         &[
-                            &load.map_or_else(dash, |l| fmt_rate(l.read_bps)),
-                            &load.map_or_else(dash, |l| fmt_rate(l.write_bps)),
+                            &load.map_or_else(dash, |l| format!("{:.0}", l.mem_pct())),
+                            &load.map_or_else(dash, |l| filelist::format_size(l.mem_used)),
                         ],
                     ),
                 ),
+                "io" => {
+                    let (r, w) = rates(load.and_then(|l| l.disk_bps));
+                    StatusSeg::label(id, trf("status.io", &[&r, &w]))
+                }
+                "net" => {
+                    let (down, up) = rates(load.and_then(|l| l.net_bps));
+                    StatusSeg::label(id, trf("status.net", &[&down, &up]))
+                }
                 _ => StatusSeg::new(id, self.license_badge()),
             })
             .collect()
@@ -83,9 +85,9 @@ impl App {
 
     /// 부하 칸이 하나라도 있는가.
     fn status_wants_load(&self) -> bool {
-        status_items_of(self.settings.get("statusbar.items").unwrap_or(""))
+        status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .iter()
-            .any(|k| matches!(*k, "cpu" | "mem" | "io"))
+            .any(|k| matches!(*k, "cpu" | "mem" | "io" | "net"))
     }
 
     /// 유휴 틱 — 주기가 됐으면 부하를 조회해 칸을 갱신하고 다음 조회 시각을 돌려준다(부하 칸이 없으면 `None` = 깨우지 않음).
@@ -99,14 +101,10 @@ impl App {
                 .int("statusbar.load_interval_ms")
                 .clamp(500, 60_000) as u64;
             self.load_next = now + Duration::from_millis(every);
-            if let Some(cur) = procload::sample() {
-                let cores = std::thread::available_parallelism().map_or(1, usize::from);
+            if let Some(cur) = sysload::sample() {
                 self.load = Some(match self.load_prev {
-                    Some((at, prev)) => procload::load_between(prev, cur, now - at, cores),
-                    None => Load {
-                        rss: cur.rss,
-                        ..Load::default()
-                    },
+                    Some((at, prev)) => sysload::load_between(prev, cur, now - at),
+                    None => sysload::load_between(cur, cur, Duration::ZERO),
                 });
                 self.load_prev = Some((now, cur));
                 let mut inv = Invalidations::default();
@@ -119,9 +117,9 @@ impl App {
         Some(self.load_next)
     }
 
-    /// 상태줄 칸 클릭 — 라이선스 = 라이선스 창.
-    pub(crate) fn status_click(&mut self, id: &str, _right: bool) {
-        if id == "license" {
+    /// 상태줄 칸 클릭 — 라이선스 = 라이선스 창(우클릭은 호스트가 순서 편집 창을 연다).
+    pub(crate) fn status_click(&mut self, id: &str, right: bool) {
+        if id == "license" && !right {
             self.command("help.license");
         }
     }
@@ -189,15 +187,14 @@ mod tests {
 
     #[test]
     fn status_items_parse_order_and_drop_unknown() {
+        let all = ["tab", "cpu", "mem", "io", "net", "license"];
+        assert_eq!(status_items_of(""), all, "빈 값 = 기본(전부)");
         assert_eq!(
-            status_items_of("tab,cpu,mem,io,license"),
-            ["tab", "cpu", "mem", "io", "license"]
+            status_items_of("status:1[license:1,nope:1,tab:1,cpu:0]"),
+            ["license", "tab", "mem", "io", "net"],
+            "적힌 순서 · 숨김 제외 · 빠진 칸은 정의 순으로 보충"
         );
-        assert_eq!(
-            status_items_of(" License , nope, tab ,tab"),
-            ["license", "tab"]
-        );
-        assert!(status_items_of("").is_empty());
+        assert!(status_items_of("status:0[tab:1]").is_empty(), "블록 숨김");
         assert_eq!(fmt_rate(0), "0 B/s");
         assert_eq!(fmt_rate(1536), "1.5 KB/s");
     }

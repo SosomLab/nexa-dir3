@@ -106,7 +106,7 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
-            "statusbar.items" | "statusbar.load_interval_ms" => {
+            "statusbar.layout" | "statusbar.load_interval_ms" => {
                 self.load_next = Instant::now();
             }
             "layout.tab_statusbar" => self.layout(),

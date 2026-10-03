@@ -48,6 +48,11 @@ pub(crate) const COLUMN_BLOCKS: OrderDefs = &[(
     &["name", "status", "size", "modified", "ext", "kind"],
 )];
 
+/// 상태줄 오른쪽 칸(key 순서 = 기본 표시 순서 · 사용자 10-04 "툴바 조정 화면처럼 상태바도"): 탭 n/m · CPU · 메모리 ·
+/// 디스크 · 네트워크 · 라이선스. 값 문법 = `status:1[tab:1,cpu:1,…]`(컬럼과 같은 한 블록).
+pub(crate) const STATUSBAR_BLOCKS: OrderDefs =
+    &[("status", &["tab", "cpu", "mem", "io", "net", "license"])];
+
 /// 기본으로 숨기는 항목 `(블록, 항목)` — 빈 설정값 · 저장값에 빠진 항목을 보충할 때 숨김으로 넣는다.
 pub(crate) const DEFAULT_HIDDEN: &[(&str, &str)] = &[("cols", "ext"), ("cols", "kind")];
 

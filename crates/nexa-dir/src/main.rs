@@ -285,8 +285,8 @@ struct App {
     row_icon_ver: u64,
     launcher_icon_ver: u64,
     /// 상태줄 부하 칸(app/statusline.rs): 직전 표본 · 지금 부하 · 다음 조회 시각.
-    load_prev: Option<(Instant, platform::procload::ProcSample)>,
-    load: Option<platform::procload::Load>,
+    load_prev: Option<(Instant, platform::sysload::SysSample)>,
+    load: Option<platform::sysload::SysLoad>,
     load_next: Instant,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
@@ -631,7 +631,7 @@ impl App {
         );
         let mut inv = Invalidations::default();
         self.statusbar.set_text(&left, &right, &mut inv);
-        // 오른쪽 칸(탭 · CPU · 메모리 · 디스크 I/O · 라이선스 — `statusbar.items`) + 패널마다 탭 상태바.
+        // 오른쪽 칸(탭 · CPU · 메모리 · 디스크 I/O · 라이선스 — `statusbar.layout`) + 패널마다 탭 상태바.
         let segs = self.status_segments();
         self.statusbar.set_segments(segs, &mut inv);
         for p in &mut self.panels {

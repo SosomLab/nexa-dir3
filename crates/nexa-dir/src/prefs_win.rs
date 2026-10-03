@@ -201,7 +201,10 @@ fn is_folder_key(_k: &str) -> bool {
 
 /// 별도 편집 창으로 고치는 순서/표시 값(DLG-069 — 설정 창 필드 3개).
 fn is_order_key(k: &str) -> bool {
-    matches!(k, "toolbar.layout" | "list.col_layout" | "ctxmenu.layout")
+    matches!(
+        k,
+        "toolbar.layout" | "list.col_layout" | "ctxmenu.layout" | "statusbar.layout"
+    )
 }
 
 impl PrefsWin {

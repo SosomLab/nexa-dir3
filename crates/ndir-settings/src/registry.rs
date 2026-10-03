@@ -519,12 +519,12 @@ pub const REGISTRY: &[Entry] = &[
     ),
     // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
     e!(
-        "statusbar.items",
+        "statusbar.layout",
         CAT_STATUSBAR,
-        "pref.statusItems",
-        "pref.statusItems.desc",
+        "pref.statusLayout",
+        "pref.statusLayout.desc",
         Text,
-        "tab,cpu,mem,io,license"
+        ""
     ),
     e!(
         "statusbar.load_interval_ms",

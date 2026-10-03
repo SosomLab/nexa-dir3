@@ -2246,7 +2246,7 @@ fn column_titles_follow_language_even_with_user_layout() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 상태줄 구성(T-94 · NEW-003) + 탭 상태바(T-95 · NEW-004 1차): 오른쪽 칸 = `statusbar.items` 순서 · 라이선스 칸 클릭 =
+/// 상태줄 구성(T-94 · NEW-003) + 탭 상태바(T-95 · NEW-004 1차): 오른쪽 칸 = `statusbar.layout` 순서/표시(우클릭 = 순서 편집 창) · 라이선스 칸 클릭 =
 /// 라이선스 창 · 패널마다 목록 아래 상태바(폴더 항목 수 · Git 브랜치) · 칸 클릭 = 상세 메뉴 · 끄면 목록이 그만큼 커진다.
 #[test]
 fn status_segments_and_tab_status_bar() {
@@ -2269,17 +2269,27 @@ fn status_segments_and_tab_status_bar() {
             .map(|s| s.id.clone())
             .collect()
     };
-    assert_eq!(ids(&app), ["tab", "cpu", "mem", "io", "license"]);
+    assert_eq!(ids(&app), ["tab", "cpu", "mem", "io", "net", "license"]);
     assert!(app.statusbar.segments()[0].text.contains("1/1"));
     // 부하: 첫 틱 = 메모리만 · 주기 전 재조회 없음.
     let t0 = Instant::now();
     let next = app.status_load_tick(t0).expect("wake");
     assert!(next > t0);
-    assert!(app.load.is_some_and(|l| l.rss > 0));
+    assert!(app.load.is_some_and(|l| l.mem_total > 0 && l.mem_used > 0));
     assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
-    let _ = app.settings.set("statusbar.items", "license,tab");
-    app.after_setting_changed("statusbar.items");
+    // 순서 편집 창이 값을 바꾼다(툴바 순서 편집과 같은 길) — 숨긴 칸은 빠지고 순서가 따른다.
+    app.order_changed(
+        "statusbar.layout",
+        "status:1[license:1,tab:1,cpu:0,mem:0,io:0,net:0]",
+    );
     assert_eq!(ids(&app), ["license", "tab"]);
+    // 상태줄 우클릭 = 순서 편집 창 요청.
+    let sbb = app.statusbar.bounds();
+    app.route(InputEvent::RightDown {
+        x: sbb.x + 20,
+        y: sbb.y + 5,
+    });
+    assert!(app.open_order, "상태줄 우클릭 = 순서 편집 창");
     assert_eq!(
         app.status_load_tick(Instant::now()),
         None,

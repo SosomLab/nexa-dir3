@@ -878,7 +878,7 @@ mod tests {
     fn statusbar_settings_are_grouped() {
         let cat = |k: &str| REGISTRY.iter().find(|e| e.key == k).map(|e| e.cat);
         for k in [
-            "statusbar.items",
+            "statusbar.layout",
             "statusbar.load_interval_ms",
             "statusbar.font_face",
             "statusbar.font_size",
