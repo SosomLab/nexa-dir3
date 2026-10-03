@@ -40,6 +40,9 @@ impl App {
             self.panels[1].paint(dc, &th);
             self.splitter.paint(dc, &th);
         }
+        // 도크 경계 2종(비어 있으면 안 그린다 — 도크 숨김 · 단일 정보).
+        self.dock_split_h.paint(dc, &th);
+        self.dock_split_v.paint(dc, &th);
         for d in &self.docks {
             if d.bounds().h > 0 {
                 d.paint(dc, &th);

@@ -268,6 +268,8 @@ impl App {
             "menubar" => Some(self.menubar.bounds()),
             "toolbar" => Some(self.toolbar.bounds()),
             "splitter" => Some(self.splitter.rect()),
+            "dsplit_h" => Some(self.dock_split_h.rect()),
+            "dsplit_v" => Some(self.dock_split_v.rect()),
             "statusbar" => Some(self.statusbar.bounds()),
             "dock0" => Some(self.docks[0].bounds()),
             "dock1" => Some(self.docks[1].bounds()),
@@ -492,6 +494,8 @@ impl App {
             ));
         }
         out.push_str(&format!("splitter {}\n", r(self.splitter.rect())));
+        out.push_str(&format!("dsplit_h {}\n", r(self.dock_split_h.rect())));
+        out.push_str(&format!("dsplit_v {}\n", r(self.dock_split_v.rect())));
         out.push_str(&format!(
             "statusbar {} left {} right {}\n",
             r(self.statusbar.bounds()),

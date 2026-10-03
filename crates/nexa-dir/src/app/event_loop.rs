@@ -99,8 +99,14 @@ impl ApplicationHandler<Wake> for App {
             }
         }
         let mut redraw = !inv.is_empty();
-        if self.splitter.tick(now_ms) {
-            redraw = true;
+        for k in [
+            SplitKind::Panel,
+            SplitKind::DockHeight,
+            SplitKind::DockSplit,
+        ] {
+            if self.split_of_mut(k).tick(now_ms) {
+                redraw = true;
+            }
         }
         if self.toasts.tick(now) {
             redraw = true;
@@ -137,8 +143,11 @@ impl ApplicationHandler<Wake> for App {
         let live = inv.tick_requested()
             || aux_live
             || self.toasts.animating()
-            || self.splitter.is_hover()
-            || self.splitter.is_dragging();
+            // 스플리터: 페이드가 움직이는 동안과 드래그 중에만 프레임 간격으로 깬다(종전 = hover 내내 16 ms 폴링 ·
+            // 벗어난 뒤 페이드아웃은 깨우지 않았다).
+            || [SplitKind::Panel, SplitKind::DockHeight, SplitKind::DockSplit]
+                .into_iter()
+                .any(|k| self.split_of(k).is_animating() || self.split_of(k).is_dragging());
         let mut next = if live {
             now + Duration::from_millis(16)
         } else {
@@ -279,13 +288,13 @@ impl ApplicationHandler<Wake> for App {
                         x: self.cursor.0,
                         y: self.cursor.1,
                     };
-                    let over_split = self.dual
-                        && (self.splitter.is_dragging() || self.splitter.rect().contains(p));
                     let over_edge = self.panels.iter().any(|g| g.rows().resize_hot(p.x, p.y));
-                    w.set_cursor(if over_split || over_edge {
-                        winit::window::CursorIcon::ColResize
-                    } else {
-                        winit::window::CursorIcon::Default
+                    w.set_cursor(match self.split_at(p) {
+                        // 가로 경계(패널 ↔ 도크) = 위아래 화살표(dir2 IDC_SIZENS) · 세로 경계 = 좌우.
+                        Some(SplitKind::DockHeight) => winit::window::CursorIcon::RowResize,
+                        Some(_) => winit::window::CursorIcon::ColResize,
+                        None if over_edge => winit::window::CursorIcon::ColResize,
+                        None => winit::window::CursorIcon::Default,
                     });
                 }
             }

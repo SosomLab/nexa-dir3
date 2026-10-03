@@ -14,5 +14,7 @@ panel1.path 706,75 494x24 text <root>
 panel1.list 602,99 598x462 rows 3 caret None
 dock0 0,564 599x214 kind 0
 dock1 602,564 598x214 kind 0
-splitter 597,53 7x508
+splitter 596,53 9x508
+dsplit_h 0,558 1200x9
+dsplit_v 596,564 9x214
 statusbar 0,778 1200x22 left 3 items right Tab 1/1

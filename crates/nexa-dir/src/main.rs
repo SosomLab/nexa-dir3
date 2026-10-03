@@ -68,7 +68,8 @@ use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
 use nexa_ctl::controls::{
     ComboItem, ContextMenu, Control, CtxItem, DockAction, DockLayout, MenuBar, MenuDef, MenuEntry,
-    SplitAxis, SplitEvent, Splitter, StatusBar, ToolDock, ToolGroup, ToolIcon, ToolItem, Toolbar,
+    SplitAxis, SplitBand, SplitEvent, Splitter, StatusBar, ToolDock, ToolGroup, ToolIcon, ToolItem,
+    Toolbar,
 };
 use nexa_ctl::draw::DrawCtx;
 use nexa_ctl::geom::{Point, Rect};
@@ -108,8 +109,32 @@ pub(crate) fn settings_clip_native() -> bool {
 const SPLIT_TH: f32 = 3.0;
 const SNAP_PX: f32 = 20.0;
 const MIN_PANEL: f32 = 200.0;
+/// 스플리터를 잡는 띠가 틈 양쪽으로 넓어지는 폭(논리 px · dir2 `SPLIT_HALF` — 배율은 dir3가 곱한다).
+const SPLIT_HALF: f32 = 3.0;
+/// 스플리터 hover가 다 올라왔을 때 accent 알파(사용자 10-03 "서서히 밝아지는" — dir2는 평상시 색 ↔ 드래그 accent 두 상태뿐이라
+/// 그 사이를 nexa-ctl 페이드(전역 hover 진입 시간)로 잇는다 · 드래그 중 = accent 그대로).
+const SPLIT_HOVER_ALPHA: f32 = 0.7;
+
+/// 스플리터 3종(dir2 WINC-094~096 · 클릭 우선순위 = 도크 높이 → 도크 좌우 → 패널 좌우).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum SplitKind {
+    /// 좌우 패널 사이(세로선 · `layout.panel_split_pct`).
+    Panel,
+    /// 패널과 하단 도크 사이(가로선 · `layout.dock_height_pct`).
+    DockHeight,
+    /// 하단 도크 좌우 사이(세로선 · `layout.dock_split_pct`).
+    DockSplit,
+}
 /// 툴바 아이콘 논리 크기의 기본값(dir2 20) — 실제 값 = 설정 `toolbar.icon_size`(16/20/24/32 · 마스크는 배율 곱한 px로 렌더).
 const TOOLBAR_ICON_LOGICAL: i32 = 20;
+
+/// 비율(%) = 반올림(`part / whole` — 드래그한 자리와 저장되는 정수 %가 반 칸 이상 어긋나지 않게).
+fn pct_of(part: i32, whole: i32) -> i64 {
+    if whole <= 0 {
+        return 0;
+    }
+    ((i64::from(part) * 200 + i64::from(whole)) / (i64::from(whole) * 2)).max(0)
+}
 
 /// UI 스레드를 깨우는 사용자 이벤트(배경 작업이 보낸다 — M4 전송·감시 스레드 · SKEL-415).
 #[derive(Debug)]
@@ -121,7 +146,7 @@ enum Area {
     Menu,
     Tool,
     Panel(usize),
-    Split,
+    Split(SplitKind),
     Status,
     Dock(usize),
     Launcher,
@@ -157,6 +182,9 @@ struct App {
     panels: [Panel; 2],
     /// 좌/우 스플리터(`layout.panel_split_pct` · 드래그 · 50% 스냅).
     splitter: Splitter,
+    /// 패널 ↔ 도크 경계(가로선) · 도크 좌우 경계(세로선) — 좌우 패널 스플리터와 같은 컨트롤 · 같은 모양(T-115).
+    dock_split_h: Splitter,
+    dock_split_v: Splitter,
     active: usize,
     dual: bool,
     statusbar: StatusBar,
@@ -407,6 +435,8 @@ impl App {
             toolbar,
             panels,
             splitter: Splitter::new(SplitAxis::Vertical),
+            dock_split_h: Splitter::new(SplitAxis::Horizontal),
+            dock_split_v: Splitter::new(SplitAxis::Vertical),
             active: 0,
             dual,
             statusbar: StatusBar::new(),
@@ -668,11 +698,24 @@ impl App {
         let area_h = (bottom - top).max(0);
         let gap = px(SPLIT_TH, s).max(2);
         let g2 = gap / 2;
-        let half = px(3.0, s);
+        let half = px(SPLIT_HALF, s);
+        // 세 스플리터 같은 모양: 틈(gap)을 채우는 띠 · 평상시 border(도크 위 경계만 text_dim — dir2 W:4917 "다크에서 보이게") ·
+        // hover = accent가 서서히 · 드래그 = accent.
+        for (sp, dim_rest) in [
+            (&mut self.splitter, false),
+            (&mut self.dock_split_h, true),
+            (&mut self.dock_split_v, false),
+        ] {
+            sp.set_band(Some(SplitBand {
+                thickness: gap,
+                dim_rest,
+                hover_alpha: SPLIT_HOVER_ALPHA,
+            }));
+        }
         let m = panel_metrics(&self.settings, s);
         // 하단 도크 = 전폭 밴드(dir2 X-6): 높이 = 영역 × `layout.dock_height_pct`(행 3줄 ~ 절반) · 숨김 = 0.
         let band_h = if self.settings.flag("dock.visible") {
-            let pct = self.settings.int("layout.dock_height_pct").clamp(5, 50) as i32;
+            let pct = self.settings.int("layout.dock_height_pct").clamp(15, 50) as i32;
             (area_h * pct / 100).clamp((m.row_h * 3).min(area_h / 2), area_h / 2)
         } else {
             0
@@ -680,8 +723,9 @@ impl App {
         let ph = (area_h - band_h).max(0);
         let rects = if self.dual {
             let sx = self.splitter_x(w);
+            // 잡는 띠 = 틈 + 양쪽 half(틈의 가운데 = 띠의 가운데 → 그리는 띠가 틈에 꼭 맞는다).
             self.splitter
-                .set_rect(Rect::new(sx - half, top, half * 2 + 1, ph));
+                .set_rect(Rect::new(sx - g2 - half, top, gap + half * 2, ph));
             [
                 Rect::new(0, top, (sx - g2).max(0), ph),
                 Rect::new(sx - g2 + gap, top, (w - sx + g2 - gap).max(0), ph),
@@ -697,17 +741,28 @@ impl App {
             let band_y = top + ph;
             let dock_y = band_y + gap;
             let dock_h = (band_h - gap).max(0);
+            // 패널 ↔ 도크 경계(전폭 · 틈 = band_y..band_y+gap).
+            self.dock_split_h
+                .set_rect(Rect::new(0, band_y - half, w, gap + half * 2));
             if single_info {
+                self.dock_split_v.set_rect(Rect::default());
                 [Rect::new(0, dock_y, w, dock_h), Rect::default()]
             } else {
-                let dpct = self.settings.int("layout.dock_split_pct").clamp(10, 90) as i32;
-                let dsx = (w * dpct / 100).clamp(w / 8, w * 7 / 8);
+                let dsx = self.dock_split_x(w);
+                self.dock_split_v.set_rect(Rect::new(
+                    dsx - g2 - half,
+                    dock_y,
+                    gap + half * 2,
+                    dock_h,
+                ));
                 [
                     Rect::new(0, dock_y, (dsx - g2).max(0), dock_h),
                     Rect::new(dsx - g2 + gap, dock_y, (w - dsx + g2 - gap).max(0), dock_h),
                 ]
             }
         } else {
+            self.dock_split_h.set_rect(Rect::default());
+            self.dock_split_v.set_rect(Rect::default());
             [Rect::default(), Rect::default()]
         };
         for (d, r) in self.docks.iter_mut().zip(dock_rects) {
@@ -721,24 +776,117 @@ impl App {
         }
     }
 
-    /// 스플리터 드래그(`SplitEvent::Drag(v)` · v = 띠의 새 x) → 비율 설정(저장은 `End`에서) · 50% 자석 스냅(Alt = 해제).
-    fn split_drag(&mut self, v: i32) {
+    /// 도크 분할선 x(dir2 `dock_split_x` W:1905) — `layout.dock_split_pct`(15~85) · 창 폭 1/8 ~ 7/8 클램프.
+    fn dock_split_x(&self, w: i32) -> i32 {
+        let pct = self.settings.int("layout.dock_split_pct").clamp(15, 85) as i32;
+        (w * pct / 100).clamp(w / 8, w * 7 / 8)
+    }
+
+    /// 지금 그 스플리터가 화면에 있는가(숨김 조건: 단일 패널 · 도크 숨김 · 단일 정보).
+    pub(crate) fn split_shown(&self, kind: SplitKind) -> bool {
+        match kind {
+            SplitKind::Panel => self.dual && !self.splitter.rect().is_empty(),
+            SplitKind::DockHeight => !self.dock_split_h.rect().is_empty(),
+            SplitKind::DockSplit => !self.dock_split_v.rect().is_empty(),
+        }
+    }
+
+    pub(crate) fn split_of(&self, kind: SplitKind) -> &Splitter {
+        match kind {
+            SplitKind::Panel => &self.splitter,
+            SplitKind::DockHeight => &self.dock_split_h,
+            SplitKind::DockSplit => &self.dock_split_v,
+        }
+    }
+
+    pub(crate) fn split_of_mut(&mut self, kind: SplitKind) -> &mut Splitter {
+        match kind {
+            SplitKind::Panel => &mut self.splitter,
+            SplitKind::DockHeight => &mut self.dock_split_h,
+            SplitKind::DockSplit => &mut self.dock_split_v,
+        }
+    }
+
+    /// 자리의 스플리터(dir2 W:8020-8042 우선순위 = 도크 높이 → 도크 좌우 → 패널 좌우 · 드래그 중인 것이 있으면 그것).
+    pub(crate) fn split_at(&self, p: Point) -> Option<SplitKind> {
+        const ORDER: [SplitKind; 3] = [
+            SplitKind::DockHeight,
+            SplitKind::DockSplit,
+            SplitKind::Panel,
+        ];
+        ORDER
+            .into_iter()
+            .find(|k| self.split_of(*k).is_dragging())
+            .or_else(|| {
+                ORDER
+                    .into_iter()
+                    .find(|k| self.split_shown(*k) && self.split_of(*k).rect().contains(p))
+            })
+    }
+
+    /// 자석 스냅(dir2 `snap_split_x` W:6148): `x`가 후보 중 하나에 `SNAP_PX` 안이면 그 자리로 · Alt = 해제.
+    fn snap_x(&self, x: i32, candidates: &[i32]) -> i32 {
+        if self.alt {
+            return x;
+        }
+        let snap = px(SNAP_PX, self.scale);
+        candidates
+            .iter()
+            .copied()
+            .filter(|c| (x - c).abs() <= snap)
+            .min_by_key(|c| (x - c).abs())
+            .unwrap_or(x)
+    }
+
+    /// 스플리터 드래그(`SplitEvent::Drag(v)` · v = 잡는 띠의 새 시작 좌표) → 비율 설정(저장은 `End`에서).
+    /// - 패널 좌우: 50 % 와 **도크 분할선**(보일 때)에 자석 · 패널 최소 폭 · 10~90 %.
+    /// - 도크 좌우: 50 % 와 **패널 스플리터**(듀얼일 때)에 자석 · 15~85 %.
+    /// - 도크 높이: (영역 바닥 − y) / 영역 높이 · 15~50 %(행 3줄 하한은 배치가 건다) · 자석 없음.
+    fn split_drag(&mut self, kind: SplitKind, v: i32) {
         let (w, _) = self.viewport;
         if w <= 0 {
             return;
         }
-        let half = px(3.0, self.scale);
-        let mut sx = v + half;
-        let snap = px(SNAP_PX, self.scale);
-        if !self.alt && (sx - w / 2).abs() <= snap {
-            sx = w / 2;
+        let gap = px(SPLIT_TH, self.scale).max(2);
+        let center = v + px(SPLIT_HALF, self.scale) + gap / 2;
+        match kind {
+            SplitKind::Panel => {
+                let mut cands = vec![w / 2];
+                if self.split_shown(SplitKind::DockSplit) {
+                    cands.push(self.dock_split_x(w));
+                }
+                let sx = self.snap_x(center, &cands);
+                let min = px(MIN_PANEL, self.scale);
+                let sx = sx.clamp(min.min(w / 2), (w - min).max(w / 2));
+                let pct = pct_of(sx, w).clamp(10, 90);
+                let _ = self
+                    .settings
+                    .set("layout.panel_split_pct", &pct.to_string());
+            }
+            SplitKind::DockSplit => {
+                let mut cands = vec![w / 2];
+                if self.dual {
+                    cands.push(self.splitter_x(w));
+                }
+                let sx = self.snap_x(center, &cands);
+                let pct = pct_of(sx, w).clamp(15, 85);
+                let _ = self.settings.set("layout.dock_split_pct", &pct.to_string());
+            }
+            SplitKind::DockHeight => {
+                let top = self.panels[0].bounds().y;
+                let bottom = self.statusbar.bounds().y;
+                let area = bottom - top;
+                if area <= 0 {
+                    return;
+                }
+                // 틈의 윗변 = 도크 밴드의 시작.
+                let band_y = v + px(SPLIT_HALF, self.scale);
+                let pct = pct_of(bottom - band_y, area).clamp(15, 50);
+                let _ = self
+                    .settings
+                    .set("layout.dock_height_pct", &pct.to_string());
+            }
         }
-        let min = px(MIN_PANEL, self.scale);
-        let sx = sx.clamp(min.min(w / 2), (w - min).max(w / 2));
-        let pct = (sx * 100 / w).clamp(10, 90);
-        let _ = self
-            .settings
-            .set("layout.panel_split_pct", &pct.to_string());
         self.layout_core();
     }
 

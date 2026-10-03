@@ -117,8 +117,8 @@ impl App {
             Some(Area::Tool)
         } else if self.launcherbar.bounds().h > 0 && self.launcherbar.bounds().contains(p) {
             Some(Area::Launcher)
-        } else if self.dual && self.splitter.rect().contains(p) {
-            Some(Area::Split)
+        } else if let Some(k) = self.split_at(p) {
+            Some(Area::Split(k))
         } else if self.panels[0].bounds().contains(p) {
             Some(Area::Panel(0))
         } else if self.dual && self.panels[1].bounds().contains(p) {
@@ -139,7 +139,7 @@ impl App {
             Area::Menu => self.menubar.on_event(ev, inv),
             Area::Tool => self.toolbar.on_event(ev, inv),
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
-            Area::Split => self.split_event(ev, inv),
+            Area::Split(k) => self.split_event(k, ev, inv),
             Area::Status => self.statusbar.on_event(ev, inv),
             Area::Dock(i) => {
                 // 도크 탭으로 터미널을 고르면 바로 입력할 수 있게 포커스를 준다(사용자 10-03 Linux 실기 — 종전에는 격자를 한 번 더
@@ -154,20 +154,42 @@ impl App {
         }
     }
 
-    /// 스플리터 사건 → 비율 갱신 · 드래그 끝 = 설정 저장.
-    fn split_event(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
-        match self.splitter.on_event(ev) {
-            SplitEvent::Hover => inv.push(self.splitter.rect()),
-            SplitEvent::Start => inv.push(self.splitter.rect()),
+    /// 스플리터 사건 → 비율 갱신 · 드래그 끝 = 설정 저장(세 스플리터 공통).
+    fn split_event(&mut self, kind: SplitKind, ev: &InputEvent, inv: &mut Invalidations) {
+        match self.split_of_mut(kind).on_event(ev) {
+            SplitEvent::Hover | SplitEvent::Start => inv.push(self.split_of(kind).rect()),
             SplitEvent::Drag(v) => {
-                self.split_drag(v);
+                self.split_drag(kind, v);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
             SplitEvent::End => {
                 let _ = self.settings.save();
-                inv.push(self.splitter.rect());
+                inv.push(self.split_of(kind).rect());
             }
             SplitEvent::None => {}
+        }
+    }
+
+    /// 포인터 이동 = 세 스플리터의 hover 갱신. 한 자리에 둘이 겹치면(도크 높이 띠와 세로 띠의 끝) 우선순위가 높은 것만
+    /// hover — 나머지는 "벗어남"으로 본다(둘이 함께 밝아지지 않게).
+    fn split_hover(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
+        let InputEvent::MouseMove { x, y } = *ev else {
+            return;
+        };
+        let top = self.split_at(Point { x, y });
+        for k in [
+            SplitKind::DockHeight,
+            SplitKind::DockSplit,
+            SplitKind::Panel,
+        ] {
+            if !self.split_shown(k) {
+                continue;
+            }
+            if top == Some(k) || self.split_of(k).is_dragging() {
+                self.split_event(k, ev, inv);
+            } else if self.split_of_mut(k).pointer_gone() {
+                inv.push(self.split_of(k).rect());
+            }
         }
     }
 
@@ -256,9 +278,7 @@ impl App {
                 if self.launcherbar.bounds().h > 0 {
                     self.launcherbar.on_event(&ev, inv);
                 }
-                if self.dual {
-                    self.split_event(&ev, inv);
-                }
+                self.split_hover(&ev, inv);
                 self.panels[0].on_event(&ev, inv);
                 if self.dual {
                     self.panels[1].on_event(&ev, inv);
@@ -557,6 +577,16 @@ impl App {
         let mut inv = Invalidations::default();
         let away = InputEvent::MouseMove { x: -1, y: -1 };
         self.toolbar.on_event(&away, &mut inv);
+        // 창을 벗어나면 스플리터 hover도 푼다(종전 = 남아 있었다 · 드래그 중이면 유지).
+        for k in [
+            SplitKind::DockHeight,
+            SplitKind::DockSplit,
+            SplitKind::Panel,
+        ] {
+            if self.split_of_mut(k).pointer_gone() {
+                inv.push(self.split_of(k).rect());
+            }
+        }
         for p in &mut self.panels {
             p.on_event(&away, &mut inv);
         }

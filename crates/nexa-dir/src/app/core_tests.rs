@@ -302,6 +302,137 @@ fn splitter_drag_and_snap() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 스플리터 3종(T-115 · dir2 WINC-094~096 + 사용자 10-03 "두께 · 동작 방식 · 서서히 밝아지는"): 패널 ↔ 도크(가로) · 도크 좌우(세로)도
+/// 패널 좌우와 같은 컨트롤 — 드래그 = 비율 설정 · 클램프 · 자석(서로의 선과 50 %) · 숨김 조건 · 우선순위 · hover 페이드 · 창 밖 = 해제.
+#[test]
+fn dock_splitters_drag_clamp_fade_and_hide() {
+    let (mut app, dir) = fixture("docksplit");
+    app.layout_for(1200, 800, 1.0);
+    let gap = 3;
+    // 세 띠 모두 같은 모양: 틈(3) + 양쪽 3 = 9 · 그리는 띠 = 틈 두께.
+    let (a, b, c) = (
+        app.splitter.rect(),
+        app.dock_split_h.rect(),
+        app.dock_split_v.rect(),
+    );
+    assert_eq!((a.w, b.h, c.w), (9, 9, 9));
+    assert_eq!(b.w, 1200, "도크 위 경계 = 전폭");
+    for k in [
+        SplitKind::Panel,
+        SplitKind::DockHeight,
+        SplitKind::DockSplit,
+    ] {
+        assert!(app.split_shown(k));
+        assert_eq!(app.split_of(k).band().map(|x| x.thickness), Some(gap));
+    }
+    assert!(app.dock_split_h.band().unwrap().dim_rest && !app.splitter.band().unwrap().dim_rest);
+    // 틈에 꼭 맞는다: 도크 위 경계의 가운데 = 패널 바닥과 도크 꼭대기 사이.
+    let (pb, dt) = (app.panels[0].bounds().bottom(), app.docks[0].bounds().y);
+    assert_eq!((dt - pb, b.y + 3, b.y + 3 + gap), (gap, pb, dt));
+    // (B) 도크 높이: 위로 끌면 도크가 커진다 · 15~50 % 클램프.
+    let (x, y) = (300, b.y + b.h / 2);
+    app.route(InputEvent::MouseMove { x, y });
+    assert!(app.dock_split_h.is_hover() && !app.splitter.is_hover());
+    let h0 = app.docks[0].bounds().h;
+    app.route(down(x, y));
+    assert!(app.dock_split_h.is_dragging());
+    app.route(InputEvent::MouseMove { x, y: y - 100 });
+    assert!(
+        app.docks[0].bounds().h > h0 + 80,
+        "{}",
+        app.docks[0].bounds().h
+    );
+    let pct = app.settings.int("layout.dock_height_pct");
+    assert!((40..=50).contains(&pct), "{pct}");
+    app.route(InputEvent::MouseMove { x, y: 60 });
+    assert_eq!(app.settings.int("layout.dock_height_pct"), 50, "상한");
+    app.route(InputEvent::MouseMove { x, y: 795 });
+    assert_eq!(app.settings.int("layout.dock_height_pct"), 15, "하한");
+    app.route(InputEvent::MouseUp { x, y: 795 });
+    assert!(!app.dock_split_h.is_dragging());
+    // (C) 도크 좌우: 끌면 비율 · 15~85 % · 패널 스플리터 x와 50 %에 자석 · Alt = 해제.
+    let _ = app.settings.set("layout.panel_split_pct", "30");
+    app.layout_for(1200, 800, 1.0);
+    let c = app.dock_split_v.rect();
+    let (x, y) = (c.x + c.w / 2, c.y + c.h / 2);
+    app.route(InputEvent::MouseMove { x, y });
+    assert!(app.dock_split_v.is_hover());
+    app.route(down(x, y));
+    app.route(InputEvent::MouseMove { x: 800, y });
+    assert_eq!(app.settings.int("layout.dock_split_pct"), 67);
+    assert!(app.docks[0].bounds().w > 780);
+    app.route(InputEvent::MouseMove { x: 370, y });
+    assert_eq!(
+        app.settings.int("layout.dock_split_pct"),
+        30,
+        "패널 스플리터(360)에 자석"
+    );
+    app.route(InputEvent::MouseMove { x: 590, y });
+    assert_eq!(app.settings.int("layout.dock_split_pct"), 50, "50 % 자석");
+    app.route(InputEvent::MouseMove { x: 5, y });
+    assert_eq!(app.settings.int("layout.dock_split_pct"), 15, "하한");
+    app.route(InputEvent::MouseMove { x: 1195, y });
+    assert_eq!(app.settings.int("layout.dock_split_pct"), 85, "상한");
+    app.alt = true;
+    app.route(InputEvent::MouseMove { x: 590, y });
+    assert_eq!(
+        app.settings.int("layout.dock_split_pct"),
+        49,
+        "Alt = 자석 해제"
+    );
+    app.alt = false;
+    app.route(InputEvent::MouseUp { x: 590, y });
+    // (A) 패널 좌우는 도크 분할선에도 붙는다(dir2 snap_split_x).
+    let _ = app.settings.set("layout.dock_split_pct", "70");
+    app.layout_for(1200, 800, 1.0);
+    let a = app.splitter.rect();
+    let (x, y) = (a.x + a.w / 2, a.y + 50);
+    app.route(InputEvent::MouseMove { x, y });
+    app.route(down(x, y));
+    app.route(InputEvent::MouseMove { x: 850, y });
+    assert_eq!(
+        app.settings.int("layout.panel_split_pct"),
+        70,
+        "도크 분할선(840)에 자석"
+    );
+    app.route(InputEvent::MouseUp { x: 850, y });
+    // hover = 서서히: 틱마다 진행이 오르고 다 오르면 애니메이션이 멈춘다 · 창 밖 = 풀림.
+    let b = app.dock_split_h.rect();
+    app.route(InputEvent::MouseMove { x: 300, y: b.y + 4 });
+    let mut last = 0.0;
+    for t in (0..=3000).step_by(100) {
+        app.dock_split_h.tick(t);
+        let v = app.dock_split_h.hover_progress();
+        assert!(v >= last);
+        last = v;
+    }
+    assert!((last - 1.0).abs() < 1e-3 && !app.dock_split_h.is_animating());
+    app.pointer_gone();
+    assert!(!app.dock_split_h.is_hover());
+    // 그리기: 세 띠가 틈 자리에(평상시 색).
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let band = Rect::new(0, app.dock_split_h.rect().y + 3, 1200, gap);
+    assert!(
+        rec.fills.iter().any(|(r, _)| *r == band),
+        "도크 위 띠 {band:?}"
+    );
+    // 숨김: 단일 정보 = 도크 좌우 없음 · 도크 숨김 = 둘 다 없음 · 단일 패널 = 패널 좌우 없음.
+    let _ = app.settings.set("layout.info_mode", "single");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.split_shown(SplitKind::DockHeight) && !app.split_shown(SplitKind::DockSplit));
+    let _ = app.settings.set("dock.visible", "off");
+    app.layout_for(1200, 800, 1.0);
+    assert!(!app.split_shown(SplitKind::DockHeight) && !app.split_shown(SplitKind::DockSplit));
+    assert!(app.split_shown(SplitKind::Panel));
+    assert_eq!(
+        app.dump_of("layout")
+            .map(|d| d.contains("dsplit_h 0,0 0x0")),
+        Some(true)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 기동 명령 어휘(창 없이): `nav:` · `panel:` · `key:` · `ui.click` · `layout.dump:` · `app.exit`.
 #[test]
 fn startup_cmd_vocabulary() {
