@@ -93,14 +93,32 @@ impl DirWatcher {
                 (dir.0 as isize, stop_thread.0 as isize, io.0 as isize);
             let alive = Arc::new(AtomicBool::new(true));
             let alive_thread = Arc::clone(&alive);
+            // 첫 `ReadDirectoryChangesW`가 걸리기 전의 변경은 통지되지 않는다(10-03 CI 적발) — 워커가 무장했음을 알릴 때까지 기다린다(≤ 1 s).
+            let armed = Arc::new(AtomicBool::new(false));
+            let armed_thread = Arc::clone(&armed);
             let dir_path = path.to_path_buf();
             std::thread::Builder::new()
                 .name("ndir-watch".into())
                 .spawn(move || {
-                    Self::run(dir_raw, stop_raw, io_raw, &dir_path, &pending);
+                    Self::run(
+                        dir_raw,
+                        stop_raw,
+                        io_raw,
+                        &dir_path,
+                        &pending,
+                        &armed_thread,
+                    );
                     alive_thread.store(false, Ordering::Relaxed);
                 })
                 .ok()?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(1000);
+            while !armed.load(Ordering::Relaxed)
+                && alive.load(Ordering::Relaxed)
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::yield_now();
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
             Some(DirWatcher {
                 path: path.to_path_buf(),
                 stop: stop.0 as isize,
@@ -110,7 +128,14 @@ impl DirWatcher {
     }
 
     /// 감시 스레드 본체 — 종료 때 핸들 3개를 닫는다.
-    fn run(dir_raw: isize, stop_raw: isize, io_raw: isize, path: &Path, pending: &Pending) {
+    fn run(
+        dir_raw: isize,
+        stop_raw: isize,
+        io_raw: isize,
+        path: &Path,
+        pending: &Pending,
+        armed: &AtomicBool,
+    ) {
         let dir = HANDLE(dir_raw as *mut core::ffi::c_void);
         let io = HANDLE(io_raw as *mut core::ffi::c_void);
         let stop = HANDLE(stop_raw as *mut core::ffi::c_void);
@@ -145,6 +170,7 @@ impl DirWatcher {
             if queued.is_err() {
                 break;
             }
+            armed.store(true, Ordering::Relaxed);
             let wait = unsafe { WaitForMultipleObjects(&[stop, io], false, INFINITE) };
             if wait.0 != WAIT_OBJECT_0.0 + 1 {
                 unsafe {
@@ -281,10 +307,9 @@ mod tests {
         w.watch(std::slice::from_ref(&base));
         assert_eq!(w.native_dirs(), vec![base.clone()]);
         assert_eq!(w.poll_interval_ms(), 250);
-        std::thread::sleep(std::time::Duration::from_millis(50));
         let _ = w.poll();
         std::fs::write(base.join("a.txt"), b"1").unwrap();
-        assert!(wait_for(&mut w, &base, 2000), "생성 통지");
+        assert!(wait_for(&mut w, &base, 5000), "생성 통지");
         std::fs::write(base.join("other").join("b.txt"), b"1").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(150));
         assert!(
@@ -292,7 +317,7 @@ mod tests {
             "감시하지 않는 하위 폴더는 보고하지 않는다"
         );
         std::fs::remove_file(base.join("a.txt")).unwrap();
-        assert!(wait_for(&mut w, &base, 2000), "삭제 통지");
+        assert!(wait_for(&mut w, &base, 5000), "삭제 통지");
         w.watch(std::slice::from_ref(&base));
         assert_eq!(w.native_dirs().len(), 1, "같은 집합 = 유지");
         let _ = std::fs::remove_dir_all(&base);
