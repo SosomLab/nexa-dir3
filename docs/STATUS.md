@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 87차 — 링크 화살표 오버레이 · 종류 "바로가기"(GAP-008)
+
+- **한 일**: nexa-ui 121차(링크 오버레이 스위치) 소비 · .lnk/심볼릭 링크/정션 아이콘에 탐색기처럼 화살표 · .lnk 종류 "바로가기" · 캡처 확인.
+- **지금 상태**: .lnk/링크 갭(GAP-006~010) 모두 해소. 경로 바 남은 갭 = GAP-014(IME). 다음(개발 세션) = Enter · Alt+↓ 실사용 결함(업무 53) → Linux 시험 안내.
+- **걸린 것**: "바로가기" vs "바로 가기" 문구 · 경로 제안 열거 UI 스레드 `read_dir` · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+
+→ [journal/2026-10-03 §92](journal/2026-10-03.md)
+
+---
+
 ## 10-03 86차 — main CI 빨강 복구 · 흔들리는 시험 수정 · `cmd.activate`
 
 - **한 일**: .lnk 시험 경로 비교를 canonicalize로(windows CI 8.3 짧은 이름) · 고속 스크롤 시험을 순수 계산으로(전역 경쟁 제거) · 명령 `cmd.activate` 추가.

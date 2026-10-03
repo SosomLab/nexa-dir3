@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **링크 화살표 · 종류 "바로가기"**: nexa-ui 121차 `set_link_overlay`(SHGFI_LINKOVERLAY · 기본 꺼짐 · nexa-sql 시험 729) · dir3 앱 시작 때 켬 · 정션/심링크 행 경로 키 조회 · .lnk 종류 "바로가기" · 캡처 ✅(.lnk · 정션 · C:\Documents and Settings) · GAP-008 해소 → [journal §92](journal/2026-10-03.md)
 - **사용자 결정**: `list.show_protected` 기본 off(숨김) 유지 확정 — dir2와 다른 의도된 차이 · docs/22 · 23 · 매트릭스 반영 → [journal §91](journal/2026-10-03.md)
 - **⚠ CI 빨강 복구 · 흔들림 제거 · `cmd.activate`**: .lnk 시험이 러너 TEMP 8.3 짧은 이름 때문에 windows CI에서만 실패 → canonicalize 비교 · 고속 스크롤 시험을 순수 계산(`scroll_configs`)으로(전역 경쟁 제거) · `cmd.activate` 명령(캐럿 행 활성화) · docs/18 시험 규약 2줄 → [journal §90](journal/2026-10-03.md)
 - **폴더 바로 가기 = 앱 안 이동**: .lnk 대상이 폴더면 활성 패널 이동(IShellLinkW::GetPath · Resolve 안 부름) · 파일 대상/해석 불가 = OS 열기 · macOS/Linux 무변화 · GAP-007 해소(dir2에 없던 Explorer 동작) · 실기 Enter 이동 확인 · ⚠ 흔들리는 시험 1건(고속 스크롤 전역 · 10회 중 1) 개발 세션 인계 → [journal §89](journal/2026-10-03.md)
