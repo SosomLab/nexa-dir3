@@ -4,6 +4,8 @@
 
 ## 2026-10-03
 
+- **보기 관리 방법 4택**(전체 · 좌/우 패널 · 탭 · **폴더 = 기본** · NEW-018): 같은 폴더면 좌우 공통 · 폴더별 기억(세션 `dirview` · 상한 300) · `ui.theme` 기본 system → [journal §104](journal/2026-10-03.md)
+- **스플리터 3종**(T-115 · nexa-ui 126 SplitBand · NEW-017): 패널 ↔ 도크 · 도크 좌우 추가 · 같은 두께 · hover 서서히 accent · 서로의 분할선 스냅 · 범위 불일치 수정 → [journal §103](journal/2026-10-03.md)
 - **탭별 보기 옵션**(T-111): 숨김 · Dot · 폴더 우선의 주인 = 탭 · 설정 = 새 탭 기본값 · 보호 파일 = 전역 · `list.view_scope` 기본 tab(의도된 차이) · 세션 `panel{i}.views` → [journal §102](journal/2026-10-03.md)
 - **툴바 "항상 위" → 새로 고침 그룹**(T-110 · dir2와 의도된 차이) · ⚠ main CI 빨강(T4 order-editor 기대값) → c1dc5a3 복구 · Linux 게이트에 T4 추가(Windows 전제 3개 제외) → [journal §101](journal/2026-10-03.md)
 - **Linux PC 세션 분담**: 개발 세션(코드 · 커밋 · push) + 협업 세션(문서 · 빌드 · 재시작 · 사전 분석) · 같은 트리 규칙 · Wayland 앱 아이콘 = 사용자 영역 .desktop · 다음 슬라이스 T-110~T-114 → [journal §100](journal/2026-10-03.md)

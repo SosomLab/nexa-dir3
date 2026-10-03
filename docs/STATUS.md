@@ -4,20 +4,30 @@
 
 ## ▶ Linux에서 이어갈 때(10-03 · 다음 세션 시작점 · 90차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `b6d2e84`(+ docs 48953c5) · nexa-license `54c8d71` · nexa-dir3 `53c45b5`. 게이트: check-3os ✓ · 시험 393 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `93d981a` · nexa-license `54c8d71` · nexa-dir3 `273b462`. 게이트: check-3os ✓ · 시험 395 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
 - **이 PC 세션 분담**(§100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`(평소 실행은 `cargo run -p nexa-dir`). 빌드에 시스템 라이브러리는 불요 · 실행은 데스크톱 배포판의 libxkbcommon/X11·Wayland 라이브러리를 dlopen(최소 설치면 추가 필요 — 추정).
 - **Linux 첫 실기에서 확인할 것**(T-103): ① 목록 쉐브론 크기·모양(✅ 선 쉐브론 §98 · 사용자 "해결") ② 경로 바 구분자 `/` · 중간 세그먼트 클릭 = 그 폴더(nexa-ui 122) ③ 내 PC 목록 = `/` · 홈 · 볼륨 · 용량 열(§95) ④ Alt+← / → / ↑ · Enter · Alt+↓(§93) ⑤ 터미널(`$SHELL` · PTY) · 열기(`xdg-open`) · 휴지통 · 폴더 감시.
 - **Linux 미구현 · 알려진 차이**: 런처 바 아이콘 = 글자(T-104 잔여 · 파일 행 아이콘은 아이콘 테마 ✅ §97) · 셸 컨텍스트 메뉴 = 앱 메뉴만 · 드래그 앤 드롭 없음 · Wayland 전용 세션 파일 클립보드 = 앱 안 사본만(X11은 연동 · 실기 미검증) · 도크 정보 OS 종류 이름 없음 · .lnk 해석/링크 오버레이 = Windows 전용 · 볼륨 라벨 미표시 · 자가 점검 미구현 그룹(미리보기 · 클립보드 · DnD · 창 · 글꼴 · 압축 · 클라우드).
 - **사용자 결정 대기**: 터미널 글꼴 크기 기준(Windows · WT 12pt vs dir2 Consolas 12 — Linux는 `term.font_size` = 본문 em으로 정함 §98) · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 이식 여부와 함께) · ↔ 아이콘 · CLAUDE.md §5 소비자 기록 구절 · dir2 BUG-001(링크 데이터 손실) 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 · "바로가기" vs "바로 가기" 문구 · 릴리스 태그.
-- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-115 스플리터 3종 → T-116 시간 설정 단위 → T-112 Linux 우클릭 통합 1차 → T-113 개발용 .desktop 스크립트 → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-93 메모리 모니터 → T-94 상태줄 → T-95 탭 상태바 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-116 시간 설정 단위 → T-112 Linux 우클릭 통합 1차 → T-113 개발용 .desktop 스크립트 → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-93 메모리 모니터 → T-94 상태줄 → T-95 탭 상태바 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-03 92차 — 스플리터 3종(T-115) · 보기 관리 방법 4택(폴더 기본) · 테마 기본 system
+
+- **한 일**: 패널 ↔ 도크 · 도크 좌우 스플리터 추가(세 띠 같은 두께 · hover 서서히 accent · 서로의 분할선 스냅 · 범위 불일치 수정 · nexa-ui 126차) · 보기 옵션 범위에 "폴더" 추가하고 기본으로(같은 폴더 = 좌우 공통 · 폴더별 기억) · `ui.theme` 기본 system.
+- **지금 상태**: 273b462 앱 재시작(PID 201763) · 사용자 화면 판정 대기(스플리터 3종 · 폴더 단위 보기 · 테마). 재시작 규칙 = 빌드 성공 직후에만 기존 창 종료(사용자 10-03).
+- **걸린 것**: T-117 T4 Linux · Windows 실기(터미널 칸 폭 · 스플리터 3종 모양) · macOS 맞춤(T-114) · 경로 제안 `read_dir` · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-03 §103~§104](journal/2026-10-03.md)
 
 ---
 
 ## 10-03 91차 — 툴바 "항상 위" 이동 · 탭별 보기 옵션 · ⚠ main CI 빨강(T4) 복구
 
 - **한 일**: "항상 위" 버튼 = 새로 고침 그룹(T-110) · 숨김/Dot/폴더 우선 = 탭별(T-111 · dir2 이식 + 사용자 규칙) · T4 `order-editor` 기대값 누락으로 CI windows 빨강 → c1dc5a3 복구.
-- **지금 상태**: 53c45b5 앱 재시작(PID 188706) · 사용자 화면 판정 대기(항상 위 위치 · 탭별 토글 · 툴팁 범위). c1dc5a3 CI 결과 확인 대기.
+- **지금 상태**: 53c45b5 앱 재시작(PID 188706) · 사용자 화면 판정 대기(항상 위 위치 · 탭별 토글 · 툴팁 범위). CI 53c45b5 = 성공(빨강 복구 확인).
 - **걸린 것**: T4 Linux 실행(Windows 전제 3개 · CI ubuntu xvfb · T-117) · 90차 걸린 것 그대로(Windows 실기 칸 폭 · macOS 맞춤 · 경로 제안 `read_dir` 등).
 
 → [journal/2026-10-03 §101~§102](journal/2026-10-03.md)

@@ -53,13 +53,15 @@
 | 64 | `app/bulk.rs:51` | 일괄 이름 바꾸기 프리셋 상한 | — | 고급 | `bulk.preset_max` | ☐ |
 | 10×10 · 3×15 · 5×10 ms | `platform/windows.rs:185,191,293,298` · `clipboard.rs:82,87` | 클립보드 열기·HDROP 재시도 | — | 상수 | — | — |
 | **배치·레이아웃** | | | | | | |
-| 3.0 · 20.0 · 200.0 | `main.rs:107-109` | 스플리터 두께(+ 히트 반폭) · 50 % 자석 스냅 · 패널 최소 폭 | — | 고급 | `layout.splitter_px` · `layout.snap_px` · `layout.min_panel_w` | ☐ |
+| 3.0 · 20.0 · 200.0 | `main.rs` `SPLIT_TH` · `SNAP_PX` · `MIN_PANEL` | 스플리터 두께(세 스플리터 공통 · §103) · 50 % 자석 스냅(+ 서로의 분할선) · 패널 최소 폭 | — | 고급 | `layout.splitter_px` · `layout.snap_px` · `layout.min_panel_w` | ☐ |
 | 20 | `main.rs:111` | 툴바 아이콘 기본 크기 | `toolbar.icon_size` | 설정 | (기존) | ✅ |
 | 4 | `app/settings.rs:193` | 툴바 그룹 간격 기본 | `toolbar.group_gap` | 고급 | (기존) | ✅ |
 | 1 | `app/settings.rs` `make_tool_dock`(§76) | 툴바 아이콘 둘레 여백(칸 = 아이콘 + 2) | `toolbar.icon_pad`(0~8) | 고급 | (기존) | ✅ |
 | 8 · 26 · 12 · 20 % · 4 px(§80 재조정 · §78은 18/55/12) | `app/settings.rs` `make_tool_dock`(nexa-ctl `SoftStates`) | 툴바 상태 표시 농도(hover 채움 · 켜짐 채움 · 켜짐 테두리 · 단계 · 모서리) | `toolbar.hover_fill_pct` · `toolbar.on_fill_pct` · `toolbar.on_line_pct` · `toolbar.state_step_pct` · `toolbar.state_radius` | 고급 | (기존) | ✅ |
 | off | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected`(§83) | 보호된 운영 체제 파일(숨김 + 시스템 속성 · macOS UF_HIDDEN + SF_RESTRICTED) 표시 — 꺼져 있으면 `list.show_hidden`이 켜져 있어도 숨김(탐색기 규칙) | `list.show_protected` | 설정(일반 · 탐색기 권장값 off · **기본 off = 사용자 확정 10-03** · dir2와 다른 의도된 차이) | (기존) | ✅ |
-| tab(dir2 panel) | `ndir-settings/src/registry.rs` · `migrate.rs` · `app/menus.rs::toggle_view_option`(§102) | 보기 토글(숨김 · Dot · 폴더 우선) 전파 폭 — tab = 활성 탭 · panel = 활성 패널 전 탭 · global = 두 패널 전 탭 | `list.view_scope` | 설정(**기본 tab = 의도된 차이** · 사용자 10-03 "이후는 탭별" · dir2 `settings.cfg` 가져오기는 panel 유지) | (기존) | ✅ |
+| 3.0 · 0.7 | `main.rs` `SPLIT_HALF` · `SPLIT_HOVER_ALPHA`(§103) | 스플리터 잡는 띠가 틈 양쪽으로 넓어지는 폭(배율 적용 — dir2는 일부 비배율) · hover 강조 알파 상한(서서히 · NEW-017) | — | 상수 | — | — |
+| system(dir2 dark) | `ndir-settings/src/registry.rs` `ui.theme`(§104) | 테마 기본값 — 시스템 따름(사용자 10-03 "테마는 시스템을 기본값으로" · **의도된 차이** · dir2 설정 가져오기는 dark 유지) | `ui.theme` | 설정 | (기존) | ✅ |
+| dir(§104 · §102 tab · dir2 panel) | `ndir-settings/src/registry.rs` · `migrate.rs` · `app/menus.rs::toggle_view_option`(§102 · §104) | 보기 토글(숨김 · Dot · 폴더 우선) 전파 폭 — dir = 그 폴더를 보는 탭 전부 + 폴더별 기억(NEW-018) · tab = 활성 탭 · panel = 활성 패널 전 탭 · global = 두 패널 전 탭 | `list.view_scope` | 설정(**기본 dir = 의도된 차이** · 사용자 10-03 "기본은 디렉토리 단위" · 사용자 10-03 "이후는 탭별" · dir2 `settings.cfg` 가져오기는 panel 유지) | (기존) | ✅ |
 | off | `app/settings.rs`(§80) | 켜진 툴바 아이콘을 강조색으로 칠할지(기본 = 본문색 · dir2 규약) | `toolbar.on_icon_accent` | 고급 | (기존) | ✅ |
 | em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
 | +3 px(종전 −4) | `app/fonts.rs` `FALLBACK_CHEVRON_DELTA` · `fallback_chevrons`(§94) | 글자 대체 쉐브론 크기 증분 · 후보 = › ⌄ → › ˅ → ▸ ▾ → > v 중 둘 다 그릴 수 있는 첫 쌍 — **§98부터 선 쉐브론을 끈 경우의 예비**(아이콘 글꼴 없는 OS는 선 쉐브론이 기본) | — | 상수(예비) | — | — |

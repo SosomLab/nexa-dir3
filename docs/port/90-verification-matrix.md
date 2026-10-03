@@ -12,7 +12,7 @@
 | B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
 | CI | 119 | 119 | 90 | 29 | 0 | 0 | 0 |
 | CLOUD | 99 | 99 | 0 | 0 | 0 | 0 | 0 |
-| CMD | 430 | 430 | 173 | 147 | 110 | 0 | 0 |
+| CMD | 430 | 430 | 176 | 144 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
 | GUI | 95 | 95 | 30 | 35 | 30 | 0 | 0 |
@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 16 | 16 | 6 | 1 | 0 | 0 | 0 |
+| NEW | 18 | 18 | 8 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -38,10 +38,10 @@
 | UIC | 235 | 235 | 4 | 0 | 231 | 0 | 0 |
 | UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
-| WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
-| WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4305 | 4305 | 2368 | 1024 | 766 | 0 | 0 |
+| WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
+| WINB | 125 | 125 | 58 | 60 | 0 | 0 | 0 |
+| WINC | 174 | 174 | 32 | 142 | 0 | 0 | 0 |
+| **합계** | 4307 | 4307 | 2384 | 1010 | 766 | 0 | 0 |
 
 ## 행
 
@@ -230,7 +230,9 @@
 | NEW-014 | 보호된 운영 체제 파일 숨기기(`list.show_protected` · 기본 숨김 · 탐색기 규칙) | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected` · `filelist.rs` · `panel.rs` · `app/settings.rs` | T1 | ndir-vfs 판정 MC/DC · `protected_os_items_follow_their_own_switch` | ✅ | §83 · 의도된 차이(Windows 루트 보호 항목 기본 숨김 — dir2는 표시 · 기본 off = 사용자 확정 10-03 §91) · 실기(macOS UF_HIDDEN · Windows C:\) 사용자 |
 | NEW-015 | Unix "내 PC" = `/` · 홈 · 마운트된 볼륨(Linux mounts · macOS /Volumes) · 홈 행 종류 = 폴더 · Windows 불변 | ndir-vfs `drive_entries` · `unix_mount_points` · `merge_unix_roots` · `filelist.rs::is_home_dir` | T1 + 실기 | `unix_roots_from_mounts` | ✅ | §95 · 실기 필요(Linux · macOS — 볼륨 라벨 미표시 · 용량 열 statvfs 미확인 · 사용자 T-103) |
 | NEW-016 | Unix 점 파일 = 숨김(`list.show_hidden`이 점 파일까지 · `list.show_dotfiles`/`view.dot`은 Windows에만 · Windows 불변) | ndir-vfs `DOT_IS_HIDDEN` · ndir-tree `Filter::allows_on` · ndir-settings `WINDOWS_ONLY`/`is_internal_on` · `platform::has_dotfile_toggle` · `menus::menu_has` · `order::toolbar_blocks` | T1·T3 + 실기 | `dot_files_follow_os_convention` · `hidden_toggle_covers_dot_files_on_unix` · `toolbar_blocks_without_dot_match_full_set` · `order_editor_applies_toolbar_ctxmenu_and_columns` | ✅ | §99 · 실기 필요(Linux 메뉴/툴바에 점 파일 없음 · H 토글로 점 파일 숨김 — 사용자 확인 대기 · macOS T-114) · 편집 없이 둔 `toolbar.layout` 저장값의 dot 토큰은 파일에 남음(툴바엔 안 나옴 · 다음 순서 저장 때 정리 · 동작 영향 없음) · 파일 대화상자 점 파일 옵션 범위 밖 |
-| PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
+| NEW-017 | 스플리터 hover 페이드 · 세 스플리터 같은 띠(두께 = 틈 3 · 잡는 띠 배율 적용) · 페이드 중에만 깨움 · pointer_gone | nexa-ui 126 `SplitBand` · `Splitter::{set_band, hover_progress, is_animating, pointer_gone}` · dir3 `main.rs` · `app/event_loop.rs` | T1·T3 + 실기 | `band_fades_in_gradually_and_reports_animation` · `dock_splitters_drag_clamp_fade_and_hide` | ✅ | §103 · 실기 필요(페이드 속도·밝기 · 사용자 판정 대기) · 기본안 = Slow · 알파 0.7 · 평상시 선 보임 |
+| NEW-018 | 보기 옵션 폴더 단위(`list.view_scope = dir` 기본 · 같은 폴더 = 좌우 공통 · 폴더별 기억 · 세션 `dirview`) · `ui.theme` 기본 system | `panel.rs::{set_view_for_dir, take_navigated}` · `app/menus.rs::{remember_dir_view, sync_dir_views}` · `session.rs` | T3 + 실기 | `view_options_follow_folders_by_default` · `session_roundtrip_with_pipe_separator` | ✅ | §104 · 실기 필요(좌우 같은 폴더 동시 반영 · 폴더 왕복 뒤 유지 · 시스템 테마 — 사용자 판정 대기) |
+| PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) → §104에서 기본 dir(NEW-018) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | GAP-006 · SHORTCUT-EXT | 바로 가기 확장자 숨김(`.lnk` `.url` `.appref-ms` · 이름 칸만 · 확장자 열 유지 · 폴더 예외 · 이름 바꾸기 때 복원 · Windows만) | `filelist.rs::{split_shortcut_ext, display_name, restore_shortcut_ext}` · `platform::hides_shortcut_ext` · `app/ops.rs` | T1·T3 | `shortcut_ext_is_hidden_and_restored_on_rename` | ✅ | §84 · dir2 source.rs:456-465 · win.rs:4036-4045 |
 | GAP-007 · LNK-NAV | 폴더를 가리키는 바로 가기(`.lnk`) 활성화 = 앱 안 이동(Explorer 동작 · dir2에 없던 개선) · 파일 대상/해석 불가 = OS 열기 · macOS/Linux 무변화(`link_target` 기본 `None`) | `platform/mod.rs::Opener::link_target` · `platform/windows.rs::shell_link_target`(IShellLinkW::GetPath · `Resolve` 안 부름) · `app/input.rs::open_external` · `filelist.rs::is_lnk` | T1(Windows)·T3 | `folder_shortcut_navigates_inside_the_app` · `shell_link_target_reads_a_real_lnk` | ✅ | §89 · 미구현 = 깨진 대상 수정/삭제 안내(OS 열기에 맡김) · 남은 링크 갭 = GAP-008 |
@@ -308,7 +310,8 @@
 | PANEL-001·002 · 031·032 | 패널 = 탭 바 + 네비([홈][←][→][↑]) + 경로 바 + 목록 수직 스택 · 네비 활성 동기 | `nexa-dir/src/panel.rs` | T2·T3 | `layout_stacks_tabbar_navbar_rows`(dir2 수치) · `nav_buttons_and_path_edit` · 골든 | ✅ | T-43 · 글리프는 유니코드(MDL2 → SVG T-30) |
 | PANEL-012·014~017 | 탭 = 독립 뷰 + 히스토리 · 새 탭 복제 · 전환/순환 · 닫기(≥1) · 드래그 재정렬 | `panel.rs` | T2 | `tabs_open_switch_close_keep_at_least_one` · `route_and_commands_without_window` | 🚧 | 잠금·고정·복제·패널 간 이동·stale 재열람은 T-43 잔여 |
 | PANEL-026~029 · 033 | 탭별 back/forward · 경로 진입(실패 = 위치 유지) · 위로 + 떠난 폴더 자동 선택 · 홈 = 내 PC · 행 활성화 · 무간섭 재열람(캐럿·스크롤) | `nav.rs` · `panel.rs` | T2 | nav 3 · `per_tab_history_and_nav_up_selects_left_folder` · `activate_enters_dir_and_reports_file` | ✅ | 선택 복원·사라진 폴더 폴백(037)은 잔여 |
-| WINA(layout) · PANEL §2-5 | 창 배치 = 메뉴/도구 28/[좌 ║ 우]/상태 22 · 스플리터 드래그·50 % 스냅(Alt 해제)·최소 200 · 열 기본 5(340·64·96·140·110) | `main.rs` `layout_core`/`split_drag` | T3 | `layout_golden_1200x800` · `splitter_drag_and_snap` · `px_rounds_and_columns_fit` | ✅ | 열 폭 기억·동기(`list.col_width_sync`)는 잔여 |
+| WINA(layout) · PANEL §2-5 | 창 배치 = 메뉴/도구 28/[좌 ║ 우]/상태 22 · 패널 좌우 스플리터 드래그·50 % 스냅(Alt 해제)·최소 200 · 열 기본 5(340·64·96·140·110) | `main.rs` `layout_core`/`split_drag` | T3 | `layout_golden_1200x800` · `splitter_drag_and_snap` · `px_rounds_and_columns_fit` | ✅ | 열 폭 기억·동기(`list.col_width_sync`)는 잔여 · **바로잡음(§103)**: 종전 이 행이 스플리터 전체를 ✅로 묶었으나 13e19b0 전까지 패널 ↔ 도크 · 도크 좌우 스플리터는 없었다 → 아래 스플리터 3종 행 |
+| WINA-008 · 038 · 064 · WINB-056 · 109 · WINC-063 · 075 · 076 · 094~096 · CMD-451 · 452 · 453 · 495 · PREFS-057 · 107 · 108 | 스플리터 3종(패널 좌우 · 패널 ↔ 도크 높이 · 도크 좌우) — 드래그 live · 클램프(10~90 % + 최소 200 · 15~50 % + 행 3줄 · 15~85 %) · 자석 = 50 % + 서로의 분할선 · Alt(macOS ⌥) 해제 · 우선순위 도크 높이 → 도크 좌우 → 패널 좌우 · 커서 Row/ColResize · 숨김 규칙 · 평상시 border(도크 위 text_dim) · 드래그 accent | `main.rs::{layout_core, split_drag}` · `app/input.rs`(area_at · 도크 스플리터) · `app/event_loop.rs`(커서 · 깨움) · `app/paint.rs` · `app/startup_cmd.rs`(dsplit_h · dsplit_v) · nexa-ui 126 `SplitBand` | T3 · T4 덤프 | `dock_splitters_drag_clamp_fade_and_hide` · `splitter_drag_and_snap` · `layout_golden_1200x800` · dock-info/layout-basic 골든 | ✅ | §103 · 의도된 차이(NEW-017 hover 페이드 · 잡는 띠 배율 적용 · 드래그 끝 즉시 저장) · dir2 버그 미계승(단일 패널에서 숨은 자리 SIZEWE 커서) · 실기(Linux 모양 · Windows) 사용자 |
 | PREFS-050 · PANEL §5-2 | 세션 파일 = dir2 `session.cfg` 형식 그대로(`session.conf` · 레거시 이름 읽기 · 원자적 저장 · 미사용 키 보존) | `nexa-dir/src/session.rs` | T2 | `session_roundtrip_with_pipe_separator`(dir2) · `parse_is_tolerant_and_loads_legacy_name` | ✅ | T-45 |
 | PREFS-051·052·054 · 616·617 · PANEL-023 | 복원(창 생성 전 · 실행 인자 우선 · 실패 탭 건너뜀) · 디바운스 저장(quiet 1 s · max 5 s · 두 패널 전부 소진) · 종료 저장 | `app/sessions.rs` · `panel.rs::restore` · `main.rs` | T3·T4 | `session_roundtrip_through_app` · 창 2회 실행 실증 | ✅ | T-45 · 펼침(`exp`)·잠금/고정 복원은 잔여 |
 | CI-106 | 기동 명령 확장 — `@ready`/`@idle`/`@after` · `quit[:코드]` · `assert.<대상>:<식>`(종료 코드 3) · `ui.click:@영역` · `ui.key` | `app/startup_cmd.rs` | T3·T4 | `startup_ready_assert_and_dumps` · `classify_prefixes` · 창 실증(exit 5 / exit 3) | ✅ | T-46 · `@idle` 작업 큐는 M6 · `ctx.wait`(열린 메뉴의 셸 항목이 찰 때까지 뒤 `@ready` 보류 · 20 s 상한 · §72 · `context_menu_opens_immediately…` ⑥ · `ctx-menu.scn`) · §81 `ops.wait` · **§88 T4 = 가짜 클립보드**(`ndir-check`가 `NDIR_FAKE_CLIPBOARD=1` 주입 · `fake_clipboard_switch_and_memory_files` · 게이트 전후 클립보드 순번 10592 → 10592) |
