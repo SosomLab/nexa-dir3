@@ -4,13 +4,23 @@
 
 ## ▶ Linux에서 이어갈 때(10-03 · 다음 세션 시작점 · 90차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `244da33`(+ docs 450a2a8) · nexa-license `54c8d71` · nexa-dir3 `8a58ecd`. 게이트: check-3os ✓ · 시험 414 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `fca3c66` · nexa-license `54c8d71` · nexa-dir3 `73e4988`. 게이트: check-3os ✓ · 시험 416 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
 - **이 PC 세션 분담**(§100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`(평소 실행은 `cargo run -p nexa-dir`). 빌드에 시스템 라이브러리는 불요 · 실행은 데스크톱 배포판의 libxkbcommon/X11·Wayland 라이브러리를 dlopen(최소 설치면 추가 필요 — 추정).
 - **Linux 첫 실기에서 확인할 것**(T-103): ① 목록 쉐브론 크기·모양(✅ 선 쉐브론 §98 · 사용자 "해결") ② 경로 바 구분자 `/` · 중간 세그먼트 클릭 = 그 폴더(nexa-ui 122) ③ 내 PC 목록 = `/` · 홈 · 볼륨 · 용량 열(§95) ④ Alt+← / → / ↑ · Enter · Alt+↓(§93) ⑤ 터미널(`$SHELL` · PTY) · 열기(`xdg-open`) · 휴지통 · 폴더 감시.
 - **Linux 미구현 · 알려진 차이**: (런처 바 · 파일 행 아이콘 = 아이콘 테마 ✅ §97 · §110) · 셸 컨텍스트 메뉴 = xdg 1차(기본 앱 · 다른 앱 ▸ · 압축 · 속성 §117 · 순서 편집 · 배경 메뉴 등 2차 T-131) · 드래그 앤 드롭 없음 · Wayland 전용 세션 파일 클립보드 = 앱 안 사본만(X11은 연동 · 실기 미검증) · 도크 정보 OS 종류 이름 없음 · .lnk 해석/링크 오버레이 = Windows 전용 · 볼륨 라벨 미표시 · 자가 점검 미구현 그룹(미리보기 · 클립보드 · DnD · 창 · 글꼴 · 압축 · 클라우드).
 - **사용자 결정 대기**: 터미널 글꼴 크기 기준(Windows · WT 12pt vs dir2 Consolas 12 — Linux는 `term.font_size` = 본문 em으로 정함 §98) · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 이식 여부와 함께) · ↔ 아이콘 · CLAUDE.md §5 소비자 기록 구절 · dir2 BUG-001(링크 데이터 손실) 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 · "바로가기" vs "바로 가기" 문구 · 릴리스 태그.
-- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 i18n 정리(조사 중) → T-95/T-94/T-93 탭 상태바 · 상태바 정보(사용자 재요청) → T-133 툴바/런처 우클릭 → T-113 → T-131 → T-130 · T-129(GAP-019) → T-126 기본 열 + 상태 열(사용자 결정 5건 대기) → T-123 컬럼 이동 표식 + GAP-016 → T-120 설정 상하/종속 관계 UX → T-112 Linux 우클릭 통합 1차 → T-113 개발용 .desktop 스크립트 → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-93 메모리 모니터 → T-94 상태줄 → T-95 탭 상태바 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-94 상태줄 칸 + T-95 탭 상태바 1차(진행) → T-134 i18n(c → a → b) → T-133 툴바/런처 우클릭 → T-93 메모리 창 → T-135 macOS 휴지통 시험 → T-113 → T-131 → T-130 · T-129(GAP-019) → T-126 기본 열 + 상태 열(사용자 결정 5건 대기) → T-123 컬럼 이동 표식 + GAP-016 → T-120 설정 상하/종속 관계 UX → T-112 Linux 우클릭 통합 1차 → T-113 개발용 .desktop 스크립트 → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-93 메모리 모니터 → T-94 상태줄 → T-95 탭 상태바 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-04 104차 — 언어 전환 열 제목 · 세션 복원 기본 열 · 상태 열 정렬 · StatusBar 칸(nexa-ui 133) · i18n 조사
+
+- **한 일**: 언어를 바꿔도 열 제목이 옛 언어이던 것 · 세션 복원 패널의 내 PC 열 교체 무동작 수정 · 상태 열 정렬 · nexa-ctl StatusBar 칸/클릭(T-94/95 부품) · T-134 i18n 전수 조사(언어 전환 미반영 10곳 · 하드코딩 · 중복 키) · 상태바/우클릭 사전 분석.
+- **지금 상태**: 73e4988 앱 재시작(PID 314368). 개발 세션 = T-94 상태줄 칸 + T-95 탭 상태바 1차. ⚠ macOS 휴지통 시험이 2회째 실패(흔들림 · 실제 휴지통 사용).
+- **걸린 것**: T-135 macOS 휴지통 시험 · i18n 사용자 결정 4건(크기 단위 · ja OK · 런처 시드 라벨 · @fallback) · T-134 · T-133 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-04 §1](journal/2026-10-04.md)
 
 ---
 
