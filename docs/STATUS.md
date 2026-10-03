@@ -2,22 +2,33 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ Linux에서 이어갈 때(10-03 · 다음 세션 시작점 · 90차 갱신)
+## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 115차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `47cdb77` · nexa-license `54c8d71` · nexa-dir3 `3fe457e`. 게이트: check-3os ✓ · 시험 427 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
-- **이 PC 세션 분담**(§100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변).
-- **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`(평소 실행은 `cargo run -p nexa-dir`). 빌드에 시스템 라이브러리는 불요 · 실행은 데스크톱 배포판의 libxkbcommon/X11·Wayland 라이브러리를 dlopen(최소 설치면 추가 필요 — 추정).
-- **Linux 첫 실기에서 확인할 것**(T-103): ① 목록 쉐브론 크기·모양(✅ 선 쉐브론 §98 · 사용자 "해결") ② 경로 바 구분자 `/` · 중간 세그먼트 클릭 = 그 폴더(nexa-ui 122) ③ 내 PC 목록 = `/` · 홈 · 볼륨 · 용량 열(§95) ④ Alt+← / → / ↑ · Enter · Alt+↓(§93) ⑤ 터미널(`$SHELL` · PTY) · 열기(`xdg-open`) · 휴지통 · 폴더 감시.
-- **Linux 미구현 · 알려진 차이**: (런처 바 · 파일 행 아이콘 = 아이콘 테마 ✅ §97 · §110) · (상태줄 시스템 부하 · 네트워크 칸 · 탭 상태바 = 10-04 §2 · §9) · 셸 컨텍스트 메뉴 = xdg 1차(기본 앱 · 다른 앱 ▸ · 압축 · 속성 §117 · 순서 편집 · 배경 메뉴 등 2차 T-131) · 드래그 앤 드롭 없음 · Wayland 전용 세션 파일 클립보드 = 앱 안 사본만(X11은 연동 · 실기 미검증) · 도크 정보 OS 종류 이름 없음 · .lnk 해석/링크 오버레이 = Windows 전용 · 볼륨 라벨 미표시 · 자가 점검 미구현 그룹(미리보기 · 클립보드 · DnD · 창 · 글꼴 · 압축 · 클라우드).
-- **사용자 결정 대기**: 터미널 글꼴 크기 기준(Windows · WT 12pt vs dir2 Consolas 12 — Linux는 `term.font_size` = 본문 em으로 정함 §98) · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 이식 여부와 함께) · ↔ 아이콘 · CLAUDE.md §5 소비자 기록 구절 · dir2 BUG-001(링크 데이터 손실) 수정 여부 · `term.color`와 사용자 NO_COLOR · 로그 "파일로 저장" 허용 · "바로가기" vs "바로 가기" 문구 · 릴리스 태그.
-- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 i18n(c → a → b) → T-133 툴바/런처 우클릭 → T-93 메모리 창 → T-95 2차 → T-113 → T-131 → T-130 · T-129(GAP-019) → T-126 기본 열 + 상태 열(사용자 결정 5건 대기) → T-123 컬럼 이동 표식 + GAP-016 → T-120 설정 상하/종속 관계 UX → T-112 Linux 우클릭 통합 1차 → T-113 개발용 .desktop 스크립트 → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-93 메모리 모니터 → T-94 상태줄 → T-95 탭 상태바 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `47cdb77`(+ docs) · nexa-license `54c8d71` · nexa-dir3 `dd0b62c`. 게이트: check-3os ✓ · 시험 427 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117). CI 3fe457e까지 3-OS 녹색.
+- **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
+- **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
+- **10-03 ~ 10-04 Linux 세션에서 바뀐 것(요약)**: 아이콘 테마 행/런처 아이콘 · 선 쉐브론 · 터미널 시스템 글꼴/한글 폴백 · Unix 점 파일 = 숨김 · 스플리터 3종 · 탭 여러 줄 · 탭 패널 간 드래그 · 보기 관리 4택(폴더 기본) · 다중 정렬 머리 · 컬럼 이동 표식 · 열 경계 더블클릭 자동 맞춤 · 기본 열 + 상태 열(클라우드) · 설정 종속 UX 1단계 · Linux 우클릭 통합 1차 · 상태줄(시스템 부하 · 네트워크 · 약어 · 칸 팝업 · 앱 메모리/라이선스) · 탭 상태바 · 메모리 창 1차 · macOS 휴지통 결함 수정 — 상세 = journal 10-03 §97~§118 · 10-04 §1~§12.
+- **Linux 미구현 · 알려진 차이**: 셸 컨텍스트 메뉴 = xdg 1차(순서 편집 · 배경 메뉴 · 아이콘 2차 T-131) · 드래그 앤 드롭 없음 · Wayland 전용 세션 파일 클립보드 = 앱 안 사본만 · 도크 정보 OS 종류 이름 없음 · .lnk/링크 오버레이 = Windows 전용 · 볼륨 라벨 미표시 · 상태 열 = 네트워크 마운트만(클라우드 상태는 Windows/macOS) · 자가 점검 미구현 그룹 · T4 Windows 전제 3개(T-117).
+- **사용자 결정 대기**: i18n 4건(크기 단위 KB 유지? · ja OK 표기 · 런처 시드 "Terminal" 라벨을 저장 시점 언어로 굳힐지 · `@fallback` 지원) · T-126 권장안 5건 확인(동기화 중 제외 · Linux 네트워크만 · 내 PC 제외 · 정렬은 사용자 요청으로 지원 · GAP-018 함께) · GAP-015 정리(연결 vs INTERNAL · T-125) · GAP-020(`list.col_layout` 기동 미적용 의도?) · 정렬 후속(T-128 — Shift 없는 클릭 리셋 · 정렬 영속) · 터미널 글꼴 크기 기준(Windows) · 설정 창 "클라우드 연결" 빈 페이지 · ↔ 아이콘 · dir2 BUG-001 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" · "바로가기" vs "바로 가기" · nexa-sql `split_d.tick` 누락 수정 · 릴리스 태그.
+- **실기(화면) 판정이 남은 것**: 10-03 ~ 10-04 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표 53항목) — 특히 상태줄 약어/팝업/색 · 메모리 창 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 스플리터 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
+- **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 i18n(c 언어 전환 미반영 10곳 → a 하드코딩 → b 중복 키) → T-133 툴바/런처 우클릭 → T-93 2차(메모리 영역 세분 · 힙 정리) → T-95 2차(git status 워커 · 감시 · 플라이아웃) → macOS 디스크 칸(IOKit) → T-113 개발용 .desktop → T-131 우클릭 2차 → T-130 설정 종속 2단계 · T-129(GAP-019 클라우드 미리보기) → T-128 정렬 후속 → T-117 T4 Linux → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-04 115차 — 옛 상태줄 배치의 앱 메모리 칸 위치 수정 · 10-04 마감
+
+- **한 일**: 옛 형식 `statusbar.layout` 저장값이면 새 앱 메모리 칸이 라이선스 뒤에 붙던 결함 수정(dd0b62c · 협업 세션이 이주 확인 거리로 짚은 것 · 사용자도 확인) · CI 3fe457e 3-OS 녹색 · STATUS 맨 위 "다음 세션 시작점" 최신화 · 10-04 마감 기록.
+- **지금 상태**: dd0b62c 앱 재시작(PID 390570). CI dd0b62c 진행 중. 세 저장소 미커밋 0(마감 커밋 뒤 개발 세션 push).
+- **걸린 것**: 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
+
+→ [journal/2026-10-04 §12](journal/2026-10-04.md)
 
 ---
 
 ## 10-04 114차 — 상태줄 약어 · 칸 클릭 상세 팝업 · 앱 메모리/라이선스 우측 · 메모리 창 1차
 
 - **한 일**: 상태줄 칸 = 약어(C · M · D · N) + 값(↑ 빨강 · ↓ 파랑 · 견본으로 기본 너비 확보 — nexa-ui 137) · 모든 칸 클릭 = 상세 팝업(주기마다 갱신 · CPU 전체 + Dir · 메모리 전체/잔여/Dir · 디스크 · 네트워크) · 맨 우측 = 앱 메모리(클릭 = 메모리 창) + 라이선스 · `mem_win.rs` 메모리 창 1차(T-93).
-- **지금 상태**: 3fe457e 앱 재시작(PID 387089). CI 9a8ed19 성공 · 3fe457e 진행 중(Dir CPU Windows/macOS 첫 실행). 옛 `statusbar.layout` 저장값 이주를 화면으로 확인 중.
+- **지금 상태**: 3fe457e 앱 재시작(PID 387089). CI 9a8ed19 · 3fe457e 성공(Dir CPU 3-OS 첫 실행 · 115차). 옛 `statusbar.layout` 저장값 이주를 화면으로 확인 중.
 - **걸린 것**: CI 3fe457e · T-93 2차(영역 확장 · 힙 정리) · macOS 디스크(IOKit) · i18n 결정 4건 · T-134 · T-133 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
 
 → [journal/2026-10-04 §11](journal/2026-10-04.md)
