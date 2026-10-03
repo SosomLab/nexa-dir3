@@ -50,6 +50,8 @@
 | 20 | `main.rs:111` | 툴바 아이콘 기본 크기 | `toolbar.icon_size` | 설정 | (기존) | ✅ |
 | 4 | `app/settings.rs:193` | 툴바 그룹 간격 기본 | `toolbar.group_gap` | 고급 | (기존) | ✅ |
 | 1 | `app/settings.rs` `make_tool_dock`(§76) | 툴바 아이콘 둘레 여백(칸 = 아이콘 + 2) | `toolbar.icon_pad`(0~8) | 고급 | (기존) | ✅ |
+| 8 · 18 · 55 · 12 % · 4 px | `app/settings.rs` `make_tool_dock`(§78 · nexa-ctl `SoftStates`) | 툴바 상태 표시 농도(hover 채움 · 켜짐 채움 · 켜짐 테두리 · 단계 · 모서리) | `toolbar.hover_fill_pct` · `toolbar.on_fill_pct` · `toolbar.on_line_pct` · `toolbar.state_step_pct` · `toolbar.state_radius` | 고급 | (기존) | ✅ |
+| em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
 | 3줄 고정 | `app/input.rs`(터미널) · `preview_win.rs`(F3) | 휠 1노치 줄 수 → §76부터 OS 값(`SPI_GETWHEELSCROLLLINES`) | — | 상수(OS 값 따름) | — | ✅ |
 | 20 / 글꼴+6 / ≥14 | `main.rs:308` | 목록 행 높이 | — | 설정 | `list.row_h`(0 = 글꼴 기준 자동) | ☐ |
 | 6 · 16 | `main.rs:309-310` | 행 좌우 여백 · 트리 들여쓰기 | — | 고급 · 설정 | `list.pad_x` · `list.indent_w` | ☐ |

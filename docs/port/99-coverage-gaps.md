@@ -128,6 +128,10 @@
 | GAP-007 | **.lnk 열기** — Explorer = 폴더 대상이면 같은 창에서 이동 · 파일 대상 = 열기 · 깨진 대상 = 수정/삭제 안내 · 인자/작업 폴더 반영 | dir2·dir3 모두 IShellLink 해석 없음(폴더 바로가기 = 새 탐색기 창) · dir3 `panel.rs:883-892` → `pending_open` → opener · 해결 = IShellLinkW::GetPath → 폴더면 `navigate_to` | 🚧 수정 예정(dir2에도 없는 Explorer 동작 — 개선) |
 | GAP-008 | **링크 오버레이·종류** — Explorer = .lnk/.url/심볼릭 링크/정션에 화살표 오버레이 · 종류 "바로 가기" | dir2·dir3 모두 `SHGFI_LINKOVERLAY` 없음(nexa-fs `shell.rs:707`) · dir3는 `ndir-vfs` `is_link()`를 nexa-dir에서 쓰지 않음 · 종류 = "LNK"/"link" | 🚧 수정 예정(nexa-fs 추가 + 종류 `SHGFI_TYPENAME`) |
 | GAP-009 | **Unix 폴더 심볼릭 링크 진입 불가** — `ndir-vfs/src/lib.rs:37-58`이 Unix에서 attrs 0 + `DirEntry::file_type`(비추적)으로 판정 → 폴더 심링크가 `Symlink`로 분류돼 들어갈 수 없다 | dir3 전용(dir2는 Windows 전용) · 해결 = Unix에서 `fs::metadata` 폴백 | 🚧 수정 예정 |
+| GAP-011 | **⚠ 경로 바 편집 중 Ctrl+C/X/V/Z가 파일 명령으로 실행** — dir2는 편집 중 do_clip ①로 글자 편집(nexa-app/src/win.rs:7246-7286 · 8706-8728) | dir3 `event_loop.rs:346` Ctrl 조합 → keymap → `command()`에 경로 바 분기 없음 → `edit.paste` = 파일 전송 시작 · `edit.undo` = 파일 작업 되돌림(10-03 §78 업무 35 조사) | ✅ 해소 10-03 §78(`App::path_edit` · 시험 `path_edit_shortcuts_edit_text_not_files`) |
+| GAP-012 | **경로 바 편집 우클릭 메뉴 · 더블클릭** — dir2 = 편집 중 우클릭 놓기 → 6항목(CMD-086~091 실행 취소/잘라내기/복사/붙여넣기/삭제/모두 선택 · A/win.rs:7472-7532) · 편집 필드 더블클릭 = 전체 선택(A/win.rs:8638-8647) | dir3 우클릭 Released 사건 없음(input.rs:47-49) · `edit_menu_state` 호출 0 · DoubleClick 분기 없음 · `begin_path_edit` dead code(panel.rs:1080-1083) | 🚧 수정 예정(경로 바 슬라이스 · + Esc = 팝업만 닫기 · `path.edit` F4/Ctrl+L) |
+| GAP-013 | **경로 자동완성 미연결** — dir2 = 편집할 때마다 `update_path_suggest`(A/win.rs:7199-7206) · 제안 클릭 = 이동(A/win.rs:8000-8007) | dir3 `set_suggestions` · `suggest_click` 호출 0 → 팝업이 안 열림 · 팝업 자리 클릭은 목록으로 가 편집 취소(panel.rs:977-978) | 🚧 수정 예정(`suggest_folders` 이식 포함) |
+| GAP-014 | **경로 바 IME 조합 창 위치** — dir2 A/win.rs:4792가 `edit_info`로 조합 창을 캐럿에 맞춤 | dir3 `edit_info`(nexa-explorer pathbar.rs:119) 호출 0 | 🚧 수정 예정 |
 | GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | 🚧 수정 예정 |
 
 ## 결함(BUG)
