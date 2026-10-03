@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 64차 — T-31 B(italic 합집합 · 글꼴 장식 설정 · 터미널 굵은 셀)
+
+- **한 일**: nexa-ui 113차 `DrawCtx::select_font_styled` + `RecordCtx.fonts` · dir3 `apply_font_decor`(dir2 X-12 세 설정이 비로소 적용) · 터미널 SGR 1 굵게 그리기 · T3 `font_decor_settings_reach_grid_font_selection` · 매트릭스 UIC-311/313 ✅ · 315 ⚠(PeerList 매핑 수용 — nexa-sql `FontPrefs` 리터럴 때문에 슬롯 추가 불가).
+- **지금 상태**: T-31 잔여 = ICO 디코더(UIC-317)뿐(테마 토큰은 nexa-grid 대체로 종결). 다음 = T-91 · CLOUD 결정 · SHCNE · DnD 2차 · T-32.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정 · CLOUD 이식 여부 결정.
+
+→ [journal/2026-10-03 §68](journal/2026-10-03.md)
+
+---
+
 ## 10-03 63차 — T-31 클립 스택(nexa-ui 112차 소비)
 
 - **한 일**: nexa-ui `RasterCtx` 클립 스택 실제 구현(91214a5 · 모든 그리기 어휘 · 시험 +2) · nexa-grid `paint_grid` = `push_clip(bounds)` · dir3 T3 `panel_grid_pushes_its_bounds_as_clip` · 매트릭스 UIC-310/N-001 ✅.

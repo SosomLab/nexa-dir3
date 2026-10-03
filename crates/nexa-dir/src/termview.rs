@@ -508,6 +508,7 @@ impl TermView {
         };
         let (ar, ag, ab) = theme.accent.rgb();
         let accent = 0xFF00_0000 | (u32::from(ar) << 16) | (u32::from(ag) << 8) | u32::from(ab);
+        let mut cur_bold = false; // grid_dims가 비굵게 Mono를 골라 뒀다
         for r in 0..rows {
             let y = rc.y + 1 + r as i32 * cell_h;
             let row_h = cell_h.min(rc.bottom() - y);
@@ -519,7 +520,7 @@ impl TermView {
                 break;
             }
             let line = self.screen.line_at(abs);
-            let eff = |c: usize| -> (u32, u32, bool) {
+            let eff = |c: usize| -> (u32, u32, bool, bool) {
                 let cell = &line[c];
                 let (mut fg, mut bg) = (pal.resolve(cell.fg), pal.resolve(cell.bg));
                 if cell.reverse {
@@ -532,19 +533,24 @@ impl TermView {
                         std::mem::swap(&mut fg, &mut bg);
                     }
                 }
-                (fg, bg, cell.faint)
+                (fg, bg, cell.faint, cell.bold)
             };
             let c_end = cols.min(line.len()).min(c0 + vis_cols);
             let mut c = c0.min(c_end);
             while c < c_end {
-                let (fg, bg, faint) = eff(c);
+                let (fg, bg, faint, bold) = eff(c);
                 let start = c;
                 while c < c_end {
-                    let (cf, cb, _) = eff(c);
-                    if cf != fg || cb != bg {
+                    let (cf, cb, _, cbold) = eff(c);
+                    if cf != fg || cb != bg || cbold != bold {
                         break;
                     }
                     c += 1;
+                }
+                // SGR 1 굵게(UIC-311 · dir2 셀 속성) — 슬롯 재선택은 비싸므로(고정폭 광학 보정 실측) 바뀔 때만.
+                if cur_bold != bold {
+                    dc.select_font_sized(FontSlot::Mono, bold, style.font_delta);
+                    cur_bold = bold;
                 }
                 let x = rc.x + 2 + (start - c0) as i32 * cell_w;
                 let clip = Rect::new(
@@ -576,6 +582,9 @@ impl TermView {
                     dc.text(cx, y, cclip, ch.encode_utf8(&mut buf), fgc);
                 }
             }
+        }
+        if cur_bold {
+            dc.select_font_sized(FontSlot::Mono, false, style.font_delta); // 종료 문구·뒤 그리기는 보통 굵기
         }
         if self.exited {
             let y = rc.bottom() - cell_h - 1;
@@ -678,6 +687,30 @@ mod tests {
             &style,
         );
         assert!(rec.drew_text("h") && rec.drew_text("w"));
+        assert!(
+            rec.fonts.iter().all(|f| !f.1),
+            "굵은 셀이 없으면 Mono 굵게 선택 없음: {:?}",
+            rec.fonts
+        );
+        // SGR 1 굵게(UIC-311): 굵은 런 앞에서 Mono 굵게를 고르고 끝나면 보통으로 돌아온다.
+        t.screen.feed("\r\n\x1b[1mBOLD\x1b[0m thin");
+        rec.clear();
+        t.paint(
+            &mut rec,
+            Rect::new(0, 0, 400, 120),
+            &th,
+            &TermPalette::dark(),
+            true,
+            20,
+            &style,
+        );
+        let bolds: Vec<_> = rec.fonts.iter().map(|f| f.1).collect();
+        assert!(bolds.contains(&true), "굵은 런 선택: {bolds:?}");
+        assert_eq!(
+            bolds.last(),
+            Some(&false),
+            "마지막은 보통 굵기로 복귀: {bolds:?}"
+        );
         assert!(t.hit(5, 5) && !t.hit(500, 5));
         assert!(
             t.mouse_report(5, 5, 0, true).is_none(),

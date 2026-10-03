@@ -306,6 +306,22 @@ impl App {
     }
 
     /// 보기 옵션(숨김 · Dot · 폴더 우선) 변경 → 두 패널 전 탭 무간섭 재열람.
+    /// 글꼴 장식 설정(dir2 X-12 · `list.folder_bold`/`list.header_bold`/`list.header_italic`) → 두 패널 그리드.
+    pub(crate) fn apply_font_decor(&mut self) {
+        let (fb, hb, hi) = (
+            self.settings.flag("list.folder_bold"),
+            self.settings.flag("list.header_bold"),
+            self.settings.flag("list.header_italic"),
+        );
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.rows_mut().set_font_decor(fb, hb, hi, &mut inv);
+        }
+        if !inv.is_empty() {
+            self.redraw();
+        }
+    }
+
     fn apply_list_opts(&mut self) {
         let opts = list_opts(&self.settings);
         let mut inv = Invalidations::default();

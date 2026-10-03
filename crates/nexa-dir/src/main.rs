@@ -479,6 +479,7 @@ impl App {
             );
         }
         app.apply_window_sizes();
+        app.apply_font_decor(); // dir2 X-12 폴더 굵게 · 헤더 굵게/이탤릭(KEY-061~063)
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
         app.set_active(if dual { active0 } else { 0 });

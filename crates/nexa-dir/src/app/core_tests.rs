@@ -2114,6 +2114,46 @@ fn external_drop_moves_or_copies_into_folder_under_cursor() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// dir2 X-12 글꼴 장식(KEY-061~063 · UIC-313): `list.header_italic/header_bold/folder_bold` → 패널 그리드 `set_font_decor` →
+/// 헤더는 `select_font_styled(PeerList, hdr_bold, hdr_italic)` · 폴더 행(`sub`)은 굵게(nexa-ui 113차 `RecordCtx.fonts`).
+#[test]
+fn font_decor_settings_reach_grid_font_selection() {
+    let (mut app, dir) = fixture("decor");
+    app.layout_for(1200, 800, 1.0);
+    let paint = |app: &mut App| {
+        let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+        app.paint_into(&mut rec, 1200, 800, 1.0);
+        rec.fonts
+    };
+    let fonts = paint(&mut app);
+    assert!(
+        fonts
+            .iter()
+            .all(|f| f.0 != nexa_ctl::FontSlot::PeerList || (!f.1 && !f.2)),
+        "기본 = 장식 없음: {fonts:?}"
+    );
+    let _ = app.settings.set("list.header_italic", "on");
+    app.after_setting_changed("list.header_italic");
+    let fonts = paint(&mut app);
+    assert!(
+        fonts.contains(&(nexa_ctl::FontSlot::PeerList, false, true)),
+        "헤더 이탤릭: {fonts:?}"
+    );
+    let _ = app.settings.set("list.header_bold", "on");
+    let _ = app.settings.set("list.folder_bold", "on");
+    app.after_setting_changed("list.folder_bold");
+    let fonts = paint(&mut app);
+    assert!(
+        fonts.contains(&(nexa_ctl::FontSlot::PeerList, true, true)),
+        "헤더 굵게+이탤릭: {fonts:?}"
+    );
+    assert!(
+        fonts.contains(&(nexa_ctl::FontSlot::PeerList, true, false)),
+        "폴더 행 굵게(sub): {fonts:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// UIC-310 클립 스택(nexa-ui 112차 · T-31): 패널 그리드는 자기 경계를 `push_clip`하고 짝 맞춰 `pop_clip`한다 —
 /// 백엔드가 교차·복원 규칙대로 쌓으면 그리드 안 호출은 전부 패널 경계 안으로 잘린다(실제 픽셀은 nexa-ctl `clip_tests`).
 #[test]

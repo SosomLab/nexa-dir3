@@ -108,6 +108,9 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
+            "list.folder_bold" | "list.header_bold" | "list.header_italic" => {
+                self.apply_font_decor();
+            }
             "list.col_layout" => {
                 let v = self
                     .settings
