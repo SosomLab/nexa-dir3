@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 80차 — 바로 가기 확장자 숨김(GAP-006) · Unix 폴더 심볼릭 링크 진입(GAP-009)
+
+- **한 일**: 이름 칸에서 `.lnk` `.url` `.appref-ms` 숨김(확장자 열 유지 · 이름 바꾸기 복원 · Windows만) · Unix에서 폴더 심링크를 폴더로 열거.
+- **지금 상태**: .lnk/링크 갭 중 006·009·010 해소. 남은 것 = GAP-007(.lnk 폴더 대상 앱 안 이동) · GAP-008(링크 오버레이/종류) · 경로 바 GAP-012~014. 다음(개발 세션) = `set:<키>=<값>` 기동 명령 등.
+- **걸린 것**: 설정 창 "클라우드 연결" 빈 페이지 처리(CLOUD 이식 여부와 함께 사용자 결정 대기) · `list.show_protected` 기본값 확인 · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+
+→ [journal/2026-10-03 §84](journal/2026-10-03.md)
+
+---
+
 ## 10-03 79차 — 보호된 운영 체제 파일 숨기기(NEW-014) · Windows 열기 = ShellExecuteW(GAP-010)
 
 - **한 일**: `list.show_protected`(기본 off = 숨김 · 탐색기 규칙 · 3-OS 판정) · Windows 파일 열기를 ShellExecuteW로(셸 메타문자 위험 제거).
