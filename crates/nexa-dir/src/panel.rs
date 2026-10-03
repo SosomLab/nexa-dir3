@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 
 /// 네비 버튼 id(= 명령 id · 호스트 `command`와 같은 어휘).
 pub(crate) const BTN_HOME: &str = "nav.home";
+/// 경로 제안 최대 개수(dir2 win.rs:7204 고정값 20).
+const PATH_SUGGEST_MAX: usize = 20;
 pub(crate) const BTN_BACK: &str = "nav.back";
 pub(crate) const BTN_FORWARD: &str = "nav.forward";
 pub(crate) const BTN_UP: &str = "nav.up";
@@ -973,6 +975,10 @@ impl Panel {
                 }
             }
             InputEvent::MouseDown { x, y, .. } => {
+                // 경로 제안 팝업(목록 위에 뜬다) 클릭 = 그 폴더로 이동(dir2 win.rs:8000-8007) — 아래 목록으로 흘리지 않는다.
+                if self.pathbar.suggest_click(x, y, inv) {
+                    return;
+                }
                 let Some(part) = self.part_at(Point { x, y }) else {
                     return;
                 };
@@ -1020,15 +1026,25 @@ impl Panel {
         if self.pathbar.is_editing() {
             match *ev {
                 // Backspace = `\u{8}` 글자(dir2 EditState 규약 · `edit_char`가 처리).
-                InputEvent::Char { c, .. } => self.pathbar.edit_char(c, inv),
+                InputEvent::Char { c, .. } => {
+                    self.pathbar.edit_char(c, inv);
+                    self.update_path_suggest(inv);
+                }
                 InputEvent::Key { key, shift, .. } => match key {
                     CtlKey::Enter => self.pathbar.submit_edit(inv),
+                    // Esc: 제안 팝업이 떠 있으면 팝업만 닫는다(편집은 계속) · 없으면 편집 취소.
+                    CtlKey::Escape if self.pathbar.suggest_open() => {
+                        self.pathbar.close_suggest(inv)
+                    }
                     CtlKey::Escape => self.pathbar.cancel_edit(inv),
                     CtlKey::Left => self.pathbar.edit_key(EditKey::Left, shift, inv),
                     CtlKey::Right => self.pathbar.edit_key(EditKey::Right, shift, inv),
                     CtlKey::Home => self.pathbar.edit_key(EditKey::Home, shift, inv),
                     CtlKey::End => self.pathbar.edit_key(EditKey::End, shift, inv),
-                    CtlKey::Delete => self.pathbar.edit_key(EditKey::DeleteForward, shift, inv),
+                    CtlKey::Delete => {
+                        self.pathbar.edit_key(EditKey::DeleteForward, shift, inv);
+                        self.update_path_suggest(inv);
+                    }
                     CtlKey::Up => {
                         self.pathbar.suggest_move(-1, inv);
                     }
@@ -1078,6 +1094,21 @@ impl Panel {
         self.tabs[self.active].rows.on_event(ev, inv);
     }
 
+    /// 경로 제안 갱신(dir2 `update_path_suggest` win.rs:7199-7206 · GAP-013): 편집 글이 바뀔 때마다 — 마지막 구분자까지를 베이스로
+    /// 하위 폴더를 열거해 접두사 일치(대소문자 무시)를 최대 [`PATH_SUGGEST_MAX`]개. 빈 목록 = 팝업 닫기.
+    pub(crate) fn update_path_suggest(&mut self, inv: &mut Invalidations) {
+        let Some(text) = self.pathbar.edit_text() else {
+            return;
+        };
+        let expanded = crate::pathinput::expand_env(&text);
+        let items = crate::pathinput::suggest_folders(
+            &expanded,
+            crate::pathinput::fs_dirs,
+            PATH_SUGGEST_MAX,
+        );
+        self.pathbar.set_suggestions(items, inv);
+    }
+
     /// 경로 바 편집 시작(우클릭 · 명령 — dir2에 단축키 없음 · 명령 표 등재는 T-44).
     #[allow(dead_code)]
     pub(crate) fn begin_path_edit(&mut self, inv: &mut Invalidations) {
@@ -1106,6 +1137,8 @@ impl Panel {
             }
         }
         if let Some(path) = self.pathbar.take_navigation() {
+            // 입력 해석(dir2 PathInterpreter): 감싼 따옴표 제거 · `%VAR%` · `$env:VAR` 확장 — 미정의 변수는 원문 그대로(열기 실패로 드러난다).
+            let path = crate::pathinput::expand_env(&path);
             let _ = self.navigate_to(PathBuf::from(path), inv);
         }
         if self.tabs[self.active].rows.take_col_resized() {
@@ -1281,6 +1314,47 @@ mod tests {
         p.drain_actions(&mut inv);
         assert_eq!(p.root_path(), dir);
         assert!(!p.pathbar.is_editing());
+        // 자동완성(GAP-013): 구분자까지 치면 하위 폴더 제안 · 접두사로 좁혀짐 · Esc = 팝업만 닫기 · 제안 클릭 = 이동.
+        p.pathbar.begin_edit(&mut inv);
+        p.key_event(&InputEvent::SelectAll, &mut inv);
+        let typed = format!("{}{}s", dir.to_string_lossy(), std::path::MAIN_SEPARATOR);
+        for c in typed.chars() {
+            p.key_event(&InputEvent::Char { c, now_ms: 0 }, &mut inv);
+        }
+        assert!(p.pathbar.suggest_open(), "하위 폴더 sub 제안");
+        let esc = InputEvent::Key {
+            key: CtlKey::Escape,
+            shift: false,
+            primary: false,
+        };
+        p.key_event(&esc, &mut inv);
+        assert!(
+            !p.pathbar.suggest_open() && p.pathbar.is_editing(),
+            "Esc = 팝업만"
+        );
+        p.key_event(&InputEvent::Char { c: 'u', now_ms: 0 }, &mut inv);
+        let r = p.pathbar.suggest_rect().expect("다시 제안");
+        p.on_event(
+            &InputEvent::MouseDown {
+                x: r.x + 8,
+                y: r.y + 4,
+                shift: false,
+                primary: false,
+            },
+            &mut inv,
+        );
+        p.drain_actions(&mut inv);
+        assert_eq!(p.root_path(), dir.join("sub"), "제안 클릭 = 이동");
+        assert!(!p.pathbar.is_editing());
+        p.navigate_to(dir.clone(), &mut inv);
+        p.pathbar.begin_edit(&mut inv);
+        p.key_event(&InputEvent::SelectAll, &mut inv);
+        for c in "zz-no-such".chars() {
+            p.key_event(&InputEvent::Char { c, now_ms: 0 }, &mut inv);
+        }
+        assert!(!p.pathbar.suggest_open(), "구분자 없는 입력 = 제안 없음");
+        p.key_event(&esc, &mut inv);
+        assert!(!p.pathbar.is_editing(), "팝업 없으면 Esc = 편집 취소");
         // 재열람은 캐럿을 유지한다.
         p.rows_mut().select_program(1, SelectOp::Single, &mut inv);
         p.reopen(&mut inv);

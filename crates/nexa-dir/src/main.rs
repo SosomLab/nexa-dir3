@@ -33,6 +33,7 @@ mod nav;
 mod order;
 mod order_win;
 mod panel;
+mod pathinput;
 mod platform;
 mod prefs_win;
 #[allow(dead_code)]

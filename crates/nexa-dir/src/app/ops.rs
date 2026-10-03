@@ -693,6 +693,12 @@ impl App {
             "edit.redo" | "edit.rename" | "edit.bulk_rename" => {}
             _ => return false,
         }
+        if matches!(
+            id,
+            "edit.undo" | "edit.cut" | "edit.paste" | "edit.delete" | "edit.delete_permanent"
+        ) {
+            self.panels[a].update_path_suggest(&mut inv);
+        }
         self.redraw();
         true
     }
