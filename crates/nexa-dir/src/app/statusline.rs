@@ -17,7 +17,21 @@ pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
 /// 항목이 있는 칸에서 항목을 전부 끄면 그 칸도 빠진다 · 순수).
 pub(crate) fn status_items_of(value: &str) -> Vec<StatusBlock> {
     let defs = crate::order::STATUSBAR_BLOCKS;
-    crate::order::parse_order_with(defs, value)
+    let mut blocks = crate::order::parse_order_with(defs, value);
+    // 저장값에 없던 새 칸은 맨 뒤에 보충된다 — 앱 메모리 칸이 생기기 전에 저장한 값이면 그 칸을 **라이선스 앞**으로 옮긴다
+    // (맨 오른쪽 = 앱 메모리 · 라이선스 순 — 사용자 10-04).
+    if !value.is_empty() && !value.contains("appmem") {
+        if let (Some(a), Some(l)) = (
+            blocks.iter().position(|b| b.0 == "appmem"),
+            blocks.iter().position(|b| b.0 == "license"),
+        ) {
+            if a > l {
+                let app = blocks.remove(a);
+                blocks.insert(l, app);
+            }
+        }
+    }
+    blocks
         .into_iter()
         .filter(|(_, vis, _)| *vis)
         .filter_map(|(b, _, items)| {
@@ -435,6 +449,20 @@ mod tests {
             ids("license:1|net:1[download:1,upload:0]|disk:0[read:1]|cpu:0|appmem:1"),
             ["license", "net[download]", "appmem", "tab", "mem"],
             "적힌 순서 · 숨김 제외 · 항목을 전부 끈 칸은 빠짐 · 빠진 칸은 정의 순으로 보충"
+        );
+        // 옛 형식(9a8ed19 — mem[app,system] · appmem 없음)으로 저장된 값: 없어진 항목은 버리고 · 사용자 순서는 지키고 ·
+        // 새 칸(appmem)은 정의상 앞 형제(net) 뒤 = 라이선스 앞에 보충된다.
+        assert_eq!(
+            ids("tab:1|cpu:1|mem:1[app:1,system:1]|disk:1[write:1,read:1]|net:1[download:1,upload:1]|license:1"),
+            [
+                "tab",
+                "cpu",
+                "mem",
+                "disk[write,read]",
+                "net[download,upload]",
+                "appmem",
+                "license"
+            ]
         );
         assert_eq!(fmt_rate(0), "0 B/s");
         assert_eq!(fmt_rate(1536), "1.5 KB/s");
