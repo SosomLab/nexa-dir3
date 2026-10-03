@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 25 | 25 | 13 | 3 | 0 | 0 | 0 |
+| NEW | 25 | 25 | 13 | 6 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 37 | 137 | 0 | 0 | 0 |
-| **합계** | 4314 | 4314 | 2397 | 1005 | 766 | 0 | 0 |
+| **합계** | 4314 | 4314 | 2397 | 1008 | 766 | 0 | 0 |
 
 ## 행
 
@@ -257,7 +257,9 @@
 | GAP-009 · UNIX-DIR-LINK | Unix 폴더 심볼릭 링크 = `Dir` + `is_link()`(진입 가능) · 깨진 링크 = `Symlink` + 표식 | ndir-vfs `unix_link_attrs` | T1(cfg(unix)) | `unix_dir_symlink_is_an_enterable_dir`(CI ubuntu·macos) | ✅ | §84 · §85 CI run 37110558207 ubuntu·macos 실행·통과 · 전송 링크 안전(BUG-001 `link_moves_and_deletes_never_touch_the_target`)도 3-OS 통과 |
 | GAP-013 · PATH-SUGGEST | 경로 자동완성(dir2 `pathinput.rs` 이식 · 입력마다 폴더 제안 최대 20 · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 `%VAR%`/`$env:VAR` 확장) | `pathinput.rs` · `panel.rs::update_path_suggest` · `app/ops.rs::path_edit` | T1·T3 | `nav_buttons_and_path_edit`(확장) · pathinput 이식 시험 4 | ✅ | §85 · dir2 win.rs:7199-7206 · 8000-8007 · 한계: UI 스레드 `read_dir` |
 | NEW-010 | 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 7(즉시 반영) | `app/settings.rs` · `app/input.rs` · `app/paint.rs` · `app/launcher_icons.rs` · nexa-ui 117차 | T2·T3 | `toolbar_groups_move_by_drag_and_size_gap_settings_apply_live` · `launcher_bar_size_and_gap_settings_apply_live` · `gaps_and_padding_are_configurable` | ✅ | §74 · §76 icon_pad · §78 상태 표시 = 부드러운 채움·테두리·알약(`toolbar.hover_fill_pct/on_fill_pct/on_line_pct/state_step_pct/state_radius`) · §101 "항상 위" = 새로 고침 그룹(`[refresh, ontop]` · dir2 기본 순서와 의도된 차이 · 옛 저장값 normalize 이행 `roundtrip_and_merge` · T4 `order-editor.scn` c1dc5a3) · 플로팅 창 · 배치 초기화 명령 = 잔여 · 실기(크기·간격·상태 모양 · 항상 위 위치) 사용자 |
-| NEW-001~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 메모리 모니터 · 상태줄 우측 칸 · 탭 상태바 · Git 공급자 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
+| NEW-001 · 002 · 006~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 메모리 모니터 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드(NEW-003~005는 아래 행) | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
+| NEW-003 | 상태줄 오른쪽 칸 [탭][CPU][메모리][디스크 I/O][라이선스] · 이 프로세스 부하(3-OS) · `statusbar.items` · 주기 · 라이선스 칸 클릭 | nexa-ui 133 StatusBar 칸 · `platform/procload.rs` · `app/statusline.rs` | T1 · T3 + 실기 | procload 3(`sample_is_available_on_supported_os` 외) · statusline 1 · `status_segments_and_tab_status_bar` | 🚧 | 10-04 §2 1차 · Windows/macOS procload 실행 = CI 첫 검증 · 순서 편집기 · 메모리 칸 클릭(T-93) 후속 · 실기(값 · 클릭) 사용자 |
+| NEW-004 · 005 | 탭 상태바(패널마다 목록 아래 · `layout.tab_statusbar`) · 칸 folder 항목 수 · git 브랜치(.git/HEAD · worktree) · 선택 요약 · 칸 클릭 메뉴 | `panel.rs` `Part::Status` · `dirinfo.rs` · `app/ctxmenu.rs`(CtxKind::Aux) | T1 · T3 + 실기 | dirinfo 2 · `status_segments_and_tab_status_bar` · 골든 layout-1200x800 | 🚧 | 10-04 §2 1차 · 2차 = git status 워커 · HEAD 감시 · 플라이아웃 · DirInfoProvider 일반화 |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |

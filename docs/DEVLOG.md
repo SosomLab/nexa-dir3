@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **상태줄 칸 [탭][CPU][메모리][디스크 I/O][라이선스] · 패널마다 탭 상태바**(T-94 · T-95 1차 · platform/procload 3-OS · .git/HEAD 브랜치) · T-135 macOS 휴지통 원인 = resultingItemURL nil → 폴백 ENOENT(운영 결함) → [journal 10-04 §2](journal/2026-10-04.md)
 - **언어 전환 열 제목 · 세션 복원 패널 기본 열 수정** · 상태 열 정렬(`SortKey::Status`) · nexa-ui 133 StatusBar 칸(⚠ clippy 빨강 5분) · T-134 i18n 조사(언어 전환 미반영 10곳 · 하드코딩 · 중복 키) · ⚠ macOS 휴지통 시험 흔들림 2회째(T-135) → [journal 10-04 §1](journal/2026-10-04.md)
 
 ## 2026-10-03
