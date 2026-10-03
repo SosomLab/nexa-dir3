@@ -133,6 +133,7 @@
 | GAP-013 | **경로 자동완성 미연결** — dir2 = 편집할 때마다 `update_path_suggest`(A/win.rs:7199-7206) · 제안 클릭 = 이동(A/win.rs:8000-8007) | dir3 `set_suggestions` · `suggest_click` 호출 0 → 팝업이 안 열림 · 팝업 자리 클릭은 목록으로 가 편집 취소(panel.rs:977-978) | ✅ 해소 10-03 §85(dir2 `pathinput.rs` 그대로 이식 · `update_path_suggest` · 제안 클릭 이동 · 시험 `nav_buttons_and_path_edit` 확장 + 이식 4) · 한계: 제안 열거가 UI 스레드 `read_dir`(느린 네트워크 경로 — DR-20 후속 후보) |
 | GAP-014 | **경로 바 IME 조합 창 위치** — dir2 A/win.rs:4792가 `edit_info`로 조합 창을 캐럿에 맞춤 | dir3 `edit_info`(nexa-explorer pathbar.rs:119) 호출 0 | 🚧 수정 예정 |
 | GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | ✅ 해소 10-03 §83(`NativeOpener` open = `ShellExecuteW(0, "open", path, null, 부모 폴더, SW_SHOWNORMAL)` · reveal = `explorer.exe /select,` · `cmd /C start` 제거 · 자동 시험 없음 = 실기 필요) |
+| GAP-015 | **연결 안 된 설정 키**(dir3 회귀 · T-120 사전 분석 §108에서 발견) — 레지스트리 · 설정 창에는 있으나 앱이 읽지 않아 바꿔도 효과가 없다: `ui.text_gdi/hint/snap/weight/contrast`(dir2 텍스트 래스터 · dir3 `app/settings.rs:17-21` 재시작 목록에만 · nexa-gfx `set_text_*` 호출 0) · `typeahead.*` 6 · `tabs.dblclick`(migrate · 시험에만) · `list.col_autofit_max` · `list.hide_empty_glyph` · `transfer.dnd_hover_ms` · `ui.menu_font_face` · `statusbar.font_face` · `list.font_face` · `ui.dialog_font_face` · `cloud.*`(CLOUD 결정 대기) · `license.gates`(INTERNAL) | 원장 15 PREFS · 31 KEY(키는 있음) · 매트릭스 PREFS-101~170 · KEY-501~570 ✅는 "레지스트리 등재"만 뜻함 → 동작 연결은 별도 확인 필요 | ☐ 정리 예정(T-125 · 연결 또는 INTERNAL — 사용자 결정) |
 
 ## 결함(BUG)
 

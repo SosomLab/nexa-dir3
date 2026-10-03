@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **네비 버튼 SVG(Windows 모양) · 도크 종류 칸 hover**(nexa-ui 127) · GAP-015 연결 안 된 설정 키 · 새 요청 T-121~T-124 · CI 빨강 2차 완전 복구(e5790ca · Windows 분기 단언) → [journal §108 · §106](journal/2026-10-03.md)
 - **터미널 줄 바꿈 기본 끔**(`term.wrap` · 의도된 차이) → [journal §107](journal/2026-10-03.md)
 - **⚠ main CI 빨강 2차**: 테마 기본 system이 windows · macos 러너의 light 테마를 타 `layout_golden` 실패 → ac7590b 픽스처 dark 고정 · docs/18 규칙(OS 상태를 타는 기본값 = 픽스처 고정) → [journal §106](journal/2026-10-03.md)
 - **시간 설정 단위**(T-116 · 바꿀 키 없음 · 감시 시험) · **대소문자 구분 정렬 툴바 토글**(T-119 · 탭 보기 옵션 4종 · NEW-019) → [journal §105](journal/2026-10-03.md)
