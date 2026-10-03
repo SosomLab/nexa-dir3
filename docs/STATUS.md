@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 38차 — T-81: nexa-license 발급기 제품 분기(NDL · GUI 안내 · E2E)
+
+- **한 일**: nexa-license `presets`/`main`/E2E/문서(태그 `nexa-dir3/t81-2026-10-03`) · dir3 LIC-163 확인.
+- **지금 상태**: M7 잔여 = T-82 패키징 · 실기 발급(루트 키). 다음 = T-32 폴더 트리 · T-51 B-2 · T-62 C-3 · T-82.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §40](journal/2026-10-03.md)
+
 ## 10-03 37차 — T-30 A: 툴바 SVG 아이콘(dir2 자산 · 마스크 틴트 · HiDPI 재렌더)
 
 - **한 일**: `assets/toolbar` 이식 · `icons.rs` · `build_toolbar` 마스크 · 배율 변경 재구성 · 시험 +3(135).

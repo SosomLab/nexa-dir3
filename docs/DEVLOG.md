@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-81 nexa-license 발급기 보강**: `mail_text` 제품 분기(nexa-dir = GUI 안내) · `id_prefix_for`(NDL) · E2E nexa-dir · 문서 정정(LIC-169) · 태그 → [journal §40](journal/2026-10-03.md)
 - **T-30 A 툴바 SVG 아이콘**: dir2 `assets/toolbar` 13종 그대로 · `icons.rs`(nexa-ui 109차 `render_mask` → `ToolIcon::Mask` 테마 틴트 · 배율별 재렌더) · 글리프 폴백 · 시험 +3(135) → [journal §39](journal/2026-10-03.md)
 - **T-62 C-2 SVG 래스터·인라인 이미지**: nexa-ui 108차(`nexa-gfx::svg` CPU 래스터 · `draw_image_hint` 캐시 · Adapt 전달) · `render_svg_impl` 3-OS(BMP 해시 파일) · preview_win 인라인 이미지 · `tree: text` · 시나리오 `mermaid` → [journal §38](journal/2026-10-03.md)
 - **T-62 C-1 압축 그리드 창**: `archive_win.rs`(nexa-grid VirtualRows · 컬럼 8 · 정렬 · TSV 복사 · 상태 줄) · F3/↗ Archive → 그리드 · 덤프 `archive` · 시나리오 `archive-grid` · Linux CI 런처 시드 시험 수정 → [journal §37](journal/2026-10-03.md)
