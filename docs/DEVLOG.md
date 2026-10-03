@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **툴바 토글 켜짐 = 스위치 초록 채움 + 흰 아이콘**(사용자 A안 · `toolbar.on_color` green|accent · nexa-ui 134 · NEW-026 · 농도 설정은 accent일 때만 풀림) → [journal 10-04 §4](journal/2026-10-04.md)
 - **macOS 휴지통 결함 수정**(T-135 · `trash_outcome` 순수 판정 · 폴백은 원본이 남았을 때만 · 실제 휴지통 시험 = CI 전용) · CI fbb6b62(procload 3-OS 첫 실행) · e73e06a 성공 → [journal 10-04 §3](journal/2026-10-04.md)
 - **상태줄 칸 [탭][CPU][메모리][디스크 I/O][라이선스] · 패널마다 탭 상태바**(T-94 · T-95 1차 · platform/procload 3-OS · .git/HEAD 브랜치) · T-135 macOS 휴지통 원인 = resultingItemURL nil → 폴백 ENOENT(운영 결함) → [journal 10-04 §2](journal/2026-10-04.md)
 - **언어 전환 열 제목 · 세션 복원 패널 기본 열 수정** · 상태 열 정렬(`SortKey::Status`) · nexa-ui 133 StatusBar 칸(⚠ clippy 빨강 5분) · T-134 i18n 조사(언어 전환 미반영 10곳 · 하드코딩 · 중복 키) · ⚠ macOS 휴지통 시험 흔들림 2회째(T-135) → [journal 10-04 §1](journal/2026-10-04.md)
