@@ -906,6 +906,7 @@ dependencies = [
  "nexa-dlg",
  "nexa-explorer",
  "nexa-font",
+ "nexa-fs",
  "nexa-gfx",
  "nexa-grid",
  "nexa-sys",

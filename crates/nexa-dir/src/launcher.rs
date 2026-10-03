@@ -82,6 +82,24 @@ pub(crate) fn encode_items(items: &[LauncherItem]) -> String {
         .join(ITEM_SEP)
 }
 
+/// 실행 파일의 실제 경로(아이콘 조회용 · T-30 B): 절대 경로면 존재할 때 그대로 · 아니면 PATH 검색(Windows는 `.exe` 보충) · 없으면 None.
+pub(crate) fn exe_path(exe: &str) -> Option<PathBuf> {
+    let p = Path::new(exe);
+    if p.is_absolute() {
+        return p.is_file().then(|| p.to_path_buf());
+    }
+    if exe.contains(['/', '\\']) {
+        return None;
+    }
+    on_path(exe)
+        .or_else(|| {
+            (cfg!(windows) && !exe.to_ascii_lowercase().ends_with(".exe"))
+                .then(|| on_path(&format!("{exe}.exe")))
+                .flatten()
+        })
+        .map(PathBuf::from)
+}
+
 fn on_path(name: &str) -> Option<String> {
     let paths = std::env::var_os("PATH")?;
     std::env::split_paths(&paths)
@@ -308,11 +326,6 @@ pub(crate) fn load_or_seed(items_text: &str, seed_version: u32) -> (Vec<Launcher
         changed = items.len() != before;
     }
     (items, changed || seed_version < SEED_VERSION)
-}
-
-#[allow(dead_code)]
-pub(crate) fn exe_path(item: &LauncherItem) -> PathBuf {
-    PathBuf::from(&item.exe)
 }
 
 #[cfg(test)]

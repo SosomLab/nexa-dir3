@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 49차 — T-30 B: 퀵 런처 exe 셸 아이콘
+
+- **한 일**: `app/launcher_icons.rs` · `launcher::exe_path` · `make_launcherbar`(16px · 패딩 2) · 이벤트 루프 폴링 · 덤프 · 시험 +2(157).
+- **지금 상태**: T-30 완료 판정(A 툴바 SVG · B 런처 아이콘 · 소형 컨트롤은 기존 nexa-ctl로 대체 완료). 다음 = ShellNew 행 메뉴 · T-52/53 · T-90/91 · T-63 매니저.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §52](journal/2026-10-03.md)
+
 ## 10-03 48차 — T-63 B: 플러그인 설정 페이지 체크박스
 
 - **한 일**: `prefs_win.rs` 플러그인 블록(동적 Checkbox 묶음 · 실시간 `plugins.disabled`) · `set_plugins` · 덤프 · 시험 +1(155) · `prefs-open.scn` 확장.

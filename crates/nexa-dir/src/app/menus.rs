@@ -107,21 +107,6 @@ impl App {
         ]
     }
 
-    /// 런처 바 항목(dir2 WINA-029: 항목 순서대로 버튼 · `-` = 구분선 · 아이콘 추출(T-30)은 후속 — 라벨 버튼).
-    pub(crate) fn build_launcherbar(items: &[launcher::LauncherItem]) -> Vec<ToolItem> {
-        items
-            .iter()
-            .enumerate()
-            .map(|(i, it)| {
-                if it.is_separator() {
-                    ToolItem::separator()
-                } else {
-                    ToolItem::text(format!("launch:{i}"), it.label.clone())
-                }
-            })
-            .collect()
-    }
-
     /// 런처 항목 실행 — 활성 패널 현재 폴더(`%path%`) · 결과 = 상태줄(`launcher.ran/failed` · dir2 무중단 규약).
     pub(crate) fn launch_item(&mut self, idx: usize) {
         let Some(item) = self.launcher_items.get(idx).cloned() else {
@@ -147,7 +132,10 @@ impl App {
     pub(crate) fn rebuild_launcher(&mut self) {
         self.launcher_items =
             launcher::parse_items(self.settings.get("launcher.items").unwrap_or(""));
-        self.launcherbar = Toolbar::new(App::build_launcherbar(&self.launcher_items));
+        let (bar, pending) = App::make_launcherbar(&self.launcher_items);
+        self.launcherbar = bar;
+        self.launcher_icons_pending = pending;
+        self.launcher_icon_ver = nexa_fs::shell::IconService::global().version();
         self.layout();
     }
 

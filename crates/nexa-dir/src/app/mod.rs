@@ -6,6 +6,7 @@ mod event_loop;
 mod fonts;
 mod input;
 pub(crate) mod keywinit;
+pub(crate) mod launcher_icons;
 pub(crate) mod license;
 mod menus;
 pub(crate) mod ops;

@@ -220,6 +220,9 @@ struct App {
     launcher_items: Vec<launcher::LauncherItem>,
     /// 마지막 런처 실행 결과(덤프 `launcher` 첫 줄 — 상태줄은 틱마다 갱신돼 시나리오가 못 본다).
     launcher_last: String,
+    /// 런처 exe 아이콘 비동기 로딩(T-30 B): 조회 중 깃발 + 마지막으로 본 IconService 버전.
+    launcher_icons_pending: bool,
+    launcher_icon_ver: u64,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -341,7 +344,7 @@ impl App {
             let _ = settings.set("launcher.seed", &launcher::SEED_VERSION.to_string());
             let _ = settings.save();
         }
-        let launcherbar = Toolbar::new(App::build_launcherbar(&launcher_items));
+        let (launcherbar, launcher_icons_pending) = App::make_launcherbar(&launcher_items);
         let mut toolbar = Toolbar::new(App::build_toolbar(&settings, App::toolbar_icon_px(1.0)));
         toolbar.set_icon_size(TOOLBAR_ICON_LOGICAL);
         toolbar.set_padding(2, 2);
@@ -444,6 +447,8 @@ impl App {
             launcherbar,
             launcher_items,
             launcher_last: String::new(),
+            launcher_icons_pending,
+            launcher_icon_ver: nexa_fs::shell::IconService::global().version(),
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),

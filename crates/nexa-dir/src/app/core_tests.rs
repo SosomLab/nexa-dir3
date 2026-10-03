@@ -1271,7 +1271,24 @@ fn launcher_bar_layout_and_launch() {
     assert_eq!(app.panels[0].bounds().y, lb.bottom(), "패널은 런처 아래");
     assert!(app.dump_of("layout").unwrap().contains("launcher 0,"));
     let ld = app.dump_of("launcher").unwrap();
-    assert_eq!(ld.lines().count(), 4, "{ld}");
+    assert_eq!(ld.lines().count(), 5, "{ld}");
+    // T-30 B 아이콘: 없는 exe = 즉시 글리프 `Ba` · 자기 exe = Windows면 셸 아이콘(비동기 → 폴링 후 image) · 다른 OS = 글리프 `Se`.
+    assert!(ld.contains("launch:2=glyph:Ba"), "{ld}");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while app.launcher_icons_tick(std::time::Instant::now()).is_some()
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let icons = app.launcher_icon_summary();
+    if cfg!(windows) {
+        assert!(
+            icons.iter().any(|s| s.starts_with("launch:0=image 16x16")),
+            "{icons:?}"
+        );
+    } else {
+        assert!(icons.iter().any(|s| s == "launch:0=glyph:Se"), "{icons:?}");
+    }
     // 상태줄은 목록 갱신 틱이 덮어쓰므로 `launcher_last`(덤프 첫 줄)로 본다.
     app.command("launch:0");
     assert!(

@@ -343,8 +343,9 @@ impl App {
             "ctx" => self.ctx_dump(),
             "launcher" => {
                 format!(
-                    "last {}\n{}\n",
+                    "last {}\nicons {}\n{}\n",
                     self.launcher_last,
+                    self.launcher_icon_summary().join(" "),
                     self.launcher_items
                         .iter()
                         .map(launcher::LauncherItem::encode)
