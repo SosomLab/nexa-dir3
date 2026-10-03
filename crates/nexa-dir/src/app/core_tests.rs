@@ -2964,3 +2964,61 @@ fn link_rows_use_per_path_icons() {
     assert!(nexa_fs::shell::link_overlay_enabled());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 탐색 단축키를 **키맵 경로 그대로**(조합 → 키맵 → 명령) 확인(사용자 10-03 "Alt 이동 · 목록 Enter"): Enter · Alt+↓ = 활성화 ·
+/// Alt+← → ↑ = 뒤로 · 앞으로 · 위로 · 메뉴가 열려 있으면 Enter는 가로채지 않는다.
+#[test]
+fn nav_shortcuts_work_through_the_keymap() {
+    use ndir_settings::Chord;
+    let (mut app, dir) = fixture("navkeys");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let press = |app: &mut App, code: &str| app.key_chord(Chord::parse(code).expect(code), false);
+    // Enter = 캐럿 폴더로 진입.
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    assert!(press(&mut app, "enter"));
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"), "Enter = 진입");
+    // Alt+← = 뒤로 · Alt+→ = 앞으로 · Alt+↑ = 위로.
+    let (back, fwd, up) = if cfg!(target_os = "macos") {
+        ("cmd+[", "cmd+]", "cmd+up")
+    } else {
+        ("alt+left", "alt+right", "alt+up")
+    };
+    assert!(press(&mut app, back));
+    assert_eq!(app.panels[0].root_path(), dir, "뒤로");
+    assert!(press(&mut app, fwd));
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"), "앞으로");
+    assert!(press(&mut app, up));
+    assert_eq!(app.panels[0].root_path(), dir, "위로");
+    // Alt+↓(macOS ⌘↓) = 활성화.
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    assert!(press(
+        &mut app,
+        if cfg!(target_os = "macos") {
+            "cmd+down"
+        } else {
+            "alt+down"
+        }
+    ));
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"), "Alt+↓ = 진입");
+    // 파일 위 Enter = OS 열기(가짜 포트 기록).
+    assert!(press(&mut app, up));
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    let log = app.platform.log.clone().expect("fake log");
+    assert!(press(&mut app, "enter"));
+    assert!(log
+        .borrow()
+        .calls
+        .iter()
+        .any(|c| c.starts_with("open:") && c.ends_with("a.txt")));
+    // 메뉴가 열려 있으면 Enter는 메뉴 몫(가로채지 않는다) · 글자 키는 타이핑(타입어헤드).
+    app.cursor = (300, 200);
+    app.open_bg_menu(0);
+    app.ctx_wait = None;
+    app.open_tab_menu(0, 0);
+    assert!(app.tab_menu.is_open());
+    assert!(!press(&mut app, "enter"), "메뉴 열림 = 통과");
+    app.tab_menu.close();
+    assert!(!press(&mut app, "a"), "글자 = 타이핑");
+    let _ = std::fs::remove_dir_all(&dir);
+}

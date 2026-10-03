@@ -328,34 +328,8 @@ impl ApplicationHandler<Wake> for App {
                             return;
                         }
                     }
-                    if let Some(first) = self.pending_chord.take() {
-                        if let Some(id) = self.keymap.lookup_seq(&first, &ch) {
-                            if !(kev.repeat && !ndir_settings::repeatable(id)) {
-                                self.command(id);
-                            }
-                        }
+                    if self.key_chord(ch, kev.repeat) {
                         return;
-                    }
-                    let plain_char =
-                        !ch.primary && !ch.alt && !ch.ctrl && ch.key.chars().count() == 1;
-                    // 경로바 편집 중엔 조합키 없는 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
-                    let editing = self.panels[self.active].pathbar.is_editing()
-                        || self.panels[self.active].rows().is_renaming();
-                    let term_typing =
-                        self.term_focused().is_some() && !ch.primary && !ch.alt && !ch.ctrl;
-                    let typing = plain_char || term_typing || (editing && !ch.primary && !ch.alt);
-                    if !typing {
-                        if self.keymap.is_prefix(&ch) {
-                            self.pending_chord = Some(ch);
-                            return;
-                        }
-                        if let Some(id) = self.keymap.lookup(&ch) {
-                            if kev.repeat && !ndir_settings::repeatable(id) {
-                                return;
-                            }
-                            self.command(id);
-                            return;
-                        }
                     }
                 }
             }
@@ -378,5 +352,46 @@ impl ApplicationHandler<Wake> for App {
         }
         // 사건 처리 중에 쌓인 "창 열기" 요청을 한 번에.
         self.open_requested_windows(el);
+    }
+}
+
+impl App {
+    /// 조합 한 번의 처리(키맵 조회 → 명령) — 처리했으면 `true`(호출부는 그 키를 컨트롤로 흘리지 않는다). 창 사건 처리에서 떼어
+    /// **시험이 실제 키 경로를 그대로** 밟게 했다(10-03: Enter · Alt+↓가 키맵에 걸린 뒤 처리 분기가 없어 아무 일도 안 했는데,
+    /// 시험은 컨트롤 사건을 직접 넣어 통과하고 있었다).
+    pub(crate) fn key_chord(&mut self, ch: ndir_settings::Chord, repeat: bool) -> bool {
+        if let Some(first) = self.pending_chord.take() {
+            if let Some(id) = self.keymap.lookup_seq(&first, &ch) {
+                if !(repeat && !ndir_settings::repeatable(id)) {
+                    self.command(id);
+                }
+            }
+            return true;
+        }
+        let plain_char = !ch.primary && !ch.alt && !ch.ctrl && ch.key.chars().count() == 1;
+        // 경로바 편집 중엔 조합키 없는 키 전부 편집으로(Tab = 패널 전환도 편집 중엔 입력이 아니다 → 그대로 명령).
+        let editing = self.panels[self.active].pathbar.is_editing()
+            || self.panels[self.active].rows().is_renaming();
+        let term_typing = self.term_focused().is_some() && !ch.primary && !ch.alt && !ch.ctrl;
+        let typing = plain_char || term_typing || (editing && !ch.primary && !ch.alt);
+        if typing {
+            return false;
+        }
+        if self.keymap.is_prefix(&ch) {
+            self.pending_chord = Some(ch);
+            return true;
+        }
+        let Some(id) = self.keymap.lookup(&ch) else {
+            return false;
+        };
+        // 열린 메뉴(우클릭 메뉴 · 메뉴 바)의 Enter = 그 메뉴의 "고르기" — 목록 활성화 명령으로 가로채지 않는다.
+        if id == "nav.activate" && (self.tab_menu.is_open() || self.menubar.is_open()) {
+            return false;
+        }
+        if repeat && !ndir_settings::repeatable(id) {
+            return true;
+        }
+        self.command(id);
+        true
     }
 }

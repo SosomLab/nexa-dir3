@@ -515,7 +515,8 @@ impl App {
             "view.preview_window" => self.open_preview_window(a),
             "cmd.contextMenu" => self.open_row_menu_at_caret(a),
             // 활성화(Enter와 같은 일 — 폴더 = 진입 · 파일 = 열기): 기동 명령·키맵에서 이름으로 부를 수 있게(행 메뉴의 "열기"와 같은 id).
-            "cmd.activate" => {
+            // `nav.activate` = 키맵 id(Enter · Alt+↓ · macOS ⌘↓/⌘O) · `cmd.activate` = 행 메뉴 "열기"의 id — 같은 일.
+            "nav.activate" | "cmd.activate" => {
                 if let Some(row) = self.panels[a].rows().caret() {
                     self.panels[a].activate_row(row, &mut inv);
                     if let Some(path) = self.panels[a].take_open() {
