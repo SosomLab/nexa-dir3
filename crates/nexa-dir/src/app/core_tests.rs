@@ -2326,10 +2326,10 @@ fn status_segments_and_tab_status_bar() {
 /// 툴바 켜짐 색(사용자 10-04 "배경은 원복하고 선만 초록"): 기본 = 배경은 강조색 옅은 채움 그대로 · 테두리(선)만 스위치와 같은
 /// 초록 · `toolbar.on_color=accent` = 종전 강조색(초록 없음) · 테두리 농도 설정은 강조색일 때만 풀린다.
 #[test]
-fn toolbar_on_color_matches_switch_green() {
+fn toolbar_on_line_color_default_blue() {
     let (mut app, dir) = fixture("oncolor");
     app.layout_for(1200, 800, 1.0);
-    let green = nexa_ctl::controls::SWITCH_ON;
+    let green = nexa_ctl::theme::Color(0x0000_00FF); // 기본 선 색 #0000FF
     let greens = |app: &mut App| {
         let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
         app.paint_into(&mut rec, 1200, 800, 1.0);
@@ -2346,7 +2346,17 @@ fn toolbar_on_color_matches_switch_green() {
             .filter(|(r, _, c)| *c == green && inside(r))
             .count()
     };
-    assert!(greens(&mut app) >= 1, "켜진 보기 모드 버튼 = 초록 테두리");
+    assert!(
+        greens(&mut app) >= 1,
+        "켜진 보기 모드 버튼 = 파란(#0000FF) 테두리"
+    );
+    // 색은 설정으로 바뀐다(잘못된 값 = 기본).
+    let _ = app.settings.set("toolbar.on_line_color", "#FF0000");
+    app.after_setting_changed("toolbar.on_line_color");
+    assert_eq!(greens(&mut app), 0, "다른 색으로 바뀜");
+    let _ = app.settings.set("toolbar.on_line_color", "nope");
+    app.after_setting_changed("toolbar.on_line_color");
+    assert!(greens(&mut app) >= 1, "잘못된 값 = 기본 파랑");
     let locked = |app: &App| {
         ndir_settings::locked_by("toolbar.on_line_pct", &|k| {
             app.settings.get(k).unwrap_or("").to_string()

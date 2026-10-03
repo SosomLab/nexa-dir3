@@ -19,7 +19,7 @@ const TOOLBAR_SIZE_OPTS: &[(&str, &str)] = &[
     ("32", "pref.toolbarSize.32"),
 ];
 const TOOLBAR_ON_COLOR_OPTS: &[(&str, &str)] = &[
-    ("green", "pref.toolbarOnColor.green"),
+    ("line", "pref.toolbarOnColor.line"),
     ("accent", "pref.toolbarOnColor.accent"),
 ];
 const VIEW_SCOPE_OPTS: &[(&str, &str)] = &[
@@ -249,15 +249,23 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 100 },
         "8"
     ),
-    // 켜짐 색(사용자 10-04 "토글 On = 스위치와 통일" → "배경은 원복하고 선만 초록"): green = 강조색 옅은 채움 + 초록 테두리 ·
-    // 초록 아이콘 선(기본) · accent = 종전(테두리 · 아이콘도 강조색 규칙 — 테두리 농도 · 아이콘 강조색 설정이 이때만 쓰인다).
+    // 켜짐 표시(사용자 10-04 "배경은 원복하고 선만" → 색 "#0000FF"): line = 강조색 옅은 채움 + **선(테두리 · 아이콘) =
+    // `toolbar.on_line_color`**(기본) · accent = 종전(테두리 · 아이콘도 강조색 규칙 — 테두리 농도 · 아이콘 강조색 설정이 이때만).
     e!(
         "toolbar.on_color",
         CAT_APPEARANCE,
         "pref.toolbarOnColor",
         "pref.toolbarOnColor.desc",
         Choice(TOOLBAR_ON_COLOR_OPTS),
-        "green"
+        "line"
+    ),
+    e!(
+        "toolbar.on_line_color",
+        CAT_APPEARANCE,
+        "pref.toolbarOnLineColor",
+        "pref.toolbarOnLineColor.desc",
+        Text,
+        "#0000FF"
     ),
     e!(
         "toolbar.on_fill_pct",
@@ -1494,6 +1502,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
+    ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
         "toolbar.on_icon_accent",

@@ -118,6 +118,7 @@ impl App {
             | "toolbar.icon_pad"
             | "toolbar.hover_fill_pct"
             | "toolbar.on_color"
+            | "toolbar.on_line_color"
             | "toolbar.on_fill_pct"
             | "toolbar.on_line_pct"
             | "toolbar.state_step_pct"
@@ -271,9 +272,14 @@ impl App {
         dock.set_item_gap(App::setting_px(settings, "toolbar.item_gap", 0, 16));
         // 상태 표시(사용자 10-03 디자인 개편): 옅은 채움 + 얇은 테두리 + 켜진 아이콘은 강조색 — 농도는 고급 설정(%).
         let pct = |k: &str, d: i32| App::setting_px(settings, k, d, 100) as f32 / 100.0;
-        // 켜짐 색(사용자 10-04): green = 배경은 종전(강조색 옅은 채움) 그대로 · **선만 스위치와 같은 초록**(테두리 또렷하게 +
+        // 켜짐 표시(사용자 10-04): line = 배경은 종전(강조색 옅은 채움) 그대로 · **선만 `toolbar.on_line_color`**(기본 #0000FF —
+        // 초록은 "너무 이상하다"로 정정 · 테두리 또렷하게 +
         // 아이콘 선) — 처음엔 초록으로 꽉 채웠다가 "배경은 원복하고 선만 초록"으로 정정 · accent = 종전(강조색 테두리 · 농도 설정).
-        let green = settings.get("toolbar.on_color").unwrap_or("green") != "accent";
+        let green = settings.get("toolbar.on_color").unwrap_or("line") != "accent";
+        let line_color = nexa_ctl::theme::color_from_hex(
+            settings.get("toolbar.on_line_color").unwrap_or("").trim(),
+        )
+        .unwrap_or(nexa_ctl::theme::Color(0x0000_00FF));
         dock.set_soft_states(Some(nexa_ctl::controls::SoftStates {
             hover_fill: pct("toolbar.hover_fill_pct", 8),
             on_fill: pct("toolbar.on_fill_pct", 26),
@@ -286,8 +292,8 @@ impl App {
             radius: App::setting_px(settings, "toolbar.state_radius", 4, 12),
             on_icon_accent: !green && settings.flag("toolbar.on_icon_accent"),
             on_color: None,
-            on_icon: green.then_some(nexa_ctl::controls::SWITCH_ON),
-            on_line_color: green.then_some(nexa_ctl::controls::SWITCH_ON),
+            on_icon: green.then_some(line_color),
+            on_line_color: green.then_some(line_color),
         }));
         dock.set_gaps(
             App::setting_px(settings, "toolbar.group_gap", 4, 32),
