@@ -54,7 +54,7 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
-            // 보호 항목 · 대소문자 = 전역(전 탭 즉시) · 숨김 · Dot · 폴더 우선 = **새 탭의 기본값**(열린 탭은 자기 값 유지 ·
+            // 보호 항목 = 전역(전 탭 즉시) · 숨김 · Dot · 폴더 우선 · 대소문자 구분 = **새 탭의 기본값**(열린 탭은 자기 값 유지 ·
             // 사용자 10-03) — 나누는 일은 `Panel::set_opts`가 한다.
             "list.show_hidden"
             | "list.show_dotfiles"

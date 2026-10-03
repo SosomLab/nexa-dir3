@@ -941,8 +941,9 @@ impl Panel {
     }
 
     /// 설정(`list.*`) 반영(사용자 10-03 규칙):
-    /// - **전역** = 보호된 운영 체제 항목 표시 · 대소문자 구분 → 모든 탭에 바로 적용(무간섭 재열람 — 캐럿·스크롤 유지).
-    /// - **새 탭의 기본값** = 숨김 · Dot · 폴더 우선 → 이 패널의 기본값만 바뀐다. 이미 열린 탭은 자기 값을 지킨다(탭별 관리).
+    /// - **전역** = 보호된 운영 체제 항목 표시 → 모든 탭에 바로 적용(무간섭 재열람 — 캐럿·스크롤 유지).
+    /// - **새 탭의 기본값** = 숨김 · Dot · 폴더 우선 · 대소문자 구분 정렬 → 이 패널의 기본값만 바뀐다. 이미 열린 탭은 자기
+    ///   값을 지킨다(보기 범위대로 관리).
     pub(crate) fn set_opts(&mut self, opts: ListOpts, inv: &mut Invalidations) {
         self.opts = opts;
         for tab in &mut self.tabs {
@@ -958,7 +959,14 @@ impl Panel {
     }
 
     /// 활성 탭의 `(숨김, Dot, 폴더 우선)` — 툴바 · 메뉴 체크가 따라간다(dir2 `active_view_values`).
+    #[cfg(test)]
     pub(crate) fn active_view_values(&self) -> (bool, bool, bool) {
+        let (hidden, dot, folders, _) = self.tab_opts().view();
+        (hidden, dot, folders)
+    }
+
+    /// 활성 탭의 보기 옵션 4종(숨김 · Dot · 폴더 우선 · 대소문자 구분 정렬).
+    pub(crate) fn active_view(&self) -> crate::filelist::ViewOpts {
         self.tab_opts().view()
     }
 
@@ -968,7 +976,7 @@ impl Panel {
     pub(crate) fn set_view(
         &mut self,
         all_tabs: bool,
-        view: (bool, bool, bool),
+        view: crate::filelist::ViewOpts,
         inv: &mut Invalidations,
     ) {
         self.session_dirty = true;
@@ -998,7 +1006,7 @@ impl Panel {
     pub(crate) fn set_view_for_dir(
         &mut self,
         dir: &Path,
-        view: (bool, bool, bool),
+        view: crate::filelist::ViewOpts,
         inv: &mut Invalidations,
     ) {
         let mut changed = false;

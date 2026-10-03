@@ -1617,9 +1617,62 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
         .iter()
         .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 20, h: 20, .. }))
         .count();
-    // 13개 명령 = SVG 마스크(20px) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 12개.
+    // 14개 명령 = SVG 마스크(20px) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 13개.
     let dot = usize::from(platform::has_dotfile_toggle());
-    assert_eq!(masks, 12 + dot);
+    assert_eq!(masks, 13 + dot);
+    // 대소문자 구분 정렬 토글 = 폴더 우선 바로 다음 · 누르면 전역 설정과 체크가 함께 바뀐다.
+    let ids: Vec<String> = app
+        .toolbar
+        .all_items()
+        .iter()
+        .map(|t| t.id.clone())
+        .collect();
+    let ff = ids
+        .iter()
+        .position(|i| i == "view.folders_first")
+        .expect("folders_first");
+    assert_eq!(
+        ids.get(ff + 1).map(String::as_str),
+        Some("view.case_sensitive")
+    );
+    // 네 번째 탭 보기 옵션: 범위(기본 = 폴더)만큼 적용 · 설정값(새 탭 기본값)은 그대로 · 세션 플래그 bit3.
+    assert!(!app.toolbar.item_checked("view.case_sensitive"));
+    app.command("view.case_sensitive");
+    assert!(
+        !app.settings.flag("list.sort_case_sensitive"),
+        "설정 = 새 탭 기본값은 불변"
+    );
+    assert!(app.toolbar.item_checked("view.case_sensitive"));
+    assert_eq!(
+        app.panels[app.active].active_view(),
+        (true, true, true, true)
+    );
+    assert_eq!(app.session_snapshot().panels[app.active].views, vec![15]);
+    let root = app.panels[app.active].root_path();
+    assert_eq!(
+        app.dir_view_of(&root),
+        (true, true, true, true),
+        "폴더에 기억"
+    );
+    app.command("view.case_sensitive");
+    assert!(!app.toolbar.item_checked("view.case_sensitive"));
+    assert!(
+        app.session_snapshot().dir_views.is_empty(),
+        "기본값 = 기억에서 빠짐"
+    );
+    // 설정을 켜면 새 탭의 기본값만 바뀐다(열린 탭은 그대로).
+    let _ = app.settings.set("list.view_scope", "tab");
+    let _ = app.settings.set("list.sort_case_sensitive", "on");
+    app.after_setting_changed("list.sort_case_sensitive");
+    assert!(!app.panels[app.active].active_view().3);
+    app.command("file.new_tab");
+    assert!(
+        app.panels[app.active].active_view().3,
+        "새 탭 = 설정 기본값"
+    );
+    let _ = app.settings.reset("list.sort_case_sensitive");
+    let _ = app.settings.reset("list.view_scope");
+    app.after_setting_changed("list.sort_case_sensitive");
     assert_eq!(
         app.toolbar.all_items().iter().any(|it| it.id == "view.dot"),
         dot == 1
@@ -1767,7 +1820,7 @@ fn view_options_follow_folders_by_default() {
     app.command("view.folders_first");
     assert_eq!(view(&app, 0), (true, true, false));
     assert_eq!(view(&app, 1), (true, true, false), "같은 폴더 = 공통");
-    assert_eq!(app.dir_view_of(&dir), (true, true, false));
+    assert_eq!(app.dir_view_of(&dir), (true, true, false, false));
     assert!(
         app.settings.flag("list.folders_first"),
         "설정 기본값은 불변"
@@ -2096,9 +2149,9 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
         if platform::has_dotfile_toggle() {
-            "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[dot:1,foldersfirst:1,casesensitive:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         } else {
-            "show:1[hidden:1,foldersfirst:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[hidden:1,foldersfirst:1,casesensitive:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         },
         "정규화 저장"
     );

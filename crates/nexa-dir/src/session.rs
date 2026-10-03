@@ -127,7 +127,7 @@ impl Session {
                     if let Some((f, path)) = v.split_once('|') {
                         if let (Ok(f), false) = (f.trim().parse::<u8>(), path.is_empty()) {
                             if s.dir_views.len() < DIR_VIEWS_MAX {
-                                s.dir_views.push((PathBuf::from(path), f & 0x7));
+                                s.dir_views.push((PathBuf::from(path), f & 0xF));
                             }
                         }
                     }
@@ -149,7 +149,7 @@ impl Session {
                 "views" => {
                     p.views = v
                         .split('|')
-                        .map(|f| f.trim().parse::<u8>().unwrap_or(0) & 0x7)
+                        .map(|f| f.trim().parse::<u8>().unwrap_or(0) & 0xF)
                         .collect();
                 }
                 "cols" => p.col_layout = v.to_string(),

@@ -1172,6 +1172,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.view.case_sensitive",
+        CAT_KEYS,
+        "pref.sortCaseSensitive",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.view.dock",
         CAT_KEYS,
         "menu.view.dock",

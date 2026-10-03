@@ -379,7 +379,7 @@ pref.sortFoldersFirst.desc = 並び順に関係なくフォルダーをファイ
 pref.hideEmptyGlyph = 空のフォルダーの展開グリフを隠す
 pref.hideEmptyGlyph.desc = 現在の表示（隠し/ドットファイルのフィルター）で表示する内容がないフォルダーは、ツリーの展開グリフを描画しません。表示オプションで内容が見えるようになると再表示されます。
 pref.viewScope = 表示オプションの管理方法
-pref.viewScope.desc = ツールバー・表示メニューの隠しファイル・Dot ファイル・フォルダー優先トグルをどこまで一緒に適用するかを決めます。全体 = 両パネルのすべてのタブ・左右パネル = そのパネルのすべてのタブ・タブ = そのタブのみ・フォルダー = 同じフォルダーを表示しているタブは左右どちらでも一緒に変わり、フォルダーごとに記憶します。この画面のチェックボックスは新しいタブ（記憶のないフォルダー）の既定値だけを決めます。
+pref.viewScope.desc = ツールバー・表示メニューの隠しファイル・Dot ファイル・フォルダー優先・大文字小文字区別トグルをどこまで一緒に適用するかを決めます。全体 = 両パネルのすべてのタブ・左右パネル = そのパネルのすべてのタブ・タブ = そのタブのみ・フォルダー = 同じフォルダーを表示しているタブは左右どちらでも一緒に変わり、フォルダーごとに記憶します。この画面のチェックボックスは新しいタブ（記憶のないフォルダー）の既定値だけを決めます。
 pref.viewScope.global = 全体
 pref.viewScope.panel = 左右パネル
 pref.viewScope.tab = タブ
@@ -404,7 +404,7 @@ pref.termCopy.html = HTML
 pref.termCopy.rtf = RTF
 pref.termCopy.both = HTML と RTF の両方
 pref.sortCaseSensitive = 大文字と小文字を区別して並べ替え
-pref.sortCaseSensitive.desc = 大文字と小文字を区別して並べ替えます — 大文字で始まる名前が先にまとまります。
+pref.sortCaseSensitive.desc = 大文字と小文字を区別して並べ替えます — 大文字で始まる項目が先のグループ。新しいタブの既定値です。開いているタブはツールバーのトグルで切り替えます。
 pref.navUpAlign = 上へ移動後の選択位置
 pref.navUpAlign.desc = Alt+↑ で上のフォルダーへ移動した後、離れたフォルダーをビューのどこに置くか。
 pref.align.top = 上

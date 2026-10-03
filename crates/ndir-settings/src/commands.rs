@@ -144,6 +144,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     c!("view.dot", "menu.view.dot", "ctrl+.", "", "ctrl+."),
     c!("view.folders_first", "pref.sortFoldersFirst", "", "", ""),
+    c!("view.case_sensitive", "pref.sortCaseSensitive", "", "", ""),
     // ⌘` 는 OS의 창 순환(CMD-489) → macOS는 Control 단독.
     c!(
         "view.dock",

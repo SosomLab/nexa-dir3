@@ -41,6 +41,7 @@ fn tbo_label(block: &str, item: Option<&str>) -> String {
         ("show", Some("hidden")) => tr("menu.view.hidden"),
         ("show", Some("dot")) => tr("menu.view.dot"),
         ("show", Some("foldersfirst")) => tr("pref.sortFoldersFirst"),
+        ("show", Some("casesensitive")) => tr("pref.sortCaseSensitive"),
         (b, i) => i.unwrap_or(b).to_string(),
     }
 }

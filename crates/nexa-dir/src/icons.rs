@@ -40,6 +40,10 @@ pub(crate) const EMBEDDED_SVG: &[(&str, &str)] = &[
         "folders-first",
         include_str!("../assets/toolbar/folders-first.svg"),
     ),
+    (
+        "case-sensitive",
+        include_str!("../assets/toolbar/case-sensitive.svg"),
+    ),
     // 도크 미리보기 ↗ "크게"(dir2 07-26) — InfoDock 버튼은 nexa-explorer가 글리프로 그린다 · 등록만.
     ("popout", include_str!("../assets/toolbar/popout.svg")),
 ];
@@ -60,6 +64,7 @@ pub(crate) fn asset_of(cmd_id: &str) -> Option<&'static str> {
         "view.hidden" => "hidden",
         "view.dot" => "dotfiles",
         "view.folders_first" => "folders-first",
+        "view.case_sensitive" => "case-sensitive",
         _ => return None,
     })
 }
@@ -132,6 +137,7 @@ mod tests {
             "view.hidden",
             "view.dot",
             "view.folders_first",
+            "view.case_sensitive",
         ] {
             let a = asset_of(id).unwrap_or_else(|| panic!("{id}"));
             assert!(EMBEDDED_SVG.iter().any(|(n, _)| *n == a), "{id} → {a}");

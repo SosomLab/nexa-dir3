@@ -244,6 +244,11 @@ impl App {
                     g("view.folders_first", "▲", "pref.sortFoldersFirst"),
                     "pref.sortFoldersFirst",
                 ),
+                // 대소문자 구분 정렬(사용자 10-03 "폴더 우선정렬 옆에 · 보기 토글과 동일한 개념") — 네 번째 탭 보기 옵션.
+                ("show", "casesensitive") => scoped(
+                    g("view.case_sensitive", "Aa", "pref.sortCaseSensitive"),
+                    "pref.sortCaseSensitive",
+                ),
                 _ => return None,
             })
         };
@@ -352,10 +357,10 @@ impl App {
         }
     }
 
-    /// 숨김 · Dot · 폴더 우선 체크(메뉴 · 툴바) = **활성 패널의 활성 탭 값**(dir2 08-02 미러 — 탭·패널을 바꾸면 따라간다).
+    /// 숨김 · Dot · 폴더 우선 · 대소문자 구분 체크(메뉴 · 툴바) = **활성 패널의 활성 탭 값**(dir2 08-02 미러 — 탭·패널을 바꾸면 따라간다).
     /// `update_status` 길목이 부른다.
     pub(crate) fn sync_view_checks(&mut self) {
-        let (hidden, dot, folders) = self.panels[self.active].active_view_values();
+        let (hidden, dot, folders, case) = self.panels[self.active].active_view();
         let mut inv = Invalidations::default();
         self.menubar.set_checked("view.hidden", hidden, &mut inv);
         self.menubar.set_checked("view.dot", dot, &mut inv);
@@ -363,6 +368,7 @@ impl App {
             ("view.hidden", hidden),
             ("view.dot", dot),
             ("view.folders_first", folders),
+            ("view.case_sensitive", case),
         ] {
             self.toolbar.set_item_checked(id, on, &mut inv);
         }
@@ -381,7 +387,7 @@ impl App {
     }
 
     /// 폴더의 보기 옵션(범위 "폴더"): 기억된 값 · 없으면 설정 기본값.
-    pub(crate) fn dir_view_of(&self, dir: &std::path::Path) -> (bool, bool, bool) {
+    pub(crate) fn dir_view_of(&self, dir: &std::path::Path) -> filelist::ViewOpts {
         self.session_keep
             .dir_views
             .iter()
@@ -393,7 +399,7 @@ impl App {
     }
 
     /// 폴더의 보기 옵션 기억(설정 기본값과 같으면 지운다 — 기본을 따르는 폴더는 적어 두지 않는다 · 상한 초과 = 오래된 것부터).
-    fn remember_dir_view(&mut self, dir: &std::path::Path, view: (bool, bool, bool)) {
+    fn remember_dir_view(&mut self, dir: &std::path::Path, view: filelist::ViewOpts) {
         let base = list_opts(&self.settings);
         let v = &mut self.session_keep.dir_views;
         v.retain(|(p, _)| p != dir);
@@ -428,14 +434,15 @@ impl App {
     /// 보기 옵션 토글 3종(dir2 08-02 `CMD_TOGGLE_HIDDEN/DOTFILES/FOLDERS_FIRST` · 값의 주인 = 탭): 활성 탭의 값을 뒤집어
     /// 범위(`list.view_scope`)만큼 적용한다. 설정값(`list.show_*` = 새 탭의 기본값)은 건드리지 않는다(사용자 10-03).
     fn toggle_view_option(&mut self, id: &str) {
-        let (mut hidden, mut dot, mut folders) = self.panels[self.active].active_view_values();
+        let (mut hidden, mut dot, mut folders, mut case) = self.panels[self.active].active_view();
         match id {
             "view.hidden" => hidden = !hidden,
             "view.dot" => dot = !dot,
+            "view.case_sensitive" => case = !case,
             _ => folders = !folders,
         }
         let scope = self.view_scope().to_string();
-        let view = (hidden, dot, folders);
+        let view = (hidden, dot, folders, case);
         let mut inv = Invalidations::default();
         if scope == "dir" {
             // 폴더별: 그 폴더를 보는 탭 전부(좌우 모두) + 폴더에 기억.
@@ -541,7 +548,7 @@ impl App {
             }
             // 점 파일 토글이 없는 OS(Linux · macOS)에서는 단축키로 불려도 아무 일도 하지 않는다(점 파일 = 숨김 파일 → view.hidden).
             "view.dot" if !platform::has_dotfile_toggle() => {}
-            "view.hidden" | "view.dot" | "view.folders_first" => {
+            "view.hidden" | "view.dot" | "view.folders_first" | "view.case_sensitive" => {
                 self.toggle_view_option(id);
             }
             "view.dock" | "view.launcher" | "view.col_width_sync" => {

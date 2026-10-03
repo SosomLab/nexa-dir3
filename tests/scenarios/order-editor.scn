@@ -11,4 +11,4 @@ check: order.txt: [x] Panel Controls
 check: order.txt:   [x] File Panel Toggle
 # 값 앞부분만 본다 — show 그룹의 dot은 Windows에만 있다(Linux · macOS는 점 파일 = 숨김 파일).
 check: order.txt: value refresh:1[refresh:1,ontop:1]|panel:1[toggle:1,dock:1,info:1,colsync:1]|view:1[tree:1,flat:1,tiles:1]|show:1[hidden:1,
-check: order.txt: foldersfirst:1]|settings:1
+check: order.txt: foldersfirst:1,casesensitive:1]|settings:1

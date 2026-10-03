@@ -379,7 +379,7 @@ pref.sortFoldersFirst.desc = Group folders before files regardless of sort order
 pref.hideEmptyGlyph = Hide expand glyph for empty folders
 pref.hideEmptyGlyph.desc = Hide the tree expand glyph when a folder has nothing to show under the current view (hidden/dot filters). Re-appears when the view options reveal content.
 pref.viewScope = View options scope
-pref.viewScope.desc = How far the hidden/dot/folders-first toggles in the toolbar and View menu reach. All = every tab in both panels; Left/right panel = every tab in that panel; Tab = that tab only; Folder = tabs showing the same folder change together in either panel, and each folder remembers its own values. The checkboxes in this window only set the default for new tabs (folders with nothing remembered).
+pref.viewScope.desc = How far the hidden/dot/folders-first/case-sensitive toggles in the toolbar and View menu reach. All = every tab in both panels; Left/right panel = every tab in that panel; Tab = that tab only; Folder = tabs showing the same folder change together in either panel, and each folder remembers its own values. The checkboxes in this window only set the default for new tabs (folders with nothing remembered).
 pref.viewScope.global = All
 pref.viewScope.panel = Left/right panel
 pref.viewScope.tab = Tab
@@ -404,7 +404,7 @@ pref.termCopy.html = HTML
 pref.termCopy.rtf = RTF
 pref.termCopy.both = Both HTML and RTF
 pref.sortCaseSensitive = Case-sensitive sort
-pref.sortCaseSensitive.desc = Sort case-sensitively - names starting with uppercase group first.
+pref.sortCaseSensitive.desc = Sort with case sensitivity — items starting with an uppercase letter group first. This is the default for new tabs; open tabs keep their own value, changed with the toolbar toggle.
 pref.navUpAlign = Selection position after Go Up
 pref.navUpAlign.desc = Where the left folder is placed in the view after Alt+Up.
 pref.align.top = Top

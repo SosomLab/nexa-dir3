@@ -18,4 +18,5 @@ nexa-ctl `ToolIcon::Mask`(테마 기준색 틴트 · hover/pressed = accent · �
 | `refresh.svg` | `view.refresh` |
 | `settings.svg` | `file.prefs` |
 | `hidden.svg` · `dotfiles.svg` · `folders-first.svg` | `view.hidden` · `view.dot` · `view.folders_first` |
+| `case-sensitive.svg` | `view.case_sensitive`(dir3 신규 10-03 — "Aa" · 대소문자 구분 정렬 토글) |
 | `popout.svg` | 도크 ↗(등록만 — nexa-explorer InfoDock은 글리프) |

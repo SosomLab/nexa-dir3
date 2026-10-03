@@ -106,32 +106,43 @@ pub(crate) struct ListOpts {
     pub case_sensitive: bool,
 }
 
+/// 탭 보기 옵션 4종 `(숨김, Dot, 폴더 우선, 대소문자 구분 정렬)` — 탭이 소유하고 보기 범위(`list.view_scope`)만큼 함께 바뀐다.
+pub(crate) type ViewOpts = (bool, bool, bool, bool);
+
 impl ListOpts {
-    /// 탭 보기 옵션 3종(숨김 · Dot · 폴더 우선)만 바꾼 사본 — 나머지(보호 항목 · 대소문자)는 그대로.
-    pub(crate) fn with_view(self, (hidden, dot, folders_first): (bool, bool, bool)) -> ListOpts {
+    /// 탭 보기 옵션 4종만 바꾼 사본 — 나머지(보호 항목 표시 = 전역)는 그대로.
+    pub(crate) fn with_view(self, (hidden, dot, folders_first, case): ViewOpts) -> ListOpts {
         ListOpts {
             show_hidden: hidden,
             show_dotfiles: dot,
             folders_first,
+            case_sensitive: case,
             ..self
         }
     }
 
-    /// 탭 보기 옵션 3종 `(숨김, Dot, 폴더 우선)`.
-    pub(crate) fn view(self) -> (bool, bool, bool) {
-        (self.show_hidden, self.show_dotfiles, self.folders_first)
+    /// 탭 보기 옵션 4종.
+    pub(crate) fn view(self) -> ViewOpts {
+        (
+            self.show_hidden,
+            self.show_dotfiles,
+            self.folders_first,
+            self.case_sensitive,
+        )
     }
 
-    /// 세션 플래그(dir2 `panel{i}.views` — bit0 숨김 · bit1 Dot · bit2 폴더 우선).
+    /// 세션 플래그(dir2 `panel{i}.views` — bit0 숨김 · bit1 Dot · bit2 폴더 우선 · **bit3 대소문자 구분**(dir3 추가 —
+    /// dir2는 하위 3비트만 읽는다)).
     pub(crate) fn view_flags(self) -> u8 {
         u8::from(self.show_hidden)
             | u8::from(self.show_dotfiles) << 1
             | u8::from(self.folders_first) << 2
+            | u8::from(self.case_sensitive) << 3
     }
 
-    /// 세션 플래그 → 보기 옵션 3종.
-    pub(crate) fn view_of_flags(f: u8) -> (bool, bool, bool) {
-        (f & 1 != 0, f & 2 != 0, f & 4 != 0)
+    /// 세션 플래그 → 보기 옵션 4종.
+    pub(crate) fn view_of_flags(f: u8) -> ViewOpts {
+        (f & 1 != 0, f & 2 != 0, f & 4 != 0, f & 8 != 0)
     }
 }
 
