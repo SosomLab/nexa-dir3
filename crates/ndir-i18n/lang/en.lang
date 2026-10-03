@@ -879,3 +879,6 @@ pref.toolbarOnLineColor = Toolbar: toggled-on line color
 pref.toolbarOnLineColor.desc = Outline and icon color of a toggled-on button, as #RRGGBB.
 pref.toolbarIconScale = Toolbar: icon image scale (%)
 pref.toolbarIconScale.desc = Size of the icon image inside each toolbar button. The button size stays the same.
+pref.cat.tabsGeneral = General
+pref.cat.tabStatus = Status bar
+pref.cat.statusbar = Status bar

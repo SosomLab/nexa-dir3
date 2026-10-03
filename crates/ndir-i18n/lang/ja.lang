@@ -879,3 +879,6 @@ pref.toolbarOnLineColor = ツールバー: オン時の線の色
 pref.toolbarOnLineColor.desc = オンのボタンの枠線とアイコンの線の色です（#RRGGBB）。
 pref.toolbarIconScale = ツールバー: アイコン画像の大きさ(%)
 pref.toolbarIconScale.desc = ツールバーボタン内のアイコン画像の大きさです。ボタンの大きさは変わりません。
+pref.cat.tabsGeneral = 一般
+pref.cat.tabStatus = ステータスバー
+pref.cat.statusbar = ステータスバー

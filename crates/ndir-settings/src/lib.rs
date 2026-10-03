@@ -873,6 +873,30 @@ mod tests {
     }
 
     /// 종속 판정(T-120): 조건 종류 · 여러 부모(AND) · 전이(부모가 잠기면 자식도) · 원인은 맨 위의 어긋난 조건.
+    /// 상태바 설정의 자리(사용자 10-04): 창 아래 상태줄 = 일반 › 상태바 한 곳 · 탭 상태바 = 탭 › 상태바.
+    #[test]
+    fn statusbar_settings_are_grouped() {
+        let cat = |k: &str| REGISTRY.iter().find(|e| e.key == k).map(|e| e.cat);
+        for k in [
+            "statusbar.items",
+            "statusbar.load_interval_ms",
+            "statusbar.font_face",
+            "statusbar.font_size",
+        ] {
+            assert_eq!(cat(k), Some("pref.cat.statusbar"), "{k}");
+        }
+        assert_eq!(cat("layout.tab_statusbar"), Some("pref.cat.tabStatus"));
+        let group_of = |c: &str| {
+            CATEGORY_TREE
+                .iter()
+                .find(|(_, cats)| cats.contains(&c))
+                .map(|(g, _)| *g)
+        };
+        assert_eq!(group_of("pref.cat.statusbar"), Some("pref.grp.general"));
+        assert_eq!(group_of("pref.cat.tabStatus"), Some("pref.cat.tabs"));
+        assert_eq!(group_of("pref.cat.tabsGeneral"), Some("pref.cat.tabs"));
+    }
+
     #[test]
     fn locks_follow_parents_transitively_and_all_conditions() {
         assert!(Dep::Ne("1").satisfied("2") && !Dep::Ne("1").satisfied("1"));

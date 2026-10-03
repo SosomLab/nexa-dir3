@@ -68,12 +68,16 @@ const PANEL_MODE_OPTS: &[(&str, &str)] = &[
 const CAT_APPEARANCE: &str = "pref.cat.appearance";
 const CAT_FONTS: &str = "pref.cat.fonts";
 const CAT_LANG: &str = "pref.cat.lang";
+/// 일반 › 상태바(사용자 10-04 "하단 상태바 관련 설정은 상태바 이름으로 모아") — 창 아래 상태줄의 칸 · 갱신 주기 · 글꼴.
+const CAT_STATUSBAR: &str = "pref.cat.statusbar";
 const CAT_LIST: &str = "pref.cat.listGeneral";
 const CAT_TYPEAHEAD: &str = "pref.cat.typeahead";
 const CAT_SCROLL: &str = "pref.cat.scroll";
 const CAT_CTXMENU: &str = "pref.cat.ctxmenu";
 const CAT_TRANSFER: &str = "pref.cat.transfer";
-const CAT_TABS: &str = "pref.cat.tabs";
+const CAT_TABS: &str = "pref.cat.tabsGeneral";
+/// 탭 › 상태바(사용자 10-04 "탭 상태바 관련 설정은 탭 > 상태바로") — 패널마다 목록 아래에 두는 탭 상태바.
+const CAT_TAB_STATUS: &str = "pref.cat.tabStatus";
 const CAT_DOCK: &str = "pref.cat.dock";
 const CAT_TERMINAL: &str = "pref.cat.terminal";
 const CAT_PLUGINS: &str = "pref.cat.plugins";
@@ -91,7 +95,7 @@ const KEY_PRESET_OPTS: &[(&str, &str)] = &[
 pub const CATEGORY_TREE: &[(&str, &[&str])] = &[
     (
         "pref.grp.general",
-        &[CAT_APPEARANCE, CAT_FONTS, CAT_LANG, CAT_KEYS],
+        &[CAT_APPEARANCE, CAT_FONTS, CAT_STATUSBAR, CAT_LANG, CAT_KEYS],
     ),
     (
         "pref.cat.list",
@@ -103,7 +107,7 @@ pub const CATEGORY_TREE: &[(&str, &[&str])] = &[
             CAT_TRANSFER,
         ],
     ),
-    (CAT_TABS, &[CAT_TABS]),
+    ("pref.cat.tabs", &[CAT_TABS, CAT_TAB_STATUS]),
     ("pref.grp.panel", &[CAT_DOCK, CAT_TERMINAL]),
     (CAT_PLUGINS, &[CAT_PLUGINS]),
     // dir2에는 페이지가 없던 항목(파일 직접 편집) — Advanced를 켜야 보인다.
@@ -499,7 +503,7 @@ pub const REGISTRY: &[Entry] = &[
     ),
     e!(
         "statusbar.font_face",
-        CAT_FONTS,
+        CAT_STATUSBAR,
         "pref.statusFont",
         "pref.statusFont.desc",
         Text,
@@ -507,7 +511,7 @@ pub const REGISTRY: &[Entry] = &[
     ),
     e!(
         "statusbar.font_size",
-        CAT_FONTS,
+        CAT_STATUSBAR,
         "pref.statusFontSize",
         "pref.statusFontSize.desc",
         Size { min: 8, max: 32 },
@@ -516,7 +520,7 @@ pub const REGISTRY: &[Entry] = &[
     // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
     e!(
         "statusbar.items",
-        CAT_APPEARANCE,
+        CAT_STATUSBAR,
         "pref.statusItems",
         "pref.statusItems.desc",
         Text,
@@ -524,7 +528,7 @@ pub const REGISTRY: &[Entry] = &[
     ),
     e!(
         "statusbar.load_interval_ms",
-        CAT_APPEARANCE,
+        CAT_STATUSBAR,
         "pref.statusInterval",
         "pref.statusInterval.desc",
         Int {
@@ -532,14 +536,6 @@ pub const REGISTRY: &[Entry] = &[
             max: 60000
         },
         "2000"
-    ),
-    e!(
-        "layout.tab_statusbar",
-        CAT_APPEARANCE,
-        "pref.tabStatusbar",
-        "pref.tabStatusbar.desc",
-        Bool,
-        "on"
     ),
     e!(
         "list.font_face",
@@ -897,6 +893,14 @@ pub const REGISTRY: &[Entry] = &[
         "end"
     ),
     // ── 하단 도크 › 하단 도크
+    e!(
+        "layout.tab_statusbar",
+        CAT_TAB_STATUS,
+        "pref.tabStatusbar",
+        "pref.tabStatusbar.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "dock.visible",
         CAT_DOCK,
