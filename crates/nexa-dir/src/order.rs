@@ -54,9 +54,10 @@ pub(crate) const COLUMN_BLOCKS: OrderDefs = &[(
 pub(crate) const STATUSBAR_BLOCKS: OrderDefs = &[
     ("tab", &[]),
     ("cpu", &[]),
-    ("mem", &["app", "system"]),
-    ("disk", &["write", "read"]),
-    ("net", &["download", "upload"]),
+    ("mem", &[]),
+    ("disk", &["read", "write"]),
+    ("net", &["upload", "download"]),
+    ("appmem", &[]),
     ("license", &[]),
 ];
 

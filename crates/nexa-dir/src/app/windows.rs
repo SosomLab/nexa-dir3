@@ -84,6 +84,12 @@ impl App {
             let owner = self.window.clone();
             self.archive_win.open(el, theme, over, owner.as_deref());
         }
+        if std::mem::take(&mut self.open_memory) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.mem_win.open(el, theme, over, owner.as_deref());
+        }
         if std::mem::take(&mut self.open_license) && self.window.is_some() {
             self.licensing.refresh();
             let over = self.main_rect();
@@ -291,6 +297,24 @@ impl App {
             }
             return true;
         }
+        if self.mem_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            match self.mem_win.handle(event) {
+                crate::mem_win::MemAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    let view = self.mem_view();
+                    self.mem_win.paint(view, &font, &self.theme, ui_px);
+                }
+                crate::mem_win::MemAction::Close => {
+                    self.mem_win.close();
+                    if let Some(w) = &self.window {
+                        w.focus_window();
+                    }
+                }
+                crate::mem_win::MemAction::None => {}
+            }
+            return true;
+        }
         if self.license_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.license_win.handle(event) {
@@ -388,6 +412,9 @@ impl App {
         if self.license_win.is_open() {
             self.license_win.redraw();
         }
+        if self.mem_win.is_open() {
+            self.mem_win.redraw();
+        }
         if self.archive_win.is_open() {
             self.archive_win.redraw();
         }
@@ -431,6 +458,9 @@ impl App {
         if self.license_win.tick(now_ms) {
             self.license_win.redraw();
         }
+        if self.mem_win.tick(now_ms) {
+            self.mem_win.redraw();
+        }
         if self.archive_win.tick(now_ms) {
             self.archive_win.redraw();
         }
@@ -455,6 +485,7 @@ impl App {
             || self.check_win.animating()
             || self.dlg.animating()
             || self.license_win.animating()
+            || self.mem_win.animating()
             || self.archive_win.animating()
             || self.preview_win.animating()
             || self.progress_win.animating()

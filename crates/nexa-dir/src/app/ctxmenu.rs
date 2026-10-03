@@ -122,7 +122,7 @@ impl App {
     }
 
     /// 메뉴를 (다시) 연다 — 연 자리(`ctx_anchor`) 그대로(셸 항목이 늦게 도착했을 때 같은 자리에서 채운다).
-    fn reopen_ctx(&mut self, items: Vec<CtxItem>) {
+    pub(crate) fn reopen_ctx(&mut self, items: Vec<CtxItem>) {
         let host = Rect::new(0, 0, self.viewport.0, self.viewport.1);
         let text_w = px(240.0, self.scale);
         let (x, y) = self.ctx_anchor;

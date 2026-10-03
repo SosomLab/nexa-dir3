@@ -2269,8 +2269,11 @@ fn status_segments_and_tab_status_bar() {
             .map(|s| s.id.clone())
             .collect()
     };
-    assert_eq!(ids(&app), ["tab", "cpu", "mem", "disk", "net", "license"]);
-    // 메모리 · 디스크 · 네트워크 칸은 안의 항목을 순서대로 잇는다(메모리 = 이 프로그램 · 시스템).
+    assert_eq!(
+        ids(&app),
+        ["tab", "cpu", "mem", "disk", "net", "appmem", "license"],
+        "맨 오른쪽 = 앱 메모리 · 라이선스"
+    );
     let text = |app: &App, id: &str| {
         app.statusbar
             .segments()
@@ -2279,29 +2282,81 @@ fn status_segments_and_tab_status_bar() {
             .map(|s| s.text.clone())
             .unwrap()
     };
-    assert_eq!(text(&app, "mem"), "Dir – · Sys –% (–)");
-    assert_eq!(text(&app, "disk"), "Disk W – · R –");
-    assert_eq!(text(&app, "net"), "Down – · Up –");
-    assert!(app.statusbar.segments()[0].text.contains("1/1"));
-    // 부하: 첫 틱 = 메모리만 · 주기 전 재조회 없음.
+    // 약어 + 값(조회 전 = –) · 디스크 = ↑ 읽기 ↓ 쓰기 · 네트워크 = ↑ 업로드 ↓ 다운로드 · 모든 칸을 누를 수 있다.
+    assert_eq!(text(&app, "cpu"), "C –");
+    assert_eq!(text(&app, "mem"), "M –");
+    assert_eq!(text(&app, "disk"), "D ↑ – ↓ –");
+    assert_eq!(text(&app, "net"), "N ↑ – ↓ –");
+    assert!(app.statusbar.segments().iter().all(|s| s.clickable));
+    // ↑ = 빨강(danger) · ↓ = 파랑(accent) · 값 조각에는 폭 견본이 있다(기본 너비 확보).
+    let net = app
+        .statusbar
+        .segments()
+        .iter()
+        .find(|s| s.id == "net")
+        .cloned()
+        .unwrap();
+    assert_eq!(net.parts[1].color, Some(app.theme.danger));
+    assert_eq!(net.parts[2].color, Some(app.theme.accent));
+    assert!(net.parts[1].hints.iter().any(|h| h == "↑ 999.9 MB/s"));
+    // 부하: 첫 틱 = 메모리 · 주기 전 재조회 없음.
     let t0 = Instant::now();
     let next = app.status_load_tick(t0).expect("wake");
     assert!(next > t0);
     assert!(app.load.is_some_and(|l| l.mem_total > 0 && l.mem_used > 0));
     assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
-    assert!(text(&app, "mem").starts_with("Dir ") && !text(&app, "mem").contains("Dir –"));
-    // 항목 순서/표시: 디스크 = 읽기만 · 네트워크 = 업 → 다운.
+    assert!(text(&app, "mem").starts_with("M ") && text(&app, "mem") != "M –");
+    assert_ne!(text(&app, "appmem"), "–");
+    // 칸 클릭 = 상세 팝업(그 칸 위 · 조회 주기마다 내용 갱신) — CPU = 전체 + 이 프로그램.
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let click = |app: &mut App, id: &str| {
+        let r = app.statusbar.seg_rect(id).expect("seg");
+        let (x, y) = (r.x + 4, r.y + 4);
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    click(&mut app, "cpu");
+    assert_eq!(app.status_popup.as_deref(), Some("cpu"));
+    let items = app.status_popup_items("cpu");
+    assert_eq!(items.len(), 5, "전체 · Dir · 코어 · 구분선 · 편집");
+    let labels: Vec<String> = app
+        .status_popup_items("mem")
+        .iter()
+        .filter_map(|it| match it {
+            CtxItem::Item { label, .. } => Some(label.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(labels[0].starts_with("In use") && labels[1].starts_with("Available"));
+    assert!(labels[3].starts_with("Nexa Dir"), "{labels:?}");
+    app.ctx_pick("aux.info");
+    // 앱 메모리 칸 = 메모리 창 요청 · 보기 = 영역별 추정 + 기타.
+    click(&mut app, "appmem");
+    assert!(app.open_memory, "메모리 창");
+    let view = app.mem_view();
+    assert!(view.app.is_some_and(|v| v > 0) && view.system.is_some());
+    assert_eq!(view.rows.len(), 3, "목록 · 창 표면 · 기타");
+    assert_eq!(
+        view.rows[0].1,
+        app.panels.iter().map(Panel::mem_estimate).sum::<u64>()
+    );
+    // 항목 순서/표시: 디스크 = 쓰기만 · 네트워크 = 다운 → 업.
     app.order_changed(
         "statusbar.layout",
-        "tab:1|cpu:1|mem:1[system:1,app:0]|disk:1[read:1,write:0]|net:1[upload:1,download:1]|license:1",
+        "tab:1|cpu:1|mem:1|disk:1[write:1,read:0]|net:1[download:1,upload:1]|appmem:1|license:1",
     );
-    assert!(text(&app, "mem").starts_with("Sys "));
-    assert!(text(&app, "disk").starts_with("Disk R ") && !text(&app, "disk").contains("W "));
-    assert!(text(&app, "net").starts_with("Up "));
+    assert!(text(&app, "disk").starts_with("D ↓ ") && !text(&app, "disk").contains('↑'));
+    assert!(text(&app, "net").starts_with("N ↓ "));
     // 순서 편집 창이 값을 바꾼다(툴바 순서 편집과 같은 길) — 숨긴 칸은 빠지고 순서가 따른다.
     app.order_changed(
         "statusbar.layout",
-        "license:1|tab:1|cpu:0|mem:0|disk:0|net:0",
+        "license:1|tab:1|cpu:0|mem:0|disk:0|net:0|appmem:0",
     );
     assert_eq!(ids(&app), ["license", "tab"]);
     // 상태줄 우클릭 = 순서 편집 창 요청.

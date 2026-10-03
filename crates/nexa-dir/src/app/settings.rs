@@ -342,6 +342,7 @@ impl App {
         self.sync_menu_shortcuts();
         self.sync_menu_checks();
         self.layout();
+        self.mem_win.relabel();
     }
 }
 

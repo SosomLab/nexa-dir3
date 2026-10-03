@@ -30,6 +30,7 @@ mod input;
 mod keys_win;
 mod launcher;
 mod license_win;
+mod mem_win;
 mod nav;
 mod order;
 mod order_win;
@@ -238,6 +239,9 @@ struct App {
     /// 라이선스(T-80): 판정 문맥(단일 원천) · 창 · 열기 깃발 · 파일 창(용도 = 라이선스 파일/설정 폴더) · 열기 깃발.
     licensing: ndir_license::Licensing,
     license_win: LicenseWin,
+    /// 메모리 창(상태줄 앱 메모리 칸 → 모덜리스 · mem_win.rs) · 열기 요청.
+    mem_win: mem_win::MemWin,
+    open_memory: bool,
     open_license: bool,
     file_win: FileWin,
     file_purpose: Option<app::license::FilePurpose>,
@@ -288,6 +292,8 @@ struct App {
     load_prev: Option<(Instant, platform::sysload::SysSample)>,
     load: Option<platform::sysload::SysLoad>,
     load_next: Instant,
+    /// 떠 있는 상태줄 상세 팝업의 칸 id(조회 주기마다 내용을 갱신한다).
+    status_popup: Option<String>,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -526,6 +532,8 @@ impl App {
             open_archive: false,
             licensing,
             license_win: LicenseWin::new(),
+            mem_win: mem_win::MemWin::new(),
+            open_memory: false,
             open_license: false,
             file_win: FileWin::new(),
             file_purpose: None,
@@ -565,6 +573,7 @@ impl App {
             load_prev: None,
             load: None,
             load_next: Instant::now(),
+            status_popup: None,
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),

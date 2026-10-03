@@ -22,6 +22,8 @@ pub(crate) struct SysSample {
     pub mem_total: u64,
     /// **이 프로그램**이 쓰는 물리 메모리(바이트 · nexa-sql 상태줄의 메모리 칸과 같은 뜻).
     pub mem_app: Option<u64>,
+    /// 이 프로그램이 쓴 CPU 시간(사용자 + 커널 · ns 누적).
+    pub app_cpu_ns: Option<u64>,
     /// 디스크 읽기 · 쓰기 누적 바이트(모든 디스크 합).
     pub disk: Option<(u64, u64)>,
     /// 네트워크 받기 · 보내기 누적 바이트(루프백 제외).
@@ -37,6 +39,8 @@ pub(crate) struct SysLoad {
     pub mem_total: u64,
     /// 이 프로그램의 메모리(바이트).
     pub mem_app: Option<u64>,
+    /// 이 프로그램의 CPU 사용률(% · 전체 코어 기준 — 시스템 값과 같은 눈금).
+    pub app_cpu_pct: Option<f32>,
     /// 디스크 읽기 · 쓰기 바이트/초.
     pub disk_bps: Option<(u64, u64)>,
     /// 네트워크 받기(다운로드) · 보내기(업로드) 바이트/초.
@@ -54,9 +58,17 @@ impl SysLoad {
     }
 }
 
-/// 두 표본 → 부하(순수). 누적값이 줄었으면(카운터 넘침 · 장치 제거) 그 항목은 0.
-pub(crate) fn load_between(prev: SysSample, cur: SysSample, dt: Duration) -> SysLoad {
+/// 두 표본 → 부하(순수). 누적값이 줄었으면(카운터 넘침 · 장치 제거) 그 항목은 0. `cores` = 논리 코어 수(0 = 1).
+pub(crate) fn load_between(prev: SysSample, cur: SysSample, dt: Duration, cores: usize) -> SysLoad {
     let secs = dt.as_secs_f64();
+    let app_cpu_pct = match (prev.app_cpu_ns, cur.app_cpu_ns) {
+        (Some(a), Some(b)) if secs > 0.0 => Some(
+            (b.saturating_sub(a) as f64 / 1e9 / secs / cores.max(1) as f64 * 100.0)
+                .clamp(0.0, 100.0) as f32,
+        ),
+        (_, Some(_)) => Some(0.0),
+        _ => None,
+    };
     let total = cur.cpu_total.saturating_sub(prev.cpu_total);
     let busy = cur.cpu_busy.saturating_sub(prev.cpu_busy);
     let cpu_pct = if total == 0 {
@@ -81,6 +93,7 @@ pub(crate) fn load_between(prev: SysSample, cur: SysSample, dt: Duration) -> Sys
         mem_used: cur.mem_used,
         mem_total: cur.mem_total,
         mem_app: cur.mem_app,
+        app_cpu_pct,
         disk_bps: pair(prev.disk, cur.disk),
         net_bps: pair(prev.net, cur.net),
     }
@@ -123,6 +136,17 @@ pub(crate) fn parse_meminfo(text: &str) -> Option<(u64, u64)> {
     let total = kb("MemTotal")?;
     let avail = kb("MemAvailable").or_else(|| kb("MemFree"))?;
     Some((total.saturating_sub(avail) * 1024, total * 1024))
+}
+
+/// `/proc/self/stat` 한 줄 → CPU 시간(ns · 순수). 실행 파일 이름에 공백 · 괄호가 있을 수 있어 **마지막 `)`** 뒤부터 센다:
+/// 그 뒤 12 · 13번째(0부터 11 · 12) = utime · stime(클럭 틱). `tick_hz` = 초당 틱(보통 100).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) fn parse_self_stat_cpu(text: &str, tick_hz: u64) -> Option<u64> {
+    let rest = &text[text.rfind(')')? + 1..];
+    let mut it = rest.split_whitespace();
+    let utime: u64 = it.nth(11)?.parse().ok()?;
+    let stime: u64 = it.next()?.parse().ok()?;
+    Some((utime + stime).saturating_mul(1_000_000_000 / tick_hz.max(1)))
 }
 
 /// `/proc/diskstats` → `(읽은 바이트, 쓴 바이트)`(순수). `is_disk(이름)`이 참인 줄만 더한다(파티션 · loop · dm은 디스크와
@@ -187,7 +211,19 @@ pub(crate) fn sample() -> Option<SysSample> {
 mod imp {
     use super::*;
 
+    extern "C" {
+        fn sysconf(name: i32) -> i64;
+    }
+    /// `_SC_CLK_TCK`(Linux).
+    const SC_CLK_TCK: i32 = 2;
+
     pub(super) fn sample() -> Option<SysSample> {
+        // SAFETY: sysconf는 인자 하나짜리 순수 조회다.
+        let hz = unsafe { sysconf(SC_CLK_TCK) };
+        let hz = if hz > 0 { hz as u64 } else { 100 };
+        let app_cpu_ns = std::fs::read_to_string("/proc/self/stat")
+            .ok()
+            .and_then(|t| parse_self_stat_cpu(&t, hz));
         let stat = std::fs::read_to_string("/proc/stat").ok()?;
         let (cpu_busy, cpu_total) = parse_proc_stat_cpu(&stat)?;
         let (mem_used, mem_total) = parse_meminfo(&std::fs::read_to_string("/proc/meminfo").ok()?)?;
@@ -215,6 +251,7 @@ mod imp {
             mem_used,
             mem_total,
             mem_app,
+            app_cpu_ns,
             disk,
             net,
         })
@@ -302,6 +339,13 @@ mod imp {
         fn GetSystemTimes(idle: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
         fn GlobalMemoryStatusEx(status: *mut MemoryStatusEx) -> i32;
         fn GetCurrentProcess() -> *mut c_void;
+        fn GetProcessTimes(
+            process: *mut c_void,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
         fn K32GetProcessMemoryInfo(process: *mut c_void, counters: *mut Pmc, cb: u32) -> i32;
         fn CreateFileW(
             name: *const u16,
@@ -456,6 +500,17 @@ mod imp {
             (K32GetProcessMemoryInfo(GetCurrentProcess(), &mut pmc, pmc.cb) != 0)
                 .then_some(pmc.working_set_size as u64)
         };
+        let (mut pc, mut pe, mut pk, mut pu) = (
+            FileTime::default(),
+            FileTime::default(),
+            FileTime::default(),
+            FileTime::default(),
+        );
+        // SAFETY: 현재 프로세스의 의사 핸들 + 크기가 맞는 출력 구조체(100 ns 단위).
+        let app_cpu_ns = unsafe {
+            (GetProcessTimes(GetCurrentProcess(), &mut pc, &mut pe, &mut pk, &mut pu) != 0)
+                .then(|| pk.ticks().saturating_add(pu.ticks()).saturating_mul(100))
+        };
         // 커널 시간에는 쉰 시간이 들어 있다.
         let total = kernel.ticks().saturating_add(user.ticks());
         Some(SysSample {
@@ -464,6 +519,7 @@ mod imp {
             mem_used: mem.total_phys.saturating_sub(mem.avail_phys),
             mem_total: mem.total_phys,
             mem_app,
+            app_cpu_ns,
             disk: disks(),
             net: net(),
         })
@@ -570,6 +626,7 @@ mod imp {
         ) -> i32;
         fn sysconf(name: i32) -> i64;
         fn getpid() -> i32;
+        fn mach_timebase_info(info: *mut [u32; 2]) -> i32;
         fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut c_void) -> i32;
         fn getifaddrs(out: *mut *mut IfAddrs) -> i32;
         fn freeifaddrs(list: *mut IfAddrs);
@@ -656,12 +713,19 @@ mod imp {
                 (&mut ru as *mut RusageInfoV2).cast(),
             ) == 0)
                 .then_some(ru.resident_size);
+            // CPU 시간은 mach 절대 시간 단위(Apple Silicon = 125/3 ns) → ns.
+            let mut tb = [0u32; 2];
+            let _ = mach_timebase_info(&mut tb);
+            let (n, d) = (u128::from(tb[0].max(1)), u128::from(tb[1].max(1)));
+            let app_cpu_ns = mem_app
+                .map(|_| ((u128::from(ru.user_time) + u128::from(ru.system_time)) * n / d) as u64);
             Some(SysSample {
                 cpu_busy: busy,
                 cpu_total: total,
                 mem_used: used.min(mem_total),
                 mem_total,
                 mem_app,
+                app_cpu_ns,
                 disk: None, // 디스크 누적 바이트는 IOKit이 필요하다 — 후속
                 net: net(),
             })
@@ -691,6 +755,7 @@ mod tests {
             mem_used: 1,
             mem_total: 8,
             mem_app: None,
+            app_cpu_ns: Some(1_000_000_000),
             disk: Some((1000, 500)),
             net: None,
         };
@@ -700,21 +765,33 @@ mod tests {
             mem_used: 2,
             mem_total: 8,
             mem_app: Some(77),
+            app_cpu_ns: Some(2_000_000_000),
             disk: Some((5000, 500)),
             net: Some((10, 10)),
         };
-        let l = load_between(a, b, Duration::from_secs(2));
+        let l = load_between(a, b, Duration::from_secs(2), 4);
+        assert!(
+            l.app_cpu_pct.is_some_and(|p| (p - 12.5).abs() < 0.01),
+            "{l:?}"
+        );
         assert!((l.cpu_pct - 25.0).abs() < 0.01, "{l:?}");
         assert_eq!((l.mem_used, l.mem_total, l.mem_app), (2, 8, Some(77)));
         assert!((l.mem_pct() - 25.0).abs() < 0.01);
         assert_eq!(l.disk_bps, Some((2000, 0)));
         assert_eq!(l.net_bps, Some((0, 0)), "직전에 없던 항목 = 0부터");
-        let back = load_between(b, a, Duration::from_secs(1));
+        let back = load_between(b, a, Duration::from_secs(1), 4);
         assert_eq!(
             (back.cpu_pct, back.disk_bps, back.net_bps),
             (0.0, Some((0, 0)), None)
         );
-        assert_eq!(load_between(a, b, Duration::ZERO).disk_bps, Some((0, 0)));
+        assert_eq!(load_between(a, b, Duration::ZERO, 4).disk_bps, Some((0, 0)));
+        assert_eq!(
+            parse_self_stat_cpu(
+                "1234 (my (odd) name) S 1 2 3 4 5 6 7 8 9 10 250 50 0 0 20 0 8 0 100",
+                100
+            ),
+            Some(3_000_000_000)
+        );
         assert_eq!(SysLoad::default().mem_pct(), 0.0);
     }
 
@@ -753,6 +830,7 @@ mod tests {
                 a.mem_app.is_some_and(|m| m > 0 && m <= a.mem_total),
                 "{a:?}"
             );
+            assert!(a.app_cpu_ns.is_some(), "{a:?}");
             let b = sample().expect("sample");
             assert!(b.cpu_total >= a.cpu_total);
             if cfg!(target_os = "linux") {

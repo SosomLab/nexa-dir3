@@ -782,6 +782,15 @@ impl Panel {
         self.git = None;
     }
 
+    /// 목록이 쓰는 메모리 추정(바이트 · 메모리 창) — 모든 탭의 행 수 × 행당 어림값(이름 · 메타 · 트리 노드).
+    pub(crate) fn mem_estimate(&self) -> u64 {
+        const PER_ROW: u64 = 256;
+        self.tabs
+            .iter()
+            .map(|t| t.rows.source().len() as u64 * PER_ROW)
+            .sum()
+    }
+
     /// 탭 상태바 칸 클릭(1회성 수거).
     pub(crate) fn take_status_click(&mut self) -> Option<(String, bool)> {
         self.pending_status.take()
