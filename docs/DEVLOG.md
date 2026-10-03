@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **상태줄 = 시스템 전체 부하 + 네트워크 다운/업**(platform/sysload 3-OS · macOS 디스크 후속) · 칸 순서 편집 창(`statusbar.layout` · 상태줄 우클릭) · 설정 재배치(일반 › 상태바 · 탭 › 일반/상태바) · DR-23 정정 필요 → [journal 10-04 §9](journal/2026-10-04.md)
 - **툴바 아이콘 그림 90 % · hover = 아이콘 강조색 · 토글만 옅은 회색 배경**(사용자 요청 3 · `toolbar.icon_scale_pct` · nexa-ui 136 · NEW-027) → [journal 10-04 §8](journal/2026-10-04.md)
 - **툴바 토글 켜짐 = 처음 모양으로 원복**(사용자 최종 · 기본 accent · line/#0000FF는 선택지로 · NEW-026 경과 4단계 마감 · 교훈 = 색 결정은 시안 먼저) → [journal 10-04 §7](journal/2026-10-04.md)
 - **툴바 토글 켜짐 선 색 = #0000FF**(사용자 "토글 색이 너무 이상해… #0000FF로" · `toolbar.on_color` line · 새 키 `toolbar.on_line_color` · 초록 철회) → [journal 10-04 §6](journal/2026-10-04.md)
