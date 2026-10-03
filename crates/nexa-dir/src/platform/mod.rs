@@ -40,6 +40,9 @@ mod winshell;
 mod wintemplates;
 #[cfg(windows)]
 mod winwatch;
+// 순수 해석이라 어느 OS에서나 컴파일·시험한다 — 쓰는 곳은 Linux 메뉴 공급자뿐.
+#[cfg_attr(not(all(unix, not(target_os = "macos"))), allow(dead_code))]
+pub(crate) mod xdgapps;
 
 /// OS 자원(셸 메뉴 COM · 폴더 감시 스레드 · PTY · 자가 점검 전체)을 쓰는 **시험 직렬화 뮤텍스** — `cargo test` 병렬 실행에서 두 개가 겹치면
 /// 교착했다(10-03 로컬 실증 · 운영은 Platform 1개라 무관). 해당 시험은 첫 줄에서 `let _g = os_test_guard();`.
@@ -638,7 +641,10 @@ impl Platform {
         let pty: Box<dyn Pty> = Box::new(unixpty::ForkPty);
         #[cfg(windows)]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(winshell::NativeShellMenu::new());
-        #[cfg(not(windows))]
+        // Linux = 앱 연결(MimeApps)로 만든 항목(1차) · macOS = 아직 없음(앱 메뉴만).
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(linux::XdgMenu::default());
+        #[cfg(not(any(windows, all(unix, not(target_os = "macos")))))]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(Unsupported);
         #[cfg(windows)]
         let watcher: Box<dyn Watcher> = Box::new(winwatch::NativeWatcher::new());
@@ -1057,11 +1063,12 @@ mod tests {
             Ok(0),
             "빈 목록 = 0(3-OS 휴지통 구현 존재)"
         );
-        if cfg!(windows) {
+        // Windows = 셸 메뉴 · Linux = 앱 연결 메뉴(빈 입력 = 빈 목록) · macOS = 아직 없음(Unsupported).
+        if cfg!(any(windows, all(unix, not(target_os = "macos")))) {
             assert_eq!(
                 p.ctxmenu.items(&[]).map(|v| v.len()),
                 Ok(0),
-                "Windows = 셸 메뉴 포트(빈 입력 = 빈 목록)"
+                "메뉴 포트 있음(빈 입력 = 빈 목록)"
             );
         } else {
             assert!(matches!(

@@ -236,6 +236,11 @@ impl App {
         let have = |id: &str| has_id(&shell, id);
         let mut items: Vec<CtxItem> = Vec::new();
         if !shell.is_empty() {
+            // Linux 앱 연결 항목(`xdg.*`)에는 폴더의 "열기"(= 앱 안 이동)가 없다 → 폴더면 앱의 열기를 맨 위에 둔다
+            // (Windows 셸 메뉴는 자기 "열기"를 갖고 온다).
+            if single_dir && (have("xdg.openwith") || have("xdg.props")) {
+                items.push(CtxItem::item("cmd.activate", tr("cmd.activate")).with_emphasis(true));
+            }
             items.extend(shell.iter().cloned());
             items.push(CtxItem::Separator);
         } else {
