@@ -77,8 +77,58 @@ impl App {
             .get("term.font_face")
             .map(str::trim)
             .filter(|f| !f.is_empty());
-        nexa_font::mono_font(face)
-            .or_else(|| nexa_font::mono_font(None))
-            .map(|l| Rc::new(l.font))
+        let extra = settings.get("term.fallback_fonts").unwrap_or("");
+        mono_chain(face, extra).map(Rc::new)
     }
+}
+
+/// 프롬프트 테마(oh-my-posh · starship · powerlevel)가 쓰는 아이콘 글리프(Nerd Fonts PUA)를 가진 글꼴 — 설치돼 있으면 자동으로
+/// 터미널 폴백에 넣는다(사용자 10-03 "터미널 결과에 두부"). 앞에 있는 것이 우선.
+const NERD_FAMILIES: [&str; 12] = [
+    "Symbols Nerd Font Mono",
+    "Symbols Nerd Font",
+    "JetBrainsMonoNL Nerd Font",
+    "JetBrainsMono Nerd Font",
+    "CaskaydiaCove Nerd Font",
+    "CaskaydiaMono Nerd Font",
+    "MesloLGS NF",
+    "MesloLGM Nerd Font",
+    "FiraCode Nerd Font",
+    "Hack Nerd Font",
+    "D2CodingLigature Nerd Font",
+    "DejaVuSansM Nerd Font",
+];
+
+/// Nerd Fonts 대표 글리프(Powerline 분기  · Font Awesome 폴더  · Devicons  · Material 󰊢 는 BMP 밖이라 제외).
+pub(crate) const NERD_PROBE: [char; 3] = ['\u{E0A0}', '\u{F07B}', '\u{E0B0}'];
+
+/// 터미널용 고정폭 글꼴 체인: **주 글꼴**(`term.font_face` → OS 고정폭) → **사용자 지정 폴백**(`term.fallback_fonts` · 쉼표) →
+/// **설치된 Nerd Font**(주 글꼴이 그 글리프를 못 가질 때만) → 한글 UI 글꼴 → 기호 폴백. nexa-font `mono_font`와 같은 구성에 폴백 두 단계를
+/// **기호 폴백 앞에** 끼운 것 — Nerd 아이콘 대역(U+E000~F8FF)은 Segoe MDL2/Fluent와 겹치므로 순서가 중요하다(뒤에 두면 엉뚱한 아이콘).
+pub(crate) fn mono_chain(face: Option<&str>, extra: &str) -> Option<Font> {
+    let primary = face
+        .and_then(nexa_font::find_font_by_family)
+        .or_else(|| nexa_font::system_mono_font().map(|f| (f.data, f.index)))
+        .or_else(|| nexa_font::system_ui_font().map(|f| (f.data, f.index)))?;
+    let mut font = Font::from_static(primary.0, primary.1).ok()?;
+    for fam in extra.split(',').map(str::trim).filter(|f| !f.is_empty()) {
+        if let Some((d, i)) = nexa_font::find_font_by_family(fam) {
+            let _ = font.push_fallback(d, i);
+        }
+    }
+    if !NERD_PROBE.iter().all(|&c| font.covers(c)) {
+        if let Some((d, i)) = NERD_FAMILIES
+            .iter()
+            .find_map(|fam| nexa_font::find_font_by_family(fam))
+        {
+            let _ = font.push_fallback(d, i);
+        }
+    }
+    if let Some(s) = nexa_font::system_ui_font() {
+        let _ = font.push_fallback(s.data, s.index);
+    }
+    for f in nexa_font::symbol_fallback_fonts() {
+        let _ = font.push_fallback(f.data, f.index);
+    }
+    Some(font)
 }

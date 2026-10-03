@@ -821,6 +821,15 @@ pub const REGISTRY: &[Entry] = &[
         Choice(TERM_COPY_OPTS),
         "text"
     ),
+    // 터미널 폴백 글꼴(dir3 신규 · 고급): 주 글꼴에 없는 글자(프롬프트 아이콘 등)를 그릴 글꼴 · 쉼표 구분 · 비우면 설치된 Nerd Font 자동.
+    e!(
+        "term.fallback_fonts",
+        CAT_TERMINAL,
+        "pref.termFallbackFonts",
+        "pref.termFallbackFonts.desc",
+        Text,
+        ""
+    ),
     e!(
         "term.shell",
         CAT_TERMINAL,
@@ -1366,6 +1375,7 @@ pub const HIDDEN: &[&str] = &[
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
     "toolbar.item_gap",
+    "term.fallback_fonts",
     "launcher.item_gap",
     "toolbar.group_gap",
     "toolbar.row_gap",

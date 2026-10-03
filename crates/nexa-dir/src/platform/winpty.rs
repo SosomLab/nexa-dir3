@@ -5,6 +5,7 @@
 //! 프로세스 신호. Drop = 프로세스 종료·핸들 정리. Windows 10 1809+.
 
 use super::*;
+use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::os::windows::ffi::OsStrExt as _;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,6 +152,9 @@ impl Pty for ConPty {
     }
 }
 
+/// 읽기 스레드가 쌓아 둘 수 있는 출력 상한(바이트) — 넘으면 읽기를 멈춰 셸에 역압을 준다.
+const BACKLOG_CAP: usize = 256 * 1024;
+
 struct ConPtySession {
     hpc: isize,
     process: isize,
@@ -158,7 +162,7 @@ struct ConPtySession {
     writer: isize,
     attr_list: *mut u8,
     attr_size: usize,
-    output: Arc<Mutex<Vec<u8>>>,
+    output: Arc<Mutex<VecDeque<u8>>>,
     eof: Arc<AtomicBool>,
     /// 프로세스 종료를 본 뒤 의사 콘솔을 닫았다(남은 출력 flush → 읽기 EOF).
     closed: bool,
@@ -282,7 +286,7 @@ impl ConPtySession {
             std::alloc::dealloc(attr_list, layout);
             return Err(e);
         }
-        let output = Arc::new(Mutex::new(Vec::new()));
+        let output = Arc::new(Mutex::new(VecDeque::new()));
         let eof = Arc::new(AtomicBool::new(false));
         {
             let (out, eof) = (output.clone(), eof.clone());
@@ -304,7 +308,12 @@ impl ConPtySession {
                         break;
                     }
                     if let Ok(mut o) = out.lock() {
-                        o.extend_from_slice(&buf[..n as usize]);
+                        o.extend(buf[..n as usize].iter().copied());
+                    }
+                    // 역압(10-03 사용자 "ls 출력 중 Ctrl+C가 안 먹는다"): UI가 못 따라오면 여기서 멈춰 ConPTY 파이프가 차게 둔다 —
+                    // 셸의 출력이 막혀야 ^C가 곧바로 효과를 내고(쌓인 수 MB를 다 그린 뒤가 아니라) 메모리도 한없이 늘지 않는다.
+                    while out.lock().map(|o| o.len()).unwrap_or(0) > BACKLOG_CAP {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
                     }
                 }
                 eof.store(true, Ordering::SeqCst);
@@ -351,8 +360,9 @@ impl PtySession for ConPtySession {
         let n = match self.output.lock() {
             Ok(mut o) => {
                 let n = o.len().min(buf.len());
-                buf[..n].copy_from_slice(&o[..n]);
-                o.drain(..n);
+                for (dst, src) in buf.iter_mut().zip(o.drain(..n)) {
+                    *dst = src;
+                }
                 n
             }
             Err(_) => 0,

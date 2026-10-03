@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 pub(crate) const CARET_BLINK_MS: u64 = 530;
 /// 출력 폴링 간격(ms) — 세션이 살아 있는 동안만 깬다.
 pub(crate) const POLL_MS: u64 = 30;
+/// 한 번의 펌프가 UI 스레드를 잡는 상한(ms) — 출력이 폭주해도 입력(Ctrl+C)·그리기가 끼어들 수 있게 나눠 읽는다.
+const PUMP_BUDGET_MS: u64 = 6;
 
 /// 표시 설정(호스트가 설정에서 만든다 — dir2 X-3 · `term.font_size` · `term.wrap` · `term.cols`).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -83,6 +85,10 @@ impl Utf8Chunker {
 type Sel = ((usize, usize), (usize, usize));
 
 pub(crate) struct TermView {
+    /// 읽을 출력이 남았다(시간 예산으로 끊음) — 호스트가 곧바로 다시 펌프한다.
+    pub(crate) backlog: bool,
+    /// 셸이 첫 출력을 냈다(그 전에는 "시작 중" 문구 — 프로필이 무거운 셸은 프롬프트까지 몇 초 걸린다).
+    pub(crate) got_output: bool,
     session: Option<Box<dyn PtySession>>,
     pub(crate) screen: VtScreen,
     chunker: Utf8Chunker,
@@ -115,6 +121,8 @@ impl Default for TermView {
 impl TermView {
     pub(crate) fn new() -> Self {
         TermView {
+            backlog: false,
+            got_output: false,
             session: None,
             screen: VtScreen::new(80, 24),
             chunker: Utf8Chunker::default(),
@@ -186,6 +194,8 @@ impl TermView {
         ) {
             Ok(s) => {
                 self.session = Some(s);
+                self.got_output = false;
+                self.backlog = false;
                 self.screen = VtScreen::new(c, r);
                 self.chunker = Utf8Chunker::default();
                 self.exited = false;
@@ -221,14 +231,22 @@ impl TermView {
         };
         let mut changed = false;
         let mut buf = [0u8; 8192];
+        let t0 = std::time::Instant::now();
+        self.backlog = false;
         loop {
             let n = s.read(&mut buf).unwrap_or(0);
             if n == 0 {
                 break;
             }
+            self.got_output = true;
             if let Some(text) = self.chunker.push(&buf[..n]) {
                 self.screen.feed(&text);
                 changed = true;
+            }
+            // 시간 예산을 넘기면 남은 것은 다음 틱에(그 사이 키 입력·그리기가 처리된다 · 종전 = 다 읽을 때까지 UI 스레드 점유).
+            if t0.elapsed().as_millis() as u64 >= PUMP_BUDGET_MS {
+                self.backlog = true;
+                break;
             }
         }
         if !self.exited && !s.alive() {
@@ -586,6 +604,17 @@ impl TermView {
         if cur_bold {
             dc.select_font_sized(FontSlot::Mono, false, style.font_delta); // 종료 문구·뒤 그리기는 보통 굵기
         }
+        // 시작 중 표시(사용자 10-03 "터미널을 누르면 반응 없이 오래 기다린다" · 1초 이상 걸리는 일은 진행 상태를 보인다):
+        // 세션은 떴지만 셸이 아직 아무것도 내지 않았다 = 프로필 로딩 중.
+        if self.session.is_some() && !self.exited && !self.got_output {
+            dc.text(
+                rc.x + 2,
+                rc.y + 1,
+                Rect::new(rc.x + 2, rc.y + 1, rc.w - 4, cell_h),
+                &ndir_i18n::trf("term.starting", &[&self.shell_label]),
+                theme.text_dim,
+            );
+        }
         if self.exited {
             let y = rc.bottom() - cell_h - 1;
             dc.text_opaque(
@@ -785,5 +814,35 @@ mod tests {
             &wrap,
         );
         assert_eq!((t.screen.cols(), t.view_x), (vis, 0));
+    }
+
+    /// 출력 폭주(사용자 10-03 "ls 출력 중 Ctrl+C가 안 먹는다"): 펌프는 시간 예산 안에서만 읽고 남은 것은 `backlog`로 알린다 —
+    /// 호스트가 틱 사이에 입력을 처리할 수 있다. 몇 번 더 펌프하면 다 읽는다. 첫 출력 전에는 `got_output` = false("시작 중" 표시).
+    #[test]
+    fn pump_is_time_boxed_and_reports_backlog() {
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        let shell = p.shell.default_shell();
+        assert!(t.start(&p, shell, Path::new("."), 80, 24));
+        assert!(!t.got_output && !t.backlog);
+        // 가짜 PTY는 쓴 것을 그대로 돌려준다 — 수 MB를 흘린다.
+        let line = "0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\r\n";
+        let big = line.repeat(60_000);
+        t.write(&big);
+        let t0 = std::time::Instant::now();
+        assert!(t.pump());
+        let first = t0.elapsed();
+        assert!(t.got_output);
+        assert!(t.backlog, "한 번에 다 읽지 않는다");
+        assert!(
+            first < std::time::Duration::from_millis(250),
+            "펌프 1회가 UI를 오래 잡지 않는다: {first:?}"
+        );
+        let mut rounds = 1;
+        while t.backlog && rounds < 100_000 {
+            t.pump();
+            rounds += 1;
+        }
+        assert!(!t.backlog && rounds > 1, "나눠 읽어 끝난다: {rounds}");
     }
 }

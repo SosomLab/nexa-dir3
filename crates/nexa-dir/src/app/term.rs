@@ -158,6 +158,10 @@ impl App {
 
     /// 폴링 간격 — 터미널이 살아 있거나 포커스 깜빡임 중이면 `POLL_MS`.
     pub(crate) fn term_wake(&self, live: bool) -> Option<Duration> {
+        // 시간 예산으로 끊긴 출력이 남아 있으면 쉬지 않고 이어서(사이사이 입력 사건이 처리된다).
+        if self.terms.iter().any(|t| t.backlog) {
+            return Some(Duration::from_millis(1));
+        }
         (live || self.term_focused().is_some()).then(|| Duration::from_millis(POLL_MS))
     }
 

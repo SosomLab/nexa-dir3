@@ -189,6 +189,9 @@ plugins.bundled = Bundled plugins cannot be removed (uncheck to disable).
 dock.terminal = Terminal
 term.exited = [shell exited — press any key to restart]
 term.fail = terminal start failed (ConPTY)
+term.starting = Starting {0}…
+pref.termFallbackFonts = Terminal fallback fonts
+pref.termFallbackFonts.desc = Fonts used for characters the terminal font lacks (prompt icons etc.), comma separated. Empty = an installed Nerd Font is picked automatically. Takes effect after restart.
 info.selected = {0} selected
 info.name = Name: {0}
 info.kind = Kind: {0}

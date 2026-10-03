@@ -2670,3 +2670,28 @@ fn launcher_bar_size_and_gap_settings_apply_live() {
     assert_eq!(app.launcherbar.bounds().h, 24);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 터미널 두부(사용자 10-03): Nerd Font가 설치돼 있으면 고정폭 체인이 프롬프트 아이콘 글리프(Powerline · Font Awesome 대역)를 가진다 ·
+/// 없으면 체인은 그래도 만들어진다(시험은 설치 여부에 따라 분기 — 실패 아님).
+#[test]
+fn terminal_font_chain_covers_nerd_glyphs_when_installed() {
+    let font = app::fonts::mono_chain(None, "").expect("mono chain");
+    let has_nerd = [
+        "Symbols Nerd Font",
+        "JetBrainsMonoNL Nerd Font",
+        "JetBrainsMono Nerd Font",
+        "CaskaydiaCove Nerd Font",
+        "MesloLGS NF",
+        "FiraCode Nerd Font",
+        "Hack Nerd Font",
+    ]
+    .iter()
+    .any(|f| nexa_font::find_font_by_family(f).is_some());
+    let covered = app::fonts::NERD_PROBE.iter().all(|&c| font.covers(c));
+    eprintln!("nerd font installed = {has_nerd} · probe covered = {covered}");
+    if has_nerd {
+        assert!(covered, "설치된 Nerd Font가 터미널 폴백에 들어가야 한다");
+    }
+    // 본문 글자·한글은 언제나.
+    assert!(font.covers('A') && font.covers('한'));
+}
