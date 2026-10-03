@@ -220,6 +220,9 @@ struct App {
     ctx_templates: Vec<platform::NewTemplate>,
     /// 행/배경 메뉴를 열 때의 항목 트리 사본(덤프 `ctx`가 서브메뉴 자식을 보여주기 위해 — nexa-ctl 메뉴는 id 목록만 준다).
     ctx_items: Vec<CtxItem>,
+    /// 외부 끌어다 놓기 1차(winit HoveredFile/DroppedFile · 틱에서 처리).
+    dnd_hover: Vec<PathBuf>,
+    dnd_drop: Vec<PathBuf>,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -447,6 +450,8 @@ impl App {
             ctx_new_dir: None,
             ctx_templates: Vec::new(),
             ctx_items: Vec::new(),
+            dnd_hover: Vec::new(),
+            dnd_drop: Vec::new(),
             platform,
             watch_next: Instant::now(),
             clip: None,

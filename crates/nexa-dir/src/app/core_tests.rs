@@ -2047,3 +2047,69 @@ fn cut_marks_ghost_rows_until_clipboard_changes() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// DnD 1차(SHELL-060~062 · 068): 폴더 행 위에 놓기 = 그 폴더로 **이동**(같은 볼륨 기본) · Ctrl = 복사 · 빈 본문 = 패널 폴더 ·
+/// 자기/하위 거부 · 전송 중 거부 · winit 파일별 DroppedFile 모아서 틱 처리.
+#[test]
+fn external_drop_moves_or_copies_into_folder_under_cursor() {
+    let (mut app, dir) = fixture("dnd");
+    app.layout_for(1200, 800, 1.0);
+    let wait = |app: &mut App| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while app.ops_tick() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "transfer did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let row_of = |app: &App, name: &str| {
+        (0..app.panels[0].rows().source().len())
+            .find(|&i| app.panels[0].rows().source().row(i).text == name)
+            .expect("row")
+    };
+    // 행 "sub"의 화면 점(본문을 위에서 훑는다).
+    let point_of = |app: &App, name: &str| {
+        let r = row_of(app, name);
+        let b = app.panels[0].rows().bounds();
+        (b.y..b.bottom())
+            .map(|y| Point { x: b.x + 40, y })
+            .find(|p| app.panels[0].rows().row_at(p.x, p.y) == Some(r))
+            .expect("point")
+    };
+    let p_sub = point_of(&app, "sub");
+    assert_eq!(
+        app.drop_dest_at(p_sub).map(|(_, d)| d),
+        Some(dir.join("sub"))
+    );
+    let p_file = point_of(&app, "b.md");
+    assert_eq!(
+        app.drop_dest_at(p_file).map(|(_, d)| d),
+        Some(dir.clone()),
+        "파일 행 = 패널 폴더"
+    );
+    assert!(app.drop_dest_at(Point { x: -5, y: -5 }).is_none());
+    // 거부: 자기 자신 · 전송 없음.
+    assert!(app.external_drop(vec![dir.join("sub")], p_sub).is_none());
+    assert!(app.transfer.is_none());
+    // 기본 = 이동.
+    let r = app.external_drop(vec![dir.join("a.txt")], p_sub);
+    assert_eq!(r, Some((dir.join("sub"), ndir_ops::Op::Move)));
+    wait(&mut app);
+    assert!(dir.join("sub").join("a.txt").is_file() && !dir.join("a.txt").exists());
+    // Ctrl = 복사 · winit 이벤트 경로(dnd_dropped → 틱 flush · 커서 = 폴더 행).
+    app.primary = true;
+    app.cursor = (p_sub.x, p_sub.y);
+    app.dnd_hover(dir.join("b.md"));
+    app.dnd_dropped(dir.join("b.md"));
+    assert!(app.dnd_flush());
+    assert!(!app.dnd_flush(), "두 번 처리하지 않는다");
+    wait(&mut app);
+    assert!(
+        dir.join("sub").join("b.md").is_file() && dir.join("b.md").is_file(),
+        "복사 = 원본 유지"
+    );
+    app.primary = false;
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 57차 — DnD 1차: 외부 끌어다 놓기 수신(3-OS 공통)
+
+- **한 일**: `app/dnd.rs` · 이벤트 루프 3 arm + 틱 flush · i18n 2키 · 시험 +1(163).
+- **지금 상태**: DnD = 수신 1차 ✅ · 발신/OLE 완전/자동 스크롤 = 2차. 다음 = T-90/91(매트릭스 전수 · QA 표) · SHCNE.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 드롭 좌표 실기 확인 · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §61](journal/2026-10-03.md)
+
 ## 10-03 56차 — SHELL-044: 잘라낸 항목 흐림(3-OS)
 
 - **한 일**: `TreeSource.cut_marks`/`is_ghosted` · `Panel::set_cut_marks` · `App::sync_cut_marks`(4 시점) · 시험 +1(162).

@@ -156,6 +156,8 @@ new.fileOp = new file
 
 # ── Shell context menu (M3-4) ──
 ctx.new = New
+dnd.rejected = Cannot drop onto itself or its own subfolder.
+dnd.dropped = Dropped {0} item(s) into {1}
 new.menuFolder = Folder
 new.menuTextFile = Text Document
 new.named = New {0}

@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **DnD 1차 수신**: `app/dnd.rs`(winit DroppedFile → 틱 처리 · 폴더 행/패널 폴더 대상 · Ctrl/Shift/볼륨 판정 · 거부 규칙 · 전송 엔진) · 시험 +1(163) → [journal §61](journal/2026-10-03.md)
 - **SHELL-044 잘라내기 흐림**: `TreeSource::is_ghosted` + `sync_cut_marks`(잘라내기/복사/전송 완료/포커스 복귀) · 시험 +1(162) → [journal §60](journal/2026-10-03.md)
 - **T-63 매니저 1차**: 설정 창 플러그인 [설치…](파일 창 → 검증 → 사용자 폴더) · [삭제](사용자분) · 공급자 캐시 무재시작 재구성 · 시험 +1(161) → [journal §59](journal/2026-10-03.md)
 - **fix(test)**: 자가 점검을 돌리는 단위 시험 2종을 CI 부분집합(`ci: true`)으로 — 실제 휴지통/셸 COM 동시 사용 교착(병렬 실행) 제거 → [journal §58](journal/2026-10-03.md)

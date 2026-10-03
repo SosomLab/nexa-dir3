@@ -102,6 +102,9 @@ impl ApplicationHandler<Wake> for App {
         let aux_live = self.aux_tick(now_ms);
         let term_live = self.term_tick(now_ms);
         let ops_live = self.ops_tick();
+        if self.dnd_flush() {
+            redraw = true;
+        }
         self.open_requested_windows(el);
         if !self.startup_timed.is_empty() {
             let due: Vec<String> = self
@@ -207,6 +210,10 @@ impl ApplicationHandler<Wake> for App {
                 self.redraw();
             }
             WindowEvent::CursorLeft { .. } => self.pointer_gone(),
+            // 외부 끌어다 놓기 1차(SHELL-060 · 3-OS 공통): 파일마다 한 건 — 틱에서 모아 처리.
+            WindowEvent::HoveredFile(p) => self.dnd_hover(p.clone()),
+            WindowEvent::HoveredFileCancelled => self.dnd_cancel(),
+            WindowEvent::DroppedFile(p) => self.dnd_dropped(p.clone()),
             WindowEvent::Moved(_) => {
                 // 다른 배율의 모니터로 옮겨진 뒤 ScaleFactorChanged가 안 오는 경우(프로그램 이동) 배율을 다시 읽는다.
                 if let Some(w) = &self.window {

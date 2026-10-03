@@ -156,6 +156,8 @@ new.fileOp = 新しいファイル
 
 # ── Shell context menu (M3-4) ──
 ctx.new = 新規作成
+dnd.rejected = 自分自身やそのサブフォルダーには置けません。
+dnd.dropped = {0} 個の項目を {1} に置きました
 new.menuFolder = フォルダー
 new.menuTextFile = テキスト ドキュメント
 new.named = 新しい {0}

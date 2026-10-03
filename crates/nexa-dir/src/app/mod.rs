@@ -2,6 +2,7 @@
 
 pub(crate) mod bulk;
 pub(crate) mod dialogs;
+pub(crate) mod dnd;
 mod event_loop;
 mod fonts;
 mod input;
