@@ -140,6 +140,34 @@ pub fn size_of(path: &Path) -> u64 {
     }
 }
 
+/// 링크형 항목인가(심볼릭 링크 · Windows 정션/마운트 포인트) — **대상을 따라가지 않고** 판정한다.
+/// 링크는 "가리키는 것"이지 "담고 있는 것"이 아니다: 지우거나 옮길 때 대상의 내용을 건드리면 안 된다.
+pub fn is_link(path: &Path) -> bool {
+    let Ok(m) = fs::symlink_metadata(path) else {
+        return false;
+    };
+    if m.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+        // FILE_ATTRIBUTE_REPARSE_POINT — std가 심링크로 치지 않는 재분석 지점(일부 정션/마운트 포인트)까지.
+        if m.file_attributes() & 0x400 != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// 링크 **자체만** 제거(대상은 그대로). Windows의 폴더 링크는 `remove_dir`, 그 밖은 `remove_file`.
+fn remove_link(path: &Path) -> io::Result<()> {
+    fs::remove_file(path).or_else(|e| match fs::remove_dir(path) {
+        Ok(()) => Ok(()),
+        Err(_) => Err(e),
+    })
+}
+
 /// 취소 신호를 io::Error(Interrupted)로 변환 — 엔진이 취소로 판정.
 fn check_cancel(cancel: &AtomicBool) -> io::Result<()> {
     if cancel.load(Ordering::Relaxed) {
@@ -204,8 +232,22 @@ fn copy_dir_with_progress(
         let e = e?;
         let p = e.path();
         let d = dest.join(e.file_name());
-        if e.file_type()?.is_dir() {
+        let ft = e.file_type()?;
+        if ft.is_dir() && !is_link(&p) {
             copy_dir_with_progress(&p, &d, on_bytes, cancel, copied.as_deref_mut())?;
+        } else if is_link(&p) && fs::metadata(&p).map(|m| m.is_dir()).unwrap_or(false) {
+            // 폴더 링크(심볼릭 링크·정션): 탐색기처럼 **대상 내용**을 복사한다. 단 ① 링크 안쪽 경로는 `copied`에 넣지 않는다 —
+            // 교차 볼륨 이동의 원본 정리(`remove_copied`)가 링크를 통해 **대상의 실제 파일을 지우지 않게**(10-03 데이터 손실 결함)
+            // 링크 경로 하나만 기록되고 정리 때 링크만 제거된다 ② 상위 폴더를 가리키는 링크(순환)는 오류로 멈춘다.
+            if let (Ok(target), Ok(here)) = (fs::canonicalize(&p), fs::canonicalize(src)) {
+                if here.starts_with(&target) {
+                    return Err(io::Error::other(format!(
+                        "링크가 상위 폴더를 가리켜 복사할 수 없음(순환): {}",
+                        leaf_name(&p)
+                    )));
+                }
+            }
+            copy_dir_with_progress(&p, &d, on_bytes, cancel, None)?;
         } else {
             // 원본 규약: 디렉터리 재귀 내부는 overwrite 복사
             copy_file_with_progress(&p, &d, true, on_bytes, cancel)?;
@@ -228,7 +270,11 @@ fn remove_copied(src: &Path, copied: &[PathBuf]) -> io::Result<()> {
         }
     };
     for p in copied {
-        // 파일(심링크 포함) 우선, 실패하면 폴더(빈 폴더만 — 남은 항목이 있으면 그대로 둔다)
+        // 링크는 **링크만**(대상은 그대로) · 파일 우선, 실패하면 폴더(빈 폴더만 — 남은 항목이 있으면 그대로 둔다)
+        if is_link(p) {
+            note(remove_link(p));
+            continue;
+        }
         let r = fs::remove_file(p).or_else(|e| {
             if p.is_dir() {
                 remove_empty_dir(p)
@@ -347,7 +393,12 @@ fn move_by_copy(
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> io::Result<()> {
-    if src.is_dir() {
+    if is_link(src) {
+        // ⚠ 링크(심볼릭 링크·정션)를 다른 볼륨으로 옮길 때: 대상 내용을 새 자리에 복사하고 원본에서는 **링크만** 없앤다.
+        // 종전에는 링크를 폴더처럼 보고 `링크\자식` 경로를 하나씩 지워 **링크가 가리키는 실제 파일이 삭제**됐다(dir2와 공통 결함).
+        copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)?;
+        remove_link(src)
+    } else if src.is_dir() {
         let mut copied = Vec::new();
         copy_onto_inner(src, dest, overwrite, on_bytes, cancel, Some(&mut copied))?; // 스테이징 교체
         remove_copied(src, &copied)
@@ -396,7 +447,10 @@ pub fn move_onto_with_progress(
 /// 완전 삭제(휴지통 아님, 폴더 재귀) — 없으면 무동작(원본 DeletePermanent).
 /// 휴지통 삭제는 셸 API가 필요해 앱 계층(win.rs) 담당.
 pub fn delete_permanent(path: &Path) -> io::Result<()> {
-    if path.is_dir() {
+    if is_link(path) {
+        // 링크 자체만(깨진 링크 포함) — 대상 폴더의 내용은 건드리지 않는다.
+        remove_link(path)
+    } else if path.is_dir() {
         fs::remove_dir_all(path)
     } else if exists(path) {
         fs::remove_file(path)
@@ -1130,5 +1184,96 @@ mod tests {
         }
         let _ = fs::remove_dir_all(&src_root);
         let _ = fs::remove_dir_all(&dst_root);
+    }
+
+    /// 폴더 링크 만들기(시험용) — Unix 심볼릭 링크 · Windows 심볼릭 링크(권한 필요) → 안 되면 정션(`mklink /J` · 권한 불필요).
+    fn make_dir_link(target: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(target, link).is_ok()
+                || std::process::Command::new("cmd")
+                    .args(["/C", "mklink", "/J"])
+                    .arg(link)
+                    .arg(target)
+                    .output()
+                    .is_ok_and(|o| o.status.success())
+        }
+    }
+
+    /// ⚠ 데이터 손실 회귀 시험(10-03): 링크(심볼릭 링크·정션)를 교차 볼륨 이동(복사 후 삭제)하거나 완전 삭제해도 **링크가 가리키는
+    /// 실제 폴더의 내용은 그대로**다 · 폴더 안에 든 링크도 마찬가지 · 새 자리에는 내용이 복사된다. 링크를 만들 수 없는 환경은 건너뜀.
+    #[test]
+    fn link_moves_and_deletes_never_touch_the_target() {
+        let d = fixture("linksafe");
+        let real = d.join("real");
+        fs::create_dir_all(real.join("deep")).unwrap();
+        fs::write(real.join("keep.txt"), b"precious").unwrap();
+        fs::write(real.join("deep").join("more.txt"), b"data").unwrap();
+        let link = d.join("link");
+        if !make_dir_link(&real, &link) {
+            eprintln!("링크를 만들 수 없는 환경 — 건너뜀");
+            let _ = fs::remove_dir_all(&d);
+            return;
+        }
+        assert!(is_link(&link) && !is_link(&real));
+        let intact = |real: &Path| {
+            fs::read(real.join("keep.txt")).ok().as_deref() == Some(b"precious".as_slice())
+                && fs::read(real.join("deep").join("more.txt")).ok().as_deref()
+                    == Some(b"data".as_slice())
+        };
+        let never = AtomicBool::new(false);
+        // ① 최상위 링크의 교차 볼륨 이동: 내용은 새 자리로 복사 · 원본에서는 링크만 사라짐 · 대상 그대로.
+        let out = d.join("moved");
+        move_by_copy(&link, &out, false, &mut |_| {}, &never).unwrap();
+        assert!(intact(&real), "링크 대상의 파일이 지워지면 안 된다");
+        assert!(!exists(&link), "원본 링크는 제거");
+        assert_eq!(fs::read(out.join("keep.txt")).unwrap(), b"precious");
+        assert_eq!(
+            fs::read(out.join("deep").join("more.txt")).unwrap(),
+            b"data"
+        );
+        // ② 링크가 든 폴더의 교차 볼륨 이동: 안쪽 링크도 링크만 제거 · 대상 그대로 · 원본 폴더는 비워져 사라짐.
+        let holder = d.join("holder");
+        fs::create_dir_all(&holder).unwrap();
+        fs::write(holder.join("own.txt"), b"own").unwrap();
+        assert!(make_dir_link(&real, &holder.join("inner")));
+        let out2 = d.join("moved2");
+        move_by_copy(&holder, &out2, false, &mut |_| {}, &never).unwrap();
+        assert!(
+            intact(&real),
+            "폴더 안 링크를 통해서도 대상이 지워지면 안 된다"
+        );
+        assert!(!exists(&holder));
+        assert_eq!(fs::read(out2.join("own.txt")).unwrap(), b"own");
+        assert_eq!(
+            fs::read(out2.join("inner").join("keep.txt")).unwrap(),
+            b"precious"
+        );
+        // ③ 완전 삭제: 링크만.
+        let link2 = d.join("link2");
+        assert!(make_dir_link(&real, &link2));
+        delete_permanent(&link2).unwrap();
+        assert!(!exists(&link2) && intact(&real));
+        // ④ 깨진 링크도 지워진다.
+        let gone = d.join("gone");
+        fs::create_dir_all(&gone).unwrap();
+        let link3 = d.join("link3");
+        assert!(make_dir_link(&gone, &link3));
+        fs::remove_dir_all(&gone).unwrap();
+        delete_permanent(&link3).unwrap();
+        assert!(!exists(&link3));
+        // ⑤ 상위를 가리키는 링크(순환)가 든 폴더의 복사는 오류로 멈춘다(무한 재귀 없음).
+        let cyc = d.join("cyc");
+        fs::create_dir_all(&cyc).unwrap();
+        assert!(make_dir_link(&cyc, &cyc.join("self")));
+        assert!(
+            copy_onto_with_progress(&cyc, &d.join("cyc-out"), false, &mut |_| {}, &never).is_err()
+        );
+        let _ = delete_permanent(&cyc.join("self"));
+        fs::remove_dir_all(&d).unwrap();
     }
 }

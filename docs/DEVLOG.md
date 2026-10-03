@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **⚠ BUG-001 데이터 손실 수정**: 정션/심볼릭 링크를 다른 볼륨으로 이동하면 링크 대상 파일이 지워지던 결함(dir2에도 있음) → `is_link`/`remove_link` · 이동·복사·완전 삭제가 링크를 따라 들어가 지우지 않게 · 시험 +1 · GAP-006~010(.lnk·링크 처리) 등재 → [journal §77](journal/2026-10-03.md)
 - **시작 중 유지 · 툴바 여백 · 스크롤 5건**: 터미널 got_output = 보이는 글자 기준(ConPTY 선행 제어 시퀀스 무시) · `toolbar.icon_pad`(기본 1 · 툴바 30) · dir2 스크롤 조치 호스트 반영(고속 스크롤 설정 · 시스템 휠 줄 수 · 터미널 휠 누적 · 도크 tick · F3 휠 누적) · 시험 +1(179) → [journal §76](journal/2026-10-03.md)
 - **터미널 3건**: 펌프 시간 예산 6 ms + backlog 재개 · ConPTY 버퍼 VecDeque + 256 KiB 역압(출력 폭주 중 Ctrl+C 즉시) · 첫 출력 전 "{셸} 시작 중…"(DR-20) · 고정폭 체인에 설치된 Nerd Font 자동 폴백 + `term.fallback_fonts` · 시험 +2(178) → [journal §75](journal/2026-10-03.md)
 - **툴바 그룹 도크 · 크기/간격 설정 · 값 분류 원칙**: nexa-ui 117차 소비 · 툴바 = `ToolDock` 5그룹(손잡이 드래그 이동 · 배치 저장) · `toolbar.icon_size/item_gap/group_gap/row_gap` · `launcher.icon_size/item_gap` 즉시 반영 · 도크 `::PC::` → 내 PC · 시험 +3(176) · docs/23 값 분류 원장(상수 52 · 고급 70 · 설정 13) + DR-19 · DR-20 1초 규칙 → [journal §74](journal/2026-10-03.md)

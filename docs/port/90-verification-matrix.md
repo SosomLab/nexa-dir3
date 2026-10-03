@@ -61,7 +61,7 @@
 | OPS(core) | `nexa-core` → `ndir-core`(FileKind · Secret 소거) | `crates/ndir-core` | T1 | dir2 테스트 6 | ✅ | DR-11 전수 이식 |
 | OPS(vfs) | `nexa-vfs` → `ndir-vfs`(열거 · MY_PC · 압축 5형식) | `crates/ndir-vfs` | T1 | dir2 테스트 40(Windows 전용 2 포함) | ✅ | 비Windows `MY_PC` 동작은 T-43에서 확인 |
 | OPS(tree) | `nexa-tree` → `ndir-tree` | `crates/ndir-tree` | T1 | dir2 테스트 20(Windows 전용 1) | ✅ | |
-| OPS(ops) | `nexa-ops` → `ndir-ops`(전송·히스토리·일괄 이름 변경) | `crates/ndir-ops` | T1 | dir2 테스트 25 + ignored 1(Windows 전용 1) | ✅ | |
+| OPS(ops) | `nexa-ops` → `ndir-ops`(전송·히스토리·일괄 이름 변경) | `crates/ndir-ops` | T1 | dir2 테스트 25 + ignored 1(Windows 전용 1) · `link_moves_and_deletes_never_touch_the_target` | ✅ | ⚠ DR-11 의도된 차이(§77 · BUG-001): 링크(심볼릭 링크·정션) 이동/복사/완전 삭제가 링크를 따라 들어가 대상을 지우지 않게 고쳤다 — dir2 원본은 교차 볼륨 이동 시 링크 대상 파일 삭제(데이터 손실 · dir2에 그대로 있음) |
 | TERM(vt) | `nexa-term` → `ndir-term`(VT 파서·스킴·복사 서식) | `crates/ndir-term` | T1 | dir2 테스트 56 | ✅ | PTY·뷰는 M4·M5 |
 | KEY-15xx/16xx | i18n 메타·키 498(3언어 파리티) | `crates/ndir-i18n/lang` + `build.rs` | T0(빌드) · T1 | `builtin_langs_parse_and_key_parity` · 빌드 검사 | ✅ | |
 | EXT-201~203 | i18n 크레이트 · 자원 · 빌드 검사 | `crates/ndir-i18n` | T1 | 9 시험 | ✅ | 표 생성(Msg enum)은 DR-14로 하지 않음 |
