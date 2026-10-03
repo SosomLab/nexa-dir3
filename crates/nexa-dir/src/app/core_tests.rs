@@ -1206,7 +1206,7 @@ fn row_and_background_context_menus() {
         d.starts_with("row ")
             && d.contains("edit.copy")
             && d.contains("ctx.copy_path")
-            && d.contains("file.new_folder"),
+            && d.contains("ctx.new["),
         "{d}"
     );
     assert!(
@@ -1742,7 +1742,7 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert!(
         row.contains("ctx.copy_name")
             && row.contains("edit.delete_permanent")
-            && row.contains("file.new_folder"),
+            && row.contains("ctx.new["),
         "{row}"
     );
     app.tab_menu.close();
@@ -1751,7 +1751,7 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     let row = app.dump_of("ctx").unwrap();
     assert!(
         !row.contains("ctx.copy_name")
-            && !row.contains("file.new_folder")
+            && !row.contains("ctx.new")
             && row.contains("ctx.paste_into"),
         "{row}"
     );
@@ -1865,5 +1865,72 @@ fn plugins_page_checkboxes_edit_disabled() {
         app.prefs_win.plugin_states().is_empty(),
         "다른 분류 = 체크박스 없음"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// SHELL-008 새로 만들기 ▸: 단일 선택 행 메뉴에 서브메뉴(폴더 · 텍스트 문서 · 가짜 템플릿) · 파일 항목 = 부모 폴더 · 폴더 항목 = 자신 ·
+/// 템플릿 선택 → `새 Fake Doc.fdoc`(바이트) 생성 + 이름 바꾸기 시작 · undo = 휴지통(가짜 기록) · 다중 선택 = 서브메뉴 없음.
+#[test]
+fn row_menu_new_submenu_creates_from_template() {
+    let (mut app, dir) = fixture("shellnew");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let row_of = |app: &App, name: &str| {
+        (0..app.panels[0].rows().source().len())
+            .find(|&i| app.panels[0].rows().source().row(i).text == name)
+            .expect("row")
+    };
+    let a = row_of(&app, "a.txt");
+    app.panels[0]
+        .rows_mut()
+        .select_program(a, nexa_grid::SelectOp::Single, &mut inv);
+    app.open_row_menu(0);
+    let d = app.dump_of("ctx").unwrap();
+    assert!(d.contains("ctx.new[new.folder new.file new.tpl:0]"), "{d}");
+    assert_eq!(
+        app.ctx_new_dir.as_deref(),
+        Some(dir.as_path()),
+        "파일 항목 = 부모"
+    );
+    app.startup_cmd("ctx.pick:new.tpl:0");
+    let made = dir.join("New Fake Doc.fdoc");
+    assert_eq!(std::fs::read(&made).unwrap(), b"fake-template");
+    assert!(app.panels[0].rows().is_renaming(), "생성 직후 이름 바꾸기");
+    app.startup_cmd("ui.press:escape");
+    assert_eq!(app.history.undo_description(), Some("new file"));
+    app.command("edit.undo");
+    assert!(app
+        .platform
+        .log
+        .as_ref()
+        .unwrap()
+        .borrow()
+        .calls
+        .iter()
+        .any(|c| c == "trash:1"));
+    // 폴더 항목 = 자신 · 다중 선택 = 서브메뉴 없음.
+    let s = row_of(&app, "sub");
+    app.panels[0]
+        .rows_mut()
+        .select_program(s, nexa_grid::SelectOp::Single, &mut inv);
+    app.open_row_menu(0);
+    assert_eq!(app.ctx_new_dir.as_deref(), Some(dir.join("sub").as_path()));
+    app.startup_cmd("ctx.pick:new.folder");
+    assert!(dir.join("sub").join("New Folder").is_dir());
+    app.startup_cmd("ui.press:escape");
+    let b = row_of(&app, "b.md");
+    let a = row_of(&app, "a.txt");
+    app.panels[0]
+        .rows_mut()
+        .select_program(a, nexa_grid::SelectOp::Single, &mut inv);
+    app.panels[0]
+        .rows_mut()
+        .select_program(b, nexa_grid::SelectOp::Toggle, &mut inv);
+    app.open_row_menu(0);
+    assert!(
+        !app.dump_of("ctx").unwrap().contains("ctx.new"),
+        "다중 선택 = 없음"
+    );
+    app.tab_menu.close();
     let _ = std::fs::remove_dir_all(&dir);
 }

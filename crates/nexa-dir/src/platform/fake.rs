@@ -29,6 +29,7 @@ struct FakeDrag(Log);
 struct FakeWatch(Log);
 struct FakeOpen(Log);
 struct FakeDisk(Log);
+struct FakeTemplates(Log);
 
 fn note(log: &Log, s: String) {
     log.borrow_mut().calls.push(s);
@@ -196,6 +197,17 @@ impl Disk for FakeDisk {
     }
 }
 
+impl Templates for FakeTemplates {
+    fn list(&self) -> Vec<NewTemplate> {
+        note(&self.0, "templates.list".into());
+        vec![NewTemplate {
+            label: "Fake Doc".into(),
+            ext: "fdoc".into(),
+            source: TemplateSource::Data(b"fake-template".to_vec()),
+        }]
+    }
+}
+
 pub(crate) fn platform() -> Platform {
     let log: Log = Rc::new(RefCell::new(FakeLog::default()));
     Platform {
@@ -208,6 +220,7 @@ pub(crate) fn platform() -> Platform {
         watcher: Box::new(FakeWatch(log.clone())),
         opener: Box::new(FakeOpen(log.clone())),
         disk: Box::new(FakeDisk(log.clone())),
+        templates: Box::new(FakeTemplates(log.clone())),
         log: Some(log),
     }
 }

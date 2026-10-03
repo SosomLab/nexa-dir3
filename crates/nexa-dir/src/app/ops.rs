@@ -60,6 +60,42 @@ fn op_error_text(e: &OpError) -> String {
     }
 }
 
+/// 새 항목 종류(SHELL-008).
+#[derive(Debug, Clone)]
+pub(crate) enum NewKind {
+    Folder,
+    File,
+    Template(platform::NewTemplate),
+}
+
+/// 템플릿 원천을 `dest`에 만든다(빈 파일 · 복사 · 바이트) — 이미 있으면 실패(`create_new`).
+fn materialize(dest: &std::path::Path, src: &platform::TemplateSource) -> std::io::Result<()> {
+    match src {
+        platform::TemplateSource::Empty => std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(dest)
+            .map(|_| ()),
+        platform::TemplateSource::Copy(from) => {
+            if dest.exists() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "exists",
+                ));
+            }
+            std::fs::copy(from, dest).map(|_| ())
+        }
+        platform::TemplateSource::Data(bytes) => {
+            use std::io::Write as _;
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(dest)?;
+            f.write_all(bytes)
+        }
+    }
+}
+
 impl App {
     /// 붙여넣을 원본(OS 파일 클립보드 우선 · 없으면 앱 내 사본) → (경로, 잘라내기).
     pub(crate) fn clip_sources(&self) -> Option<(Vec<PathBuf>, bool)> {
@@ -453,15 +489,38 @@ impl App {
 
     /// 새 폴더/새 파일(dir2 `create_new` · OPS-018 · CreateOp): 활성 폴더에 `unique_dest` 이름으로 만들고 → 재열람 → 그 행 선택 + 인라인 이름 바꾸기.
     pub(crate) fn create_new(&mut self, folder: bool) {
+        let dir = self.panels[self.active].root_path();
+        self.create_new_at(
+            dir,
+            if folder {
+                NewKind::Folder
+            } else {
+                NewKind::File
+            },
+        );
+    }
+
+    /// `dir`에 새 항목(폴더 · 빈 txt · 템플릿 — SHELL-008 "새로 만들기 ▸") → 히스토리(undo = 휴지통 · redo = 재생성) → 재열람 → 선택 + 이름 바꾸기.
+    pub(crate) fn create_new_at(&mut self, dir: PathBuf, kind: NewKind) {
         let a = self.active;
-        let dir = self.panels[a].root_path();
         if !dir.is_dir() {
             return;
         }
-        let created = if folder {
-            ndir_ops::create_new_dir(&dir, &tr("new.folderBase"))
-        } else {
-            ndir_ops::create_new_file(&dir, &format!("{}.txt", tr("new.fileBase")))
+        let folder = matches!(kind, NewKind::Folder);
+        let created = match &kind {
+            NewKind::Folder => ndir_ops::create_new_dir(&dir, &tr("new.folderBase")),
+            NewKind::File => {
+                ndir_ops::create_new_file(&dir, &format!("{}.txt", tr("new.fileBase")))
+            }
+            NewKind::Template(t) => {
+                let name = if t.ext.is_empty() {
+                    trf("new.named", &[&t.label])
+                } else {
+                    format!("{}.{}", trf("new.named", &[&t.label]), t.ext)
+                };
+                let dest = ndir_ops::unique_dest(&dir, &name, false);
+                materialize(&dest, &t.source).map(|()| dest)
+            }
         };
         let path = match created {
             Ok(p) => p,
@@ -480,16 +539,12 @@ impl App {
         });
         let recreate: ndir_ops::history::RecreateFn = {
             let p = path.clone();
-            if folder {
-                Box::new(move || std::fs::create_dir(&p))
-            } else {
-                Box::new(move || {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&p)
-                        .map(|_| ())
-                })
+            match kind {
+                NewKind::Folder => Box::new(move || std::fs::create_dir(&p)),
+                NewKind::File => {
+                    Box::new(move || materialize(&p, &platform::TemplateSource::Empty))
+                }
+                NewKind::Template(t) => Box::new(move || materialize(&p, &t.source)),
             }
         };
         self.history.push(Box::new(ndir_ops::history::CreateOp::new(

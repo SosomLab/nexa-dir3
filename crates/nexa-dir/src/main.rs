@@ -215,6 +215,11 @@ struct App {
     tab_menu_at: Option<(usize, usize)>,
     /// 행/배경 컨텍스트 메뉴 주인(탭 메뉴와 같은 `ContextMenu` 공유).
     ctx_kind: Option<app::ctxmenu::CtxKind>,
+    /// 행 메뉴 "새로 만들기 ▸"의 대상 폴더 + 열 때의 템플릿 목록(SHELL-008 · 메뉴가 열려 있는 동안만).
+    ctx_new_dir: Option<PathBuf>,
+    ctx_templates: Vec<platform::NewTemplate>,
+    /// 행/배경 메뉴를 열 때의 항목 트리 사본(덤프 `ctx`가 서브메뉴 자식을 보여주기 위해 — nexa-ctl 메뉴는 id 목록만 준다).
+    ctx_items: Vec<CtxItem>,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -439,6 +444,9 @@ impl App {
             tab_menu: ContextMenu::new(),
             tab_menu_at: None,
             ctx_kind: None,
+            ctx_new_dir: None,
+            ctx_templates: Vec::new(),
+            ctx_items: Vec::new(),
             platform,
             watch_next: Instant::now(),
             clip: None,

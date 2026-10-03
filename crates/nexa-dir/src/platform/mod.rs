@@ -31,6 +31,8 @@ mod winrecycle;
 #[cfg(windows)]
 mod winshell;
 #[cfg(windows)]
+mod wintemplates;
+#[cfg(windows)]
 mod winwatch;
 
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
@@ -166,6 +168,110 @@ pub(crate) trait Disk {
     fn space(&self, root: &Path) -> Option<(u64, u64)>;
 }
 
+/// "새로 만들기 ▸" 템플릿 하나(SHELL-008 · dir2 ShellNew 전체 목록의 3-OS 대응): 라벨(OS 종류 이름 또는 파일 이름) · 확장자(점 없음) · 원천.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NewTemplate {
+    pub label: String,
+    pub ext: String,
+    pub source: TemplateSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TemplateSource {
+    /// 빈 파일.
+    Empty,
+    /// 이 파일을 복사.
+    Copy(PathBuf),
+    /// 이 바이트를 쓴다.
+    Data(Vec<u8>),
+}
+
+/// 템플릿 목록 포트 — Windows = 레지스트리 ShellNew + 사용자 폴더 · macOS/Linux = 사용자 폴더(`<설정>/templates` · Linux XDG `TEMPLATES`).
+pub(crate) trait Templates {
+    fn list(&self) -> Vec<NewTemplate>;
+}
+
+/// 사용자 템플릿 폴더들의 파일 = 템플릿(라벨 = 파일 이름 줄기 · 숨김 파일 제외 · 이름순).
+pub(crate) struct UserTemplates {
+    dirs: Vec<PathBuf>,
+}
+
+impl UserTemplates {
+    pub(crate) fn new(dirs: Vec<PathBuf>) -> Self {
+        UserTemplates { dirs }
+    }
+}
+
+impl Templates for UserTemplates {
+    fn list(&self) -> Vec<NewTemplate> {
+        let mut out: Vec<NewTemplate> = Vec::new();
+        for d in &self.dirs {
+            let Ok(rd) = std::fs::read_dir(d) else {
+                continue;
+            };
+            for e in rd.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().into_owned();
+                if !p.is_file() || name.starts_with('.') {
+                    continue;
+                }
+                let label = p
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| name.clone());
+                let ext = p
+                    .extension()
+                    .map(|s| s.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                if out.iter().any(|t| t.label == label && t.ext == ext) {
+                    continue;
+                }
+                out.push(NewTemplate {
+                    label,
+                    ext,
+                    source: TemplateSource::Copy(p),
+                });
+            }
+        }
+        out.sort_by_key(|t| t.label.to_lowercase());
+        out
+    }
+}
+
+/// `~/.config/user-dirs.dirs`의 `XDG_TEMPLATES_DIR="$HOME/Templates"` 해석(순수 함수 · 없으면 None).
+pub(crate) fn xdg_templates_dir(user_dirs: &str, home: &Path) -> Option<PathBuf> {
+    let line = user_dirs
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("XDG_TEMPLATES_DIR="))?;
+    let v = line["XDG_TEMPLATES_DIR=".len()..].trim().trim_matches('"');
+    let v = v
+        .strip_prefix("$HOME/")
+        .map_or_else(|| PathBuf::from(v), |rest| home.join(rest));
+    (!v.as_os_str().is_empty()).then_some(v)
+}
+
+/// 이 OS의 템플릿 폴더들(존재 여부는 묻지 않는다 — 목록을 읽을 때 없으면 건너뜀).
+pub(crate) fn os_template_dirs() -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = Vec::new();
+    if let Some(c) = ndir_settings::config_dir() {
+        v.push(c.join("templates"));
+    }
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let cfg = std::env::var_os("XDG_CONFIG_HOME")
+                .map_or_else(|| home.join(".config"), PathBuf::from)
+                .join("user-dirs.dirs");
+            let dir = std::fs::read_to_string(&cfg)
+                .ok()
+                .and_then(|t| xdg_templates_dir(&t, &home))
+                .unwrap_or_else(|| home.join("Templates"));
+            v.push(dir);
+        }
+    }
+    v
+}
+
 /// OS 모듈이 주는 포트 다섯(셸 · 열기 · 용량 · 휴지통 · 파일 클립보드).
 type OsPorts = (
     Box<dyn Shell>,
@@ -187,6 +293,8 @@ pub(crate) struct Platform {
     pub watcher: Box<dyn Watcher>,
     pub opener: Box<dyn Opener>,
     pub disk: Box<dyn Disk>,
+    /// "새로 만들기" 템플릿(SHELL-008).
+    pub templates: Box<dyn Templates>,
     /// 가짜 플랫폼의 기록(시험) · 운영은 `None`.
     pub log: Option<Rc<RefCell<fake::FakeLog>>>,
 }
@@ -241,6 +349,12 @@ impl FileClipboard for Unsupported {
 impl DragSource for Unsupported {
     fn begin_drag(&self, _paths: &[PathBuf]) -> Result<DragOutcome, PlatformError> {
         Err(PlatformError::Unsupported("drag source"))
+    }
+}
+
+impl Templates for Unsupported {
+    fn list(&self) -> Vec<NewTemplate> {
+        Vec::new()
     }
 }
 
@@ -416,6 +530,10 @@ impl Platform {
         let watcher: Box<dyn Watcher> = Box::new(winwatch::NativeWatcher::new());
         #[cfg(not(windows))]
         let watcher: Box<dyn Watcher> = Box::new(PollWatcher::default());
+        #[cfg(windows)]
+        let templates: Box<dyn Templates> = Box::new(wintemplates::ShellNewTemplates::new());
+        #[cfg(not(windows))]
+        let templates: Box<dyn Templates> = Box::new(UserTemplates::new(os_template_dirs()));
         Platform {
             shell,
             pty,
@@ -426,6 +544,7 @@ impl Platform {
             watcher,
             opener,
             disk,
+            templates,
             log: None,
         }
     }
@@ -446,6 +565,36 @@ mod tests {
             args: vec![],
             label: p.to_string(),
         }
+    }
+
+    /// XDG 템플릿 폴더 해석 · 사용자 템플릿 폴더 목록(숨김 제외 · 이름순 · 라벨/확장자).
+    #[test]
+    fn xdg_templates_and_user_templates() {
+        let home = Path::new("/home/u");
+        assert_eq!(
+            xdg_templates_dir(
+                "XDG_DESKTOP_DIR=\"$HOME/Desktop\"\nXDG_TEMPLATES_DIR=\"$HOME/Templates\"\n",
+                home
+            ),
+            Some(PathBuf::from("/home/u/Templates"))
+        );
+        assert_eq!(
+            xdg_templates_dir("XDG_TEMPLATES_DIR=\"/srv/tpl\"", home),
+            Some(PathBuf::from("/srv/tpl"))
+        );
+        assert_eq!(xdg_templates_dir("# nothing", home), None);
+        let d = std::env::temp_dir().join(format!("ndir-tpl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("Letter.docx"), b"x").unwrap();
+        std::fs::write(d.join(".hidden.txt"), b"x").unwrap();
+        std::fs::write(d.join("a-note.md"), b"x").unwrap();
+        let t = UserTemplates::new(vec![d.clone(), d.join("missing")]).list();
+        assert_eq!(t.len(), 2);
+        assert_eq!((t[0].label.as_str(), t[0].ext.as_str()), ("a-note", "md"));
+        assert_eq!(t[1].label, "Letter");
+        assert!(matches!(&t[1].source, TemplateSource::Copy(p) if p == &d.join("Letter.docx")));
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// 순수 판정: 존재하는 첫 후보 · 전부 없으면 None · 순서 보존.

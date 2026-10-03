@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 50차 — SHELL-008: 행 메뉴 "새로 만들기 ▸"(3-OS 템플릿 포트)
+
+- **한 일**: `platform::Templates`(+`wintemplates.rs` 레지스트리 · `UserTemplates` · XDG) · `create_new_at`/`NewKind` · 행 메뉴 서브메뉴 · 덤프 자식 표기 · 시험 +3(160).
+- **지금 상태**: T-51 B-2 잔여 = OLE DnD · SHCNE 통지. 다음 = T-52/53(mac/linux 잔여) · T-90/91 · T-63 매니저.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §53](journal/2026-10-03.md)
+
 ## 10-03 49차 — T-30 B: 퀵 런처 exe 셸 아이콘
 
 - **한 일**: `app/launcher_icons.rs` · `launcher::exe_path` · `make_launcherbar`(16px · 패딩 2) · 이벤트 루프 폴링 · 덤프 · 시험 +2(157).

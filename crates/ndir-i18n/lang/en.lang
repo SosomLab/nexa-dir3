@@ -156,6 +156,9 @@ new.fileOp = new file
 
 # ── Shell context menu (M3-4) ──
 ctx.new = New
+new.menuFolder = Folder
+new.menuTextFile = Text Document
+new.named = New {0}
 ctx.deletePermanent = Delete Permanently
 ctx.pasteInto = Paste into Folder
 ctx.paste = Paste

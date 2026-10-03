@@ -62,6 +62,7 @@ impl App {
         let (x, y) = self.cursor;
         self.ctx_kind = Some(kind);
         self.tab_menu_at = None;
+        self.ctx_items = items.clone();
         self.tab_menu.open_at(x, y, items, host, text_w);
         self.redraw();
     }
@@ -145,10 +146,33 @@ impl App {
                 _ => {}
             }
         }
-        if vis("new") {
-            items.push(CtxItem::Separator);
-            items.push(CtxItem::item("file.new_folder", tr("menu.file.newFolder")));
-            items.push(CtxItem::item("file.new_file", tr("menu.file.newFile")));
+        // 새로 만들기 ▸(SHELL-008 · dir2 CLSID_NewMenu 호스팅 → 자체 서브메뉴): 단일 선택일 때만 · 대상 = 폴더 항목 자신 / 파일 항목 부모 ·
+        // 자식 = 폴더 · 텍스트 문서(템플릿에 txt가 없을 때) · OS/사용자 템플릿.
+        self.ctx_new_dir = None;
+        self.ctx_templates.clear();
+        if vis("new") && sel.len() == 1 {
+            let target = if sel[0].is_dir() {
+                Some(sel[0].clone())
+            } else {
+                sel[0].parent().map(std::path::Path::to_path_buf)
+            };
+            if let Some(dir) = target.filter(|d| d.is_dir()) {
+                let tpls = self.platform.templates.list();
+                let mut kids = vec![CtxItem::item("new.folder", tr("new.menuFolder"))];
+                if !tpls.iter().any(|t| t.ext == "txt") {
+                    kids.push(CtxItem::item("new.file", tr("new.menuTextFile")));
+                }
+                if !tpls.is_empty() {
+                    kids.push(CtxItem::Separator);
+                }
+                for (i, t) in tpls.iter().enumerate() {
+                    kids.push(CtxItem::item(format!("new.tpl:{i}"), t.label.clone()));
+                }
+                items.push(CtxItem::Separator);
+                items.push(CtxItem::submenu("ctx.new", tr("ctx.new"), kids));
+                self.ctx_new_dir = Some(dir);
+                self.ctx_templates = tpls;
+            }
         }
         self.open_ctx(CtxKind::Row(panel), items);
     }
@@ -269,6 +293,25 @@ impl App {
                     .join("\r\n");
                 let _ = clipboard::write_text(&text);
             }
+            "new.folder" | "new.file" => {
+                if let Some(dir) = self.ctx_new_dir.take() {
+                    let kind = if id == "new.folder" {
+                        app::ops::NewKind::Folder
+                    } else {
+                        app::ops::NewKind::File
+                    };
+                    self.create_new_at(dir, kind);
+                }
+            }
+            t if t.starts_with("new.tpl:") => {
+                let idx: Option<usize> = t["new.tpl:".len()..].parse().ok();
+                if let (Some(dir), Some(tpl)) = (
+                    self.ctx_new_dir.take(),
+                    idx.and_then(|i| self.ctx_templates.get(i).cloned()),
+                ) {
+                    self.create_new_at(dir, app::ops::NewKind::Template(tpl));
+                }
+            }
             "ctx.paste_into" => {
                 let sel = self.panels[panel].selected_paths();
                 if let ([dest], Some((sources, cut))) = (&sel[..], self.clip_sources()) {
@@ -336,7 +379,30 @@ impl App {
             (None, Some(_)) => "tab",
             _ => "?",
         };
-        format!("{kind} {}\n", self.tab_menu.item_ids().join(" "))
+        // 서브메뉴 자식은 `부모[자식 자식]`로(새로 만들기 ▸ · 셸 서브메뉴) — 열 때 보관한 사본(`ctx_items`) · 탭 메뉴는 id 목록만.
+        if self.ctx_kind.is_none() {
+            return format!("{kind} {}\n", self.tab_menu.item_ids().join(" "));
+        }
+        let ids: Vec<String> = self
+            .ctx_items
+            .iter()
+            .filter_map(|it| match it {
+                CtxItem::Item { id, children, .. } if !children.is_empty() => Some(format!(
+                    "{id}[{}]",
+                    children
+                        .iter()
+                        .filter_map(|c| match c {
+                            CtxItem::Item { id, .. } => Some(id.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )),
+                CtxItem::Item { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+        format!("{kind} {}\n", ids.join(" "))
     }
 
     /// 기동 명령 `ctx.pick:<id>` — 열린 메뉴를 닫고 그 항목을 실행.
