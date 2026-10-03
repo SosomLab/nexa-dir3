@@ -379,6 +379,7 @@ pub(crate) fn sort_key_of(col: u32) -> Option<SortKey> {
         COL_KIND => SortKey::Kind,
         COL_SIZE => SortKey::Size,
         COL_MODIFIED => SortKey::Modified,
+        COL_STATUS => SortKey::Status,
         _ => return None,
     })
 }
@@ -751,6 +752,7 @@ mod tests {
         // 열 → 정렬 키: 확장자와 종류는 서로 다른 키 · 내 PC 열(전체 크기 · 여유 공간)은 정렬 대상이 아니다.
         assert_eq!(sort_key_of(COL_EXT), Some(SortKey::Ext));
         assert_eq!(sort_key_of(COL_KIND), Some(SortKey::Kind));
+        assert_eq!(sort_key_of(COL_STATUS), Some(SortKey::Status));
         assert_eq!(sort_key_of(COL_TOTAL), None);
         #[cfg(windows)]
         assert_eq!(title_of(Path::new("D:\\")), "D:");

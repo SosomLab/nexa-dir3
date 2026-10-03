@@ -378,8 +378,7 @@ fn all_columns_for(panel_w: i32, s: f32) -> Vec<Column> {
     if name_w + shown > panel_w {
         name_w = (panel_w - shown - px(8.0, s)).max(px(120.0, s));
     }
-    let mut status = Column::new(filelist::COL_STATUS, tr("col.status"), status_w);
-    status.sortable = false; // 상태로는 정렬하지 않는다(정렬 키 없음)
+    let status = Column::new(filelist::COL_STATUS, tr("col.status"), status_w);
     vec![
         Column::new(filelist::COL_NAME, tr("col.name"), name_w),
         status,
@@ -1123,7 +1122,7 @@ mod tests {
         );
         let all = all_columns_for(1000, 1.0);
         assert_eq!(all.len(), 6);
-        assert!(!all[1].sortable, "상태 열은 정렬하지 않는다");
+        assert!(all[1].sortable, "상태 열도 정렬한다(SortKey::Status)");
         assert_eq!((all[4].width, all[5].width), (64, 110));
         assert_eq!(view_mode_of("tiles"), ViewMode::Tiles);
         assert_eq!(view_mode_of("x"), ViewMode::Tree);

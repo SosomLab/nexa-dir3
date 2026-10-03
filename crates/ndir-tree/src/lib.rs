@@ -98,6 +98,8 @@ pub enum SortKey {
     Size,
     Modified,
     Kind,
+    /// 상태(클라우드 — dir3 "상태" 열): 없음 → 온라인 전용 → 로컬에 있음 → 항상 유지 순 · 같은 상태끼리는 다음 키/이름.
+    Status,
     /// 정렬 없음 = 원래 **열거 순서**(children id 오름차순 복원).
     None,
 }
@@ -357,6 +359,7 @@ impl Tree {
                 SortKey::Kind => kind_rank(na.kind)
                     .cmp(&kind_rank(nb.kind))
                     .then_with(|| cmp_name(ext_of(&na.name), ext_of(&nb.name))),
+                SortKey::Status => status_rank(na.attrs).cmp(&status_rank(nb.attrs)),
                 SortKey::None => Ordering::Equal, // 위에서 처리(도달 안 함)
             };
             let ord = if desc { ord.reverse() } else { ord };
@@ -817,6 +820,16 @@ fn ext_of(name: &str) -> &str {
     match name.rfind('.') {
         Some(i) if i > 0 => &name[i + 1..],
         _ => "",
+    }
+}
+
+/// 상태 정렬 순위(속성 비트 → [`ndir_vfs::cloud_status`]).
+fn status_rank(attrs: u32) -> u8 {
+    match ndir_vfs::cloud_status(attrs) {
+        ndir_vfs::FileStatus::None | ndir_vfs::FileStatus::Network => 0,
+        ndir_vfs::FileStatus::CloudOnly => 1,
+        ndir_vfs::FileStatus::AvailableLocally => 2,
+        ndir_vfs::FileStatus::AlwaysKeep => 3,
     }
 }
 
@@ -1423,6 +1436,26 @@ mod tests {
         t.set_sort(spec(SortKey::Ext, false, true));
         // 폴더(확장자 없음, 이름 tie) → 파일 확장자: log(a) < md(z) < txt(m)
         assert_eq!(names(&t), vec!["adir", "zdir", "a.log", "z.md", "m.txt"]);
+    }
+
+    /// 상태 정렬 순위(dir3 "상태" 열): 없음/네트워크 0 → 온라인 전용 → 로컬에 있음 → 항상 유지.
+    #[test]
+    fn status_rank_orders_cloud_states() {
+        use ndir_vfs::FileStatus as S;
+        let bits: Vec<u32> = (0..32).map(|i| 1u32 << i).collect();
+        let find = |want: S| {
+            bits.iter()
+                .copied()
+                .find(|b| ndir_vfs::cloud_status(*b) == want)
+        };
+        assert_eq!(status_rank(0), 0);
+        let ranks: Vec<u8> = [S::CloudOnly, S::AvailableLocally, S::AlwaysKeep]
+            .into_iter()
+            .filter_map(find)
+            .map(status_rank)
+            .collect();
+        assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
+        assert!(ranks.iter().all(|r| *r > 0));
     }
 
     #[test]
