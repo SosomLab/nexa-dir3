@@ -2937,9 +2937,16 @@ fn folder_shortcut_navigates_inside_the_app() {
     log.borrow_mut().link_target = None;
     app.open_external(&lnk);
     assert_eq!(opens(&log), 2);
+    // 명령 `cmd.activate` = 캐럿 행 활성화(파일 = OS 열기).
+    let mut inv = Invalidations::default();
+    app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.command("cmd.activate");
+    assert_eq!(opens(&log), 3);
+    app.panels[0].navigate_to(dir.join("sub"), &mut inv);
     log.borrow_mut().link_target = Some(dir.clone());
     app.open_external(&dir.join("a.txt"));
-    assert_eq!(opens(&log), 3);
+    assert_eq!(opens(&log), 4);
     assert_eq!(app.panels[0].root_path(), dir.join("sub"));
     let _ = std::fs::remove_dir_all(&dir);
 }

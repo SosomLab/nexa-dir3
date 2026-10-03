@@ -514,6 +514,15 @@ impl App {
             }
             "view.preview_window" => self.open_preview_window(a),
             "cmd.contextMenu" => self.open_row_menu_at_caret(a),
+            // 활성화(Enter와 같은 일 — 폴더 = 진입 · 파일 = 열기): 기동 명령·키맵에서 이름으로 부를 수 있게(행 메뉴의 "열기"와 같은 id).
+            "cmd.activate" => {
+                if let Some(row) = self.panels[a].rows().caret() {
+                    self.panels[a].activate_row(row, &mut inv);
+                    if let Some(path) = self.panels[a].take_open() {
+                        self.open_external(&path);
+                    }
+                }
+            }
             "help.about" => self.about_ask(),
             _ if id.starts_with("launch:") => {
                 if let Ok(i) = id["launch:".len()..].trim().parse::<usize>() {
