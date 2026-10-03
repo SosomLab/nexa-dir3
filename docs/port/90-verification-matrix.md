@@ -9,37 +9,37 @@
 
 | 접두 | 원장 | 덮음 | ✅ | 🚧 | ⚠ | 🖐 | 미착수 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| B | 21 | 0 | 0 | 0 | 0 | 0 | 21 |
-| CI | 119 | 33 | 13 | 19 | 0 | 0 | 86 |
+| B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
+| CI | 119 | 119 | 90 | 29 | 0 | 0 | 0 |
 | CLOUD | 99 | 99 | 0 | 0 | 0 | 0 | 0 |
-| CMD | 430 | 423 | 172 | 141 | 110 | 0 | 7 |
-| DLG | 88 | 84 | 30 | 0 | 54 | 0 | 4 |
-| EXT | 213 | 191 | 126 | 45 | 19 | 0 | 22 |
-| GUI | 95 | 88 | 30 | 28 | 30 | 0 | 7 |
-| KEY | 817 | 683 | 663 | 20 | 0 | 0 | 134 |
-| L | 33 | 0 | 0 | 0 | 0 | 0 | 33 |
-| LIC | 149 | 147 | 134 | 13 | 0 | 0 | 2 |
-| N | 15 | 0 | 0 | 0 | 0 | 0 | 15 |
-| O | 20 | 0 | 0 | 0 | 0 | 0 | 20 |
+| CMD | 430 | 430 | 173 | 147 | 110 | 0 | 0 |
+| DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
+| EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
+| GUI | 95 | 95 | 30 | 35 | 30 | 0 | 0 |
+| KEY | 817 | 817 | 751 | 32 | 34 | 0 | 0 |
+| L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
+| LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
+| N | 15 | 15 | 0 | 15 | 0 | 0 | 0 |
+| O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
-| OS | 19 | 0 | 0 | 0 | 0 | 0 | 19 |
+| OS | 19 | 19 | 0 | 19 | 0 | 0 | 0 |
 | PANEL | 138 | 138 | 130 | 8 | 0 | 0 | 0 |
-| PLUG | 100 | 88 | 83 | 0 | 1 | 0 | 12 |
+| PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
-| RENDER | 54 | 0 | 0 | 0 | 0 | 0 | 54 |
-| RT | 28 | 0 | 0 | 0 | 0 | 0 | 28 |
-| SET | 104 | 86 | 83 | 0 | 3 | 0 | 18 |
-| SHELL | 75 | 29 | 22 | 0 | 0 | 0 | 46 |
-| SKEL | 291 | 273 | 147 | 76 | 50 | 0 | 18 |
-| T | 48 | 5 | 5 | 0 | 0 | 0 | 43 |
+| RENDER | 54 | 54 | 14 | 0 | 40 | 0 | 0 |
+| RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
+| SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
+| SHELL | 75 | 75 | 38 | 10 | 11 | 0 | 0 |
+| SKEL | 291 | 291 | 147 | 94 | 50 | 0 | 0 |
+| T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 1 | 0 | 234 | 0 | 0 |
 | UIK | 67 | 67 | 10 | 12 | 45 | 0 | 0 |
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4266 | 3677 | 2136 | 814 | 608 | 0 | 589 |
+| **합계** | 4266 | 4266 | 2342 | 1026 | 756 | 0 | 0 |
 
 ## 행
 
@@ -128,6 +128,43 @@
 | DLG-074~077 · 079~083 · 086 · 088 | 일괄 이름 변경 창(880×620 · 카드 스택 6종 · 수확 규칙 · 실시간 미리보기 · 충돌 · 적용 토글 · 정렬 · 프리셋 메뉴/저장/불러오기 · [Rename] 순차 + undo 1건 · 선택 수집) | `bulk_win.rs` · `app/bulk.rs` · `ndir-ops/batch_rename.rs` | T2 | `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` · ndir-ops 코어 14 | ✅ | 관리 팝업(084) · 포맷 도움말(085) · 썸(078) · 라벨 실측(087) · TZ |
 | CI-114 · CI-052~066 · T-82 | 패키징 3-OS(`packaging/lib.sh` 공용 · deb/rpm FHS · Universal 2 .app + pkg/dmg · MSI(WiX v4 · Main+PathEnv) + 포터블 zip · 동봉 `plugins/` · THIRD-PARTY-NOTICES · 임포트 게이트 · `release.yml` 설치 스모크) | `packaging/**` · `scripts/third-party-notices.*` · `scripts/check-imports.ps1` · `.github/workflows/release.yml` | T0·T5 | 로컬: `stage_common` · `check-imports` 15종 인박스 · `build-msi.ps1`/`build-zip.ps1` · CI: release.yml 설치→`--version`·`--smoke`→제거 잔여 0 | 🚧 | 태그 릴리스 첫 실행 전 · deb/rpm/pkg/dmg는 CI 몫 |
 | DLG-069 · 070 · 071 · 072 · 073 · T-13 | 순서/표시 편집 창(어댑터 3종 · 블록/자식 이동 규칙 · 표시 체크(잠금·그룹 통째) · 키보드 · 실시간 적용 통지) + 툴바/컨텍스트 메뉴/컬럼 반영 · 세션 `cols` | `order.rs` · `order_win.rs` · `app/order.rs` · `app/menus.rs::build_toolbar` · `app/ctxmenu.rs::ctx_layout` · `panel.rs::apply_col_layout` | T1·T2·T3·T4 | `order::tests` 3 · `order_win::tests` 2 · `order_editor_applies_toolbar_ctxmenu_and_columns` · `order-editor.scn` | ✅ | 우클릭 팝업 진입 ☐ · 셰브론 접기 생략 |
+| KEY-201~222 | 영속 파일 목록(settings.conf · session.conf · crash · license · plugins/ · renames/ · lang 오버레이 · 구 이름) | `ndir-settings::config_dir` · `session.rs` · `crash.rs` · `app/license.rs` · `app/bulk.rs::presets_dir` · `preview::user_plugin_dir` | T1·T3 | settings/session/crash 시험 · T-80/T-71/T-63 core 시험 · `config_dir_honors_env_home` | ✅ | 데이터 폴더 = DR-9(NDIR_HOME → exe 옆 data/ → OS 사용자 폴더) |
+| KEY-301~317 | 명령행 인자(경로 · `--smoke` · `--selfcheck` · `--version`) · 실행 시 환경 변수(`NDIR_HOME` · `NDIR_STARTUP_CMD` · `NDIR_PLUGINS_DIR` · `NDIR_NO_ACTIVATE` · `NDIR_TRACE_*`) | `main.rs`(cli) · `app/startup_cmd.rs` · `preview/mod.rs` | T3·T4 | `cli::tests` · 시나리오 러너(환경 변수 주입) · `--smoke` | ✅ | dir2 `NEXA_*` → `NDIR_*` 개명 |
+| KEY-318~324 | 빌드 시 환경 변수 · 레지스트리 | `build.rs` · `packaging/windows/nexa-dir.wxs`(InstallDir) | T0 | CI 빌드 · MSI 스모크 | ⚠ | dir3는 레지스트리를 설정 저장에 쓰지 않는다(MSI InstallDir·PathAdded만) |
+| KEY-325~336 | 레지스트리 밖의 OS 설정 조회(표시 언어 · 테마 · 더블클릭 간격 · 휠 줄 수 · 글꼴 · …) | `ndir-i18n/syslang.rs` · `theme.rs`(winit 테마) · `ui.dblclick_ms` 설정 · `nexa-font` | T1·T3 | `syslang` 시험 · `apply_theme_mode` 시험 | 🚧 | 휠 줄 수/스크롤 설정 = OS 기본값 상수(OS-011) |
+| KEY-337~345 | 설정 파일로 재정의할 수 있는 내장 상수 | `ndir-settings::registry` HIDDEN 키 | T1 | `dependencies_and_hidden_and_advanced` | ✅ | 구현 상수 = 설정 키(docs/15 규약) |
+| KEY-571 · 581~600 | 대응표 잔여(`launcher_count`) · `session.cfg` 대응 · 새로 필요한 키 후보 | `session.rs` · `registry.rs` | T1 | session 시험 · registry 시험 | ✅ | 571 = ⚠ 목록 대체 · 599~600 후보는 채택 안 함(필요 시 등재) |
+| KEY-601~615 | nexa-sql 설정 구조 차용 계약(REGISTRY · 변경분만 저장 · 곁 표 · 자동 설정 창) | `ndir-settings` 전체 · `prefs_win.rs` | T1·T3 | `ndir-settings` 시험 23 · prefs core 시험 | ✅ | DR-3 |
+| CI-067~074 | Homebrew 워크플로 · 서명 자리 · THIRD-PARTY-NOTICES · 브랜딩 SSOT · 배포 교훈표 · 워크스페이스 메타/린트 · 툴체인 고정 | `release.yml` · `scripts/third-party-notices.*` · `packaging/branding/` · `Cargo.toml [workspace.lints]` · `rust-toolchain.toml` | T0 | CI · check-all | ✅ | Homebrew(067) = 채널 결정 후속(⚠) |
+| CMD-101 · PLUG-085 · SHELL-020 · 022 · 042 | 미리보기 창 우클릭 복사 · 압축 암호 비밀 타입 · 고유 항목 동작(경로/이름 복사 · 완전 삭제 · 폴더에 붙여넣기) · 파일 실행(연결 프로그램) · 붙여넣기 대상 규칙 | `preview_win.rs` · `preview/archive.rs` · `app/ctxmenu.rs` · `platform::Opener` · `app/ops.rs::paste_dest` | T1·T3 | `password_cache_is_memory_only_and_forgettable` · `row_and_background_context_menus` · `copy_paste` core · `fake.open` 시험 | ✅ | 미리보기 창 우클릭 메뉴는 Ctrl+C 복사로 대체(🚧 메뉴) |
+| RENDER-001~030 · 045~054 | dir2 렌더링(Direct2D 백버퍼·DPI · DirectWrite 텍스트 · 도형/클립/이미지 · GDI 글꼴 체인·팔레트) | nexa-ui `nexa-gfx`(CPU 래스터) · `nexa-font` · `app/fonts.rs`(em_to_px) | T2 | nexa-gfx/nexa-ctl 시험 · `fonts` 시험 | ⚠ | DR-1 — OS 렌더 API 대신 자체 래스터(3-OS 동일 픽셀) · 사용자 피드백 10-03 글자 크기/전각 수정 |
+| RENDER-031~044 | 아이콘·SVG·자원(툴바 SVG · exe/파일 아이콘 · ico 리소스) | `icons.rs` · nexa-gfx `svg.rs` · `app/launcher_icons.rs` · `build.rs`/`winres.rs` | T1·T2 | `all_embedded_icons_render_masks` · `toolbar_commands_map_to_assets` · 런처 아이콘 시험 | ✅ | 파일 목록 아이콘(PANEL-064) = nexa-fs IconService 후속 |
+| B-001~021 | 렌더 자원 대조표(화면 표면 · 글리프 래스터 · 기본/고정폭 글꼴 · …) | nexa-gfx `Surface` · ab_glyph · nexa-font | T2 | nexa-ui 시험 | ⚠ | DR-1 대체 표 |
+| N-001~015 | "없음 → 추가" 표(클립 스택 · 끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · T-31 잔여 | T2 | nexa-gfx svg 시험 | 🚧 | SVG ✅ · 클립 스택/italic/테마 토큰 = T-31 |
+| L-001~033 | 실측 교훈(위젯 · 패널 · 클라우드) | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
+| O-001~020 | 클라우드 결함·미처리 목록 | — | — | — | ☐ | CLOUD 미이식(M8) |
+| OS-010~028 | 패널/목록 OS 분기 표(타임존 · 휠 줄 수 · 픽셀 스크롤 · 가로 휠 · 파일 아이콘 · …) | `app/input.rs` · `filelist.rs`(format_time) · `platform/` | T3 | `input` 휠 시험 · `format_time` 시험 | 🚧 | 타임존 = 로컬 변환 ✅ · 파일 아이콘 ☐ |
+| RT-001~028 | 릴리스 회귀 테스트 후보(3타깃 정적 게이트 · 3-OS test · 적대적 입력 · 플러그인 E2E · …) | `scripts/check-3os.sh` · `ci.yml` · `ndir-term`/`archive` 시험 · CI plugins 잡 | T0~T5 | 전부 CI | 🚧 | 001·002·004 ✅ · 적대적 입력 묶음 일부(VT·zip) ✅ · 나머지 = T-91 |
+| T-001~048 | 패널/위젯 테스트 후보 표 | `app/core_tests.rs` · nexa-grid 시험 | T3 | `layout_core` · `tabs_and_panels` · 네비 시험 … | 🚧 | 후보별 ID 대조는 T-91 QA 표 |
+| KEY-101~112 | `session.cfg` 키(active_panel · panel{i}.tabs/active/expanded/locked/pinned/modes/cols/colw) | `session.rs` | T1 | `session_roundtrip_with_pipe_separator` · `parse_is_tolerant_and_loads_legacy_name` | ✅ | |
+| KEY-1601~1627 | i18n 결함·사문·플랫폼 종속 문구 목록 | `ndir-i18n` | T1 | `locked_and_fail_messages_carry_list_placeholder` | ⚠ | 사문 키 유지 · OS 문구는 EXT-212~215 |
+| CI-001~040 | 문서 체계 · git/커밋/브랜치/푸시/태그 · 작업 규칙(격리·안전·검증) | `CLAUDE.md` · `docs/15` · `docs/16` · `docs/18` | — | CI-119 행 | ✅ | nexa-sql 규칙 dir3판 |
+| CI-041~051 | CI 워크플로(3-OS 매트릭스 · 캐시 · 폰트 · 플러그인 잡) | `.github/workflows/ci.yml` | T0 | CI 자체 | ✅ | CI-113 |
+| CI-075~093 | 테스트 하네스 7층 · 자동 시험 진입점(스모크 · 기동 명령 · 환경 변수) | `app/startup_cmd.rs` · `ndir-check` · `selfcheck.rs` · `docs/18` | T3~T5 | 시나리오 20 · `--smoke` · `--selfcheck --ci` | ✅ | DR-10 |
+| CI-094~099 · 101~120 | 절차서(성능 · 코드 건강) · 제안 요소 표 | `docs/18` · `scripts/check-all.sh` | — | — | 🚧 | 성능 절차서/기준선 = T-91 |
+| SET-039 · 054 · 100~115 | 도메인 접근자 · 프로젝트 파일 · CLI `nsql config`/명명 규칙/미구현 안 | `ndir-settings/lib.rs` | T1 | registry 시험 | ⚠ | projfile/CLI는 nexa-sql 전용(dir3 = `--smoke`/`--selfcheck`) · 명명 규칙 채택 |
+| SET-120~137 | 차용 테스트 · 상속 금지 결함 | `ndir-settings` 시험 | T1 | `registry_defaults_are_valid_and_keys_unique` · `every_command_has_key_entry_and_label`(SET-130) · `renamed_and_rescaled_tables_are_consistent` | ✅ | |
+| SHELL-012 · 016 · 017 · 021 | 셸 명령 실행 후 재로드 · 동기 폴백 · 우클릭 판정 순서 · 포워딩 해제 | `platform/winshell.rs` · `app/input.rs` · `app/ctxmenu.rs` | T1·T3 | winshell 시험 · `row_and_background_context_menus` | ✅ | 016/021 = dir3 구조상 불필요(메뉴 스레드 없음) |
+| SHELL-010 · 013 · 018 · 090~100 | 내 PC 클라우드 메뉴 · 숫자 ID 대역 · 진단 계측 · 접근성(UIA) · 비밀/코어 공용 · 예제 | — | — | — | ⚠ | 010 = CLOUD ☐ · 013 = 문자열 id · 018 = `NDIR_TRACE_*` 환경 변수 · 접근성 = nexa-ui 범위 밖(후속 결정) |
+| SHELL-034~038 | 셸 수준 통지(SHCNE) · 프로브 스윕 · 감시 자가 치유 | `platform/winwatch.rs` · `PollWatcher` | T1 | winwatch 시험 | 🚧 | SHCNE(034) ☐ · 프로브/치유 ✅ |
+| SHELL-045 · 050~052 | 클립보드 열기 재시도 · 텍스트/서식 복사 · 포커스 문맥 디스패치 | `platform/windows.rs::ClipGuard` · `clipboard.rs` · `app/input.rs` | T1·T3 | windows 클립보드 시험 · `fixed_columns…`(HTML 복사) | ✅ | |
+| SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | ☐ | DnD 2차(docs/port/19 §4-7 2~4차) |
+| SHELL-070~075 | 삭제·휴지통(확인 대화상자 · 잠긴 항목 · 완전 삭제 · 복원) | `app/ops.rs` · `trashop.rs` · `platform/*recycle*`·`macos.rs`·`linux.rs` | T1·T3·T5 | `dialogs_delete_permanent_and_paste_conflict` · `new_folder_rename_and_undo` · 휴지통 OS별 시험 · 자가 점검 trash | ✅ | |
+| SHELL-080~085 | 파일 정보(도크 Info — 종류 이름 · 크기 · 시각 · 속성) | `dockinfo.rs` · nexa-fs `kind_name` | T3 | `dock` core 시험 | 🚧 | OS 종류 이름 macOS/Linux = nexa-fs 후속 |
+| EXT-204~215 · 401~418 | i18n 구성안 세부(식별자 규칙 · 레지스트리 연결 · 호출부 전환) · nexa-sql에서 가져올 것 잔여 | `ndir-i18n` · `ndir-settings` | T1 | i18n/settings 시험 | 🚧 | |
+| PLUG-009~013 · 040~047 · 050~062 · 110~127 잔여 | 테마 신호 · 표시 폭 · 상한 · 메타 목록 · 라인 태그 세부 · 창 세부 · 동봉/배포 세부 | `preview/mod.rs` · `preview_win.rs` · `packaging/` | T1·T3 | `render_svg_writes_bmp_and_caches` · `plugin_manager_install_and_remove` · T-62 시험 | 🚧 | |
+| SKEL-414~439 | 재그리기 3원칙 · 통지 규약 · Focus 초안 · 메뉴/명령 규약 · 자원 · platform 시그니처 · 하네스 훅 | `app/event_loop.rs` · `platform/mod.rs` · `app/startup_cmd.rs` | — | — | 🚧 | 규약 초안 = docs/01에 흡수 |
+| GUI-067~079 · DLG-078~087 · LIC-159 · 162 · CMD-083~085 · 100 · 498~499 | 메뉴 지표 · 첫 프레임 · 아이콘 버튼 · 카드 스크롤 썸 · 프리셋 관리 팝업 · 날짜 도움말 · 라이선스 i18n/CLI · 클라우드 후보 메뉴 · 미리보기 창 우클릭 · 기타 | 각 창 | — | — | 🚧 | 소형 잔여(T-71/T-62/T-80 비고와 동일) |
 | CLOUD-001~099 | 클라우드(동기화 폴더 링크 · OAuth · 가상 FS · 전송) 전체 | — | — | — | ☐ | **미이식 보류(M8)** — dir2 X-36/37 · 네트워크 기능은 `plugins.*`/`cloud.*` 게이트 뒤 · 결정 필요(DR 후보) |
 | PROC-001~034 | 프로젝트 관리·개발·문서·커밋 규칙(dir2 계승) | `CLAUDE.md` · `docs/15` · `docs/16` · `docs/18` | — | CI-119 행 · `check-all.sh` | ✅ | 규칙 문서 dir3판 |
 | PROC-040~057 | 라이선스 정책(전 기능 무료 · 상업 유료 · 게이트 0 · 제품 id) | `ndir-license` · `app/license.rs` · nexa-license `presets` | T1·T3·T5 | `ndir-license` 시험 · T-80 core 시험 · T-81 E2E(`nexa-license`) | ✅ | DR-4 |

@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 62차 — T-90 5차: 원장 전 ID 덮음(묶음 행 28)
+
+- **한 일**: RENDER/B/N/L/O/OS/RT/T/CI/SET/SHELL/소형 묶음 행 · 감사 재생성.
+- **지금 상태**: 매트릭스가 원장 4,266 ID 전부를 가리킨다(상태별 수치 = 90 집계). T-90 = 전수 달성 · 이후 🚧→✅ 세분화는 T-91과 함께. 다음 = T-91 QA 표/성능 기준선 · CLOUD 결정 · SHCNE · DnD 2차 · T-31/T-32.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정 · CLOUD 이식 여부 결정.
+
+→ [journal/2026-10-03 §66](journal/2026-10-03.md)
+
 ## 10-03 61차 — T-90 4차: 접두별 묶음 행 44
 
 - **한 일**: PROC/WINA/WINB/WINC/PANEL/OPS/TERM/PLUG/PREFS/DLG/GUI/LIC/EXT/SKEL/UIC/UIK/CLOUD 묶음 행 · 감사 재생성.
