@@ -1134,6 +1134,7 @@ mod tests {
         ListOpts {
             show_hidden: true,
             show_dotfiles: true,
+            show_protected: true,
             folders_first: true,
             case_sensitive: false,
         }

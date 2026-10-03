@@ -56,6 +56,7 @@ impl App {
             }
             "list.show_hidden"
             | "list.show_dotfiles"
+            | "list.show_protected"
             | "list.folders_first"
             | "list.sort_case_sensitive" => {
                 let opts = list_opts(&self.settings);

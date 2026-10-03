@@ -284,6 +284,7 @@ fn list_opts(s: &Settings) -> ListOpts {
     ListOpts {
         show_hidden: s.flag("list.show_hidden"),
         show_dotfiles: s.flag("list.show_dotfiles"),
+        show_protected: s.flag("list.show_protected"),
         folders_first: s.flag("list.folders_first"),
         case_sensitive: s.flag("list.sort_case_sensitive"),
     }

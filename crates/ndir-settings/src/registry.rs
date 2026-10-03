@@ -558,6 +558,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 보호된 운영 체제 항목(Windows 숨김+시스템 · macOS 숨김+SIP 보호 · Linux 해당 없음) — 기본 = 숨김(탐색기 권장값 · 사용자 10-03).
+    e!(
+        "list.show_protected",
+        CAT_LIST,
+        "pref.showProtected",
+        "pref.showProtected.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "list.col_autofit_max",
         CAT_LIST,

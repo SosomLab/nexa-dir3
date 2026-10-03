@@ -48,6 +48,8 @@ pub(crate) fn display_path(p: &Path) -> String {
 pub(crate) struct ListOpts {
     pub show_hidden: bool,
     pub show_dotfiles: bool,
+    /// 보호된 운영 체제 항목 표시(`list.show_protected`).
+    pub show_protected: bool,
     pub folders_first: bool,
     pub case_sensitive: bool,
 }
@@ -111,7 +113,12 @@ impl TreeSource {
             }
             None => (vec![(SortKey::Name, false)], Vec::new(), Vec::new()),
         };
-        match Tree::open_filtered(&self.path, self.opts.show_hidden, self.opts.show_dotfiles) {
+        match Tree::open_visible(
+            &self.path,
+            self.opts.show_hidden,
+            self.opts.show_dotfiles,
+            self.opts.show_protected,
+        ) {
             Ok(mut t) => {
                 t.set_sort(SortSpec {
                     keys,
@@ -529,6 +536,7 @@ mod tests {
         ListOpts {
             show_hidden: true,
             show_dotfiles: true,
+            show_protected: true,
             folders_first: true,
             case_sensitive: false,
         }

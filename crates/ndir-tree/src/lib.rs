@@ -141,8 +141,8 @@ pub enum FindScope {
     VisibleStream,
 }
 
-/// Windows 숨김 속성 비트(FILE_ATTRIBUTE_HIDDEN).
-const ATTR_HIDDEN: u32 = 0x2;
+/// 숨김 속성 비트(Windows 숨김 · macOS `UF_HIDDEN`).
+const ATTR_HIDDEN: u32 = ndir_vfs::ATTR_HIDDEN;
 
 /// 가시성 필터(숨김 속성·점 파일). 앱 `ViewOptions`와 동일 개념(둘 다 "보기").
 /// 열거 시 적용 — 걸러진 항목은 트리에 아예 생성하지 않는다.
@@ -150,11 +150,16 @@ const ATTR_HIDDEN: u32 = 0x2;
 struct Filter {
     show_hidden: bool,
     show_dotfiles: bool,
+    /// 보호된 운영 체제 항목(숨김 + 시스템)도 보인다 — 꺼져 있으면 `show_hidden`이 켜져 있어도 숨긴다(탐색기 규칙).
+    show_protected: bool,
 }
 
 impl Filter {
     fn allows(&self, name: &str, attrs: u32) -> bool {
         if !self.show_dotfiles && name.starts_with('.') {
+            return false;
+        }
+        if !self.show_protected && ndir_vfs::is_protected_os_item(attrs) {
             return false;
         }
         if !self.show_hidden && (attrs & ATTR_HIDDEN) != 0 {
@@ -191,6 +196,16 @@ impl Tree {
         show_hidden: bool,
         show_dotfiles: bool,
     ) -> io::Result<Tree> {
+        Tree::open_visible(path, show_hidden, show_dotfiles, true)
+    }
+
+    /// [`Self::open_filtered`] + **보호된 운영 체제 항목**(숨김 + 시스템 — [`ndir_vfs::is_protected_os_item`]) 표시 여부.
+    pub fn open_visible(
+        path: impl AsRef<Path>,
+        show_hidden: bool,
+        show_dotfiles: bool,
+        show_protected: bool,
+    ) -> io::Result<Tree> {
         let root_path = path.as_ref().to_path_buf();
         let mut tree = Tree {
             nodes: Vec::new(),
@@ -203,6 +218,7 @@ impl Tree {
             filter: Filter {
                 show_hidden,
                 show_dotfiles,
+                show_protected,
             },
             sort: SortSpec::default(),
         };
@@ -865,6 +881,7 @@ impl Tree {
             filter: Filter {
                 show_hidden: true,
                 show_dotfiles: true,
+                show_protected: true,
             },
             sort: SortSpec::default(),
         }
@@ -1180,6 +1197,27 @@ mod tests {
         t.clear_selection();
         assert_eq!(t.selection_count(), 0);
         fs::remove_dir_all(&base).unwrap();
+    }
+
+    /// 보호된 운영 체제 항목(숨김 + 시스템): `show_protected`가 꺼져 있으면 숨김 표시가 켜져 있어도 걸러진다 ·
+    /// 숨김만/시스템만인 항목은 이 스위치와 무관(MC/DC).
+    #[test]
+    fn protected_os_items_follow_their_own_switch() {
+        let f = |show_hidden, show_protected| Filter {
+            show_hidden,
+            show_dotfiles: true,
+            show_protected,
+        };
+        let (h, s) = (ndir_vfs::ATTR_HIDDEN, ndir_vfs::ATTR_SYSTEM);
+        assert!(!f(true, false).allows("pagefile.sys", h | s));
+        assert!(f(true, true).allows("pagefile.sys", h | s));
+        assert!(
+            !f(false, true).allows("pagefile.sys", h | s),
+            "숨김 표시가 꺼져 있으면 역시 안 보인다"
+        );
+        assert!(f(true, false).allows("hidden.txt", h));
+        assert!(f(true, false).allows("sys-only.dat", s));
+        assert!(f(false, false).allows("plain.txt", 0));
     }
 
     #[test]

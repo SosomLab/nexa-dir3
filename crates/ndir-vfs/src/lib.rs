@@ -32,6 +32,17 @@ pub struct Entry {
 
 /// `FILE_ATTRIBUTE_DIRECTORY` — 열거 속성 비트의 폴더 표식.
 pub const ATTR_DIRECTORY: u32 = 0x10;
+/// 숨김(Windows `FILE_ATTRIBUTE_HIDDEN` · macOS `UF_HIDDEN` 플래그를 이 비트로 옮긴다 · Linux에는 없다 — 점 파일 규칙만).
+pub const ATTR_HIDDEN: u32 = 0x2;
+/// 시스템(Windows `FILE_ATTRIBUTE_SYSTEM` · macOS `SF_RESTRICTED`(SIP 보호)를 이 비트로 옮긴다 · Linux에는 없다).
+pub const ATTR_SYSTEM: u32 = 0x4;
+
+/// **보호된 운영 체제 항목**인가 — 숨김 + 시스템이 **둘 다** 켜진 것(Windows 탐색기 "보호된 운영 체제 파일 숨기기"와 같은 규칙:
+/// `$RECYCLE.BIN` · `pagefile.sys` · `System Volume Information` · 호환용 정션 …). macOS는 숨김 + SIP 보호 항목.
+#[must_use]
+pub fn is_protected_os_item(attrs: u32) -> bool {
+    attrs & (ATTR_HIDDEN | ATTR_SYSTEM) == (ATTR_HIDDEN | ATTR_SYSTEM)
+}
 /// `FILE_ATTRIBUTE_REPARSE_POINT` — 심볼릭 링크·정션·마운트 포인트 등 **링크 표식**.
 /// 종류([`FileKind`])와 별개 비트 — 폴더 링크는 `Dir` + 이 비트, 파일 링크는 `Symlink` + 이 비트.
 pub const ATTR_REPARSE_POINT: u32 = 0x400;
@@ -66,7 +77,22 @@ fn file_attrs(m: &fs::Metadata) -> u32 {
     m.file_attributes()
 }
 
-#[cfg(not(windows))]
+/// macOS: BSD 파일 플래그 → 같은 뜻의 비트(`UF_HIDDEN` 0x8000 → 숨김 · `SF_RESTRICTED` 0x80000 → 시스템).
+#[cfg(target_os = "macos")]
+fn file_attrs(m: &fs::Metadata) -> u32 {
+    use std::os::macos::fs::MetadataExt;
+    let f = m.st_flags();
+    let mut a = 0;
+    if f & 0x8000 != 0 {
+        a |= ATTR_HIDDEN;
+    }
+    if f & 0x0008_0000 != 0 {
+        a |= ATTR_SYSTEM;
+    }
+    a
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn file_attrs(_m: &fs::Metadata) -> u32 {
     0
 }
@@ -529,6 +555,13 @@ mod tests {
             target: None,
         };
         assert!(mk(FileKind::Dir, ATTR_DIRECTORY | ATTR_REPARSE_POINT).is_link());
+        // 보호된 운영 체제 항목 = 숨김과 시스템 둘 다(MC/DC: 한쪽만이면 아니다).
+        assert!(is_protected_os_item(
+            ATTR_HIDDEN | ATTR_SYSTEM | ATTR_DIRECTORY
+        ));
+        assert!(!is_protected_os_item(ATTR_HIDDEN));
+        assert!(!is_protected_os_item(ATTR_SYSTEM));
+        assert!(!is_protected_os_item(0));
         assert!(mk(FileKind::Symlink, ATTR_REPARSE_POINT).is_link());
         assert!(!mk(FileKind::Dir, ATTR_DIRECTORY).is_link());
         assert!(!mk(FileKind::File, 0x20).is_link());
