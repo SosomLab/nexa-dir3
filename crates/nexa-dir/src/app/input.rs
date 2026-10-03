@@ -140,7 +140,12 @@ impl App {
             Area::Tool => self.toolbar.on_event(ev, inv),
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
             Area::Split(k) => self.split_event(k, ev, inv),
-            Area::Status => self.statusbar.on_event(ev, inv),
+            Area::Status => {
+                self.statusbar.on_event(ev, inv);
+                if let Some((id, right)) = self.statusbar.take_click() {
+                    self.status_click(&id, right);
+                }
+            }
             Area::Dock(i) => {
                 // 도크 탭으로 터미널을 고르면 바로 입력할 수 있게 포커스를 준다(사용자 10-03 Linux 실기 — 종전에는 격자를 한 번 더
                 // 눌러야 했다). 셸은 다음 paint에서 시작한다.
@@ -552,6 +557,10 @@ impl App {
                 } else {
                     self.open_bg_menu(i);
                 }
+            }
+            if let Some((seg, _right)) = self.panels[i].take_status_click() {
+                self.open_tab_status_menu(i, &seg);
+                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
             if let Some(t) = self.panels[i].take_tab_menu() {
                 self.open_tab_menu(i, t);

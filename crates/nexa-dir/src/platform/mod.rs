@@ -26,6 +26,7 @@ mod macclip;
 mod macos;
 #[cfg(target_os = "macos")]
 mod macwatch;
+pub(crate) mod procload;
 #[cfg(unix)]
 mod unixpty;
 #[cfg(windows)]

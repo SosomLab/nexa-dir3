@@ -16,6 +16,8 @@ pub(crate) enum CtxKind {
     Bg(usize),
     /// 경로 바 편집 필드의 글자 편집 메뉴(GAP-012).
     PathEdit(usize),
+    /// 보조 메뉴(탭 상태바 칸 · 툴바 · 런처) — 항목 id가 스스로 뜻을 가진다(`aux.*` → `App::aux_menu_action`).
+    Aux(usize),
 }
 
 /// 셸 verb → 앱 명령(dir2 SHELL-005/006 가로채기).
@@ -112,7 +114,7 @@ fn has_id(items: &[CtxItem], id: &str) -> bool {
 }
 
 impl App {
-    fn open_ctx(&mut self, kind: CtxKind, items: Vec<CtxItem>) {
+    pub(crate) fn open_ctx(&mut self, kind: CtxKind, items: Vec<CtxItem>) {
         self.ctx_anchor = self.ctx_anchor_next.take().unwrap_or(self.cursor);
         self.ctx_kind = Some(kind);
         self.tab_menu_at = None;
@@ -557,6 +559,7 @@ impl App {
         };
         let panel = match kind {
             CtxKind::Row(p) | CtxKind::Bg(p) | CtxKind::PathEdit(p) => p,
+            CtxKind::Aux(p) => return self.aux_menu_action(p, id),
         };
         if panel != self.active {
             self.set_active(panel);

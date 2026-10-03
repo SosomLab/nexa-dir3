@@ -852,3 +852,22 @@ fdlg.menu.refresh = 更新
 fdlg.multiSelected = {0} 個のファイルを選択 · {1}
 fdlg.filter.all = すべてのファイル (*.*)
 fdlg.filter.folders = フォルダー
+
+# ── 상태줄 구성 · 탭 상태바(docs/22 NEW-003 · NEW-004)
+status.cpu = CPU {0}%
+status.mem = メモリ {0}
+status.io = 読込 {0} · 書込 {1}
+tabstatus.git = git: {0}
+tabstatus.git.branch = ブランチ: {0}
+tabstatus.git.repo = リポジトリ: {0}
+tabstatus.git.copy = ブランチ名をコピー
+tabstatus.shown = 表示中: {0}
+tabstatus.total = すべての項目(隠し含む): {0}
+tabstatus.folders = フォルダー: {0}
+tabstatus.files = ファイル: {0}
+pref.statusItems = ステータスバーの項目
+pref.statusItems.desc = ステータスバー右側の項目をカンマ区切りで順に指定します: tab, cpu, mem, io, license。CPU・メモリ・ディスク I/O はこのプログラムの負荷です。
+pref.statusInterval = ステータスバー負荷の更新間隔(ms)
+pref.statusInterval.desc = CPU・メモリ・ディスク I/O を読み直す間隔です。
+pref.tabStatusbar = タブのステータスバー
+pref.tabStatusbar.desc = 各パネルの下部にステータスバーを表示し、現在のフォルダーの項目数と Git ブランチを示します。

@@ -19,6 +19,7 @@ pub(crate) mod row_icons;
 mod sessions;
 mod settings;
 mod startup_cmd;
+pub(crate) mod statusline;
 mod term;
 mod watch;
 mod windows;

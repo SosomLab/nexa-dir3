@@ -2237,6 +2237,92 @@ fn column_titles_follow_language_even_with_user_layout() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 상태줄 구성(T-94 · NEW-003) + 탭 상태바(T-95 · NEW-004 1차): 오른쪽 칸 = `statusbar.items` 순서 · 라이선스 칸 클릭 =
+/// 라이선스 창 · 패널마다 목록 아래 상태바(폴더 항목 수 · Git 브랜치) · 칸 클릭 = 상세 메뉴 · 끄면 목록이 그만큼 커진다.
+#[test]
+fn status_segments_and_tab_status_bar() {
+    let (mut app, dir) = fixture("statusline");
+    std::fs::create_dir_all(dir.join(".git")).unwrap();
+    std::fs::write(
+        dir.join(".git").join("HEAD"),
+        "ref: refs/heads/feat/status\n",
+    )
+    .unwrap();
+    let mut inv = Invalidations::default();
+    app.panels[0].invalidate_dir_info();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let ids = |app: &App| -> Vec<String> {
+        app.statusbar
+            .segments()
+            .iter()
+            .map(|s| s.id.clone())
+            .collect()
+    };
+    assert_eq!(ids(&app), ["tab", "cpu", "mem", "io", "license"]);
+    assert!(app.statusbar.segments()[0].text.contains("1/1"));
+    // 부하: 첫 틱 = 메모리만 · 주기 전 재조회 없음.
+    let t0 = Instant::now();
+    let next = app.status_load_tick(t0).expect("wake");
+    assert!(next > t0);
+    assert!(app.load.is_some_and(|l| l.rss > 0));
+    assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
+    let _ = app.settings.set("statusbar.items", "license,tab");
+    app.after_setting_changed("statusbar.items");
+    assert_eq!(ids(&app), ["license", "tab"]);
+    assert_eq!(
+        app.status_load_tick(Instant::now()),
+        None,
+        "부하 칸 없음 = 깨우지 않음"
+    );
+    // 라이선스 칸 클릭 = 라이선스 창 요청.
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let r = app.statusbar.seg_rect("license").expect("license seg");
+    let (x, y) = (r.x + 4, r.y + 4);
+    app.route(InputEvent::MouseDown {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    });
+    app.route(InputEvent::MouseUp { x, y });
+    assert!(app.open_license, "라이선스 창");
+    // 탭 상태바: 목록 바로 아래 · 패널 바닥까지.
+    let (pb, lb, sb) = (
+        app.panels[0].bounds(),
+        app.panels[0].rows().bounds(),
+        app.panels[0].status_bounds(),
+    );
+    assert_eq!((sb.y, sb.bottom(), sb.h), (lb.bottom(), pb.bottom(), 22));
+    let sum = app.panels[0].status_summary();
+    assert!(sum[0].starts_with("folder="), "{sum:?}");
+    assert_eq!(sum[1], "git=git: feat/status");
+    // Git 칸 클릭 = 상세 메뉴(브랜치 복사 · 새로 고침).
+    let r = app.panels[0].status_seg_rect("git").expect("git seg");
+    let (x, y) = (r.x + 4, r.y + 4);
+    app.route(InputEvent::MouseDown {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    });
+    app.route(InputEvent::MouseUp { x, y });
+    let menu = app.dump_of("ctx").unwrap_or_default();
+    assert!(
+        menu.contains("aux.git.copy") && menu.contains("aux.refresh"),
+        "{menu}"
+    );
+    app.ctx_pick("aux.refresh");
+    // 끄면 목록이 22만큼 커진다.
+    let _ = app.settings.set("layout.tab_statusbar", "off");
+    app.after_setting_changed("layout.tab_statusbar");
+    assert_eq!(app.panels[0].rows().bounds().bottom(), pb.bottom());
+    assert_eq!(app.panels[0].status_bounds().h, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

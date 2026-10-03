@@ -485,6 +485,11 @@ impl App {
                 p.rows().source().len(),
                 p.rows().caret()
             ));
+            out.push_str(&format!(
+                "panel{i}.status {} {}\n",
+                r(p.status_bounds()),
+                p.status_summary().join(" | ")
+            ));
         }
         for (i, d) in self.docks.iter().enumerate() {
             out.push_str(&format!(

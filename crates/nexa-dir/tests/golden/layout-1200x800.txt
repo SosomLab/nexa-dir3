@@ -6,12 +6,14 @@ panel0 0,53 599x508 tabs 1 active 0 path <root>
 panel0.tabs 0,53 599x22
 panel0.nav 0,75 104x24
 panel0.path 104,75 495x24 text <root>
-panel0.list 0,99 599x462 rows 3 caret None
+panel0.list 0,99 599x440 rows 3 caret None
+panel0.status 0,539 599x22 folder=3 items
 panel1 602,53 598x508 tabs 1 active 0 path <root>
 panel1.tabs 602,53 598x22
 panel1.nav 602,75 104x24
 panel1.path 706,75 494x24 text <root>
-panel1.list 602,99 598x462 rows 3 caret None
+panel1.list 602,99 598x440 rows 3 caret None
+panel1.status 602,539 598x22 folder=3 items
 dock0 0,564 599x214 kind 0
 dock1 602,564 598x214 kind 0
 splitter 596,53 9x508

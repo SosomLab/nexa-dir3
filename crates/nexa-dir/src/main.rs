@@ -18,6 +18,7 @@ mod clipboard;
 mod clipboard_x11;
 mod copybtn;
 mod crash;
+mod dirinfo;
 mod dlg_win;
 mod dockinfo;
 mod file_win;
@@ -283,6 +284,10 @@ struct App {
     /// 행 아이콘 서비스 버전(조회 중이던 아이콘 도착 감지 · GAP-003).
     row_icon_ver: u64,
     launcher_icon_ver: u64,
+    /// 상태줄 부하 칸(app/statusline.rs): 직전 표본 · 지금 부하 · 다음 조회 시각.
+    load_prev: Option<(Instant, platform::procload::ProcSample)>,
+    load: Option<platform::procload::Load>,
+    load_next: Instant,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -557,6 +562,9 @@ impl App {
             launcher_icons_pending,
             row_icon_ver: 0,
             launcher_icon_ver: nexa_fs::shell::IconService::global().version(),
+            load_prev: None,
+            load: None,
+            load_next: Instant::now(),
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),
@@ -623,6 +631,12 @@ impl App {
         );
         let mut inv = Invalidations::default();
         self.statusbar.set_text(&left, &right, &mut inv);
+        // 오른쪽 칸(탭 · CPU · 메모리 · 디스크 I/O · 라이선스 — `statusbar.items`) + 패널마다 탭 상태바.
+        let segs = self.status_segments();
+        self.statusbar.set_segments(segs, &mut inv);
+        for p in &mut self.panels {
+            p.sync_status(&mut inv);
+        }
         self.sync_dir_views();
         self.sync_view_checks();
         self.update_docks();
@@ -802,7 +816,9 @@ impl App {
             d.set_metrics(m.row_h, m.pad_x, &mut inv);
             d.set_bounds(r, &mut inv);
         }
+        let tab_status = self.settings.flag("layout.tab_statusbar");
         for (p, r) in self.panels.iter_mut().zip(rects) {
+            p.set_tab_status(tab_status, &mut inv);
             p.set_metrics(m, &mut inv);
             p.set_default_columns(columns_for(r.w, s), all_columns_for(r.w, s), &mut inv);
             p.set_bounds(r, &mut inv);

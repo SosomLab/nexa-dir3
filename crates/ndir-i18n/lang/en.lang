@@ -852,3 +852,22 @@ fdlg.menu.refresh = Refresh
 fdlg.multiSelected = {0} files selected · {1}
 fdlg.filter.all = All files (*.*)
 fdlg.filter.folders = Folders
+
+# ── 상태줄 구성 · 탭 상태바(docs/22 NEW-003 · NEW-004)
+status.cpu = CPU {0}%
+status.mem = Mem {0}
+status.io = R {0} · W {1}
+tabstatus.git = git: {0}
+tabstatus.git.branch = Branch: {0}
+tabstatus.git.repo = Repository: {0}
+tabstatus.git.copy = Copy branch name
+tabstatus.shown = Shown: {0}
+tabstatus.total = All items (incl. hidden): {0}
+tabstatus.folders = Folders: {0}
+tabstatus.files = Files: {0}
+pref.statusItems = Status bar items
+pref.statusItems.desc = Items on the right of the status bar, in order, separated by commas: tab, cpu, mem, io, license. CPU, memory and disk I/O show the load of this program.
+pref.statusInterval = Status bar load refresh (ms)
+pref.statusInterval.desc = How often CPU, memory and disk I/O are read.
+pref.tabStatusbar = Tab status bar
+pref.tabStatusbar.desc = Shows a status bar at the bottom of each panel with the current folder's item count and Git branch.

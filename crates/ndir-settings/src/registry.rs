@@ -482,6 +482,34 @@ pub const REGISTRY: &[Entry] = &[
         Size { min: 8, max: 32 },
         "12"
     ),
+    // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
+    e!(
+        "statusbar.items",
+        CAT_APPEARANCE,
+        "pref.statusItems",
+        "pref.statusItems.desc",
+        Text,
+        "tab,cpu,mem,io,license"
+    ),
+    e!(
+        "statusbar.load_interval_ms",
+        CAT_APPEARANCE,
+        "pref.statusInterval",
+        "pref.statusInterval.desc",
+        Int {
+            min: 500,
+            max: 60000
+        },
+        "2000"
+    ),
+    e!(
+        "layout.tab_statusbar",
+        CAT_APPEARANCE,
+        "pref.tabStatusbar",
+        "pref.tabStatusbar.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "list.font_face",
         CAT_FONTS,
@@ -1516,6 +1544,7 @@ pub const HIDDEN: &[&str] = &[
 
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
+    "statusbar.load_interval_ms",
     "toolbar.icon_pad",
     "toolbar.hover_fill_pct",
     "toolbar.on_fill_pct",

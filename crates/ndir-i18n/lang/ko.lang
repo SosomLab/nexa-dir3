@@ -851,3 +851,22 @@ fdlg.menu.refresh = 새로 고침
 fdlg.multiSelected = {0}개 파일 선택 · {1}
 fdlg.filter.all = 모든 파일 (*.*)
 fdlg.filter.folders = 폴더
+
+# ── 상태줄 구성 · 탭 상태바(docs/22 NEW-003 · NEW-004)
+status.cpu = CPU {0}%
+status.mem = 메모리 {0}
+status.io = 읽기 {0} · 쓰기 {1}
+tabstatus.git = git: {0}
+tabstatus.git.branch = 브랜치: {0}
+tabstatus.git.repo = 저장소: {0}
+tabstatus.git.copy = 브랜치 이름 복사
+tabstatus.shown = 보이는 항목: {0}
+tabstatus.total = 전체 항목(숨김 포함): {0}
+tabstatus.folders = 폴더: {0}
+tabstatus.files = 파일: {0}
+pref.statusItems = 상태줄 칸
+pref.statusItems.desc = 상태줄 오른쪽 칸을 쉼표로 구분해 순서대로 적습니다: tab, cpu, mem, io, license. CPU · 메모리 · 디스크 I/O는 이 프로그램의 부하입니다.
+pref.statusInterval = 상태줄 부하 갱신 주기(ms)
+pref.statusInterval.desc = CPU · 메모리 · 디스크 I/O를 다시 읽는 간격입니다.
+pref.tabStatusbar = 탭 상태바
+pref.tabStatusbar.desc = 패널마다 아래에 상태바를 두어 현재 폴더의 항목 수와 Git 브랜치를 보여 줍니다.

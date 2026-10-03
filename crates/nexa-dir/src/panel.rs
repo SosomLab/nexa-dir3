@@ -51,6 +51,8 @@ enum Part {
     Nav,
     Path,
     List,
+    /// 탭 상태바(패널 맨 아래).
+    Status,
 }
 
 pub(crate) struct Panel {
@@ -90,7 +92,20 @@ pub(crate) struct Panel {
     pool_columns: Vec<Column>,
     /// 사용자가 컬럼 순서를 바꿨다(호스트가 수거해 전 탭 · 반대 패널에 전파).
     col_order_changed: bool,
+    /// 탭 상태바(docs/22 NEW-004 · 패널 맨 아래 한 줄): 칸 = 폴더 상태 · Git 브랜치 · 뒤에 선택 요약. 꺼짐 = 높이 0.
+    status: nexa_ctl::StatusBar,
+    status_on: bool,
+    /// Git 브랜치 캐시 `(본 폴더, (저장소 루트, 브랜치))` — 폴더가 바뀌거나 새로 고칠 때만 다시 읽는다.
+    git: Option<(PathBuf, Option<(PathBuf, String)>)>,
+    /// 탭 상태바 칸 클릭 `(칸 id, 우클릭인가)` — 호스트가 상세 메뉴를 연다.
+    pending_status: Option<(String, bool)>,
 }
+
+/// 탭 상태바 높이(논리 px · 창 상태줄과 같다).
+const TAB_STATUS_H: f32 = 22.0;
+/// 탭 상태바 칸 id.
+pub(crate) const SEG_FOLDER: &str = "folder";
+pub(crate) const SEG_GIT: &str = "git";
 
 /// 네비 버튼 1개 폭(고정 — 배치가 측정 없이 계산 · dir2 `nav_btn_w`).
 fn nav_btn_w(m: &PanelMetrics) -> i32 {
@@ -203,6 +218,14 @@ impl Panel {
             col_changed: false,
             pool_columns: Vec::new(),
             col_order_changed: false,
+            status: {
+                let mut sb = nexa_ctl::StatusBar::new();
+                sb.set_segments_leading(true, &mut inv);
+                sb
+            },
+            status_on: false,
+            git: None,
+            pending_status: None,
         };
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
@@ -501,7 +524,18 @@ impl Panel {
             inv,
         );
         let list_y = bounds.y + tab_h + bar_h;
-        let list_h = (bounds.bottom() - list_y).max(0);
+        // 탭 상태바(켜져 있으면 목록 높이에서 뺀다).
+        let status_h = if self.status_on {
+            ((TAB_STATUS_H * self.m.scale).round() as i32).min((bounds.bottom() - list_y).max(0))
+        } else {
+            0
+        };
+        let list_h = (bounds.bottom() - list_y - status_h).max(0);
+        self.status.set_scale(self.m.scale);
+        self.status.set_bounds(
+            Rect::new(bounds.x, list_y + list_h, bounds.w, status_h),
+            inv,
+        );
         for tab in &mut self.tabs {
             tab.rows
                 .set_bounds(Rect::new(bounds.x, list_y, bounds.w, list_h), inv);
@@ -688,6 +722,89 @@ impl Panel {
         self.navbtns.paint(ctx, theme);
         self.pathbar.paint(ctx, theme);
         self.rows().paint(ctx, theme);
+        if self.status_on {
+            self.status.paint(ctx, theme);
+        }
+    }
+
+    /// 탭 상태바 켜기/끄기(설정 `layout.tab_statusbar`) — 바뀌면 다시 배치한다.
+    pub(crate) fn set_tab_status(&mut self, on: bool, inv: &mut Invalidations) {
+        if self.status_on != on {
+            self.status_on = on;
+            let b = self.bounds;
+            self.set_bounds(b, inv);
+        }
+    }
+
+    /// 탭 상태바 내용을 활성 탭에 맞춘다(호스트의 `update_status` 길목): 칸 ① 폴더 상태(보이는 항목 수) ② Git 브랜치 ·
+    /// 칸 뒤 = 선택 요약(선택이 있을 때).
+    pub(crate) fn sync_status(&mut self, inv: &mut Invalidations) {
+        if !self.status_on {
+            return;
+        }
+        let root = self.root_path();
+        if self.git.as_ref().is_none_or(|(p, _)| *p != root) {
+            let found = if ndir_vfs::is_virtual_root(&root) || ndir_vfs::is_network_path(&root) {
+                None
+            } else {
+                crate::dirinfo::git_branch(&root)
+            };
+            self.git = Some((root, found));
+        }
+        let src = self.rows().source();
+        let mut segs = vec![nexa_ctl::StatusSeg::new(
+            SEG_FOLDER,
+            ndir_i18n::trf("status.itemCount", &[&src.len().to_string()]),
+        )];
+        if let Some((_, Some((_, branch)))) = &self.git {
+            segs.push(nexa_ctl::StatusSeg::new(
+                SEG_GIT,
+                ndir_i18n::trf("tabstatus.git", &[branch]),
+            ));
+        }
+        let sel = src.selection_count();
+        let left = if sel > 0 {
+            ndir_i18n::trf("status.selectedCount", &[&sel.to_string()])
+        } else {
+            String::new()
+        };
+        self.status.set_segments(segs, inv);
+        self.status.set_left(&left, inv);
+    }
+
+    /// 탭 상태바의 Git 정보 `(저장소 루트, 브랜치)`(활성 탭 · 저장소 밖 = `None`).
+    pub(crate) fn git_info(&self) -> Option<(PathBuf, String)> {
+        self.git.as_ref().and_then(|(_, g)| g.clone())
+    }
+
+    /// Git 캐시를 버린다(새로 고침 · 수동 갱신) — 다음 [`Self::sync_status`]가 다시 읽는다.
+    pub(crate) fn invalidate_dir_info(&mut self) {
+        self.git = None;
+    }
+
+    /// 탭 상태바 칸 클릭(1회성 수거).
+    pub(crate) fn take_status_click(&mut self) -> Option<(String, bool)> {
+        self.pending_status.take()
+    }
+
+    /// 탭 상태바 자리(꺼짐 = 높이 0 · 덤프 · 시험).
+    pub(crate) fn status_bounds(&self) -> Rect {
+        self.status.bounds()
+    }
+
+    /// 탭 상태바 칸 글(시험 · 덤프): `id=글` 목록.
+    pub(crate) fn status_summary(&self) -> Vec<String> {
+        self.status
+            .segments()
+            .iter()
+            .map(|s| format!("{}={}", s.id, s.text))
+            .collect()
+    }
+
+    /// 탭 상태바 칸 자리(마지막으로 그린 자리 · 시험).
+    #[cfg(test)]
+    pub(crate) fn status_seg_rect(&self, id: &str) -> Option<Rect> {
+        self.status.seg_rect(id)
     }
 
     /// 팝업 층(툴팁 · 경로 제안) — 호스트가 맨 뒤에 그린다.
@@ -1368,6 +1485,8 @@ impl Panel {
             Some(Part::Path)
         } else if self.rows().bounds().contains(p) {
             Some(Part::List)
+        } else if self.status_on && self.status.bounds().contains(p) {
+            Some(Part::Status)
         } else {
             None
         }
@@ -1379,6 +1498,13 @@ impl Panel {
             Part::Nav => self.navbtns.on_event(ev, inv),
             Part::Path => self.pathbar.on_event(ev, inv),
             Part::List => self.tabs[self.active].rows.on_event(ev, inv),
+            Part::Status => {
+                use nexa_ctl::Widget as _;
+                self.status.on_event(ev, inv);
+                if let Some(c) = self.status.take_click() {
+                    self.pending_status = Some(c);
+                }
+            }
         }
     }
 
@@ -1393,6 +1519,10 @@ impl Panel {
                     self.navbtns.on_event(ev, inv);
                     self.pathbar.on_event(ev, inv);
                     self.tabs[self.active].rows.on_event(ev, inv);
+                    if self.status_on {
+                        use nexa_ctl::Widget as _;
+                        self.status.on_event(ev, inv);
+                    }
                 }
             }
             InputEvent::MouseDown { x, y, .. } => {

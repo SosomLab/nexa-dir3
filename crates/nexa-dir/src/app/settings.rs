@@ -106,6 +106,10 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
+            "statusbar.items" | "statusbar.load_interval_ms" => {
+                self.load_next = Instant::now();
+            }
+            "layout.tab_statusbar" => self.layout(),
             "launcher.items" | "launcher.seed" | "launcher.icon_size" | "launcher.item_gap" => {
                 self.rebuild_launcher();
             }
