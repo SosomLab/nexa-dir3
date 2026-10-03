@@ -165,6 +165,7 @@ impl Panel {
         let mut inv = Invalidations::default();
         let mut rows = VirtualRows::new(TreeSource::open(path, opts), m.row_h, m.pad_x, m.indent_w);
         rows.set_columns(columns, &mut inv);
+        rows.set_sort_mark_trailing(true, &mut inv); // 정렬 표시 = 칸 오른쪽 끝(nexa-sql 모양 · 사용자 10-03)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
         let mut p = Panel {
@@ -673,6 +674,7 @@ impl Panel {
             self.m.indent_w,
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
+        rows.set_sort_mark_trailing(true, inv);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.rows().view_mode(), inv);
         self.tabs.push(Tab {
@@ -799,6 +801,7 @@ impl Panel {
             self.m.indent_w,
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
+        rows.set_sort_mark_trailing(true, inv);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
         self.tabs.insert(

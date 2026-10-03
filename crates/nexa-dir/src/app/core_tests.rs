@@ -2048,6 +2048,50 @@ fn tabs_wrap_into_lines_by_default() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 다중 정렬 머리(T-127 · 사용자 10-03 · nexa-sql 모양): 정렬 표시는 칸 오른쪽 끝 · 다중 정렬일 때만 순번이 그 오른쪽 ·
+/// Shift+클릭 = 오름 → 내림 → 없음 · 새 탭도 같은 모양.
+#[test]
+fn header_sort_marks_trail_and_shift_cycles() {
+    let (mut app, dir) = fixture("sortmarks");
+    app.layout_for(1200, 800, 1.0);
+    let b = app.panels[0].rows().bounds();
+    let cols: Vec<(u32, i32)> = app.panels[0].col_widths_by_key();
+    // 열 가운데 x(머리 줄).
+    let mid = |i: usize| b.x + cols[..i].iter().map(|c| c.1).sum::<i32>() + cols[i].1 / 2;
+    let y = b.y + 5;
+    let click = |app: &mut App, x: i32, shift: bool| {
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    let mark = |app: &App, i: usize| app.panels[0].rows().sort_mark(cols[i].0);
+    click(&mut app, mid(0), false);
+    assert_eq!(mark(&app, 0).as_deref(), Some("▲"), "단일 = 순번 없음");
+    click(&mut app, mid(2), true);
+    assert_eq!(
+        (mark(&app, 0).as_deref(), mark(&app, 2).as_deref()),
+        (Some("▲1"), Some("▲2"))
+    );
+    click(&mut app, mid(2), true);
+    assert_eq!(mark(&app, 2).as_deref(), Some("▼2"));
+    click(&mut app, mid(2), true);
+    assert_eq!((mark(&app, 0).as_deref(), mark(&app, 2)), (Some("▲"), None));
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(
+        rec.drew_text("▲") && rec.drew_text("Name"),
+        "표시와 제목을 따로 그린다"
+    );
+    app.command("file.new_tab");
+    click(&mut app, mid(0), false);
+    assert_eq!(mark(&app, 0).as_deref(), Some("▲"), "새 탭도 끝 정렬 모양");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]

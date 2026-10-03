@@ -333,7 +333,10 @@ impl TreeSource {
 pub(crate) fn sort_key_of(col: u32) -> Option<SortKey> {
     Some(match col {
         COL_NAME => SortKey::Name,
-        COL_EXT | COL_KIND => SortKey::Kind,
+        // 확장자 열 = 확장자순(dir2 source.rs:434 PANEL-065 — 종전 dir3는 종류 키로 묶어 확장자 + 종류 다중 정렬에 같은 키가
+        // 두 번 들어갔다 · 10-03 적발).
+        COL_EXT => SortKey::Ext,
+        COL_KIND => SortKey::Kind,
         COL_SIZE => SortKey::Size,
         COL_MODIFIED => SortKey::Modified,
         _ => return None,
@@ -697,6 +700,10 @@ mod tests {
         assert_eq!(title_of(&dir.join("sub")), "sub");
         // Unix 루트 = `/`(공백 아님) · 드라이브 루트 = `D:`.
         assert_eq!(title_of(Path::new("/")), "/");
+        // 열 → 정렬 키: 확장자와 종류는 서로 다른 키 · 내 PC 열(전체 크기 · 여유 공간)은 정렬 대상이 아니다.
+        assert_eq!(sort_key_of(COL_EXT), Some(SortKey::Ext));
+        assert_eq!(sort_key_of(COL_KIND), Some(SortKey::Kind));
+        assert_eq!(sort_key_of(COL_TOTAL), None);
         #[cfg(windows)]
         assert_eq!(title_of(Path::new("D:\\")), "D:");
         assert_eq!(
@@ -724,7 +731,6 @@ mod tests {
         // 정렬 키 대응
         assert_eq!(sort_key_of(COL_MODIFIED), Some(SortKey::Modified));
         assert_eq!(sort_key_of(99), None);
-        assert_eq!(sort_key_of(COL_EXT), Some(SortKey::Kind));
         assert!(src.set_sort(&[(COL_SIZE, true)]));
         let _ = std::fs::remove_dir_all(&dir);
     }
