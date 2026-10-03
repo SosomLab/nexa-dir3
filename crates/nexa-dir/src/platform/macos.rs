@@ -94,8 +94,8 @@ impl SystemTrash {
         }
     }
 
-    /// 항목 하나를 시스템 휴지통으로 — 성공 = 휴지통 안 경로.
-    fn trash_one(p: &Path) -> Result<PathBuf, String> {
+    /// 항목 하나를 시스템 휴지통으로 — `Ok(휴지통 안 경로)`(경로를 못 받았으면 `None`) · `Err` = 오류를 돌려줌.
+    fn trash_one(p: &Path) -> Result<Option<PathBuf>, ()> {
         use objc2_foundation::{NSFileManager, NSString, NSURL};
         // SAFETY: Foundation 호출 — 살아 있는 NSURL · 출력 슬롯은 Option.
         unsafe {
@@ -103,9 +103,8 @@ impl SystemTrash {
             let mut out: Option<objc2::rc::Retained<NSURL>> = None;
             NSFileManager::defaultManager()
                 .trashItemAtURL_resultingItemURL_error(&url, Some(&mut out))
-                .map_err(|e| e.localizedDescription().to_string())?;
-            out.and_then(|u| u.path().map(|s| PathBuf::from(s.to_string())))
-                .ok_or_else(|| "no resulting URL".to_string())
+                .map_err(|_| ())?;
+            Ok(out.and_then(|u| u.path().map(|s| PathBuf::from(s.to_string()))))
         }
     }
 }
@@ -115,12 +114,16 @@ impl Trash for SystemTrash {
         let mut n = 0;
         let mut fallback: Vec<PathBuf> = Vec::new();
         for p in paths {
-            match Self::trash_one(p) {
-                Ok(t) => {
-                    self.trashed.borrow_mut().insert(p.clone(), t);
+            // 원본이 사라졌으면 옮겨진 것이다(결과 경로가 없거나 오류를 돌려줘도) — 폴백은 원본이 남아 있을 때만.
+            let api = Self::trash_one(p);
+            match super::trash_outcome(api, p.symlink_metadata().is_ok()) {
+                super::TrashOutcome::Trashed(t) => {
+                    if let Some(t) = t {
+                        self.trashed.borrow_mut().insert(p.clone(), t);
+                    }
                     n += 1;
                 }
-                Err(_) => fallback.push(p.clone()),
+                super::TrashOutcome::Fallback => fallback.push(p.clone()),
             }
         }
         if !fallback.is_empty() {
@@ -237,8 +240,12 @@ mod tests {
     }
 
     /// 시스템 휴지통 왕복(macOS 러너): 임시 파일 → trashItemAtURL(원본 사라짐 · 기록) → restore(원래 경로로 복원) · 모르는 경로 복원 = Unsupported.
+    /// 실제 시스템 휴지통을 쓰므로 **CI에서만** 돈다(규약: 시험은 사용자 휴지통을 건드리지 않는다 — 개발 PC는 건너뜀).
     #[test]
     fn system_trash_round_trip() {
+        if std::env::var_os("CI").is_none() {
+            return;
+        }
         let _g = crate::platform::os_test_guard();
         let dir = std::env::temp_dir().join(format!("ndir-mactrash-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
@@ -247,8 +254,11 @@ mod tests {
         let t = SystemTrash::new();
         assert_eq!(t.trash(std::slice::from_ref(&f)), Ok(1));
         assert!(!f.exists(), "원본은 휴지통으로");
-        assert_eq!(t.restore(std::slice::from_ref(&f)), Ok(1));
-        assert_eq!(std::fs::read(&f).unwrap(), b"restore");
+        // 휴지통 안 경로를 받았을 때만 복원할 수 있다(못 받으면 기록이 없어 Unsupported — 러너에 따라 다르다).
+        match t.restore(std::slice::from_ref(&f)) {
+            Ok(1) => assert_eq!(std::fs::read(&f).unwrap(), b"restore"),
+            other => assert_eq!(other, Err(PlatformError::Unsupported("trash.restore"))),
+        }
         assert_eq!(
             t.restore(&[dir.join("never.txt")]),
             Err(PlatformError::Unsupported("trash.restore"))

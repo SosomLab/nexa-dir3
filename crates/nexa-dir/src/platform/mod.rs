@@ -57,6 +57,28 @@ pub(crate) fn os_test_guard() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 시스템 휴지통 호출 한 건의 판정(macOS `trashItemAtURL` — 순수 · T-135).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TrashOutcome {
+    /// 휴지통으로 갔다 — 휴지통 안 경로(모르면 `None` = 복원 기록 없음).
+    Trashed(Option<PathBuf>),
+    /// 옮겨지지 않았다(원본이 그대로 있다) — 폴백(직접 옮기기)을 시도해도 된다.
+    Fallback,
+}
+
+/// `api` = 호출 결과(`Ok(결과 경로)` · `Err` = 오류를 돌려줌) · `still_exists` = 호출 뒤 원본이 아직 있는가.
+/// 성공인데 결과 경로가 없을 수 있고(Apple 문서) 오류를 돌려주고도 실제로는 옮겨졌을 수 있다 — 어느 쪽이든 **원본이 없으면
+/// 옮겨진 것**이다(종전 = 결과 경로가 없으면 실패로 보고 폴백 → 이미 없는 원본을 rename 해 ENOENT · CI macOS 2회).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn trash_outcome(api: Result<Option<PathBuf>, ()>, still_exists: bool) -> TrashOutcome {
+    match (api, still_exists) {
+        (Ok(Some(t)), _) => TrashOutcome::Trashed(Some(t)),
+        (Ok(None) | Err(()), false) => TrashOutcome::Trashed(None),
+        (Ok(None) | Err(()), true) => TrashOutcome::Fallback,
+    }
+}
+
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlatformError {
@@ -1132,5 +1154,23 @@ mod tests {
         assert_eq!(m.read_files(), None);
         m.write_files(&[PathBuf::from("a.txt")], true).unwrap();
         assert_eq!(m.read_files(), Some((vec![PathBuf::from("a.txt")], true)));
+    }
+
+    /// 휴지통 판정(T-135 MC/DC): 결과 경로가 있으면 그대로 · 없거나 오류여도 원본이 사라졌으면 옮겨진 것 · 원본이 남았을 때만 폴백.
+    #[test]
+    fn trash_outcome_decides_by_original_presence() {
+        let t = PathBuf::from("/x/.Trash/a");
+        assert_eq!(
+            trash_outcome(Ok(Some(t.clone())), false),
+            TrashOutcome::Trashed(Some(t.clone()))
+        );
+        assert_eq!(
+            trash_outcome(Ok(Some(t.clone())), true),
+            TrashOutcome::Trashed(Some(t))
+        );
+        assert_eq!(trash_outcome(Ok(None), false), TrashOutcome::Trashed(None));
+        assert_eq!(trash_outcome(Err(()), false), TrashOutcome::Trashed(None));
+        assert_eq!(trash_outcome(Ok(None), true), TrashOutcome::Fallback);
+        assert_eq!(trash_outcome(Err(()), true), TrashOutcome::Fallback);
     }
 }
