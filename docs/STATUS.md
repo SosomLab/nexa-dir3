@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 58차 — T-90 1차: 매트릭스 전수 감사 스크립트 + 미착수 전수(91)
+
+- **한 일**: `scripts/matrix-audit.py` · docs/port/90 집계 생성물화 · docs/port/91 생성(미착수 3,574) · check-all 단계.
+- **지금 상태**: 덮음 692/4,266(16 %). T-90 2차 = 집단 행(KEY·CMD·PREFS·SET)으로 실제 시험 범위를 ID에 연결 · 미이식(CLOUD·PROC) 사유 행. 다음 = T-90 2차 · T-91 QA 표 · SHCNE · DnD 2차.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §62](journal/2026-10-03.md)
+
 ## 10-03 57차 — DnD 1차: 외부 끌어다 놓기 수신(3-OS 공통)
 
 - **한 일**: `app/dnd.rs` · 이벤트 루프 3 arm + 틱 flush · i18n 2키 · 시험 +1(163).

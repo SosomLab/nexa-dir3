@@ -72,6 +72,8 @@ if cargo run -q -p nexa-dir -- --help 2>/dev/null | grep -q -- '--smoke'; then
     step "nexa-dir --smoke" "$ROOT" cargo run -q -p nexa-dir -- --smoke
 fi
 step "nexa-dir --selfcheck --ci" "$ROOT" cargo run -q -p nexa-dir -- --selfcheck --ci
+# 검증 매트릭스 집계가 원장과 맞는가(T-90 · docs/port/90 집계는 생성물 — 틀리면 `python scripts/matrix-audit.py`로 다시 생성).
+step "matrix-audit --check" "$ROOT" python scripts/matrix-audit.py --check
 if [[ $QUICK -eq 0 ]]; then
     step "ndir-check --ci" "$ROOT" cargo run -q -p ndir-check -- --ci
 fi
