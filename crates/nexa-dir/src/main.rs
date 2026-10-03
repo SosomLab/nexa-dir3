@@ -173,6 +173,9 @@ struct App {
     /// 종료 코드(`quit:<코드>` · 단언 실패 3) · `@ready` 큐 · 첫 프레임 뒤 한 번.
     exit_code: u8,
     startup_ready: Vec<String>,
+    /// `ctx.wait`로 보류된 `@ready` 명령(셸 메뉴 항목 도착 대기) + 보류 시작 시각.
+    startup_blocked: Vec<String>,
+    startup_blocked_since: Instant,
     ready_fired: bool,
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
@@ -427,6 +430,8 @@ impl App {
             session_keep,
             exit_code: 0,
             startup_ready: Vec::new(),
+            startup_blocked: Vec::new(),
+            startup_blocked_since: Instant::now(),
             ready_fired: false,
             prefs_win: PrefsWin::new(),
             keys_win: KeysWin::new(),
@@ -842,7 +847,8 @@ fn run_gui() -> ExitCode {
         eprintln!("nexa-dir: no usable UI font");
         return ExitCode::FAILURE;
     };
-    // Linux: 창 백엔드 = X11 우선(모달 창을 메인의 transient로 붙이려면 · Wayland 경로는 winit 0.30이 부모 창을 지원하지 않는다).
+    app::fonts::init_icon_glyphs(&ui.font); // 네비·쉐브론 글리프(MDL2 있으면 dir2 모양 · 없으면 유니코드 — 두부 방지)
+                                            // Linux: 창 백엔드 = X11 우선(모달 창을 메인의 transient로 붙이려면 · Wayland 경로는 winit 0.30이 부모 창을 지원하지 않는다).
     let built = {
         let mut b = EventLoop::<Wake>::with_user_event();
         #[cfg(all(unix, not(target_os = "macos")))]

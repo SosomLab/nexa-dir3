@@ -10,6 +10,40 @@ use crate::*;
 use nexa_ctl::raster::FontSet;
 use nexa_ctl::theme::SlotFont;
 
+/// UI 글꼴 체인에 아이콘 글꼴(Segoe MDL2 Assets / Fluent Icons — PUA U+E700~)이 있는가. 기동 때 [`init_icon_glyphs`]가 정한다.
+static ICON_FONT: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn icon_font_available() -> bool {
+    ICON_FONT.load(Ordering::Relaxed)
+}
+
+/// dir2가 쓰는 MDL2 글리프(네비 4 + 쉐브론 2).
+pub(crate) const MDL2_GLYPHS: [char; 6] = [
+    '\u{EA8A}', '\u{E72B}', '\u{E72A}', '\u{E74A}', '\u{E76C}', '\u{E70D}',
+];
+
+/// 아이콘 글꼴이 없을 때의 대체 글리프(네비 4 + 쉐브론 2 · nexa-font `UI_SYMBOLS` 보장 대역).
+pub(crate) const FALLBACK_GLYPHS: [char; 6] = [
+    '\u{2302}', '\u{2190}', '\u{2192}', '\u{2191}', '\u{203A}', '\u{2304}',
+];
+
+/// 순수 판정: 이 글꼴(체인)이 dir2 MDL2 글리프 6개를 전부 가졌는가.
+pub(crate) fn icon_font_covers(ui: &Font) -> bool {
+    MDL2_GLYPHS.iter().all(|&c| ui.covers(c))
+}
+
+/// 글꼴이 정해진 직후 1회(패널을 만들기 **전에**): 아이콘 글꼴이 dir2 글리프 6개를 전부 가지면 그대로 쓰고(dir2와 같은 모양),
+/// 하나라도 없으면 두부(□) 대신 유니코드로 — 네비 = ⌂←→↑ · 트리 쉐브론 = › ⌄(nexa-font `UI_SYMBOLS` 보장 대역).
+pub(crate) fn init_icon_glyphs(ui: &Font) {
+    let ok = icon_font_covers(ui);
+    ICON_FONT.store(ok, Ordering::Relaxed);
+    if ok {
+        nexa_grid::set_marker_glyphs("\u{E76C}", "\u{E70D}");
+    } else {
+        nexa_grid::set_marker_glyphs("\u{203A}", "\u{2304}");
+    }
+}
+
 impl App {
     /// 설정 키의 글리프 크기(px · em → 높이 변환 · 배율 전 논리 px).
     pub(crate) fn font_px(&self, key: &str) -> f32 {

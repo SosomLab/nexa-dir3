@@ -2363,5 +2363,62 @@ fn context_menu_opens_immediately_and_fills_when_shell_items_arrive() {
     assert!(app.ctx_shell_tick(t2).is_some());
     let _ = app.ctx_shell_tick(t2 + Duration::from_millis(301));
     assert_eq!(shared.borrow().prepared.len(), 2);
+    // ⑥ 하네스 `ctx.wait`: 기다릴 것이 없으면 지나가고, 대기 중이면 나머지 `@ready` 명령을 보류했다가 채워진 뒤 이어 돈다.
+    let tabs0 = app.panels[0].tab_count();
+    app.startup_ready = vec!["ctx.wait".into(), "file.new_tab".into()];
+    app.ready_fired = false;
+    app.fire_ready();
+    assert_eq!(
+        app.panels[0].tab_count(),
+        tabs0 + 1,
+        "대기 없음 = 바로 실행"
+    );
+    app.set_active(0);
+    app.open_bg_menu(0);
+    assert!(app.ctx_pending.is_some());
+    let pending = app.ctx_pending.clone().unwrap();
+    app.startup_ready = vec!["ctx.wait".into(), "file.new_tab".into()];
+    app.ready_fired = false;
+    app.fire_ready();
+    assert_eq!(app.panels[0].tab_count(), tabs0 + 1, "대기 중 = 보류");
+    assert_eq!(app.startup_blocked.len(), 2);
+    let t3 = Instant::now();
+    assert!(app.ctx_shell_tick(t3).is_some(), "보류 중에는 틱 유지");
+    shared.borrow_mut().events.push_back(MenuEvent::Items {
+        target: pending,
+        items: Vec::new(),
+    });
+    let _ = app.ctx_shell_tick(t3);
+    assert!(app.startup_blocked.is_empty());
+    assert_eq!(
+        app.panels[0].tab_count(),
+        tabs0 + 2,
+        "채워진 뒤 이어서 실행"
+    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 두부(□) 방지(사용자 10-03 "확장/축소 쉐브론이 깨짐"): 네비 4 + 쉐브론 2 글리프는 **이 OS의 UI 글꼴 체인이 가진 집합**에서 고른다 —
+/// 아이콘 글꼴(Segoe MDL2/Fluent · nexa-font 115차)이 있으면 dir2와 같은 PUA 글리프, 없으면 유니코드 대체. 어느 쪽이든 전부 그려진다.
+/// (전역 선택 상태는 건드리지 않는다 — 병렬 시험의 네비 글리프 기대와 독립.)
+#[test]
+fn icon_glyph_choice_never_yields_tofu() {
+    let ui = nexa_font::ui_font(None).expect("OS UI font");
+    let set = if app::fonts::icon_font_covers(&ui.font) {
+        app::fonts::MDL2_GLYPHS
+    } else {
+        app::fonts::FALLBACK_GLYPHS
+    };
+    let missing: String = set.iter().filter(|&&c| !ui.font.covers(c)).collect();
+    assert!(
+        missing.is_empty(),
+        "tofu: {missing:?} · chain {:?}",
+        ui.chain
+    );
+    // Windows는 Segoe MDL2 Assets/Fluent Icons가 체인에 있어야 dir2와 같은 모양(없는 러너에서는 유니코드 대체 — 실패 아님).
+    eprintln!(
+        "icon font = {} · chain {:?}",
+        app::fonts::icon_font_covers(&ui.font),
+        ui.chain
+    );
 }

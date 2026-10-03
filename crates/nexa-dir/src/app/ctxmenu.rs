@@ -360,7 +360,15 @@ impl App {
                 }
             }
         }
-        if self.ctx_pending.is_some() || self.platform.ctxmenu.busy() {
+        // 기동 명령 `ctx.wait`로 보류된 하네스 명령 재개(종료 요청이 나오면 곧바로 깨어나 처리).
+        self.resume_blocked(now);
+        if self.exit_requested {
+            return Some(now);
+        }
+        if self.ctx_pending.is_some()
+            || self.platform.ctxmenu.busy()
+            || !self.startup_blocked.is_empty()
+        {
             let t = now + Duration::from_millis(CTX_POLL_MS);
             wake = Some(wake.map_or(t, |w| w.min(t)));
         }

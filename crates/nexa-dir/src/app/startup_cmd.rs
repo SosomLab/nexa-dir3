@@ -503,8 +503,39 @@ impl App {
             return;
         }
         self.ready_fired = true;
-        for id in std::mem::take(&mut self.startup_ready) {
+        let cmds = std::mem::take(&mut self.startup_ready);
+        self.run_ready(cmds);
+    }
+
+    /// `@ready` 명령 순차 실행 — `ctx.wait`를 만나면 열린 메뉴의 셸 항목이 채워질 때까지(비동기 · dir2 X-61) **나머지를 보류**한다
+    /// (고정 ms 대기 없는 결정적 하네스 · [`Self::resume_blocked`]가 이어 돌린다). 기다릴 것이 없으면 그냥 지나간다.
+    fn run_ready(&mut self, cmds: Vec<String>) {
+        let mut it = cmds.into_iter();
+        while let Some(id) = it.next() {
+            if id == "ctx.wait" {
+                if self.ctx_pending.is_some() {
+                    self.startup_blocked = std::iter::once(id).chain(it).collect();
+                    self.startup_blocked_since = Instant::now();
+                    return;
+                }
+                continue;
+            }
             self.startup_cmd(&id);
+        }
+    }
+
+    /// 보류된 `@ready` 명령 재개 — 셸 항목이 도착했거나(대기 해제) 20 s가 지났으면(응답 없는 셸 확장 · 하네스가 멈추지 않게).
+    pub(crate) fn resume_blocked(&mut self, now: Instant) {
+        if self.startup_blocked.is_empty() {
+            return;
+        }
+        let timed_out = now.duration_since(self.startup_blocked_since) > Duration::from_secs(20);
+        if timed_out {
+            self.ctx_pending = None;
+        }
+        if self.ctx_pending.is_none() {
+            let cmds = std::mem::take(&mut self.startup_blocked);
+            self.run_ready(cmds);
         }
     }
 

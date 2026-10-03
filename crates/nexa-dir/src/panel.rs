@@ -85,13 +85,25 @@ fn nav_btn_w(m: &PanelMetrics) -> i32 {
     m.row_h + m.pad_x
 }
 
-/// [홈][←][→][↑] — dir2는 Segoe MDL2 PUA 글리프 · 3-OS는 유니코드 글리프(SVG 아이콘은 T-30).
+/// 네비 글리프 4개([홈][←][→][↑]) — dir2 = **Segoe MDL2 Assets**(HomeSolid U+EA8A · Back U+E72B · Forward U+E72A · Up U+E74A ·
+/// 사용자 확정 07-18/08-01). UI 글꼴 체인에 아이콘 글꼴이 있으면(Windows · nexa-font 115차) 그대로, 없으면(macOS/Linux) 유니코드.
+pub(crate) fn nav_glyphs() -> [char; 4] {
+    let set = if crate::app::fonts::icon_font_available() {
+        crate::app::fonts::MDL2_GLYPHS
+    } else {
+        crate::app::fonts::FALLBACK_GLYPHS
+    };
+    [set[0], set[1], set[2], set[3]]
+}
+
+/// [홈][←][→][↑] — 순서·폭(`nav_btn_w` × 4 · 틈 없음)은 dir2 그대로.
 fn nav_buttons() -> Toolbar {
+    let g = nav_glyphs();
     let items = [
-        (BTN_HOME, "\u{2302}", "nav.mypc"),
-        (BTN_BACK, "\u{2190}", "cmd.navBack"),
-        (BTN_FORWARD, "\u{2192}", "cmd.navForward"),
-        (BTN_UP, "\u{2191}", "cmd.navUp"),
+        (BTN_HOME, g[0], "nav.mypc"),
+        (BTN_BACK, g[1], "cmd.navBack"),
+        (BTN_FORWARD, g[2], "cmd.navForward"),
+        (BTN_UP, g[3], "cmd.navUp"),
     ]
     .into_iter()
     .map(|(id, g, tip)| ToolItem::new(id, ToolIcon::Glyph(g.to_string())).tip(ndir_i18n::tr(tip)))

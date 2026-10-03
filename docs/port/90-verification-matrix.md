@@ -22,8 +22,8 @@
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
-| OS | 19 | 19 | 0 | 19 | 0 | 0 | 0 |
-| PANEL | 138 | 138 | 129 | 9 | 0 | 0 | 0 |
+| OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
+| PANEL | 138 | 138 | 128 | 10 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
@@ -148,7 +148,8 @@
 | N-002~015 | "없음 → 추가" 표(끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · 113차 italic | T2 | nexa-gfx svg 시험 · nexa-grid `adapt_forwards_to_ctl_ctx` | 🚧 | SVG ✅ · italic ✅(§68) · ICO ☐ |
 | L-001~033 | 실측 교훈(위젯 · 패널 · 클라우드) | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
 | O-001~020 | 클라우드 결함·미처리 목록 | — | — | — | ☐ | CLOUD 미이식(M8) |
-| OS-010~028 | 패널/목록 OS 분기 표(타임존 · 휠 줄 수 · 픽셀 스크롤 · 가로 휠 · 파일 아이콘 · …) | `app/input.rs` · `filelist.rs`(format_time) · `platform/` | T3 | `input` 휠 시험 · `format_time` 시험 | 🚧 | 타임존 = 로컬 변환 ✅ · 파일 아이콘 ☐ |
+| OS-010~028 | 패널/목록 OS 분기 표(타임존 · 휠 줄 수 · 픽셀 스크롤 · 가로 휠 · 파일 아이콘 · …) | `app/input.rs` · `filelist.rs`(format_time) · `platform/` | T3 | `input` 휠 시험 · `format_time` 시험 | 🚧 | 타임존 = 로컬 변환 ✅ · 파일 아이콘 ☐ · 네비 글리프 = 아래 OS-11 행 |
+| OS-11 · PANEL-031 | 네비 버튼·트리 쉐브론 글리프(원장 14 OS-11 — dir2 Segoe MDL2 PUA 홈 U+EA8A · ← U+E72B · → U+E72A · ↑ U+E74A · 쉐브론 U+E76C/E70D) | nexa-ui 115차 nexa-font 아이콘 글꼴 체인(`segmdl2.ttf` · `SegoeIcons.ttf`) · `app/fonts.rs::{init_icon_glyphs, icon_font_covers}` · `panel.rs::nav_glyphs` · nexa-grid `set_marker_glyphs` | T1·T3 | `icon_glyph_choice_never_yields_tofu` · nexa-grid `adapt_forwards_to_ctl_ctx` | ✅ | Windows = MDL2 PUA(dir2와 같음) · 아이콘 글꼴 없는 OS = 유니코드 대체(⌂←→↑ · › ⌄) · journal §72 · 실기(모양 비교) 사용자 |
 | RT-001~028 | 릴리스 회귀 테스트 후보(3타깃 정적 게이트 · 3-OS test · 적대적 입력 · 플러그인 E2E · …) | `scripts/check-3os.sh` · `ci.yml` · `ndir-term`/`archive` 시험 · CI plugins 잡 | T0~T5 | 전부 CI | 🚧 | 001·002·004 ✅ · 적대적 입력 묶음 일부(VT·zip) ✅ · 나머지 = T-91 |
 | T-001~048 | 패널/위젯 테스트 후보 표 | `app/core_tests.rs` · nexa-grid 시험 | T3 | `layout_core` · `tabs_and_panels` · 네비 시험 … | 🚧 | 후보별 ID 대조는 T-91 QA 표 |
 | KEY-101~112 | `session.cfg` 키(active_panel · panel{i}.tabs/active/expanded/locked/pinned/modes/cols/colw) | `session.rs` | T1 | `session_roundtrip_with_pipe_separator` · `parse_is_tolerant_and_loads_legacy_name` | ✅ | |
@@ -183,7 +184,7 @@
 | WINB-036~042 | 클라우드 전송 | — | — | — | ☐ | CLOUD 미이식 |
 | WINC-001~025 | 설정 값 적용 `apply_prefs`(실시간 · 멱등) | `app/settings.rs::apply_setting` | T3 | `every_registry_key_is_applied_or_declared_restart` | ✅ | 레지스트리 전 키 적용 감시 |
 | WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) |
-| PANEL-001~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
+| PANEL-001~035 · 037~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
 | PANEL-064 · GAP-003 | 아이콘 키 → 행 셸 아이콘(dir2 `icons.rs` ShellIconCache LRU) | `filelist.rs:276` `TreeSource`에 `icon` 없음(nexa-grid 기본 `None`) | — | — | 🚧 | 구현 예정(개발 세션 다음 슬라이스 · [99](99-coverage-gaps.md) GAP-003) |
 | UIX-021 · GAP-004 | FilePicker 최근 목록 · 숨김 파일 설정 주입 | `file_win.rs:160~163`(`set_show_dot`만) | — | — | 🚧 | 구현 예정(GAP-003 뒤) |
 | PANEL-054~063 · 065~068 | 데이터 어댑터 `TreeSource` | `filelist.rs` | T1·T3 | `filelist::tests` · `my_pc_drive_columns_from_disk_port` · `cut_marks_ghost_rows_…` | ✅ | |
@@ -288,11 +289,11 @@
 | PANEL(열 폭) | 기본 열이 패널보다 넓으면 이름 열 폭을 맞춤(보이지 않는 열 방지) | `main.rs` `columns_for` | T3 | `paint_records_inside_surface`(RecordCtx = 호출 그대로 · 표면 밖 0) | ⚠ | 넘침 자체는 UIC-310 클립 ✅ · 열 폭 기억/동기는 T-43 |
 | PANEL-001·002 · 031·032 | 패널 = 탭 바 + 네비([홈][←][→][↑]) + 경로 바 + 목록 수직 스택 · 네비 활성 동기 | `nexa-dir/src/panel.rs` | T2·T3 | `layout_stacks_tabbar_navbar_rows`(dir2 수치) · `nav_buttons_and_path_edit` · 골든 | ✅ | T-43 · 글리프는 유니코드(MDL2 → SVG T-30) |
 | PANEL-012·014~017 | 탭 = 독립 뷰 + 히스토리 · 새 탭 복제 · 전환/순환 · 닫기(≥1) · 드래그 재정렬 | `panel.rs` | T2 | `tabs_open_switch_close_keep_at_least_one` · `route_and_commands_without_window` | 🚧 | 잠금·고정·복제·패널 간 이동·stale 재열람은 T-43 잔여 |
-| PANEL-026~029 · 033 · 036 | 탭별 back/forward · 경로 진입(실패 = 위치 유지) · 위로 + 떠난 폴더 자동 선택 · 홈 = 내 PC · 행 활성화 · 무간섭 재열람(캐럿·스크롤) | `nav.rs` · `panel.rs` | T2 | nav 3 · `per_tab_history_and_nav_up_selects_left_folder` · `activate_enters_dir_and_reports_file` | ✅ | 선택 복원·사라진 폴더 폴백(037)은 잔여 |
+| PANEL-026~029 · 033 | 탭별 back/forward · 경로 진입(실패 = 위치 유지) · 위로 + 떠난 폴더 자동 선택 · 홈 = 내 PC · 행 활성화 · 무간섭 재열람(캐럿·스크롤) | `nav.rs` · `panel.rs` | T2 | nav 3 · `per_tab_history_and_nav_up_selects_left_folder` · `activate_enters_dir_and_reports_file` | ✅ | 선택 복원·사라진 폴더 폴백(037)은 잔여 |
 | WINA(layout) · PANEL §2-5 | 창 배치 = 메뉴/도구 28/[좌 ║ 우]/상태 22 · 스플리터 드래그·50 % 스냅(Alt 해제)·최소 200 · 열 기본 5(340·64·96·140·110) | `main.rs` `layout_core`/`split_drag` | T3 | `layout_golden_1200x800` · `splitter_drag_and_snap` · `px_rounds_and_columns_fit` | ✅ | 열 폭 기억·동기(`list.col_width_sync`)는 잔여 |
 | PREFS-050 · PANEL §5-2 | 세션 파일 = dir2 `session.cfg` 형식 그대로(`session.conf` · 레거시 이름 읽기 · 원자적 저장 · 미사용 키 보존) | `nexa-dir/src/session.rs` | T2 | `session_roundtrip_with_pipe_separator`(dir2) · `parse_is_tolerant_and_loads_legacy_name` | ✅ | T-45 |
 | PREFS-051·052·054 · 616·617 · PANEL-023 | 복원(창 생성 전 · 실행 인자 우선 · 실패 탭 건너뜀) · 디바운스 저장(quiet 1 s · max 5 s · 두 패널 전부 소진) · 종료 저장 | `app/sessions.rs` · `panel.rs::restore` · `main.rs` | T3·T4 | `session_roundtrip_through_app` · 창 2회 실행 실증 | ✅ | T-45 · 펼침(`exp`)·잠금/고정 복원은 잔여 |
-| CI-106 | 기동 명령 확장 — `@ready`/`@idle`/`@after` · `quit[:코드]` · `assert.<대상>:<식>`(종료 코드 3) · `ui.click:@영역` · `ui.key` | `app/startup_cmd.rs` | T3·T4 | `startup_ready_assert_and_dumps` · `classify_prefixes` · 창 실증(exit 5 / exit 3) | ✅ | T-46 · `@idle` 작업 큐는 M6 |
+| CI-106 | 기동 명령 확장 — `@ready`/`@idle`/`@after` · `quit[:코드]` · `assert.<대상>:<식>`(종료 코드 3) · `ui.click:@영역` · `ui.key` | `app/startup_cmd.rs` | T3·T4 | `startup_ready_assert_and_dumps` · `classify_prefixes` · 창 실증(exit 5 / exit 3) | ✅ | T-46 · `@idle` 작업 큐는 M6 · `ctx.wait`(열린 메뉴의 셸 항목이 찰 때까지 뒤 `@ready` 보류 · 20 s 상한 · §72 · `context_menu_opens_immediately…` ⑥ · `ctx-menu.scn`) |
 | CI-107 · CI-081 | 덤프 어휘 — `layout` `panel` `list` `tabs` `status` `menu` · `dump:` 전부 | `app/startup_cmd.rs::dump_of` | T3 | `startup_ready_assert_and_dumps` | 🚧 | T-46 · tree/ops/term/preview/prefs/plugin/license/log 덤프는 각 기능과 함께 |
 | CI-112 · CI-072 | 패닉 훅 → `<HOME>/crash/crash-<unix>.txt`(버전·OS·마지막 명령) · 다음 기동 안내 1회 | `nexa-dir/src/crash.rs` | T2 | `report_has_version_os_and_last_command` · `unreported_is_taken_once_and_newest_first` | ✅ | T-46 |
 | CI-108 | `ndir-check` 시나리오 러너(의존 0 · `.scn` · 격리 홈·샘플 트리 · 종료 코드/패닉/검사식 · summary) + 시나리오 5 | `crates/ndir-check` · `tests/scenarios/*.scn` | T4 | 러너 시험 3 · 시나리오 5 PASS(Windows 로컬·CI) | ✅ | T-06 · Linux xvfb·macOS 러너는 후속 · 캡처 플러그 없음 |
@@ -304,7 +305,8 @@
 | PANEL(colw) · 07-18 | 열 폭 동기(`list.col_width_sync` · 켜는 순간 즉시 정렬 · 사용자 변경 전파) | `app/input.rs` `sync_col_widths_from` · `panel.rs` | T3 | `tab_menu_and_column_sync` | ✅ | T-43 2차 |
 | PANEL-044 · X-17 | 내 PC 전용 열(이름·종류·전체 크기·여유 공간 · 진입/이탈 시점만 교체 · 타일 용량 바) | `filelist.rs`(COL_TOTAL/FREE · drive_space · tile_info) · `panel.rs`(sync_columns_for_root) · `main.rs`(Disk 포트 주입) | T2·T3 | `drive_columns_use_injected_space` · `my_pc_switches_columns_and_back` · `my_pc_drive_columns_from_disk_port` | ✅ | 비Windows 드라이브/마운트 열거는 T-53(ndir-vfs X-17 β) |
 | DR-5 · CI-103 · SKEL-404·425·431·432 | 플랫폼 포트 9종(Shell·Pty·ContextMenuProvider·Trash·FileClipboard·DragSource·Watcher·Opener·Disk) · `Platform::native/fake` · Unsupported 규약 | `nexa-dir/src/platform/{mod,fake,windows,macos,linux}.rs` · `docs/adr/0001` | T1·T2·T3 | `pick_shell_prefers_first_existing` · `poll_watcher_reports_changed_dirs_only` · `native_has_a_shell_and_unsupported_ports_say_so` · `fake_records_and_injects` · `platform_ports_wire_open_and_watch` | ✅ | T-50 · Pty/메뉴/휴지통/클립보드/DnD 운영 구현은 T-51~53 |
-| PANEL-036 · 042 · SHELL §1-B | 폴더 자동 갱신(폴링 감시 1 s → 그 폴더 탭 무간섭 재열람) | `app/watch.rs` · `platform::PollWatcher` | T3 | `platform_ports_wire_open_and_watch` | 🚧 | OS 통지(ReadDirectoryChangesW·FSEvents·inotify)는 T-51~53 · 감시 상한(WATCH_CAP)·펼친 폴더는 잔여 |
+| PANEL-042 · SHELL §1-B | 폴더 자동 갱신(폴링 감시 1 s → 그 폴더 탭 무간섭 재열람) | `app/watch.rs` · `platform::PollWatcher` | T3 | `platform_ports_wire_open_and_watch` | 🚧 | OS 통지(ReadDirectoryChangesW·FSEvents·inotify)는 T-51~53 · 감시 상한(WATCH_CAP)·펼친 폴더는 잔여 |
+| PANEL-036 · GAP-005 | 무간섭 재열람(F5 · 감시 · 필터 토글 — dir2 `reopen_filtered`: 선택 경로 · 캐럿 경로 · 스크롤 스냅샷 → 재열기 → 복원) | `panel.rs:901` `Panel::reopen` = 캐럿 인덱스·스크롤만 복원 · **선택 복원 누락**(`TreeSource::reload`가 선택을 비움) · 펼침/정렬 유지 미검증 | T3 | `per_tab…`(캐럿·스크롤) | 🚧 | 10-03 §72 적발(ctx-menu.scn — 감시 재열람 뒤 `edit.copy` = clip none) · 수정 예정(개발 세션 다음 슬라이스 · 경로 기준 복원 + T3) · [99](99-coverage-gaps.md) GAP-005 |
 | CI-110 (shell·open·fs) | `--selfcheck` 실제 항목: 기본 셸·후보 · 열기 명령 · 샌드박스 파일 왕복 · 드라이브 용량 | `nexa-dir/src/selfcheck.rs` | T5 | `--selfcheck --ci` PASS(Windows) | ✅ | T-50 · Unix 용량 SKIP(T-52/53) |
 | SHELL §1-E · SKEL-427 | 휴지통 3-OS(Windows SHFileOperationW ALLOWUNDO · Linux freedesktop Trash 규격 · macOS ~/.Trash 이동) + `edit.delete` 배선 + selfcheck `trash` | `platform/{windows,linux,macos}.rs` · `app/menus.rs::delete_to_trash` | T1·T3·T5 | `trash_moves_and_writes_info`(Linux) · `home_trash_moves_with_suffix…`(mac) · `delete_goes_through_trash_port` · selfcheck(비CI) | ✅ | T-51 A · 확인창 T-29 · macOS 되돌리기 T-52 · 복원(undelete) 잔여 |
 | SHELL §1-C · SKEL-428 | 파일 클립보드 — Windows CF_HDROP + Preferred DropEffect 읽기/쓰기 | `platform/windows.rs::NativeFileClipboard` | T2(ignored · opt-in) | `double_null_list_layout` · `clipboard_roundtrip_and_trash_real`(ignored) | 🚧 | mac/Linux(T-52/53) · 명령 배선(edit.cut/copy/paste)은 M6 |

@@ -4,7 +4,7 @@ pub(crate) mod bulk;
 pub(crate) mod dialogs;
 pub(crate) mod dnd;
 mod event_loop;
-mod fonts;
+pub(crate) mod fonts;
 mod input;
 pub(crate) mod keywinit;
 pub(crate) mod launcher_icons;
