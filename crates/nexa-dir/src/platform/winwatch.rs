@@ -300,6 +300,7 @@ mod tests {
     /// 파일 생성·수정·삭제가 1 s 안에 그 폴더로 보고된다 · 다른 폴더는 보고하지 않는다 · 같은 집합 재지정은 유지.
     #[test]
     fn native_watcher_reports_changes_in_watched_dir() {
+        let _g = crate::platform::os_test_guard();
         let base = std::env::temp_dir().join(format!("ndir-winwatch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("other")).unwrap();
@@ -326,6 +327,7 @@ mod tests {
     /// 폴더 소실 = 스레드 죽음이 관측되고 다음 `watch`가 정리/재구독한다 · 없는 폴더 = 폴링 폴백(간격 1 s) · 패닉 없음.
     #[test]
     fn watcher_death_is_observable_and_missing_dir_falls_back() {
+        let _g = crate::platform::os_test_guard();
         let base = std::env::temp_dir().join(format!("ndir-winwatch-die-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();

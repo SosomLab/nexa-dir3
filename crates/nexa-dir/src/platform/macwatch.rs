@@ -272,6 +272,7 @@ mod tests {
     /// 생성·삭제가 그 폴더로 보고된다 · 하위 폴더는 보고하지 않는다 · 같은 집합 재지정은 유지 · 없는 폴더 = 폴백 · 소실 = 해제 + 재구독.
     #[test]
     fn kqueue_watcher_reports_changes_and_falls_back() {
+        let _g = crate::platform::os_test_guard();
         let base = std::env::temp_dir().join(format!("ndir-kqueue-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("other")).unwrap();

@@ -239,6 +239,7 @@ mod tests {
     /// 시스템 휴지통 왕복(macOS 러너): 임시 파일 → trashItemAtURL(원본 사라짐 · 기록) → restore(원래 경로로 복원) · 모르는 경로 복원 = Unsupported.
     #[test]
     fn system_trash_round_trip() {
+        let _g = crate::platform::os_test_guard();
         let dir = std::env::temp_dir().join(format!("ndir-mactrash-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let f = dir.join("restore-me.txt");

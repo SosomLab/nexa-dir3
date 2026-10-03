@@ -41,6 +41,18 @@ mod wintemplates;
 #[cfg(windows)]
 mod winwatch;
 
+/// OS 자원(셸 메뉴 COM · 폴더 감시 스레드 · PTY · 자가 점검 전체)을 쓰는 **시험 직렬화 뮤텍스** — `cargo test` 병렬 실행에서 두 개가 겹치면
+/// 교착했다(10-03 로컬 실증 · 운영은 Platform 1개라 무관). 해당 시험은 첫 줄에서 `let _g = os_test_guard();`.
+#[cfg(test)]
+pub(crate) static OS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn os_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    OS_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlatformError {

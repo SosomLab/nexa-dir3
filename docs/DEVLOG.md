@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **fix(test)**: 자가 점검을 돌리는 단위 시험 2종을 CI 부분집합(`ci: true`)으로 — 실제 휴지통/셸 COM 동시 사용 교착(병렬 실행) 제거 → [journal §58](journal/2026-10-03.md)
 - **T-52 macOS 시스템 휴지통**: `SystemTrash`(trashItemAtURL + 세션 기록 복원 · HomeTrash 폴백) · 시험 +1(macOS CI) → [journal §57](journal/2026-10-03.md)
 - **T-53 Linux 파일 클립보드**: `clipboard_x11.rs` 다중 타깃(uri-list · gnome-copied-files · kde cut) + `platform/linux.rs::X11Files` · 시험 +1 → [journal §56](journal/2026-10-03.md)
 - **T-52 macOS 파일 클립보드**: `platform/macclip.rs`(NSPasteboard 파일 URL · 앱 전용 cut 타입 + changeCount) · 시험 +1(macOS CI) → [journal §55](journal/2026-10-03.md)

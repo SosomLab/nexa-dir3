@@ -415,6 +415,7 @@ mod tests {
     /// 실제 셸: 임시 .txt의 메뉴에 항목이 있고 verb `open`/`delete`/`copy` 중 하나는 보인다(CI Windows 러너 포함).
     #[test]
     fn shell_menu_lists_items_for_temp_file() {
+        let _g = crate::platform::os_test_guard();
         let dir = std::env::temp_dir().join(format!("ndir-shellmenu-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let f = dir.join("a.txt");
@@ -442,6 +443,7 @@ mod tests {
     /// 생성 감지는 정확히 1개일 때만 · 범위 밖 id = 오류.
     #[test]
     fn background_menu_lists_items_and_detects_single_creation() {
+        let _g = crate::platform::os_test_guard();
         let dir = std::env::temp_dir().join(format!("ndir-shellbg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();

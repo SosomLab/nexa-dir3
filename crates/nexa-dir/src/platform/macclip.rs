@@ -95,6 +95,7 @@ mod tests {
     /// 실제 보드 왕복(macOS 러너): 2경로 잘라내기 → 같은 경로 + cut · 복사로 다시 쓰면 cut=false · 빈 목록 쓰기 = 무동작.
     #[test]
     fn pasteboard_round_trip_with_cut_marker() {
+        let _g = crate::platform::os_test_guard();
         let base = std::env::temp_dir().join(format!("ndir-macclip-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&base);
         let a = base.join("a.txt");

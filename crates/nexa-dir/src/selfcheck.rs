@@ -801,9 +801,15 @@ mod tests {
         assert_eq!(r.exit_code(), 0);
     }
 
+    /// CI 부분집합으로 돈다 — 기본 옵션은 실제 휴지통 왕복·셸 메뉴 COM을 건드려 시험 규율 위반이고, 다른 시험(셸 메뉴·check_win)과 겹치면
+    /// 멈췄다(10-03 로컬 실증 · 병렬 실행에서만 재현).
     #[test]
     fn all_groups_present_and_unimplemented_are_skip() {
-        let r = run(&Options::default());
+        let _g = crate::platform::os_test_guard();
+        let r = run(&Options {
+            ci: true,
+            ..Default::default()
+        });
         for g in GROUPS {
             assert!(r.items.iter().any(|i| i.group == *g), "group {g} missing");
         }

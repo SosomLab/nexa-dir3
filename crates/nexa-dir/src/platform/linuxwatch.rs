@@ -241,6 +241,7 @@ mod tests {
     /// 폴더 소실 = 해제 + 다음 watch 재구독.
     #[test]
     fn inotify_watcher_reports_changes_and_falls_back() {
+        let _g = crate::platform::os_test_guard();
         let base = std::env::temp_dir().join(format!("ndir-inotify-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("other")).unwrap();

@@ -72,16 +72,20 @@ impl CheckWin {
         }
     }
 
-    /// 점검 시작(작업 스레드). 이미 도는 중이면 무시.
+    /// 점검 시작(작업 스레드). 이미 도는 중이면 무시. CI 환경이면 사용자 자원 항목은 SKIP(`--ci`와 같은 부분집합).
     pub(crate) fn start(&mut self) {
+        self.start_with(Options {
+            ci: std::env::var_os("CI").is_some(),
+            ..Default::default()
+        });
+    }
+
+    /// 옵션을 지정해 시작(시험 = `ci: true` — 실제 휴지통·셸 메뉴 COM을 건드리지 않는다 · 10-03 로컬 시험 멈춤 적발).
+    pub(crate) fn start_with(&mut self, opts: Options) {
         if self.running {
             return;
         }
         let (tx, rx) = mpsc::channel();
-        let opts = Options {
-            ci: std::env::var_os("CI").is_some(),
-            ..Default::default()
-        };
         std::thread::spawn(move || {
             let _ = tx.send(selfcheck::run(&opts));
         });
@@ -565,8 +569,15 @@ mod tests {
     #[test]
     fn start_runs_in_background_and_reports() {
         ndir_i18n::activate(ndir_i18n::load("en", std::path::Path::new("nowhere")));
+        let _g = crate::platform::os_test_guard();
         let mut w = CheckWin::new();
-        w.start();
+        // env 그룹만 — 셸 메뉴 COM·폴더 감시·PTY 같은 실자원 점검은 다른 시험(selfcheck · winshell)과 겹치면 멈춘다
+        // (10-03 로컬 실증 · 병렬 실행). 창의 스레드/표/요약 동작이 시험 대상이지 점검 내용이 아니다.
+        w.start_with(Options {
+            ci: true,
+            only: Some("env".into()),
+            ..Default::default()
+        });
         assert!(w.is_running() && w.summary_text() == "Running…");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
         while !w.poll() {
@@ -576,7 +587,7 @@ mod tests {
             );
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
-        assert!(!w.is_running() && w.rows_len() > 5, "{}", w.table());
+        assert!(!w.is_running() && w.rows_len() >= 1, "{}", w.table());
         assert!(w.table().contains("PASS env"), "{}", w.table());
     }
 }
