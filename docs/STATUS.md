@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-03 · 다음 세션 시작점 · 90차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `9625a1a`(+ docs) · nexa-license `54c8d71` · nexa-dir3 `9a8ed19`. 게이트: check-3os ✓ · 시험 426 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `47cdb77` · nexa-license `54c8d71` · nexa-dir3 `3fe457e`. 게이트: check-3os ✓ · 시험 427 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
 - **이 PC 세션 분담**(§100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`(평소 실행은 `cargo run -p nexa-dir`). 빌드에 시스템 라이브러리는 불요 · 실행은 데스크톱 배포판의 libxkbcommon/X11·Wayland 라이브러리를 dlopen(최소 설치면 추가 필요 — 추정).
 - **Linux 첫 실기에서 확인할 것**(T-103): ① 목록 쉐브론 크기·모양(✅ 선 쉐브론 §98 · 사용자 "해결") ② 경로 바 구분자 `/` · 중간 세그먼트 클릭 = 그 폴더(nexa-ui 122) ③ 내 PC 목록 = `/` · 홈 · 볼륨 · 용량 열(§95) ④ Alt+← / → / ↑ · Enter · Alt+↓(§93) ⑤ 터미널(`$SHELL` · PTY) · 열기(`xdg-open`) · 휴지통 · 폴더 감시.
@@ -14,11 +14,21 @@
 
 ---
 
+## 10-04 114차 — 상태줄 약어 · 칸 클릭 상세 팝업 · 앱 메모리/라이선스 우측 · 메모리 창 1차
+
+- **한 일**: 상태줄 칸 = 약어(C · M · D · N) + 값(↑ 빨강 · ↓ 파랑 · 견본으로 기본 너비 확보 — nexa-ui 137) · 모든 칸 클릭 = 상세 팝업(주기마다 갱신 · CPU 전체 + Dir · 메모리 전체/잔여/Dir · 디스크 · 네트워크) · 맨 우측 = 앱 메모리(클릭 = 메모리 창) + 라이선스 · `mem_win.rs` 메모리 창 1차(T-93).
+- **지금 상태**: 3fe457e 앱 재시작(PID 387089). CI 9a8ed19 성공 · 3fe457e 진행 중(Dir CPU Windows/macOS 첫 실행). 옛 `statusbar.layout` 저장값 이주를 화면으로 확인 중.
+- **걸린 것**: CI 3fe457e · T-93 2차(영역 확장 · 힙 정리) · macOS 디스크(IOKit) · i18n 결정 4건 · T-134 · T-133 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-04 §11](journal/2026-10-04.md)
+
+---
+
 ## 10-04 113차 — 상태줄 칸 안 항목(메모리 Dir/시스템 · 디스크 쓰기/읽기 · 네트워크 다운/업) · DR-25
 
 - **한 일**: 상태줄 칸 안에 항목(메모리 = 이 프로그램 + 시스템 · 디스크 = 쓰기 · 읽기 · 네트워크 = 다운 · 업) · 순서 편집 창 = 그룹/자식(항목 모두 끄면 칸 빠짐) · DR-25로 DR-23 정정(시스템 값 · 네트워크 · 칸 안 항목).
 - **지금 상태**: 9a8ed19 앱 재시작(PID 378499). CI 0ad7599 성공 · 9a8ed19 진행 중. ⚠ 협업 세션 재시작(`pkill`)이 개발 세션 T4를 죽인 사고 → 자기 PID만 종료로 바꿈.
-- **걸린 것**: CI 9a8ed19(mem_app) · macOS 디스크(IOKit) · i18n 결정 4건 · T-134 · T-133 · T-93 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
+- **걸린 것**: (CI 9a8ed19 성공 = 114차) · macOS 디스크(IOKit) · i18n 결정 4건 · T-134 · T-133 · T-93 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
 
 → [journal/2026-10-04 §10](journal/2026-10-04.md)
 
