@@ -2855,3 +2855,55 @@ fn keyboard_context_menu_opens_at_the_caret_row() {
     assert_eq!(app.ctx_anchor, (300, 200));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// GAP-012: 경로 편집 필드 우클릭 = 글자 편집 메뉴(6항목 · 활성 규칙) · 항목 실행은 경로 글자에만 · 더블클릭 = 전체 선택.
+#[test]
+fn path_edit_right_click_opens_text_menu() {
+    let (mut app, dir) = fixture("pathmenu");
+    app.layout_for(1200, 800, 1.0);
+    let pb = app.panels[0].pathbar.bounds();
+    let (x, y) = (pb.x + 12, pb.y + pb.h / 2);
+    // 첫 우클릭 = 편집 진입(메뉴 없음) · 편집 중 우클릭 = 메뉴.
+    app.route(InputEvent::RightDown { x, y });
+    assert!(app.panels[0].pathbar.is_editing() && !app.tab_menu.is_open());
+    app.route(InputEvent::RightDown { x, y });
+    assert!(app.tab_menu.is_open());
+    let d = app.dump_of("ctx").unwrap();
+    assert_eq!(
+        d.trim(),
+        "pathedit edit.undo edit.cut edit.copy edit.paste edit.delete edit.select_all"
+    );
+    assert!(app.panels[0].pathbar.is_editing(), "메뉴가 떠도 편집 유지");
+    // 삭제 = 선택된 경로 글자만 지운다(편집 진입 = 전체 선택 상태) · 파일은 그대로.
+    let before = std::fs::read_dir(&dir).unwrap().count();
+    app.ctx_pick("edit.delete");
+    assert_eq!(app.panels[0].pathbar.edit_text().as_deref(), Some(""));
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), before);
+    // 실행 취소로 글자 복구 → 더블클릭 = 전체 선택(선택이 있어야 "복사"가 활성).
+    app.route(InputEvent::RightDown { x, y });
+    app.ctx_pick("edit.undo");
+    let text = app.panels[0].pathbar.edit_text().unwrap();
+    assert!(!text.is_empty(), "되돌림");
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Home,
+        shift: false,
+        primary: false,
+    });
+    assert_eq!(
+        app.panels[0].pathbar.edit_menu_state().map(|s| s.1),
+        Some(false),
+        "Home = 선택 해제"
+    );
+    app.route(InputEvent::DoubleClick {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    });
+    assert_eq!(
+        app.panels[0].pathbar.edit_menu_state().map(|s| s.1),
+        Some(true),
+        "더블클릭 = 전체 선택"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -403,6 +403,12 @@ impl App {
             if let Some((row, name)) = self.panels[i].take_rename() {
                 self.apply_rename(i, row, &name);
             }
+            if self.panels[i].take_path_menu() {
+                if i != self.active {
+                    self.set_active(i);
+                }
+                self.open_path_edit_menu(i);
+            }
             if let Some(on_row) = self.panels[i].take_ctx() {
                 if i != self.active {
                     self.set_active(i);

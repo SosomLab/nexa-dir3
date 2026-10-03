@@ -14,6 +14,8 @@ pub(crate) enum CtxKind {
     Row(usize),
     /// 배경(빈 영역) 메뉴.
     Bg(usize),
+    /// 경로 바 편집 필드의 글자 편집 메뉴(GAP-012).
+    PathEdit(usize),
 }
 
 /// 셸 verb → 앱 명령(dir2 SHELL-005/006 가로채기).
@@ -180,6 +182,27 @@ impl App {
         self.ctx_anchor_next = Some(at);
         self.open_row_menu(panel);
         self.ctx_anchor_next = None;
+    }
+
+    /// 경로 바 편집 필드 메뉴(dir2 CMD-086~091 · win.rs:7472-7532): 실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택.
+    /// 활성 = 네이티브 EDIT 메뉴와 같은 규칙(되돌릴 것 · 선택 · 클립보드 글자 · 비어 있지 않음). 실행은 [`Self::path_edit`].
+    pub(crate) fn open_path_edit_menu(&mut self, panel: usize) {
+        let Some((can_undo, has_sel, empty)) = self.panels[panel].pathbar.edit_menu_state() else {
+            return;
+        };
+        let has_text = clipboard::read_text().is_some_and(|t| !t.is_empty());
+        let items = vec![
+            CtxItem::maybe("edit.undo", tr("menu.edit.undo"), can_undo),
+            CtxItem::Separator,
+            CtxItem::maybe("edit.cut", tr("menu.edit.cut"), has_sel),
+            CtxItem::maybe("edit.copy", tr("menu.edit.copy"), has_sel),
+            CtxItem::maybe("edit.paste", tr("menu.edit.paste"), has_text),
+            CtxItem::maybe("edit.delete", tr("menu.edit.delete"), has_sel),
+            CtxItem::Separator,
+            CtxItem::maybe("edit.select_all", tr("menu.edit.selectAll"), !empty),
+        ];
+        self.ctx_wait = None;
+        self.open_ctx(CtxKind::PathEdit(panel), items);
     }
 
     /// 기다리던 메뉴 취소(다른 곳 클릭 · Esc · 키 입력).
@@ -528,10 +551,15 @@ impl App {
             return;
         };
         let panel = match kind {
-            CtxKind::Row(p) | CtxKind::Bg(p) => p,
+            CtxKind::Row(p) | CtxKind::Bg(p) | CtxKind::PathEdit(p) => p,
         };
         if panel != self.active {
             self.set_active(panel);
+        }
+        if matches!(kind, CtxKind::PathEdit(_)) {
+            // 글자 편집 명령만(파일 명령으로 빠지지 않는다 — 편집이 이미 끝났으면 아무 일도 하지 않는다).
+            let _ = self.path_edit(id);
+            return;
         }
         match id {
             "ctx.copy_path" => {
@@ -625,6 +653,7 @@ impl App {
         let kind = match (self.ctx_kind, self.tab_menu_at) {
             (Some(CtxKind::Row(_)), _) => "row",
             (Some(CtxKind::Bg(_)), _) => "bg",
+            (Some(CtxKind::PathEdit(_)), _) => "pathedit",
             (None, Some(_)) => "tab",
             _ => "?",
         };

@@ -77,6 +77,8 @@ pub(crate) struct Panel {
     pending_rename: Option<(usize, String)>,
     /// 목록 우클릭(행 위 = true · 빈 영역 = false) — 호스트가 컨텍스트 메뉴를 연다.
     pending_ctx: Option<bool>,
+    /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
+    pending_path_menu: bool,
     session_dirty: bool,
     /// 사용자가 열 폭을 바꿨다(호스트가 수거해 반대 패널에 동기 · `list.col_width_sync`).
     col_changed: bool,
@@ -155,6 +157,7 @@ impl Panel {
             pending_tab_menu: None,
             pending_rename: None,
             pending_ctx: None,
+            pending_path_menu: false,
             session_dirty: false,
             col_changed: false,
         };
@@ -400,6 +403,16 @@ impl Panel {
 
     pub(crate) fn take_ctx(&mut self) -> Option<bool> {
         self.pending_ctx.take()
+    }
+
+    /// 경로 편집 필드 위인가 — 편집 중 + 경로 바 영역(그리기 캐시에 기대지 않는다: 편집 필드는 경로 바 전체를 차지한다).
+    fn path_edit_at(&self, x: i32, y: i32) -> bool {
+        self.pathbar.is_editing() && self.pathbar.bounds().contains(Point { x, y })
+    }
+
+    /// 경로 편집 메뉴 요청을 한 번 꺼낸다.
+    pub(crate) fn take_path_menu(&mut self) -> bool {
+        std::mem::take(&mut self.pending_path_menu)
     }
 
     pub(crate) fn take_tab_menu(&mut self) -> Option<usize> {
@@ -994,6 +1007,11 @@ impl Panel {
                 }
             }
             InputEvent::DoubleClick { x, y, .. } => {
+                // 경로 편집 필드 더블클릭 = 전체 선택(dir2 win.rs:8638-8647).
+                if self.path_edit_at(x, y) {
+                    self.pathbar.edit_key(EditKey::SelectAll, false, inv);
+                    return;
+                }
                 if let Some(part) = self.part_at(Point { x, y }) {
                     if part == Part::List {
                         if let Some(row) = self.rows().row_at(x, y) {
@@ -1005,6 +1023,11 @@ impl Panel {
                 }
             }
             InputEvent::RightDown { x, y } | InputEvent::MiddleDown { x, y } => {
+                // 경로 편집 중 필드 우클릭 = 편집 메뉴(dir2 win.rs:7472-7532) — 처음 우클릭(편집 진입)과 구분.
+                if matches!(ev, InputEvent::RightDown { .. }) && self.path_edit_at(x, y) {
+                    self.pending_path_menu = true;
+                    return;
+                }
                 if let Some(part) = self.part_at(Point { x, y }) {
                     self.send(part, ev, inv);
                     if part == Part::List && matches!(ev, InputEvent::RightDown { .. }) {
