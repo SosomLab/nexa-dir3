@@ -343,6 +343,16 @@ pref.toolbarSize.24 = 24（大）
 pref.toolbarSize.32 = 32（特大）
 pref.toolbarIconPad = ツールバー: アイコン周囲の余白(px)
 pref.toolbarIconPad.desc = ツールバーの各アイコンの上下左右に置く余白です。1 = アイコン間 2px・ツールバーの高さ +2px。
+pref.toolbarHoverFill = ツールバー: ホバーの塗り(%)
+pref.toolbarHoverFill.desc = ツールバーのボタンにポインターを重ねたときの薄い背景の濃さです。
+pref.toolbarOnFill = ツールバー: オン時の塗り(%)
+pref.toolbarOnFill.desc = オン（トグル済み）のボタンのアクセント色背景の濃さです。
+pref.toolbarOnLine = ツールバー: オン時の枠線(%)
+pref.toolbarOnLine.desc = オンのボタンの 1px アクセント色枠線の濃さです。
+pref.toolbarStateStep = ツールバー: ホバー/押下の段階(%)
+pref.toolbarStateStep.desc = オンのボタンをホバー・押下したときに一段階ごとに濃くなる量です。
+pref.toolbarStateRadius = ツールバー: 状態背景の角丸(px)
+pref.toolbarStateRadius.desc = ホバー/オン背景の角の半径です。
 pref.toolbarItemGap = ツールバー: アイコン間の間隔(px)
 pref.toolbarItemGap.desc = ツールバーグループ内のアイコン同士の間隔です。0 = 隙間なし。
 pref.toolbarGroupGap = ツールバー: グループ間の間隔(px)

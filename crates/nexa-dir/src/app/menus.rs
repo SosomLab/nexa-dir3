@@ -383,6 +383,11 @@ impl App {
         if self.rename_edit(id) {
             return;
         }
+        // ⚠ 경로 바 편집 중 편집 명령(Ctrl+C/X/V/Z/A · Delete)은 **경로 글자**에(dir2 do_clip ① · win.rs:7246-7286) —
+        // 이 분기가 없으면 Ctrl+V가 파일 붙여넣기(전송 시작) · Ctrl+Z가 마지막 파일 작업 되돌리기로 실행된다(GAP-011).
+        if self.path_edit(id) {
+            return;
+        }
         match id {
             "file.exit" => self.exit_requested = true,
             "file.new_folder" => self.create_new(true),

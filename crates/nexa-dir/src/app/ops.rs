@@ -632,6 +632,58 @@ impl App {
     }
 
     /// 이름 바꾸기 편집 필드 안의 편집 명령(dir2 `do_clip` ② — undo/cut/copy/paste/select_all/delete). 처리했으면 true.
+    /// 경로 바 편집 중의 편집 명령 → 경로 글자(텍스트 클립보드). 처리했으면 true. 편집 중이면 **모르는 편집 명령도 삼킨다** —
+    /// 경로를 고치는 동안 파일 명령(붙여넣기·삭제·되돌리기)이 실행되면 안 된다.
+    pub(crate) fn path_edit(&mut self, id: &str) -> bool {
+        let a = self.active;
+        if !self.panels[a].pathbar.is_editing() {
+            return false;
+        }
+        let mut inv = Invalidations::default();
+        let bar = &mut self.panels[a].pathbar;
+        match id {
+            "edit.undo" => {
+                bar.edit_undo(&mut inv);
+            }
+            "edit.cut" => {
+                if let Some(t) = bar.edit_cut(&mut inv) {
+                    let _ = clipboard::write_text(&t);
+                }
+            }
+            "edit.copy" => {
+                if let Some(t) = bar.edit_selected_text() {
+                    let _ = clipboard::write_text(&t);
+                }
+            }
+            "edit.paste" => {
+                if let Some(t) = clipboard::read_text() {
+                    // 여러 줄/따옴표로 감싼 경로(탐색기 "경로로 복사")도 한 줄 경로로.
+                    let line: String = t
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_matches('"')
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .collect();
+                    bar.edit_paste(&line, &mut inv);
+                }
+            }
+            "edit.select_all" => {
+                bar.edit_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+            }
+            "edit.delete" | "edit.delete_permanent" => {
+                bar.edit_delete(&mut inv);
+            }
+            // 그 밖의 편집/파일 변경 명령은 경로 편집 중에는 실행하지 않는다.
+            "edit.redo" | "edit.rename" | "edit.bulk_rename" => {}
+            _ => return false,
+        }
+        self.redraw();
+        true
+    }
+
     pub(crate) fn rename_edit(&mut self, id: &str) -> bool {
         let a = self.active;
         if !self.panels[a].rows().is_renaming() {

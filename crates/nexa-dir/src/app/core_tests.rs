@@ -2740,3 +2740,53 @@ fn scroll_settings_reach_controls_and_terminal_wheel_accumulates() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// ⚠ GAP-011: 경로 바 편집 중 Ctrl+C/X/V/Z · Delete는 **경로 글자**를 다룬다 — 파일 붙여넣기(전송)·삭제·되돌리기가 실행되면 안 된다.
+#[test]
+fn path_edit_shortcuts_edit_text_not_files() {
+    let (mut app, dir) = fixture("pathedit");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    // 파일을 하나 선택해 두고(복사 대상 후보) 경로 편집에 들어간다.
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.panels[0].pathbar.begin_edit(&mut inv);
+    assert!(app.panels[0].pathbar.is_editing());
+    let log = app.platform.log.clone().expect("fake log");
+    let ops_before = log.borrow().calls.len();
+    let entries_before = std::fs::read_dir(&dir).unwrap().count();
+    for id in [
+        "edit.copy",
+        "edit.cut",
+        "edit.paste",
+        "edit.undo",
+        "edit.delete",
+        "edit.redo",
+    ] {
+        app.command(id);
+        assert!(
+            app.panels[0].pathbar.is_editing(),
+            "{id}: 편집 상태 유지(파일 명령으로 빠지지 않는다)"
+        );
+    }
+    assert_eq!(
+        log.borrow().calls.len(),
+        ops_before,
+        "휴지통·파일 클립보드 등 플랫폼 호출 없음: {:?}",
+        log.borrow().calls
+    );
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        entries_before,
+        "파일 변화 없음"
+    );
+    assert!(dir.join("a.txt").exists());
+    assert!(!app.toasts.animating(), "전송/오류 토스트 없음");
+    // 전체 선택 → 삭제 = 경로 글자가 비워진다.
+    app.command("edit.select_all");
+    app.command("edit.delete");
+    assert_eq!(app.panels[0].pathbar.edit_text().as_deref(), Some(""));
+    // 편집 중이 아니면 가로채지 않는다.
+    app.panels[0].pathbar.cancel_edit(&mut inv);
+    assert!(!app.path_edit("edit.copy"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

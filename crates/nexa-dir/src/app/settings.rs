@@ -107,6 +107,11 @@ impl App {
             // 순서 편집기(T-71 DLG-073): 툴바 재구성 · 컬럼 = 활성 패널(+동기) · 컨텍스트 메뉴는 다음 열 때 읽는다.
             "toolbar.icon_size"
             | "toolbar.icon_pad"
+            | "toolbar.hover_fill_pct"
+            | "toolbar.on_fill_pct"
+            | "toolbar.on_line_pct"
+            | "toolbar.state_step_pct"
+            | "toolbar.state_radius"
             | "toolbar.item_gap"
             | "toolbar.group_gap"
             | "toolbar.row_gap"
@@ -230,6 +235,15 @@ impl App {
         // 아이콘 둘레 여백(`toolbar.icon_pad` · 기본 1 = 상하좌우 1px → 칸 22 · 아이콘 사이 2 · 툴바 높이 30) + 양끝/위아래 4.
         dock.set_padding(App::setting_px(settings, "toolbar.icon_pad", 1, 8), 4);
         dock.set_item_gap(App::setting_px(settings, "toolbar.item_gap", 0, 16));
+        // 상태 표시(사용자 10-03 디자인 개편): 옅은 채움 + 얇은 테두리 + 켜진 아이콘은 강조색 — 농도는 고급 설정(%).
+        let pct = |k: &str, d: i32| App::setting_px(settings, k, d, 100) as f32 / 100.0;
+        dock.set_soft_states(Some(nexa_ctl::controls::SoftStates {
+            hover_fill: pct("toolbar.hover_fill_pct", 8),
+            on_fill: pct("toolbar.on_fill_pct", 18),
+            on_line: pct("toolbar.on_line_pct", 55),
+            step: pct("toolbar.state_step_pct", 12),
+            radius: App::setting_px(settings, "toolbar.state_radius", 4, 12),
+        }));
         dock.set_gaps(
             App::setting_px(settings, "toolbar.group_gap", 4, 32),
             App::setting_px(settings, "toolbar.row_gap", 0, 16),

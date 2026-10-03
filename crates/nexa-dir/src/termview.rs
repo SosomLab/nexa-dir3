@@ -637,7 +637,8 @@ impl TermView {
                 theme.accent,
                 argb(pal.bg),
             );
-        } else if caret {
+        } else if caret && self.got_output {
+            // 시작 중 문구 위에 캐럿이 겹치지 않게(10-03 캡처 검토) — 셸이 화면을 쓰기 시작한 뒤에만.
             let cr = sb + self.screen.cursor_row();
             let cc = self.screen.cursor_col();
             if cr >= top && cr < top + rows && cc >= c0 && cc < c0 + vis_cols {

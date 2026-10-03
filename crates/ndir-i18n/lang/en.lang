@@ -343,6 +343,16 @@ pref.toolbarSize.24 = 24 (large)
 pref.toolbarSize.32 = 32 (extra large)
 pref.toolbarIconPad = Toolbar: padding around icons (px)
 pref.toolbarIconPad.desc = Extra space on all four sides of each toolbar icon. 1 = icons are 2 px apart and the toolbar is 2 px taller.
+pref.toolbarHoverFill = Toolbar: hover fill (%)
+pref.toolbarHoverFill.desc = Strength of the soft background shown when the pointer is over a toolbar button.
+pref.toolbarOnFill = Toolbar: toggled fill (%)
+pref.toolbarOnFill.desc = Strength of the accent background of a toggled-on toolbar button.
+pref.toolbarOnLine = Toolbar: toggled border (%)
+pref.toolbarOnLine.desc = Strength of the 1 px accent border of a toggled-on toolbar button.
+pref.toolbarStateStep = Toolbar: hover/press step (%)
+pref.toolbarStateStep.desc = How much stronger a toggled button gets on hover, and again when pressed.
+pref.toolbarStateRadius = Toolbar: state corner radius (px)
+pref.toolbarStateRadius.desc = Corner radius of the hover/toggled background.
 pref.toolbarItemGap = Toolbar: gap between icons (px)
 pref.toolbarItemGap.desc = Space between icons inside a toolbar group. 0 = icons touch.
 pref.toolbarGroupGap = Toolbar: gap between groups (px)

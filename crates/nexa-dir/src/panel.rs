@@ -111,6 +111,12 @@ fn nav_buttons() -> Toolbar {
     let mut t = Toolbar::new(items);
     t.set_icon_size(14);
     t.set_padding(4, 0);
+    t.set_item_gap(0); // dir2: 4개가 틈 없이 연속(버튼 폭 = nav_btn_w)
+                       // dir2 기준(dw.rs · chrome.rs:273-295): 아이콘 글꼴 em 13 · 칸 정중앙 · hover = 배경(sel_bg) · 글리프 색은 그대로.
+    t.set_icon_glyphs(crate::app::fonts::nav_glyph_delta(
+        crate::app::fonts::ui_font_px(),
+    ));
+    t.set_hover_background(true);
     t
 }
 

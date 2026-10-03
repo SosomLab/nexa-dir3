@@ -232,6 +232,46 @@ pub const REGISTRY: &[Entry] = &[
         "1"
     ),
     e!(
+        "toolbar.hover_fill_pct",
+        CAT_APPEARANCE,
+        "pref.toolbarHoverFill",
+        "pref.toolbarHoverFill.desc",
+        Int { min: 0, max: 100 },
+        "8"
+    ),
+    e!(
+        "toolbar.on_fill_pct",
+        CAT_APPEARANCE,
+        "pref.toolbarOnFill",
+        "pref.toolbarOnFill.desc",
+        Int { min: 0, max: 100 },
+        "18"
+    ),
+    e!(
+        "toolbar.on_line_pct",
+        CAT_APPEARANCE,
+        "pref.toolbarOnLine",
+        "pref.toolbarOnLine.desc",
+        Int { min: 0, max: 100 },
+        "55"
+    ),
+    e!(
+        "toolbar.state_step_pct",
+        CAT_APPEARANCE,
+        "pref.toolbarStateStep",
+        "pref.toolbarStateStep.desc",
+        Int { min: 0, max: 100 },
+        "12"
+    ),
+    e!(
+        "toolbar.state_radius",
+        CAT_APPEARANCE,
+        "pref.toolbarStateRadius",
+        "pref.toolbarStateRadius.desc",
+        Int { min: 0, max: 12 },
+        "4"
+    ),
+    e!(
         "toolbar.item_gap",
         CAT_APPEARANCE,
         "pref.toolbarItemGap",
@@ -1383,6 +1423,11 @@ pub const HIDDEN: &[&str] = &[
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
     "toolbar.icon_pad",
+    "toolbar.hover_fill_pct",
+    "toolbar.on_fill_pct",
+    "toolbar.on_line_pct",
+    "toolbar.state_step_pct",
+    "toolbar.state_radius",
     "toolbar.item_gap",
     "term.fallback_fonts",
     "launcher.item_gap",

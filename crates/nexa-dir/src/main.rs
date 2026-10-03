@@ -854,6 +854,7 @@ fn run_gui() -> ExitCode {
         return ExitCode::FAILURE;
     };
     app::row_icons::install(); // 패널 행 셸 아이콘(GAP-003 · dir2 M1-7)
+    app::fonts::set_ui_font_px(ui.font.em_to_px(settings.font_px("ui.font_size")));
     app::fonts::init_icon_glyphs(&ui.font); // 네비·쉐브론 글리프(MDL2 있으면 dir2 모양 · 없으면 유니코드 — 두부 방지)
                                             // Linux: 창 백엔드 = X11 우선(모달 창을 메인의 transient로 붙이려면 · Wayland 경로는 winit 0.30이 부모 창을 지원하지 않는다).
     let built = {

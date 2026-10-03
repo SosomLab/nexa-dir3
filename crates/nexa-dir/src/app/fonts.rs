@@ -17,6 +17,27 @@ pub(crate) fn icon_font_available() -> bool {
     ICON_FONT.load(Ordering::Relaxed)
 }
 
+/// 기본 UI 글꼴의 글리프 크기(px ×100 · `ui.font_size` em → px) — 패널이 네비 글리프 증분을 구할 때 쓴다(레이아웃 때 갱신).
+static UI_FONT_PX100: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1600);
+
+pub(crate) fn ui_font_px() -> f32 {
+    UI_FONT_PX100.load(Ordering::Relaxed) as f32 / 100.0
+}
+
+pub(crate) fn set_ui_font_px(px: f32) {
+    UI_FONT_PX100.store((px * 100.0).round().max(0.0) as u32, Ordering::Relaxed);
+}
+
+/// dir2 아이콘 글꼴 크기(DirectWrite em · DIP): 네비 대형 13(사용자 확정 08-01 — 11은 식별 어려움 · 15는 과함) · 쉐브론 9
+/// (nexa-dir2 `dw.rs:331-350`). 아이콘 글꼴은 em = 높이라 nexa-gfx 크기(px)로 그대로 쓴다.
+pub(crate) const NAV_GLYPH_EM: f32 = 13.0;
+pub(crate) const CHEVRON_EM: f32 = 9.0;
+
+/// 네비 글리프 크기 증분(기본 UI 글꼴 px 대비 · 아이콘 글꼴이 없으면 `None` = 본문 크기 유니코드 글리프).
+pub(crate) fn nav_glyph_delta(ui_px: f32) -> Option<f32> {
+    icon_font_available().then_some(NAV_GLYPH_EM - ui_px)
+}
+
 /// dir2가 쓰는 MDL2 글리프(네비 4 + 쉐브론 2).
 pub(crate) const MDL2_GLYPHS: [char; 6] = [
     '\u{EA8A}', '\u{E72B}', '\u{E72A}', '\u{E74A}', '\u{E76C}', '\u{E70D}',
@@ -37,6 +58,12 @@ pub(crate) fn icon_font_covers(ui: &Font) -> bool {
 pub(crate) fn init_icon_glyphs(ui: &Font) {
     let ok = icon_font_covers(ui);
     ICON_FONT.store(ok, Ordering::Relaxed);
+    // 쉐브론 크기(dir2 `mk_mdl2(9.0)` = 아이콘 글꼴 em 9): 목록 글꼴 px(기본 12 em → 16) 기준 증분. 아이콘 글꼴이 없으면 종전(−4).
+    nexa_grid::draw::set_glyph_delta(if ok {
+        CHEVRON_EM - ui.em_to_px(12.0)
+    } else {
+        -4.0
+    });
     if ok {
         nexa_grid::set_marker_glyphs("\u{E76C}", "\u{E70D}");
     } else {
