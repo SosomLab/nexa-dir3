@@ -845,7 +845,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.termWrap",
         "pref.termWrap.desc",
         Bool,
-        "on"
+        "off"
     ),
     e!(
         "term.cols",

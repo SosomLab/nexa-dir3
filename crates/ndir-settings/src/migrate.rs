@@ -323,10 +323,11 @@ mod tests {
         assert_eq!(
             modified,
             vec![
-                // dir3가 기본을 바꾼 것 — dir2에서 쓰던 값을 지킨다(테마 dark · 보기 범위 panel).
+                // dir3가 기본을 바꾼 것 — dir2에서 쓰던 값을 지킨다(테마 dark · 보기 범위 panel · 터미널 줄 바꿈 on).
                 ("ui.theme", "dark".to_string()),
                 ("launcher.seed", "2".to_string()),
-                ("list.view_scope", "panel".to_string())
+                ("list.view_scope", "panel".to_string()),
+                ("term.wrap", "on".to_string())
             ],
             "{modified:?}"
         );
