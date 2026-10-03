@@ -18,9 +18,9 @@ use nexa_ctl::theme::{FontPrefs, Theme};
 use nexa_ctl::tokens::{hover_alpha, FadeSpeed, IntentFade};
 use nexa_ctl::HudPos;
 use nexa_ctl::{
-    Button, Combo, ComboControl, ComboItem, Control, EditCtxAction, InputEvent, Invalidations,
-    Key as CtlKey, LabelSide, ScrollBars, TextBox, TreeControl, TreeModel, TreeNode, TreeView,
-    Widget,
+    Button, Checkbox, Combo, ComboControl, ComboItem, Control, EditCtxAction, InputEvent,
+    Invalidations, Key as CtlKey, LabelSide, ScrollBars, TextBox, TreeControl, TreeModel, TreeNode,
+    TreeView, Widget,
 };
 use nexa_gfx::{Font, Surface};
 use std::rc::Rc;
@@ -134,6 +134,14 @@ pub(crate) struct PrefsWin {
     split_drag: Option<(i32, f32)>,
     split_fade: IntentFade,
     split_rect: Rect,
+    /// 플러그인 페이지(T-63 B · dir2 EXT-129): 호스트가 준 (id, 라벨) 목록 + 로드 오류 줄 · 페이지가 보일 때만 체크박스를 만든다 ·
+    /// 해제 = `plugins.disabled`(`|` 구분) — 카드 밖의 **동적 묶음**이라 레지스트리 카드와 따로 둔다.
+    plugins: Vec<(String, String)>,
+    plugin_notes: Vec<String>,
+    plugin_boxes: Vec<Checkbox>,
+    plugin_page: bool,
+    plugin_rect: Rect,
+    plugin_dirty: bool,
 }
 
 fn is_color_key(k: &str) -> bool {
@@ -272,6 +280,65 @@ impl PrefsWin {
             split_drag: None,
             split_fade: IntentFade::with_speed(FadeSpeed::Fast),
             split_rect: Rect::default(),
+            plugins: Vec::new(),
+            plugin_notes: Vec::new(),
+            plugin_boxes: Vec::new(),
+            plugin_page: false,
+            plugin_rect: Rect::default(),
+            plugin_dirty: false,
+        }
+    }
+
+    /// 플러그인 목록(id, `이름 (id) — ext…`) + 로드 오류 줄(열 때 · 바뀌면 페이지 재구성).
+    pub(crate) fn set_plugins(&mut self, rows: Vec<(String, String)>, notes: Vec<String>) {
+        if self.plugins == rows && self.plugin_notes == notes {
+            return;
+        }
+        self.plugins = rows;
+        self.plugin_notes = notes;
+        if !self.cards.is_empty() || self.plugin_page {
+            self.rebuild_cards();
+        }
+    }
+
+    /// 페이지의 체크 상태(id, 켜짐) — 시험·덤프.
+    pub(crate) fn plugin_states(&self) -> Vec<(String, bool)> {
+        self.plugins
+            .iter()
+            .zip(&self.plugin_boxes)
+            .map(|((id, _), b)| (id.clone(), b.is_checked()))
+            .collect()
+    }
+
+    /// 해제된 id를 `|`로(설정 `plugins.disabled` 값).
+    fn disabled_value(&self) -> String {
+        self.plugins
+            .iter()
+            .zip(&self.plugin_boxes)
+            .filter(|(_, b)| !b.is_checked())
+            .map(|((id, _), _)| id.as_str())
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+
+    fn sync_plugin_boxes(&mut self) {
+        let disabled = self
+            .snap
+            .iter()
+            .find(|s| s.entry.key == "plugins.disabled")
+            .map(|s| s.value.clone())
+            .unwrap_or_default();
+        for ((id, _), b) in self.plugins.iter().zip(self.plugin_boxes.iter_mut()) {
+            b.set_checked(!disabled.split('|').any(|d| d.trim() == id));
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn toggle_plugin(&mut self, i: usize) {
+        if let Some(b) = self.plugin_boxes.get_mut(i) {
+            let on = b.is_checked();
+            b.set_checked(!on);
+            self.plugin_dirty = true;
         }
     }
 
@@ -327,6 +394,7 @@ impl PrefsWin {
                 }
             }
         }
+        self.sync_plugin_boxes();
         self.apply_deps();
     }
 
@@ -356,6 +424,7 @@ impl PrefsWin {
         let q = self.query.trim().to_lowercase();
         let mut chosen: Vec<Snap> = Vec::new();
         let mut adv_hidden = 0usize;
+        let mut plugin_page = false;
         if !q.is_empty() {
             for sn in &self.snap {
                 if self.hidden.contains(&sn.entry.cat) {
@@ -386,6 +455,7 @@ impl PrefsWin {
                 },
                 None => Vec::new(),
             };
+            plugin_page = cats.contains(&"pref.cat.plugins");
             for sn in &self.snap {
                 if !cats.contains(&sn.entry.cat) {
                     continue;
@@ -463,6 +533,17 @@ impl PrefsWin {
                 }
             })
             .collect();
+        self.plugin_page = plugin_page;
+        self.plugin_boxes = if plugin_page {
+            self.plugins
+                .iter()
+                .map(|(_, label)| Checkbox::new(label.clone(), true))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.plugin_rect = Rect::default();
+        self.sync_plugin_boxes();
         self.scroll = 0;
         self.content_h = 0;
         self.apply_deps();
@@ -1135,6 +1216,9 @@ impl PrefsWin {
                     b.on_event(&ie, &mut inv);
                 }
             }
+            for b in &mut self.plugin_boxes {
+                b.on_event(&ie, &mut inv);
+            }
         }
         match ie {
             InputEvent::MouseMove { .. } => {
@@ -1239,7 +1323,19 @@ impl PrefsWin {
     }
 
     /// 컨트롤 변화 수거 → 첫 변경만 보고(한 이벤트에 하나).
-    fn collect_changes(&mut self) -> PrefsAction {
+    pub(crate) fn collect_changes(&mut self) -> PrefsAction {
+        let mut toggled = std::mem::take(&mut self.plugin_dirty);
+        for b in &mut self.plugin_boxes {
+            if b.take_toggled().is_some() {
+                toggled = true;
+            }
+        }
+        if toggled {
+            return PrefsAction::Changed {
+                key: "plugins.disabled".into(),
+                value: self.disabled_value(),
+            };
+        }
         for c in &mut self.cards {
             let key = c.entry.key.to_string();
             if c.reset.take_clicked() {
@@ -1371,6 +1467,51 @@ impl PrefsWin {
             }
             let mut inv = Invalidations::default();
             let mut desc_lines: Vec<(Vec<String>, usize)> = Vec::with_capacity(self.cards.len());
+            // 플러그인 페이지 블록(T-63 B): 제목 · 설명(없으면 안내) · 체크박스 n줄 · 로드 오류 줄 — 카드와 같은 모양으로 카드 앞에.
+            let mut plugin_lines: Vec<(String, bool)> = Vec::new();
+            if self.plugin_page {
+                for l in Self::wrap(&mut dc, &tr("pref.plugins.desc"), text_w) {
+                    plugin_lines.push((l, false));
+                }
+                if self.plugins.is_empty() {
+                    for l in Self::wrap(&mut dc, &tr("pref.plugins.empty"), text_w) {
+                        plugin_lines.push((l, false));
+                    }
+                }
+                for n in &self.plugin_notes {
+                    for l in Self::wrap(&mut dc, n, text_w) {
+                        plugin_lines.push((l, true));
+                    }
+                }
+                let rows = self.plugin_boxes.len() as i32;
+                let rows_h = if rows > 0 {
+                    (8.0 * s).round() as i32 + rows * ctl_h
+                } else {
+                    0
+                };
+                let ph = inner_pad * 2
+                    + th_txt
+                    + (4.0 * s).round() as i32
+                    + th_txt * plugin_lines.len() as i32
+                    + rows_h;
+                let visible = y + ph > list.y && y < list.bottom();
+                self.plugin_rect = Rect::new(list.x, y, card_w, if visible { ph } else { 0 });
+                let desc_n = plugin_lines.iter().filter(|(_, warn)| !warn).count() as i32;
+                let mut by = y
+                    + inner_pad
+                    + th_txt
+                    + (4.0 * s).round() as i32
+                    + th_txt * desc_n
+                    + (8.0 * s).round() as i32;
+                for b in &mut self.plugin_boxes {
+                    b.set_scale(s);
+                    let r = Rect::new(list.x + inner_pad, by, card_w - inner_pad * 2, ctl_h);
+                    let shown = visible && by >= list.y && by + ctl_h <= list.bottom();
+                    b.set_bounds(if shown { r } else { Rect::default() }, &mut inv);
+                    by += ctl_h;
+                }
+                y += ph + gap;
+            }
             for c in &mut self.cards {
                 let note = self
                     .notes
@@ -1527,6 +1668,42 @@ impl PrefsWin {
                 }
             }
             let now = std::time::Instant::now();
+            if self.plugin_page && self.plugin_rect.h > 0 {
+                let r = self.plugin_rect;
+                let clip = r.intersection(&list);
+                if clip.h > 0 {
+                    dc.fill_round_rect(clip, (6.0 * s).round() as i32, th.panel_bg);
+                    let tx = r.x + inner_pad;
+                    let mut ty = r.y + inner_pad;
+                    dc.select_font(FontSlot::Base, true);
+                    dc.text(tx, ty, clip, &tr("pref.cat.plugins"), th.text);
+                    dc.select_font(FontSlot::Base, false);
+                    ty += th_txt + (4.0 * s).round() as i32;
+                    let desc_n = plugin_lines.iter().filter(|(_, warn)| !warn).count() as i32;
+                    for (l, warn) in plugin_lines.iter().filter(|(_, w)| !w) {
+                        let _ = warn;
+                        dc.text(tx, ty, clip, l, th.text_dim);
+                        ty += th_txt;
+                    }
+                    for b in &self.plugin_boxes {
+                        b.paint(&mut dc, th);
+                    }
+                    ty = r.y
+                        + inner_pad
+                        + th_txt
+                        + (4.0 * s).round() as i32
+                        + th_txt * desc_n
+                        + if self.plugin_boxes.is_empty() {
+                            0
+                        } else {
+                            (8.0 * s).round() as i32 + self.plugin_boxes.len() as i32 * ctl_h
+                        };
+                    for (l, _) in plugin_lines.iter().filter(|(_, w)| *w) {
+                        dc.text(tx, ty, clip, l, th.warn);
+                        ty += th_txt;
+                    }
+                }
+            }
             for (c, (lines, note_at)) in self.cards.iter().zip(desc_lines.iter()) {
                 if c.rect.h == 0 {
                     continue;

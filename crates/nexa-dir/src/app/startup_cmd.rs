@@ -325,9 +325,10 @@ impl App {
                 self.statusbar.right()
             ),
             "prefs" => format!(
-                "open {} keys {:?}\n",
+                "open {} keys {:?}\nplugins {:?}\n",
                 self.prefs_win.is_open(),
-                self.prefs_win.shown_keys()
+                self.prefs_win.shown_keys(),
+                self.prefs_win.plugin_states()
             ),
             "term" => self.term_dump(),
             "check" => self.check_win.table(),

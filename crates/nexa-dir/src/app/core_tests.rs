@@ -1782,3 +1782,71 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert_eq!(keys(&app, 0), vec![0]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-63 B 플러그인 페이지: 분류를 열면 플러그인당 체크박스(기본 켬) · 해제 → `plugins.disabled`(`|`) 통지 → 호스트 저장 → 창 재동기 ·
+/// 밖에서 값을 비우면 다시 켬 · 다른 분류에서는 체크박스 없음 · 덤프 `prefs`에 상태.
+#[test]
+fn plugins_page_checkboxes_edit_disabled() {
+    let (mut app, dir) = fixture("plugpage");
+    app.layout_for(1200, 800, 1.0);
+    app.prefs_win.set_plugins(
+        vec![
+            ("markdown".into(), "Markdown (markdown) — md".into()),
+            ("archive".into(), "Archive (archive) — zip".into()),
+        ],
+        vec!["bad.wasm: oops".into()],
+    );
+    app.prefs_win.refresh(&app.settings);
+    app.prefs_win.select_category("pref.cat.plugins");
+    assert_eq!(
+        app.prefs_win.plugin_states(),
+        vec![
+            ("markdown".to_string(), true),
+            ("archive".to_string(), true)
+        ]
+    );
+    app.prefs_win.toggle_plugin(0);
+    let act = app.prefs_win.collect_changes();
+    assert_eq!(
+        act,
+        crate::prefs_win::PrefsAction::Changed {
+            key: "plugins.disabled".into(),
+            value: "markdown".into()
+        }
+    );
+    let _ = app.settings.set("plugins.disabled", "markdown");
+    app.after_setting_changed("plugins.disabled");
+    // 창이 없으면 after_setting_changed가 refresh를 건너뛴다 — 호스트가 열려 있을 때 하는 일을 직접.
+    app.prefs_win.refresh(&app.settings);
+    assert_eq!(
+        app.prefs_win.plugin_states()[0],
+        ("markdown".to_string(), false)
+    );
+    assert!(app
+        .dump_of("prefs")
+        .unwrap()
+        .contains("plugins [(\"markdown\", false), (\"archive\", true)]"));
+    // 둘 다 해제 → `markdown|archive` · 밖에서 비우면 둘 다 켬.
+    app.prefs_win.toggle_plugin(1);
+    assert_eq!(
+        app.prefs_win.collect_changes(),
+        crate::prefs_win::PrefsAction::Changed {
+            key: "plugins.disabled".into(),
+            value: "markdown|archive".into()
+        }
+    );
+    let _ = app.settings.reset("plugins.disabled");
+    app.after_setting_changed("plugins.disabled");
+    app.prefs_win.refresh(&app.settings);
+    assert!(app.prefs_win.plugin_states().iter().all(|(_, on)| *on));
+    assert_eq!(
+        app.prefs_win.collect_changes(),
+        crate::prefs_win::PrefsAction::None
+    );
+    app.prefs_win.select_category("pref.cat.keys");
+    assert!(
+        app.prefs_win.plugin_states().is_empty(),
+        "다른 분류 = 체크박스 없음"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

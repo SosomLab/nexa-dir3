@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-63 B 플러그인 설정 페이지**: 설정 창 플러그인 분류 = 플러그인당 nexa-ctl `Checkbox`(해제 = `plugins.disabled`) + 로드 오류 줄 · 시험 +1(155) → [journal §51](journal/2026-10-03.md)
 - **T-71 순서/표시 편집 창**: `order.rs`(모델 · dir2 문법) · `order_win.rs`(툴바/컬럼/컨텍스트 메뉴 공통 · 실시간 통지) · `app/order.rs` · 툴바 `toolbar.layout` 반영 · 컨텍스트 메뉴 `ctxmenu.layout` · 새 키 `list.col_layout` + 세션 `cols` · 시험 +6(154) → [journal §50](journal/2026-10-03.md)
 - **T-82 패키징 3-OS**: `packaging/{lib.sh, linux, macos, windows}`(nexa-sql 이식 · MSI + 포터블 zip · pkg/dmg · deb/rpm · 동봉 `plugins/`) · `scripts/{third-party-notices, check-imports}` · `release.yml` · 브랜딩 PNG 세트 · §3-4 결정 확정 → [journal §49](journal/2026-10-03.md)
 - **T-71 일괄 이름 변경 창**: `bulk_win.rs`(카드 스택 6종 · 실시간 미리보기 · 충돌 · 적용 토글 · 프리셋 콤보) · `app/bulk.rs`(적용 + undo 1건 · 프리셋 파일) · 시험 +2(148) → [journal §48](journal/2026-10-03.md)

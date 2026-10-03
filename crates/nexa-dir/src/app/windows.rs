@@ -32,10 +32,9 @@ impl App {
                 .set_advanced(self.settings.flag("ui.prefs_advanced"));
             self.prefs_win
                 .set_dyn_choices("ui.lang", self.lang_choices());
-            // 플러그인 페이지(T-63 A · dir2 PLUG-125 축약): 로드된 플러그인 목록·로드 오류를 `plugins.disabled` 설명 줄로 —
-            // 체크박스 목록(동적 Bool 묶음)은 T-63 B(nexa-ctl Checkbox 페이지).
+            // 플러그인 페이지(T-63 B · dir2 EXT-129): 로드된 플러그인당 체크박스 + 로드 오류 줄(해제 = `plugins.disabled`).
             self.prefs_win
-                .set_note("plugins.disabled", Some(self.plugin_note()));
+                .set_plugins(self.plugin_rows(), preview::load_notes());
             self.prefs_win.refresh(&self.settings);
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
@@ -119,24 +118,17 @@ impl App {
         }
     }
 
-    /// 설정 창 플러그인 설명 줄: `이름 (id) — ext, …` 목록(없으면 `pref.plugins.empty`) + 로드 오류.
-    pub(crate) fn plugin_note(&self) -> String {
-        let infos = preview::plugin_infos();
-        let mut s = if infos.is_empty() {
-            tr("pref.plugins.empty")
-        } else {
-            infos
-                .iter()
-                .map(|p| format!("{} ({}) — {}", p.name, p.id, p.exts.join(", ")))
-                .collect::<Vec<_>>()
-                .join(" · ")
-        };
-        let notes = preview::load_notes();
-        if !notes.is_empty() {
-            s.push_str(" · ");
-            s.push_str(&notes.join(" · "));
-        }
-        s
+    /// 설정 창 플러그인 페이지 행: (id, `이름 (id) — ext, …`) — dir2 EXT-129 표시 문자열 유지.
+    pub(crate) fn plugin_rows(&self) -> Vec<(String, String)> {
+        preview::plugin_infos()
+            .iter()
+            .map(|p| {
+                (
+                    p.id.clone(),
+                    format!("{} ({}) — {}", p.name, p.id, p.exts.join(", ")),
+                )
+            })
+            .collect()
     }
 
     /// 언어 콤보 후보(`system` + 내장/오버레이 발견분).
