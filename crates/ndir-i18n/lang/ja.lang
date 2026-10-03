@@ -332,6 +332,24 @@ pref.colLayout = ファイル一覧の列
 pref.colLayout.desc = ファイル一覧の列の表示/非表示と並べ替えを別ウィンドウで行います (フォーカス中のパネルに適用・列同期に従います)。
 pref.iconOverrides = カスタムアイコン
 pref.iconOverrides.desc = ファイル一覧で使う独自アイコン（最優先）。ルールは ';' で区切り、形式は 種類:パターン=画像 - 種類は path（フルパス）· name（ファイル/フォルダー名）· dir（フォルダー名）· ext（拡張子）。画像は PNG/BMP/GIF/JPEG、相対パスは設定フォルダーの icons フォルダーから探します。例: ext:rs=rust.png; dir:node_modules=nm.png
+pref.toolbarSize = ツールバーのアイコンサイズ
+pref.toolbarSize.desc = 上部ツールバーのアイコンの大きさです。変更はすぐに反映されます。
+pref.toolbarSize.16 = 16（小）
+pref.toolbarSize.20 = 20（標準）
+pref.toolbarSize.24 = 24（大）
+pref.toolbarSize.32 = 32（特大）
+pref.toolbarItemGap = ツールバー: アイコン間の間隔(px)
+pref.toolbarItemGap.desc = ツールバーグループ内のアイコン同士の間隔です。0 = 隙間なし。
+pref.toolbarGroupGap = ツールバー: グループ間の間隔(px)
+pref.toolbarGroupGap.desc = ツールバーグループ同士の間隔です（各グループのつまみをドラッグして移動できます）。
+pref.toolbarRowGap = ツールバー: 行間の間隔(px)
+pref.toolbarRowGap.desc = グループを複数行に配置したときの行間です。ツールバーの高さが変わります。
+pref.toolbarDockLayout = ツールバーグループの配置
+pref.toolbarDockLayout.desc = ツールバーグループの順序と行（グループをドラッグすると保存されます）。
+pref.launcherSize = クイックランチャーのアイコンサイズ
+pref.launcherSize.desc = クイックランチャーバーのアイコンの大きさです。変更はすぐに反映され、バーの高さも変わります。
+pref.launcherItemGap = クイックランチャー: アイコン間の間隔(px)
+pref.launcherItemGap.desc = クイックランチャーバーのアイコン同士の間隔です。0 = 隙間なし。
 pref.ctxMenuOrder = コンテキストメニュー項目
 pref.ctxMenuOrder.desc = アプリ独自のコンテキストメニュー項目の表示/非表示と並べ替え (シェル動詞には影響しません)。
 pref.ctxm.grpRow = 項目メニュー

@@ -332,6 +332,24 @@ pref.colLayout = File Columns
 pref.colLayout.desc = Show/hide and reorder file list columns in a separate window (applies to the focused panel; follows column sync).
 pref.iconOverrides = Custom Icons
 pref.iconOverrides.desc = Your own icons for the file list, highest priority. Rules separated by ';' in the form kind:pattern=image - kind is path (full path), name (file or folder name), dir (folder name) or ext (extension). Images: PNG/BMP/GIF/JPEG; relative paths are looked up in the icons folder of the settings folder. Example: ext:rs=rust.png; dir:node_modules=nm.png
+pref.toolbarSize = Toolbar icon size
+pref.toolbarSize.desc = Size of the top toolbar icons. Applied immediately.
+pref.toolbarSize.16 = 16 (small)
+pref.toolbarSize.20 = 20 (default)
+pref.toolbarSize.24 = 24 (large)
+pref.toolbarSize.32 = 32 (extra large)
+pref.toolbarItemGap = Toolbar: gap between icons (px)
+pref.toolbarItemGap.desc = Space between icons inside a toolbar group. 0 = icons touch.
+pref.toolbarGroupGap = Toolbar: gap between groups (px)
+pref.toolbarGroupGap.desc = Space between toolbar groups (each group has a grip you can drag to move it).
+pref.toolbarRowGap = Toolbar: gap between rows (px)
+pref.toolbarRowGap.desc = Space between toolbar rows when groups are arranged on more than one row. Changes the toolbar height.
+pref.toolbarDockLayout = Toolbar group arrangement
+pref.toolbarDockLayout.desc = Order and rows of the toolbar groups (saved when you drag a group).
+pref.launcherSize = Quick launcher icon size
+pref.launcherSize.desc = Size of the quick launcher bar icons. Applied immediately; the bar height follows.
+pref.launcherItemGap = Quick launcher: gap between icons (px)
+pref.launcherItemGap.desc = Space between icons in the quick launcher bar. 0 = icons touch.
 pref.ctxMenuOrder = Context Menu Items
 pref.ctxMenuOrder.desc = Show/hide and reorder the app's own context menu items (shell verbs are not affected).
 pref.ctxm.grpRow = Item Menu

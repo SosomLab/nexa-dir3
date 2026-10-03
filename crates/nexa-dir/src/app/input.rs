@@ -189,6 +189,18 @@ impl App {
                 return;
             }
         }
+        // 툴바 그룹을 끄는 중 Esc = 취소(원래 순서·행으로 · nexa-ctl `ToolDock::cancel_drag`).
+        if self.toolbar.is_dragging() {
+            if let InputEvent::Key {
+                key: nexa_ctl::Key::Escape,
+                ..
+            } = ev
+            {
+                self.toolbar.cancel_drag(inv);
+                self.pressed = None;
+                return;
+            }
+        }
         match ev {
             InputEvent::MouseMove { x, y } => {
                 self.cursor = (x, y);
@@ -348,6 +360,7 @@ impl App {
         if let Some(id) = self.toolbar.take_clicked() {
             self.command(&id);
         }
+        self.toolbar_actions();
         if let Some(id) = self.launcherbar.take_clicked() {
             self.command(&id);
         }

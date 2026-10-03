@@ -1436,7 +1436,7 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
     let (mut app, dir) = fixture("tbicons");
     let masks = app
         .toolbar
-        .items()
+        .all_items()
         .iter()
         .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 20, h: 20, .. }))
         .count();
@@ -1446,7 +1446,7 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
     app.sync_menu_checks();
     assert!(
         app.toolbar
-            .items()
+            .all_items()
             .iter()
             .all(|it| it.separator
                 || matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 40, h: 40, .. }))
@@ -1708,8 +1708,13 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     );
     app.startup_cmd("order.open:bogus");
     // 툴바: 기본 = refresh 먼저 · view 그룹 숨김 + show 재배열 → 항목 집합/순서가 따라온다.
-    let ids =
-        |app: &App| -> Vec<String> { app.toolbar.items().iter().map(|t| t.id.clone()).collect() };
+    let ids = |app: &App| -> Vec<String> {
+        app.toolbar
+            .all_items()
+            .iter()
+            .map(|t| t.id.clone())
+            .collect()
+    };
     let before = ids(&app);
     assert_eq!(before[0], "view.refresh");
     assert!(before.contains(&"view.mode_tree".to_string()));
@@ -2516,5 +2521,152 @@ fn rows_expose_dir2_icon_keys() {
         "{keys:?}"
     );
     assert_eq!(keys.len(), s.len(), "모든 행이 아이콘 키를 준다");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 상단 툴바 = 그룹 도크(사용자 10-03): 그룹 손잡이를 끌면 순서가 바뀌고 배치가 설정에 저장돼 재구성 뒤에도 유지 · Esc = 취소 ·
+/// 아이콘 크기/간격 설정은 즉시 반영(높이·아이콘 칸 · 아래 영역이 따라 내려간다) · 그룹 안 아이콘은 기본 간격 0(붙임).
+#[test]
+fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
+    let (mut app, dir) = fixture("tooldock");
+    app.layout_for(1200, 800, 1.0);
+    let ids = |app: &App| -> Vec<String> {
+        app.toolbar
+            .groups()
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect()
+    };
+    assert_eq!(ids(&app), ["refresh", "panel", "view", "show", "settings"]);
+    // 그룹 안 아이콘 = 붙임(기본 toolbar.item_gap 0).
+    let (a, b) = (
+        app.toolbar.item_rect("view.mode_tree").unwrap(),
+        app.toolbar.item_rect("view.mode_flat").unwrap(),
+    );
+    assert_eq!(a.right(), b.x, "아이콘 사이 간격 0");
+    assert_eq!(a.w, 20, "기본 아이콘 크기 20");
+    // ① 그룹 이동: `view` 그룹의 손잡이(그룹 툴바 왼쪽 10px)를 잡아 맨 앞으로 끈다.
+    let vb = app.toolbar.bar("view").unwrap().bounds();
+    let (gx, gy) = (vb.x - 5, vb.y + vb.h / 2);
+    let first = app.toolbar.bar("refresh").unwrap().bounds();
+    app.route(InputEvent::MouseMove { x: gx, y: gy });
+    app.route(down(gx, gy));
+    assert!(!app.toolbar.is_dragging() || app.toolbar.is_dragging());
+    for x in [gx - 10, gx - 60, first.x - 8] {
+        app.route(InputEvent::MouseMove { x, y: gy });
+    }
+    assert!(app.toolbar.is_dragging(), "끄는 중");
+    app.route(InputEvent::MouseUp {
+        x: first.x - 8,
+        y: gy,
+    });
+    assert_eq!(ids(&app)[0], "view", "맨 앞으로 이동: {:?}", ids(&app));
+    let saved = app
+        .settings
+        .get("toolbar.dock_layout")
+        .unwrap_or("")
+        .to_string();
+    assert!(saved.starts_with("view"), "배치 저장: {saved}");
+    // 재구성(언어·배율 변경 경로)에도 유지.
+    app.rebuild_toolbar();
+    assert_eq!(ids(&app)[0], "view");
+    // ② Esc = 취소: 다시 끌다가 Esc → 순서 그대로 · 설정 그대로.
+    app.layout_for(1200, 800, 1.0);
+    let sb = app.toolbar.bar("settings").unwrap().bounds();
+    let (sx, sy) = (sb.x - 5, sb.y + sb.h / 2);
+    let before = ids(&app);
+    app.route(InputEvent::MouseMove { x: sx, y: sy });
+    app.route(down(sx, sy));
+    app.route(InputEvent::MouseMove { x: sx - 200, y: sy });
+    assert!(app.toolbar.is_dragging());
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(!app.toolbar.is_dragging());
+    assert_eq!(ids(&app), before, "Esc = 원래 순서");
+    assert_eq!(app.settings.get("toolbar.dock_layout").unwrap_or(""), saved);
+    app.route(InputEvent::MouseUp { x: sx - 200, y: sy });
+    // ③ 크기 설정 즉시 반영: 32 → 아이콘 칸·툴바 높이가 커지고 아래(패널)가 따라 내려간다 · 20으로 되돌리면 원래대로.
+    let (h20, panel_y20) = (app.toolbar.bounds().h, app.panels[0].bounds().y);
+    let _ = app.settings.set("toolbar.icon_size", "32");
+    app.after_setting_changed("toolbar.icon_size");
+    assert_eq!(app.toolbar.item_rect("view.mode_tree").unwrap().w, 32);
+    assert_eq!(app.toolbar.bounds().h, h20 + 12);
+    assert_eq!(app.panels[0].bounds().y, panel_y20 + 12);
+    assert_eq!(ids(&app)[0], "view", "크기 변경에도 배치 유지");
+    let _ = app.settings.set("toolbar.icon_size", "20");
+    app.after_setting_changed("toolbar.icon_size");
+    assert_eq!(app.toolbar.bounds().h, h20);
+    // ④ 간격 설정 즉시 반영: 아이콘 사이 6 · 그룹 사이 0.
+    let _ = app.settings.set("toolbar.item_gap", "6");
+    app.after_setting_changed("toolbar.item_gap");
+    let (a, b) = (
+        app.toolbar.item_rect("view.mode_tree").unwrap(),
+        app.toolbar.item_rect("view.mode_flat").unwrap(),
+    );
+    assert_eq!(b.x - a.right(), 6);
+    let gap_of = |app: &App| {
+        let g = ids(app);
+        let (l, r) = (
+            app.toolbar.bar(&g[0]).unwrap().bounds(),
+            app.toolbar.bar(&g[1]).unwrap().bounds(),
+        );
+        r.x - l.right()
+    };
+    let g4 = gap_of(&app);
+    let _ = app.settings.set("toolbar.group_gap", "0");
+    app.after_setting_changed("toolbar.group_gap");
+    assert_eq!(gap_of(&app), g4 - 4, "그룹 간격 4 → 0");
+    // 체크 상태는 재구성 뒤에도 맞는다.
+    assert_eq!(
+        app.toolbar.item_checked("view.hidden"),
+        app.settings.flag("list.show_hidden")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 도크 정보: 내 PC(가상 최상위)에서는 내부 표식 `::PC::`가 아니라 표시명을 보인다.
+#[test]
+fn dock_info_shows_display_name_for_virtual_root() {
+    let lines = crate::dockinfo::info_lines(&[], std::path::Path::new(ndir_vfs::MY_PC));
+    assert_eq!(lines.len(), 1);
+    assert!(!lines[0].contains("::PC::"), "{lines:?}");
+    assert!(lines[0].contains(&ndir_i18n::tr("nav.mypc")), "{lines:?}");
+}
+
+/// 퀵 런처 바 크기/간격 설정(사용자 10-03 "퀵 런처 바도 설정으로"): 기본 = dir2(아이콘 16 · 바 24) · `launcher.icon_size` 32 = 바 40 +
+/// 아래 영역이 따라 내려감 · `launcher.item_gap` 0 = 아이콘 칸이 맞닿음 — 전부 즉시 반영.
+#[test]
+fn launcher_bar_size_and_gap_settings_apply_live() {
+    let (mut app, dir) = fixture("launchsize");
+    let _ = app.settings.set("launcher.visible", "on");
+    let _ = app
+        .settings
+        .set("launcher.items", "A|ndir-no-such-a|;;B|ndir-no-such-b|");
+    app.after_setting_changed("launcher.items");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(app.launcherbar.bounds().h, 24, "기본 = dir2 24");
+    let panel_y = app.panels[0].bounds().y;
+    let gap = |app: &App| {
+        let (a, b) = (
+            app.launcherbar.item_rect("launch:0").unwrap(),
+            app.launcherbar.item_rect("launch:1").unwrap(),
+        );
+        (a.w, b.x - a.right())
+    };
+    assert_eq!(gap(&app), (20, 4), "칸 = 16 + 여백 4 · 간격 4");
+    let _ = app.settings.set("launcher.icon_size", "32");
+    app.after_setting_changed("launcher.icon_size");
+    assert_eq!(app.launcherbar.bounds().h, 40);
+    assert_eq!(app.panels[0].bounds().y, panel_y + 16);
+    assert_eq!(gap(&app).0, 36);
+    let _ = app.settings.set("launcher.item_gap", "0");
+    app.after_setting_changed("launcher.item_gap");
+    assert_eq!(gap(&app).1, 0);
+    let _ = app.settings.set("launcher.icon_size", "16");
+    app.after_setting_changed("launcher.icon_size");
+    assert_eq!(app.launcherbar.bounds().h, 24);
     let _ = std::fs::remove_dir_all(&dir);
 }

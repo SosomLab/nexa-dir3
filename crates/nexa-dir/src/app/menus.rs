@@ -132,7 +132,7 @@ impl App {
     pub(crate) fn rebuild_launcher(&mut self) {
         self.launcher_items =
             launcher::parse_items(self.settings.get("launcher.items").unwrap_or(""));
-        let (bar, pending) = App::make_launcherbar(&self.launcher_items);
+        let (bar, pending) = App::make_launcherbar(&self.launcher_items, &self.settings);
         self.launcherbar = bar;
         self.launcher_icons_pending = pending;
         self.launcher_icon_ver = nexa_fs::shell::IconService::global().version();
@@ -196,9 +196,9 @@ impl App {
         }
     }
 
-    /// 툴바(dir2 `build_toolbar` — **순서/표시 = 설정 `toolbar.layout`**(T-71 `order::TOOLBAR_BLOCKS` 기본 refresh · panel · view · show · settings) ·
+    /// 툴바 그룹(dir2 `build_toolbar` — **순서/표시 = 설정 `toolbar.layout`** · 블록 1개 = 도크 그룹 1개(T-71 `order::TOOLBAR_BLOCKS` 기본 refresh · panel · view · show · settings) ·
     /// 블록 사이 구분선 · 그룹 숨김 = 통째 · 글리프 폴백 · SVG 아이콘은 T-30).
-    pub(crate) fn build_toolbar(settings: &Settings, icon_px: u32) -> Vec<ToolItem> {
+    pub(crate) fn build_tool_groups(settings: &Settings, icon_px: u32) -> Vec<ToolGroup> {
         // dir2 SVG 아이콘(T-30 · `icons.rs` · nexa-gfx svg 마스크 → 테마 틴트) · 없으면 글리프(자산 미등록·파싱 실패 격리).
         let g = |id: &str, glyph: &str, tip_key: &str| {
             let icon = icons::asset_of(id)
@@ -228,30 +228,40 @@ impl App {
             })
         };
         let layout = settings.get("toolbar.layout").unwrap_or("");
-        let mut out: Vec<ToolItem> = Vec::new();
+        let mut out: Vec<ToolGroup> = Vec::new();
         for (block, bvis, items) in
             crate::order::parse_order_with(crate::order::TOOLBAR_BLOCKS, layout)
         {
             if !bvis {
                 continue;
             }
-            let start = out.len();
+            let tools: Vec<ToolItem> = if items.is_empty() {
+                item(&block, "").into_iter().collect()
+            } else {
+                items
+                    .iter()
+                    .filter(|(_, v)| *v)
+                    .filter_map(|(k, _)| item(&block, k))
+                    .collect()
+            };
+            if tools.is_empty() {
+                continue; // 전부 숨긴 블록 = 그룹도 없음
+            }
+            let title = app::order::toolbar_group_title(&block);
+            out.push(ToolGroup::new(block, title, tools));
+        }
+        out
+    }
+
+    /// 툴바 항목 평탄 목록(그룹 사이 = 구분자) — 시험·점검용(종전 단일 툴바 구성과 같은 순서).
+    #[cfg(test)]
+    pub(crate) fn build_toolbar(settings: &Settings, icon_px: u32) -> Vec<ToolItem> {
+        let mut out: Vec<ToolItem> = Vec::new();
+        for g in App::build_tool_groups(settings, icon_px) {
             if !out.is_empty() {
                 out.push(ToolItem::separator());
             }
-            if items.is_empty() {
-                out.extend(item(&block, ""));
-            } else {
-                out.extend(
-                    items
-                        .iter()
-                        .filter(|(_, v)| *v)
-                        .filter_map(|(k, _)| item(&block, k)),
-                );
-            }
-            if out.len() == start + 1 && start > 0 {
-                out.pop(); // 전부 숨긴 블록 = 구분선도 없음
-            }
+            out.extend(g.items);
         }
         out
     }

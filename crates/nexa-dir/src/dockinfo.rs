@@ -78,7 +78,15 @@ fn kind_of(path: &Path, b: &Basic) -> String {
 /// 정보 줄(dir2 `dock_info`): 선택 1 = 기본 정보 8줄 · 여럿 = 개수 · 없음 = 현재 폴더.
 pub(crate) fn info_lines(selected: &[PathBuf], current: &Path) -> Vec<String> {
     match selected {
-        [] => vec![trf("info.currentFolder", &[&current.display().to_string()])],
+        // 가상 최상위는 내부 표식(`::PC::`)이 아니라 경로 바와 같은 표시명으로(10-03 캡처 검토에서 적발).
+        [] => {
+            let shown = if ndir_vfs::is_virtual_root(current) {
+                ndir_i18n::tr("nav.mypc")
+            } else {
+                current.display().to_string()
+            };
+            vec![trf("info.currentFolder", &[&shown])]
+        }
         [one] => match basic(one) {
             Some(b) => {
                 let name = one

@@ -101,8 +101,20 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
-            "launcher.items" | "launcher.seed" => self.rebuild_launcher(),
+            "launcher.items" | "launcher.seed" | "launcher.icon_size" | "launcher.item_gap" => {
+                self.rebuild_launcher();
+            }
             // 순서 편집기(T-71 DLG-073): 툴바 재구성 · 컬럼 = 활성 패널(+동기) · 컨텍스트 메뉴는 다음 열 때 읽는다.
+            "toolbar.icon_size"
+            | "toolbar.item_gap"
+            | "toolbar.group_gap"
+            | "toolbar.row_gap"
+            | "toolbar.dock_layout" => {
+                // 즉시 반영: 그 크기로 아이콘을 다시 만들고(선명) 높이가 달라지므로 창 배치도 다시.
+                self.rebuild_toolbar();
+                self.sync_menu_checks();
+                self.layout();
+            }
             "toolbar.layout" => {
                 self.rebuild_toolbar();
                 self.sync_menu_checks();
@@ -142,19 +154,72 @@ impl App {
     }
 
     /// 툴바 아이콘 논리 크기 → 물리 px(배율 반영 · SVG 마스크를 그 크기로 렌더해 선명).
+    #[cfg(test)]
     pub(crate) fn toolbar_icon_px(scale: f32) -> u32 {
         (TOOLBAR_ICON_LOGICAL as f32 * scale).round().max(8.0) as u32
     }
 
     /// 툴바 재구성(언어 · 배율 변경 — 체크 상태는 `sync_menu_checks`가 다시 맞춘다).
     pub(crate) fn rebuild_toolbar(&mut self) {
-        let mut toolbar = Toolbar::new(App::build_toolbar(
-            &self.settings,
-            App::toolbar_icon_px(self.scale),
+        self.toolbar = App::make_tool_dock(&self.settings, self.scale);
+    }
+
+    /// 설정 `toolbar.icon_size`(16/20/24/32 · 그 밖 = 20).
+    pub(crate) fn toolbar_icon_logical(settings: &Settings) -> i32 {
+        match settings.get("toolbar.icon_size").unwrap_or("20") {
+            "16" => 16,
+            "24" => 24,
+            "32" => 32,
+            _ => TOOLBAR_ICON_LOGICAL,
+        }
+    }
+
+    fn setting_px(settings: &Settings, key: &str, default: i32, max: i32) -> i32 {
+        settings
+            .get(key)
+            .and_then(|v| v.trim().parse::<i32>().ok())
+            .unwrap_or(default)
+            .clamp(0, max)
+    }
+
+    /// 툴바 그룹 도크 생성 — 그룹 = `toolbar.layout`의 블록(숨긴 블록·빈 블록 제외) · 아이콘 크기/간격 = 설정 · 배치 = `toolbar.dock_layout`.
+    /// 아이콘 칸 여백은 0(아이콘 사이 간격은 `toolbar.item_gap` 하나로 정한다 · 기본 0 = 붙임).
+    pub(crate) fn make_tool_dock(settings: &Settings, scale: f32) -> ToolDock {
+        let logical = App::toolbar_icon_logical(settings);
+        let icon_px = (logical as f32 * scale).round().max(8.0) as u32;
+        let mut dock = ToolDock::new(App::build_tool_groups(settings, icon_px));
+        dock.set_icon_size(logical);
+        dock.set_padding(0, 4); // 칸 여백 0(아이콘 맞닿음) · 양끝/위아래 4 = 툴바 높이는 종전(dir2 28 = 20 + 8) 그대로
+        dock.set_item_gap(App::setting_px(settings, "toolbar.item_gap", 0, 16));
+        dock.set_gaps(
+            App::setting_px(settings, "toolbar.group_gap", 4, 32),
+            App::setting_px(settings, "toolbar.row_gap", 0, 16),
+        );
+        dock.apply_layout(&DockLayout::parse(
+            settings.get("toolbar.dock_layout").unwrap_or(""),
         ));
-        toolbar.set_icon_size(TOOLBAR_ICON_LOGICAL);
-        toolbar.set_padding(2, 2);
-        self.toolbar = toolbar;
+        let _ = dock.take_actions();
+        dock
+    }
+
+    /// 도크가 알린 일 처리: 배치 변경 = 설정 저장 · 행 수 변경 = 창 재배치 · 떼어 내기 = 도로 붙임(플로팅 창은 후속).
+    pub(crate) fn toolbar_actions(&mut self) {
+        for a in self.toolbar.take_actions() {
+            match a {
+                DockAction::Float { id, .. } => {
+                    self.toolbar.dock(&id);
+                    self.layout();
+                }
+                DockAction::LayoutChanged => {
+                    let v = self.toolbar.layout().serialize();
+                    if self.settings.get("toolbar.dock_layout").unwrap_or("") != v {
+                        let _ = self.settings.set("toolbar.dock_layout", &v);
+                        let _ = self.settings.save();
+                    }
+                }
+                DockAction::Resized => self.layout(),
+            }
+        }
     }
 
     /// 언어 전환 뒤 라벨 재구성(메뉴 · 툴바 · 열 · 상태줄).

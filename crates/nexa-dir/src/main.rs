@@ -66,8 +66,8 @@ use ndir_i18n::{tr, trf};
 use ndir_settings::keymap::{Chord, Keymap};
 use ndir_settings::{Settings, ThemeMode};
 use nexa_ctl::controls::{
-    ComboItem, ContextMenu, Control, CtxItem, MenuBar, MenuDef, MenuEntry, SplitAxis, SplitEvent,
-    Splitter, StatusBar, ToolIcon, ToolItem, Toolbar,
+    ComboItem, ContextMenu, Control, CtxItem, DockAction, DockLayout, MenuBar, MenuDef, MenuEntry,
+    SplitAxis, SplitEvent, Splitter, StatusBar, ToolDock, ToolGroup, ToolIcon, ToolItem, Toolbar,
 };
 use nexa_ctl::draw::DrawCtx;
 use nexa_ctl::geom::{Point, Rect};
@@ -107,7 +107,7 @@ pub(crate) fn settings_clip_native() -> bool {
 const SPLIT_TH: f32 = 3.0;
 const SNAP_PX: f32 = 20.0;
 const MIN_PANEL: f32 = 200.0;
-/// 툴바 아이콘 논리 크기(dir2 20 · `Toolbar::set_icon_size` · 마스크는 배율 곱한 px로 렌더).
+/// 툴바 아이콘 논리 크기의 기본값(dir2 20) — 실제 값 = 설정 `toolbar.icon_size`(16/20/24/32 · 마스크는 배율 곱한 px로 렌더).
 const TOOLBAR_ICON_LOGICAL: i32 = 20;
 
 /// UI 스레드를 깨우는 사용자 이벤트(배경 작업이 보낸다 — M4 전송·감시 스레드 · SKEL-415).
@@ -148,7 +148,8 @@ struct App {
     alt: bool,
     ctrl_mac: bool,
     menubar: MenuBar,
-    toolbar: Toolbar,
+    /// 상단 툴바 = 그룹 도크(nexa-sql `ToolDock` · 그룹 손잡이를 끌어 순서·행 이동 · 배치 = 설정 `toolbar.dock_layout`).
+    toolbar: ToolDock,
     /// 파일 패널 2(듀얼 · dir2 좌/우) — 단일 모드면 `panels[1]`은 빈 사각형(상태는 보존).
     panels: [Panel; 2],
     /// 좌/우 스플리터(`layout.panel_split_pct` · 드래그 · 50% 스냅).
@@ -367,10 +368,9 @@ impl App {
             let _ = settings.set("launcher.seed", &launcher::SEED_VERSION.to_string());
             let _ = settings.save();
         }
-        let (launcherbar, launcher_icons_pending) = App::make_launcherbar(&launcher_items);
-        let mut toolbar = Toolbar::new(App::build_toolbar(&settings, App::toolbar_icon_px(1.0)));
-        toolbar.set_icon_size(TOOLBAR_ICON_LOGICAL);
-        toolbar.set_padding(2, 2);
+        let (launcherbar, launcher_icons_pending) =
+            App::make_launcherbar(&launcher_items, &settings);
+        let toolbar = App::make_tool_dock(&settings, 1.0);
         let session_keep = session.clone().unwrap_or_default();
         let mut panels = match &session {
             Some(s) => [0usize, 1].map(|i| {
@@ -638,7 +638,8 @@ impl App {
         // 퀵 런처 바(dir2 WINA-065: 24 · 숨김이거나 실행 항목 0이면 0).
         let has_items = self.launcher_items.iter().any(|i| !i.is_separator());
         let launch_h = if self.settings.flag("launcher.visible") && has_items {
-            px(24.0, s)
+            // 높이 = 아이콘 크기 + 여백 8(기본 16 → dir2의 24) · `preferred_height`는 논리 px.
+            px(self.launcherbar.preferred_height() as f32, s)
         } else {
             0
         };

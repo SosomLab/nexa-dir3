@@ -16,6 +16,11 @@ pub(crate) fn order_defs_of(key: &str) -> Option<OrderDefs> {
 }
 
 /// 도구 모음 라벨(dir2 `tbo_label` — 기존 메뉴 키 최대 재사용).
+/// 툴바 그룹 제목(도크 그룹 · 순서 편집기와 같은 라벨).
+pub(crate) fn toolbar_group_title(block: &str) -> String {
+    tbo_label(block, None)
+}
+
 fn tbo_label(block: &str, item: Option<&str>) -> String {
     match (block, item) {
         ("panel", None) => tr("pref.tbo.grpPanel"),

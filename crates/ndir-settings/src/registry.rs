@@ -12,6 +12,12 @@ const THEME_OPTS: &[(&str, &str)] = &[
     ("light", "pref.theme.light"),
     ("dark", "pref.theme.dark"),
 ];
+const TOOLBAR_SIZE_OPTS: &[(&str, &str)] = &[
+    ("16", "pref.toolbarSize.16"),
+    ("20", "pref.toolbarSize.20"),
+    ("24", "pref.toolbarSize.24"),
+    ("32", "pref.toolbarSize.32"),
+];
 const VIEW_SCOPE_OPTS: &[(&str, &str)] = &[
     ("global", "pref.viewScope.global"),
     ("panel", "pref.viewScope.panel"),
@@ -167,6 +173,23 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 퀵 런처 바 크기/간격(dir3 신규 · 사용자 10-03 "퀵 런처 바도 설정으로") — 크기 = 일반 · 간격 = 고급.
+    e!(
+        "launcher.icon_size",
+        CAT_APPEARANCE,
+        "pref.launcherSize",
+        "pref.launcherSize.desc",
+        Choice(TOOLBAR_SIZE_OPTS),
+        "16"
+    ),
+    e!(
+        "launcher.item_gap",
+        CAT_APPEARANCE,
+        "pref.launcherItemGap",
+        "pref.launcherItemGap.desc",
+        Int { min: 0, max: 16 },
+        "4"
+    ),
     e!(
         "launcher.seed",
         CAT_APPEARANCE,
@@ -190,6 +213,47 @@ pub const REGISTRY: &[Entry] = &[
         "pref.prefsAdvanced.desc",
         Bool,
         "off"
+    ),
+    // 상단 툴바(dir3 신규 · 사용자 10-03): 아이콘 크기 = 일반 설정 · 간격 3종 = 고급 · 그룹 배치(끌어서 옮긴 순서·행) = HIDDEN.
+    e!(
+        "toolbar.icon_size",
+        CAT_APPEARANCE,
+        "pref.toolbarSize",
+        "pref.toolbarSize.desc",
+        Choice(TOOLBAR_SIZE_OPTS),
+        "20"
+    ),
+    e!(
+        "toolbar.item_gap",
+        CAT_APPEARANCE,
+        "pref.toolbarItemGap",
+        "pref.toolbarItemGap.desc",
+        Int { min: 0, max: 16 },
+        "0"
+    ),
+    e!(
+        "toolbar.group_gap",
+        CAT_APPEARANCE,
+        "pref.toolbarGroupGap",
+        "pref.toolbarGroupGap.desc",
+        Int { min: 0, max: 32 },
+        "4"
+    ),
+    e!(
+        "toolbar.row_gap",
+        CAT_APPEARANCE,
+        "pref.toolbarRowGap",
+        "pref.toolbarRowGap.desc",
+        Int { min: 0, max: 16 },
+        "0"
+    ),
+    e!(
+        "toolbar.dock_layout",
+        CAT_APPEARANCE,
+        "pref.toolbarDockLayout",
+        "pref.toolbarDockLayout.desc",
+        Text,
+        ""
     ),
     e!(
         "ui.dblclick_ms",
@@ -1286,6 +1350,7 @@ pub const HIDDEN: &[&str] = &[
     "launcher.seed",
     "launcher.items",
     "ui.prefs_advanced",
+    "toolbar.dock_layout",
     "ui.dblclick_ms",
     "window.main_size",
     "window.main_pos",
@@ -1300,6 +1365,10 @@ pub const HIDDEN: &[&str] = &[
 
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
 pub const ADVANCED: &[&str] = &[
+    "toolbar.item_gap",
+    "launcher.item_gap",
+    "toolbar.group_gap",
+    "toolbar.row_gap",
     "input.scroll_natural",
     "ui.text_gdi",
     "ui.text_hint",
