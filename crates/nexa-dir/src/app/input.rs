@@ -137,6 +137,8 @@ impl App {
     fn send(&mut self, area: Area, ev: &InputEvent, inv: &mut Invalidations) {
         match area {
             Area::Menu => self.menubar.on_event(ev, inv),
+            // 툴바 우클릭 = 순서 편집 · 설정 바로가기(dir2 CMD-097~099 `show_bar_popup` · T-133).
+            Area::Tool if matches!(ev, InputEvent::RightDown { .. }) => self.open_toolbar_menu(),
             Area::Tool => self.toolbar.on_event(ev, inv),
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
             Area::Split(k) => self.split_event(k, ev, inv),
@@ -159,6 +161,10 @@ impl App {
                 if !was_term && self.docks[i].active_kind() == 2 {
                     self.set_term_focus(Some(i), inv);
                 }
+            }
+            // 빠른 실행 우클릭 = 항목 추가 · 편집 · 제거 · 숨기기 · 설정(dir3 신규 · T-133).
+            Area::Launcher if matches!(ev, InputEvent::RightDown { .. }) => {
+                self.open_launcher_menu()
             }
             Area::Launcher => self.launcherbar.on_event(ev, inv),
         }

@@ -195,7 +195,7 @@ pub(crate) fn run(opts: &Options) -> Report {
                 group: other,
                 name: "(not implemented)".into(),
                 verdict: Verdict::Skip,
-                detail: "M1~M5에서 채움".into(),
+                detail: "not implemented yet".into(),
                 ms: 0,
             }),
         }

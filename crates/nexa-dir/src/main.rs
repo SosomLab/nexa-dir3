@@ -1118,8 +1118,8 @@ fn run_gui() -> ExitCode {
     if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {
         app.toasts.push(
             toast::ToastKind::Warn,
-            tr("menu.help.about"),
-            format!("crash report: {}", p.display()),
+            tr("crash.title"),
+            trf("crash.reported", &[&p.display().to_string()]),
         );
     }
     let _ = start;

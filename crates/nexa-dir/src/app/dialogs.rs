@@ -18,6 +18,8 @@ pub(crate) enum DlgReply {
     About,
     /// 일괄 이름 변경 프리셋 저장(이름 입력 · T-71).
     BulkPreset,
+    /// 빠른 실행 항목 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`라벨|실행 파일|인자`)을 넣는다(T-133).
+    LauncherItem(Option<usize>),
 }
 
 impl App {
@@ -93,6 +95,11 @@ impl App {
                 }
             }
             DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
+            DlgReply::LauncherItem(at) => {
+                if id == 1 {
+                    self.launcher_item_entered(at, text.as_deref().unwrap_or(""));
+                }
+            }
             DlgReply::Conflict(tx) => {
                 let choice = match id {
                     1 => ConflictChoice::Overwrite,

@@ -393,9 +393,126 @@ impl App {
         self.open_ctx(CtxKind::Aux(panel), items);
     }
 
+    /// 툴바 우클릭 메뉴(dir2 `show_bar_popup`): 도구 모음 순서… · 설정….
+    pub(crate) fn open_toolbar_menu(&mut self) {
+        let items = vec![
+            CtxItem::item("aux.tb.order", format!("{}…", tr("pref.toolbarOrder"))),
+            CtxItem::Separator,
+            CtxItem::item("aux.prefs", tr("menu.file.prefs")),
+        ];
+        self.open_ctx(CtxKind::Aux(self.active), items);
+    }
+
+    /// 커서 아래 빠른 실행 항목의 자리(`launcher_items` 인덱스 · 빈 곳 · 구분선 = `None`).
+    fn launcher_item_at(&self, x: i32, y: i32) -> Option<usize> {
+        (0..self.launcher_items.len()).find(|i| {
+            self.launcherbar
+                .item_rect(&format!("launch:{i}"))
+                .is_some_and(|r| r.contains(Point { x, y }))
+        })
+    }
+
+    /// 빠른 실행 우클릭 메뉴: (항목 위) 편집… · 제거 / 항목 추가… · 구분선 추가 / 빠른 실행 숨기기 · 설정….
+    pub(crate) fn open_launcher_menu(&mut self) {
+        let (x, y) = self.cursor;
+        let mut items: Vec<CtxItem> = Vec::new();
+        if let Some(i) = self.launcher_item_at(x, y) {
+            items.push(CtxItem::item(
+                format!("aux.launch.edit:{i}"),
+                trf("launcher.menu.edit", &[&self.launcher_items[i].label]),
+            ));
+            items.push(CtxItem::item(
+                format!("aux.launch.remove:{i}"),
+                tr("launcher.menu.remove"),
+            ));
+            items.push(CtxItem::Separator);
+        }
+        items.push(CtxItem::item("aux.launch.add", tr("launcher.menu.add")));
+        items.push(CtxItem::item(
+            "aux.launch.addsep",
+            tr("launcher.menu.addSep"),
+        ));
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("aux.launch.hide", tr("launcher.menu.hide")));
+        items.push(CtxItem::item("aux.prefs", tr("menu.file.prefs")));
+        self.open_ctx(CtxKind::Aux(self.active), items);
+    }
+
+    /// 빠른 실행 항목 목록을 설정에 쓰고 바를 다시 만든다.
+    fn save_launcher_items(&mut self, items: &[launcher::LauncherItem]) {
+        let _ = self
+            .settings
+            .set("launcher.items", &launcher::encode_items(items));
+        let _ = self.settings.save();
+        self.after_setting_changed("launcher.items");
+    }
+
+    /// 항목 입력 대화상자(추가 = `None` · 편집 = `Some(자리)`) — 한 줄 `라벨|실행 파일|인자`.
+    fn ask_launcher_item(&mut self, at: Option<usize>) {
+        let initial = at
+            .and_then(|i| self.launcher_items.get(i))
+            .map(launcher::LauncherItem::encode)
+            .unwrap_or_default();
+        let mut spec = crate::dlg_win::DlgSpec::confirm(
+            tr("launcher.dlg.title"),
+            tr("launcher.dlg.text"),
+            tr("dlg.ok"),
+        );
+        spec.input = Some(crate::dlg_win::DlgInput {
+            label: tr("launcher.dlg.input"),
+            masked: false,
+            initial,
+        });
+        let _ = self.ask(spec, crate::app::dialogs::DlgReply::LauncherItem(at));
+    }
+
+    /// 대화상자 확인 — 입력을 항목으로 풀어 추가/교체한다(형식이 틀리면 안내만).
+    pub(crate) fn launcher_item_entered(&mut self, at: Option<usize>, text: &str) {
+        let Some(item) = launcher::LauncherItem::parse(text) else {
+            self.toasts.push(
+                toast::ToastKind::Warn,
+                tr("launcher.dlg.title"),
+                tr("launcher.dlg.invalid"),
+            );
+            return;
+        };
+        let mut items = self.launcher_items.clone();
+        match at.filter(|i| *i < items.len()) {
+            Some(i) => items[i] = item,
+            None => items.push(item),
+        }
+        self.save_launcher_items(&items);
+    }
+
     /// 보조 메뉴(탭 상태바 · 툴바 · 런처) 항목 실행.
     pub(crate) fn aux_menu_action(&mut self, panel: usize, id: &str) {
+        if let Some(i) = id
+            .strip_prefix("aux.launch.edit:")
+            .and_then(|n| n.parse::<usize>().ok())
+        {
+            return self.ask_launcher_item(Some(i));
+        }
+        if let Some(i) = id
+            .strip_prefix("aux.launch.remove:")
+            .and_then(|n| n.parse::<usize>().ok())
+        {
+            let mut items = self.launcher_items.clone();
+            if i < items.len() {
+                items.remove(i);
+                self.save_launcher_items(&items);
+            }
+            return;
+        }
         match id {
+            "aux.tb.order" => self.open_order_editor("toolbar.layout"),
+            "aux.prefs" => self.command("file.prefs"),
+            "aux.launch.add" => self.ask_launcher_item(None),
+            "aux.launch.addsep" => {
+                let mut items = self.launcher_items.clone();
+                items.push(launcher::LauncherItem::separator());
+                self.save_launcher_items(&items);
+            }
+            "aux.launch.hide" => self.command("view.launcher"),
             "aux.git.copy" => {
                 if let Some((_, branch)) = self.panels[panel].git_info() {
                     let _ = clipboard::write_text(&branch);

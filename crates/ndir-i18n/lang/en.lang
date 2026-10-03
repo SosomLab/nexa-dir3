@@ -86,7 +86,7 @@ cloud.err.reauth = Permission denied — reconnect this cloud account (write acc
 
 # ── About (X-26 (3)) ──
 about.title = About Nexa Dir
-about.desc = Ultra-low-memory portable file explorer for Windows
+about.desc = Ultra-low-memory portable file explorer for Windows, macOS and Linux
 about.version = Version
 about.link.repo = Nexa Dir repository (GitHub)
 about.link.releases = Download (GitHub Releases)
@@ -193,7 +193,7 @@ plugins.removeFail = Remove failed: {0} — {1}
 plugins.bundled = Bundled plugins cannot be removed (uncheck to disable).
 dock.terminal = Terminal
 term.exited = [shell exited — press any key to restart]
-term.fail = terminal start failed (ConPTY)
+term.fail = terminal start failed
 term.starting = Starting {0}…
 pref.termFallbackFonts = Terminal fallback fonts
 pref.termFallbackFonts.desc = Fonts used for characters the terminal font lacks (prompt icons etc.), comma separated. Empty = an installed Nerd Font is picked automatically. Takes effect after restart.
@@ -918,3 +918,16 @@ mem.system = System memory: {0} of {1} in use ({2}%)
 mem.cat.lists = File lists
 mem.cat.surfaces = Window surface
 mem.cat.other = Other
+crash.title = Crash report
+crash.reported = A crash report was saved: {0}
+info.bytes = {0} bytes
+info.sizeLong = {0} ({1} bytes)
+launcher.menu.edit = Edit "{0}"…
+launcher.menu.remove = Remove
+launcher.menu.add = Add item…
+launcher.menu.addSep = Add separator
+launcher.menu.hide = Hide quick launcher
+launcher.dlg.title = Quick launcher item
+launcher.dlg.text = Enter the item as: label|program|arguments. In arguments, %path% is replaced by the current folder.
+launcher.dlg.input = Item
+launcher.dlg.invalid = Enter at least a label and a program, separated by |.

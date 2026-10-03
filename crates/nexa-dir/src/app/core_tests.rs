@@ -2515,6 +2515,84 @@ fn relabel_refreshes_one_time_labels() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 툴바 · 빠른 실행 우클릭 메뉴(T-133 · dir2 CMD-097~099 + dir3 신규): 툴바 = 순서 편집 · 설정 / 빠른 실행 = 항목 편집 ·
+/// 제거 · 추가 · 구분선 · 숨기기 · 설정 — 항목 변경은 `launcher.items`에 바로 저장된다.
+#[test]
+fn toolbar_and_launcher_right_click_menus() {
+    let (mut app, dir) = fixture("barmenus");
+    let _ = app.settings.set("launcher.visible", "on");
+    let _ = app
+        .settings
+        .set("launcher.items", "A|ndir-no-such-a|;;B|ndir-no-such-b|--x");
+    app.after_setting_changed("launcher.items");
+    app.layout_for(1200, 800, 1.0);
+    let menu = |app: &App| app.dump_of("ctx").unwrap_or_default();
+    // 툴바 우클릭.
+    let tb = app.toolbar.bounds();
+    app.route(InputEvent::MouseMove {
+        x: tb.right() - 5,
+        y: tb.y + 5,
+    });
+    app.route(InputEvent::RightDown {
+        x: tb.right() - 5,
+        y: tb.y + 5,
+    });
+    assert!(
+        menu(&app).contains("aux.tb.order aux.prefs"),
+        "{}",
+        menu(&app)
+    );
+    app.ctx_pick("aux.tb.order");
+    assert!(app.open_order, "도구 모음 순서 편집 창");
+    // 빠른 실행: 항목 위 우클릭 = 편집/제거 포함.
+    let r = app.launcherbar.item_rect("launch:1").expect("item B");
+    let (x, y) = (r.x + 3, r.y + 3);
+    app.cursor = (x, y);
+    app.route(InputEvent::RightDown { x, y });
+    let m = menu(&app);
+    assert!(
+        m.contains("aux.launch.edit:1 aux.launch.remove:1")
+            && m.contains("aux.launch.add aux.launch.addsep")
+            && m.contains("aux.launch.hide aux.prefs"),
+        "{m}"
+    );
+    app.ctx_pick("aux.launch.remove:1");
+    assert_eq!(
+        app.settings.get("launcher.items"),
+        Some("A|ndir-no-such-a|")
+    );
+    // 빈 곳 우클릭 = 편집/제거 없음 · 구분선 추가.
+    let lb = app.launcherbar.bounds();
+    app.cursor = (lb.right() - 5, lb.y + 5);
+    app.route(InputEvent::RightDown {
+        x: lb.right() - 5,
+        y: lb.y + 5,
+    });
+    assert!(!menu(&app).contains("aux.launch.edit"), "{}", menu(&app));
+    app.ctx_pick("aux.launch.addsep");
+    assert_eq!(
+        app.settings.get("launcher.items"),
+        Some("A|ndir-no-such-a|;;-")
+    );
+    // 입력 확인: 추가 · 교체 · 형식 오류는 그대로.
+    app.launcher_item_entered(None, "C|ndir-no-such-c|%path%");
+    app.launcher_item_entered(Some(0), "A2|ndir-no-such-a2|");
+    app.launcher_item_entered(None, "no-separator");
+    assert_eq!(
+        app.settings.get("launcher.items"),
+        Some("A2|ndir-no-such-a2|;;-;;C|ndir-no-such-c|%path%")
+    );
+    // 숨기기.
+    app.cursor = (lb.right() - 5, lb.y + 5);
+    app.route(InputEvent::RightDown {
+        x: lb.right() - 5,
+        y: lb.y + 5,
+    });
+    app.ctx_pick("aux.launch.hide");
+    assert!(!app.settings.flag("launcher.visible"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

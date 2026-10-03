@@ -58,9 +58,12 @@ pub(crate) fn group_thousands(n: u64) -> String {
 /// 긴 크기 표기(dir2 `fmt_size_long` · 탐색기 속성 창): `1.5 KB (1,536 bytes)` · 1 KiB 미만은 `512 bytes`.
 pub(crate) fn fmt_size_long(bytes: u64) -> String {
     if bytes < 1024 {
-        format!("{} bytes", group_thousands(bytes))
+        ndir_i18n::trf("info.bytes", &[&group_thousands(bytes)])
     } else {
-        format!("{} ({} bytes)", format_size(bytes), group_thousands(bytes))
+        ndir_i18n::trf(
+            "info.sizeLong",
+            &[&format_size(bytes), &group_thousands(bytes)],
+        )
     }
 }
 
