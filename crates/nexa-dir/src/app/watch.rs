@@ -1,4 +1,4 @@
-//! App — 폴더 변경 감시 → 무간섭 재열람(dir2 PANEL-036·042 · `Watcher` 포트 · 1 s 폴링 · 호스트 틱이 부른다).
+//! App — 폴더 변경 감시 → 무간섭 재열람(dir2 PANEL-036·042 · `Watcher` 포트 · 간격 = 포트가 정한다(폴링 1 s · Windows 통지 250 ms) · 호스트 틱이 부른다).
 
 use crate::*;
 
@@ -15,12 +15,12 @@ impl App {
         self.platform.watcher.watch(&dirs);
     }
 
-    /// 1 s마다 변경을 거둬 그 폴더를 보는 탭을 다시 읽는다(캐럿·스크롤 유지). 다음 깨울 시각을 돌려준다.
+    /// 포트 간격마다 변경을 거둬 그 폴더를 보는 탭을 다시 읽는다(캐럿·스크롤 유지). 다음 깨울 시각을 돌려준다.
     pub(crate) fn watch_tick(&mut self, now: Instant) -> Instant {
         if now < self.watch_next {
             return self.watch_next;
         }
-        self.watch_next = now + Duration::from_secs(1);
+        self.watch_next = now + Duration::from_millis(self.platform.watcher.poll_interval_ms());
         self.watch_sync();
         let changed = self.platform.watcher.poll();
         if !changed.is_empty() {

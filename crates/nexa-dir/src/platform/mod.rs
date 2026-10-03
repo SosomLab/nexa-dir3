@@ -28,6 +28,8 @@ mod windows;
 mod winpty;
 #[cfg(windows)]
 mod winshell;
+#[cfg(windows)]
+mod winwatch;
 
 /// 포트 호출 실패 — `Unsupported`(이 OS/빌드에 구현 없음 · 안내만) · `Failed`(구현이 있으나 실패 · 사유).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,6 +142,10 @@ pub(crate) enum DragOutcome {
 pub(crate) trait Watcher {
     fn watch(&mut self, dirs: &[PathBuf]);
     fn poll(&mut self) -> Vec<PathBuf>;
+    /// 호스트가 `poll`을 부르는 간격(ms) — 폴링 프로브 1000 · OS 통지 250(디바운스 역할).
+    fn poll_interval_ms(&self) -> u64 {
+        1000
+    }
 }
 
 pub(crate) trait Opener {
@@ -400,6 +406,10 @@ impl Platform {
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(winshell::NativeShellMenu::new());
         #[cfg(not(windows))]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(Unsupported);
+        #[cfg(windows)]
+        let watcher: Box<dyn Watcher> = Box::new(winwatch::NativeWatcher::new());
+        #[cfg(not(windows))]
+        let watcher: Box<dyn Watcher> = Box::new(PollWatcher::default());
         Platform {
             shell,
             pty,
@@ -407,7 +417,7 @@ impl Platform {
             trash,
             clipboard,
             drag: Box::new(Unsupported),
-            watcher: Box::new(PollWatcher::default()),
+            watcher,
             opener,
             disk,
             log: None,

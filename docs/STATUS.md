@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 40차 — T-51 B-2b: Windows 폴더 감시(ReadDirectoryChangesW) + 폴링 폴백
+
+- **한 일**: `winwatch.rs` · 포트 간격 메서드 · selfcheck 감시 항목 · 시험 +2(139).
+- **지금 상태**: T-51 B-2 잔여 = 행 메뉴 ShellNew · OLE DnD · 휴지통 복원 · 셸 통지(SHCNE). T-52/53 = FSEvents/inotify 같은 틀로. 다음 = T-62 C-3 · T-82 · ShellNew.
+- **걸린 것**: 없음.
+
+→ [journal/2026-10-03 §42](journal/2026-10-03.md)
+
 ## 10-03 39차 — T-51 B-2a: Windows 배경 셸 메뉴 · 생성 감지 · selfcheck ctxmenu
 
 - **한 일**: 포트 계약 2 메서드(기본 구현) · winshell 배경 메뉴 · ctxmenu 합류/실행 · fake · selfcheck · 시험 +2(137).

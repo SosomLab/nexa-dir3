@@ -185,7 +185,10 @@ pub(crate) fn run(opts: &Options) -> Report {
             "shell" => check_shell(&mut r),
             "ctxmenu" => check_ctxmenu(&mut r),
             "open" => check_open(&mut r),
-            "fs" => check_fs(&mut r),
+            "fs" => {
+                check_fs(&mut r);
+                check_watch(&mut r);
+            }
             "trash" => check_trash(&mut r, opts.ci),
             "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
@@ -505,6 +508,33 @@ fn check_shell(r: &mut Report) {
                 .join(" · "),
         )
     });
+}
+
+/// 폴더 감시(T-51 B-2b `Watcher` 포트): 임시 폴더를 감시하고 파일 하나를 만들어 통지가 간격×4 안에 오는지(Windows 통지 · 그 외 폴링).
+fn check_watch(r: &mut Report) {
+    let mut p = crate::platform::Platform::native();
+    let dir = std::env::temp_dir().join(format!("ndir-selfcheck-watch-{}", unique_tag()));
+    let _ = std::fs::create_dir_all(&dir);
+    timed(r, "fs", "folder watch notifies", || {
+        p.watcher.watch(std::slice::from_ref(&dir));
+        let interval = p.watcher.poll_interval_ms();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let _ = p.watcher.poll();
+        let _ = std::fs::write(dir.join("probe.txt"), b"x");
+        let deadline = Instant::now() + std::time::Duration::from_millis(interval * 4);
+        while Instant::now() < deadline {
+            if p.watcher.poll().contains(&dir) {
+                return (Verdict::Pass, format!("interval {interval} ms"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        (
+            Verdict::Warn,
+            format!("no notification within {} ms", interval * 4),
+        )
+    });
+    p.watcher.watch(&[]);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 셸 컨텍스트 메뉴(T-51 B `ContextMenuProvider` 포트): 임시 파일의 행 메뉴 · 임시 폴더의 배경 메뉴를 **실제로 구축**해 항목 수를 본다
