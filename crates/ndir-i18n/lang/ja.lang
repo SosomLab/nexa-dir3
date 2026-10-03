@@ -602,8 +602,8 @@ pref.listFontSize = ファイル一覧のフォントサイズ
 pref.listFontSize.desc = ファイル一覧のフォントサイズ(8〜32)。
 pref.termShell = ターミナルのシェル
 pref.termShell.desc = ドックターミナルで実行するプログラム。空 = 自動(Windows: pwsh → powershell → cmd · macOS/Linux: $SHELL → /bin/sh)。
-pref.termFollowWt = Windows Terminal に合わせる
-pref.termFollowWt.desc = Windows Terminal の既定プロファイルのフォントとフォントサイズをドックのターミナルに使います（Windows のみ・未インストールなら無視）。オフ = 下のターミナル設定を使用。フォントは再起動後に有効になります。
+pref.termFollowWt = システム既定のターミナルに合わせる
+pref.termFollowWt.desc = OS 既定のターミナルのフォントをドックのターミナルに使います（Windows = Windows Terminal の既定プロファイルのフォントとサイズ・Linux = デスクトップの等幅フォント、サイズは下のターミナルフォントサイズ・見つからなければ無視）。オフ = 下のターミナル設定を使用。フォントは再起動後に有効になります。
 pref.alwaysOnTop = 常に手前に表示
 pref.alwaysOnTop.desc = メインウィンドウを他のウィンドウの手前に保ちます(表示メニュー)。
 pref.panelMode = パネルモード

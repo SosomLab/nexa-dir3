@@ -141,7 +141,15 @@ impl App {
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
             Area::Split => self.split_event(ev, inv),
             Area::Status => self.statusbar.on_event(ev, inv),
-            Area::Dock(i) => self.docks[i].on_event(ev, inv),
+            Area::Dock(i) => {
+                // 도크 탭으로 터미널을 고르면 바로 입력할 수 있게 포커스를 준다(사용자 10-03 Linux 실기 — 종전에는 격자를 한 번 더
+                // 눌러야 했다). 셸은 다음 paint에서 시작한다.
+                let was_term = self.docks[i].active_kind() == 2;
+                self.docks[i].on_event(ev, inv);
+                if !was_term && self.docks[i].active_kind() == 2 {
+                    self.set_term_focus(Some(i), inv);
+                }
+            }
             Area::Launcher => self.launcherbar.on_event(ev, inv),
         }
     }

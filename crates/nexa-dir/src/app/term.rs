@@ -61,7 +61,13 @@ impl App {
             .as_ref()
             .zip(self.mono_font.as_ref())
             .map(|(wt, mono)| {
-                let target = mono.em_to_px(wt.size_pt * 96.0 / 72.0);
+                // 크기: 프로필이 주면 그 pt → DIP · 안 주면(Linux) 설정 `term.font_size`(em) — 어느 쪽이든 **그 고정폭 글꼴의**
+                // 지표로 px를 구한다(본문 글꼴 지표로 환산하면 글꼴마다 실제 크기가 달라진다).
+                let em = wt.size_pt.map_or_else(
+                    || self.settings.font_px("term.font_size"),
+                    |pt| pt * 96.0 / 72.0,
+                );
+                let target = mono.em_to_px(em);
                 let mult =
                     (self.ui_font.digit_height(100.0) / mono.digit_height(100.0)).clamp(0.75, 1.15);
                 // 줄 높이 = 그 글꼴의 어센트+디센트+줄 간격(Windows Terminal의 칸 높이 · 배율 반영) — 종전 "글자 높이 + 3"은

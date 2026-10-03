@@ -715,8 +715,9 @@ pub(crate) fn wheel_lines() -> Option<i32> {
 pub(crate) struct WtProfile {
     /// 글꼴 이름 목록(`font.face`의 쉼표 구분 순서 = 대체 글꼴 순서).
     pub faces: Vec<String>,
-    /// 글꼴 크기(pt · Windows Terminal 기본 12).
-    pub size_pt: f32,
+    /// 글꼴 크기(pt · Windows Terminal 기본 12). `None` = 크기는 따라가지 않는다(설정 `term.font_size` — Linux: 사용자 10-03
+    /// "터미널 글꼴이 너무 크다 · 정보/미리보기와 맞춰" — 데스크톱 고정폭 글꼴 11 pt는 본문(12 em = 9 pt)보다 크다).
+    pub size_pt: Option<f32>,
     /// 색 구성표 이름(없으면 Windows Terminal 기본 = Campbell).
     pub scheme: Option<String>,
     /// 시작 명령(`commandline` · 없으면 프로필 원천의 기본).
@@ -836,7 +837,7 @@ pub(crate) fn parse_wt_settings(text: &str) -> Option<WtProfile> {
                     .collect()
             })
             .unwrap_or_default(),
-        size_pt: size.filter(|s| (4.0..=96.0).contains(s)).unwrap_or(12.0),
+        size_pt: Some(size.filter(|s| (4.0..=96.0).contains(s)).unwrap_or(12.0)),
         scheme: pick(&|p| text_of(get(p, "colorScheme"))),
         commandline: pick(&|p| text_of(get(p, "commandline"))),
     })
@@ -864,9 +865,107 @@ pub(crate) fn windows_terminal_profile() -> Option<WtProfile> {
     }
 }
 
+/// 터미널 글꼴의 폴백(한글 등)을 주 글꼴과 **같은 em**으로 그릴까(nexa-gfx `set_fallback_em_match`). Linux·macOS = 켬
+/// (터미널 관례 — 전각 글자가 두 칸을 채운다 · Linux 실기 10-03 "한글이 작고 벌어진다"). Windows = 종전 유지
+/// (Windows Terminal 대조 캡처로 맞춘 화면을 실기 확인 없이 바꾸지 않는다 — 확인되면 켠다).
+pub(crate) fn term_fallback_em_match() -> bool {
+    cfg!(not(windows))
+}
+
+/// 글꼴 지정 문자열(GNOME `monospace-font-name` · Pango 표기 `"Ubuntu Sans Mono 11"` · `"DejaVu Sans Mono Bold 10.5"`) →
+/// (글꼴 이름, 크기 pt)(순수). 끝의 숫자 = 크기 · 그 앞의 굵기/기울기 낱말은 떼어 낸다. 크기가 없거나 범위(4~96) 밖이면 `None`.
+pub(crate) fn parse_font_spec(spec: &str) -> Option<(String, f32)> {
+    const STYLES: [&str; 12] = [
+        "regular",
+        "bold",
+        "italic",
+        "oblique",
+        "light",
+        "medium",
+        "semi-bold",
+        "semibold",
+        "thin",
+        "book",
+        "condensed",
+        "heavy",
+    ];
+    let spec = spec.trim().trim_matches(['\'', '"']).trim();
+    let (name, size) = spec.rsplit_once(' ')?;
+    let size: f32 = size.trim().parse().ok()?;
+    if !(4.0..=96.0).contains(&size) {
+        return None;
+    }
+    let mut words: Vec<&str> = name.split_whitespace().collect();
+    while words.len() > 1
+        && words
+            .last()
+            .is_some_and(|w| STYLES.contains(&w.to_ascii_lowercase().as_str()))
+    {
+        words.pop();
+    }
+    (!words.is_empty()).then(|| (words.join(" "), size))
+}
+
+/// 이 OS의 **기본 터미널이 쓰는 글꼴**(터미널 도크가 따라갈 값 · DR-21 확장 — 사용자 10-03 Linux 실기 "시스템 기본(터미널과 동일한)
+/// 폰트로"): Windows = Windows Terminal 기본 프로필(글꼴 + 크기) · Linux = 데스크톱의 고정폭 글꼴 **이름**(`gsettings
+/// org.gnome.desktop.interface monospace-font-name` — GNOME 터미널 기본값이 이것을 쓴다) · 그 밖/없음 = `None`(설정 값 사용).
+/// 시험 빌드에서는 Linux도 `None`(프로세스를 띄우지 않고 · 화면이 PC 설정에 따라 달라지지 않게).
+pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
+    #[cfg(windows)]
+    {
+        windows_terminal_profile()
+    }
+    #[cfg(all(target_os = "linux", not(test)))]
+    {
+        let out = std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "monospace-font-name"])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
+        // 글꼴 이름만 따라간다 — 크기는 설정 `term.font_size`(기본 12 = 정보/미리보기 본문과 같은 em).
+        let (face, _) = parse_font_spec(&String::from_utf8_lossy(&out.stdout))?;
+        Some(WtProfile {
+            faces: vec![face],
+            size_pt: None,
+            scheme: None,
+            commandline: None,
+        })
+    }
+    #[cfg(not(any(windows, all(target_os = "linux", not(test)))))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 글꼴 지정 문자열: 끝 숫자 = 크기 · 굵기 낱말 제거 · 따옴표/공백 · 크기 없음/범위 밖 = None.
+    #[test]
+    fn font_spec_splits_family_and_size() {
+        assert_eq!(
+            parse_font_spec("'Ubuntu Sans Mono 11'\n"),
+            Some(("Ubuntu Sans Mono".into(), 11.0))
+        );
+        assert_eq!(
+            parse_font_spec("DejaVu Sans Mono Bold 10.5"),
+            Some(("DejaVu Sans Mono".into(), 10.5))
+        );
+        assert_eq!(
+            parse_font_spec("Monospace Semi-Bold Italic 12"),
+            Some(("Monospace".into(), 12.0))
+        );
+        assert_eq!(parse_font_spec("Bold 9"), Some(("Bold".into(), 9.0)));
+        assert_eq!(parse_font_spec("Ubuntu Mono"), None);
+        assert_eq!(parse_font_spec("Mono 200"), None);
+        assert_eq!(parse_font_spec("''"), None);
+        // 시험 빌드의 Linux는 프로세스를 띄우지 않는다.
+        #[cfg(target_os = "linux")]
+        assert_eq!(system_terminal_profile(), None);
+    }
 
     fn spec(p: &str) -> ShellSpec {
         ShellSpec {
@@ -988,7 +1087,11 @@ mod tests {
         }"#;
         let p = parse_wt_settings(text).expect("profile");
         assert_eq!(p.faces, ["D2Coding", "JetBrainsMono Nerd Font"]);
-        assert_eq!(p.size_pt, 12.0, "지정 없음 = Windows Terminal 기본 12pt");
+        assert_eq!(
+            p.size_pt,
+            Some(12.0),
+            "지정 없음 = Windows Terminal 기본 12pt"
+        );
         assert_eq!(p.scheme.as_deref(), Some("One Half Dark"));
         assert_eq!(p.commandline, None);
         // 프로필 값이 defaults보다 우선 · 옛 키.
@@ -996,7 +1099,7 @@ mod tests {
         let p = parse_wt_settings(old).expect("old format");
         assert_eq!(
             (p.faces.as_slice(), p.size_pt),
-            (&["Consolas".to_string()][..], 10.0)
+            (&["Consolas".to_string()][..], Some(10.0))
         );
         assert_eq!(p.commandline.as_deref(), Some("cmd.exe /k"));
         assert!(parse_wt_settings("not json").is_none());

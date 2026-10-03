@@ -85,6 +85,9 @@ pub(crate) fn init_icon_glyphs(ui: &Font) {
     } else {
         FALLBACK_CHEVRON_DELTA
     });
+    // 아이콘 글꼴이 없으면 쉐브론을 선으로 그린다(nexa-ui 123차 · Linux 실기 10-03 "윈도우와 다르게 작다") — 글꼴과 무관하게
+    // MDL2 em 9와 같은 크기·모양. 아래 대체 글리프는 선 그리기를 끈 경우의 예비로 남긴다.
+    nexa_grid::set_marker_vector(!ok);
     if ok {
         nexa_grid::set_marker_glyphs("\u{E76C}", "\u{E70D}");
     } else {
@@ -145,11 +148,12 @@ impl App {
         mono_chain(face, extra).map(Rc::new)
     }
 
-    /// 설정 `term.follow_windows_terminal`이 켜져 있으면 이 PC의 Windows Terminal 기본 프로필(없으면 `None`).
+    /// 설정 `term.follow_windows_terminal`이 켜져 있으면 이 PC의 기본 터미널 글꼴(Windows = Windows Terminal 기본 프로필 ·
+    /// Linux = 데스크톱 고정폭 글꼴 · 없으면 `None` = 설정 `term.font_face`/`term.font_size`).
     pub(crate) fn load_wt_profile(settings: &Settings) -> Option<platform::WtProfile> {
         settings
             .flag("term.follow_windows_terminal")
-            .then(platform::windows_terminal_profile)
+            .then(platform::system_terminal_profile)
             .flatten()
     }
 }
@@ -174,6 +178,13 @@ const NERD_FAMILIES: [&str; 12] = [
 /// Nerd Fonts 대표 글리프(Powerline 분기  · Font Awesome 폴더  · Devicons  · Material 󰊢 는 BMP 밖이라 제외).
 pub(crate) const NERD_PROBE: [char; 3] = ['\u{E0A0}', '\u{F07B}', '\u{E0B0}'];
 
+/// 터미널 고정폭 폴백(데스크톱 Linux에서 fontconfig가 터미널에 골라 주는 글꼴 — 앞이 우선): 기호(➜ ✗)를 한 칸 폭으로 가진
+/// DejaVu Sans Mono(Linux 실기 10-03 — 넓은 기호 글꼴에서 오면 칸에서 잘린다).
+const MONO_FALLBACK_FAMILIES: [&str; 1] = ["DejaVu Sans Mono"];
+/// (파일 패밀리, 그 컬렉션 안의 얼굴) — fontconfig가 터미널 한글·한자에 골라 주는 고정폭판(`NotoSansCJK-*.ttc` 안에 일반판과
+/// 함께 들어 있다). 한글 폭은 이 얼굴도 0.92 em이라 두 칸 안에서 조금 남는다(우분투 터미널과 같은 모양).
+const MONO_CJK_FACE: (&str, &str) = ("Noto Sans CJK", "Noto Sans Mono CJK KR");
+
 /// 터미널용 고정폭 글꼴 체인: **주 글꼴**(`term.font_face` → OS 고정폭) → **사용자 지정 폴백**(`term.fallback_fonts` · 쉼표) →
 /// **설치된 Nerd Font**(주 글꼴이 그 글리프를 못 가질 때만) → 한글 UI 글꼴 → 기호 폴백. nexa-font `mono_font`와 같은 구성에 폴백 두 단계를
 /// **기호 폴백 앞에** 끼운 것 — Nerd 아이콘 대역(U+E000~F8FF)은 Segoe MDL2/Fluent와 겹치므로 순서가 중요하다(뒤에 두면 엉뚱한 아이콘).
@@ -196,12 +207,24 @@ pub(crate) fn mono_chain(face: Option<&str>, extra: &str) -> Option<Font> {
             let _ = font.push_fallback(d, i);
         }
     }
+    // 고정폭 폴백(Linux 실기 10-03): 기호와 한글을 칸 폭에 맞게 가진 고정폭 글꼴을 가변폭 한글·기호 폴백보다 먼저 둔다
+    // (설치돼 있지 않은 OS에서는 아무 일도 없다).
+    for fam in MONO_FALLBACK_FAMILIES {
+        if let Some((d, i)) = nexa_font::find_font_by_family(fam) {
+            let _ = font.push_fallback(d, i);
+        }
+    }
+    if let Some((d, i)) = nexa_font::find_collection_face(MONO_CJK_FACE.0, MONO_CJK_FACE.1) {
+        let _ = font.push_fallback(d, i);
+    }
     if let Some(s) = nexa_font::system_ui_font() {
         let _ = font.push_fallback(s.data, s.index);
     }
     for f in nexa_font::symbol_fallback_fonts() {
         let _ = font.push_fallback(f.data, f.index);
     }
+    // 폴백 글꼴(한글 등)을 주 글꼴과 같은 em으로(nexa-ui 125차) — 전각 글자가 두 칸을 채운다(종전 = 같은 높이라 작고 벌어졌다).
+    font.set_fallback_em_match(platform::term_fallback_em_match());
     Some(font)
 }
 
@@ -223,5 +246,25 @@ mod chevron_tests {
         );
         assert_eq!(fallback_chevrons(|c| c.is_ascii()), (">", "v"));
         assert_eq!(fallback_chevrons(|_| false), (">", "v"));
+    }
+
+    /// 터미널 글꼴 체인: 폴백 em 맞춤은 플랫폼 판정대로(Linux·macOS 켬 · Windows 종전).
+    #[test]
+    fn mono_chain_matches_fallback_em_per_platform() {
+        let Some(f) = mono_chain(None, "") else {
+            return; // 글꼴이 하나도 없는 환경
+        };
+        assert_eq!(f.fallback_em_match(), platform::term_fallback_em_match());
+        assert_eq!(platform::term_fallback_em_match(), !cfg!(windows));
+    }
+
+    /// 아이콘 글꼴(MDL2)이 없는 OS에서는 쉐브론을 선으로 그린다 · 있으면 글리프(dir2와 같음).
+    #[test]
+    fn chevrons_are_drawn_as_lines_without_icon_font() {
+        let ui = nexa_font::ui_font(None).expect("OS UI font");
+        init_icon_glyphs(&ui.font);
+        assert_eq!(nexa_grid::marker_vector(), !icon_font_covers(&ui.font));
+        #[cfg(target_os = "linux")]
+        assert!(nexa_grid::marker_vector(), "Linux에는 Segoe MDL2가 없다");
     }
 }

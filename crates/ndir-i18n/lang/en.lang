@@ -602,8 +602,8 @@ pref.listFontSize = File list font size
 pref.listFontSize.desc = Size of the file list font (8–32).
 pref.termShell = Terminal shell
 pref.termShell.desc = Program for the dock terminal. Empty = automatic (Windows: pwsh, powershell, cmd; macOS/Linux: $SHELL, /bin/sh).
-pref.termFollowWt = Match Windows Terminal
-pref.termFollowWt.desc = Use the fonts and font size of your Windows Terminal default profile in the dock terminal (Windows only; ignored when Windows Terminal is not installed). Off = use the terminal settings below. Fonts take effect after restart.
+pref.termFollowWt = Match the system terminal
+pref.termFollowWt.desc = Use the font of the OS default terminal in the dock terminal (Windows = font and size of the Windows Terminal default profile; Linux = desktop monospace font, size from the terminal font size below; ignored when not found). Off = use the terminal settings below. Fonts take effect after restart.
 pref.alwaysOnTop = Always on top
 pref.alwaysOnTop.desc = Keep the main window above other windows (View menu).
 pref.panelMode = Panel mode

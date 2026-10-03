@@ -601,8 +601,8 @@ pref.listFontSize = 파일 목록 글꼴 크기
 pref.listFontSize.desc = 파일 목록 글꼴 크기(8~32).
 pref.termShell = 터미널 셸
 pref.termShell.desc = 도크 터미널이 실행할 프로그램. 비우면 자동(Windows: pwsh → powershell → cmd · macOS/Linux: $SHELL → /bin/sh).
-pref.termFollowWt = Windows Terminal과 같게
-pref.termFollowWt.desc = Windows Terminal 기본 프로필의 글꼴과 글꼴 크기를 터미널 도크에 그대로 씁니다(Windows 전용 · Windows Terminal이 없으면 무시). 끄면 아래 터미널 설정을 씁니다. 글꼴은 다시 시작하면 적용됩니다.
+pref.termFollowWt = 시스템 기본 터미널과 같게
+pref.termFollowWt.desc = OS 기본 터미널의 글꼴을 터미널 도크에 그대로 씁니다(Windows = Windows Terminal 기본 프로필의 글꼴과 크기 · Linux = 데스크톱 고정폭 글꼴, 크기는 아래 터미널 글꼴 크기 · 찾지 못하면 무시). 끄면 아래 터미널 설정을 씁니다. 글꼴은 다시 시작하면 적용됩니다.
 pref.alwaysOnTop = 항상 맨 위에
 pref.alwaysOnTop.desc = 메인 창을 다른 창 위에 둡니다(보기 메뉴).
 pref.panelMode = 패널 모드

@@ -45,6 +45,12 @@ pub(crate) fn is_icon_glyph(c: char) -> bool {
     matches!(c, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{10FFFD}')
 }
 
+/// 한 칸보다 넓게 그려질 수 있는 기호인가(화살표 · 기술 기호 · 도형 · 기타 기호 · 딩벳 — 프롬프트의 ➜ ✗ 등). 대체 글꼴에서 오면
+/// 칸보다 넓어 잘리므로, 뒤가 빈 칸이면 아이콘 글리프처럼 다음 칸까지 넘쳐 그린다(Linux 실기 10-03 "➜가 잘려 ⊣처럼 보임").
+pub(crate) fn is_wide_symbol(c: char) -> bool {
+    matches!(c, '\u{2190}'..='\u{21FF}' | '\u{2300}'..='\u{23FF}' | '\u{25A0}'..='\u{27BF}')
+}
+
 /// 한 번의 펌프가 UI 스레드를 잡는 상한(ms) — 출력이 폭주해도 입력(Ctrl+C)·그리기가 끼어들 수 있게 나눠 읽는다.
 const PUMP_BUDGET_MS: u64 = 6;
 
@@ -198,7 +204,9 @@ impl TermView {
         style: &TermStyle,
     ) -> (usize, usize, i32, i32) {
         dc.select_font_sized(FontSlot::Mono, false, style.font_delta);
-        let cw = dc.text_width("M").max(1);
+        // 칸 폭 = 글자 전진 폭의 **반올림**(터미널 관례 · Linux 실기 10-03): `text_width`는 올림이라 한 글자만 재면 8.2 px가
+        // 9 px이 되어 우분투 터미널(8 px)보다 글자 사이가 벌어졌다 → 16자를 재어 평균을 반올림한다.
+        let cw = ((dc.text_width("MMMMMMMMMMMMMMMM") as f32 / 16.0).round() as i32).max(1);
         let ch = match style.cell_h {
             Some(h) => h.max(8),
             None if style.font_delta == 0.0 => row_h.max(8),
@@ -648,9 +656,9 @@ impl TermView {
                     }
                     // 폭 2칸: 전각 글자(다음 칸 = 연속 표식) · **아이콘 글리프 뒤가 빈 칸**(Windows Terminal처럼 한 칸보다 넓은
                     // Nerd Font 아이콘을 다음 칸까지 넘쳐 그린다 — 칸 안에서 자르면 아이콘이 잘리고 뒤 공백이 넓어 보인다).
-                    let wide = line
-                        .get(i + 1)
-                        .is_some_and(|n| n.ch == '\0' || (is_icon_glyph(ch) && n.ch == ' '));
+                    let wide = line.get(i + 1).is_some_and(|n| {
+                        n.ch == '\0' || ((is_icon_glyph(ch) || is_wide_symbol(ch)) && n.ch == ' ')
+                    });
                     let cx = rc.x + 2 + (i - c0) as i32 * cell_w;
                     let cclip = Rect::new(cx, y, if wide { 2 } else { 1 } * cell_w, row_h);
                     let mut buf = [0u8; 4];
@@ -913,6 +921,13 @@ mod tests {
     #[test]
     fn icon_glyph_overflows_into_following_blank_cell() {
         assert!(is_icon_glyph('\u{F07B}') && is_icon_glyph('\u{E0A0}') && !is_icon_glyph('A'));
+        // 넓은 기호(➜ ✗ ← ▶)는 뒤가 빈 칸이면 넘쳐 그린다 · 상자 그리기(─ │)와 글자는 아니다.
+        assert!(['\u{279C}', '\u{2717}', '\u{2190}', '\u{25B6}']
+            .into_iter()
+            .all(is_wide_symbol));
+        assert!(!['\u{2500}', '\u{2502}', 'A', '가', '\u{E0A0}']
+            .into_iter()
+            .any(is_wide_symbol));
         let p = Platform::fake();
         let mut t = TermView::new();
         assert!(t.start(&p, p.shell.default_shell(), Path::new("."), 40, 5));

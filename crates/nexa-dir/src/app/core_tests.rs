@@ -788,6 +788,28 @@ fn terminal_dock_with_fake_pty() {
         y: cr.y + 10,
     });
     assert_eq!(app.term_focus, Some(0));
+    // 도크 탭으로 다른 종류 → 터미널 탭 클릭 = 포커스가 바로 온다(격자를 다시 누르지 않아도 입력 가능).
+    app.startup_cmd("dock.kind:0");
+    app.route(down(lp.x + 50, lp.y + 120));
+    app.route(InputEvent::MouseUp {
+        x: lp.x + 50,
+        y: lp.y + 120,
+    });
+    assert_eq!((app.docks[0].active_kind(), app.term_focus), (0, None));
+    let (db, cr) = (app.docks[0].bounds(), app.docks[0].content_rect());
+    let ty = (db.y + cr.y) / 2;
+    for tx in (db.x + 4..db.right()).step_by(6) {
+        app.route(down(tx, ty));
+        app.route(InputEvent::MouseUp { x: tx, y: ty });
+        if app.docks[0].active_kind() == 2 {
+            break;
+        }
+    }
+    assert_eq!(
+        (app.docks[0].active_kind(), app.term_focus),
+        (2, Some(0)),
+        "터미널 탭 클릭 = 포커스"
+    );
     // 덤프 어휘 · 도크 숨김 = 낡은 포커스는 키를 삼키지 않는다.
     assert!(app.dump_of("term").unwrap().starts_with("dock0 alive"));
     let _ = app.settings.set("dock.visible", "off");
