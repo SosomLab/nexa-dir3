@@ -872,6 +872,6 @@ pref.statusInterval.desc = CPU・メモリ・ディスク I/O を読み直す間
 pref.tabStatusbar = タブのステータスバー
 pref.tabStatusbar.desc = 各パネルの下部にステータスバーを表示し、現在のフォルダーの項目数と Git ブランチを示します。
 pref.toolbarOnColor = ツールバー: オン時の色
-pref.toolbarOnColor.desc = オンのツールバーボタンの見た目です。緑 = スイッチと同じ緑で塗り、アイコンは白。アクセント = アクセント色の薄い塗り（下の濃さ設定が適用されます）。
-pref.toolbarOnColor.green = 緑（スイッチと同じ）
-pref.toolbarOnColor.accent = アクセント（薄い塗り）
+pref.toolbarOnColor.desc = オンのツールバーボタンの見た目です。緑 = 背景はアクセント色の薄い塗りのまま、枠線とアイコンの線だけスイッチと同じ緑。アクセント = 枠線とアイコンは下のアクセント設定に従います。
+pref.toolbarOnColor.green = 緑の線（スイッチと同じ）
+pref.toolbarOnColor.accent = アクセント

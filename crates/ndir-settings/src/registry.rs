@@ -249,8 +249,8 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 100 },
         "8"
     ),
-    // 켜짐 색(사용자 10-04 "토글 On = 스위치와 통일"): green = 스위치와 같은 초록 진한 채움 + 흰 아이콘(기본) ·
-    // accent = 종전(강조색 옅은 채움 — 아래 농도 설정이 이때만 쓰인다).
+    // 켜짐 색(사용자 10-04 "토글 On = 스위치와 통일" → "배경은 원복하고 선만 초록"): green = 강조색 옅은 채움 + 초록 테두리 ·
+    // 초록 아이콘 선(기본) · accent = 종전(테두리 · 아이콘도 강조색 규칙 — 테두리 농도 · 아이콘 강조색 설정이 이때만 쓰인다).
     e!(
         "toolbar.on_color",
         CAT_APPEARANCE,
@@ -1494,7 +1494,6 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
-    ("toolbar.on_fill_pct", "toolbar.on_color", Dep::Eq("accent")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
         "toolbar.on_icon_accent",

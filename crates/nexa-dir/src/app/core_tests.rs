@@ -2323,8 +2323,8 @@ fn status_segments_and_tab_status_bar() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 툴바 켜짐 색(사용자 10-04 권장안 A): 기본 = 설정 창 스위치와 같은 초록으로 켜진 버튼을 채운다 · `toolbar.on_color=accent` =
-/// 종전 강조색(초록 없음) · 농도 설정은 강조색일 때만 풀린다.
+/// 툴바 켜짐 색(사용자 10-04 "배경은 원복하고 선만 초록"): 기본 = 배경은 강조색 옅은 채움 그대로 · 테두리(선)만 스위치와 같은
+/// 초록 · `toolbar.on_color=accent` = 종전 강조색(초록 없음) · 테두리 농도 설정은 강조색일 때만 풀린다.
 #[test]
 fn toolbar_on_color_matches_switch_green() {
     let (mut app, dir) = fixture("oncolor");
@@ -2334,14 +2334,21 @@ fn toolbar_on_color_matches_switch_green() {
         let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
         app.paint_into(&mut rec, 1200, 800, 1.0);
         let tb = app.toolbar.bounds();
-        rec.round_rects
+        let inside = |r: &Rect| r.y >= tb.y && r.bottom() <= tb.bottom();
+        assert!(
+            !rec.round_rects
+                .iter()
+                .any(|(r, _, c)| *c == green && inside(r)),
+            "배경은 초록으로 채우지 않는다"
+        );
+        rec.strokes
             .iter()
-            .filter(|(r, _, c)| *c == green && r.y >= tb.y && r.bottom() <= tb.bottom())
+            .filter(|(r, _, c)| *c == green && inside(r))
             .count()
     };
-    assert!(greens(&mut app) >= 1, "켜진 보기 모드 버튼 = 초록");
+    assert!(greens(&mut app) >= 1, "켜진 보기 모드 버튼 = 초록 테두리");
     let locked = |app: &App| {
-        ndir_settings::locked_by("toolbar.on_fill_pct", &|k| {
+        ndir_settings::locked_by("toolbar.on_line_pct", &|k| {
             app.settings.get(k).unwrap_or("").to_string()
         })
         .is_some()

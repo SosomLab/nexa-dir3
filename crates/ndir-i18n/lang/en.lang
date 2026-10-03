@@ -872,6 +872,6 @@ pref.statusInterval.desc = How often CPU, memory and disk I/O are read.
 pref.tabStatusbar = Tab status bar
 pref.tabStatusbar.desc = Shows a status bar at the bottom of each panel with the current folder's item count and Git branch.
 pref.toolbarOnColor = Toolbar: toggled-on color
-pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Green = solid green like the switches with a white icon. Accent = light accent fill (the strength settings below apply).
-pref.toolbarOnColor.green = Green (same as switches)
-pref.toolbarOnColor.accent = Accent (light fill)
+pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Green = light accent background with a green outline and icon, like the switches. Accent = outline and icon follow the accent settings below.
+pref.toolbarOnColor.green = Green outline (same as switches)
+pref.toolbarOnColor.accent = Accent
