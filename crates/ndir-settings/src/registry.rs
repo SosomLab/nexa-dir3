@@ -245,7 +245,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarOnFill",
         "pref.toolbarOnFill.desc",
         Int { min: 0, max: 100 },
-        "18"
+        "26"
     ),
     e!(
         "toolbar.on_line_pct",
@@ -253,7 +253,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarOnLine",
         "pref.toolbarOnLine.desc",
         Int { min: 0, max: 100 },
-        "55"
+        "12"
     ),
     e!(
         "toolbar.state_step_pct",
@@ -261,7 +261,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarStateStep",
         "pref.toolbarStateStep.desc",
         Int { min: 0, max: 100 },
-        "12"
+        "20"
     ),
     e!(
         "toolbar.state_radius",
@@ -270,6 +270,14 @@ pub const REGISTRY: &[Entry] = &[
         "pref.toolbarStateRadius.desc",
         Int { min: 0, max: 12 },
         "4"
+    ),
+    e!(
+        "toolbar.on_icon_accent",
+        CAT_APPEARANCE,
+        "pref.toolbarOnIconAccent",
+        "pref.toolbarOnIconAccent.desc",
+        Bool,
+        "off"
     ),
     e!(
         "toolbar.item_gap",
@@ -1437,6 +1445,7 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.on_line_pct",
     "toolbar.state_step_pct",
     "toolbar.state_radius",
+    "toolbar.on_icon_accent",
     "toolbar.item_gap",
     "term.fallback_fonts",
     "launcher.item_gap",

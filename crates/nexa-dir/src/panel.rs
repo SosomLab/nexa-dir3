@@ -109,10 +109,12 @@ fn nav_buttons() -> Toolbar {
     .map(|(id, g, tip)| ToolItem::new(id, ToolIcon::Glyph(g.to_string())).tip(ndir_i18n::tr(tip)))
     .collect();
     let mut t = Toolbar::new(items);
+    // dir2 배치(panel.rs:392-399 · 1546-1548): 버튼 폭 26(= 14 + 6×2) · 4개가 틈 없이 왼쪽 끝부터 · 경로 바가 바로 붙는다.
     t.set_icon_size(14);
-    t.set_padding(4, 0);
-    t.set_item_gap(0); // dir2: 4개가 틈 없이 연속(버튼 폭 = nav_btn_w)
-                       // dir2 기준(dw.rs · chrome.rs:273-295): 아이콘 글꼴 em 13 · 칸 정중앙 · hover = 배경(sel_bg) · 글리프 색은 그대로.
+    t.set_padding(6, 0);
+    t.set_side_margin(0);
+    t.set_item_gap(0);
+    // dir2 기준(dw.rs · chrome.rs:273-295): 아이콘 글꼴 em 13 · 칸 정중앙 · hover = 배경(sel_bg) · 글리프 색은 그대로.
     t.set_icon_glyphs(crate::app::fonts::nav_glyph_delta(
         crate::app::fonts::ui_font_px(),
     ));

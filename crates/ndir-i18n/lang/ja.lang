@@ -353,6 +353,8 @@ pref.toolbarStateStep = ツールバー: ホバー/押下の段階(%)
 pref.toolbarStateStep.desc = オンのボタンをホバー・押下したときに一段階ごとに濃くなる量です。
 pref.toolbarStateRadius = ツールバー: 状態背景の角丸(px)
 pref.toolbarStateRadius.desc = ホバー/オン背景の角の半径です。
+pref.toolbarOnIconAccent = ツールバー: オン時のアイコンをアクセント色に
+pref.toolbarOnIconAccent.desc = オン（トグル済み）のボタンのアイコンをアクセント色で描きます。オフ = 通常のアイコン色のまま（アクセント色の背景上で見やすい）。
 pref.toolbarItemGap = ツールバー: アイコン間の間隔(px)
 pref.toolbarItemGap.desc = ツールバーグループ内のアイコン同士の間隔です。0 = 隙間なし。
 pref.toolbarGroupGap = ツールバー: グループ間の間隔(px)

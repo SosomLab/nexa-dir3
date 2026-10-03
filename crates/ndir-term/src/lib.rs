@@ -18,6 +18,8 @@ pub struct TermCell {
     pub reverse: bool,
     /// SGR 2 — PSReadLine 인라인 예측 등이 연한 회색으로 표시.
     pub faint: bool,
+    /// SGR 3 — 기울임(pwsh 표 머리글 `Length` 등 · dir3 추가: dir2는 무시했다).
+    pub italic: bool,
 }
 
 impl TermCell {
@@ -29,6 +31,7 @@ impl TermCell {
             bold: false,
             reverse: false,
             faint: false,
+            italic: false,
         }
     }
 }
@@ -583,6 +586,7 @@ pub struct VtScreen {
     bold: bool,
     reverse: bool,
     faint: bool,
+    italic: bool,
     state: S,
     /// CSI private 마커('?') — DECSET/DECRST(h/l) 판별(X-5 마우스 모드).
     private: bool,
@@ -612,6 +616,7 @@ impl VtScreen {
             bold: false,
             reverse: false,
             faint: false,
+            italic: false,
             state: S::Ground,
             private: false,
             mouse_mode: 0,
@@ -928,6 +933,7 @@ impl VtScreen {
             bold: self.bold,
             reverse: self.reverse,
             faint: self.faint,
+            italic: self.italic,
         }
     }
 
@@ -1092,6 +1098,7 @@ impl VtScreen {
         self.bold = false;
         self.reverse = false;
         self.faint = false;
+        self.italic = false;
         self.cx = 0;
         self.cy = 0;
         self.top = 0;
@@ -1117,7 +1124,10 @@ impl VtScreen {
                     self.bold = false;
                     self.reverse = false;
                     self.faint = false;
+                    self.italic = false;
                 }
+                3 => self.italic = true,
+                23 => self.italic = false,
                 1 => self.bold = true,
                 2 => self.faint = true,
                 22 => {
@@ -1853,5 +1863,16 @@ mod tests {
         s.resize(8, 2);
         assert_eq!((s.cols(), s.rows()), (8, 2));
         assert!(s.cursor_row() < 2 && s.cursor_col() < 8, "커서 클램프");
+    }
+
+    /// SGR 3/23 기울임 · SGR 0이 끈다.
+    #[test]
+    fn sgr_italic_on_off() {
+        let mut s = VtScreen::new(20, 3);
+        s.feed("\x1b[3mab\x1b[23mc\x1b[3md\x1b[0me");
+        let row = s.line_at(0);
+        assert!(
+            row[0].italic && row[1].italic && !row[2].italic && row[3].italic && !row[4].italic
+        );
     }
 }

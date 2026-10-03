@@ -350,6 +350,8 @@ pref.toolbarStateStep = 툴바: 올림/누름 단계(%)
 pref.toolbarStateStep.desc = 켜진 버튼에 마우스를 올리거나 눌렀을 때 한 단계마다 더 진해지는 정도입니다.
 pref.toolbarStateRadius = 툴바: 상태 배경 모서리(px)
 pref.toolbarStateRadius.desc = 마우스 올림/켜짐 배경의 모서리 반경입니다.
+pref.toolbarOnIconAccent = 툴바: 켜진 아이콘을 강조색으로
+pref.toolbarOnIconAccent.desc = 켜진(토글된) 툴바 버튼의 아이콘을 강조색으로 그립니다. 끄면 보통 아이콘 색 그대로(강조색 배경 위에서 더 또렷합니다).
 pref.toolbarItemGap = 툴바: 아이콘 사이 간격(px)
 pref.toolbarItemGap.desc = 툴바 그룹 안에서 아이콘과 아이콘 사이의 간격입니다. 0 = 붙여서 배치.
 pref.toolbarGroupGap = 툴바: 그룹 사이 간격(px)

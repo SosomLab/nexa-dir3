@@ -56,7 +56,7 @@ impl App {
         let base = self.font_px("statusbar.font_size");
         // Windows Terminal 따라가기: 글꼴 크기 pt → DIP(×96/72) → **그 고정폭 글꼴의** px. nexa-ctl의 Mono 슬롯은 숫자 높이를
         // 본문 글꼴에 맞추는 광학 보정(0.75~1.15배)을 곱하므로 그만큼 나눠 실제 크기가 Windows Terminal과 같게 한다.
-        let wt_px = self
+        let wt = self
             .wt_profile
             .as_ref()
             .zip(self.mono_font.as_ref())
@@ -64,10 +64,14 @@ impl App {
                 let target = mono.em_to_px(wt.size_pt * 96.0 / 72.0);
                 let mult =
                     (self.ui_font.digit_height(100.0) / mono.digit_height(100.0)).clamp(0.75, 1.15);
-                target / mult
+                // 줄 높이 = 그 글꼴의 어센트+디센트+줄 간격(Windows Terminal의 칸 높이 · 배율 반영) — 종전 "글자 높이 + 3"은
+                // 본문 글꼴 상자 높이 기준이라 줄 간격이 더 벌어졌다(10-03 캡처: 24.5 px ↔ WT 약 19~20 px).
+                let cell_h = (mono.line_height(target) * self.scale).ceil() as i32;
+                (target / mult, cell_h)
             });
-        let want = wt_px.unwrap_or_else(|| self.font_px("term.font_size"));
+        let want = wt.map_or_else(|| self.font_px("term.font_size"), |w| w.0);
         TermStyle {
+            cell_h: wt.map(|w| w.1),
             font_delta: if want > 0.0 && base > 0.0 {
                 want - base
             } else {

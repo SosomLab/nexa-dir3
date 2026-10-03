@@ -34,11 +34,14 @@ pub(crate) struct TermStyle {
     /// 줄 바꿈 = 가시 폭이 열 수 · 아니면 `cols` 고정 + 가로 스크롤.
     pub wrap: bool,
     pub cols: usize,
+    /// 줄(칸) 높이 지정(px) — Windows Terminal 따라가기: 그 글꼴의 줄 높이(어센트+디센트+줄 간격). `None` = 종전 규칙.
+    pub cell_h: Option<i32>,
 }
 
 impl Default for TermStyle {
     fn default() -> Self {
         TermStyle {
+            cell_h: None,
             font_delta: 0.0,
             wrap: true,
             cols: 240,
@@ -171,10 +174,10 @@ impl TermView {
     ) -> (usize, usize, i32, i32) {
         dc.select_font_sized(FontSlot::Mono, false, style.font_delta);
         let cw = dc.text_width("M").max(1);
-        let ch = if style.font_delta == 0.0 {
-            row_h.max(8)
-        } else {
-            (dc.text_height() + 3).max(8)
+        let ch = match style.cell_h {
+            Some(h) => h.max(8),
+            None if style.font_delta == 0.0 => row_h.max(8),
+            None => (dc.text_height() + 3).max(8),
         };
         let vis_cols = ((rc.w - 4) / cw).max(0) as usize;
         let cols = if style.wrap {
@@ -543,7 +546,7 @@ impl TermView {
         };
         let (ar, ag, ab) = theme.accent.rgb();
         let accent = 0xFF00_0000 | (u32::from(ar) << 16) | (u32::from(ag) << 8) | u32::from(ab);
-        let mut cur_bold = false; // grid_dims가 비굵게 Mono를 골라 뒀다
+        let mut cur_bold = (false, false); // (굵게, 기울임) — grid_dims가 보통 Mono를 골라 뒀다
         for r in 0..rows {
             let y = rc.y + 1 + r as i32 * cell_h;
             let row_h = cell_h.min(rc.bottom() - y);
@@ -555,7 +558,7 @@ impl TermView {
                 break;
             }
             let line = self.screen.line_at(abs);
-            let eff = |c: usize| -> (u32, u32, bool, bool) {
+            let eff = |c: usize| -> (u32, u32, bool, (bool, bool)) {
                 let cell = &line[c];
                 let (mut fg, mut bg) = (pal.resolve(cell.fg), pal.resolve(cell.bg));
                 if cell.reverse {
@@ -568,7 +571,7 @@ impl TermView {
                         std::mem::swap(&mut fg, &mut bg);
                     }
                 }
-                (fg, bg, cell.faint, cell.bold)
+                (fg, bg, cell.faint, (cell.bold, cell.italic))
             };
             let c_end = cols.min(line.len()).min(c0 + vis_cols);
             let mut c = c0.min(c_end);
@@ -584,7 +587,7 @@ impl TermView {
                 }
                 // SGR 1 굵게(UIC-311 · dir2 셀 속성) — 슬롯 재선택은 비싸므로(고정폭 광학 보정 실측) 바뀔 때만.
                 if cur_bold != bold {
-                    dc.select_font_sized(FontSlot::Mono, bold, style.font_delta);
+                    dc.select_font_sized_styled(FontSlot::Mono, bold.0, bold.1, style.font_delta);
                     cur_bold = bold;
                 }
                 let x = rc.x + 2 + (start - c0) as i32 * cell_w;
@@ -622,7 +625,7 @@ impl TermView {
                 }
             }
         }
-        if cur_bold {
+        if cur_bold != (false, false) {
             dc.select_font_sized(FontSlot::Mono, false, style.font_delta); // 종료 문구·뒤 그리기는 보통 굵기
         }
         // 시작 중 표시(사용자 10-03 "터미널을 누르면 반응 없이 오래 기다린다" · 1초 이상 걸리는 일은 진행 상태를 보인다):
@@ -785,6 +788,7 @@ mod tests {
             font_delta: 0.0,
             wrap: false,
             cols: 120,
+            cell_h: None,
         };
         let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
         let th = Theme::dark();
@@ -901,6 +905,35 @@ mod tests {
             widths[0],
             widths[1] * 2,
             "뒤가 공백 = 2칸 · 뒤가 글자 = 1칸: {widths:?}"
+        );
+    }
+
+    /// SGR 3 기울임 셀은 기울임 글꼴로 그린다(Windows Terminal의 `Length` 머리글처럼) · 끝나면 보통으로 복귀.
+    #[test]
+    fn italic_cells_select_italic_font() {
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        assert!(t.start(&p, p.shell.default_shell(), Path::new("."), 40, 5));
+        t.screen.feed("plain \x1b[3mLength\x1b[23m Name");
+        let mut rec = nexa_ctl::RecordCtx::with_surface(400, 120);
+        t.paint(
+            &mut rec,
+            Rect::new(0, 0, 400, 120),
+            &Theme::dark(),
+            &TermPalette::dark(),
+            false,
+            20,
+            &TermStyle::default(),
+        );
+        assert!(
+            rec.fonts.contains(&(nexa_ctl::FontSlot::Mono, false, true)),
+            "기울임 선택: {:?}",
+            rec.fonts
+        );
+        assert_eq!(
+            rec.fonts.last().map(|f| (f.1, f.2)),
+            Some((false, false)),
+            "보통으로 복귀"
         );
     }
 }

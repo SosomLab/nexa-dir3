@@ -112,6 +112,7 @@ impl App {
             | "toolbar.on_line_pct"
             | "toolbar.state_step_pct"
             | "toolbar.state_radius"
+            | "toolbar.on_icon_accent"
             | "toolbar.item_gap"
             | "toolbar.group_gap"
             | "toolbar.row_gap"
@@ -244,10 +245,11 @@ impl App {
         let pct = |k: &str, d: i32| App::setting_px(settings, k, d, 100) as f32 / 100.0;
         dock.set_soft_states(Some(nexa_ctl::controls::SoftStates {
             hover_fill: pct("toolbar.hover_fill_pct", 8),
-            on_fill: pct("toolbar.on_fill_pct", 18),
-            on_line: pct("toolbar.on_line_pct", 55),
-            step: pct("toolbar.state_step_pct", 12),
+            on_fill: pct("toolbar.on_fill_pct", 26),
+            on_line: pct("toolbar.on_line_pct", 12),
+            step: pct("toolbar.state_step_pct", 20),
             radius: App::setting_px(settings, "toolbar.state_radius", 4, 12),
+            on_icon_accent: settings.flag("toolbar.on_icon_accent"),
         }));
         dock.set_gaps(
             App::setting_px(settings, "toolbar.group_gap", 4, 32),

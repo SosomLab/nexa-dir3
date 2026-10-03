@@ -353,6 +353,8 @@ pref.toolbarStateStep = Toolbar: hover/press step (%)
 pref.toolbarStateStep.desc = How much stronger a toggled button gets on hover, and again when pressed.
 pref.toolbarStateRadius = Toolbar: state corner radius (px)
 pref.toolbarStateRadius.desc = Corner radius of the hover/toggled background.
+pref.toolbarOnIconAccent = Toolbar: accent-colored icon when toggled
+pref.toolbarOnIconAccent.desc = Draw the icon of a toggled-on toolbar button in the accent color. Off = keep the normal icon color (clearer on the accent background).
 pref.toolbarItemGap = Toolbar: gap between icons (px)
 pref.toolbarItemGap.desc = Space between icons inside a toolbar group. 0 = icons touch.
 pref.toolbarGroupGap = Toolbar: gap between groups (px)
