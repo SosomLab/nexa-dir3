@@ -2189,6 +2189,54 @@ fn column_resize_survives_pointer_leaving_window() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 언어 전환(사용자 10-03 "파일 그리드도 다국어 변경이 안 됨"): 사용자 열 레이아웃(폭을 바꾼 패널 · 세션 복원 패널)이어도
+/// 열 제목은 새 열 정의의 제목으로 바뀐다 · 폭은 그대로 · 세션 복원 패널의 기본 열이 채워져 내 PC 열 교체가 된다.
+#[test]
+fn column_titles_follow_language_even_with_user_layout() {
+    let (mut app, dir) = fixture("coltitles");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    assert!(app.panels[0].set_col_width_user(2, 123, &mut inv));
+    let renamed = |mut cols: Vec<Column>| {
+        for c in &mut cols {
+            c.title = format!("X-{}", c.title);
+        }
+        cols
+    };
+    app.panels[0].set_default_columns(
+        renamed(columns_for(600, 1.0)),
+        renamed(all_columns_for(600, 1.0)),
+        &mut inv,
+    );
+    let cols = app.panels[0].rows().columns().to_vec();
+    assert!(cols.iter().all(|c| c.title.starts_with("X-")), "{cols:?}");
+    assert_eq!(cols[2].width, 123, "폭은 그대로");
+    // 세션에서 복원한 패널(열 폭 있음 = 사용자 레이아웃): 기본 열이 채워져 내 PC로 가면 드라이브 열로 바뀐다.
+    let ps = crate::session::PanelSession {
+        tabs: vec![dir.clone()],
+        col_widths: vec![300, 60, 90, 150],
+        ..Default::default()
+    };
+    let mut p = Panel::restore(
+        &ps,
+        &dir,
+        list_opts(&app.settings),
+        panel_metrics(&app.settings, 1.0),
+        columns_for(600, 1.0),
+        all_columns_for(600, 1.0),
+    );
+    p.set_default_columns(columns_for(600, 1.0), all_columns_for(600, 1.0), &mut inv);
+    let _ = p.navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    assert!(
+        p.rows()
+            .columns()
+            .iter()
+            .any(|c| c.key == filelist::COL_TOTAL),
+        "내 PC = 드라이브 열"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

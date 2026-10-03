@@ -542,13 +542,57 @@ impl Panel {
     ) {
         self.pool_columns = pool;
         if self.user_cols {
-            return; // 사용자 레이아웃(순서 · 표시 · 폭)은 배치가 덮지 않는다
+            // 사용자 레이아웃(순서 · 표시 · 폭)은 배치가 덮지 않는다 — 단 ① 세션에서 복원한 패널은 기본 열이 비어 있어
+            // (내 PC 드라이브 열 교체 · 새 탭 상속이 멈춘다) 지금 열로 채우고 ② 제목은 지금 언어로 다시 붙인다(언어 전환).
+            if self.base_columns.is_empty() {
+                self.base_columns = self
+                    .tabs
+                    .iter()
+                    .find(|t| !t.rows.source().is_virtual_root())
+                    .map_or(cols, |t| t.rows.columns().to_vec());
+            }
+            self.retitle_columns(inv);
+            self.sync_columns_for_root(inv);
+            return;
         }
         self.base_columns = cols.clone();
         for tab in &mut self.tabs {
             tab.rows.set_columns(cols.clone(), inv);
         }
         self.sync_columns_for_root(inv);
+    }
+
+    /// 열 제목을 지금 언어로(폭 · 순서 · 표시는 그대로) — 열 정의 원형(`pool_columns`)의 제목을 key로 찾아 넣는다.
+    fn retitle_columns(&mut self, inv: &mut Invalidations) {
+        let pool = self.pool_columns.clone();
+        let title_of = |key: u32| -> Option<String> {
+            if key == crate::filelist::COL_TOTAL {
+                return Some(ndir_i18n::tr("col.total"));
+            }
+            if key == crate::filelist::COL_FREE {
+                return Some(ndir_i18n::tr("col.free"));
+            }
+            pool.iter().find(|c| c.key == key).map(|c| c.title.clone())
+        };
+        let retitle = |cols: &mut Vec<Column>| -> bool {
+            let mut changed = false;
+            for c in cols.iter_mut() {
+                if let Some(t) = title_of(c.key) {
+                    if c.title != t {
+                        c.title = t;
+                        changed = true;
+                    }
+                }
+            }
+            changed
+        };
+        retitle(&mut self.base_columns);
+        for tab in &mut self.tabs {
+            let mut cols = tab.rows.columns().to_vec();
+            if retitle(&mut cols) {
+                tab.rows.set_columns(cols, inv);
+            }
+        }
     }
 
     /// 내 PC 전용 열(이름 · 종류 · 전체 크기 · 여유 공간 — dir2 PANEL-044 · §2-5): 폭은 기본 열 것을 상속.
