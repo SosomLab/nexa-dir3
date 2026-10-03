@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 21 | 21 | 11 | 1 | 0 | 0 | 0 |
+| NEW | 22 | 22 | 12 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 35 | 139 | 0 | 0 | 0 |
-| **합계** | 4310 | 4310 | 2391 | 1006 | 766 | 0 | 0 |
+| **합계** | 4311 | 4311 | 2392 | 1006 | 766 | 0 | 0 |
 
 ## 행
 
@@ -235,6 +235,7 @@
 | NEW-019 | 대소문자 구분 정렬 툴바 토글(탭 보기 옵션 4번째 · 보기 관리 방법만큼 · 설정 = 새 탭 기본값 · 세션 bit3) | `app/menus.rs` · `order.rs` · `panel.rs` · `session.rs` · `assets/toolbar/case-sensitive.svg` | T3 · T4 | `toolbar_uses_svg_masks_and_rebuilds_on_scale` · `roundtrip_and_merge` · `order-editor.scn` | ✅ | §105 · 실기(툴바 위치 · 토글 · 툴팁 범위) 사용자 |
 | NEW-020 | 탭 여러 줄 기본(`tabs.multiline` · dir2와 같음) · 한 줄 옵션의 ◀ ▶ 자리 3택(`tabs.scroll_buttons` · DEPENDS) · 줄 수 변경 재배치 · 탭 바 배율(논리 px) | nexa-ui 129 · `app/settings.rs::apply_tab_style` · `panel.rs::{set_tab_style, take_tab_lines_changed}` · `app/paint.rs::paint_into` | T2 · T3 + 실기 | `scroll_buttons_placement_start_and_split` · `tabs_wrap_into_lines_by_default` | ✅ | §111 · 실기 필요(여러 줄 감김 · 한 줄 버튼 자리 · HiDPI 탭 여백 — Windows 배율 ≠ 1 포함) |
 | NEW-021 | 정렬 표시 = 칸 오른쪽 끝 · 순번은 다중 정렬일 때만(PANEL-077 `▲ 이름 ①`과 의도된 차이) | nexa-ui 130 `set_sort_mark_trailing` · `panel.rs` | T2 · T3 + 실기 | `trailing_sort_mark_and_shift_cycle` · `header_sort_marks_trail_and_shift_cycles` | ✅ | §112 · 실기(머리 모양 · Shift 다중 정렬) 사용자 · 도형 화살표 · gap = T-128 |
+| NEW-022 | 컬럼 이동 표식(끄는 동안 놓일 열 자리 강조 · 좌우 1 px 선 · dir2는 고스트만) | nexa-ui 131 `set_col_drag_marker` · `panel.rs` | T2 · T3 + 실기 | `col_drag_marker_follows_live_slot_and_cancel_restores` · `column_reorder_shows_marker_propagates_and_cancels` | ✅ | §114 · 실기(표식 모양) 사용자 |
 | GAP-017 · SORT-EXT | 확장자 열 정렬 = `SortKey::Ext`(dir2 PANEL-065 · 종전 dir3는 Kind로 잘못 매핑) | `filelist.rs::sort_key_of` | T3 | `header_sort_marks_trail_and_shift_cycles`(sort_key_of 단언) | ✅ | §112 · 이식 실수 회귀 수정 |
 | WINB-100 · WINC-098 · 101 · 116 · TAB-DND | 탭을 끌어 좌우 패널 사이로 이동(놓을 때 · 탭 위 = 그 앞 · 그 밖 = 끝 · 활성 이동 · Esc 취소 · 마지막/잠긴 탭 거부 · 보기 옵션 채택 규칙 = 메뉴 경로와 같음) | `app/input.rs::tab_cross_drop` · `App.tab_drop_hint` · `app/paint.rs` · `panel.rs::{tab_dragging, cancel_tab_drag, tab_drop_target, tabbar_bounds}` | T3 | `tab_drag_moves_between_panels` | ✅ | §113 · **의도된 차이**: WINC-098 끄는 중 미리 보기 이동 대신 놓을 때 이동 + 끄는 중 대상 탭 바 강조 · 2 px 삽입선(dir2에 없던 표식) · 실기(끌기 · 표식 · Esc) 사용자 |
 | GAP-018 · CLOUD-LINK | 클라우드 플레이스홀더를 링크로 보지 않기 | 예정 = ndir-vfs `is_link` · `filelist.rs` | — | — | ☐ | §113 · T-129 · Windows 실기 필요 |
@@ -332,7 +333,7 @@
 | PANEL-016~022 · 019·020 | 탭 잠금(닫기·분리 거부) · 고정(핀 그룹) · 복제 · 패널 간 분리/부착 · 세션 잠금/고정 | `nexa-dir/src/panel.rs` · `app/sessions.rs` | T2·T3 | `lock_pin_duplicate_detach_attach` · `tab_menu_and_column_sync` | ✅ | T-43 2차 · 드래그로 패널 간 이동은 잔여(메뉴로 가능) |
 | PANEL-021 · TAB-MENU | 탭 우클릭 메뉴(nexa-ctl ContextMenu · 잠금·고정·복제·새 탭·다른 패널로·닫기) | `app/input.rs` `open_tab_menu`/`tab_menu_action` | T3 | `tab_menu_and_column_sync` | ✅ | T-43 2차 |
 | PANEL(colw) · 07-18 | 열 폭 동기(`list.col_width_sync` · 켜는 순간 즉시 정렬 · 사용자 변경 전파) | `app/input.rs` `sync_col_widths_from` · `panel.rs::{col_widths_by_key, apply_col_widths_by_key}` | T3 | `tab_menu_and_column_sync` · `col_width_sync_matches_by_column_key` | ✅ | T-43 2차 · §109 T-124: 열 key별(순서·표시가 달라도) · 설정 창에서 켜도 즉시 · 같은 패널 전 탭 + 반대 패널 전 탭 · 기본 열 반영 · 끄면 독립(복원 없음 · dir2와 같음) |
-| GAP-016 · COL-REORDER | 헤더 드래그로 바꾼 열 순서 → 같은 패널 전 탭 · (동기면) 반대 패널 · 세션 · `list.col_layout` · Esc 취소(dir2 WINC-031 · PANEL-053/132 · CMD-288) | 예정 = `panel.rs::drain_actions`에서 nexa-grid `take_col_reordered` 수거 · 키 Esc → `cancel_col_drag` | — | — | ☐ | §109 · 미연결 회귀(GAP-016) · T-123과 함께 |
+| GAP-016 · COL-REORDER | 헤더 드래그로 바꾼 열 순서 → 같은 패널 전 탭 · (동기면) 반대 패널 · 세션 · Esc 취소(dir2 WINC-031 · PANEL-053/132 · CMD-288) | `panel.rs::{col_order_changed, col_order_spec, cancel_col_drag}` · `app/input.rs::sync_col_layout_from` | T3 | `column_reorder_shows_marker_propagates_and_cancels` | ✅ | §109 발견 · §114 해소(0110f82) · 내 PC 열은 전파 제외 · 실기(끌기 · 전파 · Esc) 사용자 |
 | PANEL-044 · X-17 | 내 PC 전용 열(이름·종류·전체 크기·여유 공간 · 진입/이탈 시점만 교체 · 타일 용량 바) | `filelist.rs`(COL_TOTAL/FREE · drive_space · tile_info) · `panel.rs`(sync_columns_for_root) · `main.rs`(Disk 포트 주입) | T2·T3 | `drive_columns_use_injected_space` · `my_pc_switches_columns_and_back` · `my_pc_drive_columns_from_disk_port` | ✅ | 비Windows 드라이브/마운트 열거는 T-53(ndir-vfs X-17 β) |
 | DR-5 · CI-103 · SKEL-404·425·431·432 | 플랫폼 포트 9종(Shell·Pty·ContextMenuProvider·Trash·FileClipboard·DragSource·Watcher·Opener·Disk) · `Platform::native/fake` · Unsupported 규약 | `nexa-dir/src/platform/{mod,fake,windows,macos,linux}.rs` · `docs/adr/0001` | T1·T2·T3 | `pick_shell_prefers_first_existing` · `poll_watcher_reports_changed_dirs_only` · `native_has_a_shell_and_unsupported_ports_say_so` · `fake_records_and_injects` · `platform_ports_wire_open_and_watch` | ✅ | T-50 · Pty/메뉴/휴지통/클립보드/DnD 운영 구현은 T-51~53 |
 | PANEL-042 · SHELL §1-B | 폴더 자동 갱신(폴링 감시 1 s → 그 폴더 탭 무간섭 재열람) | `app/watch.rs` · `platform::PollWatcher` | T3 | `platform_ports_wire_open_and_watch` | 🚧 | OS 통지(ReadDirectoryChangesW·FSEvents·inotify)는 T-51~53 · 감시 상한(WATCH_CAP)·펼친 폴더는 잔여 |
