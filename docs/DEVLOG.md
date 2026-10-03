@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **⚠ 시험의 실제 클립보드 접촉 수정**: `cargo test`가 사용자 텍스트 클립보드를 읽고 덮어쓰던 것을 시험 빌드 가짜로(호출부 25곳 · `test_build_never_touches_the_os_clipboard`) · T4 `edit.copy` 2곳은 아직 실제 파일 클립보드에 씀(env 가짜 예정) → [journal §87](journal/2026-10-03.md)
 - **경로 편집 메뉴 · 더블클릭**: 편집 중 경로 바 우클릭 = 텍스트 메뉴 6항목(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택 · 글자 편집만) · 더블클릭 = 전체 선택 · GAP-012 해소(dir2 win.rs:7472-7532 · 8638-8647) → [journal §86](journal/2026-10-03.md)
 - **경로 자동완성**: dir2 `pathinput.rs` 그대로 이식(expand_env · suggest_folders) · 입력마다 폴더 제안(최대 20) · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 %VAR%/$env:VAR 확장 · GAP-013 해소 · GAP-009 CI(ubuntu·macos) 통과 확인 → [journal §85](journal/2026-10-03.md)
 - **바로 가기 확장자 숨김 · Unix 폴더 심링크 진입**: .lnk/.url/.appref-ms를 이름 칸에서 숨김(확장자 열 유지 · 이름 바꾸기 때 복원 · Windows만 · GAP-006) · Unix 폴더 심볼릭 링크를 폴더로 열거해 들어갈 수 있게(GAP-009 · CI에서 시험) → [journal §84](journal/2026-10-03.md)
