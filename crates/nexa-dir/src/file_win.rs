@@ -86,6 +86,14 @@ pub(crate) fn labels() -> PickerLabels {
 }
 
 /// 라이선스 파일 필터 — `.license` 기본 · 전체.
+/// 플러그인 설치 파일 창 필터(T-63): `*.wasm` + 전체.
+pub(crate) fn plugin_filters() -> Vec<FileFilter> {
+    vec![
+        FileFilter::new(tr("plugins.filter"), &["wasm"]),
+        FileFilter::new(tr("fdlg.filter.all"), &[]),
+    ]
+}
+
 pub(crate) fn license_filters() -> Vec<FileFilter> {
     vec![
         FileFilter::new(tr("license.filter"), &["license"]),

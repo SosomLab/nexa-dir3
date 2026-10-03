@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 55차 — T-63 매니저 1차: 플러그인 설치/삭제(무재시작)
+
+- **한 일**: `app/plugins.rs` · `preview` 캐시 무효화/사용자 폴더/검증 · 설정 창 [설치…]/[삭제] · `FilePurpose::Plugin` · i18n 8키 · 시험 +1(161).
+- **지금 상태**: T-63 = A·B·매니저 1차 ✅(2단계 원격 저장소는 보류). 다음 = T-90/91(매트릭스 전수 · QA 표) · DnD(NSDragging/XDND) · SHELL-044.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §59](journal/2026-10-03.md)
+
 ## 10-03 54차 — T-52: macOS 시스템 휴지통 + 복원
 
 - **한 일**: `SystemTrash`(trashItemAtURL · moveItem 복원 · 폴백) · Cargo objc2-foundation NSFileManager/NSError · 시험 +1(macOS CI).

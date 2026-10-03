@@ -72,6 +72,8 @@ pub(crate) struct WasmPlugin {
     pub exts: Vec<String>,
     /// 능력 선언(nx_meta 4번째 줄) — `archive` = 압축 목록 공급자.
     pub caps: Vec<String>,
+    /// 로드한 파일(사용자 설치분 삭제 판정 · T-63).
+    pub path: PathBuf,
     module: Module,
     engine: Engine,
 }
@@ -303,7 +305,7 @@ fn call_buf_timeout(
 }
 
 /// `.wasm` 1개 로드 — 검증·컴파일 + 메타(nx_meta) 추출.
-fn load_one(path: &Path) -> Result<WasmPlugin, String> {
+pub(crate) fn load_one(path: &Path) -> Result<WasmPlugin, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read failed: {e}"))?;
     if bytes.len() > MODULE_CAP {
         return Err("module exceeds 8MB".into());
@@ -317,6 +319,7 @@ fn load_one(path: &Path) -> Result<WasmPlugin, String> {
         name: String::new(),
         exts: Vec::new(),
         caps: Vec::new(),
+        path: path.to_path_buf(),
         module,
         engine,
     };

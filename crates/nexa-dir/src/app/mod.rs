@@ -12,6 +12,7 @@ mod menus;
 pub(crate) mod ops;
 pub(crate) mod order;
 mod paint;
+pub(crate) mod plugins;
 mod previewcmd;
 mod sessions;
 mod settings;

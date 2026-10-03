@@ -1808,8 +1808,8 @@ fn plugins_page_checkboxes_edit_disabled() {
     app.layout_for(1200, 800, 1.0);
     app.prefs_win.set_plugins(
         vec![
-            ("markdown".into(), "Markdown (markdown) — md".into()),
-            ("archive".into(), "Archive (archive) — zip".into()),
+            ("markdown".into(), "Markdown (markdown) — md".into(), false),
+            ("archive".into(), "Archive (archive) — zip".into(), true),
         ],
         vec!["bad.wasm: oops".into()],
     );
@@ -1932,5 +1932,68 @@ fn row_menu_new_submenu_creates_from_template() {
         "다중 선택 = 없음"
     );
     app.tab_menu.close();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-63 매니저: 사용자 폴더 재지정(스레드 로컬) → 동봉 markdown.wasm 설치 = 사용자 폴더 복사 + 캐시 재구성(사용자분이 1순위 · 삭제 가능) ·
+/// 잘못된 파일 = 실패 토스트 · 삭제 = 파일 제거 + 동봉분으로 복귀(삭제 불가) · 동봉분 삭제 요청 = 안내 · 설정 창 행 갱신.
+#[test]
+fn plugin_manager_install_and_remove() {
+    let (mut app, dir) = fixture("plugmgr");
+    app.layout_for(1200, 800, 1.0);
+    let user = dir.join("uplugins");
+    preview::set_user_plugin_dir(Some(user.clone()));
+    assert_eq!(app.user_plugin_dir(), user);
+    let bundled = PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../plugins/markdown.wasm"
+    ));
+    assert!(bundled.is_file(), "{}", bundled.display());
+    let before = app.plugin_rows();
+    assert!(
+        before
+            .iter()
+            .any(|(id, _, removable)| id == "markdown" && !removable),
+        "{before:?}"
+    );
+    // 잘못된 파일.
+    let bad = dir.join("bad.wasm");
+    std::fs::write(&bad, b"not wasm").unwrap();
+    app.plugin_install(&bad);
+    assert!(!user.join("bad.wasm").exists(), "검증 실패 = 복사 안 함");
+    // 설치.
+    app.plugin_install(&bundled);
+    assert!(user.join("markdown.wasm").is_file());
+    let rows = app.plugin_rows();
+    let md = rows
+        .iter()
+        .find(|(id, _, _)| id == "markdown")
+        .expect("markdown");
+    assert!(md.2, "사용자 설치분 = 삭제 가능: {rows:?}");
+    assert_eq!(
+        rows.iter().filter(|(id, _, _)| id == "markdown").count(),
+        1,
+        "같은 id는 1개"
+    );
+    app.prefs_win.refresh(&app.settings);
+    app.prefs_win.select_category("pref.cat.plugins");
+    assert!(app
+        .prefs_win
+        .plugin_states()
+        .iter()
+        .any(|(id, _)| id == "markdown"));
+    // 삭제 → 동봉분 복귀.
+    app.plugin_remove("markdown");
+    assert!(!user.join("markdown.wasm").exists());
+    let rows = app.plugin_rows();
+    assert!(
+        rows.iter()
+            .any(|(id, _, removable)| id == "markdown" && !removable),
+        "{rows:?}"
+    );
+    // 동봉분 삭제 요청 = 안내(파일 그대로).
+    app.plugin_remove("markdown");
+    assert!(bundled.is_file());
+    preview::set_user_plugin_dir(None);
     let _ = std::fs::remove_dir_all(&dir);
 }

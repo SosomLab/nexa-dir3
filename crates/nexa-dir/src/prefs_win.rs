@@ -53,6 +53,9 @@ pub(crate) enum PrefsAction {
     EditJson,
     /// 순서/표시 편집 창(T-71 DLG-069 · `toolbar.layout` / `list.col_layout` / `ctxmenu.layout`).
     EditOrder(String),
+    /// 플러그인 설치(파일 창 `*.wasm` · T-63) · 사용자 설치 플러그인 삭제(id).
+    InstallPlugin,
+    RemovePlugin(String),
 }
 
 const PAD: f32 = 12.0;
@@ -136,12 +139,15 @@ pub(crate) struct PrefsWin {
     split_rect: Rect,
     /// 플러그인 페이지(T-63 B · dir2 EXT-129): 호스트가 준 (id, 라벨) 목록 + 로드 오류 줄 · 페이지가 보일 때만 체크박스를 만든다 ·
     /// 해제 = `plugins.disabled`(`|` 구분) — 카드 밖의 **동적 묶음**이라 레지스트리 카드와 따로 둔다.
-    plugins: Vec<(String, String)>,
+    plugins: Vec<(String, String, bool)>,
     plugin_notes: Vec<String>,
     plugin_boxes: Vec<Checkbox>,
     plugin_page: bool,
     plugin_rect: Rect,
     plugin_dirty: bool,
+    /// 매니저(T-63): [설치…] + 행별 [삭제](사용자 설치분만 활성).
+    plugin_install: Button,
+    plugin_remove: Vec<Button>,
 }
 
 fn is_color_key(k: &str) -> bool {
@@ -286,11 +292,13 @@ impl PrefsWin {
             plugin_page: false,
             plugin_rect: Rect::default(),
             plugin_dirty: false,
+            plugin_install: Button::new(tr("pref.plugins.install")),
+            plugin_remove: Vec::new(),
         }
     }
 
     /// 플러그인 목록(id, `이름 (id) — ext…`) + 로드 오류 줄(열 때 · 바뀌면 페이지 재구성).
-    pub(crate) fn set_plugins(&mut self, rows: Vec<(String, String)>, notes: Vec<String>) {
+    pub(crate) fn set_plugins(&mut self, rows: Vec<(String, String, bool)>, notes: Vec<String>) {
         if self.plugins == rows && self.plugin_notes == notes {
             return;
         }
@@ -306,7 +314,7 @@ impl PrefsWin {
         self.plugins
             .iter()
             .zip(&self.plugin_boxes)
-            .map(|((id, _), b)| (id.clone(), b.is_checked()))
+            .map(|((id, _, _), b)| (id.clone(), b.is_checked()))
             .collect()
     }
 
@@ -316,7 +324,7 @@ impl PrefsWin {
             .iter()
             .zip(&self.plugin_boxes)
             .filter(|(_, b)| !b.is_checked())
-            .map(|((id, _), _)| id.as_str())
+            .map(|((id, _, _), _)| id.as_str())
             .collect::<Vec<_>>()
             .join("|")
     }
@@ -328,7 +336,7 @@ impl PrefsWin {
             .find(|s| s.entry.key == "plugins.disabled")
             .map(|s| s.value.clone())
             .unwrap_or_default();
-        for ((id, _), b) in self.plugins.iter().zip(self.plugin_boxes.iter_mut()) {
+        for ((id, _, _), b) in self.plugins.iter().zip(self.plugin_boxes.iter_mut()) {
             b.set_checked(!disabled.split('|').any(|d| d.trim() == id));
         }
     }
@@ -537,7 +545,19 @@ impl PrefsWin {
         self.plugin_boxes = if plugin_page {
             self.plugins
                 .iter()
-                .map(|(_, label)| Checkbox::new(label.clone(), true))
+                .map(|(_, label, _)| Checkbox::new(label.clone(), true))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.plugin_remove = if plugin_page {
+            self.plugins
+                .iter()
+                .map(|(_, _, removable)| {
+                    let mut b = Button::new(tr("pref.plugins.remove"));
+                    b.set_enabled(*removable);
+                    b
+                })
                 .collect()
         } else {
             Vec::new()
@@ -606,6 +626,10 @@ impl PrefsWin {
             | self.close_btn.tick(now_ms)
             | self.json_btn.tick(now_ms);
         let now = std::time::Instant::now();
+        any |= self.plugin_install.tick(now_ms);
+        for b in &mut self.plugin_remove {
+            any |= b.tick(now_ms);
+        }
         for c in &mut self.cards {
             any |= c.reset.tick(now_ms);
             any |= c.copy.next_tick(now).is_some();
@@ -628,6 +652,8 @@ impl PrefsWin {
                 || self.search.is_animating()
                 || self.close_btn.is_animating()
                 || self.json_btn.is_animating()
+                || self.plugin_install.is_animating()
+                || self.plugin_remove.iter().any(|b| b.is_animating())
                 || self.cards.iter().any(|c| {
                     c.reset.is_animating()
                         || c.copy.next_tick(std::time::Instant::now()).is_some()
@@ -1219,6 +1245,10 @@ impl PrefsWin {
             for b in &mut self.plugin_boxes {
                 b.on_event(&ie, &mut inv);
             }
+            self.plugin_install.on_event(&ie, &mut inv);
+            for b in &mut self.plugin_remove {
+                b.on_event(&ie, &mut inv);
+            }
         }
         match ie {
             InputEvent::MouseMove { .. } => {
@@ -1335,6 +1365,14 @@ impl PrefsWin {
                 key: "plugins.disabled".into(),
                 value: self.disabled_value(),
             };
+        }
+        if self.plugin_install.take_clicked() {
+            return PrefsAction::InstallPlugin;
+        }
+        for ((id, _, _), b) in self.plugins.iter().zip(self.plugin_remove.iter_mut()) {
+            if b.take_clicked() {
+                return PrefsAction::RemovePlugin(id.clone());
+            }
         }
         for c in &mut self.cards {
             let key = c.entry.key.to_string();
@@ -1489,25 +1527,57 @@ impl PrefsWin {
                 } else {
                     0
                 };
+                let head_h = ctl_h.max(th_txt);
                 let ph = inner_pad * 2
-                    + th_txt
+                    + head_h
                     + (4.0 * s).round() as i32
                     + th_txt * plugin_lines.len() as i32
                     + rows_h;
                 let visible = y + ph > list.y && y < list.bottom();
                 self.plugin_rect = Rect::new(list.x, y, card_w, if visible { ph } else { 0 });
+                let bw = (90.0 * s).round() as i32;
+                // [설치…] = 제목 줄 오른쪽.
+                self.plugin_install.set_scale(s);
+                let hy = y + inner_pad;
+                let head_shown = visible && hy >= list.y && hy + ctl_h <= list.bottom();
+                self.plugin_install.set_bounds(
+                    if head_shown {
+                        Rect::new(list.x + card_w - inner_pad - bw, hy, bw, ctl_h)
+                    } else {
+                        Rect::default()
+                    },
+                    &mut inv,
+                );
                 let desc_n = plugin_lines.iter().filter(|(_, warn)| !warn).count() as i32;
                 let mut by = y
                     + inner_pad
-                    + th_txt
+                    + head_h
                     + (4.0 * s).round() as i32
                     + th_txt * desc_n
                     + (8.0 * s).round() as i32;
-                for b in &mut self.plugin_boxes {
+                for (b, rm) in self
+                    .plugin_boxes
+                    .iter_mut()
+                    .zip(self.plugin_remove.iter_mut())
+                {
                     b.set_scale(s);
-                    let r = Rect::new(list.x + inner_pad, by, card_w - inner_pad * 2, ctl_h);
+                    rm.set_scale(s);
+                    let r = Rect::new(
+                        list.x + inner_pad,
+                        by,
+                        card_w - inner_pad * 2 - bw - (8.0 * s).round() as i32,
+                        ctl_h,
+                    );
                     let shown = visible && by >= list.y && by + ctl_h <= list.bottom();
                     b.set_bounds(if shown { r } else { Rect::default() }, &mut inv);
+                    rm.set_bounds(
+                        if shown {
+                            Rect::new(list.x + card_w - inner_pad - bw, by, bw, ctl_h)
+                        } else {
+                            Rect::default()
+                        },
+                        &mut inv,
+                    );
                     by += ctl_h;
                 }
                 y += ph + gap;
@@ -1675,10 +1745,18 @@ impl PrefsWin {
                     dc.fill_round_rect(clip, (6.0 * s).round() as i32, th.panel_bg);
                     let tx = r.x + inner_pad;
                     let mut ty = r.y + inner_pad;
+                    let head_h = ctl_h.max(th_txt);
                     dc.select_font(FontSlot::Base, true);
-                    dc.text(tx, ty, clip, &tr("pref.cat.plugins"), th.text);
+                    dc.text(
+                        tx,
+                        ty + (head_h - th_txt) / 2,
+                        clip,
+                        &tr("pref.cat.plugins"),
+                        th.text,
+                    );
                     dc.select_font(FontSlot::Base, false);
-                    ty += th_txt + (4.0 * s).round() as i32;
+                    self.plugin_install.paint(&mut dc, th);
+                    ty += head_h + (4.0 * s).round() as i32;
                     let desc_n = plugin_lines.iter().filter(|(_, warn)| !warn).count() as i32;
                     for (l, warn) in plugin_lines.iter().filter(|(_, w)| !w) {
                         let _ = warn;
@@ -1688,9 +1766,14 @@ impl PrefsWin {
                     for b in &self.plugin_boxes {
                         b.paint(&mut dc, th);
                     }
+                    for b in &self.plugin_remove {
+                        if b.bounds().h > 0 {
+                            b.paint(&mut dc, th);
+                        }
+                    }
                     ty = r.y
                         + inner_pad
-                        + th_txt
+                        + head_h
                         + (4.0 * s).round() as i32
                         + th_txt * desc_n
                         + if self.plugin_boxes.is_empty() {

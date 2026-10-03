@@ -277,6 +277,8 @@ pub(crate) struct PluginInfo {
     pub id: String,
     pub name: String,
     pub exts: Vec<String>,
+    /// 로드한 파일(사용자 설치분 = 사용자 폴더 안 · 매니저 삭제 대상).
+    pub path: PathBuf,
 }
 
 /// 로드된 플러그인 목록.
@@ -295,6 +297,20 @@ pub(crate) fn load_notes() -> Vec<String> {
 /// 1. `<설정 폴더>/plugins`(사용자 드롭인 · 관리 설치본은 하위 폴더 — T-63)
 /// 2. 동봉 `<exe 폴더>/plugins` · macOS 번들 `<exe>/../Resources/plugins` · Linux 패키지 `<exe>/../share/nexa-dir/plugins`
 pub(crate) fn plugin_dirs() -> Vec<PathBuf> {
+    if let Some(d) = USER_DIR.with(|u| u.borrow().clone()) {
+        // 시험 재지정 — 그 폴더 + 동봉 폴더만(사용자 설정 폴더는 보지 않는다).
+        let mut v = vec![d];
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                v.push(exe_dir.join("plugins"));
+            }
+        }
+        v.push(PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../plugins"
+        )));
+        return v;
+    }
     let mut dirs: Vec<PathBuf> = Vec::new();
     let mut push = |p: PathBuf| {
         if !dirs.contains(&p) {
@@ -326,17 +342,57 @@ pub(crate) fn plugin_dirs() -> Vec<PathBuf> {
 
 type Cache = (Vec<Box<dyn PreviewProvider>>, Vec<PluginInfo>, Vec<String>);
 
-/// 현재 공급자 전체로 콜백 실행 — 미리보기 최초 사용 시 지연 구성(스레드 로컬 · 재구성은 재시작 — EXT-409는 T-63).
+thread_local! {
+    /// 공급자 캐시(스레드 로컬 · 최초 사용 시 지연 구성 · [`invalidate`]로 재구성 — EXT-409 무재시작 · T-63).
+    static PROVIDERS: std::cell::RefCell<Option<Cache>> = const { std::cell::RefCell::new(None) };
+    /// 사용자 플러그인 폴더 재지정(시험 — 실제 설정 폴더를 건드리지 않는다).
+    static USER_DIR: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// 현재 공급자 전체로 콜백 실행.
 fn with_providers<R>(
     f: impl FnOnce(&[Box<dyn PreviewProvider>], &[PluginInfo], &[String]) -> R,
 ) -> R {
-    thread_local! {
-        static PROVIDERS: std::cell::OnceCell<Cache> = const { std::cell::OnceCell::new() };
-    }
     PROVIDERS.with(|c| {
-        let (providers, infos, notes) = c.get_or_init(build_cache);
-        f(providers, infos, notes)
+        if c.borrow().is_none() {
+            *c.borrow_mut() = Some(build_cache());
+        }
+        let g = c.borrow();
+        match g.as_ref() {
+            Some((providers, infos, notes)) => f(providers, infos, notes),
+            None => f(&[], &[], &[]),
+        }
     })
+}
+
+/// 공급자 캐시를 버린다(설치/삭제 뒤 — 다음 사용 때 폴더를 다시 읽는다).
+pub(crate) fn invalidate() {
+    PROVIDERS.with(|c| *c.borrow_mut() = None);
+}
+
+/// 사용자 플러그인 폴더(설치 대상 · 탐색 경로 1순위): 시험 재지정 → `NDIR_PLUGINS_DIR` → `<설정 폴더>/plugins`.
+pub(crate) fn user_plugin_dir() -> PathBuf {
+    if let Some(d) = USER_DIR.with(|u| u.borrow().clone()) {
+        return d;
+    }
+    if let Some(d) = std::env::var_os("NDIR_PLUGINS_DIR") {
+        return PathBuf::from(d);
+    }
+    ndir_settings::config_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("plugins")
+}
+
+/// 시험용 사용자 폴더 재지정(스레드 로컬 — 병렬 시험에 새지 않는다) + 캐시 무효화.
+#[cfg(test)]
+pub(crate) fn set_user_plugin_dir(dir: Option<PathBuf>) {
+    USER_DIR.with(|u| *u.borrow_mut() = dir);
+    invalidate();
+}
+
+/// 설치 전 검증 — 모듈 로드 + `nx_meta` 호출이 되면 id.
+pub(crate) fn validate_plugin(path: &Path) -> Result<String, String> {
+    wasm::load_one(path).map(|p| p.id)
 }
 
 /// 경로 우선순위대로 로드하고 **같은 id는 앞선 것만** 채택(동봉분 위에 사용자 설치분이 얹힌다).
@@ -359,6 +415,7 @@ fn build_cache() -> Cache {
             id: p.id.clone(),
             name: p.name.clone(),
             exts: p.exts.clone(),
+            path: p.path.clone(),
         })
         .collect();
     let mut v: Vec<Box<dyn PreviewProvider>> = plugins

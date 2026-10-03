@@ -19,6 +19,8 @@ pub(crate) enum FilePurpose {
     License,
     /// 설정 창의 폴더 찾아보기 → 설정 키에 저장.
     Setting(String),
+    /// 플러그인 설치(`*.wasm` → 사용자 플러그인 폴더 · T-63).
+    Plugin,
 }
 
 impl App {
@@ -254,6 +256,11 @@ impl App {
                     .filter(|p| p.is_dir()),
                 Vec::new(),
             ),
+            Some(FilePurpose::Plugin) => (
+                PickerMode::Open,
+                Some(self.term_cwd(0)),
+                file_win::plugin_filters(),
+            ),
             _ => (
                 PickerMode::Open,
                 Some(self.term_cwd(0)),
@@ -266,6 +273,7 @@ impl App {
     pub(crate) fn file_confirmed(&mut self, path: PathBuf) {
         match self.file_purpose.take() {
             Some(FilePurpose::License) => self.license_install(&path),
+            Some(FilePurpose::Plugin) => self.plugin_install(&path),
             Some(FilePurpose::Setting(key)) => {
                 let v = path.display().to_string();
                 if self.settings.set(&key, &v).is_ok() {

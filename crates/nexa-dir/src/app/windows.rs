@@ -33,8 +33,8 @@ impl App {
             self.prefs_win
                 .set_dyn_choices("ui.lang", self.lang_choices());
             // 플러그인 페이지(T-63 B · dir2 EXT-129): 로드된 플러그인당 체크박스 + 로드 오류 줄(해제 = `plugins.disabled`).
-            self.prefs_win
-                .set_plugins(self.plugin_rows(), preview::load_notes());
+            let rows = self.plugin_rows();
+            self.prefs_win.set_plugins(rows, preview::load_notes());
             self.prefs_win.refresh(&self.settings);
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
@@ -118,19 +118,6 @@ impl App {
         }
     }
 
-    /// 설정 창 플러그인 페이지 행: (id, `이름 (id) — ext, …`) — dir2 EXT-129 표시 문자열 유지.
-    pub(crate) fn plugin_rows(&self) -> Vec<(String, String)> {
-        preview::plugin_infos()
-            .iter()
-            .map(|p| {
-                (
-                    p.id.clone(),
-                    format!("{} ({}) — {}", p.name, p.id, p.exts.join(", ")),
-                )
-            })
-            .collect()
-    }
-
     /// 언어 콤보 후보(`system` + 내장/오버레이 발견분).
     pub(crate) fn lang_choices(&self) -> Vec<(String, String)> {
         let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
@@ -179,6 +166,10 @@ impl App {
                 }
                 PrefsAction::OpenKeys => self.open_keys = true,
                 PrefsAction::EditOrder(key) => self.open_order_editor(&key),
+                PrefsAction::InstallPlugin => {
+                    self.open_file_window(app::license::FilePurpose::Plugin);
+                }
+                PrefsAction::RemovePlugin(id) => self.plugin_remove(&id),
                 PrefsAction::BrowseFolder { key, .. } => {
                     self.open_file_window(app::license::FilePurpose::Setting(key));
                 }
