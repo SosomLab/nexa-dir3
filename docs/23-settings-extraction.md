@@ -65,6 +65,9 @@
 | **터미널** | | | | | | |
 | 530 ms | `termview.rs:18` | 캐럿 깜빡임 | — | 설정 | `term.caret_blink_ms` | ☐ |
 | 30 ms | `termview.rs:20` | 출력 폴링 | — | 고급 | `term.poll_ms` | ☐ |
+| 6 ms | `termview.rs` `PUMP_BUDGET_MS`(§75) | 펌프 1회 시간 예산(넘으면 backlog → 1 ms 뒤 재개) | — | 고급(HIDDEN) | `term.pump_budget_ms` | ☐ |
+| 256 KiB | `platform/winpty.rs` `BACKLOG_CAP`(§75) | ConPTY 읽기 버퍼 상한(넘으면 읽기 쉼 = 셸 역압) | — | 고급(HIDDEN) | `term.backlog_kb` | ☐ |
+| 12종 · U+E0A0/F07B/E0B0 | `app/fonts.rs` `NERD_FAMILIES` · `NERD_PROBE`(§75) | 자동 폴백 Nerd Font 후보 · 판정 글리프 | `term.fallback_fonts`(사용자 지정 폴백 · 고급 · §75) | 상수(후보 목록) | — | ✅(사용자 지정은 키로) |
 | 3줄 · 4열 /노치 | `app/input.rs:319,326` | 세로·가로 휠 이동량 | — | 설정 | `term.wheel_lines` · `term.hwheel_cols` | ☐ |
 | 800 | `ndir-term/src/lib.rs:48` | 스크롤백 줄 상한(`MAX_SCROLLBACK`) | — | 설정 | `term.scrollback` | ☐ |
 | 80×24 · 8192 · 4096 · 65535 · 5 ms | `termview.rs:119,223` · `winpty.rs:290` · `ndir-term/src/lib.rs:807` · `unixpty.rs:151` | 초기 PTY 크기 · 읽기 버퍼 · CSI 상한 · 재시도 | — | 상수 | — | — |
