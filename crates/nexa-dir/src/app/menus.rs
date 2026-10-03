@@ -218,13 +218,14 @@ impl App {
             Some(match (block, key) {
                 ("panel", "toggle") => g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
                 ("panel", "dock") => g("view.dock", "▂", "menu.view.dock"),
-                ("panel", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
                 ("panel", "info") => g("view.info_toggle", "ⓘ", "cmd.infoToggle"),
                 ("panel", "colsync") => g("view.col_width_sync", "⇔", "menu.view.colWidthSync"),
                 ("view", "tree") => g("view.mode_tree", "├─", "menu.view.modeTree"),
                 ("view", "flat") => g("view.mode_flat", "☰", "menu.view.modeFlat"),
                 ("view", "tiles") => g("view.mode_tiles", "▦", "menu.view.modeTiles"),
-                ("refresh", _) => g("view.refresh", "⟳", "menu.view.refresh"),
+                // 새로 고침 그룹 = 새로 고침 · 항상 위(사용자 10-03 "항상 최상위 고정은 새로고침 그룹으로 · 새로고침 다음에").
+                ("refresh", "refresh") => g("view.refresh", "⟳", "menu.view.refresh"),
+                ("refresh", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
                 ("settings", _) => g("file.prefs", "⚙", "menu.file.prefs"),
                 ("show", "hidden") => g("view.hidden", "👁", "menu.view.hidden"),
                 ("show", "dot") => g("view.dot", "…", "menu.view.dot"),

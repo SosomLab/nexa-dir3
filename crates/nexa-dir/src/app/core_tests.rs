@@ -1817,9 +1817,9 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
         if platform::has_dotfile_toggle() {
-            "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1"
+            "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         } else {
-            "show:1[hidden:1,foldersfirst:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1"
+            "show:1[hidden:1,foldersfirst:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         },
         "정규화 저장"
     );

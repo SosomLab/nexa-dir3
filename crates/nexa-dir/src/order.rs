@@ -10,8 +10,8 @@ pub(crate) type OrderBlock = (String, bool, Vec<(String, bool)>);
 
 /// 도구 모음 블록(dir2 SSOT · 기본 순서 = 사용자 확정 07-19 "현재 순서를 기본값으로").
 pub(crate) const TOOLBAR_BLOCKS: OrderDefs = &[
-    ("refresh", &[]),
-    ("panel", &["toggle", "dock", "info", "colsync", "ontop"]),
+    ("refresh", &["refresh", "ontop"]),
+    ("panel", &["toggle", "dock", "info", "colsync"]),
     ("view", &["tree", "flat", "tiles"]),
     ("show", &["hidden", "dot", "foldersfirst"]),
     ("settings", &[]),
@@ -19,8 +19,8 @@ pub(crate) const TOOLBAR_BLOCKS: OrderDefs = &[
 
 /// 점 파일 토글이 없는 OS(Linux · macOS)의 도구 모음 블록 — `show`에서 `dot`만 뺀 것([`TOOLBAR_BLOCKS`]와 나머지는 같아야 한다).
 pub(crate) const TOOLBAR_BLOCKS_NO_DOT: OrderDefs = &[
-    ("refresh", &[]),
-    ("panel", &["toggle", "dock", "info", "colsync", "ontop"]),
+    ("refresh", &["refresh", "ontop"]),
+    ("panel", &["toggle", "dock", "info", "colsync"]),
     ("view", &["tree", "flat", "tiles"]),
     ("show", &["hidden", "foldersfirst"]),
     ("settings", &[]),
@@ -227,7 +227,7 @@ mod tests {
         let d = default_order(TOOLBAR_BLOCKS);
         assert_eq!(normalize(TOOLBAR_BLOCKS, &d), d, "기본 왕복");
         assert_eq!(normalize(TOOLBAR_BLOCKS, ""), d, "빈 값 = 기본");
-        let s = "view:0[tiles:1,tree:0,flat:1]|refresh:1|panel:1[colsync:1,toggle:1,dock:1,info:1,ontop:1]|show:1[dot:1,hidden:1,foldersfirst:1]|settings:1";
+        let s = "view:0[tiles:1,tree:0,flat:1]|refresh:1[ontop:1,refresh:0]|panel:1[colsync:1,toggle:1,dock:1,info:1]|show:1[dot:1,hidden:1,foldersfirst:1]|settings:1";
         assert_eq!(normalize(TOOLBAR_BLOCKS, s), s, "재배열/표시 보존");
         // 구형(vis 없음 · 누락 자식 · 미지 토큰 · 중복) → 보충 · 정의상 앞 형제 뒤에 삽입.
         let old = "panel[dock,toggle]|bogus|panel|view[flat]";
@@ -235,7 +235,16 @@ mod tests {
         assert_eq!(p[0].0, "panel");
         let keys: Vec<&str> = p[0].2.iter().map(|(k, _)| k.as_str()).collect();
         // 보충 규칙 = 정의상 **가장 가까운 앞 형제**(있는 것) 뒤: info는 dock(정의 idx 1) 뒤 → toggle이 말미로 밀린다(dir2 동일).
-        assert_eq!(keys, ["dock", "info", "colsync", "ontop", "toggle"]);
+        assert_eq!(keys, ["dock", "info", "colsync", "toggle"]);
+        // "항상 위"는 새로 고침 그룹으로 옮겼다(사용자 10-03): 옛 저장값의 panel/ontop은 버려지고 refresh 그룹에 자식이 보충된다.
+        let moved = normalize(TOOLBAR_BLOCKS, "refresh:1|panel:1[toggle:1,ontop:0]");
+        assert!(
+            moved.starts_with(
+                "refresh:1[refresh:1,ontop:1]|panel:1[toggle:1,dock:1,info:1,colsync:1]|"
+            ),
+            "{moved}"
+        );
+        assert_eq!(TOOLBAR_BLOCKS[0], ("refresh", &["refresh", "ontop"][..]));
         assert_eq!(p[1].0, "view");
         assert_eq!(p.len(), TOOLBAR_BLOCKS.len());
         assert!(p

@@ -879,7 +879,14 @@ mod tests {
             OrderSpec {
                 title: "tb".into(),
                 key: "toolbar.layout".into(),
-                defs: order::TOOLBAR_BLOCKS,
+                // 컨트롤 동작 시험용 고정 정의(실제 도구 모음 구성이 바뀌어도 행 번호가 흔들리지 않게).
+                defs: &[
+                    ("refresh", &[]),
+                    ("panel", &["toggle", "dock", "info", "colsync", "ontop"]),
+                    ("view", &["tree", "flat", "tiles"]),
+                    ("show", &["hidden", "dot", "foldersfirst"]),
+                    ("settings", &[]),
+                ],
                 with_vis: true,
                 flat: false,
                 locked: &[],

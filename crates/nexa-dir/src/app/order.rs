@@ -28,12 +28,12 @@ fn tbo_label(block: &str, item: Option<&str>) -> String {
         ("panel", Some("dock")) => tr("menu.view.dock"),
         ("panel", Some("info")) => tr("pref.tbo.infoToggle"),
         ("panel", Some("colsync")) => tr("menu.view.colWidthSync"),
-        ("panel", Some("ontop")) => tr("menu.view.alwaysOnTop"),
         ("view", None) => tr("pref.tbo.grpView"),
         ("view", Some("tree")) => tr("menu.view.modeTree"),
         ("view", Some("flat")) => tr("menu.view.modeFlat"),
         ("view", Some("tiles")) => tr("menu.view.modeTiles"),
-        ("refresh", None) => tr("menu.view.refresh"),
+        ("refresh", None | Some("refresh")) => tr("menu.view.refresh"),
+        ("refresh", Some("ontop")) => tr("menu.view.alwaysOnTop"),
         ("settings", None) => tr("menu.file.prefs")
             .trim_end_matches(['.', '…'])
             .to_string(),
