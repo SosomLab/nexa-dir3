@@ -3,7 +3,7 @@ id: prefs-open
 title: 설정 창 열기 · 검색 · 분류 · 단축키 창
 tree: file a.txt 1
 settings: ui.lang=en
-cmd: @ready:prefs.search:dotfiles
+cmd: @ready:prefs.search:show_hidden
 cmd: @after:300:prefs.dump:<out>/prefs.txt
 cmd: @after:400:prefs.cat:pref.cat.keys
 cmd: @after:500:prefs.dump:<out>/prefs2.txt
@@ -11,7 +11,7 @@ cmd: @after:600:keys.window
 cmd: @after:700:prefs.cat:pref.cat.plugins
 cmd: @after:800:prefs.dump:<out>/prefs3.txt
 cmd: @after:900:quit
-check: prefs.txt: open true keys ["list.show_dotfiles"]
+check: prefs.txt: open true keys ["list.show_hidden"]
 check: prefs2.txt: key.file.new_tab
 check: prefs3.txt: plugins [("archive-sample", true), ("markdown", true)]
 check: stderr: !panicked
