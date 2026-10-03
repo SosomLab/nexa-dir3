@@ -4,6 +4,9 @@
 
 ## 2026-10-03
 
+- **터미널 줄 바꿈 기본 끔**(`term.wrap` · 의도된 차이) → [journal §107](journal/2026-10-03.md)
+- **⚠ main CI 빨강 2차**: 테마 기본 system이 windows · macos 러너의 light 테마를 타 `layout_golden` 실패 → ac7590b 픽스처 dark 고정 · docs/18 규칙(OS 상태를 타는 기본값 = 픽스처 고정) → [journal §106](journal/2026-10-03.md)
+- **시간 설정 단위**(T-116 · 바꿀 키 없음 · 감시 시험) · **대소문자 구분 정렬 툴바 토글**(T-119 · 탭 보기 옵션 4종 · NEW-019) → [journal §105](journal/2026-10-03.md)
 - **보기 관리 방법 4택**(전체 · 좌/우 패널 · 탭 · **폴더 = 기본** · NEW-018): 같은 폴더면 좌우 공통 · 폴더별 기억(세션 `dirview` · 상한 300) · `ui.theme` 기본 system → [journal §104](journal/2026-10-03.md)
 - **스플리터 3종**(T-115 · nexa-ui 126 SplitBand · NEW-017): 패널 ↔ 도크 · 도크 좌우 추가 · 같은 두께 · hover 서서히 accent · 서로의 분할선 스냅 · 범위 불일치 수정 → [journal §103](journal/2026-10-03.md)
 - **탭별 보기 옵션**(T-111): 숨김 · Dot · 폴더 우선의 주인 = 탭 · 설정 = 새 탭 기본값 · 보호 파일 = 전역 · `list.view_scope` 기본 tab(의도된 차이) · 세션 `panel{i}.views` → [journal §102](journal/2026-10-03.md)
