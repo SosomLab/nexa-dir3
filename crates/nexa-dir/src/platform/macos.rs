@@ -1,5 +1,5 @@
 //! macOS 구현(T-50·T-51 A): 셸 탐지 · 열기/보기 · **휴지통(`~/.Trash`로 이동 · 되돌리기 정보는 T-52 `trashItem`)** · **드라이브 용량**(`statvfs`).
-//! NSPasteboard 파일 URL · NSDragging은 T-52 잔여 · 폴더 감시 = `macwatch.rs`(kqueue) · PTY = `unixpty.rs`.
+//! 파일 클립보드 = `macclip.rs`(NSPasteboard) · 폴더 감시 = `macwatch.rs`(kqueue) · PTY = `unixpty.rs` · NSDragging은 T-52 잔여.
 
 use super::*;
 

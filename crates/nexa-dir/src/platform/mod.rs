@@ -21,6 +21,8 @@ mod linux;
 #[cfg(target_os = "linux")]
 mod linuxwatch;
 #[cfg(target_os = "macos")]
+mod macclip;
+#[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
 mod macwatch;
@@ -512,7 +514,7 @@ impl Platform {
             Box::new(macos::opener()),
             Box::new(macos::NativeDisk),
             Rc::new(macos::HomeTrash::new()),
-            Box::new(Unsupported),
+            Box::new(macclip::PasteboardFiles::new()),
         );
         #[cfg(all(unix, not(target_os = "macos")))]
         let (shell, opener, disk, trash, clipboard): OsPorts = (

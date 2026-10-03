@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 52차 — T-52: macOS 파일 클립보드(NSPasteboard)
+
+- **한 일**: `macclip.rs` · Cargo objc2 기능 · `Platform::native` macOS 클립보드 교체 · 시험 +1(macOS CI).
+- **지금 상태**: 파일 클립보드 = Windows(CF_HDROP) · macOS(NSPasteboard) ✅ · Linux(uri-list) ☐. 다음 = Linux uri-list(clipboard_x11 다중 타깃) · T-90/91 · T-63 매니저.
+- **걸린 것**: 실기 캡처 비교 전(사용자) · 글꼴/전각 피드백 재확인 대기 · 릴리스 태그는 사용자 결정.
+
+→ [journal/2026-10-03 §55](journal/2026-10-03.md)
+
 ## 10-03 51차 — T-52/53: 폴더 감시 네이티브(inotify · kqueue)
 
 - **한 일**: `linuxwatch.rs` · `macwatch.rs` · `Platform::native` 분기 · OS별 시험 +2(CI 러너가 실행).
