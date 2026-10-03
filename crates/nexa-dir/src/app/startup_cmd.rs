@@ -329,6 +329,7 @@ impl App {
             "license" => self.license_dump(),
             "archive" => self.archive_win.dump(),
             "progress" => self.progress_win.dump(),
+            "bulk" => self.bulk_win.dump(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),

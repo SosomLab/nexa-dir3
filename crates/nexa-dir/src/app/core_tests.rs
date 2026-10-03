@@ -253,8 +253,8 @@ fn route_and_commands_without_window() {
     app.command("view.mode_flat");
     assert_eq!(app.panels[0].rows().view_mode(), ViewMode::Flat);
     // 모르는 명령 = 상태줄 안내 · 종료 요청.
-    app.command("edit.bulk_rename");
-    assert!(app.statusbar.left().starts_with("edit.bulk_rename:"));
+    app.command("zz.unknown");
+    assert!(app.statusbar.left().starts_with("zz.unknown:"));
     app.command("file.exit");
     assert!(app.exit_requested);
     let _ = std::fs::remove_dir_all(&dir);
@@ -1600,5 +1600,75 @@ fn transfer_progress_window_updates_and_closes() {
     while app.ops_tick() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-71 일괄 이름 변경: 선택 2건 → `edit.bulk_rename` = 창 요청 + 항목 2 · 선택 없음 = 상태줄 안내 · 파이프라인 적용 → 순차 rename + undo 1건(설명 `renamed 2`) ·
+/// 프리셋 저장(대화상자 → 파일) · 불러오기 · 이름 정리.
+#[test]
+fn bulk_rename_window_apply_undo_and_presets() {
+    let (mut app, dir) = fixture("bulk");
+    app.layout_for(1200, 800, 1.0);
+    app.open_bulk_rename();
+    assert_eq!(app.statusbar.left(), "no selection");
+    assert!(!app.open_bulk);
+    let mut inv = Invalidations::default();
+    let row_of = |app: &App, name: &str| {
+        (0..app.panels[0].rows().source().len())
+            .find(|&i| app.panels[0].rows().source().row(i).text == name)
+            .expect("row")
+    };
+    let a = row_of(&app, "a.txt");
+    let b = row_of(&app, "b.md");
+    app.panels[0]
+        .rows_mut()
+        .select_program(a, nexa_grid::SelectOp::Single, &mut inv);
+    app.panels[0]
+        .rows_mut()
+        .select_program(b, nexa_grid::SelectOp::Toggle, &mut inv);
+    app.command("edit.bulk_rename");
+    assert!(app.open_bulk && app.bulk_win.items_len() == 2);
+    app.bulk_win
+        .load_ops(&[ndir_ops::batch_rename::RenameOp::Insert {
+            scope: ndir_ops::batch_rename::Scope::Name,
+            text: "x_".into(),
+            at: ndir_ops::batch_rename::InsertAt {
+                offset: 0,
+                from_end: false,
+            },
+        }]);
+    let d = app.dump_of("bulk").unwrap();
+    assert!(
+        d.contains("a.txt → x_a.txt apply") && d.contains("b.md → x_b.md apply"),
+        "{d}"
+    );
+    let list = app.bulk_win.result();
+    assert_eq!(list.len(), 2);
+    app.bulk_action(crate::bulk_win::BulkAction::Rename(list));
+    assert!(dir.join("x_a.txt").is_file() && dir.join("x_b.md").is_file());
+    assert_eq!(app.history.undo_description(), Some("renamed 2"));
+    app.command("edit.undo");
+    assert!(
+        dir.join("a.txt").is_file() && !dir.join("x_a.txt").exists(),
+        "undo 1건"
+    );
+    // 프리셋 저장: 대화상자 → 이름 → 파일 · 불러오기 · 정리 규칙.
+    let pdir = App::presets_dir();
+    let _ = std::fs::remove_file(pdir.join("T71 test.cfg"));
+    let preset_text = ndir_ops::batch_rename::serialize_ops(&app.bulk_win.ops());
+    app.bulk_action(crate::bulk_win::BulkAction::SavePreset(preset_text));
+    assert!(
+        app.dump_of("dlg").unwrap().contains("pending"),
+        "{}",
+        app.dump_of("dlg").unwrap()
+    );
+    app.bulk_preset_saved(1, Some("T71 <test>".into()));
+    assert!(pdir.join("T71 test.cfg").is_file());
+    assert!(App::preset_names(&pdir).iter().any(|n| n == "T71 test"));
+    assert_eq!(App::sanitize_preset_name("  a/b:c  "), Some("abc".into()));
+    assert_eq!(App::sanitize_preset_name(" <> "), None);
+    app.bulk_action(crate::bulk_win::BulkAction::LoadPreset("T71 test".into()));
+    assert_eq!(app.bulk_win.ops().len(), 1);
+    let _ = std::fs::remove_file(pdir.join("T71 test.cfg"));
     let _ = std::fs::remove_dir_all(&dir);
 }

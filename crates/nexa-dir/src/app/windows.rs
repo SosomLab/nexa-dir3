@@ -4,6 +4,7 @@
 //! `all_aux_windows` + 틱(`aux_tick`) + 기하 기억(`persist_window_sizes`/`apply_window_sizes`).
 
 use crate::archive_win::ArcAction;
+use crate::bulk_win::BulkAction;
 use crate::check_win::CheckAction;
 use crate::dlg_win::DlgAction;
 use crate::file_win::FileWinAction;
@@ -58,6 +59,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.preview_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_bulk) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.bulk_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_progress) && self.window.is_some() {
             let over = self.main_rect();
@@ -244,6 +251,18 @@ impl App {
             }
             return true;
         }
+        if self.bulk_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            match self.bulk_win.handle(event) {
+                BulkAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.bulk_win.paint(&font, &self.theme, ui_px);
+                }
+                BulkAction::None => {}
+                other => self.bulk_action(other),
+            }
+            return true;
+        }
         if self.progress_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             if self.progress_win.handle(event) == ProgAction::Paint {
@@ -366,6 +385,9 @@ impl App {
         if self.archive_win.is_open() {
             self.archive_win.redraw();
         }
+        if self.bulk_win.is_open() {
+            self.bulk_win.redraw();
+        }
         if self.file_win.is_open() {
             self.file_win.redraw();
         }
@@ -402,6 +424,9 @@ impl App {
         if self.progress_win.tick(now_ms) {
             self.progress_win.redraw();
         }
+        if self.bulk_win.tick(now_ms) {
+            self.bulk_win.redraw();
+        }
         if self.file_win.tick(now_ms) {
             self.file_win.redraw();
         }
@@ -414,6 +439,7 @@ impl App {
             || self.archive_win.animating()
             || self.preview_win.animating()
             || self.progress_win.animating()
+            || self.bulk_win.animating()
             || self.file_win.animating()
     }
 

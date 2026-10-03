@@ -348,6 +348,7 @@ impl App {
             "file.new_folder" => self.create_new(true),
             "file.new_file" => self.create_new(false),
             "edit.rename" => self.begin_rename(),
+            "edit.bulk_rename" => self.open_bulk_rename(),
             "file.prefs" => self.open_prefs = true,
             "keys.window" => self.open_keys = true,
             "file.new_tab" => self.panels[a].new_tab(&mut inv),

@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T-71 일괄 이름 변경 창**: `bulk_win.rs`(카드 스택 6종 · 실시간 미리보기 · 충돌 · 적용 토글 · 프리셋 콤보) · `app/bulk.rs`(적용 + undo 1건 · 프리셋 파일) · 시험 +2(148) → [journal §48](journal/2026-10-03.md)
 - **T-05 `check-all.sh`**: 형제(nexa-ui · nexa-license) → dir3 게이트 전체(fmt·clippy·test·check-3os·smoke·selfcheck·시나리오) + `summary.txt` · `--quick` · `.ps1` 래퍼 → [journal §47](journal/2026-10-03.md)
 - **T-70 전송 진행 창**: nexa-ui 111차 `SegProgress`(세그먼트 바) · `progress_win.rs`(취소 · 닫기 카운트다운) · 워커 항목별 진행 공유 · 시험 +2(146) → [journal §46](journal/2026-10-03.md)
 - **사용자 피드백 — 글자 크기·전각 현상**: nexa-ui 110차 `Font::em_to_px` + `app/fonts.rs`(설정 em → 높이 px · 슬롯별 prefs · 고정폭 글꼴 `FontSet.mono`) → [journal §45](journal/2026-10-03.md)

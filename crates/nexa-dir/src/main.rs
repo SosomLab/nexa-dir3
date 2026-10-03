@@ -8,6 +8,7 @@
 
 mod app;
 mod archive_win;
+mod bulk_win;
 mod check_win;
 mod cli;
 #[allow(dead_code)] // M6 파일 작업·M5 터미널 복사에서 소비(지금은 호스트 껍질만 들여놓음).
@@ -53,6 +54,7 @@ mod wingeom;
 mod winhost;
 
 use archive_win::ArchiveWin;
+use bulk_win::BulkWin;
 use check_win::CheckWin;
 use dlg_win::DlgWin;
 use file_win::FileWin;
@@ -183,6 +185,10 @@ struct App {
     /// 전송 진행 창(T-70 · `transfer.close_ms > 0`일 때만) + 열기 깃발.
     progress_win: ProgressWin,
     open_progress: bool,
+    /// 일괄 이름 변경 창(T-71) + 열기 깃발 + 저장 대기 프리셋 본문.
+    bulk_win: BulkWin,
+    open_bulk: bool,
+    bulk_pending_preset: Option<String>,
     /// 압축 미리보기 그리드 창(T-62 C · F3/↗ 결과가 Archive면 텍스트 창 대신) + 열기 깃발.
     archive_win: ArchiveWin,
     open_archive: bool,
@@ -403,6 +409,9 @@ impl App {
             open_preview: false,
             progress_win: ProgressWin::new(),
             open_progress: false,
+            bulk_win: BulkWin::new(),
+            open_bulk: false,
+            bulk_pending_preset: None,
             archive_win: ArchiveWin::new(),
             open_archive: false,
             licensing,

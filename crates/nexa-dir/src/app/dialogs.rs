@@ -16,6 +16,8 @@ pub(crate) enum DlgReply {
     ArchivePassword(PathBuf),
     /// About(T-80 LIC-158 ⓑ) — 2 = 라이선스 창.
     About,
+    /// 일괄 이름 변경 프리셋 저장(이름 입력 · T-71).
+    BulkPreset,
 }
 
 impl App {
@@ -90,6 +92,7 @@ impl App {
                     self.open_license = true;
                 }
             }
+            DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
             DlgReply::Conflict(tx) => {
                 let choice = match id {
                     1 => ConflictChoice::Overwrite,

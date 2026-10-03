@@ -2,6 +2,14 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 45차 — T-71: 일괄 이름 변경 창(카드 파이프라인 · 미리보기 · 프리셋)
+
+- **한 일**: `bulk_win.rs` · `app/bulk.rs` · `edit.bulk_rename` · 시험 +2(148).
+- **지금 상태**: T-71 잔여 = 순서 편집기(툴바/메뉴 DLG-069~073) · 프리셋 관리 팝업 · 날짜 TZ. 다음 = T-82 패키징 · ShellNew · T-63 B · T-52/53.
+- **걸린 것**: 실기 캡처 비교 전(사용자).
+
+→ [journal/2026-10-03 §48](journal/2026-10-03.md)
+
 ## 10-03 44차 — T-05: `check-all.sh` 전체 게이트
 
 - **한 일**: `scripts/check-all.{sh,ps1}` · summary.txt · 문서 규약 갱신.
