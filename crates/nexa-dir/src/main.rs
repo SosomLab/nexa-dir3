@@ -294,6 +294,13 @@ struct App {
     load_next: Instant,
     /// 떠 있는 상태줄 상세 팝업의 칸 id(조회 주기마다 내용을 갱신한다).
     status_popup: Option<String>,
+    /// Git 상태(탭 상태바 · NEW-005 2차): 저장소 루트 → 요약 · 조회 중인 루트 · 워커 결과 통로.
+    git_detail: std::collections::HashMap<PathBuf, dirinfo::GitDetail>,
+    git_busy: std::collections::HashSet<PathBuf>,
+    /// `git` 프로세스를 돌려 상태를 조회하는가(시험에서는 끈다 — 실제 프로세스를 띄우지 않는다).
+    git_enabled: bool,
+    git_tx: std::sync::mpsc::Sender<(PathBuf, Option<dirinfo::GitDetail>)>,
+    git_rx: std::sync::mpsc::Receiver<(PathBuf, Option<dirinfo::GitDetail>)>,
     /// 하단 도크 2(dir2 X-6: 패널 밖 **전폭 밴드** · 듀얼 = 좌/우 · 단일 정보 = 좌 하나 전폭 · 내용 = 정보/미리보기/터미널).
     docks: [InfoDock; 2],
     /// 도크 미리보기의 마지막 산출(공급자 id · 줄) — `preview.dump`/`assert.preview:`(T-62).
@@ -467,6 +474,7 @@ impl App {
         }
         let wt_profile = App::load_wt_profile(&settings);
         let mono_font = App::load_mono_font(&settings, wt_profile.as_ref());
+        let (git_tx, git_rx) = std::sync::mpsc::channel();
         let mut app = App {
             window: None,
             surface: None,
@@ -574,6 +582,11 @@ impl App {
             load: None,
             load_next: Instant::now(),
             status_popup: None,
+            git_detail: std::collections::HashMap::new(),
+            git_busy: std::collections::HashSet::new(),
+            git_enabled: !cfg!(test),
+            git_tx,
+            git_rx,
             docks: [
                 InfoDock::new(tr("dock.info"), 20, 6),
                 InfoDock::new(tr("dock.info"), 20, 6),
@@ -646,6 +659,7 @@ impl App {
         for p in &mut self.panels {
             p.sync_status(&mut inv);
         }
+        self.git_sync(&mut inv);
         self.sync_dir_views();
         self.sync_view_checks();
         self.update_docks();

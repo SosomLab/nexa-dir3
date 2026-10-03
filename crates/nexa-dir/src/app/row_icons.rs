@@ -214,6 +214,15 @@ fn theme_icon(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage
     })
 }
 
+/// 행 아이콘 캐시가 쥔 픽셀 바이트(메모리 창 · 가로 × 세로 × 4 — 셸/테마/상태 아이콘 합).
+pub(crate) fn cache_bytes() -> u64 {
+    let px = |img: &nexa_gfx::IconImage| u64::from(img.w) * u64::from(img.h) * 4;
+    let shell: u64 = CACHE.with(|c| c.borrow().1.values().map(|i| px(i)).sum());
+    let theme: u64 = THEME_IMAGES.with(|c| c.borrow().values().flatten().map(|i| px(i)).sum());
+    let status: u64 = STATUS_IMAGES.with(|c| c.borrow().values().flatten().map(|i| px(i)).sum());
+    shell + theme + status
+}
+
 /// 상태 아이콘 캐시: (이름, px) → 색 입힌 이미지(실패도 기억).
 type StatusImages = HashMap<(String, i32), Option<Rc<nexa_gfx::IconImage>>>;
 

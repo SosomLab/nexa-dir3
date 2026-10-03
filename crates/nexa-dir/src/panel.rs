@@ -99,6 +99,8 @@ pub(crate) struct Panel {
     git: Option<(PathBuf, Option<(PathBuf, String)>)>,
     /// 탭 상태바 칸 클릭 `(칸 id, 우클릭인가)` — 호스트가 상세 메뉴를 연다.
     pending_status: Option<(String, bool)>,
+    /// Git 칸에 덧붙이는 요약(`↑1 ●3` — 호스트가 `git status` 결과로 넣는다 · 빈 글 = 없음).
+    git_extra: String,
 }
 
 /// 탭 상태바 높이(논리 px · 창 상태줄과 같다).
@@ -229,6 +231,7 @@ impl Panel {
             status_on: false,
             git: None,
             pending_status: None,
+            git_extra: String::new(),
         };
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
@@ -769,10 +772,12 @@ impl Panel {
             ndir_i18n::trf("status.itemCount", &[&src.len().to_string()]),
         )];
         if let Some((_, Some((_, branch)))) = &self.git {
-            segs.push(nexa_ctl::StatusSeg::new(
-                SEG_GIT,
-                ndir_i18n::trf("tabstatus.git", &[branch]),
-            ));
+            let mut text = ndir_i18n::trf("tabstatus.git", &[branch]);
+            if !self.git_extra.is_empty() {
+                text.push(' ');
+                text.push_str(&self.git_extra);
+            }
+            segs.push(nexa_ctl::StatusSeg::new(SEG_GIT, text));
         }
         let sel = src.selection_count();
         let left = if sel > 0 {
@@ -787,6 +792,11 @@ impl Panel {
     /// 탭 상태바의 Git 정보 `(저장소 루트, 브랜치)`(활성 탭 · 저장소 밖 = `None`).
     pub(crate) fn git_info(&self) -> Option<(PathBuf, String)> {
         self.git.as_ref().and_then(|(_, g)| g.clone())
+    }
+
+    /// Git 칸 요약(앞섬 · 뒤짐 · 변경 수)을 넣는다 — 다음 [`Self::sync_status`]가 칸에 반영한다.
+    pub(crate) fn set_git_extra(&mut self, extra: String) {
+        self.git_extra = extra;
     }
 
     /// Git 캐시를 버린다(새로 고침 · 수동 갱신) — 다음 [`Self::sync_status`]가 다시 읽는다.

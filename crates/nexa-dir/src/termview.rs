@@ -162,6 +162,13 @@ impl Default for TermView {
 }
 
 impl TermView {
+    /// 화면 버퍼(스크롤백 + 보이는 화면)가 쥔 바이트 추정(메모리 창) — 줄 수 × 열 수 × 셀 크기.
+    pub(crate) fn mem_estimate(&self) -> u64 {
+        (self.screen.line_count() as u64)
+            * (self.screen.cols() as u64)
+            * std::mem::size_of::<ndir_term::TermCell>() as u64
+    }
+
     pub(crate) fn new() -> Self {
         TermView {
             wheel: nexa_ctl::WheelAccum::default(),

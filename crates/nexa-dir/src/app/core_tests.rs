@@ -2341,7 +2341,12 @@ fn status_segments_and_tab_status_bar() {
     assert!(app.open_memory, "메모리 창");
     let view = app.mem_view();
     assert!(view.app.is_some_and(|v| v > 0) && view.system.is_some());
-    assert_eq!(view.rows.len(), 3, "목록 · 창 표면 · 기타");
+    assert_eq!(
+        view.rows.len(),
+        5,
+        "목록 · 아이콘 캐시 · 터미널 · 창 표면 · 기타"
+    );
+    assert_eq!(view.rows[3].1, 1200 * 800 * 4, "창 표면 = 가로 × 세로 × 4");
     assert_eq!(
         view.rows[0].1,
         app.panels.iter().map(Panel::mem_estimate).sum::<u64>()
@@ -2394,6 +2399,31 @@ fn status_segments_and_tab_status_bar() {
     let sum = app.panels[0].status_summary();
     assert!(sum[0].starts_with("folder="), "{sum:?}");
     assert_eq!(sum[1], "git=git: feat/status");
+    // 저장소 상태(워커 결과가 도착한 것처럼 넣는다 — 시험은 git 프로세스를 띄우지 않는다): 칸에 요약이 붙는다.
+    assert!(!app.git_enabled && app.git_busy.is_empty());
+    app.git_tx
+        .send((
+            dir.clone(),
+            Some(dirinfo::GitDetail {
+                upstream: Some("origin/feat/status".into()),
+                ahead: 2,
+                staged: 1,
+                untracked: 3,
+                ..Default::default()
+            }),
+        ))
+        .unwrap();
+    assert_eq!(
+        app.git_tick(Instant::now()),
+        None,
+        "조회 중인 것이 없으면 깨우지 않는다"
+    );
+    assert_eq!(
+        app.panels[0].status_summary()[1],
+        "git=git: feat/status ↑2 ●4"
+    );
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
     // Git 칸 클릭 = 상세 메뉴(브랜치 복사 · 새로 고침).
     let r = app.panels[0].status_seg_rect("git").expect("git seg");
     let (x, y) = (r.x + 4, r.y + 4);

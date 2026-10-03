@@ -323,6 +323,14 @@ impl App {
             rows: crate::mem_win::rows_with_other(
                 vec![
                     (tr("mem.cat.lists"), lists),
+                    (
+                        tr("mem.cat.icons"),
+                        app::row_icons::cache_bytes() + app::launcher_icons::cache_bytes(),
+                    ),
+                    (
+                        tr("mem.cat.terminal"),
+                        self.terms.iter().map(TermView::mem_estimate).sum(),
+                    ),
                     (tr("mem.cat.surfaces"), surfaces),
                 ],
                 app,
@@ -356,12 +364,72 @@ impl App {
         self.reopen_ctx(items);
     }
 
+    /// Git 상태를 패널에 맞춘다(탭 상태바 길목): 패널이 보는 저장소의 요약이 있으면 칸에 덧붙이고 · 없고 조회 중도 아니면
+    /// 워커를 돌린다(`git status --porcelain=v2 --branch` — UI는 기다리지 않는다 · git이 없으면 브랜치 이름만 남는다).
+    pub(crate) fn git_sync(&mut self, inv: &mut Invalidations) {
+        for i in 0..self.panels.len() {
+            let Some((repo, _)) = self.panels[i].git_info() else {
+                self.panels[i].set_git_extra(String::new());
+                continue;
+            };
+            let extra = self
+                .git_detail
+                .get(&repo)
+                .map(dirinfo::GitDetail::short)
+                .unwrap_or_default();
+            self.panels[i].set_git_extra(extra);
+            self.panels[i].sync_status(inv);
+            if !self.git_detail.contains_key(&repo) && self.git_enabled {
+                self.git_request(repo);
+            }
+        }
+    }
+
+    /// 저장소 상태 조회를 워커에 맡긴다(같은 저장소가 조회 중이면 건너뜀).
+    pub(crate) fn git_request(&mut self, repo: PathBuf) {
+        if !self.git_busy.insert(repo.clone()) {
+            return;
+        }
+        let tx = self.git_tx.clone();
+        std::thread::spawn(move || {
+            let out = platform::quiet_command("git")
+                .arg("-C")
+                .arg(&repo)
+                .args(["status", "--porcelain=v2", "--branch"])
+                .stdin(std::process::Stdio::null())
+                .output();
+            let detail = out
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| dirinfo::parse_porcelain_v2(&String::from_utf8_lossy(&o.stdout)));
+            let _ = tx.send((repo, detail));
+        });
+    }
+
+    /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다.
+    pub(crate) fn git_tick(&mut self, now: Instant) -> Option<Instant> {
+        let mut got = false;
+        while let Ok((repo, detail)) = self.git_rx.try_recv() {
+            self.git_busy.remove(&repo);
+            // 실패(git 없음 · 저장소 아님)도 기억한다 — 같은 저장소를 되풀이해 조회하지 않게(빈 요약).
+            self.git_detail.insert(repo, detail.unwrap_or_default());
+            got = true;
+        }
+        if got {
+            let mut inv = Invalidations::default();
+            self.git_sync(&mut inv);
+            self.redraw();
+        }
+        (!self.git_busy.is_empty()).then(|| now + Duration::from_millis(150))
+    }
+
     /// 탭 상태바 칸 클릭 → 상세 메뉴(좌 · 우클릭 같은 메뉴 — 1차): 폴더 = 항목 수 상세 · Git = 브랜치 · 복사 · 새로 고침.
     pub(crate) fn open_tab_status_menu(&mut self, panel: usize, seg: &str) {
         let p = &self.panels[panel];
         let root = p.root_path();
         let info = |text: String| CtxItem::maybe("aux.info", text, false);
         let mut items: Vec<CtxItem> = Vec::new();
+        let mut git_repo: Option<PathBuf> = None;
         match seg {
             panel::SEG_GIT => {
                 let Some((repo, branch)) = p.git_info() else {
@@ -372,7 +440,30 @@ impl App {
                     "tabstatus.git.repo",
                     &[&repo.display().to_string()],
                 )));
+                if let Some(d) = self.git_detail.get(&repo) {
+                    if let Some(up) = &d.upstream {
+                        items.push(info(trf(
+                            "tabstatus.git.upstream",
+                            &[up, &d.ahead.to_string(), &d.behind.to_string()],
+                        )));
+                    }
+                    items.push(info(if d.is_clean() {
+                        tr("tabstatus.git.clean")
+                    } else {
+                        trf(
+                            "tabstatus.git.changes",
+                            &[
+                                &d.staged.to_string(),
+                                &d.changed.to_string(),
+                                &d.untracked.to_string(),
+                                &d.conflicts.to_string(),
+                            ],
+                        )
+                    }));
+                }
                 items.push(CtxItem::Separator);
+                // 메뉴를 열 때마다 최신 상태를 다시 조회한다(도착하면 칸이 갱신된다 · 메뉴는 지금 아는 값으로).
+                git_repo = Some(repo);
                 items.push(CtxItem::item("aux.git.copy", tr("tabstatus.git.copy")));
                 items.push(CtxItem::item("aux.refresh", tr("menu.view.refresh")));
             }
@@ -391,6 +482,9 @@ impl App {
             }
         }
         self.open_ctx(CtxKind::Aux(panel), items);
+        if let Some(repo) = git_repo.filter(|_| self.git_enabled) {
+            self.git_request(repo);
+        }
     }
 
     /// 툴바 우클릭 메뉴(dir2 `show_bar_popup`): 도구 모음 순서… · 설정….
@@ -520,6 +614,10 @@ impl App {
             }
             "aux.sb.edit" => self.open_order_editor("statusbar.layout"),
             "aux.refresh" => {
+                // 저장소 상태도 다시 조회한다.
+                if let Some((repo, _)) = self.panels[panel].git_info() {
+                    self.git_detail.remove(&repo);
+                }
                 self.panels[panel].invalidate_dir_info();
                 if panel != self.active {
                     self.set_active(panel);

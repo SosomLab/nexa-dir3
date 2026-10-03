@@ -57,6 +57,19 @@ pub(crate) fn os_test_guard() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 창을 띄우지 않는 자식 프로세스(Windows = 콘솔 창 없음 `CREATE_NO_WINDOW` · 그 밖 = 그대로) — `git` 같은 명령줄 도구를
+/// 조용히 돌릴 때(탭 상태바 Git 상태 · NEW-005).
+pub(crate) fn quiet_command(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
 /// 시스템 휴지통 호출 한 건의 판정(macOS `trashItemAtURL` — 순수 · T-135).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]

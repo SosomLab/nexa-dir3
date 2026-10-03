@@ -50,6 +50,77 @@ pub(crate) fn git_branch(dir: &Path) -> Option<(PathBuf, String)> {
     None
 }
 
+/// 저장소 상태 요약(`git status --porcelain=v2 --branch` — NEW-005 2차).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct GitDetail {
+    /// 업스트림(`origin/main` · 없으면 `None`).
+    pub upstream: Option<String>,
+    /// 업스트림보다 앞선 · 뒤진 커밋 수.
+    pub ahead: u32,
+    pub behind: u32,
+    /// 스테이지된 · 스테이지 안 된 변경 · 미추적 · 충돌 항목 수.
+    pub staged: u32,
+    pub changed: u32,
+    pub untracked: u32,
+    pub conflicts: u32,
+}
+
+impl GitDetail {
+    /// 작업 트리가 깨끗한가.
+    pub(crate) fn is_clean(&self) -> bool {
+        self.staged + self.changed + self.untracked + self.conflicts == 0
+    }
+
+    /// 탭 상태바 칸에 덧붙이는 짧은 요약(없으면 빈 글): `↑1 ↓2 ●3`(앞섬 · 뒤짐 · 바뀐 항목 수 합).
+    pub(crate) fn short(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if self.ahead > 0 {
+            parts.push(format!("↑{}", self.ahead));
+        }
+        if self.behind > 0 {
+            parts.push(format!("↓{}", self.behind));
+        }
+        let dirty = self.staged + self.changed + self.untracked + self.conflicts;
+        if dirty > 0 {
+            parts.push(format!("●{dirty}"));
+        }
+        parts.join(" ")
+    }
+}
+
+/// `git status --porcelain=v2 --branch` 출력 → 요약(순수). 머리 줄 = `# branch.upstream <이름>` · `# branch.ab +A -B` ·
+/// 항목 줄 = `1`/`2`(XY 두 글자 — X = 스테이지 · Y = 작업 트리 · `.` = 변화 없음) · `u`(충돌) · `?`(미추적) · `!`(무시)는 세지 않는다.
+pub(crate) fn parse_porcelain_v2(text: &str) -> GitDetail {
+    let mut d = GitDetail::default();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("# branch.upstream ") {
+            d.upstream = Some(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
+            for tok in rest.split_whitespace() {
+                if let Some(n) = tok.strip_prefix('+') {
+                    d.ahead = n.parse().unwrap_or(0);
+                } else if let Some(n) = tok.strip_prefix('-') {
+                    d.behind = n.parse().unwrap_or(0);
+                }
+            }
+        } else if line.starts_with("1 ") || line.starts_with("2 ") {
+            let mut xy = line[2..].chars();
+            let (x, y) = (xy.next().unwrap_or('.'), xy.next().unwrap_or('.'));
+            if x != '.' {
+                d.staged += 1;
+            }
+            if y != '.' {
+                d.changed += 1;
+            }
+        } else if line.starts_with("u ") {
+            d.conflicts += 1;
+        } else if line.starts_with("? ") {
+            d.untracked += 1;
+        }
+    }
+    d
+}
+
 /// 폴더 바로 아래 항목 수 `(폴더, 파일)` — 숨김 · 점 파일 포함 **전부**(상세 표시용 · 읽기 실패 = `None`).
 pub(crate) fn count_entries(dir: &Path) -> Option<(usize, usize)> {
     let mut n = (0, 0);
@@ -93,6 +164,27 @@ mod tests {
             Some("../.git/worktrees/w1")
         );
         assert_eq!(parse_gitdir_file("nope"), None);
+    }
+
+    /// porcelain v2 고정물: 업스트림 · 앞섬/뒤짐 · 스테이지/변경/미추적/충돌 수 · 짧은 요약.
+    #[test]
+    fn porcelain_v2_summary() {
+        let text = "# branch.oid 1234abcd\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -1\n\
+1 M. N... 100644 100644 100644 aaa bbb staged.rs\n1 .M N... 100644 100644 100644 aaa bbb changed.rs\n\
+1 MM N... 100644 100644 100644 aaa bbb both.rs\n2 R. N... 100644 100644 100644 aaa bbb R100 new.rs\told.rs\n\
+u UU N... 100644 100644 100644 100644 a b c conflict.rs\n? untracked.txt\n? other.txt\n! ignored.log\n";
+        let d = parse_porcelain_v2(text);
+        assert_eq!(d.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((d.ahead, d.behind), (2, 1));
+        assert_eq!(
+            (d.staged, d.changed, d.untracked, d.conflicts),
+            (3, 2, 2, 1)
+        );
+        assert!(!d.is_clean());
+        assert_eq!(d.short(), "↑2 ↓1 ●8");
+        let clean = parse_porcelain_v2("# branch.oid x\n# branch.head main\n");
+        assert!(clean.is_clean() && clean.upstream.is_none());
+        assert_eq!(clean.short(), "");
     }
 
     /// 실제 폴더: 하위 폴더에서 위로 올라가 저장소를 찾는다 · worktree식 `.git` 파일 · 저장소 밖 = None · 항목 수.

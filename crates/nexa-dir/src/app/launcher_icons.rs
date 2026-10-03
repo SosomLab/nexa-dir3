@@ -24,6 +24,17 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
+/// 빠른 실행 아이콘 캐시가 쥔 픽셀 바이트(메모리 창).
+pub(crate) fn cache_bytes() -> u64 {
+    APP_ICONS.with(|c| {
+        c.borrow()
+            .values()
+            .flatten()
+            .map(|i| u64::from(i.w) * u64::from(i.h) * 4)
+            .sum()
+    })
+}
+
 /// 아이콘 테마의 앱 아이콘(Linux — `nexa_fs::icontheme::app_icon_file`) · 파일마다 한 번 디코드.
 fn theme_app_icon(exe: &std::path::Path, px: u32) -> Option<Rc<nexa_gfx::IconImage>> {
     let file = nexa_fs::icontheme::app_icon_file(exe, px)?;

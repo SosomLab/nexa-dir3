@@ -166,6 +166,9 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.status_load_tick(now) {
             next = next.min(t);
         }
+        if let Some(t) = self.git_tick(now) {
+            next = next.min(t);
+        }
         if let Some(t) = self.ctx_shell_tick(now) {
             next = next.min(t);
         }
