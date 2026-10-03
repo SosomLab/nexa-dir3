@@ -48,6 +48,27 @@ pub(crate) const FALLBACK_GLYPHS: [char; 6] = [
     '\u{2302}', '\u{2190}', '\u{2192}', '\u{2191}', '\u{203A}', '\u{2304}',
 ];
 
+/// 아이콘 글꼴이 없을 때(macOS · Linux)의 쉐브론 크기 증분(목록 글꼴 px 대비): 유니코드 쉐브론(› ⌄)은 글자 상자에 비해 그림이
+/// 작아 본문보다 **키워야** 보인다(종전 −4 = Linux 실기 10-03 "쉐브론이 깨진다" — 점처럼 작게 그려졌다).
+pub(crate) const FALLBACK_CHEVRON_DELTA: f32 = 3.0;
+
+/// 대체 쉐브론 후보(접힘, 펼침) — 앞에서부터 **둘 다 그릴 수 있는** 첫 쌍(글꼴마다 가진 글자가 다르다 · 마지막 = ASCII라 항상 있다).
+const FALLBACK_CHEVRONS: [(&str, &str); 4] = [
+    ("\u{203A}", "\u{2304}"), // › ⌄
+    ("\u{203A}", "\u{02C5}"), // › ˅
+    ("\u{25B8}", "\u{25BE}"), // ▸ ▾
+    (">", "v"),
+];
+
+/// 대체 쉐브론 고르기(순수 · `covers` = 그 글자를 그릴 수 있는가).
+pub(crate) fn fallback_chevrons(covers: impl Fn(char) -> bool) -> (&'static str, &'static str) {
+    FALLBACK_CHEVRONS
+        .iter()
+        .copied()
+        .find(|(c, e)| c.chars().chain(e.chars()).all(&covers))
+        .unwrap_or((">", "v"))
+}
+
 /// 순수 판정: 이 글꼴(체인)이 dir2 MDL2 글리프 6개를 전부 가졌는가.
 pub(crate) fn icon_font_covers(ui: &Font) -> bool {
     MDL2_GLYPHS.iter().all(|&c| ui.covers(c))
@@ -62,12 +83,13 @@ pub(crate) fn init_icon_glyphs(ui: &Font) {
     nexa_grid::draw::set_glyph_delta(if ok {
         CHEVRON_EM - ui.em_to_px(12.0)
     } else {
-        -4.0
+        FALLBACK_CHEVRON_DELTA
     });
     if ok {
         nexa_grid::set_marker_glyphs("\u{E76C}", "\u{E70D}");
     } else {
-        nexa_grid::set_marker_glyphs("\u{203A}", "\u{2304}");
+        let (c, e) = fallback_chevrons(|ch| ui.covers(ch));
+        nexa_grid::set_marker_glyphs(c, e);
     }
 }
 
@@ -181,4 +203,25 @@ pub(crate) fn mono_chain(face: Option<&str>, extra: &str) -> Option<Font> {
         let _ = font.push_fallback(f.data, f.index);
     }
     Some(font)
+}
+
+#[cfg(test)]
+mod chevron_tests {
+    use super::*;
+
+    /// 대체 쉐브론: 둘 다 그릴 수 있는 첫 쌍 · 아무것도 없으면 ASCII.
+    #[test]
+    fn fallback_chevrons_pick_first_drawable_pair() {
+        assert_eq!(fallback_chevrons(|_| true), ("\u{203A}", "\u{2304}"));
+        assert_eq!(
+            fallback_chevrons(|c| c != '\u{2304}'),
+            ("\u{203A}", "\u{02C5}")
+        );
+        assert_eq!(
+            fallback_chevrons(|c| c == '\u{25B8}' || c == '\u{25BE}'),
+            ("\u{25B8}", "\u{25BE}")
+        );
+        assert_eq!(fallback_chevrons(|c| c.is_ascii()), (">", "v"));
+        assert_eq!(fallback_chevrons(|_| false), (">", "v"));
+    }
 }
