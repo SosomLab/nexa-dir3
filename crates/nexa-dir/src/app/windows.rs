@@ -35,7 +35,7 @@ impl App {
             // 플러그인 페이지(T-63 B · dir2 EXT-129): 로드된 플러그인당 체크박스 + 로드 오류 줄(해제 = `plugins.disabled`).
             let rows = self.plugin_rows();
             self.prefs_win.set_plugins(rows, preview::load_notes());
-            self.prefs_win.refresh(&self.settings);
+            self.refresh_prefs();
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
@@ -372,7 +372,7 @@ impl App {
                 .set_left(&tr("status.needsRestart"), &mut inv);
         }
         if self.prefs_win.is_open() {
-            self.prefs_win.refresh(&self.settings);
+            self.refresh_prefs();
             self.prefs_win.redraw();
         }
         if self.keys_win.is_open() {

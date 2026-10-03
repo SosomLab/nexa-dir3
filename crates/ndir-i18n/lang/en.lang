@@ -719,6 +719,13 @@ pref.btn.browse = Browse…
 pref.btn.edit = Edit…
 pref.advanced = Advanced
 pref.defaultValue = Default: {0}
+pref.lockedOff = Unavailable while “{0}” is off (your value is kept).
+pref.lockedNeed = Used only when “{0}” is “{1}” — unavailable now (your value is kept).
+pref.lockedNot = Not used when “{0}” is “{1}” — unavailable now (your value is kept).
+pref.lockedEmpty = Set “{0}” first.
+pref.forcedBy = “{0}” is on, so “{1}” is used for now — your own value is kept and comes back when you turn it off.
+pref.value.on = On
+pref.value.off = Off
 pref.advancedHidden = {0} advanced setting(s) hidden — turn on Advanced
 keys.title = Shortcuts
 keys.hint = Select a command and press Assign, then press the key combination.\nEsc cancels · Clear = no shortcut · Reset = platform defaults.

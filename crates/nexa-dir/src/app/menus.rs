@@ -341,6 +341,43 @@ impl App {
     }
 
     /// 보기 옵션(숨김 · Dot · 폴더 우선) 변경 → 두 패널 전 탭 무간섭 재열람.
+    /// 설정 창 갱신 — 강제 값 목록을 먼저 넣고 스냅샷을 다시 읽는다.
+    pub(crate) fn refresh_prefs(&mut self) {
+        self.prefs_win.set_forced(self.prefs_forced());
+        self.prefs_win.refresh(&self.settings);
+    }
+
+    /// 지금 다른 설정이 대신 정하고 있는 값들(키 · 실제로 쓰이는 값 · 이유) — 설정 창이 그 값을 보여 주고 잠근다.
+    /// 저장된 사용자 값은 건드리지 않는다(강제가 풀리면 그대로 다시 쓰인다 · 사용자 10-03 "성능향상모드처럼 … 원래 값으로").
+    /// - "시스템 기본 터미널과 같게"(`term.follow_windows_terminal`)가 켜져 있고 기본 터미널 글꼴을 찾았으면:
+    ///   `term.font_face` = 그 글꼴 · 프로필이 크기도 주면(Windows Terminal) `term.font_size`도.
+    pub(crate) fn prefs_forced(&self) -> Vec<(String, String, String)> {
+        let mut out = Vec::new();
+        if let Some(p) = self
+            .wt_profile
+            .as_ref()
+            .filter(|_| self.settings.flag("term.follow_windows_terminal"))
+        {
+            let by = tr("pref.termFollowWt");
+            if let Some(face) = p.faces.first() {
+                out.push((
+                    "term.font_face".to_string(),
+                    face.clone(),
+                    trf("pref.forcedBy", &[&by, face]),
+                ));
+            }
+            if let Some(pt) = p.size_pt {
+                let shown = format!("{pt} pt");
+                out.push((
+                    "term.font_size".to_string(),
+                    shown.clone(),
+                    trf("pref.forcedBy", &[&by, &shown]),
+                ));
+            }
+        }
+        out
+    }
+
     /// 탭 바 모양 설정(`tabs.multiline` 기본 on · `tabs.scroll_buttons` end/start/split) → 두 패널.
     pub(crate) fn apply_tab_style(&mut self) {
         use nexa_ctl::controls::ScrollButtons;

@@ -2264,6 +2264,59 @@ fn column_reorder_shows_marker_propagates_and_cancels() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 강제 값(T-120 · 사용자 10-03 "강제로 설정된 경우는 제약이 풀렸을 때 원래 값으로 돌아갈 수 있도록 · 사용자가 직접 설정한
+/// 값은 보이지 않지만 유지"): "시스템 기본 터미널과 같게"가 켜져 있고 터미널 글꼴을 찾았으면 터미널 글꼴 카드는 그 글꼴을
+/// 보여 주고 잠긴다(이유 덧줄 · [초기화] 무시) · 저장된 사용자 값은 그대로 · 끄면 사용자 값이 다시 보이고 풀린다.
+#[test]
+fn forced_settings_show_effective_value_and_keep_user_value() {
+    let (mut app, dir) = fixture("forced");
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("term.font_face", "My Mono");
+    assert!(app.prefs_forced().is_empty(), "프로필 없음 = 강제 없음");
+    app.wt_profile = Some(platform::WtProfile {
+        faces: vec!["System Mono".into()],
+        size_pt: None,
+        scheme: None,
+        commandline: None,
+    });
+    let forced = app.prefs_forced();
+    assert_eq!(forced.len(), 1, "크기는 프로필이 줄 때만(Windows Terminal)");
+    assert_eq!(
+        (forced[0].0.as_str(), forced[0].1.as_str()),
+        ("term.font_face", "System Mono")
+    );
+    app.startup_cmd("prefs.search:term.font_face");
+    assert_eq!(
+        app.prefs_win.card_value("term.font_face").as_deref(),
+        Some("System Mono")
+    );
+    assert_eq!(app.prefs_win.is_locked("term.font_face"), Some(true));
+    let why = app
+        .prefs_win
+        .lock_reason("term.font_face")
+        .expect("이유 덧줄");
+    assert!(why.contains("System Mono"), "{why}");
+    assert_eq!(
+        app.settings.get("term.font_face"),
+        Some("My Mono"),
+        "사용자 값은 보관"
+    );
+    // 크기까지 주는 프로필(Windows Terminal).
+    app.wt_profile.as_mut().unwrap().size_pt = Some(12.0);
+    assert_eq!(app.prefs_forced().len(), 2);
+    // 끄면 강제가 풀리고 사용자 값이 다시 보인다.
+    let _ = app.settings.set("term.follow_windows_terminal", "off");
+    assert!(app.prefs_forced().is_empty());
+    app.refresh_prefs();
+    assert_eq!(
+        app.prefs_win.card_value("term.font_face").as_deref(),
+        Some("My Mono")
+    );
+    assert_eq!(app.prefs_win.is_locked("term.font_face"), Some(false));
+    assert_eq!(app.prefs_win.lock_reason("term.font_face"), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-51 B-2a 배경 셸 메뉴: 빈 영역 우클릭 = 셸 배경 항목(가짜 포트)이 상단에 · 앱 고유 항목 뒤따름 · 실행 = `invoke_bg(폴더)` ·
 /// 생성 보고(`fake.bgnew`) = 재열람 + 선택 + 인라인 이름 바꾸기 · 가상 최상위에는 셸 항목 없음.
 #[test]

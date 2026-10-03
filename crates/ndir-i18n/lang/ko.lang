@@ -718,6 +718,13 @@ pref.btn.browse = 찾아보기…
 pref.btn.edit = 편집…
 pref.advanced = 고급
 pref.defaultValue = 기본값: {0}
+pref.lockedOff = ‘{0}’이(가) 꺼져 있어 지금은 바꿀 수 없습니다(값은 그대로 보관됩니다).
+pref.lockedNeed = ‘{0}’이(가) ‘{1}’일 때만 쓰입니다 — 지금은 바꿀 수 없습니다(값은 그대로 보관됩니다).
+pref.lockedNot = ‘{0}’이(가) ‘{1}’이면 쓰이지 않습니다 — 지금은 바꿀 수 없습니다(값은 그대로 보관됩니다).
+pref.lockedEmpty = ‘{0}’을(를) 먼저 정해야 합니다.
+pref.forcedBy = ‘{0}’이(가) 켜져 있어 지금은 ‘{1}’(으)로 정해집니다 — 직접 정한 값은 그대로 보관되고, 끄면 다시 쓰입니다.
+pref.value.on = 켬
+pref.value.off = 끔
 pref.advancedHidden = 고급 설정 {0}개 숨김 — 고급을 켜세요
 keys.title = 단축키
 keys.hint = 명령을 고르고 [지정]을 누른 뒤 키 조합을 누르세요.\nEsc = 취소 · 비우기 = 단축키 없음 · 초기화 = 플랫폼 기본.

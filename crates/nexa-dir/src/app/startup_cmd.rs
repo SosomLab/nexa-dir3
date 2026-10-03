@@ -44,13 +44,13 @@ impl App {
         }
         if let Some(q) = id.strip_prefix("prefs.search:") {
             self.open_prefs = true;
-            self.prefs_win.refresh(&self.settings);
+            self.refresh_prefs();
             self.prefs_win.preset_query(q);
             return;
         }
         if let Some(cat) = id.strip_prefix("prefs.cat:") {
             self.open_prefs = true;
-            self.prefs_win.refresh(&self.settings);
+            self.refresh_prefs();
             self.prefs_win.select_category(cat);
             return;
         }

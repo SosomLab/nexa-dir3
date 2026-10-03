@@ -284,6 +284,10 @@ pub enum Dep {
     NotEmpty,
     /// 부모가 이 값.
     Eq(&'static str),
+    /// 부모가 이 값이 **아님**.
+    Ne(&'static str),
+    /// 부모가 이 값들 중 하나.
+    OneOf(&'static [&'static str]),
 }
 
 impl Dep {
@@ -294,8 +298,44 @@ impl Dep {
             Dep::On => parent_value == "on",
             Dep::NotEmpty => !parent_value.trim().is_empty(),
             Dep::Eq(v) => parent_value == v,
+            Dep::Ne(v) => parent_value != v,
+            Dep::OneOf(vs) => vs.contains(&parent_value),
         }
     }
+}
+
+/// 자식 키의 모든 (부모 키, 조건) — 전부 만족해야 쓸 수 있다(AND · [`DEPENDS`]에 여러 줄).
+pub fn dependencies(child: &str) -> impl Iterator<Item = (&'static str, Dep)> + '_ {
+    DEPENDS
+        .iter()
+        .filter(move |(c, _, _)| *c == child)
+        .map(|(_, p, d)| (*p, *d))
+}
+
+/// 지금 이 설정을 **쓸 수 없게 만든 원인** `(부모 키, 조건)`(순수 · `value_of` = 키의 현재 값): 조건이 하나라도 어긋나면 그
+/// 부모 · 조건은 맞아도 **부모가 잠겨 있으면 그 부모를 잠근 원인**(전이 — 상위를 끄면 하위의 하위도 잠긴다 · 사용자 10-03).
+/// 쓸 수 있으면 `None`.
+#[must_use]
+pub fn locked_by(child: &str, value_of: &dyn Fn(&str) -> String) -> Option<(&'static str, Dep)> {
+    fn walk(
+        child: &str,
+        value_of: &dyn Fn(&str) -> String,
+        depth: u8,
+    ) -> Option<(&'static str, Dep)> {
+        if depth > 8 {
+            return None; // 순환 방어(곁 표 시험이 순환을 막는다)
+        }
+        for (parent, dep) in dependencies(child) {
+            if !dep.satisfied(&value_of(parent)) {
+                return Some((parent, dep));
+            }
+            if let Some(cause) = walk(parent, value_of, depth + 1) {
+                return Some(cause);
+            }
+        }
+        None
+    }
+    walk(child, value_of, 0)
 }
 
 /// 자식 키의 (부모 키, 조건) — [`DEPENDS`].
@@ -829,6 +869,77 @@ mod tests {
             "cfg.readOnly",
         ] {
             assert!(ndir_i18n::has(key), "{key}");
+        }
+    }
+
+    /// 종속 판정(T-120): 조건 종류 · 여러 부모(AND) · 전이(부모가 잠기면 자식도) · 원인은 맨 위의 어긋난 조건.
+    #[test]
+    fn locks_follow_parents_transitively_and_all_conditions() {
+        assert!(Dep::Ne("1").satisfied("2") && !Dep::Ne("1").satisfied("1"));
+        assert!(Dep::OneOf(&["system", "dark"]).satisfied("dark"));
+        assert!(!Dep::OneOf(&["system", "dark"]).satisfied("campbell"));
+        let with = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(pk, _)| *pk == k)
+                    .map(|(_, v)| (*v).to_string())
+                    .or_else(|| default_of(k).map(str::to_string))
+                    .unwrap_or_default()
+            }
+        };
+        // 기본값에서는 잠긴 것이 없다(터미널 열 수만 줄 바꿈 조건 — 기본 off라 풀려 있다).
+        let d = with(&[]);
+        for (child, _, _) in DEPENDS {
+            if *child == "tabs.scroll_buttons" {
+                continue; // 기본 = 여러 줄 → 버튼 자리는 잠김(의도)
+            }
+            assert_eq!(locked_by(child, &d), None, "{child}");
+        }
+        // 전이: 고속 스크롤을 끄면 배지(켜져 있어도)의 하위 설정까지 잠기고 원인 = scroll.fast.
+        let off = with(&[("scroll.fast", "off"), ("scroll.fast_hud", "on")]);
+        assert_eq!(
+            locked_by("scroll.fast_hud", &off),
+            Some(("scroll.fast", Dep::On))
+        );
+        assert_eq!(
+            locked_by("scroll.fast_hud_pos", &off),
+            Some(("scroll.fast", Dep::On))
+        );
+        let hud_off = with(&[("scroll.fast_hud", "off")]);
+        assert_eq!(
+            locked_by("scroll.fast_hud_pos", &hud_off),
+            Some(("scroll.fast_hud", Dep::On))
+        );
+        // 여러 부모(AND): 도크 좌우 분할 = 도크 표시 ∧ 듀얼 정보(∧ 전이로 듀얼 패널).
+        assert_eq!(dependencies("layout.dock_split_pct").count(), 2);
+        let hidden = with(&[("dock.visible", "off")]);
+        assert_eq!(
+            locked_by("layout.dock_split_pct", &hidden),
+            Some(("dock.visible", Dep::On))
+        );
+        let single_info = with(&[("layout.info_mode", "single")]);
+        assert_eq!(
+            locked_by("layout.dock_split_pct", &single_info),
+            Some(("layout.info_mode", Dep::Eq("dual")))
+        );
+        let single_panel = with(&[("layout.panel_mode", "single")]);
+        assert_eq!(
+            locked_by("layout.dock_split_pct", &single_panel),
+            Some(("layout.panel_mode", Dep::Eq("dual"))),
+            "전이: 단일 패널 → 정보 배치 잠김 → 도크 좌우도"
+        );
+        assert_eq!(locked_by("layout.dock_height_pct", &single_panel), None);
+        // 터미널 테마: 스킴 id를 직접 적으면 다크/라이트 스킴 둘 다 쓰이지 않는다.
+        let scheme = with(&[("term.theme", "campbell")]);
+        assert!(locked_by("term.theme_dark", &scheme).is_some());
+        assert!(locked_by("term.theme_light", &scheme).is_some());
+        let dark = with(&[("term.theme", "dark")]);
+        assert_eq!(locked_by("term.theme_dark", &dark), None);
+        assert!(locked_by("term.theme_light", &dark).is_some());
+        // 곁 표에 순환이 없다(자식은 부모 뒤에 등재 — side_tables 시험 · 여기서는 깊이로 확인).
+        for (child, _, _) in DEPENDS {
+            let _ = locked_by(child, &off);
         }
     }
 

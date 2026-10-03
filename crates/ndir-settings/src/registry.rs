@@ -1452,6 +1452,31 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
+    // 배치(사용자 10-03 "상위를 끄면 하위는 설정 불가"): 단일 패널이면 좌우 분할·정보 배치가 무의미 · 도크를 숨기면 도크 크기가
+    // 무의미 · 도크 좌우 분할은 도크 표시 ∧ 듀얼 패널 ∧ 듀얼 정보일 때만(여러 줄 = AND).
+    ("layout.info_mode", "layout.panel_mode", Dep::Eq("dual")),
+    (
+        "layout.panel_split_pct",
+        "layout.panel_mode",
+        Dep::Eq("dual"),
+    ),
+    ("layout.dock_height_pct", "dock.visible", Dep::On),
+    ("layout.dock_split_pct", "dock.visible", Dep::On),
+    ("layout.dock_split_pct", "layout.info_mode", Dep::Eq("dual")),
+    // 런처 바를 숨기면 크기·간격이 무의미.
+    ("launcher.icon_size", "launcher.visible", Dep::On),
+    ("launcher.item_gap", "launcher.visible", Dep::On),
+    // 터미널 테마: system = 다크/라이트 스킴 둘 다 · dark/light = 그쪽만 · 스킴 id를 직접 적으면 둘 다 쓰이지 않는다.
+    (
+        "term.theme_dark",
+        "term.theme",
+        Dep::OneOf(&["system", "dark"]),
+    ),
+    (
+        "term.theme_light",
+        "term.theme",
+        Dep::OneOf(&["system", "light"]),
+    ),
     ("tabs.scroll_buttons", "tabs.multiline", Dep::Eq("off")),
 ];
 

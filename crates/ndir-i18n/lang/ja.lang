@@ -719,6 +719,13 @@ pref.btn.browse = 参照…
 pref.btn.edit = 編集…
 pref.advanced = 詳細
 pref.defaultValue = 既定値: {0}
+pref.lockedOff = 「{0}」がオフのため今は変更できません（値は保持されます）。
+pref.lockedNeed = 「{0}」が「{1}」のときだけ使われます — 今は変更できません（値は保持されます）。
+pref.lockedNot = 「{0}」が「{1}」のときは使われません — 今は変更できません（値は保持されます）。
+pref.lockedEmpty = 先に「{0}」を設定してください。
+pref.forcedBy = 「{0}」がオンのため今は「{1}」が使われます — ご自身の値は保持され、オフにすると再び使われます。
+pref.value.on = オン
+pref.value.off = オフ
 pref.advancedHidden = 詳細設定 {0} 件は非表示 — 詳細をオンにしてください
 keys.title = ショートカット
 keys.hint = コマンドを選び [割り当て] を押してからキーを押してください。\nEsc = 取消 · クリア = なし · 初期化 = 既定。

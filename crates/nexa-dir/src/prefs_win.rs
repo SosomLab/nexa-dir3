@@ -83,12 +83,46 @@ struct Card {
     /// 보조 버튼(지정…/선택…/찾아보기…).
     aux: Option<Button>,
     locked: bool,
+    /// 잠긴 이유 덧줄(상위 설정 때문에 쓸 수 없음 — 설명 아래에 보인다).
+    lock_reason: Option<String>,
     rect: Rect,
     /// 검색 모드에서 카테고리 표시.
     show_cat: bool,
     error: Option<String>,
     default_below: bool,
     copy: CopyBtn,
+}
+
+/// 설정 값의 사람이 읽는 표기(Choice = 선택지 라벨 · on/off = 켬/끔 · 그 밖 = 값 그대로).
+fn value_label(key: &str, value: &str) -> String {
+    if let Some(e) = ndir_settings::entry(key) {
+        if let ndir_settings::SettingKind::Choice(opts) = e.kind {
+            if let Some((_, label)) = opts.iter().find(|(v, _)| *v == value) {
+                return tr(label);
+            }
+        }
+    }
+    match value {
+        "on" => tr("pref.value.on"),
+        "off" => tr("pref.value.off"),
+        v => v.to_string(),
+    }
+}
+
+/// 잠긴 이유 문구(상위 설정 `parent`가 조건 `dep`을 만족하지 않는다).
+fn lock_reason_text(parent: &str, dep: ndir_settings::Dep) -> String {
+    use ndir_settings::Dep;
+    let name = ndir_settings::entry(parent).map_or_else(|| parent.to_string(), |e| tr(e.label));
+    match dep {
+        Dep::On => trf("pref.lockedOff", &[&name]),
+        Dep::NotEmpty => trf("pref.lockedEmpty", &[&name]),
+        Dep::Eq(v) => trf("pref.lockedNeed", &[&name, &value_label(parent, v)]),
+        Dep::Ne(v) => trf("pref.lockedNot", &[&name, &value_label(parent, v)]),
+        Dep::OneOf(vs) => {
+            let list: Vec<String> = vs.iter().map(|v| value_label(parent, v)).collect();
+            trf("pref.lockedNeed", &[&name, &list.join(" · ")])
+        }
+    }
 }
 
 /// 입력란을 카드 폭만큼 넓힐 글자 설정 — 읽기 전용 정보와 경로(셸 명령).
@@ -117,6 +151,9 @@ pub(crate) struct PrefsWin {
     hidden: Vec<&'static str>,
     dyn_choices: std::collections::HashMap<&'static str, Vec<(String, String)>>,
     info: std::collections::HashMap<String, String>,
+    /// 지금 **다른 설정·상황이 대신 정하고 있는** 값: 키 → (실제로 쓰이는 값, 이유). 카드는 그 값을 보여 주고 잠긴다 —
+    /// 사용자가 정해 둔 값은 설정에 그대로 남아(보이지 않을 뿐) 강제가 풀리면 다시 쓰인다(사용자 10-03).
+    forced: std::collections::HashMap<String, (String, String)>,
     notes: std::collections::HashMap<String, String>,
     vtree: Vec<(&'static str, Vec<&'static str>)>,
     advanced: Switch,
@@ -256,6 +293,7 @@ impl PrefsWin {
             hidden: Vec::new(),
             dyn_choices: std::collections::HashMap::new(),
             info: std::collections::HashMap::new(),
+            forced: std::collections::HashMap::new(),
             notes: std::collections::HashMap::new(),
             vtree,
             window: None,
@@ -350,6 +388,14 @@ impl PrefsWin {
         }
     }
 
+    /// 강제 값 목록(키 · 실제로 쓰이는 값 · 이유) — [`Self::refresh`] 앞에 부른다(호스트가 상황을 보고 만든다).
+    pub(crate) fn set_forced(&mut self, values: Vec<(String, String, String)>) {
+        self.forced = values
+            .into_iter()
+            .map(|(k, v, why)| (k, (v, why)))
+            .collect();
+    }
+
     /// 읽기 전용 정보 값 — [`Self::refresh`] 앞에 부른다.
     #[allow(dead_code)] // 읽기 전용 정보 값(셸·PTY 탐지 · M5)에서 쓴다.
     pub(crate) fn set_info(&mut self, values: Vec<(String, String)>) {
@@ -365,6 +411,8 @@ impl PrefsWin {
                 entry: e,
                 value: if ndir_settings::is_info(e.key) {
                     self.info.get(e.key).cloned().unwrap_or_default()
+                } else if let Some((shown, _)) = self.forced.get(e.key) {
+                    shown.clone() // 강제 값 표시(저장된 사용자 값은 그대로)
                 } else if let Some(shown) = self.info.get(e.key).filter(|_| {
                     ndir_settings::dependency(e.key)
                         .is_some_and(|(parent, dep)| !dep.satisfied(s.get(parent).unwrap_or("")))
@@ -424,6 +472,24 @@ impl PrefsWin {
             .iter()
             .find(|c| c.entry.key == key)
             .map(|c| c.locked)
+    }
+
+    /// 카드에 지금 보이는 값(시험).
+    #[cfg(test)]
+    pub(crate) fn card_value(&self, key: &str) -> Option<String> {
+        self.cards
+            .iter()
+            .find(|c| c.entry.key == key)
+            .map(|c| c.value.clone())
+    }
+
+    /// 카드가 잠긴 이유(상위 설정 때문 · 없으면 None) — 시험 · 덤프.
+    #[allow(dead_code)]
+    pub(crate) fn lock_reason(&self, key: &str) -> Option<String> {
+        self.cards
+            .iter()
+            .find(|c| c.entry.key == key)
+            .and_then(|c| c.lock_reason.clone())
     }
 
     /// 지금 선택/검색에 맞는 카드 목록을 만든다.
@@ -539,6 +605,7 @@ impl PrefsWin {
                     show_cat,
                     error: None,
                     locked: false,
+                    lock_reason: None,
                     default_below: false,
                     copy: CopyBtn::new(),
                 }
@@ -582,9 +649,15 @@ impl PrefsWin {
                 .unwrap_or_default()
         };
         for c in &mut self.cards {
-            c.locked = ndir_settings::dependency(c.entry.key)
-                .is_some_and(|(parent, dep)| !dep.satisfied(&parent_val(parent)))
-                || ndir_settings::is_info(c.entry.key);
+            // 상위 설정 조건(여러 개면 전부 · 상위가 잠겨 있으면 그 원인까지 전이) — 값은 그대로 두고 화면에서만 잠근다.
+            let cause = ndir_settings::locked_by(c.entry.key, &parent_val);
+            // 강제 값이 있으면 그 이유가 먼저(지금 쓰이는 값을 보여 주고 잠근다).
+            c.lock_reason = self
+                .forced
+                .get(c.entry.key)
+                .map(|(_, why)| why.clone())
+                .or_else(|| cause.map(|(parent, dep)| lock_reason_text(parent, dep)));
+            c.locked = c.lock_reason.is_some() || ndir_settings::is_info(c.entry.key);
             match &mut c.ctl {
                 CardCtl::Text(tb) => tb.set_read_only(c.locked),
                 CardCtl::Choice(cb) if c.locked => cb.set_focused(false),
@@ -1380,6 +1453,10 @@ impl PrefsWin {
         for c in &mut self.cards {
             let key = c.entry.key.to_string();
             if c.reset.take_clicked() {
+                // 상위 설정 때문에 잠긴 카드는 [초기화]도 듣지 않는다(숨어 있는 사용자 값이 지워지지 않게 · 사용자 10-03).
+                if c.lock_reason.is_some() {
+                    continue;
+                }
                 return PrefsAction::Reset(key);
             }
             if let Some(b) = &mut c.aux {
@@ -1586,9 +1663,10 @@ impl PrefsWin {
                 y += ph + gap;
             }
             for c in &mut self.cards {
-                let note = self
-                    .notes
-                    .get(c.entry.key)
+                let note = c
+                    .lock_reason
+                    .as_ref()
+                    .or_else(|| self.notes.get(c.entry.key))
                     .or_else(|| self.info.get(&format!("{}#note", c.entry.key)));
                 let desc = if c.entry.desc.is_empty() {
                     String::new()
@@ -1958,6 +2036,23 @@ mod tests {
         s.set("scroll.fast", "on").expect("set");
         w.refresh(&s);
         assert_eq!(w.is_locked("scroll.fast_step"), Some(false));
+        assert_eq!(w.lock_reason("scroll.fast_step"), None);
+        // 잠긴 이유 덧줄 · 전이(배지가 켜져 있어도 상위가 꺼지면 배지 하위까지) · 잠긴 카드의 [초기화]는 듣지 않는다.
+        s.set("scroll.fast_step", "7").expect("set");
+        s.set("scroll.fast", "off").expect("set");
+        w.refresh(&s);
+        let why = w.lock_reason("scroll.fast_step").expect("reason");
+        assert!(
+            why.contains(&tr("pref.fastScroll")) || !why.is_empty(),
+            "{why}"
+        );
+        assert_eq!(w.is_locked("scroll.fast_hud_pos"), Some(true), "전이 잠금");
+        assert_eq!(w.lock_reason("scroll.fast_hud_pos"), Some(why));
+        assert_eq!(s.get("scroll.fast_step"), Some("7"), "잠겨도 값은 보관");
+        s.set("scroll.fast", "on").expect("set");
+        w.refresh(&s);
+        assert_eq!(w.is_locked("scroll.fast_step"), Some(false));
+        assert_eq!(w.lock_reason("scroll.fast_hud_pos"), None);
         // 동적 후보(언어 목록)는 Text 카드를 콤보로 바꾼다.
         w.set_dyn_choices(
             "ui.lang",
