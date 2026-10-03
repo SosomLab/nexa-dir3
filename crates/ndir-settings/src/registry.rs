@@ -1425,6 +1425,11 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
 /// 나오지 않고 · 검색에 안 걸리고 · JSON 내보내기/가져오기에도 없다. 코드(`get/flag`)만 읽는다.
 pub const INTERNAL: &[&str] = &["license.gates"];
 
+/// **Windows에만 뜻이 있는 설정**(사용자 10-03 "dot file은 윈도우에서만 표시") — Linux · macOS에서는 점으로 시작하는 이름이 곧
+/// 숨김 파일이라 "점 파일 표시"가 따로 없다(`list.show_hidden`이 다룬다). 그 OS에서는 [`INTERNAL`]처럼 설정 창·검색·JSON에서 빠진다
+/// (값은 남아 있어 같은 설정 파일을 Windows로 가져가면 그대로 쓴다).
+pub const WINDOWS_ONLY: &[&str] = &["list.show_dotfiles", "key.view.dot"];
+
 /// 비노출(자동 기억 값 · 메뉴/툴바로만 바뀌는 값 · 구현 상수) — `set/get/reset`은 되지만 설정 창에는 안 보인다.
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",

@@ -678,6 +678,12 @@ impl Platform {
     }
 }
 
+/// "점 파일 표시" 토글이 따로 있는 OS인가 — Windows만(숨김 속성과 점 파일이 별개). Linux · macOS는 점으로 시작하면 숨김 파일이라
+/// "숨김 파일 표시" 하나로 다룬다(`ndir_vfs::DOT_IS_HIDDEN` · 사용자 10-03) → 메뉴 · 툴바 · 순서 편집기에서 뺀다.
+pub(crate) fn has_dotfile_toggle() -> bool {
+    !ndir_vfs::DOT_IS_HIDDEN
+}
+
 /// 바로 가기 파일의 확장자를 이름에서 숨기는 OS인가(GAP-006) — Windows 탐색기는 `.lnk` · `.url` · `.appref-ms`를
 /// "확장명 표시" 설정과 무관하게 늘 숨긴다. 다른 OS에서는 평범한 파일이라 그대로 보인다.
 pub(crate) fn hides_shortcut_ext() -> bool {

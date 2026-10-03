@@ -156,13 +156,22 @@ struct Filter {
 
 impl Filter {
     fn allows(&self, name: &str, attrs: u32) -> bool {
-        if !self.show_dotfiles && name.starts_with('.') {
+        self.allows_on(name, attrs, ndir_vfs::DOT_IS_HIDDEN)
+    }
+
+    /// 가시성 판정(순수 · `dot_is_hidden` = 점으로 시작하는 이름이 숨김인 OS인가):
+    /// - Unix(`true`): 점 파일 = 숨김 파일 → `show_hidden` 하나가 숨김 속성과 점 파일을 함께 다룬다 · `show_dotfiles`는 쓰지 않는다.
+    /// - Windows(`false`): 숨김 속성 = `show_hidden` · 점 파일 = `show_dotfiles`(서로 독립 · dir2 그대로).
+    fn allows_on(&self, name: &str, attrs: u32, dot_is_hidden: bool) -> bool {
+        let dot = name.starts_with('.');
+        if !dot_is_hidden && !self.show_dotfiles && dot {
             return false;
         }
         if !self.show_protected && ndir_vfs::is_protected_os_item(attrs) {
             return false;
         }
-        if !self.show_hidden && (attrs & ATTR_HIDDEN) != 0 {
+        let hidden = (attrs & ATTR_HIDDEN) != 0 || (dot_is_hidden && dot);
+        if !self.show_hidden && hidden {
             return false;
         }
         true
@@ -1229,12 +1238,61 @@ mod tests {
         fs::write(base.join("visible.txt"), b"v").unwrap();
 
         let all = Tree::open(&base).unwrap();
-        let no_dot = Tree::open_filtered(&base, true, false).unwrap();
+        // 점 파일을 거르는 스위치: Windows = `show_dotfiles` · Unix = `show_hidden`(점 파일 = 숨김 파일).
+        let no_dot = if ndir_vfs::DOT_IS_HIDDEN {
+            Tree::open_filtered(&base, false, true).unwrap()
+        } else {
+            Tree::open_filtered(&base, true, false).unwrap()
+        };
+        // 다른 쪽 스위치는 그 OS에서 점 파일에 영향이 없다.
+        let other = if ndir_vfs::DOT_IS_HIDDEN {
+            Tree::open_filtered(&base, true, false).unwrap()
+        } else {
+            Tree::open_filtered(&base, false, true).unwrap()
+        };
         fs::remove_dir_all(&base).unwrap();
 
         assert_eq!(all.visible_len(), 2); // 기본 open = 모두 표시
         assert_eq!(no_dot.visible_len(), 1); // .hidden 제외
         assert_eq!(no_dot.row(0).unwrap().name, "visible.txt");
+        assert_eq!(other.visible_len(), 2);
+    }
+
+    /// 점 파일 규칙(순수 · 두 OS 규칙을 어느 OS에서나 시험): Unix = 점 파일은 숨김 스위치가 다루고 점 파일 스위치는 무시 ·
+    /// Windows = 서로 독립.
+    #[test]
+    fn dot_files_follow_os_convention() {
+        let f = |show_hidden, show_dotfiles| Filter {
+            show_hidden,
+            show_dotfiles,
+            show_protected: true,
+        };
+        let h = ndir_vfs::ATTR_HIDDEN;
+        // (show_hidden, show_dotfiles, 이름, 속성, Unix 결과, Windows 결과)
+        let cases = [
+            (true, true, ".a", 0, true, true),
+            (false, true, ".a", 0, false, true),
+            (true, false, ".a", 0, true, false),
+            (false, false, ".a", 0, false, false),
+            (false, true, "a", 0, true, true),
+            (true, false, "a", 0, true, true),
+            (false, true, "a", h, false, false),
+            (true, false, "a", h, true, true),
+            (true, false, ".a", h, true, false),
+            (false, true, ".a", h, false, false),
+        ];
+        for (sh, sd, name, attrs, unix, win) in cases {
+            assert_eq!(
+                f(sh, sd).allows_on(name, attrs, true),
+                unix,
+                "unix {sh} {sd} {name} {attrs}"
+            );
+            assert_eq!(
+                f(sh, sd).allows_on(name, attrs, false),
+                win,
+                "win {sh} {sd} {name} {attrs}"
+            );
+        }
     }
 
     #[test]

@@ -20,11 +20,16 @@ fn items(ids: &[&str]) -> Vec<MenuEntry> {
     for id in ids {
         if *id == "-" {
             out.push(MenuEntry::Separator);
-        } else {
+        } else if menu_has(id, platform::has_dotfile_toggle()) {
             out.push(item(id));
         }
     }
     out
+}
+
+/// 이 OS의 메뉴에 그 명령이 있는가(순수): "점 파일 표시"는 점 파일 토글이 있는 OS(Windows)에만.
+pub(crate) fn menu_has(id: &str, dotfile_toggle: bool) -> bool {
+    id != "view.dot" || dotfile_toggle
 }
 
 /// 메뉴 항목 전체(단축키·체크 동기화 대상).
@@ -230,7 +235,7 @@ impl App {
         let layout = settings.get("toolbar.layout").unwrap_or("");
         let mut out: Vec<ToolGroup> = Vec::new();
         for (block, bvis, items) in
-            crate::order::parse_order_with(crate::order::TOOLBAR_BLOCKS, layout)
+            crate::order::parse_order_with(crate::order::toolbar_blocks(), layout)
         {
             if !bvis {
                 continue;
@@ -420,6 +425,8 @@ impl App {
                     p.reopen(&mut inv);
                 }
             }
+            // 점 파일 토글이 없는 OS(Linux · macOS)에서는 단축키로 불려도 아무 일도 하지 않는다(점 파일 = 숨김 파일 → view.hidden).
+            "view.dot" if !platform::has_dotfile_toggle() => {}
             "view.hidden" | "view.dot" | "view.folders_first" => {
                 let key = match id {
                     "view.hidden" => "list.show_hidden",

@@ -17,6 +17,29 @@ pub(crate) const TOOLBAR_BLOCKS: OrderDefs = &[
     ("settings", &[]),
 ];
 
+/// 점 파일 토글이 없는 OS(Linux · macOS)의 도구 모음 블록 — `show`에서 `dot`만 뺀 것([`TOOLBAR_BLOCKS`]와 나머지는 같아야 한다).
+pub(crate) const TOOLBAR_BLOCKS_NO_DOT: OrderDefs = &[
+    ("refresh", &[]),
+    ("panel", &["toggle", "dock", "info", "colsync", "ontop"]),
+    ("view", &["tree", "flat", "tiles"]),
+    ("show", &["hidden", "foldersfirst"]),
+    ("settings", &[]),
+];
+
+/// 도구 모음 블록 정의(순수): 점 파일 토글이 있는 OS면 전체 · 없으면 `dot`을 뺀 것.
+pub(crate) fn toolbar_blocks_for(dotfile_toggle: bool) -> OrderDefs {
+    if dotfile_toggle {
+        TOOLBAR_BLOCKS
+    } else {
+        TOOLBAR_BLOCKS_NO_DOT
+    }
+}
+
+/// 이 OS의 도구 모음 블록 정의.
+pub(crate) fn toolbar_blocks() -> OrderDefs {
+    toolbar_blocks_for(crate::platform::has_dotfile_toggle())
+}
+
 /// 파일 목록 컬럼(key 순서 = 기본 표시 순서 · `name` = 상시 표시).
 pub(crate) const COLUMN_BLOCKS: OrderDefs =
     &[("cols", &["name", "ext", "size", "modified", "kind"])];
@@ -182,6 +205,22 @@ pub(crate) fn col_id_key(id: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 점 파일 토글이 없는 OS의 도구 모음 정의 = 전체에서 `show/dot`만 뺀 것(나머지 블록·순서 동일).
+    #[test]
+    fn toolbar_blocks_without_dot_match_full_set() {
+        assert_eq!(toolbar_blocks_for(true), TOOLBAR_BLOCKS);
+        let no_dot = toolbar_blocks_for(false);
+        assert_eq!(no_dot.len(), TOOLBAR_BLOCKS.len());
+        for ((b1, c1), (b2, c2)) in TOOLBAR_BLOCKS.iter().zip(no_dot) {
+            assert_eq!(b1, b2);
+            let want: Vec<&str> = c1.iter().copied().filter(|c| *c != "dot").collect();
+            assert_eq!(&want[..], *c2, "{b1}");
+        }
+        // 저장된 레이아웃의 dot 토큰은 그 OS에서 버려진다.
+        let n = normalize(no_dot, "show:1[dot:1,hidden:0]");
+        assert!(!n.contains("dot") && n.contains("hidden:0"), "{n}");
+    }
 
     #[test]
     fn roundtrip_and_merge() {

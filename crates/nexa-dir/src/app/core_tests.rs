@@ -482,7 +482,11 @@ fn prefs_host_wiring_without_window() {
     app.open_prefs = false;
     app.startup_cmd("prefs.search:dotfiles");
     assert!(app.open_prefs);
-    assert!(app.dump_of("prefs").unwrap().contains("list.show_dotfiles"));
+    // "점 파일 표시"는 점 파일 토글이 있는 OS(Windows)의 설정 창에만 나온다(Linux · macOS = 점 파일이 곧 숨김 파일).
+    assert_eq!(
+        app.dump_of("prefs").unwrap().contains("list.show_dotfiles"),
+        platform::has_dotfile_toggle()
+    );
     app.startup_cmd("prefs.cat:pref.cat.keys");
     assert!(app.dump_of("prefs").unwrap().contains("key.file.new_tab"));
     // 설정 창이 값을 바꿨을 때의 길: 저장 → 적용 → 메뉴 체크 동기.
@@ -1462,7 +1466,13 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
         .iter()
         .filter(|it| matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 20, h: 20, .. }))
         .count();
-    assert_eq!(masks, 13, "13개 명령 = SVG 마스크(20px)");
+    // 13개 명령 = SVG 마스크(20px) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 12개.
+    let dot = usize::from(platform::has_dotfile_toggle());
+    assert_eq!(masks, 12 + dot);
+    assert_eq!(
+        app.toolbar.all_items().iter().any(|it| it.id == "view.dot"),
+        dot == 1
+    );
     app.layout_for(1200, 800, 2.0);
     app.rebuild_toolbar();
     app.sync_menu_checks();
@@ -1474,6 +1484,49 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
                 || matches!(it.icon, nexa_ctl::ToolIcon::Mask { w: 40, h: 40, .. }))
     );
     assert_eq!(App::toolbar_icon_px(1.5), 30);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 숨김 파일 규칙(사용자 10-03 "리눅스는 . 으로 시작하면 숨김파일 · dot file 토글은 윈도우에서만"): Unix에서는 "숨김 파일 표시"가
+/// 점 파일을 켜고 끄고 · "점 파일 표시"는 메뉴에 없고 명령도 아무 일을 하지 않는다. Windows는 종전대로 점 파일 토글이 따로 있다.
+#[test]
+fn hidden_toggle_covers_dot_files_on_unix() {
+    let (mut app, dir) = fixture("dothidden");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::write(dir.join(".secret"), b"x").unwrap();
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let shown = |app: &App| {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .filter_map(|i| src.row_path(i))
+            .any(|p| p.ends_with(".secret"))
+    };
+    assert!(shown(&app), "기본 = 숨김·점 파일 표시");
+    let dot_toggle = platform::has_dotfile_toggle();
+    assert_eq!(dot_toggle, !ndir_vfs::DOT_IS_HIDDEN);
+    let menus = format!("{:?}", App::build_menus(&app.settings));
+    assert!(menus.contains("view.hidden"));
+    assert_eq!(
+        menus.contains("view.dot"),
+        dot_toggle,
+        "점 파일 표시 = Windows 메뉴에만"
+    );
+    assert!(app::menus::menu_has("view.hidden", false) && !app::menus::menu_has("view.dot", false));
+    assert!(app::menus::menu_has("view.dot", true));
+    // 점 파일 토글 명령: Windows = 점 파일을 끈다 · Unix = 설정도 목록도 그대로.
+    app.command("view.dot");
+    assert_eq!(app.settings.flag("list.show_dotfiles"), !dot_toggle);
+    assert_eq!(shown(&app), !dot_toggle);
+    if dot_toggle {
+        app.command("view.dot");
+    }
+    // 숨김 토글 명령: Unix = 점 파일이 사라진다 · Windows = 숨김 속성만 다루므로 점 파일은 남는다.
+    app.command("view.hidden");
+    assert!(!app.settings.flag("list.show_hidden"));
+    assert_eq!(shown(&app), dot_toggle);
+    app.command("view.hidden");
+    assert!(shown(&app));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1750,13 +1803,24 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
         !after.contains(&"view.panel_toggle".to_string()),
         "{after:?}"
     );
-    // 누락 foldersfirst는 가장 가까운 앞 형제(dot) 뒤로 보충된다(dir2 규칙).
-    assert_eq!(after[0], "view.dot");
-    assert_eq!(after[1], "view.folders_first");
-    assert_eq!(after[2], "view.hidden");
+    if platform::has_dotfile_toggle() {
+        // 누락 foldersfirst는 가장 가까운 앞 형제(dot) 뒤로 보충된다(dir2 규칙).
+        assert_eq!(after[0], "view.dot");
+        assert_eq!(after[1], "view.folders_first");
+        assert_eq!(after[2], "view.hidden");
+    } else {
+        // 점 파일 토글이 없는 OS: dot은 모르는 토큰으로 버려지고 foldersfirst는 앞 형제(hidden) 뒤로 보충된다.
+        assert_eq!(after[0], "view.hidden");
+        assert_eq!(after[1], "view.folders_first");
+        assert!(!after.contains(&"view.dot".to_string()));
+    }
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
-        "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1",
+        if platform::has_dotfile_toggle() {
+            "show:1[dot:1,foldersfirst:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1"
+        } else {
+            "show:1[hidden:1,foldersfirst:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1|panel:1[toggle:0,dock:1,info:1,colsync:1,ontop:1]|settings:1"
+        },
         "정규화 저장"
     );
     // 컨텍스트 메뉴: copyName 숨김 · pasteInto 앞 · bg 그룹 숨김 = paste/undo/redo 전부 제외.

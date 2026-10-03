@@ -34,6 +34,10 @@ pub struct Entry {
 pub const ATTR_DIRECTORY: u32 = 0x10;
 /// 숨김(Windows `FILE_ATTRIBUTE_HIDDEN` · macOS `UF_HIDDEN` 플래그를 이 비트로 옮긴다 · Linux에는 없다 — 점 파일 규칙만).
 pub const ATTR_HIDDEN: u32 = 0x2;
+/// 이 OS에서 **이름이 점(`.`)으로 시작하면 숨김 파일**인가(Unix 관례 — Linux · macOS). Windows에서는 점 파일이 숨김과 별개의
+/// 개념이다(숨김 = 속성 · 점 파일 = 따로 켜고 끄는 보기 옵션 — 사용자 10-03 "리눅스에는 dot file이라는 개념이 없고
+/// . 으로 시작하면 숨김파일").
+pub const DOT_IS_HIDDEN: bool = cfg!(unix);
 /// 시스템(Windows `FILE_ATTRIBUTE_SYSTEM` · macOS `SF_RESTRICTED`(SIP 보호)를 이 비트로 옮긴다 · Linux에는 없다).
 pub const ATTR_SYSTEM: u32 = 0x4;
 

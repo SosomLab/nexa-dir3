@@ -8,7 +8,7 @@ use crate::*;
 /// 설정 키 → 순서 정의(설정 창·기동 명령이 같은 표를 본다).
 pub(crate) fn order_defs_of(key: &str) -> Option<OrderDefs> {
     Some(match key {
-        "toolbar.layout" => order::TOOLBAR_BLOCKS,
+        "toolbar.layout" => order::toolbar_blocks(),
         "list.col_layout" => order::COLUMN_BLOCKS,
         "ctxmenu.layout" => order::CTXMENU_BLOCKS,
         _ => return None,

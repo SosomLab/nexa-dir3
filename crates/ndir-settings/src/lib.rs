@@ -32,7 +32,7 @@ pub use json::{to_json, Import as JsonImport, Json};
 pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
     ADVANCED, CATEGORY_TREE, DEPENDS, EXTENSION_CATEGORIES, HIDDEN, INFO_KEYS, INTERNAL,
-    OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED,
+    OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED, WINDOWS_ONLY,
 };
 
 /// 앱 폴더 이름(`%APPDATA%\nexa-dir` · `~/.config/nexa-dir` · `~/Library/Application Support/nexa-dir`).
@@ -316,7 +316,13 @@ pub fn is_hidden(key: &str) -> bool {
 /// 내부 전용 설정인가 — 설정 창(고급 포함) · 검색 · JSON 어디에도 나오지 않는다([`INTERNAL`]).
 #[must_use]
 pub fn is_internal(key: &str) -> bool {
-    INTERNAL.contains(&key)
+    is_internal_on(key, cfg!(windows))
+}
+
+/// [`is_internal`]의 순수 판정(`windows` = 이 OS가 Windows인가): 내부 전용 키 ∪ (Windows가 아니면) [`WINDOWS_ONLY`].
+#[must_use]
+pub fn is_internal_on(key: &str, windows: bool) -> bool {
+    INTERNAL.contains(&key) || (!windows && WINDOWS_ONLY.contains(&key))
 }
 
 /// 고급 설정인가(설정 창 Advanced 토글 대상) — 비노출 ∪ [`ADVANCED`].
@@ -1028,6 +1034,13 @@ mod tests {
     #[test]
     fn internal_keys_never_surface() {
         assert!(is_internal("license.gates") && !is_internal("ui.theme"));
+        // Windows 전용 설정: Windows에서는 보이고 다른 OS에서는 내부 전용처럼 빠진다 · 키는 레지스트리에 있어야 한다.
+        for k in WINDOWS_ONLY {
+            assert!(entry(k).is_some(), "{k}");
+            assert!(!is_internal_on(k, true) && is_internal_on(k, false), "{k}");
+        }
+        assert!(!is_internal_on("list.show_hidden", false));
+        assert!(is_internal_on("license.gates", true));
         for k in INTERNAL {
             assert!(entry(k).is_some(), "레지스트리에 있어야 한다: {k}");
             assert!(
