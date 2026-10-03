@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 27 | 27 | 15 | 7 | 0 | 0 | 0 |
+| NEW | 28 | 28 | 16 | 7 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 37 | 137 | 0 | 0 | 0 |
-| **합계** | 4316 | 4316 | 2399 | 1009 | 766 | 0 | 0 |
+| **합계** | 4317 | 4317 | 2400 | 1009 | 766 | 0 | 0 |
 
 ## 행
 
@@ -241,6 +241,8 @@
 | NEW-025 | Linux 우클릭 메뉴 통합 1차(기본 앱 · 다른 앱 ▸ · 압축 · 속성) | `platform/xdgapps.rs` · `platform/linux.rs::XdgMenu` · `platform/mod.rs` | T1 + 실기 | `desktop_app_name_exec_and_hidden` · `mime_apps_default_first_then_cache` · `exec_field_codes` · `xdg_menu_lists_apps_and_properties` | 🚧 | §117 · 실기 필요(앱 실행 · 속성 창 · 폴더 메뉴 — 사용자) · 2차 T-131(순서 편집 · 배경 메뉴 · 아이콘 · selfcheck · T4) |
 | NEW-026 | 툴바 토글 켜짐 = 스위치 초록 채움 + 흰 아이콘(`toolbar.on_color` green 기본 · accent = 종전 · 농도 설정 DEPENDS) | nexa-ui 134 · `app/settings.rs` · ndir-settings registry | T2 · T3 + 실기 | `soft_states_on_color_overrides_accent` · `toolbar_on_color_matches_switch_green` | ✅ | 10-04 §4 · §5 정정(채움 원복 · 선 초록) · **§6 선 색 #0000FF**(`toolbar.on_line_color` · 시험 `toolbar_on_line_color_default_blue` · 초록 철회) · **§7 원복 = 기본 accent**(`toolbar_on_default_is_accent_background_only` · 사용자 최종 · dir2 UIK-206과 기본 모양 차이 없음) · 의도된 차이(dir2 UIK-206 강조색 38 % 블렌드) · 실기(다크/라이트 · hover/눌림) 사용자 |
 | NEW-027 | 툴바 그림 90 %(`toolbar.icon_scale_pct`) · hover 아이콘 강조색 · 토글만 hover 회색 배경 | nexa-ui 136 · `app/settings.rs` · `app/menus.rs` | T2 · T3 + 실기 | `icon_scale_and_hover_accent_toggle_fill` · dir3 툴바 마스크 시험 | ✅ | 10-04 §8 · 의도된 차이(dir2 UIK-206 hover 배경 블렌드) · 실기(크기 · hover 색 · 토글 배경 · 다크/라이트) 사용자 |
+| NEW-028 | 빠른 실행 우클릭 = 항목 편집/삭제/추가/구분선/숨기기/설정 · 한 줄 입력 대화상자 | `app/statusline.rs` · `app/input.rs` · `DlgReply::LauncherItem` | T3 + 실기 | `toolbar_and_launcher_right_click_menus` | ✅ | 10-04 §13 · dir2에 없음(PREFS-165 · 166 파일 직접 편집) · 실기(입력 형식 · 실행) 사용자 |
+| T-134 · I18N-RELABEL | 언어 전환 때 일회성 라벨 갱신(편집 메뉴 · 설정 창 · 도크 · 네비 · 보조 창 6종) · 하드코딩 문자열 일부 · 낡은 문구 | `main.rs::install_ctl_labels` · `App::relabel` · `Panel::relabel` · `*_win.rs::relabel` | T2 · T3 | `relabel_refreshes_one_time_labels` · keys_win/prefs_win relabel 시험 | 🚧 | 10-04 §13 · 남은 것 = 자가 점검 창 · 라이선스 문구 · 허용값 · unsupported · Command Prompt 비교 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 |
 | WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |
 | PTR-GONE · COL-RESIZE | 열 폭/열 순서를 끄는 중 포인터가 창을 벗어나도 끌던 값 유지(`pointer_gone`이 끄는 패널 건너뜀) | `app/input.rs::pointer_gone` · `panel.rs::is_pressed` | T3 | `column_resize_survives_pointer_leaving_window` | ✅ | §118 결함 수정(종전 = 40으로 축소 · 동기면 반대 패널까지) |
 | I18N-RETITLE · COL-BASE | 언어 전환 때 열 제목 갱신(사용자 레이아웃이어도) · 세션 복원 패널 base_columns 채움(내 PC 드라이브 열 교체) | `panel.rs::retitle_columns` · `set_default_columns` | T3 | `column_titles_follow_language_even_with_user_layout` | ✅ | 10-04 §1 결함 수정 2건 · 남은 언어 전환 미반영 10곳 = T-134 |
@@ -268,7 +270,7 @@
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |
 | CMD-068~082 | 행/배경 컨텍스트 메뉴 항목(셸 실행 · 삭제 · 이름 바꾸기 · 잘라내기/복사 · 경로/이름 복사 · 완전 삭제 · 폴더에 붙여넣기 · 새로 만들기 · 배경 붙여넣기 · undo/redo) | `app/ctxmenu.rs` | T3 | `row_and_background_context_menus` · `row_menu_new_submenu_creates_from_template` · `dialogs_delete_permanent_and_paste_conflict` | ✅ | 076(폴더에 붙여넣기)·080 실기 |
 | CMD-086~096 | 텍스트 편집 컨텍스트 팝업(경로바·이름 바꾸기·도크 텍스트·터미널 — 되돌리기/잘라내기/복사/붙여넣기/삭제/전체 선택/서식 복사) | nexa-ctl `EditCtxAction`(TextBox) · `termview` 복사 | T2 | nexa-ctl TextBox 시험 · `fixed_columns_horizontal_scroll_and_mouse_report`(HTML 복사) | 🚧 | 도크 텍스트 선택/복사 ✅(T-62 C-3) · 터미널 붙여넣기 CR 변환 실기 · 경로 바 편집 중 Ctrl+C/X/V/Z = 글자 편집 ✅ §78(`path_edit` · `path_edit_shortcuts_edit_text_not_files` · GAP-011) · 경로 바 편집 우클릭 6항목 메뉴 · 더블클릭 전체 선택 ✅ §86(`open_path_edit_menu` · `path_edit_right_click_opens_text_menu` · GAP-012 · dir2 win.rs:7472-7532 · 8638-8647 — 누를 때 열림이 dir2와 다름) |
-| CMD-097~099 · 102~104 | 도구 모음/헤더 우클릭 → 순서 편집 창 · 설정 창 · 컬럼 편집 · 일괄 이름 변경 프리셋 불러오기/저장/관리 | `order_win.rs` · `bulk_win.rs` · `app/bulk.rs` | T3 | `order_editor_applies_toolbar_ctxmenu_and_columns` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 우클릭 진입점 ☐(설정 창 [편집…]로 진입) · 프리셋 관리 = 폴더 열기 |
+| CMD-097~099 · 102~104 | 도구 모음/헤더 우클릭 → 순서 편집 창 · 설정 창 · 컬럼 편집 · 일괄 이름 변경 프리셋 불러오기/저장/관리 | `order_win.rs` · `bulk_win.rs` · `app/bulk.rs` | T3 | `order_editor_applies_toolbar_ctxmenu_and_columns` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 우클릭 진입점 ✅ 10-04 §13(툴바 우클릭 = 도구 모음 순서 · 설정 · a29094b · `toolbar_and_launcher_right_click_menus` · dir2와 달리 버튼 위에서도 뜸) · 프리셋 관리 = 폴더 열기 |
 | CMD-105~116 | 하위 창 버튼(미리보기 창 · 삭제 확인 · 재프로브 · 충돌 4버튼 · 인증 URL · 위치 선택) | `preview_win.rs` · `dlg_win.rs` · `app/dialogs.rs` | T3 | `dialogs_delete_permanent_and_paste_conflict` · `preview_window` 시험 | 🚧 | 114(클라우드) 미이식 · 116 PositionDropdown ✅ |
 | CMD-160~259 | 컨텍스트 메뉴·팝업 지역 **숫자** ID 대역(셸 1..0x6FFF · New 0x7000 · 고유 0x8000+) | — | — | — | ⚠ | dir3는 문자열 id(SHELL-013 N 판정) — 대역 개념 없음 |
 | CMD-260~286 · 330~356 | 단축키 문맥 ①~③(경로바 편집 · 터미널 포커스 · 인라인 이름 바꾸기) · Alt/시스템 키 · 하위 창 공용 키 | `app/input.rs` · `termview.rs` · 각 창 `handle` | T3 | `route_and_commands_without_window` · 창별 Esc/Enter 시험 | 🚧 | 문맥 ④ 전역(287~329)은 별도 행 ✅ |
