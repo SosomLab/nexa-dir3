@@ -181,7 +181,25 @@ impl App {
     /// 스크롤 설정 적용(dir2 X-63 f986415 · 7d8b1e9 — 호스트 누락분): `scroll.fast*` → nexa-grid(목록·도크·그리드 창) +
     /// nexa-ctl(설정 창 등 `ScrollBars`) 전역 고속 스크롤 · 파일 그리드 한 단계 더 빠르게 · 시스템 "한 번에 스크롤할 줄 수".
     pub(crate) fn apply_scroll_settings(&self) {
-        let s = &self.settings;
+        let (grid, grid_extra, ctl) = Self::scroll_configs(&self.settings);
+        nexa_grid::fastscroll::set_fast_scroll(grid);
+        nexa_grid::fastscroll::set_fast_scroll_grid(grid_extra);
+        nexa_ctl::set_fast_scroll(ctl);
+        if let Some(n) = platform::wheel_lines() {
+            nexa_ctl::set_wheel_lines(n);
+        }
+    }
+
+    /// 설정 `scroll.*` → 고속 스크롤 구성(순수): (nexa-grid 공통 · 파일 그리드 전용(한 단계 더 빠르게 — 꺼져 있으면 `None`) · nexa-ctl).
+    /// 전역에 쓰는 일은 [`Self::apply_scroll_settings`]만 한다 — 시험은 이 함수로 값을 확인한다(전역은 프로세스 공유라 병렬 시험이
+    /// 서로 덮어쓴다 · 10-03 흔들림).
+    pub(crate) fn scroll_configs(
+        s: &Settings,
+    ) -> (
+        nexa_grid::fastscroll::FastScroll,
+        Option<nexa_grid::fastscroll::FastScroll>,
+        nexa_ctl::FastScroll,
+    ) {
         let int = |k: &str, lo: i64, hi: i64| s.int(k).clamp(lo, hi);
         let pos = s.position_index("scroll.fast_hud_pos").min(8);
         let grid = nexa_grid::fastscroll::FastScroll {
@@ -194,12 +212,10 @@ impl App {
             hud_hold_ms: int("scroll.fast_hud_hold_ms", 0, 10_000) as u64,
             hud_fade_ms: int("scroll.fast_hud_fade_ms", 0, 10_000) as u64,
         };
-        nexa_grid::fastscroll::set_fast_scroll(grid);
-        nexa_grid::fastscroll::set_fast_scroll_grid(
-            s.flag("scroll.fast_grid_extra")
-                .then(|| nexa_grid::fastscroll::grid_extra_of(&grid)),
-        );
-        nexa_ctl::set_fast_scroll(nexa_ctl::FastScroll {
+        let grid_extra = s
+            .flag("scroll.fast_grid_extra")
+            .then(|| nexa_grid::fastscroll::grid_extra_of(&grid));
+        let ctl = nexa_ctl::FastScroll {
             enabled: grid.enabled,
             step: grid.step,
             max: grid.max,
@@ -208,10 +224,8 @@ impl App {
             hud_pos: nexa_ctl::HudPos::parse(s.get("scroll.fast_hud_pos").unwrap_or("top_right")),
             hud_hold_ms: grid.hud_hold_ms,
             hud_fade_ms: grid.hud_fade_ms,
-        });
-        if let Some(n) = platform::wheel_lines() {
-            nexa_ctl::set_wheel_lines(n);
-        }
+        };
+        (grid, grid_extra, ctl)
     }
 
     /// 설정 `toolbar.icon_size`(16/20/24/32 · 그 밖 = 20).

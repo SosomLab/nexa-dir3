@@ -2731,33 +2731,33 @@ fn terminal_font_chain_covers_nerd_glyphs_when_installed() {
 #[test]
 fn scroll_settings_reach_controls_and_terminal_wheel_accumulates() {
     let (mut app, dir) = fixture("scrollcfg");
+    // 값 확인은 순수 계산으로(전역 고속 스크롤은 프로세스 공유 — 병렬 시험이 덮어써 흔들렸다 · 전역에 쓰는 것은 apply 한 줄뿐).
     let _ = app.settings.set("scroll.fast_step", "5");
     let _ = app.settings.set("scroll.fast_max", "9");
     let _ = app.settings.set("scroll.fast_hud", "off");
-    app.after_setting_changed("scroll.fast_step");
-    let g = nexa_grid::fastscroll::fast_scroll();
+    let (g, grid, c) = App::scroll_configs(&app.settings);
     assert_eq!((g.enabled, g.step, g.max, g.hud), (true, 5, 9, false));
-    let grid = nexa_grid::fastscroll::fast_scroll_grid();
+    let grid = grid.expect("scroll.fast_grid_extra 기본 on");
     assert_eq!(
         (grid.step, grid.max),
         (4, 18),
         "그리드 = 한 단계 더 빠르게(step-1 · max×2)"
     );
-    let c = nexa_ctl::fast_scroll();
     assert_eq!((c.enabled, c.step, c.max), (true, 5, 9));
     let _ = app.settings.set("scroll.fast", "off");
-    app.after_setting_changed("scroll.fast");
-    assert!(!nexa_grid::fastscroll::fast_scroll().enabled && !nexa_ctl::fast_scroll().enabled);
-    // 기본값으로 되돌려 다른 시험에 영향 없게(전역).
+    let (g, _, c) = App::scroll_configs(&app.settings);
+    assert!(!g.enabled && !c.enabled);
+    let _ = app.settings.set("scroll.fast_grid_extra", "off");
+    assert!(App::scroll_configs(&app.settings).1.is_none());
     for k in [
         "scroll.fast",
         "scroll.fast_step",
         "scroll.fast_max",
         "scroll.fast_hud",
+        "scroll.fast_grid_extra",
     ] {
         let _ = app.settings.reset(k);
     }
-    app.apply_scroll_settings();
     // 휠 누적기: 30씩 4번 = 노치 1개 = 시스템 줄 수만큼.
     let mut acc = nexa_ctl::WheelAccum::default();
     let lines: i32 = (0..4).map(|_| acc.add(30, 3)).sum();

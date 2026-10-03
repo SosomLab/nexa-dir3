@@ -467,12 +467,15 @@ mod tests {
                 .Save(PCWSTR(wide(&lnk).as_ptr()), true)
                 .expect("Save");
         }
-        let got = shell_link_target(&lnk);
+        // 경로 문자열은 표기가 다를 수 있다(CI 러너의 TEMP = 8.3 짧은 이름 `RUNNER~1` · 바로 가기는 긴 이름을 저장) → 양쪽 다
+        // 정규화해 같은 폴더인지로 비교(지우기 전에 계산).
+        let got = shell_link_target(&lnk).map(|p| std::fs::canonicalize(p).expect("대상 존재"));
+        let want = std::fs::canonicalize(&target).expect("canonicalize");
         let plain = dir.join("plain.txt");
         std::fs::write(&plain, b"not a link").unwrap();
         let none = shell_link_target(&plain);
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(got.as_deref(), Some(target.as_path()));
+        assert_eq!(got, Some(want));
         assert_eq!(none, None);
     }
 }
