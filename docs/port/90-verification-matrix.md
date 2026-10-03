@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 26 | 26 | 14 | 6 | 0 | 0 | 0 |
+| NEW | 27 | 27 | 15 | 6 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 37 | 137 | 0 | 0 | 0 |
-| **합계** | 4315 | 4315 | 2398 | 1008 | 766 | 0 | 0 |
+| **합계** | 4316 | 4316 | 2399 | 1008 | 766 | 0 | 0 |
 
 ## 행
 
@@ -240,6 +240,7 @@
 | NEW-024 | "상태" 열(클라우드 속성 · 네트워크 위치 → 아이콘) · 기본 열 = 이름 · 상태 · 크기 · 수정한 날짜(확장자 · 종류 기본 숨김) · 세션 열 폭 key 이주 | ndir-vfs `cloud_status` · `is_network_path` · filelist `status_of` · `cell_icon` · order `DEFAULT_HIDDEN` · `saved_visible_keys` · nexa-ui 132 | T1 · T3 · T4 + 실기 | `cloud_status_link_and_network_rules` · `columns_default_hidden_and_saved_width_keys` · `status_column_defaults_icons_and_session_migration` · `nav-up-select.scn` | ✅ | §116 · 10-04 §1 상태 열 정렬(`SortKey::Status` · `status_rank_orders_cloud_states`) · 실기 필요(Windows OneDrive 상태 아이콘 3종 · Linux 네트워크 마운트 · 옛 세션 colw 이주 — 격리 세션으로 확인 중) |
 | NEW-025 | Linux 우클릭 메뉴 통합 1차(기본 앱 · 다른 앱 ▸ · 압축 · 속성) | `platform/xdgapps.rs` · `platform/linux.rs::XdgMenu` · `platform/mod.rs` | T1 + 실기 | `desktop_app_name_exec_and_hidden` · `mime_apps_default_first_then_cache` · `exec_field_codes` · `xdg_menu_lists_apps_and_properties` | 🚧 | §117 · 실기 필요(앱 실행 · 속성 창 · 폴더 메뉴 — 사용자) · 2차 T-131(순서 편집 · 배경 메뉴 · 아이콘 · selfcheck · T4) |
 | NEW-026 | 툴바 토글 켜짐 = 스위치 초록 채움 + 흰 아이콘(`toolbar.on_color` green 기본 · accent = 종전 · 농도 설정 DEPENDS) | nexa-ui 134 · `app/settings.rs` · ndir-settings registry | T2 · T3 + 실기 | `soft_states_on_color_overrides_accent` · `toolbar_on_color_matches_switch_green` | ✅ | 10-04 §4 · §5 정정(채움 원복 · 선 초록) · **§6 선 색 #0000FF**(`toolbar.on_line_color` · 시험 `toolbar_on_line_color_default_blue` · 초록 철회) · **§7 원복 = 기본 accent**(`toolbar_on_default_is_accent_background_only` · 사용자 최종 · dir2 UIK-206과 기본 모양 차이 없음) · 의도된 차이(dir2 UIK-206 강조색 38 % 블렌드) · 실기(다크/라이트 · hover/눌림) 사용자 |
+| NEW-027 | 툴바 그림 90 %(`toolbar.icon_scale_pct`) · hover 아이콘 강조색 · 토글만 hover 회색 배경 | nexa-ui 136 · `app/settings.rs` · `app/menus.rs` | T2 · T3 + 실기 | `icon_scale_and_hover_accent_toggle_fill` · dir3 툴바 마스크 시험 | ✅ | 10-04 §8 · 의도된 차이(dir2 UIK-206 hover 배경 블렌드) · 실기(크기 · hover 색 · 토글 배경 · 다크/라이트) 사용자 |
 | WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |
 | PTR-GONE · COL-RESIZE | 열 폭/열 순서를 끄는 중 포인터가 창을 벗어나도 끌던 값 유지(`pointer_gone`이 끄는 패널 건너뜀) | `app/input.rs::pointer_gone` · `panel.rs::is_pressed` | T3 | `column_resize_survives_pointer_leaving_window` | ✅ | §118 결함 수정(종전 = 40으로 축소 · 동기면 반대 패널까지) |
 | I18N-RETITLE · COL-BASE | 언어 전환 때 열 제목 갱신(사용자 레이아웃이어도) · 세션 복원 패널 base_columns 채움(내 PC 드라이브 열 교체) | `panel.rs::retitle_columns` · `set_default_columns` | T3 | `column_titles_follow_language_even_with_user_layout` | ✅ | 10-04 §1 결함 수정 2건 · 남은 언어 전환 미반영 10곳 = T-134 |
