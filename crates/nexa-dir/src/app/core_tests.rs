@@ -2950,3 +2950,17 @@ fn folder_shortcut_navigates_inside_the_app() {
     assert_eq!(app.panels[0].root_path(), dir.join("sub"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// GAP-008: 링크 표식(재분석 지점)이 있는 행은 종류별 키("dir")가 아니라 경로 키로 아이콘을 묻는다(셸이 화살표 오버레이를 얹게) ·
+/// 앱 시작 때 nexa-fs 링크 오버레이가 켜진다.
+#[test]
+fn link_rows_use_per_path_icons() {
+    use nexa_grid::RowSource as _;
+    let (app, dir) = fixture("lnkicon");
+    let src = app.panels[0].rows().source();
+    let (key, hint) = src.icon(0).expect("icon");
+    assert_eq!(key, "dir", "일반 폴더 = 종류별 키: {hint}");
+    crate::app::row_icons::install();
+    assert!(nexa_fs::shell::link_overlay_enabled());
+    let _ = std::fs::remove_dir_all(&dir);
+}

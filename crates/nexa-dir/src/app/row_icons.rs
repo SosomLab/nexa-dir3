@@ -235,6 +235,8 @@ pub(crate) fn resolve(key: &str, hint: &str, _size: i32) -> Option<Rc<nexa_gfx::
 
 /// 기동 때 1회 — nexa-grid에 리졸버 등록.
 pub(crate) fn install() {
+    // 링크(.lnk · 심볼릭 링크 · 정션) 아이콘에 탐색기처럼 화살표 오버레이(GAP-008) — 첫 조회 전에 켠다.
+    nexa_fs::shell::set_link_overlay(true);
     nexa_grid::draw::set_icon_resolver(Some(Rc::new(resolve)));
 }
 

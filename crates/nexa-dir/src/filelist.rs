@@ -346,6 +346,10 @@ fn kind_label(kind: FileKind, name: &str) -> String {
     match kind {
         FileKind::Dir => ndir_i18n::tr("kind.folder"),
         FileKind::Symlink => ndir_i18n::tr("kind.link"),
+        // 바로 가기 파일(.lnk · .url · .appref-ms) = "바로 가기"(탐색기 종류 · 확장자를 이름에서 숨기는 OS에서만 — GAP-008).
+        _ if crate::platform::hides_shortcut_ext() && split_shortcut_ext(name).is_some() => {
+            ndir_i18n::tr("kind.link")
+        }
         _ => match name.rsplit_once('.') {
             Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_ascii_uppercase(),
             _ => ndir_i18n::tr("kind.file"),
@@ -386,9 +390,12 @@ impl RowSource for TreeSource {
 
     /// 행 아이콘 `(키, 경로)`(dir2 `source.rs:426-432` · M1-7 셸 아이콘) — 그리는 쪽(nexa-grid `Adapt::draw_icon`)이 호스트 리졸버에 묻는다.
     fn icon(&self, index: usize) -> Option<(String, String)> {
-        let is_dir = self.tree.as_ref()?.row(index)?.kind == FileKind::Dir;
+        let row = self.tree.as_ref()?.row(index)?;
+        let is_dir = row.kind == FileKind::Dir;
         let path = self.row_path(index)?;
-        let per_path = ndir_vfs::is_virtual_root(&self.path);
+        // 링크(심볼릭 링크 · 정션)는 경로로 조회해야 셸이 화살표 오버레이를 얹는다(GAP-008 — 종류별 아이콘에는 링크 정보가 없다).
+        let per_path =
+            ndir_vfs::is_virtual_root(&self.path) || row.attrs & ndir_vfs::ATTR_REPARSE_POINT != 0;
         Some((
             icon_key(is_dir, &path, per_path),
             path.to_string_lossy().into_owned(),
@@ -728,5 +735,15 @@ mod tests {
         assert_eq!(restore_shortcut_ext("a.txt", "b", false, true), "b");
         assert_eq!(restore_shortcut_ext("d.lnk", "e", true, true), "e");
         assert_eq!(restore_shortcut_ext("Chrome.lnk", "", false, true), "");
+        // 종류 열(GAP-008): 바로 가기 파일 = "바로 가기"(확장자를 숨기는 OS) · 그 밖 = 확장자 대문자.
+        let link = ndir_i18n::tr("kind.link");
+        if crate::platform::hides_shortcut_ext() {
+            assert_eq!(kind_label(FileKind::File, "Chrome.lnk"), link);
+            assert_eq!(kind_label(FileKind::File, "Site.url"), link);
+        } else {
+            assert_eq!(kind_label(FileKind::File, "Chrome.lnk"), "LNK");
+        }
+        assert_eq!(kind_label(FileKind::File, "a.txt"), "TXT");
+        assert_eq!(kind_label(FileKind::Symlink, "x"), link);
     }
 }
