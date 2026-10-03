@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **보호된 OS 파일 숨기기 · ShellExecuteW**: `list.show_protected`(기본 숨김 · 숨김+시스템 = 보호 · macOS UF_HIDDEN/SF_RESTRICTED · Linux 해당 없음 · NEW-014) · Windows 열기를 `cmd /C start` → ShellExecuteW(GAP-010 · 이름의 & ^ % 위험 제거) → [journal §83](journal/2026-10-03.md)
 - **키보드 메뉴 캐럿 자리 · 가짜 가로 막대 · 아이콘 칸 결론**: Shift+F10 행 메뉴 = 캐럿 행 옆(SHELL-003) · nexa-ui 120차 ContextMenu 폭 수정(소비자 기록 · nexa-sql 시험 729) · conhost는 Nerd 아이콘 1칸 → dir3 1칸 + 넘쳐 그리기 유지 → [journal §82](journal/2026-10-03.md)
 - **우클릭 1회 표시 · 구분선 · 메뉴 스크롤 · 내부 설정**: 셸 항목 준비 뒤 완성 메뉴 한 번(대기 중 상태줄 표시 · 3 s 상한) · 빈 구분선 정리 · 창보다 긴 메뉴 스크롤 · `license.gates` = INTERNAL(설정 창·검색·JSON 제외) · `NDIR_TERM_TRACE` · `pty CxR` 덤프 · `ops.wait`(copy-paste.scn 흔들림 해소) → [journal §81](journal/2026-10-03.md)
 - **캡처 판정 반영 · 소비자 기록 원칙**: nexa-ui 119차(글꼴 매칭 Regular 우선 · ⚠ 동작 변경 · nexa-sql 시험 729) · 툴바 기본 농도 26/12/20 % · 네비 폭 26 · 터미널 이탤릭 · 줄 높이 = 글꼴 줄 높이 · DR-24 + nexa-ui/nexa-license `docs/CONSUMER-CHANGES.md` 신설 → [journal §80](journal/2026-10-03.md)

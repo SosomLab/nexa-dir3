@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 79차 — 보호된 운영 체제 파일 숨기기(NEW-014) · Windows 열기 = ShellExecuteW(GAP-010)
+
+- **한 일**: `list.show_protected`(기본 off = 숨김 · 탐색기 규칙 · 3-OS 판정) · Windows 파일 열기를 ShellExecuteW로(셸 메타문자 위험 제거).
+- **지금 상태**: Windows 기본 목록에서 `$RECYCLE.BIN` · `pagefile.sys` 등 보호된 항목이 기본으로 숨겨진다(dir2와 다름 — 의도된 차이 · 기본값 사용자 재확인 중). 다음(개발 세션) = 경로 바 GAP-012~014 · .lnk/링크 GAP-006~009.
+- **걸린 것**: `list.show_protected` 기본값 확인(사용자) · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인(열기 · macOS 숨김) · 릴리스 태그 · CLOUD.
+
+→ [journal/2026-10-03 §83](journal/2026-10-03.md)
+
+---
+
 ## 10-03 78차 — 키보드로 연 메뉴 = 캐럿 행 · 메뉴 가짜 가로 막대 제거 · 터미널 아이콘 칸 결론
 
 - **한 일**: Shift+F10 행 메뉴를 캐럿 행 자리에(SHELL-003 ✅) · nexa-ui 120차(ContextMenu 폭 · CONSUMER-CHANGES 기록) · 터미널 원시 바이트로 conhost 아이콘 1칸 확인(2칸 처리 안 함).

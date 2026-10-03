@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 13 | 13 | 3 | 1 | 0 | 0 | 0 |
+| NEW | 14 | 14 | 4 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4302 | 4302 | 2365 | 1024 | 766 | 0 | 0 |
+| **합계** | 4303 | 4303 | 2366 | 1024 | 766 | 0 | 0 |
 
 ## 행
 
@@ -227,6 +227,8 @@
 | NEW-011 | 터미널 응답성(펌프 시간 예산 · 역압) · 첫 출력 전 "시작 중…" · 고정폭 체인 Nerd Font 자동 폴백 + `term.fallback_fonts` | `termview.rs` · `platform/winpty.rs` · `app/term.rs` · `app/fonts.rs::mono_chain` | T1·T3 | `pump_is_time_boxed_and_reports_backlog` · `terminal_font_chain_covers_nerd_glyphs_when_installed` | ✅ | §75 · §76 시작 표시 = 보이는 글자 기준(ConPTY 선행 제어 시퀀스 무시) · 실기(Ctrl+C · 시작 표시 · 아이콘) 사용자 |
 | NEW-012 | Windows Terminal 설정 따르기 1차(글꼴 목록 · 크기 · 아이콘 넘쳐 그리기 · `term.follow_windows_terminal`) | `platform/mod.rs::{parse_wt_settings, windows_terminal_profile}` · `app/fonts.rs` · `app/term.rs` · `termview.rs` | T1 | `wt_settings_parse_default_profile` · `icon_glyph_overflows_into_following_blank_cell` | 🚧 | §79 · §80 이탤릭(`sgr_italic_on_off` · `italic_cells_select_italic_font`) · 줄 높이 · 글꼴 매칭 Regular(nexa-ui 119 `family_rank_prefers_regular_face`) ✅ · 남은 2차 = 색 구성표 · 커서/여백 · 줄바꿈 · 실기(WT 대조) 사용자 |
 | NEW-013 | 창 투명도 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(DR-22) |
+| NEW-014 | 보호된 운영 체제 파일 숨기기(`list.show_protected` · 기본 숨김 · 탐색기 규칙) | ndir-vfs `is_protected_os_item` · ndir-tree `Filter.show_protected` · `filelist.rs` · `panel.rs` · `app/settings.rs` | T1 | ndir-vfs 판정 MC/DC · `protected_os_items_follow_their_own_switch` | ✅ | §83 · 의도된 차이(Windows 루트 보호 항목 기본 숨김 — dir2는 표시) · 실기(macOS UF_HIDDEN · Windows C:\) 사용자 |
+| GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | NEW-010 | 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 7(즉시 반영) | `app/settings.rs` · `app/input.rs` · `app/paint.rs` · `app/launcher_icons.rs` · nexa-ui 117차 | T2·T3 | `toolbar_groups_move_by_drag_and_size_gap_settings_apply_live` · `launcher_bar_size_and_gap_settings_apply_live` · `gaps_and_padding_are_configurable` | ✅ | §74 · §76 icon_pad · §78 상태 표시 = 부드러운 채움·테두리·알약(`toolbar.hover_fill_pct/on_fill_pct/on_line_pct/state_step_pct/state_radius`) · 플로팅 창 · 배치 초기화 명령 = 잔여 · 실기(크기·간격·상태 모양) 사용자 |
 | NEW-001~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 메모리 모니터 · 상태줄 우측 칸 · 탭 상태바 · Git 공급자 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |

@@ -132,7 +132,7 @@
 | GAP-012 | **경로 바 편집 우클릭 메뉴 · 더블클릭** — dir2 = 편집 중 우클릭 놓기 → 6항목(CMD-086~091 실행 취소/잘라내기/복사/붙여넣기/삭제/모두 선택 · A/win.rs:7472-7532) · 편집 필드 더블클릭 = 전체 선택(A/win.rs:8638-8647) | dir3 우클릭 Released 사건 없음(input.rs:47-49) · `edit_menu_state` 호출 0 · DoubleClick 분기 없음 · `begin_path_edit` dead code(panel.rs:1080-1083) | 🚧 수정 예정(경로 바 슬라이스 · + Esc = 팝업만 닫기 · `path.edit` F4/Ctrl+L) |
 | GAP-013 | **경로 자동완성 미연결** — dir2 = 편집할 때마다 `update_path_suggest`(A/win.rs:7199-7206) · 제안 클릭 = 이동(A/win.rs:8000-8007) | dir3 `set_suggestions` · `suggest_click` 호출 0 → 팝업이 안 열림 · 팝업 자리 클릭은 목록으로 가 편집 취소(panel.rs:977-978) | 🚧 수정 예정(`suggest_folders` 이식 포함) |
 | GAP-014 | **경로 바 IME 조합 창 위치** — dir2 A/win.rs:4792가 `edit_info`로 조합 창을 캐럿에 맞춤 | dir3 `edit_info`(nexa-explorer pathbar.rs:119) 호출 0 | 🚧 수정 예정 |
-| GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | 🚧 수정 예정 |
+| GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | ✅ 해소 10-03 §83(`NativeOpener` open = `ShellExecuteW(0, "open", path, null, 부모 폴더, SW_SHOWNORMAL)` · reveal = `explorer.exe /select,` · `cmd /C start` 제거 · 자동 시험 없음 = 실기 필요) |
 
 ## 결함(BUG)
 
