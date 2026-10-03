@@ -5,7 +5,7 @@
 
 ## 집계
 
-> `scripts/matrix-audit.py`가 생성(원장 = docs/port/[0-8]*.md 표 행 머리 ID · 덮음 = 매트릭스 행이 가리키는 ID · 미착수 전수 = [91](91-matrix-coverage.md)).
+> `scripts/matrix-audit.py`가 생성(원장 = docs/port/[0-8]*.md + docs/22 NEW 표 행 머리 ID · 덮음 = 매트릭스 행이 가리키는 ID · 미착수 전수 = [91](91-matrix-coverage.md)).
 
 | 접두 | 원장 | 덮음 | ✅ | 🚧 | ⚠ | 🖐 | 미착수 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -20,10 +20,11 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
+| NEW | 9 | 9 | 1 | 0 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
-| PANEL | 138 | 138 | 128 | 10 | 0 | 0 | 0 |
+| PANEL | 138 | 138 | 130 | 8 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
@@ -36,11 +37,11 @@
 | TERM | 90 | 90 | 73 | 17 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 4 | 0 | 231 | 0 | 0 |
 | UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
-| UIX | 23 | 23 | 9 | 2 | 12 | 0 | 0 |
+| UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 4 | 92 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 56 | 62 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 26 | 148 | 0 | 0 | 0 |
-| **합계** | 4289 | 4289 | 2358 | 1026 | 766 | 0 | 0 |
+| **합계** | 4298 | 4298 | 2362 | 1023 | 766 | 0 | 0 |
 
 ## 행
 
@@ -142,7 +143,7 @@
 | CI-067~074 | Homebrew 워크플로 · 서명 자리 · THIRD-PARTY-NOTICES · 브랜딩 SSOT · 배포 교훈표 · 워크스페이스 메타/린트 · 툴체인 고정 | `release.yml` · `scripts/third-party-notices.*` · `packaging/branding/` · `Cargo.toml [workspace.lints]` · `rust-toolchain.toml` | T0 | CI · check-all | ✅ | Homebrew(067) = 채널 결정 후속(⚠) |
 | CMD-101 · PLUG-085 · SHELL-020 · 022 · 042 | 미리보기 창 우클릭 복사 · 압축 암호 비밀 타입 · 고유 항목 동작(경로/이름 복사 · 완전 삭제 · 폴더에 붙여넣기) · 파일 실행(연결 프로그램) · 붙여넣기 대상 규칙 | `preview_win.rs` · `preview/archive.rs` · `app/ctxmenu.rs` · `platform::Opener` · `app/ops.rs::paste_dest` | T1·T3 | `password_cache_is_memory_only_and_forgettable` · `row_and_background_context_menus` · `copy_paste` core · `fake.open` 시험 | ✅ | 미리보기 창 우클릭 메뉴는 Ctrl+C 복사로 대체(🚧 메뉴) |
 | RENDER-001~030 · 045~054 | dir2 렌더링(Direct2D 백버퍼·DPI · DirectWrite 텍스트 · 도형/클립/이미지 · GDI 글꼴 체인·팔레트) | nexa-ui `nexa-gfx`(CPU 래스터) · `nexa-font` · `app/fonts.rs`(em_to_px) | T2 | nexa-gfx/nexa-ctl 시험 · `fonts` 시험 | ⚠ | DR-1 — OS 렌더 API 대신 자체 래스터(3-OS 동일 픽셀) · 사용자 피드백 10-03 글자 크기/전각 수정 |
-| RENDER-031~044 | 아이콘·SVG·자원(툴바 SVG · exe/파일 아이콘 · ico 리소스) | `icons.rs` · nexa-gfx `svg.rs` · `app/launcher_icons.rs` · `build.rs`/`winres.rs` | T1·T2 | `all_embedded_icons_render_masks` · `toolbar_commands_map_to_assets` · 런처 아이콘 시험 | ✅ | 파일 목록 아이콘(PANEL-064) = nexa-fs IconService 후속 |
+| RENDER-031~044 | 아이콘·SVG·자원(툴바 SVG · exe/파일 아이콘 · ico 리소스) | `icons.rs` · nexa-gfx `svg.rs` · `app/launcher_icons.rs` · `build.rs`/`winres.rs` | T1·T2 | `all_embedded_icons_render_masks` · `toolbar_commands_map_to_assets` · 런처 아이콘 시험 | ✅ | RENDER-040(셸 아이콘 비동기 로드) = nexa-fs `IconService` 워커 + dir3 `app/row_icons.rs` 캐시(상한 512) · `row_icons_tick` 150 ms(§73 · dir2 상한 256 · 틱 80 ms와 수치만 다름) |
 | B-001~021 | 렌더 자원 대조표(화면 표면 · 글리프 래스터 · 기본/고정폭 글꼴 · …) | nexa-gfx `Surface` · ab_glyph · nexa-font | T2 | nexa-ui 시험 | ⚠ | DR-1 대체 표 |
 | N-001 | 클립 스택(가로 스크롤 번짐 차단) | nexa-ui 112차 `RasterCtx.clips` | T2 | nexa-ctl `clip_tests` | ✅ | journal §67 |
 | N-002~015 | "없음 → 추가" 표(끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · 113차 italic | T2 | nexa-gfx svg 시험 · nexa-grid `adapt_forwards_to_ctl_ctx` | 🚧 | SVG ✅ · italic ✅(§68) · ICO ☐ |
@@ -185,7 +186,7 @@
 | WINC-001~025 | 설정 값 적용 `apply_prefs`(실시간 · 멱등) | `app/settings.rs::apply_setting` | T3 | `every_registry_key_is_applied_or_declared_restart` | ✅ | 레지스트리 전 키 적용 감시 |
 | WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) |
 | PANEL-001~035 · 037~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
-| PANEL-064 · GAP-003 | 아이콘 키 → 행 셸 아이콘(dir2 `icons.rs` ShellIconCache LRU) | `filelist.rs:276` `TreeSource`에 `icon` 없음(nexa-grid 기본 `None`) | — | — | 🚧 | 구현 예정(개발 세션 다음 슬라이스 · [99](99-coverage-gaps.md) GAP-003) |
+| PANEL-064 · GAP-003 · NEW-009 | 아이콘 키 → 행 셸 아이콘(dir2 `icons::icon_key` · source.rs:426-432) + 아이콘 계층(직접 설정 → 파일 등록 → 확장자 등록 → 시스템 기본 → 자체 그림) | `filelist.rs::{icon_key, RowSource::icon}` · `app/row_icons.rs`(nexa-grid 리졸버) · nexa-ui 116차 `set_icon_resolver` | T1·T3 | `rows_expose_dir2_icon_keys` · `service_key_maps_dir2_icon_keys` · `override_rules_parse_and_match_by_priority` · `resolver_always_yields_an_image` | ✅ | §73 · ICO/SVG 사용자 아이콘 미지원(UIC-317) · 규칙 편집은 Text 한 줄 · 타 OS = nexa-fs 폴백 · 실기(아이콘 모양) 사용자 |
 | UIX-021 · GAP-004 | FilePicker 최근 목록 · 숨김 파일 설정 주입 | `file_win.rs:160~163`(`set_show_dot`만) | — | — | 🚧 | 구현 예정(GAP-003 뒤) |
 | PANEL-054~063 · 065~068 | 데이터 어댑터 `TreeSource` | `filelist.rs` | T1·T3 | `filelist::tests` · `my_pc_drive_columns_from_disk_port` · `cut_marks_ghost_rows_…` | ✅ | |
 | PANEL-069~118 | 목록 위젯 `VirtualRows`(열·타입어헤드·고속 스크롤·선택·드래그 열) | nexa-ui `nexa-grid`(dir2 `rows.rs` 승격 · DR-2) | T2 | nexa-grid 시험(nexa-ui) · `fixed_columns…` | ✅ | 컨트롤은 nexa-ui 소유 — 변경은 nexa-ui에서 |
@@ -221,7 +222,9 @@
 | UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 |
 | UIX-001 · 005 · 010~014 · 020 · 024 | nexa-ui 보조 크레이트 중 dir3가 쓰는 것 — TextBox(한 줄) · 기록기 · nexa-grid `EditState`(이름 바꾸기 · 경로 바) · FilePicker(Open/Folder · 틱) | `prefs_win.rs` · `bulk_win.rs` · `dlg_win.rs` · `file_win.rs` · `license_win.rs` · `app/ops.rs::begin_rename` | T2·T3 | `new_folder_rename_and_undo` · `bulk_rename_window_apply_undo_and_presets` · nexa-grid `edit.rs` 단위 | ✅ | [52](52-nexa-ui-dlg-fs-status.md) §1~§3 |
 | UIX-002~004 · 022 · 023 · 025 · 030~032 · 034~036 | nexa-ui 보조 API 중 dir3 미사용 — 편집기 기능 · 편집 명령(TextBox 내부 간접) · 클릭 정책 · FilePicker 다중/저장/시험 보조 · nexa-fs 목록/드라이브/외부 열기/감시/경로·시간 | nexa-ui(DR-2) · dir3 대체 = ndir-vfs/ndir-tree · `platform::{Opener, Watcher}` · `dockinfo.rs` | — | — | ⚠ | DR-2/DR-5 — nexa-sql 전용이거나 dir2 이식 크레이트·`platform/`이 대신 · [52](52-nexa-ui-dlg-fs-status.md) |
-| UIX-021 · 033 | FilePicker 상태 주입(최근 목록 · 숨김 파일) · 셸 아이콘(IconService — 런처·템플릿 ✅ · **패널 행 아이콘 없음**) | `file_win.rs:160~163` · `app/launcher_icons.rs` · `platform/wintemplates.rs` · `filelist.rs:276`(`TreeSource`에 `icon` 없음) | — | — | 🚧 | 빈칸 2 — 개발 세션 확인 대상([52](52-nexa-ui-dlg-fs-status.md) §5 · [98](98-dir2-release-parity.md) M1) |
+| UIX-021 | FilePicker 상태 주입(최근 목록 · 숨김 파일) | `file_win.rs:160~163` | — | — | 🚧 | GAP-004 · [52](52-nexa-ui-dlg-fs-status.md) §5 |
+| UIX-033 | 셸 아이콘(IconService) — 런처 · 템플릿 `kind_name` · **패널 행 아이콘**(§73) | `app/launcher_icons.rs` · `platform/wintemplates.rs` · `app/row_icons.rs` | T1·T3 | 위 PANEL-064 행 시험 | ✅ | GAP-003 해소 |
+| NEW-001~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 메모리 모니터 · 상태줄 우측 칸 · 탭 상태바 · Git 공급자 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드 | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
 | CMD-001~031 · 042~055 · 063~067 | 메뉴바·도구 모음·탭 메뉴 명령(dir2 상수 45 → dir3 문자열 id) | `ndir-settings/src/commands.rs::COMMANDS` · `app/menus.rs::MENU_IDS` · 탭 메뉴 | T1·T3 | `dir2_catalog_menu_commands_map_to_dir3_ids`(원장 §1 대조) · `route_and_commands_without_window` | ✅ | |
 | CMD-032~041 | 언어 i(동적 `lang:<code>`) · 클라우드 메뉴(이동/웹/URL 복사/연결 해제/추가/인증) | — | — | — | ⚠ | 동적 명령은 표 밖(commands.rs 머리말) · 클라우드 = 미이식(M8 CLOUD) |
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | 🚧 | 버튼별 ID 대조 행 없음(동작은 시험) |
@@ -306,7 +309,7 @@
 | PANEL-044 · X-17 | 내 PC 전용 열(이름·종류·전체 크기·여유 공간 · 진입/이탈 시점만 교체 · 타일 용량 바) | `filelist.rs`(COL_TOTAL/FREE · drive_space · tile_info) · `panel.rs`(sync_columns_for_root) · `main.rs`(Disk 포트 주입) | T2·T3 | `drive_columns_use_injected_space` · `my_pc_switches_columns_and_back` · `my_pc_drive_columns_from_disk_port` | ✅ | 비Windows 드라이브/마운트 열거는 T-53(ndir-vfs X-17 β) |
 | DR-5 · CI-103 · SKEL-404·425·431·432 | 플랫폼 포트 9종(Shell·Pty·ContextMenuProvider·Trash·FileClipboard·DragSource·Watcher·Opener·Disk) · `Platform::native/fake` · Unsupported 규약 | `nexa-dir/src/platform/{mod,fake,windows,macos,linux}.rs` · `docs/adr/0001` | T1·T2·T3 | `pick_shell_prefers_first_existing` · `poll_watcher_reports_changed_dirs_only` · `native_has_a_shell_and_unsupported_ports_say_so` · `fake_records_and_injects` · `platform_ports_wire_open_and_watch` | ✅ | T-50 · Pty/메뉴/휴지통/클립보드/DnD 운영 구현은 T-51~53 |
 | PANEL-042 · SHELL §1-B | 폴더 자동 갱신(폴링 감시 1 s → 그 폴더 탭 무간섭 재열람) | `app/watch.rs` · `platform::PollWatcher` | T3 | `platform_ports_wire_open_and_watch` | 🚧 | OS 통지(ReadDirectoryChangesW·FSEvents·inotify)는 T-51~53 · 감시 상한(WATCH_CAP)·펼친 폴더는 잔여 |
-| PANEL-036 · GAP-005 | 무간섭 재열람(F5 · 감시 · 필터 토글 — dir2 `reopen_filtered`: 선택 경로 · 캐럿 경로 · 스크롤 스냅샷 → 재열기 → 복원) | `panel.rs:901` `Panel::reopen` = 캐럿 인덱스·스크롤만 복원 · **선택 복원 누락**(`TreeSource::reload`가 선택을 비움) · 펼침/정렬 유지 미검증 | T3 | `per_tab…`(캐럿·스크롤) | 🚧 | 10-03 §72 적발(ctx-menu.scn — 감시 재열람 뒤 `edit.copy` = clip none) · 수정 예정(개발 세션 다음 슬라이스 · 경로 기준 복원 + T3) · [99](99-coverage-gaps.md) GAP-005 |
+| PANEL-036 · GAP-005 | 무간섭 재열람(F5 · 감시 · 필터 토글 — dir2 `reopen_filtered`: 선택 경로 · 캐럿 경로 · 스크롤 스냅샷 → 재열기 → 복원) | `filelist.rs::TreeSource::reload` = 정렬 키 · 펼친 폴더(부모 먼저) · 선택 경로 스냅샷 → 새 트리에 `set_sort`/`expand_path`/`select` 복원(사라진 항목만 빠짐) · `panel.rs` `Panel::reopen`(캐럿·스크롤) | T3·T4 | `reopen_keeps_selection_expansion_and_sort` · `ctx-menu.scn`(행 메뉴 `ctx.wait` 회귀) | ✅ | §72 적발 → §73 해소 · [99](99-coverage-gaps.md) GAP-005 |
 | CI-110 (shell·open·fs) | `--selfcheck` 실제 항목: 기본 셸·후보 · 열기 명령 · 샌드박스 파일 왕복 · 드라이브 용량 | `nexa-dir/src/selfcheck.rs` | T5 | `--selfcheck --ci` PASS(Windows) | ✅ | T-50 · Unix 용량 SKIP(T-52/53) |
 | SHELL §1-E · SKEL-427 | 휴지통 3-OS(Windows SHFileOperationW ALLOWUNDO · Linux freedesktop Trash 규격 · macOS ~/.Trash 이동) + `edit.delete` 배선 + selfcheck `trash` | `platform/{windows,linux,macos}.rs` · `app/menus.rs::delete_to_trash` | T1·T3·T5 | `trash_moves_and_writes_info`(Linux) · `home_trash_moves_with_suffix…`(mac) · `delete_goes_through_trash_port` · selfcheck(비CI) | ✅ | T-51 A · 확인창 T-29 · macOS 되돌리기 T-52 · 복원(undelete) 잔여 |
 | SHELL §1-C · SKEL-428 | 파일 클립보드 — Windows CF_HDROP + Preferred DropEffect 읽기/쓰기 | `platform/windows.rs::NativeFileClipboard` | T2(ignored · opt-in) | `double_null_list_layout` · `clipboard_roundtrip_and_trash_real`(ignored) | 🚧 | mac/Linux(T-52/53) · 명령 배선(edit.cut/copy/paste)은 M6 |

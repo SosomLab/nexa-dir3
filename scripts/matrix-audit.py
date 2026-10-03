@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """matrix-audit.py — 검증 매트릭스 전수 감사(T-90 · CI-116).
 
-원장(docs/port/[0-8]*.md)의 표 행 머리 ID(`| PREFIX-NNN |`)를 전부 모으고, 매트릭스(docs/port/90)의 각 행 첫 칸이 가리키는 ID
+원장(docs/port/[0-8]*.md + dir3 신규 기능 원장 docs/22-dir3-features.md의 `NEW-NNN`)의 표 행 머리 ID(`| PREFIX-NNN |`)를 전부 모으고, 매트릭스(docs/port/90)의 각 행 첫 칸이 가리키는 ID
 (`PREFIX-NNN` · `NNN~MMM` 범위 · `·`/`/` 나열 · 접두 생략 연속 · `15xx` 와일드카드 · 괄호 꼬리 무시)와 상태(✅ 🚧 ⚠ 🖐 ☐)를 대조해
   1) docs/port/90의 `## 집계` 표를 다시 쓰고(접두별 원장 수 · 매트릭스가 덮는 ID 수 · 상태별)
   2) docs/port/91-matrix-coverage.md(생성물)에 **미착수 ID 전수**(원장 파일:줄 + 제목)를 적는다.
@@ -18,6 +18,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = os.path.join(ROOT, "docs", "port")
 MATRIX = os.path.join(PORT, "90-verification-matrix.md")
 OUT = os.path.join(PORT, "91-matrix-coverage.md")
+# dir3 신규 기능(dir2에 없음) 원장 — NEW-* 도 같은 매트릭스에 걸어 빈칸을 드러낸다(10-03 · DR-15~18).
+EXTRA_LEDGERS = [os.path.join(ROOT, "docs", "22-dir3-features.md")]
 
 ID_ROW = re.compile(r"^\| ([A-Z]+)-(\d{2,4})([a-z]?) \|(.*)$")
 STATUS_MARKS = ["✅", "🚧", "⚠", "🖐", "☐"]
@@ -30,9 +32,11 @@ def read(p):
 def ledger():
     """{ (prefix, num) : (file, line, title) } — 같은 ID가 여러 문서에 있으면 처음 것."""
     ids = {}
-    files = sorted(f for f in os.listdir(PORT) if re.match(r"[0-8]\d-.*\.md$", f))
-    for f in files:
-        for ln, line in enumerate(read(os.path.join(PORT, f)).splitlines(), 1):
+    files = [(f, os.path.join(PORT, f)) for f in sorted(os.listdir(PORT)) if re.match(r"[0-8]\d-.*\.md$", f)]
+    # 91에서 링크로 쓰이는 이름 = port/ 기준 상대 경로.
+    files += [("../" + os.path.basename(p), p) for p in EXTRA_LEDGERS if os.path.exists(p)]
+    for f, path in files:
+        for ln, line in enumerate(read(path).splitlines(), 1):
             m = ID_ROW.match(line)
             if not m:
                 continue
@@ -144,7 +148,7 @@ def main():
     _, _, tail = rest.partition("## 행")
     new = (
         head
-        + "## 집계\n\n> `scripts/matrix-audit.py`가 생성(원장 = docs/port/[0-8]*.md 표 행 머리 ID · 덮음 = 매트릭스 행이 가리키는 ID · 미착수 전수 = [91](91-matrix-coverage.md)).\n\n"
+        + "## 집계\n\n> `scripts/matrix-audit.py`가 생성(원장 = docs/port/[0-8]*.md + docs/22 NEW 표 행 머리 ID · 덮음 = 매트릭스 행이 가리키는 ID · 미착수 전수 = [91](91-matrix-coverage.md)).\n\n"
         + table
         + "\n\n## 행"
         + tail

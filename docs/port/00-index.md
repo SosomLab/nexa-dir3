@@ -34,6 +34,8 @@
 
 **T-91(10-03)로 작성**: [52](52-nexa-ui-dlg-fs-status.md)(nexa-ctl TextBox·nexa-grid edit · nexa-dlg FilePicker · nexa-fs OS 분기 현황) · [92](92-qa-checklist.md)(dir2 대조 실기 QA 표 — 생성물 `scripts/qa-checklist.py`) · [98](98-dir2-release-parity.md)(dir2 릴리스 기능(로드맵 M0~M5) ↔ dir3 대조) · [99](99-coverage-gaps.md)(dir2 파일 커버리지 · GAP — 생성물 `scripts/coverage-files.py`).
 
+**dir3 신규 기능(dir2에 없음)은 이 원장에 넣지 않는다** — 결정 = [10](../10-decision-record.md) DR-15~18 · 원장 = [docs/22 dir3 신규 기능](../22-dir3-features.md)(ID 접두 `NEW-NNN` · `scripts/matrix-audit.py`가 함께 읽으므로 [90](90-verification-matrix.md)에 NEW 행을 건다).
+
 ## 2. 교차 검증에 쓰는 법
 
 1. 기능 하나를 구현하기 전 원장에서 ID를 고른다 → 해당 문서의 "동작 상세·진입점·이식 분류(N/A/P/W)·OS 분기·주의"를 읽는다 → dir2 원본 코드를 **직접** 연다.
