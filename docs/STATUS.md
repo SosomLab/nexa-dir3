@@ -2,6 +2,16 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
+## 10-03 86차 — main CI 빨강 복구 · 흔들리는 시험 수정 · `cmd.activate`
+
+- **한 일**: .lnk 시험 경로 비교를 canonicalize로(windows CI 8.3 짧은 이름) · 고속 스크롤 시험을 순수 계산으로(전역 경쟁 제거) · 명령 `cmd.activate` 추가.
+- **지금 상태**: 흔들리는 시험 없음(개발 세션 15/15). .lnk/링크 남은 갭 = GAP-008 · 경로 바 GAP-014(IME).
+- **걸린 것**: 경로 제안 열거 UI 스레드 `read_dir` · 설정 창 "클라우드 연결" 빈 페이지(CLOUD 결정과 함께) · `list.show_protected` 기본값 · CLAUDE.md §5 소비자 기록 규칙 · dir2 링크 결함 · `term.color`와 NO_COLOR · 로그 "파일로 저장" 허용 · 실기 확인 · 릴리스 태그.
+
+→ [journal/2026-10-03 §90](journal/2026-10-03.md)
+
+---
+
 ## 10-03 85차 — 폴더 바로 가기(.lnk) = 앱 안 이동(GAP-007)
 
 - **한 일**: .lnk 대상이 폴더면 탐색기처럼 같은 패널에서 이동(Windows · IShellLinkW) · 파일 대상은 종전대로 OS 열기 · 시험 2 · 실기(Enter) 확인.

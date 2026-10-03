@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **⚠ CI 빨강 복구 · 흔들림 제거 · `cmd.activate`**: .lnk 시험이 러너 TEMP 8.3 짧은 이름 때문에 windows CI에서만 실패 → canonicalize 비교 · 고속 스크롤 시험을 순수 계산(`scroll_configs`)으로(전역 경쟁 제거) · `cmd.activate` 명령(캐럿 행 활성화) · docs/18 시험 규약 2줄 → [journal §90](journal/2026-10-03.md)
 - **폴더 바로 가기 = 앱 안 이동**: .lnk 대상이 폴더면 활성 패널 이동(IShellLinkW::GetPath · Resolve 안 부름) · 파일 대상/해석 불가 = OS 열기 · macOS/Linux 무변화 · GAP-007 해소(dir2에 없던 Explorer 동작) · 실기 Enter 이동 확인 · ⚠ 흔들리는 시험 1건(고속 스크롤 전역 · 10회 중 1) 개발 세션 인계 → [journal §89](journal/2026-10-03.md)
 - **T4 가짜 클립보드**: `NDIR_FAKE_CLIPBOARD=1`(프로세스 안 텍스트·파일 클립보드) · ndir-check가 모든 시나리오에 주입 → 게이트 전후 OS 클립보드 순번 10592 → 10592(무변화) 확인 · 시험 클립보드 접촉 위반 완전 해소 → [journal §88](journal/2026-10-03.md)
 - **⚠ 시험의 실제 클립보드 접촉 수정**: `cargo test`가 사용자 텍스트 클립보드를 읽고 덮어쓰던 것을 시험 빌드 가짜로(호출부 25곳 · `test_build_never_touches_the_os_clipboard`) · T4 `edit.copy` 2곳은 아직 실제 파일 클립보드에 씀(env 가짜 예정) → [journal §87](journal/2026-10-03.md)
