@@ -832,6 +832,46 @@ mod tests {
         }
     }
 
+    /// 시간 단위 규칙(nexa-sql docs/94 §6-5 · 사용자 10-03 "10초 이상은 초 단위 · 10초 미만은 ms"): 기본값이 10초 이하인 시간
+    /// 설정 = `_ms` · 넘으면 `_secs` · 분 = `_min`. 단위 없는 시간 키(`_sec` · `_timeout` · `_delay` · `_interval`로 끝남)는 금지 —
+    /// 새 키가 규칙을 어기면 여기서 걸린다. 단위를 바꾸면 `RESCALED`에 (옛 키, 새 키, 배수)를 적는다.
+    #[test]
+    fn time_keys_follow_unit_rule() {
+        let mut ms = 0;
+        for e in REGISTRY {
+            let default: Option<i64> = e.default.parse().ok();
+            if e.key.ends_with("_ms") {
+                ms += 1;
+                let d = default.unwrap_or_else(|| panic!("{}: 숫자 기본값", e.key));
+                assert!(d <= 10_000, "{} 기본 {d} ms > 10초 → `_secs`로", e.key);
+            } else if e.key.ends_with("_secs") {
+                let d = default.unwrap_or_else(|| panic!("{}: 숫자 기본값", e.key));
+                assert!(d > 10 || d == 0, "{} 기본 {d}초 ≤ 10초 → `_ms`로", e.key);
+            }
+            for bad in [
+                "_sec",
+                "_seconds",
+                "_timeout",
+                "_delay",
+                "_interval",
+                "_millis",
+            ] {
+                assert!(
+                    !e.key.ends_with(bad),
+                    "{}: 단위 접미(`_ms`/`_secs`/`_min`)를 붙인다",
+                    e.key
+                );
+            }
+        }
+        assert!(ms >= 7, "시간 설정 {ms}개");
+        for (old, new, scale) in RESCALED {
+            assert!(
+                entry(new).is_some() && entry(old).is_none() && *scale > 0,
+                "{old} → {new}"
+            );
+        }
+    }
+
     /// dir2 기본값 계승(DR-3 · PREFS-101~): 테마 = **system**(dir2 dark에서 바꿈 — 사용자 10-03 "테마는 시스템을 기본값으로") · 언어 system · 숨김 on · 고속 스크롤 3/16 · 타입어헤드 좌하 · 전송 2000 ms.
     #[test]
     fn defaults_follow_dir2() {
