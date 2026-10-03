@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **T4 가짜 클립보드**: `NDIR_FAKE_CLIPBOARD=1`(프로세스 안 텍스트·파일 클립보드) · ndir-check가 모든 시나리오에 주입 → 게이트 전후 OS 클립보드 순번 10592 → 10592(무변화) 확인 · 시험 클립보드 접촉 위반 완전 해소 → [journal §88](journal/2026-10-03.md)
 - **⚠ 시험의 실제 클립보드 접촉 수정**: `cargo test`가 사용자 텍스트 클립보드를 읽고 덮어쓰던 것을 시험 빌드 가짜로(호출부 25곳 · `test_build_never_touches_the_os_clipboard`) · T4 `edit.copy` 2곳은 아직 실제 파일 클립보드에 씀(env 가짜 예정) → [journal §87](journal/2026-10-03.md)
 - **경로 편집 메뉴 · 더블클릭**: 편집 중 경로 바 우클릭 = 텍스트 메뉴 6항목(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택 · 글자 편집만) · 더블클릭 = 전체 선택 · GAP-012 해소(dir2 win.rs:7472-7532 · 8638-8647) → [journal §86](journal/2026-10-03.md)
 - **경로 자동완성**: dir2 `pathinput.rs` 그대로 이식(expand_env · suggest_folders) · 입력마다 폴더 제안(최대 20) · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 %VAR%/$env:VAR 확장 · GAP-013 해소 · GAP-009 CI(ubuntu·macos) 통과 확인 → [journal §85](journal/2026-10-03.md)

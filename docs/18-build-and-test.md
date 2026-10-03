@@ -53,6 +53,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | `NDIR_NO_ACTIVATE` | 창을 앞으로 가져오지 않음(사용자 작업 방해 금지) |
 | `NDIR_TRACE_FRAMES` / `_IME` / `_CLIP` / `_WINDOW` | 추적 로그 |
 | `NDIR_TERM_TRACE` | `<파일>` — 터미널 PTY에서 읽은 **원시 바이트**를 그 파일에 덧붙인다(conhost가 보내는 이스케이프·커서 이동·글자 폭 진단 · §81). `term.dump` 끝에는 PTY에 마지막으로 준 크기 `pty CxR`가 찍힌다 |
+| `NDIR_FAKE_CLIPBOARD` | `1`(빈 값·`0` = 꺼짐) — 텍스트·파일 클립보드를 **프로세스 안 가짜**로 쓴다(OS 클립보드를 읽지도 쓰지도 않음 · §88). `ndir-check`가 모든 T4 시나리오 프로세스에 항상 넣는다 · 검토용 격리 캡처 실행에도 넣는다 · **사용자 인스턴스에는 넣지 않는다** |
 | 덤프 어휘 | `layout` · `panel` · `list` · `tree` · `tabs` · `status` · `menu` · `ops` · `term` · `preview` · `prefs` · `plugin` · `license` · `log` — 컨트롤·패널마다 `dump()` 하나가 구현 요건 |
 
 ## 6. 자가 점검(`--selfcheck`) 항목
@@ -99,4 +100,5 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 - 프로세스는 내가 띄운 PID만 종료(예외: 이 저장소 `target/` 아래 `nexa-dir.exe`).
 - 사용자 클립보드를 덮어쓰는 명령은 자동 시험에 넣지 않는다.
   - **텍스트 클립보드 = 시험 빌드에서 가짜**(§87): `clipboard::{read_text, write_text, write_rich}`는 `#[cfg(test)]`에서 스레드별 가짜(`thread_local FAKE`)만 쓴다 — T1~T3(`cargo test`)은 OS 클립보드를 읽지도 쓰지도 않는다(시험 `test_build_never_touches_the_os_clipboard`). 파일 클립보드는 `platform` 가짜 포트.
-  - **⚠ T4(실제 exe)는 아직 예외**: `copy-paste.scn` · `ctx-menu.scn`의 `edit.copy`가 운영 플랫폼 `NativeFileClipboard`로 실제 OS 클립보드에 CF_HDROP을 쓴다(10-03 §87 적발) → env 가짜 클립보드(`NDIR_FAKE_CLIPBOARD` 예정)로 돌리기 전까지는 게이트를 돌리면 사용자 클립보드가 바뀐다.
+  - **T4(실제 exe) = env 가짜 클립보드**(§88 · §87 적발 해소): `ndir-check`가 시나리오 프로세스에 `NDIR_FAKE_CLIPBOARD=1`을 넣어, `copy-paste.scn` · `ctx-menu.scn`의 `edit.copy`도 프로세스 안 `MemoryFiles`/`MEMORY`로만 간다. 검증 = 게이트 전후 `GetClipboardSequenceNumber`(읽기만) 비교 — journal §88에 수치.
+  - `--selfcheck --with-clipboard`(opt-in)만 사용자가 명시로 켤 때 실제 클립보드를 쓴다.
