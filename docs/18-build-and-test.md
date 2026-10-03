@@ -102,5 +102,6 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
   - **텍스트 클립보드 = 시험 빌드에서 가짜**(§87): `clipboard::{read_text, write_text, write_rich}`는 `#[cfg(test)]`에서 스레드별 가짜(`thread_local FAKE`)만 쓴다 — T1~T3(`cargo test`)은 OS 클립보드를 읽지도 쓰지도 않는다(시험 `test_build_never_touches_the_os_clipboard`). 파일 클립보드는 `platform` 가짜 포트.
   - **T4(실제 exe) = env 가짜 클립보드**(§88 · §87 적발 해소): `ndir-check`가 시나리오 프로세스에 `NDIR_FAKE_CLIPBOARD=1`을 넣어, `copy-paste.scn` · `ctx-menu.scn`의 `edit.copy`도 프로세스 안 `MemoryFiles`/`MEMORY`로만 간다. 검증 = 게이트 전후 `GetClipboardSequenceNumber`(읽기만) 비교 — journal §88에 수치.
   - `--selfcheck --with-clipboard`(opt-in)만 사용자가 명시로 켤 때 실제 클립보드를 쓴다.
+- **키 주입 경로를 구분한다**(§93): 기동 명령 `ui.press:<키>`는 **키맵을 우회**해 컨트롤에 키 사건을 직접 넣는다 — 키맵이 가로채는 키(Enter · Alt+↓ 등)의 실제 동작은 검증되지 않는다. 키맵 경로는 `ui.key:<조합>`(키맵 조회 → 명령 · 타이핑/메뉴 통과 규칙은 미적용)으로, T3는 `App::key_chord`로 넣는다. 다음 하네스 = 실제 경로 전체(`key_chord`)를 타는 기동 명령.
 - **경로 비교 시험은 양쪽을 `fs::canonicalize` 뒤 비교**한다(§90): CI 러너의 `TEMP`는 8.3 짧은 이름(`C:\Users\RUNNER~1\…`)이라 OS API가 돌려주는 긴 이름과 문자열이 다르다 — 로컬(TEMP = 긴 이름)에서는 통과하고 CI에서만 깨진다. 지우기 전에 계산.
 - **프로세스 전역을 시험하지 않는다**(§90): nexa-grid/nexa-ctl 고속 스크롤처럼 프로세스 공유 전역은 병렬 시험(다른 시험의 `App` 생성)이 덮어쓴다 → 구성 계산을 순수 함수로 떼어 그것을 확인한다(`App::scroll_configs`).
