@@ -2485,6 +2485,36 @@ fn toolbar_on_default_is_accent_background_only() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 언어 전환 길(T-134): `relabel`이 입력칸 우클릭 메뉴 글(nexa-ctl 내장 · 종전 = 기동 언어에 고정) · 도크 종류 칸 ·
+/// 네비 버튼 툴팁을 지금 언어의 글로 다시 넣는다(전역 언어는 바꾸지 않는다 — 다른 시험과 경합하지 않게 같은 언어로 확인).
+#[test]
+fn relabel_refreshes_one_time_labels() {
+    let (mut app, dir) = fixture("relabel");
+    app.layout_for(1200, 800, 1.0);
+    app.relabel();
+    use nexa_ctl::controls::{ctl_label, CtlMsg};
+    assert_eq!(ctl_label(CtlMsg::CtxCopy), tr("menu.edit.copy"));
+    assert_eq!(ctl_label(CtlMsg::CtxPaste), tr("menu.edit.paste"));
+    let tips: Vec<String> = app.panels[0]
+        .nav_items()
+        .iter()
+        .map(|it| it.tip.clone())
+        .collect();
+    assert_eq!(
+        tips,
+        [
+            tr("nav.mypc"),
+            tr("cmd.navBack"),
+            tr("cmd.navForward"),
+            tr("cmd.navUp")
+        ]
+    );
+    // 두 번 불러도 같은 결과(라벨 누수는 글이 바뀔 때만).
+    app.relabel();
+    assert_eq!(ctl_label(CtlMsg::CtxSelectAll), tr("menu.edit.selectAll"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

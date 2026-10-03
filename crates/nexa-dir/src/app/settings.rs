@@ -341,7 +341,26 @@ impl App {
         self.rebuild_toolbar();
         self.sync_menu_shortcuts();
         self.sync_menu_checks();
+        // 한 번만 만들던 글(T-134 · 언어 전환 때 안 바뀌던 곳): 입력칸 우클릭 메뉴 · 도크 종류 칸 · 패널 네비 툴팁/내 PC 제목 ·
+        // 보조 창의 버튼/제목.
+        crate::install_ctl_labels();
+        let mut inv = Invalidations::default();
+        for d in &mut self.docks {
+            d.set_kinds(
+                vec![tr("dock.info"), tr("dock.preview"), tr("dock.terminal")],
+                &mut inv,
+            );
+        }
+        for p in &mut self.panels {
+            p.relabel(&mut inv);
+        }
         self.layout();
+        self.prefs_win.relabel();
+        self.keys_win.relabel();
+        self.check_win.relabel();
+        self.license_win.relabel();
+        self.order_win.relabel();
+        self.bulk_win.relabel();
         self.mem_win.relabel();
     }
 }

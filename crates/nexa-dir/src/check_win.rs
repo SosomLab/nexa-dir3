@@ -225,6 +225,17 @@ impl CheckWin {
         [&mut self.run_btn, &mut self.copy_btn, &mut self.close_btn]
     }
 
+    /// 언어 전환 — 버튼 글 · 창 제목(T-134).
+    pub(crate) fn relabel(&mut self) {
+        self.run_btn.set_label(tr("check.btn.run"));
+        self.copy_btn.set_label(tr("check.btn.copy"));
+        self.close_btn.set_label(tr("pref.btn.close"));
+        if let Some(w) = &self.window {
+            w.set_title(&format!("Nexa Dir — {}", tr("check.title")));
+            w.request_redraw();
+        }
+    }
+
     pub(crate) fn open(
         &mut self,
         el: &ActiveEventLoop,

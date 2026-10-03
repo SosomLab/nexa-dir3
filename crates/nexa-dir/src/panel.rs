@@ -157,8 +157,11 @@ fn nav_icons(scale: f32) -> [ToolIcon; 4] {
 }
 
 /// [홈][←][→][↑] — 순서·폭(`nav_btn_w` × 4 · 틈 없음)은 dir2 그대로.
+/// 네비 버튼 툴팁 키(순서 = 홈 · 뒤로 · 앞으로 · 위로).
+const NAV_TIP_KEYS: [&str; 4] = ["nav.mypc", "cmd.navBack", "cmd.navForward", "cmd.navUp"];
+
 fn nav_buttons() -> Toolbar {
-    let tips = ["nav.mypc", "cmd.navBack", "cmd.navForward", "cmd.navUp"];
+    let tips = NAV_TIP_KEYS;
     let items = nav_icons(1.0)
         .into_iter()
         .enumerate()
@@ -725,6 +728,15 @@ impl Panel {
         if self.status_on {
             self.status.paint(ctx, theme);
         }
+    }
+
+    /// 언어 전환 — 네비 버튼 툴팁 · 탭 제목/경로 바의 "내 PC"를 지금 언어로(T-134).
+    pub(crate) fn relabel(&mut self, inv: &mut Invalidations) {
+        for (i, key) in NAV_TIP_KEYS.iter().enumerate() {
+            self.navbtns
+                .set_item_tip(NAV_ASSETS[i].0, &ndir_i18n::tr(key));
+        }
+        self.sync_chrome(inv);
     }
 
     /// 탭 상태바 켜기/끄기(설정 `layout.tab_statusbar`) — 바뀌면 다시 배치한다.

@@ -426,6 +426,14 @@ impl OrderWin {
         (w as f64, h as f64)
     }
 
+    /// 언어 전환 — 닫기 버튼 글(T-134 · 행 라벨은 그릴 때마다 만든다).
+    pub(crate) fn relabel(&mut self) {
+        self.close_btn.set_label(tr("pref.btn.close"));
+        if let Some(w) = &self.window {
+            w.request_redraw();
+        }
+    }
+
     pub(crate) fn open(
         &mut self,
         el: &ActiveEventLoop,

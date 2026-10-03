@@ -99,6 +99,18 @@ impl KeysWin {
     }
 
     /// 키맵으로 표시 행을 다시 만든다(열 때 · 값이 바뀔 때).
+    /// 언어 전환 — 버튼 글 · 창 제목(T-134).
+    pub(crate) fn relabel(&mut self) {
+        self.assign_btn.set_label(tr("keys.btn.assign"));
+        self.clear_btn.set_label(tr("keys.btn.clear"));
+        self.reset_btn.set_label(tr("pref.btn.reset"));
+        self.close_btn.set_label(tr("pref.btn.close"));
+        if let Some(w) = &self.window {
+            w.set_title(&format!("Nexa Dir — {}", tr("keys.title")));
+            w.request_redraw();
+        }
+    }
+
     pub(crate) fn refresh(&mut self, km: &Keymap) {
         self.rows = COMMANDS
             .iter()
@@ -575,6 +587,17 @@ impl KeysWin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 언어 전환(T-134): 만들 때 한 번만 넣던 버튼 글을 `relabel`이 지금 언어의 글로 다시 넣는다.
+    #[test]
+    fn relabel_restores_button_labels_from_i18n() {
+        let mut w = KeysWin::new();
+        w.assign_btn.set_label("stale");
+        w.close_btn.set_label("stale");
+        w.relabel();
+        assert_eq!(w.assign_btn.label(), tr("keys.btn.assign"));
+        assert_eq!(w.close_btn.label(), tr("pref.btn.close"));
+    }
     use ndir_settings::Settings;
 
     #[test]

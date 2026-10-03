@@ -98,6 +98,19 @@ impl LicenseWin {
         }
     }
 
+    /// 언어 전환 — 버튼 글 · 창 제목(T-134 · 표의 라벨은 그릴 때마다 호스트가 만든다).
+    pub(crate) fn relabel(&mut self) {
+        self.btn_copy.set_label(tr("license.btn.copyReq"));
+        self.btn_open.set_label(tr("license.btn.open"));
+        self.btn_remove.set_label(tr("license.btn.remove"));
+        self.btn_close.set_label(tr("license.btn.close"));
+        if let Some(w) = &self.window {
+            w.set_title(&format!("Nexa Dir — {}", tr("license.title")));
+        }
+        self.fit = true;
+        self.redraw();
+    }
+
     pub(crate) fn open(
         &mut self,
         el: &ActiveEventLoop,

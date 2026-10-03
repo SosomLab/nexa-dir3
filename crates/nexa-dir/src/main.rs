@@ -978,22 +978,33 @@ fn init_i18n(settings: &Settings) {
     ndir_i18n::activate(ndir_i18n::load(&code, &home));
 }
 
-/// nexa-ctl 내장 메뉴(우클릭 편집) 라벨을 앱 i18n에 잇는다 — `fn` 포인터 계약이라 한 번 누수해 `'static`으로.
+/// nexa-ctl 내장 메뉴(우클릭 편집) 라벨을 앱 i18n에 잇는다 — `fn` 포인터 계약이라 `'static` 글이 필요해 누수한다.
+/// **언어를 바꿀 때마다 다시 부른다**(종전 = `OnceLock`이라 재시작 전까지 기동 언어 · T-134) — 같은 글이면 다시 누수하지 않는다.
 fn install_ctl_labels() {
     use nexa_ctl::controls::CtlMsg as C;
-    static LABELS: std::sync::OnceLock<[&'static str; 4]> = std::sync::OnceLock::new();
-    let leak = |k: &str| -> &'static str { Box::leak(tr(k).into_boxed_str()) };
-    let _ = LABELS.set([
-        leak("menu.edit.selectAll"),
-        leak("menu.edit.copy"),
-        leak("menu.edit.cut"),
-        leak("menu.edit.paste"),
-    ]);
+    static LABELS: std::sync::Mutex<[&'static str; 4]> =
+        std::sync::Mutex::new(["Select All", "Copy", "Cut", "Paste"]);
+    let keys = [
+        "menu.edit.selectAll",
+        "menu.edit.copy",
+        "menu.edit.cut",
+        "menu.edit.paste",
+    ];
+    {
+        let mut cur = LABELS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (slot, key) in cur.iter_mut().zip(keys) {
+            let text = tr(key);
+            if *slot != text {
+                *slot = Box::leak(text.into_boxed_str());
+            }
+        }
+    }
     nexa_ctl::controls::set_ctl_labels(|m| {
-        let l = LABELS
-            .get()
-            .copied()
-            .unwrap_or(["Select All", "Copy", "Cut", "Paste"]);
+        let l = *LABELS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match m {
             C::CtxSelectAll => l[0],
             C::CtxCopy => l[1],

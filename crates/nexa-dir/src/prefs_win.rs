@@ -266,6 +266,26 @@ impl PrefsWin {
         }
     }
 
+    /// 언어 전환 — 만들 때 한 번만 넣던 글을 지금 언어로(T-134): 분류 트리 · 검색 안내 글 · "고급" 스위치 · JSON/닫기 ·
+    /// 플러그인 설치 버튼 · 카드(콤보 항목 · 버튼) · 창 제목. 선택 · 검색어 · 스위치 상태는 그대로.
+    pub(crate) fn relabel(&mut self) {
+        self.tree = TreeView::new(Self::build_model(&self.vtree));
+        let query = self.search.text();
+        self.search = TextBox::new(tr("pref.search.placeholder")).with_clearable();
+        self.search.set_text(&query);
+        let adv = self.advanced.is_on();
+        self.advanced = Switch::new(tr("pref.advanced"), adv).with_label_side(LabelSide::Right);
+        self.json_btn.set_label(tr("pref.btn.json"));
+        self.close_btn.set_label(tr("pref.btn.close"));
+        self.plugin_install.set_label(tr("pref.plugins.install"));
+        if let Some(w) = &self.window {
+            w.set_title(&format!("Nexa Dir — {}", tr("pref.title")));
+            self.rebuild_cards();
+            self.layout();
+            self.redraw();
+        }
+    }
+
     /// 분류 숨김 갱신(플러그인·클라우드 분류를 기능이 꺼졌을 때) — 트리를 다시 만들고 선택을 보정한다.
     #[allow(dead_code)] // 플러그인·클라우드 분류 숨김(M5/M6)에서 쓴다.
     pub(crate) fn set_hidden_categories(&mut self, hidden: Vec<&'static str>) {
@@ -1996,6 +2016,21 @@ impl PrefsWin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 언어 전환(T-134): 설정 창의 고정 요소(버튼 · 스위치 · 검색 칸)를 다시 만들되 상태(고급 스위치 · 검색어)는 지킨다.
+    #[test]
+    fn relabel_keeps_state_and_restores_labels() {
+        let mut w = PrefsWin::new();
+        w.close_btn.set_label("stale");
+        w.json_btn.set_label("stale");
+        w.advanced.set_on(true);
+        w.search.set_text("font");
+        w.relabel();
+        assert_eq!(w.close_btn.label(), tr("pref.btn.close"));
+        assert_eq!(w.json_btn.label(), tr("pref.btn.json"));
+        assert!(w.advanced.is_on(), "고급 스위치 상태 유지");
+        assert_eq!(w.search.text(), "font", "검색어 유지");
+    }
 
     fn settings(tag: &str, text: &str) -> Settings {
         Settings::from_text(

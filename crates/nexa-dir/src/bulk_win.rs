@@ -815,6 +815,29 @@ impl BulkWin {
         (v * self.scale).round() as i32
     }
 
+    /// 언어 전환 — 그리드 열 제목(폭은 그대로) · 버튼 글 · 프리셋 콤보 · 창 제목(T-134).
+    pub(crate) fn relabel(&mut self) {
+        let mut inv = Invalidations::default();
+        let mut cols = self.rows.columns().to_vec();
+        for c in &mut cols {
+            match c.key {
+                COL_BEFORE => c.title = tr("bulk.grid.before"),
+                COL_AFTER => c.title = tr("bulk.grid.after"),
+                COL_APPLY => c.title = tr("bulk.grid.apply"),
+                _ => {}
+            }
+        }
+        self.rows.set_columns(cols, &mut inv);
+        self.btn_cancel.set_label(tr("bulk.cancel"));
+        self.btn_rename.set_label(tr("bulk.rename"));
+        let names = self.preset_names.clone();
+        self.set_presets(names);
+        if let Some(w) = &self.window {
+            w.set_title(&format!("Nexa Dir — {}", tr("bulk.title")));
+            w.request_redraw();
+        }
+    }
+
     pub(crate) fn open(
         &mut self,
         el: &ActiveEventLoop,
