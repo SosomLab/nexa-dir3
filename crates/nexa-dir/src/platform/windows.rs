@@ -30,17 +30,53 @@ impl Shell for NativeShell {
     }
 }
 
-/// `start`로 연결 프로그램 · `explorer /select,`로 보기.
-pub(super) fn opener() -> CommandOpener {
-    CommandOpener {
-        open: ["cmd.exe", "/C", "start", "", "{path}"]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect(),
-        reveal: ["explorer.exe", "/select,{path}"]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect(),
+/// 열기 = **`ShellExecuteW("open")`**(dir2와 같음 · GAP-010) — 종전 `cmd.exe /C start "" {path}`는 경로가 명령줄로 다시 해석돼
+/// `&` `^` `%` 같은 메타문자가 든 이름에서 엉뚱한 명령이 실행될 수 있었다. 셸 API는 경로를 그대로 받는다(.lnk · 연결 프로그램 ·
+/// 폴더 모두 탐색기와 같은 동작 · 작업 폴더 = 부모 폴더). 보기 = `explorer /select,`(cmd를 거치지 않는 직접 실행).
+pub(super) struct NativeOpener {
+    reveal: CommandOpener,
+}
+
+pub(super) fn opener() -> NativeOpener {
+    NativeOpener {
+        reveal: CommandOpener {
+            open: Vec::new(),
+            reveal: ["explorer.exe", "/select,{path}"]
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
+        },
+    }
+}
+
+impl Opener for NativeOpener {
+    fn open(&self, path: &Path) -> Result<(), PlatformError> {
+        let file = wide(path);
+        let verb: Vec<u16> = "open\0".encode_utf16().collect();
+        let dir = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(wide);
+        // SAFETY: 모든 포인터는 이 호출 동안 살아 있는 NUL 종료 UTF-16 버퍼(또는 null) · 창 핸들 0 = 소유 창 없음.
+        let rc = unsafe {
+            ShellExecuteW(
+                0,
+                verb.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                dir.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
+                SW_SHOWNORMAL,
+            )
+        };
+        // 반환값 > 32 = 성공(그 이하는 SE_ERR_* 코드).
+        if rc > 32 {
+            Ok(())
+        } else {
+            Err(PlatformError::Failed(format!("ShellExecuteW: {rc}")))
+        }
+    }
+    fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
+        self.reveal.reveal(path)
     }
 }
 
@@ -95,7 +131,17 @@ struct ShFileOpStructW {
 extern "system" {
     fn SHFileOperationW(op: *mut ShFileOpStructW) -> i32;
     fn DragQueryFileW(hdrop: *mut c_void, index: u32, out: *mut u16, cap: u32) -> u32;
+    fn ShellExecuteW(
+        hwnd: isize,
+        verb: *const u16,
+        file: *const u16,
+        params: *const u16,
+        dir: *const u16,
+        show: i32,
+    ) -> isize;
 }
+
+const SW_SHOWNORMAL: i32 = 1;
 
 const FO_DELETE: u32 = 3;
 const FOF_SILENT: u16 = 0x4;
