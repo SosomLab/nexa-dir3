@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-03 · 다음 세션 시작점 · 90차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `a729fc6`(+ docs a53dd5c) · nexa-license `54c8d71` · nexa-dir3 `69fd482`. 게이트: check-3os ✓ · 시험 425 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `a729fc6`(+ docs a53dd5c) · nexa-license `54c8d71` · nexa-dir3 `5103870`. 게이트: check-3os ✓ · 시험 425 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117).
 - **이 PC 세션 분담**(§100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`(평소 실행은 `cargo run -p nexa-dir`). 빌드에 시스템 라이브러리는 불요 · 실행은 데스크톱 배포판의 libxkbcommon/X11·Wayland 라이브러리를 dlopen(최소 설치면 추가 필요 — 추정).
 - **Linux 첫 실기에서 확인할 것**(T-103): ① 목록 쉐브론 크기·모양(✅ 선 쉐브론 §98 · 사용자 "해결") ② 경로 바 구분자 `/` · 중간 세그먼트 클릭 = 그 폴더(nexa-ui 122) ③ 내 PC 목록 = `/` · 홈 · 볼륨 · 용량 열(§95) ④ Alt+← / → / ↑ · Enter · Alt+↓(§93) ⑤ 터미널(`$SHELL` · PTY) · 열기(`xdg-open`) · 휴지통 · 폴더 감시.
@@ -14,11 +14,21 @@
 
 ---
 
+## 10-04 110차 — 툴바 토글 켜짐 = 처음 모양 원복(사용자 최종)
+
+- **한 일**: 사용자 최종 "처음처럼 색은 두고 배경색만 유지" → `toolbar.on_color` 기본 accent(강조색 옅은 채움 · 아이콘 본문색) · line/#0000FF는 선택지로 남김 · NEW-026 경과 마감(초록 채움 → 초록 선 → 파랑 선 → 원복).
+- **지금 상태**: 5103870 앱 재시작(PID 346283) · 화면 = 10-03 모양. CI 69fd482 · a4f6732 · 08320e8 성공 · 5103870 진행 중. 개발 세션 다음 = T-134 i18n.
+- **걸린 것**: i18n 결정 4건 · T-134 · T-133 · T-93 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-04 §7](journal/2026-10-04.md)
+
+---
+
 ## 10-04 109차 — 툴바 토글 켜짐 선 색 = #0000FF(초록 철회)
 
 - **한 일**: 사용자 "토글 색이 너무 이상해… #0000FF로 변경" → 켜짐 = 강조색 옅은 채움 + 테두리/아이콘 선 #0000FF(`toolbar.on_color` = line 기본 · 새 키 `toolbar.on_line_color` #RRGGBB) · 초록 철회.
 - **지금 상태**: 69fd482 앱 재시작(PID 342495) · 사용자 화면 판정 대기. CI d016797 · fee494c 성공 · 69fd482 진행 중.
-- **걸린 것**: "선"(테두리 + 아이콘) 해석 확인 · i18n 결정 4건 · T-134 · T-133 · T-93 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
+- **걸린 것**: ("선" 해석 = 110차 원복으로 해소) · i18n 결정 4건 · T-134 · T-133 · T-93 · T-95 2차 · T-131 · T-126 권장안 확인 · ⚠ GAP-019 · GAP-020 · GAP-015 · T-130 · T-128 · T-117 · Windows 실기 · macOS 맞춤(T-114) · 위 "사용자 결정 대기".
 
 → [journal/2026-10-04 §6](journal/2026-10-04.md)
 

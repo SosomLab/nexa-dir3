@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **툴바 토글 켜짐 = 처음 모양으로 원복**(사용자 최종 · 기본 accent · line/#0000FF는 선택지로 · NEW-026 경과 4단계 마감 · 교훈 = 색 결정은 시안 먼저) → [journal 10-04 §7](journal/2026-10-04.md)
 - **툴바 토글 켜짐 선 색 = #0000FF**(사용자 "토글 색이 너무 이상해… #0000FF로" · `toolbar.on_color` line · 새 키 `toolbar.on_line_color` · 초록 철회) → [journal 10-04 §6](journal/2026-10-04.md)
 - **툴바 토글 켜짐 정정**(사용자 "배경은 원복하고 선만 초록으로") — 채움 = 강조색 26 % 그대로 · 테두리 + 아이콘 선 = 스위치 초록(해석 확인 대기) · nexa-ui 135 `on_line_color` → [journal 10-04 §5](journal/2026-10-04.md)
 - **툴바 토글 켜짐 = 스위치 초록 채움 + 흰 아이콘**(사용자 A안 · `toolbar.on_color` green|accent · nexa-ui 134 · NEW-026 · 농도 설정은 accent일 때만 풀림) → [journal 10-04 §4](journal/2026-10-04.md)
