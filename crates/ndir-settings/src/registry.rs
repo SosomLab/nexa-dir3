@@ -1412,6 +1412,10 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("term.cols", "term.wrap", Dep::Eq("off")),
 ];
 
+/// **내부 전용**(사용자 10-03 "라이선스 게이트처럼 라이선스로 기능을 켜고 끄는 것은 보이면 안 된다") — 고급 토글을 켜도 설정 창에
+/// 나오지 않고 · 검색에 안 걸리고 · JSON 내보내기/가져오기에도 없다. 코드(`get/flag`)만 읽는다.
+pub const INTERNAL: &[&str] = &["license.gates"];
+
 /// 비노출(자동 기억 값 · 메뉴/툴바로만 바뀌는 값 · 구현 상수) — `set/get/reset`은 되지만 설정 창에는 안 보인다.
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",

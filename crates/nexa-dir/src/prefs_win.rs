@@ -446,6 +446,9 @@ impl PrefsWin {
                     tr(sn.entry.cat)
                 )
                 .to_lowercase();
+                if ndir_settings::is_internal(sn.entry.key) {
+                    continue; // 내부 전용 — 검색에도 안 나온다
+                }
                 if hay.contains(&q) {
                     if !adv && ndir_settings::is_advanced(sn.entry.key) {
                         adv_hidden += 1;
@@ -465,7 +468,7 @@ impl PrefsWin {
             };
             plugin_page = cats.contains(&"pref.cat.plugins");
             for sn in &self.snap {
-                if !cats.contains(&sn.entry.cat) {
+                if !cats.contains(&sn.entry.cat) || ndir_settings::is_internal(sn.entry.key) {
                     continue;
                 }
                 if !adv && ndir_settings::is_advanced(sn.entry.key) {

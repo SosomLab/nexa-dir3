@@ -368,6 +368,9 @@ pub fn to_json(s: &Settings) -> String {
         },
     );
     for e in REGISTRY {
+        if crate::is_internal(e.key) {
+            continue; // 내부 전용 — 내보내지 않는다
+        }
         let v = s.get(e.key).unwrap_or(e.default);
         let mut cur = &mut root;
         for seg in e.key.split('.') {
@@ -423,6 +426,10 @@ impl Settings {
                 r.unknown.push(k);
                 continue;
             };
+            if crate::is_internal(e.key) {
+                r.unknown.push(k); // 내부 전용 — 가져오기로 바꿀 수 없다(모르는 키와 같게 보고)
+                continue;
+            }
             let Some(raw) = jv.scalar_text() else {
                 r.unknown.push(k);
                 continue;

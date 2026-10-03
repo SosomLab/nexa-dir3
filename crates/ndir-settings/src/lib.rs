@@ -31,8 +31,8 @@ pub use commands::{command, preset_default, repeatable, setting_key, Command, Pr
 pub use json::{to_json, Import as JsonImport, Json};
 pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
-    ADVANCED, CATEGORY_TREE, DEPENDS, EXTENSION_CATEGORIES, HIDDEN, INFO_KEYS, OLD_DEFAULTS,
-    OS_DEFAULTS, REGISTRY, RENAMED, RESCALED,
+    ADVANCED, CATEGORY_TREE, DEPENDS, EXTENSION_CATEGORIES, HIDDEN, INFO_KEYS, INTERNAL,
+    OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED,
 };
 
 /// 앱 폴더 이름(`%APPDATA%\nexa-dir` · `~/.config/nexa-dir` · `~/Library/Application Support/nexa-dir`).
@@ -311,6 +311,12 @@ pub fn dependency(child: &str) -> Option<(&'static str, Dep)> {
 #[must_use]
 pub fn is_hidden(key: &str) -> bool {
     HIDDEN.contains(&key)
+}
+
+/// 내부 전용 설정인가 — 설정 창(고급 포함) · 검색 · JSON 어디에도 나오지 않는다([`INTERNAL`]).
+#[must_use]
+pub fn is_internal(key: &str) -> bool {
+    INTERNAL.contains(&key)
 }
 
 /// 고급 설정인가(설정 창 Advanced 토글 대상) — 비노출 ∪ [`ADVANCED`].
@@ -1016,5 +1022,40 @@ mod tests {
         assert_eq!(config_dir().as_deref(), Some(d.as_path()));
         std::env::remove_var(ENV_HOME);
         assert!(config_dir().is_some(), "포터블 또는 사용자 폴더 중 하나");
+    }
+
+    /// 내부 전용 키(`license.gates`): 레지스트리에는 있고 코드로는 읽지만 JSON 내보내기에 없고 가져오기로 못 바꾼다.
+    #[test]
+    fn internal_keys_never_surface() {
+        assert!(is_internal("license.gates") && !is_internal("ui.theme"));
+        for k in INTERNAL {
+            assert!(entry(k).is_some(), "레지스트리에 있어야 한다: {k}");
+            assert!(
+                is_hidden(k),
+                "내부 전용은 비노출 목록에도 둔다(설정 화면 기본 목록 제외): {k}"
+            );
+        }
+        let dir =
+            std::env::temp_dir().join(format!("ndir-settings-internal-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let mut s = Settings::from_text(dir.join("settings.conf"), "");
+        let before = s.get("license.gates").map(str::to_string);
+        let path = s.export_json().expect("export");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !text.contains("gates"),
+            "내보낸 JSON에 내부 키가 없어야 한다"
+        );
+        let r = s
+            .import_json(r#"{"license": {"gates": true}, "ui": {"theme": "light"}}"#)
+            .expect("import");
+        assert_eq!(
+            s.get("license.gates").map(str::to_string),
+            before,
+            "가져오기로 못 바꾼다"
+        );
+        assert!(r.unknown.iter().any(|k| k == "license.gates"));
+        assert!(r.changed.iter().any(|k| k == "ui.theme"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
