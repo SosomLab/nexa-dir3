@@ -533,7 +533,8 @@ impl App {
             "tab.move_other" if self.dual => {
                 if let Some(t) = self.panels[panel].detach_tab(tab, &mut inv) {
                     let other = 1 - panel;
-                    self.panels[other].attach_tab(t, None, &mut inv);
+                    let adopt = self.view_scope() != "tab";
+                    self.panels[other].attach_tab(t, None, adopt, &mut inv);
                     self.set_active(other);
                 }
             }

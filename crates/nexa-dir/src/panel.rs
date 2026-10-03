@@ -212,6 +212,13 @@ impl Panel {
             .unwrap_or(0)
             .min(panel.tabs.len() - 1);
         panel.active = active;
+        // 탭별 보기 옵션(dir2 `views` — 없는 자리는 설정 기본 그대로).
+        for (slot, (orig, _)) in valid.iter().enumerate() {
+            if let Some(&f) = ps.views.get(*orig) {
+                let o = opts.with_view(ListOpts::view_of_flags(f));
+                panel.tabs[slot].rows.source_mut().set_opts(o);
+            }
+        }
         for (slot, (orig, _)) in valid.iter().enumerate() {
             panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
             panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
@@ -615,7 +622,7 @@ impl Panel {
     pub(crate) fn new_tab(&mut self, inv: &mut Invalidations) {
         let path = self.root_path();
         let mut rows = VirtualRows::new(
-            TreeSource::open(&path, self.opts),
+            TreeSource::open(&path, self.opts), // 새 탭의 보기 옵션 = 설정 기본값(사용자 10-03)
             self.m.row_h,
             self.m.pad_x,
             self.m.indent_w,
@@ -740,7 +747,7 @@ impl Panel {
         }
         let path = self.tabs[i].rows.source().path().to_path_buf();
         let mut rows = VirtualRows::new(
-            TreeSource::open(&path, self.opts),
+            TreeSource::open(&path, self.tabs[i].rows.source().opts()), // 원본 탭 보기 옵션 계승
             self.m.row_h,
             self.m.pad_x,
             self.m.indent_w,
@@ -780,12 +787,25 @@ impl Panel {
     }
 
     /// 패널 간 탭 이동 — 결합: `at`(없음 = 끝)에 삽입·활성. 열 구성은 대상 패널 상속.
-    pub(crate) fn attach_tab(&mut self, mut tab: Tab, at: Option<usize>, inv: &mut Invalidations) {
+    /// 보기 옵션(숨김 · Dot · 폴더 우선): `adopt` = 대상 패널(활성 탭) 값 채택(범위 ≠ "활성 탭" — 패널 안 값 균일 유지) ·
+    /// 아니면 탭이 지닌 값 그대로(dir2 08-02 `cross_move_tab`).
+    pub(crate) fn attach_tab(
+        &mut self,
+        mut tab: Tab,
+        at: Option<usize>,
+        adopt: bool,
+        inv: &mut Invalidations,
+    ) {
         self.session_dirty = true;
         let at = at.unwrap_or(self.tabs.len()).min(self.tabs.len());
         tab.rows.set_focused(self.focused, inv);
         tab.rows.set_columns(self.rows().columns().to_vec(), inv);
-        tab.rows.source_mut().set_opts(self.opts);
+        let view = if adopt {
+            self.tab_opts().view()
+        } else {
+            tab.rows.source().opts().view()
+        };
+        tab.rows.source_mut().set_opts(self.opts.with_view(view));
         self.tabs.insert(at, tab);
         self.active = at;
         self.set_bounds(self.bounds, inv);
@@ -823,7 +843,7 @@ impl Panel {
 
     /// 새 경로 진입(히스토리 push — 앞으로 절단). 열기 실패 시 현 위치 유지(경로 바는 복귀) · 실패 사유를 돌려준다.
     pub(crate) fn navigate_to(&mut self, path: PathBuf, inv: &mut Invalidations) -> Option<String> {
-        let src = TreeSource::open(&path, self.opts);
+        let src = TreeSource::open(&path, self.tab_opts());
         if let Some(e) = src.error() {
             let why = e.to_string();
             self.sync_chrome(inv);
@@ -838,7 +858,7 @@ impl Panel {
         let Some(p) = self.tabs[self.active].nav.back().map(Path::to_path_buf) else {
             return;
         };
-        let src = TreeSource::open(&p, self.opts);
+        let src = TreeSource::open(&p, self.tab_opts());
         if src.error().is_some() {
             let _ = self.tabs[self.active].nav.forward(); // 실패 — 위치 복원
             return;
@@ -850,7 +870,7 @@ impl Panel {
         let Some(p) = self.tabs[self.active].nav.forward().map(Path::to_path_buf) else {
             return;
         };
-        let src = TreeSource::open(&p, self.opts);
+        let src = TreeSource::open(&p, self.tab_opts());
         if src.error().is_some() {
             let _ = self.tabs[self.active].nav.back();
             return;
@@ -915,17 +935,67 @@ impl Panel {
         }
     }
 
-    /// 보기 옵션 변경(숨김 · Dot · 폴더 우선) → 모든 탭 **무간섭 재열람**(캐럿·스크롤 유지 · 히스토리 무이동).
+    /// 설정(`list.*`) 반영(사용자 10-03 규칙):
+    /// - **전역** = 보호된 운영 체제 항목 표시 · 대소문자 구분 → 모든 탭에 바로 적용(무간섭 재열람 — 캐럿·스크롤 유지).
+    /// - **새 탭의 기본값** = 숨김 · Dot · 폴더 우선 → 이 패널의 기본값만 바뀐다. 이미 열린 탭은 자기 값을 지킨다(탭별 관리).
     pub(crate) fn set_opts(&mut self, opts: ListOpts, inv: &mut Invalidations) {
         self.opts = opts;
+        for tab in &mut self.tabs {
+            let view = tab.rows.source().opts().view();
+            tab.rows.source_mut().set_opts(opts.with_view(view));
+        }
         self.reopen(inv);
     }
 
-    pub(crate) fn reopen(&mut self, inv: &mut Invalidations) {
-        let opts = self.opts;
-        for tab in &mut self.tabs {
+    /// 활성 탭의 열람 옵션(새 탭 · 이동이 이 값을 계승한다 — 값의 원천은 탭).
+    pub(crate) fn tab_opts(&self) -> ListOpts {
+        self.rows().source().opts()
+    }
+
+    /// 활성 탭의 `(숨김, Dot, 폴더 우선)` — 툴바 · 메뉴 체크가 따라간다(dir2 `active_view_values`).
+    pub(crate) fn active_view_values(&self) -> (bool, bool, bool) {
+        self.tab_opts().view()
+    }
+
+    /// 탭 보기 옵션 기입(dir2 08-02 · `list.view_scope`가 전파 폭을 정한다): `all_tabs` = 이 패널 전 탭 · 아니면 활성 탭만.
+    /// 새 탭의 기본값(설정)은 건드리지 않는다.
+    /// 바뀐 탭은 무간섭 재열람(캐럿·스크롤 유지).
+    pub(crate) fn set_view(
+        &mut self,
+        all_tabs: bool,
+        view: (bool, bool, bool),
+        inv: &mut Invalidations,
+    ) {
+        self.session_dirty = true;
+        let active = self.active;
+        for (i, tab) in self.tabs.iter_mut().enumerate() {
+            if !all_tabs && i != active {
+                continue;
+            }
+            let opts = tab.rows.source().opts().with_view(view);
+            if tab.rows.source().opts() == opts {
+                continue;
+            }
             let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
             tab.rows.source_mut().set_opts(opts);
+            tab.rows.restore_view(caret, sr, sx, inv);
+        }
+        self.sync_chrome(inv);
+        inv.push(self.bounds);
+    }
+
+    /// 세션 저장 — 탭별 보기 옵션 플래그(dir2 `panel{i}.views`).
+    pub(crate) fn session_view_flags(&self) -> Vec<u8> {
+        self.tabs
+            .iter()
+            .map(|t| t.rows.source().opts().view_flags())
+            .collect()
+    }
+
+    /// 다시 읽기(각 탭 **자기 보기 옵션 그대로** · 캐럿·스크롤 유지).
+    pub(crate) fn reopen(&mut self, inv: &mut Invalidations) {
+        for tab in &mut self.tabs {
+            let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
             tab.rows.source_mut().reload();
             tab.rows.restore_view(caret, sr, sx, inv);
         }
@@ -1418,7 +1488,7 @@ mod tests {
         q.set_bounds(Rect::new(0, 0, 300, 300), &mut inv);
         let tab = p.detach_tab(1, &mut inv).expect("detach");
         assert_eq!(p.tab_count(), 3);
-        q.attach_tab(tab, None, &mut inv);
+        q.attach_tab(tab, None, true, &mut inv);
         assert_eq!(q.tab_count(), 2);
         assert_eq!(q.active_index(), 1);
         assert!(q.root_path().ends_with("sub"));

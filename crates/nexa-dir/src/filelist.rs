@@ -106,6 +106,35 @@ pub(crate) struct ListOpts {
     pub case_sensitive: bool,
 }
 
+impl ListOpts {
+    /// 탭 보기 옵션 3종(숨김 · Dot · 폴더 우선)만 바꾼 사본 — 나머지(보호 항목 · 대소문자)는 그대로.
+    pub(crate) fn with_view(self, (hidden, dot, folders_first): (bool, bool, bool)) -> ListOpts {
+        ListOpts {
+            show_hidden: hidden,
+            show_dotfiles: dot,
+            folders_first,
+            ..self
+        }
+    }
+
+    /// 탭 보기 옵션 3종 `(숨김, Dot, 폴더 우선)`.
+    pub(crate) fn view(self) -> (bool, bool, bool) {
+        (self.show_hidden, self.show_dotfiles, self.folders_first)
+    }
+
+    /// 세션 플래그(dir2 `panel{i}.views` — bit0 숨김 · bit1 Dot · bit2 폴더 우선).
+    pub(crate) fn view_flags(self) -> u8 {
+        u8::from(self.show_hidden)
+            | u8::from(self.show_dotfiles) << 1
+            | u8::from(self.folders_first) << 2
+    }
+
+    /// 세션 플래그 → 보기 옵션 3종.
+    pub(crate) fn view_of_flags(f: u8) -> (bool, bool, bool) {
+        (f & 1 != 0, f & 2 != 0, f & 4 != 0)
+    }
+}
+
 /// 한 패널의 행 공급자.
 #[derive(Debug)]
 pub(crate) struct TreeSource {
@@ -194,6 +223,11 @@ impl TreeSource {
                 self.error = Some(e.to_string());
             }
         }
+    }
+
+    /// 이 소스의 열람 옵션(탭별 보기 옵션의 원천 — 숨김 · Dot · 폴더 우선은 탭이 소유한다).
+    pub(crate) fn opts(&self) -> ListOpts {
+        self.opts
     }
 
     pub(crate) fn set_opts(&mut self, opts: ListOpts) {

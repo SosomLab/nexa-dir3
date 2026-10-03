@@ -237,10 +237,12 @@ fn route_and_commands_without_window() {
     assert!(app.splitter.rect().is_empty());
     app.command("view.panel_toggle");
     assert!(app.dual && app.panels[1].bounds().w > 0);
-    // 숨김 토글은 설정 + 메뉴 체크 + 툴바 토글이 함께 바뀐다.
-    let before = app.settings.flag("list.show_hidden");
+    // 숨김 토글 = 활성 탭의 값 + 메뉴 체크 + 툴바 토글이 함께 바뀐다(설정값 = 새 탭 기본값은 그대로 · 탭별 보기 옵션).
+    let before = app.panels[app.active].active_view_values().0;
+    assert_eq!(before, app.settings.flag("list.show_hidden"));
     app.command("view.hidden");
-    assert_eq!(app.settings.flag("list.show_hidden"), !before);
+    assert_eq!(app.panels[app.active].active_view_values().0, !before);
+    assert_eq!(app.settings.flag("list.show_hidden"), before);
     assert_eq!(app.menubar.is_checked("view.hidden"), Some(!before));
     assert_eq!(app.toolbar.item_checked("view.hidden"), !before);
     // 테마 순환: dark → system → light → dark.
@@ -315,8 +317,8 @@ fn startup_cmd_vocabulary() {
     let first = hidden_code.split('|').next().unwrap_or("");
     app.startup_cmd(&format!("key:{first}"));
     assert!(
-        !app.settings.flag("list.show_hidden"),
-        "key:{first} = view.hidden 토글(기본 on → off)"
+        !app.panels[app.active].active_view_values().0,
+        "key:{first} = view.hidden 토글(활성 탭 · 기본 on → off)"
     );
     let dump = dir.join("layout.txt");
     app.startup_cmd(&format!("layout.dump:{}", dump.display()));
@@ -489,10 +491,24 @@ fn prefs_host_wiring_without_window() {
     );
     app.startup_cmd("prefs.cat:pref.cat.keys");
     assert!(app.dump_of("prefs").unwrap().contains("key.file.new_tab"));
-    // 설정 창이 값을 바꿨을 때의 길: 저장 → 적용 → 메뉴 체크 동기.
+    // 설정 창이 값을 바꿨을 때의 길: 저장 → 적용. 숨김 = **새 탭의 기본값**이라 열린 탭(과 메뉴 체크)은 그대로이고
+    // 새 탭이 그 값으로 열린다(사용자 10-03).
     let _ = app.settings.set("list.show_hidden", "off");
     app.after_setting_changed("list.show_hidden");
-    assert_eq!(app.menubar.is_checked("view.hidden"), Some(false));
+    assert_eq!(app.menubar.is_checked("view.hidden"), Some(true));
+    assert!(app.panels[0].active_view_values().0);
+    app.command("file.new_tab");
+    assert!(
+        !app.panels[app.active].active_view_values().0,
+        "새 탭 = 설정 기본값"
+    );
+    assert_eq!(
+        app.menubar.is_checked("view.hidden"),
+        Some(false),
+        "체크 = 활성 탭 값"
+    );
+    let _ = app.settings.reset("list.show_hidden");
+    app.after_setting_changed("list.show_hidden");
     let _ = app.settings.set("ui.font_face", "Nope");
     app.after_setting_changed("ui.font_face");
     assert_eq!(app.statusbar.left(), "Takes effect after restart");
@@ -1516,17 +1532,85 @@ fn hidden_toggle_covers_dot_files_on_unix() {
     assert!(app::menus::menu_has("view.dot", true));
     // 점 파일 토글 명령: Windows = 점 파일을 끈다 · Unix = 설정도 목록도 그대로.
     app.command("view.dot");
-    assert_eq!(app.settings.flag("list.show_dotfiles"), !dot_toggle);
+    assert_eq!(app.panels[0].active_view_values().1, !dot_toggle);
     assert_eq!(shown(&app), !dot_toggle);
     if dot_toggle {
         app.command("view.dot");
     }
     // 숨김 토글 명령: Unix = 점 파일이 사라진다 · Windows = 숨김 속성만 다루므로 점 파일은 남는다.
     app.command("view.hidden");
-    assert!(!app.settings.flag("list.show_hidden"));
+    assert!(!app.panels[0].active_view_values().0);
     assert_eq!(shown(&app), dot_toggle);
     app.command("view.hidden");
     assert!(shown(&app));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 탭별 보기 옵션(dir2 08-02 이식 + 사용자 10-03 규칙): 숨김 · Dot · 폴더 우선의 주인은 **탭** · 토글은 범위(`list.view_scope` ·
+/// 기본 = 활성 탭)만큼 · 설정값은 새 탭의 기본값 · 보호 항목 표시는 전역 · 체크는 활성 탭을 따라간다 · 세션에 탭별로 남는다.
+#[test]
+fn view_options_belong_to_tabs() {
+    let (mut app, dir) = fixture("tabview");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    assert_eq!(app.view_scope(), "tab", "기본 범위 = 활성 탭");
+    let view = |app: &App, p: usize| app.panels[p].active_view_values();
+    assert_eq!(view(&app, 0), (true, true, true));
+    // 탭 0에서 폴더 우선을 끈다 → 새 탭(설정 기본값)은 켜져 있고 · 탭을 오가면 체크가 따라간다.
+    app.command("view.folders_first");
+    assert_eq!(view(&app, 0), (true, true, false));
+    assert!(
+        app.settings.flag("list.folders_first"),
+        "설정 = 새 탭 기본값은 불변"
+    );
+    assert!(!app.toolbar.item_checked("view.folders_first"));
+    app.command("file.new_tab");
+    assert_eq!(view(&app, 0), (true, true, true), "새 탭 = 설정 기본값");
+    assert!(app.toolbar.item_checked("view.folders_first"));
+    app.command("tab.prev");
+    assert_eq!(view(&app, 0), (true, true, false), "탭 0은 자기 값");
+    assert!(
+        !app.toolbar.item_checked("view.folders_first"),
+        "체크 = 활성 탭"
+    );
+    // 세션: 탭별 플래그(bit0 숨김 · bit1 Dot · bit2 폴더 우선).
+    assert_eq!(app.session_snapshot().panels[0].views, vec![3, 7]);
+    // 다른 패널은 영향 없음(범위 = 탭).
+    assert_eq!(view(&app, 1), (true, true, true));
+    // 범위 = 패널: 활성 패널의 전 탭 · 범위 = 전체: 두 패널 전 탭.
+    let _ = app.settings.set("list.view_scope", "panel");
+    app.command("view.hidden");
+    assert_eq!(app.session_snapshot().panels[0].views, vec![2, 2]);
+    assert!(view(&app, 1).0);
+    let _ = app.settings.set("list.view_scope", "global");
+    app.command("view.hidden");
+    assert_eq!(app.session_snapshot().panels[0].views, vec![3, 3]);
+    assert_eq!(
+        view(&app, 1),
+        (true, true, false),
+        "전체 = 활성 탭 값이 두 패널로"
+    );
+    // 전역 설정(보호 항목 · 대소문자)을 바꿔도 탭 값은 그대로 · 숨김 기본값을 바꿔도 열린 탭은 그대로.
+    app.command("view.folders_first");
+    let before = app.session_snapshot().panels[0].views.clone();
+    let _ = app.settings.set("list.show_protected", "on");
+    app.after_setting_changed("list.show_protected");
+    let _ = app.settings.set("list.show_hidden", "off");
+    app.after_setting_changed("list.show_hidden");
+    assert_eq!(app.session_snapshot().panels[0].views, before);
+    assert!(
+        app.panels[0].tab_opts().show_protected,
+        "보호 항목 = 전역(전 탭)"
+    );
+    // 탭 복제 = 원본 탭 값 계승.
+    let _ = app.settings.set("list.view_scope", "tab");
+    app.command("view.hidden");
+    let src = view(&app, 0);
+    let mut inv = Invalidations::default();
+    let i = app.panels[0].active_index();
+    app.panels[0].duplicate_tab(i, &mut inv);
+    assert_eq!(view(&app, 0), src);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

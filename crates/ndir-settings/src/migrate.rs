@@ -312,7 +312,8 @@ mod tests {
         let mut s = Settings::from_text(std::path::PathBuf::from("x"), "");
         let n = s.import_dir2(dir2_defaults);
         assert!(n >= 50, "{n}");
-        // dir2 기본값 = dir3 기본값 → 변경분 0에 가깝다(Windows 전용 글꼴 이름은 건너뛴다 · 시드 2만 남는다).
+        // dir2 기본값 = dir3 기본값 → 변경분 0에 가깝다(Windows 전용 글꼴 이름은 건너뛴다 · 시드 2와, dir3가 기본을 바꾼
+        // 보기 옵션 범위(dir2 `panel` → dir3 `tab` · 사용자 10-03 "탭별 설정으로 관리")만 남는다 — dir2에서 쓰던 범위를 지킨다).
         let modified: Vec<_> = s
             .list()
             .into_iter()
@@ -321,7 +322,10 @@ mod tests {
             .collect();
         assert_eq!(
             modified,
-            vec![("launcher.seed", "2".to_string())],
+            vec![
+                ("launcher.seed", "2".to_string()),
+                ("list.view_scope", "panel".to_string())
+            ],
             "{modified:?}"
         );
     }

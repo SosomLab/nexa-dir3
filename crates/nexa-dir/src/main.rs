@@ -563,6 +563,7 @@ impl App {
         );
         let mut inv = Invalidations::default();
         self.statusbar.set_text(&left, &right, &mut inv);
+        self.sync_view_checks();
         self.update_docks();
     }
 

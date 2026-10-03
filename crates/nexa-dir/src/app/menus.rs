@@ -156,8 +156,6 @@ impl App {
     pub(crate) fn sync_menu_checks(&mut self) {
         let s = &self.settings;
         let checks = [
-            ("view.hidden", s.flag("list.show_hidden")),
-            ("view.dot", s.flag("list.show_dotfiles")),
             ("view.dock", s.flag("dock.visible")),
             ("view.launcher", s.flag("launcher.visible")),
             ("view.always_on_top", s.flag("window.always_on_top")),
@@ -192,13 +190,11 @@ impl App {
             ("view.mode_tree", mode == "tree"),
             ("view.mode_flat", mode == "flat"),
             ("view.mode_tiles", mode == "tiles"),
-            ("view.hidden", s.flag("list.show_hidden")),
-            ("view.dot", s.flag("list.show_dotfiles")),
-            ("view.folders_first", s.flag("list.folders_first")),
         ];
         for (id, on) in tool {
             self.toolbar.set_item_checked(id, on, &mut inv);
         }
+        self.sync_view_checks();
     }
 
     /// 툴바 그룹(dir2 `build_toolbar` — **순서/표시 = 설정 `toolbar.layout`** · 블록 1개 = 도크 그룹 1개(T-71 `order::TOOLBAR_BLOCKS` 기본 refresh · panel · view · show · settings) ·
@@ -214,6 +210,17 @@ impl App {
                 );
             ToolItem::new(id, icon).tip(tr(tip_key))
         };
+        let scope = settings
+            .get("list.view_scope")
+            .filter(|s| matches!(*s, "global" | "panel"))
+            .unwrap_or("tab");
+        let scoped = |it: ToolItem, label_key: &str| {
+            it.tip(format!(
+                "{} — {}",
+                tr(label_key),
+                tr(&format!("pref.viewScope.{scope}"))
+            ))
+        };
         let item = |block: &str, key: &str| -> Option<ToolItem> {
             Some(match (block, key) {
                 ("panel", "toggle") => g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
@@ -227,9 +234,16 @@ impl App {
                 ("refresh", "refresh") => g("view.refresh", "⟳", "menu.view.refresh"),
                 ("refresh", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
                 ("settings", _) => g("file.prefs", "⚙", "menu.file.prefs"),
-                ("show", "hidden") => g("view.hidden", "👁", "menu.view.hidden"),
-                ("show", "dot") => g("view.dot", "…", "menu.view.dot"),
-                ("show", "foldersfirst") => g("view.folders_first", "▲", "pref.sortFoldersFirst"),
+                // 보기 옵션 3종 = 툴팁에 적용 범위를 덧붙인다(dir2 08-02 `scope_tip` "라벨 — 범위").
+                ("show", "hidden") => scoped(
+                    g("view.hidden", "👁", "menu.view.hidden"),
+                    "menu.view.hidden",
+                ),
+                ("show", "dot") => scoped(g("view.dot", "…", "menu.view.dot"), "menu.view.dot"),
+                ("show", "foldersfirst") => scoped(
+                    g("view.folders_first", "▲", "pref.sortFoldersFirst"),
+                    "pref.sortFoldersFirst",
+                ),
                 _ => return None,
             })
         };
@@ -338,12 +352,55 @@ impl App {
         }
     }
 
-    fn apply_list_opts(&mut self) {
-        let opts = list_opts(&self.settings);
+    /// 숨김 · Dot · 폴더 우선 체크(메뉴 · 툴바) = **활성 패널의 활성 탭 값**(dir2 08-02 미러 — 탭·패널을 바꾸면 따라간다).
+    /// `update_status` 길목이 부른다.
+    pub(crate) fn sync_view_checks(&mut self) {
+        let (hidden, dot, folders) = self.panels[self.active].active_view_values();
         let mut inv = Invalidations::default();
-        for p in &mut self.panels {
-            p.set_opts(opts, &mut inv);
+        self.menubar.set_checked("view.hidden", hidden, &mut inv);
+        self.menubar.set_checked("view.dot", dot, &mut inv);
+        for (id, on) in [
+            ("view.hidden", hidden),
+            ("view.dot", dot),
+            ("view.folders_first", folders),
+        ] {
+            self.toolbar.set_item_checked(id, on, &mut inv);
         }
+        if !inv.is_empty() {
+            self.redraw();
+        }
+    }
+
+    /// 보기 옵션 토글의 적용 범위(설정 `list.view_scope` — `tab` 활성 탭 · `panel` 활성 패널 전 탭 · `global` 두 패널 전 탭).
+    pub(crate) fn view_scope(&self) -> &str {
+        match self.settings.get("list.view_scope") {
+            Some(s @ ("global" | "panel")) => s,
+            _ => "tab",
+        }
+    }
+
+    /// 보기 옵션 토글 3종(dir2 08-02 `CMD_TOGGLE_HIDDEN/DOTFILES/FOLDERS_FIRST` · 값의 주인 = 탭): 활성 탭의 값을 뒤집어
+    /// 범위(`list.view_scope`)만큼 적용한다. 설정값(`list.show_*` = 새 탭의 기본값)은 건드리지 않는다(사용자 10-03).
+    fn toggle_view_option(&mut self, id: &str) {
+        let (mut hidden, mut dot, mut folders) = self.panels[self.active].active_view_values();
+        match id {
+            "view.hidden" => hidden = !hidden,
+            "view.dot" => dot = !dot,
+            _ => folders = !folders,
+        }
+        let scope = self.view_scope().to_string();
+        let targets: &[usize] = if scope == "global" {
+            &[0, 1]
+        } else if self.active == 0 {
+            &[0]
+        } else {
+            &[1]
+        };
+        let mut inv = Invalidations::default();
+        for &pi in targets {
+            self.panels[pi].set_view(scope != "tab", (hidden, dot, folders), &mut inv);
+        }
+        self.sync_menu_checks();
         self.update_status();
         self.redraw();
     }
@@ -429,14 +486,7 @@ impl App {
             // 점 파일 토글이 없는 OS(Linux · macOS)에서는 단축키로 불려도 아무 일도 하지 않는다(점 파일 = 숨김 파일 → view.hidden).
             "view.dot" if !platform::has_dotfile_toggle() => {}
             "view.hidden" | "view.dot" | "view.folders_first" => {
-                let key = match id {
-                    "view.hidden" => "list.show_hidden",
-                    "view.dot" => "list.show_dotfiles",
-                    _ => "list.folders_first",
-                };
-                self.toggle_flag(key);
-                self.sync_menu_checks();
-                self.apply_list_opts();
+                self.toggle_view_option(id);
             }
             "view.dock" | "view.launcher" | "view.col_width_sync" => {
                 let key = match id {

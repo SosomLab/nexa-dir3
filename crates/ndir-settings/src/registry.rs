@@ -605,7 +605,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.viewScope",
         "pref.viewScope.desc",
         Choice(VIEW_SCOPE_OPTS),
-        "panel"
+        "tab"
     ),
     e!(
         "list.nav_up_align",

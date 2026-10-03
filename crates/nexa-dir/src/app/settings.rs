@@ -54,6 +54,8 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
+            // 보호 항목 · 대소문자 = 전역(전 탭 즉시) · 숨김 · Dot · 폴더 우선 = **새 탭의 기본값**(열린 탭은 자기 값 유지 ·
+            // 사용자 10-03) — 나누는 일은 `Panel::set_opts`가 한다.
             "list.show_hidden"
             | "list.show_dotfiles"
             | "list.show_protected"
@@ -65,6 +67,7 @@ impl App {
                 }
                 self.sync_menu_checks();
             }
+            "list.view_scope" => self.rebuild_toolbar(),
             "list.view_mode" => {
                 let mode = view_mode_of(self.settings.get("list.view_mode").unwrap_or("tree"));
                 for p in &mut self.panels {

@@ -34,6 +34,8 @@ impl App {
             let any = |v: Vec<bool>| if v.iter().any(|x| *x) { v } else { Vec::new() };
             s.panels[i].locked = any(p.session_locked());
             s.panels[i].pinned = any(p.session_pinned());
+            // 탭별 보기 옵션(dir2 08-02 `views`) — 항상 기록한다(값의 주인은 탭 · 설정 기본값이 나중에 바뀌어도 탭은 자기 값).
+            s.panels[i].views = p.session_view_flags();
         }
         s
     }
