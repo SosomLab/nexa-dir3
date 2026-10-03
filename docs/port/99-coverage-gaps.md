@@ -134,6 +134,7 @@
 | GAP-014 | **경로 바 IME 조합 창 위치** — dir2 A/win.rs:4792가 `edit_info`로 조합 창을 캐럿에 맞춤 | dir3 `edit_info`(nexa-explorer pathbar.rs:119) 호출 0 | 🚧 수정 예정 |
 | GAP-010 | **Windows 열기 경로** — dir3 opener = `cmd.exe /C start "" {path}`(`platform/windows.rs:33-40` · 메타문자/따옴표 위험 · 미검증) · dir2 = ShellExecuteW | dir3 회귀 · 해결 = ShellExecuteW(.lnk 포함) | ✅ 해소 10-03 §83(`NativeOpener` open = `ShellExecuteW(0, "open", path, null, 부모 폴더, SW_SHOWNORMAL)` · reveal = `explorer.exe /select,` · `cmd /C start` 제거 · 자동 시험 없음 = 실기 필요) |
 | GAP-015 | **연결 안 된 설정 키**(dir3 회귀 · T-120 사전 분석 §108에서 발견) — 레지스트리 · 설정 창에는 있으나 앱이 읽지 않아 바꿔도 효과가 없다: `ui.text_gdi/hint/snap/weight/contrast`(dir2 텍스트 래스터 · dir3 `app/settings.rs:17-21` 재시작 목록에만 · nexa-gfx `set_text_*` 호출 0) · `typeahead.*` 6 · `tabs.dblclick`(migrate · 시험에만) · `list.col_autofit_max` · `list.hide_empty_glyph` · `transfer.dnd_hover_ms` · `ui.menu_font_face` · `statusbar.font_face` · `list.font_face` · `ui.dialog_font_face` · `cloud.*`(CLOUD 결정 대기) · `license.gates`(INTERNAL) | 원장 15 PREFS · 31 KEY(키는 있음) · 매트릭스 PREFS-101~170 · KEY-501~570 ✅는 "레지스트리 등재"만 뜻함 → 동작 연결은 별도 확인 필요 | ☐ 정리 예정(T-125 · 연결 또는 INTERNAL — 사용자 결정) |
+| GAP-016 | **열 순서(헤더 드래그) 경로 미연결** — dir2: 헤더 드래그 재배열 결과를 수거해 같은 패널 전 탭 · (동기면) 반대 패널 · 설정에 퍼뜨리고 Esc로 취소(`win.rs:6921-6940` WINC-031 · PANEL-053/132 · Esc `win.rs:8797-8804` CMD-288) | dir3 회귀: nexa-grid `take_col_reordered()` · `cancel_col_drag()` 호출 0 → 드래그로 바꾼 순서가 활성 탭에만 남고 다른 탭 · 반대 패널 · 세션 · `list.col_layout` 미반영 · Esc 취소 없음(폭 경로 `take_col_resized`는 연결돼 있음 · §109) | ☐ 수정 예정(T-123과 함께) |
 
 ## 결함(BUG)
 
