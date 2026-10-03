@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 19 | 19 | 9 | 1 | 0 | 0 | 0 |
+| NEW | 20 | 20 | 10 | 1 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 58 | 60 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 32 | 142 | 0 | 0 | 0 |
-| **합계** | 4308 | 4308 | 2385 | 1010 | 766 | 0 | 0 |
+| **합계** | 4309 | 4309 | 2386 | 1010 | 766 | 0 | 0 |
 
 ## 행
 
@@ -233,6 +233,7 @@
 | NEW-017 | 스플리터 hover 페이드 · 세 스플리터 같은 띠(두께 = 틈 3 · 잡는 띠 배율 적용) · 페이드 중에만 깨움 · pointer_gone | nexa-ui 126 `SplitBand` · `Splitter::{set_band, hover_progress, is_animating, pointer_gone}` · dir3 `main.rs` · `app/event_loop.rs` | T1·T3 + 실기 | `band_fades_in_gradually_and_reports_animation` · `dock_splitters_drag_clamp_fade_and_hide` | ✅ | §103 · 실기 필요(페이드 속도·밝기 · 사용자 판정 대기) · 기본안 = Slow · 알파 0.7 · 평상시 선 보임 |
 | NEW-018 | 보기 옵션 폴더 단위(`list.view_scope = dir` 기본 · 같은 폴더 = 좌우 공통 · 폴더별 기억 · 세션 `dirview`) · `ui.theme` 기본 system | `panel.rs::{set_view_for_dir, take_navigated}` · `app/menus.rs::{remember_dir_view, sync_dir_views}` · `session.rs` | T3 + 실기 | `view_options_follow_folders_by_default` · `session_roundtrip_with_pipe_separator` | ✅ | §104 · 실기 필요(좌우 같은 폴더 동시 반영 · 폴더 왕복 뒤 유지 · 시스템 테마 — 사용자 판정 대기) |
 | NEW-019 | 대소문자 구분 정렬 툴바 토글(탭 보기 옵션 4번째 · 보기 관리 방법만큼 · 설정 = 새 탭 기본값 · 세션 bit3) | `app/menus.rs` · `order.rs` · `panel.rs` · `session.rs` · `assets/toolbar/case-sensitive.svg` | T3 · T4 | `toolbar_uses_svg_masks_and_rebuilds_on_scale` · `roundtrip_and_merge` · `order-editor.scn` | ✅ | §105 · 실기(툴바 위치 · 토글 · 툴팁 범위) 사용자 |
+| NEW-020 | 탭 여러 줄 기본(`tabs.multiline` · dir2와 같음) · 한 줄 옵션의 ◀ ▶ 자리 3택(`tabs.scroll_buttons` · DEPENDS) · 줄 수 변경 재배치 · 탭 바 배율(논리 px) | nexa-ui 129 · `app/settings.rs::apply_tab_style` · `panel.rs::{set_tab_style, take_tab_lines_changed}` · `app/paint.rs::paint_into` | T2 · T3 + 실기 | `scroll_buttons_placement_start_and_split` · `tabs_wrap_into_lines_by_default` | ✅ | §111 · 실기 필요(여러 줄 감김 · 한 줄 버튼 자리 · HiDPI 탭 여백 — Windows 배율 ≠ 1 포함) |
 | PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) → §104에서 기본 dir(NEW-018) · §105 대소문자 구분 정렬이 4번째 보기 옵션으로 합류(`list.sort_case_sensitive` = 새 탭 기본값 · 보호 항목만 전역) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
 | GAP-006 · SHORTCUT-EXT | 바로 가기 확장자 숨김(`.lnk` `.url` `.appref-ms` · 이름 칸만 · 확장자 열 유지 · 폴더 예외 · 이름 바꾸기 때 복원 · Windows만) | `filelist.rs::{split_shortcut_ext, display_name, restore_shortcut_ext}` · `platform::hides_shortcut_ext` · `app/ops.rs` | T1·T3 | `shortcut_ext_is_hidden_and_restored_on_rename` | ✅ | §84 · dir2 source.rs:456-465 · win.rs:4036-4045 |

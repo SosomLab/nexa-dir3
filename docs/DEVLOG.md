@@ -4,6 +4,7 @@
 
 ## 2026-10-03
 
+- **탭 여러 줄 기본**(T-121 · `tabs.multiline` · 한 줄 ◀ ▶ 자리 3택 nexa-ui 129 · NEW-020) · ⚠ 탭 바 배율 결함 수정 · macOS 휴지통 시험 1회 실패(재발 감시) · 새 요청 T-126 · T-127 → [journal §111](journal/2026-10-03.md)
 - **Linux 런처 = 앱 아이콘**(T-104 ✅ · nexa-ui 128 .desktop → 테마) · Unix 루트 `/` 탭 제목 · 경로 바 루트 세그먼트(⚠ nexa-ui 동작 변경) → [journal §110](journal/2026-10-03.md)
 - **열 너비 동기화 수정**(T-124 · 열 key별 · 설정 창에서 켜도 즉시 · 같은 패널 전 탭) · GAP-016 열 순서 경로 미연결 → [journal §109](journal/2026-10-03.md)
 - **네비 버튼 SVG(Windows 모양) · 도크 종류 칸 hover**(nexa-ui 127) · GAP-015 연결 안 된 설정 키 · 새 요청 T-121~T-124 · CI 빨강 2차 완전 복구(e5790ca · Windows 분기 단언) → [journal §108 · §106](journal/2026-10-03.md)
