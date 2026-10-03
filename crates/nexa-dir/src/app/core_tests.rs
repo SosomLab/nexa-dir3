@@ -2819,3 +2819,39 @@ fn path_edit_shortcuts_edit_text_not_files() {
     assert!(!app.path_edit("edit.copy"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 키보드로 연 행 메뉴(SHELL-003 · 10-03 캡처 판정 "창 왼쪽 위 모서리에 열림"): 마우스 커서가 아니라 캐럿 행 자리에 열린다.
+#[test]
+fn keyboard_context_menu_opens_at_the_caret_row() {
+    let (mut app, dir) = fixture("ctxkbd");
+    app.layout_for(1000, 700, 1.0);
+    app.cursor = (0, 0);
+    app.set_active(0);
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Down,
+        shift: false,
+        primary: false,
+    });
+    let rows = app.panels[0].rows();
+    let at = rows
+        .row_anchor(rows.caret().expect("caret"))
+        .expect("visible");
+    let bounds = rows.bounds();
+    app.command("cmd.contextMenu");
+    assert_eq!(app.ctx_anchor.1, at.y, "캐럿 행 높이");
+    assert!(
+        app.ctx_anchor.0 > at.x
+            && bounds.contains(nexa_ctl::Point {
+                x: app.ctx_anchor.0,
+                y: app.ctx_anchor.1,
+            })
+    );
+    assert!(app.ctx_anchor_next.is_none(), "한 번 쓰고 비운다");
+    // 마우스 우클릭 경로는 종전대로 커서 자리.
+    app.tab_menu.close();
+    app.ctx_wait = None;
+    app.cursor = (300, 200);
+    app.open_row_menu(0);
+    assert_eq!(app.ctx_anchor, (300, 200));
+    let _ = std::fs::remove_dir_all(&dir);
+}

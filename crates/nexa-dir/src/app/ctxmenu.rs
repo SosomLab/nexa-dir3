@@ -111,7 +111,7 @@ fn has_id(items: &[CtxItem], id: &str) -> bool {
 
 impl App {
     fn open_ctx(&mut self, kind: CtxKind, items: Vec<CtxItem>) {
-        self.ctx_anchor = self.cursor;
+        self.ctx_anchor = self.ctx_anchor_next.take().unwrap_or(self.cursor);
         self.ctx_kind = Some(kind);
         self.tab_menu_at = None;
         self.reopen_ctx(items);
@@ -160,12 +160,26 @@ impl App {
     /// 셸 항목이 아직 없다 → 메뉴를 열지 않고 기다린다(사용자 10-03 "우클릭하면 메뉴가 두 번 뜬다" — 종전은 자체 항목으로 먼저
     /// 열고 도착하면 다시 채웠다). UI는 멈추지 않고 상태줄에 진행을 알린다(DR-20) · 준비되면 [`Self::ctx_shell_tick`]이 한 번 연다.
     fn ctx_begin_wait(&mut self, kind: CtxKind, target: MenuTarget) {
-        self.ctx_anchor = self.cursor;
+        self.ctx_anchor = self.ctx_anchor_next.take().unwrap_or(self.cursor);
         self.ctx_pending = None;
         self.ctx_wait = Some((kind, target, Instant::now()));
         let mut inv = Invalidations::default();
         self.statusbar.set_left(&tr("ctx.loading"), &mut inv);
         self.redraw();
+    }
+
+    /// 키보드로 여는 행 메뉴(Shift+F10 · Apps 키 · `cmd.contextMenu` — SHELL-003): 마우스 커서가 아니라 **캐럿 행 자리**에 연다
+    /// (캐럿이 화면 밖이면 목록 왼쪽 위).
+    pub(crate) fn open_row_menu_at_caret(&mut self, panel: usize) {
+        let rows = self.panels[panel].rows();
+        let b = rows.bounds();
+        let at = rows.caret().and_then(|c| rows.row_anchor(c)).map_or(
+            (b.x + px(24.0, self.scale), b.y + px(24.0, self.scale)),
+            |p| (p.x + px(24.0, self.scale), p.y),
+        );
+        self.ctx_anchor_next = Some(at);
+        self.open_row_menu(panel);
+        self.ctx_anchor_next = None;
     }
 
     /// 기다리던 메뉴 취소(다른 곳 클릭 · Esc · 키 입력).

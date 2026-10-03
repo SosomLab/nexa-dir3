@@ -513,7 +513,7 @@ impl App {
                 }
             }
             "view.preview_window" => self.open_preview_window(a),
-            "cmd.contextMenu" => self.open_row_menu(a),
+            "cmd.contextMenu" => self.open_row_menu_at_caret(a),
             "help.about" => self.about_ask(),
             _ if id.starts_with("launch:") => {
                 if let Ok(i) = id["launch:".len()..].trim().parse::<usize>() {

@@ -231,6 +231,8 @@ struct App {
     ctx_wait: Option<(app::ctxmenu::CtxKind, platform::MenuTarget, Instant)>,
     /// 메뉴를 연 자리(다시 채울 때 같은 자리).
     ctx_anchor: (i32, i32),
+    /// 다음에 여는 메뉴의 자리(키보드로 열 때 = 캐럿 행 · 한 번 쓰고 비운다 · 없으면 마우스 커서).
+    ctx_anchor_next: Option<(i32, i32)>,
     /// 비동기 셸 실행을 건 패널(`Invoked` 통지 처리용).
     ctx_invoke_panel: Option<usize>,
     /// 선행 구축(선택 머무름 300 ms · dir2 `CTX_PREBUILD_MS`): 지금 대상 · 머문 시작 · 구축 요청함.
@@ -476,6 +478,7 @@ impl App {
             ctx_pending: None,
             ctx_wait: None,
             ctx_anchor: (0, 0),
+            ctx_anchor_next: None,
             ctx_invoke_panel: None,
             ctx_dwell_target: None,
             ctx_dwell_since: Instant::now(),
