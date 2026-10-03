@@ -28,6 +28,33 @@ pub(crate) fn set_ui_font_px(px: f32) {
     UI_FONT_PX100.store((px * 100.0).round().max(0.0) as u32, Ordering::Relaxed);
 }
 
+/// 상태 열의 기본 폭(논리 px) — 머리글("상태" · "Status" · "状態" …)이 잘리지 않는 폭. 언어·목록 글꼴이 정해질 때 호스트가
+/// 잰다([`measure_status_col_w`]) · 열 정의(`all_columns_for`)가 읽는다.
+static STATUS_COL_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(56);
+
+pub(crate) fn status_col_w() -> i32 {
+    STATUS_COL_W.load(Ordering::Relaxed)
+}
+
+/// 머리글 글자 폭(논리 px) → 상태 열 기본 폭(순수): 글자 + 좌우 여백 6×2 + 여유 6 · 아이콘(16)이 들어갈 최소 40.
+pub(crate) fn status_col_w_for(text_w: f32) -> i32 {
+    ((text_w.ceil() as i32) + 12 + 6).max(40)
+}
+
+/// 상태 열 기본 폭을 지금 언어의 머리글과 목록 글꼴(머리 굵게 포함)로 다시 잰다.
+pub(crate) fn measure_status_col_w(font: &Font, settings: &Settings) -> i32 {
+    let px = font.em_to_px(settings.font_px("list.font_size"));
+    let w = font.measure_from_styled(
+        &tr("col.status"),
+        px,
+        0.0,
+        settings.flag("list.header_bold"),
+    );
+    let w = status_col_w_for(w);
+    STATUS_COL_W.store(w, Ordering::Relaxed);
+    w
+}
+
 /// dir2 아이콘 글꼴 크기(DirectWrite em · DIP): 네비 대형 13(사용자 확정 08-01 — 11은 식별 어려움 · 15는 과함) · 쉐브론 9
 /// (nexa-dir2 `dw.rs:331-350`). 아이콘 글꼴은 em = 높이라 nexa-gfx 크기(px)로 그대로 쓴다.
 pub(crate) const NAV_GLYPH_EM: f32 = 13.0;

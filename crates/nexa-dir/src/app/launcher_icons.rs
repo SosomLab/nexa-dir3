@@ -41,7 +41,9 @@ fn theme_app_icon(exe: &std::path::Path, px: u32) -> Option<Rc<nexa_gfx::IconIma
 }
 
 /// 항목 아이콘 — `(아이콘, 조회 중인가)`. 실행 파일을 PATH로 풀어 셸에 묻는다(없으면 즉시 글리프).
-pub(crate) fn launcher_icon(item: &launcher::LauncherItem, large: bool) -> (ToolIcon, bool) {
+/// `logical` = 아이콘 논리 크기(16/20/24/32) — 테마 아이콘은 그 크기로 · 셸 아이콘은 20 초과면 큰 것(32).
+pub(crate) fn launcher_icon(item: &launcher::LauncherItem, logical: i32) -> (ToolIcon, bool) {
+    let large = logical > 20;
     let glyph = ToolIcon::Glyph(fallback_glyph(&item.label));
     let found = launcher::exe_path(&item.exe);
     // Linux = 설치된 앱의 아이콘(`.desktop`의 Icon → 아이콘 테마 · pixmaps) · 못 찾으면 일반 실행 파일 아이콘 — 글자 두 개 대신
@@ -49,7 +51,7 @@ pub(crate) fn launcher_icon(item: &launcher::LauncherItem, large: bool) -> (Tool
     let exe = found
         .clone()
         .unwrap_or_else(|| PathBuf::from(item.exe.trim()));
-    if let Some(img) = theme_app_icon(&exe, if large { 32 } else { 16 }) {
+    if let Some(img) = theme_app_icon(&exe, logical.max(16) as u32) {
         return (ToolIcon::Image(img), false);
     }
     let Some(path) = found else {
@@ -70,19 +72,14 @@ pub(crate) fn launcher_icon(item: &launcher::LauncherItem, large: bool) -> (Tool
 }
 
 impl App {
-    /// 설정 `launcher.icon_size`(16/20/24/32 · 그 밖 = 16 — dir2 기본).
+    /// 설정 `launcher.icon_size`(16/20/24/32 · 그 밖 = 20 — 상단 툴바 기본과 같게 · 사용자 10-03 · dir2는 16).
     pub(crate) fn launcher_icon_logical(settings: &Settings) -> i32 {
-        match settings.get("launcher.icon_size").unwrap_or("16") {
-            "20" => 20,
+        match settings.get("launcher.icon_size").unwrap_or("20") {
+            "16" => 16,
             "24" => 24,
             "32" => 32,
-            _ => 16,
+            _ => 20,
         }
-    }
-
-    /// 큰 셸 아이콘(32)을 물어야 하는 크기인가 — 16/20은 작은 아이콘(16)을, 24/32는 큰 아이콘을 쓴다(확대 흐림 방지).
-    pub(crate) fn launcher_icon_large(settings: &Settings) -> bool {
-        App::launcher_icon_logical(settings) > 20
     }
 
     /// 런처 바 생성(dir2 기본: 바 24 · 아이콘 16 · 여백 2) — 아이콘 크기 = `launcher.icon_size` · 항목 간격 = `launcher.item_gap`.
@@ -90,7 +87,7 @@ impl App {
         items: &[launcher::LauncherItem],
         settings: &Settings,
     ) -> (Toolbar, bool) {
-        let large = App::launcher_icon_large(settings);
+        let large = App::launcher_icon_logical(settings);
         let mut pending = false;
         let tool_items: Vec<ToolItem> = items
             .iter()
@@ -126,7 +123,7 @@ impl App {
         let v = IconService::global().version();
         if v != self.launcher_icon_ver {
             self.launcher_icon_ver = v;
-            let large = App::launcher_icon_large(&self.settings);
+            let large = App::launcher_icon_logical(&self.settings);
             let mut inv = Invalidations::default();
             let mut pending = false;
             for (i, it) in self.launcher_items.iter().enumerate() {
@@ -179,7 +176,7 @@ mod tests {
             exe: "nope-xyz-program-ndir".into(),
             args: String::new(),
         };
-        let (icon, pending) = launcher_icon(&it, false);
+        let (icon, pending) = launcher_icon(&it, 16);
         // 없는 exe: 아이콘 테마가 있는 Linux = 일반 실행 파일 아이콘(버튼으로 보인다) · 그 밖 = 라벨 앞 2자 글리프.
         if nexa_fs::icontheme::theme_name().is_some() {
             assert!(matches!(icon, ToolIcon::Image(_)));

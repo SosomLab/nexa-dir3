@@ -392,6 +392,18 @@ impl App {
                     self.menubar.on_event(&ev, inv);
                     return;
                 }
+                // 열 경계 더블클릭 = 내용에 맞춰 폭 자동 맞춤(dir2 07-19 `win.rs:8667-8673` · T-132).
+                if matches!(ev, InputEvent::DoubleClick { .. }) {
+                    for i in 0..2 {
+                        if !self.dual && i != self.active {
+                            continue;
+                        }
+                        if let Some(col) = self.panels[i].rows().autofit_col_at(x, y) {
+                            self.autofit_column(i, col, inv);
+                            return;
+                        }
+                    }
+                }
                 // 터미널 격자 클릭 = 터미널 포커스 + 선택 시작(dir2 QA 07-14) — 도크 위젯으로는 보내지 않는다.
                 if let InputEvent::MouseDown { shift, .. } = ev {
                     if let Some(i) = self.term_hit_at(x, y) {
@@ -676,6 +688,50 @@ impl App {
         self.redraw();
     }
 
+    /// 열 자동 맞춤(dir2 `win.rs::autofit_column` · 07-19): **보이는 행 + 머리글**의 폭을 목록 글꼴로 재어 그 최대값으로.
+    /// 머리글은 제목 + 정렬 표시(▲/▼) + 다중 정렬 순번까지 한 덩어리로 잰다(머리 굵게 반영 — 데이터가 더 길면 데이터가 이긴다).
+    /// 상한 = `list.col_autofit_max`(논리 px) · 하한 = 열 최소 폭. 반영 뒤 같은 패널의 탭 · (동기 켜짐) 반대 패널로 전파.
+    pub(crate) fn autofit_column(&mut self, panel: usize, col: usize, inv: &mut Invalidations) {
+        let samples = self.panels[panel].rows().autofit_texts(col);
+        if samples.is_empty() {
+            return;
+        }
+        let size = self
+            .ui_font
+            .em_to_px(self.settings.font_px("list.font_size"))
+            * self.scale;
+        let hdr_bold = self.settings.flag("list.header_bold");
+        let folder_bold = self.settings.flag("list.folder_bold");
+        let need = samples
+            .iter()
+            .enumerate()
+            .map(|(i, (text, extra))| {
+                // 0번 = 머리글(머리 굵게) · 그 밖 = 행(폴더 굵게가 켜져 있으면 넉넉하게 굵은 폭으로).
+                let bold = if i == 0 { hdr_bold } else { folder_bold };
+                self.ui_font
+                    .measure_from_styled(text, size, 0.0, bold)
+                    .ceil() as i32
+                    + extra
+                    + 1
+            })
+            .max()
+            .unwrap_or(0);
+        let max = px(
+            self.settings.int("list.col_autofit_max").clamp(50, 2000) as f32,
+            self.scale,
+        );
+        if self.panels[panel].set_col_width_user(col, need.min(max), inv) {
+            if self.dual && self.settings.flag("list.col_width_sync") {
+                self.sync_col_widths_from(panel);
+            } else {
+                // 같은 패널의 다른 탭 · 기본 열에도(새 탭이 그 폭을 잇는다).
+                let widths = self.panels[panel].col_widths_by_key();
+                self.panels[panel].apply_col_widths_by_key(&widths, inv);
+            }
+        }
+        self.redraw();
+    }
+
     /// 열 폭 동기 — `from` 패널 활성 탭의 폭을 **열 종류(key)별로** 반대 패널의 모든 탭과 같은 패널의 다른 탭에
     /// (사용자 10-03 점검: 종전 = 자리(순서)로 복사해 열 순서·표시가 다르면 엉뚱한 열에 들어갔고 · 같은 패널의 다른 탭은 그대로였다).
     pub(crate) fn sync_col_widths_from(&mut self, from: usize) {
@@ -701,8 +757,12 @@ impl App {
                 inv.push(self.split_of(k).rect());
             }
         }
+        // 끄는 중인 패널은 건너뛴다 — 열 폭을 끌다 포인터가 창을 벗어나면(또는 포커스를 잃으면) 가짜 좌표(-1)를 따라가
+        // 그 열이 최소 폭 40으로 줄었다(10-03 세션 `colw=…,40,…` 관찰 · 스플리터의 "드래그 중이면 유지"와 같은 규칙).
         for p in &mut self.panels {
-            p.on_event(&away, &mut inv);
+            if !p.is_pressed() {
+                p.on_event(&away, &mut inv);
+            }
         }
         // 도크 머리의 종류 칸 hover(nexa-ui 127차)도 푼다.
         for d in &mut self.docks {

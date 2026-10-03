@@ -186,7 +186,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.launcherSize",
         "pref.launcherSize.desc",
         Choice(TOOLBAR_SIZE_OPTS),
-        "16"
+        "20"
     ),
     e!(
         "launcher.item_gap",

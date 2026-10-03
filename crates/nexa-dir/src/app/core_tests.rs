@@ -1462,7 +1462,7 @@ fn launcher_bar_layout_and_launch() {
     let _ = app.settings.set("launcher.visible", "on");
     app.apply_setting("launcher.visible");
     let lb = app.launcherbar.bounds();
-    assert_eq!((lb.y, lb.h), (app.toolbar.bounds().bottom(), 24), "{lb:?}");
+    assert_eq!((lb.y, lb.h), (app.toolbar.bounds().bottom(), 28), "{lb:?}");
     assert_eq!(app.panels[0].bounds().y, lb.bottom(), "패널은 런처 아래");
     assert!(app.dump_of("layout").unwrap().contains("launcher 0,"));
     let ld = app.dump_of("launcher").unwrap();
@@ -2097,6 +2097,142 @@ fn header_sort_marks_trail_and_shift_cycles() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 열 경계 더블클릭 = 자동 맞춤(T-132 · dir2 07-19 `autofit_column`): 보이는 행 + 머리글 폭 · 머리글은 제목 + 정렬 표시 + 순번까지 ·
+/// 상한 = `list.col_autofit_max` · 반대 패널 동기 · 세션에 남는다.
+#[test]
+fn header_edge_double_click_autofits_column() {
+    let (mut app, dir) = fixture("autofit");
+    app.layout_for(1200, 800, 1.0);
+    let b = app.panels[0].rows().bounds();
+    let y = b.y + 5;
+    let width = |app: &App, p: usize, key: u32| {
+        app.panels[p]
+            .col_widths_by_key()
+            .iter()
+            .find(|c| c.0 == key)
+            .map(|c| c.1)
+            .unwrap()
+    };
+    // 열 i의 오른쪽 경계 x · 가운데 x(지금 폭 기준).
+    let edge = |app: &App, i: usize| {
+        b.x + app.panels[0].col_widths_by_key()[..=i]
+            .iter()
+            .map(|c| c.1)
+            .sum::<i32>()
+    };
+    let dbl = |app: &mut App, x: i32| {
+        app.route(InputEvent::DoubleClick {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    let size_px = app.ui_font.em_to_px(app.settings.font_px("list.font_size"));
+    let pad2 = 2 * panel_metrics(&app.settings, 1.0).pad_x;
+    // 상태 열(데이터 = 아이콘뿐): 머리글 폭으로 줄어든다.
+    let x = edge(&app, 1);
+    dbl(&mut app, x);
+    let plain = width(&app, 0, filelist::COL_STATUS);
+    let text_w = app.ui_font.measure(&tr("col.status"), size_px).ceil() as i32;
+    assert_eq!(plain, (text_w + pad2 + 1).max(40));
+    assert_eq!(
+        width(&app, 1, filelist::COL_STATUS),
+        plain,
+        "반대 패널 동기"
+    );
+    // 넓힌 뒤 다시 더블클릭 = 같은 폭으로 돌아온다(사용자 폭으로 남아 배치가 덮지 않는다).
+    let mut inv = Invalidations::default();
+    app.panels[0].set_col_width_user(1, 100, &mut inv);
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(width(&app, 0, filelist::COL_STATUS), 100);
+    let x = edge(&app, 1);
+    dbl(&mut app, x);
+    assert_eq!(width(&app, 0, filelist::COL_STATUS), plain);
+    // 상한: 이름 열(긴 이름) = `list.col_autofit_max`를 넘지 않는다.
+    let _ = app.settings.set("list.col_autofit_max", "50");
+    let x = edge(&app, 0);
+    dbl(&mut app, x);
+    assert!(
+        width(&app, 0, filelist::COL_NAME) <= 120,
+        "상한 50 · 열 최소 폭 120"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 열 폭을 끄는 중 포인터가 창을 벗어나도(`pointer_gone`) 폭이 가짜 좌표를 따라가지 않는다(종전 = 최소 폭 40으로 줄었다).
+#[test]
+fn column_resize_survives_pointer_leaving_window() {
+    let (mut app, dir) = fixture("resizegone");
+    app.layout_for(1200, 800, 1.0);
+    let b = app.panels[0].rows().bounds();
+    let cols = app.panels[0].col_widths_by_key();
+    let (x, y) = (b.x + cols[0].1 + cols[1].1 + cols[2].1 - 2, b.y + 5);
+    app.route(InputEvent::MouseDown {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    });
+    app.route(InputEvent::MouseMove { x: x + 20, y });
+    let grown = app.panels[0].col_widths_by_key()[2].1;
+    assert_eq!(grown, cols[2].1 + 20);
+    app.pointer_gone();
+    assert_eq!(
+        app.panels[0].col_widths_by_key()[2].1,
+        grown,
+        "끄는 중 = 그대로"
+    );
+    app.route(InputEvent::MouseUp { x: x + 20, y });
+    assert_eq!(app.panels[0].col_widths_by_key()[2].1, grown);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
+/// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
+#[test]
+fn autofit_counts_sort_mark_and_order_in_header() {
+    let (mut app, dir) = fixture("autofitsort");
+    app.layout_for(1200, 800, 1.0);
+    let fit = |app: &mut App| {
+        let mut inv = Invalidations::default();
+        app.autofit_column(0, 2, &mut inv);
+        app.panels[0].col_widths_by_key()[2].1
+    };
+    // 크기 열: 시험 폴더의 값은 짧다 → 머리글이 폭을 정한다.
+    let _ = app.settings.set("list.col_autofit_max", "2000");
+    let plain = fit(&mut app);
+    let b = app.panels[0].rows().bounds();
+    let cols = app.panels[0].col_widths_by_key();
+    let mid = |i: usize| b.x + cols[..i].iter().map(|c| c.1).sum::<i32>() + cols[i].1 / 2;
+    let click = |app: &mut App, x: i32, shift: bool| {
+        let y = b.y + 5;
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    click(&mut app, mid(2), false);
+    assert_eq!(
+        app.panels[0].rows().sort_mark(cols[2].0).as_deref(),
+        Some("▲")
+    );
+    let sorted = fit(&mut app);
+    assert!(sorted > plain, "정렬 표시만큼 넓다: {sorted} vs {plain}");
+    click(&mut app, mid(0), true);
+    assert_eq!(
+        app.panels[0].rows().sort_mark(cols[2].0).as_deref(),
+        Some("▲1")
+    );
+    let multi = fit(&mut app);
+    assert!(multi > sorted, "순번만큼 더 넓다: {multi} vs {sorted}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 탭 패널 간 드래그(T-122 · dir2 71baf67 WINC-098/101/116): 탭을 끌어 반대 패널 위에서 놓으면 그 패널로 옮겨 가고(탭 위 = 그
 /// 탭 앞 · 그 밖 = 끝) 활성 패널이 따라간다 · 끄는 동안 놓일 자리 표식 · Esc = 취소 · 마지막 탭은 옮기지 않는다.
 #[test]
@@ -2412,7 +2548,19 @@ fn status_column_defaults_icons_and_session_migration() {
         (Some(300), Some(90), Some(150)),
         "폭이 열 종류에 맞게: {w:?}"
     );
-    assert_eq!(of(filelist::COL_STATUS), Some(56), "새 열 = 기본 폭");
+    // 새 열 = 기본 폭 = 머리글("Status")이 다 보이는 폭(글자 폭 + 여백) · 아이콘이 들어갈 최소 40.
+    let sw = app::fonts::status_col_w();
+    assert_eq!(of(filelist::COL_STATUS), Some(sw), "새 열 = 기본 폭");
+    let px = app.ui_font.em_to_px(app.settings.font_px("list.font_size"));
+    for label in ["Status", "상태", "状態", "Statut du fichier"] {
+        let text_w = app.ui_font.measure(label, px);
+        let w = app::fonts::status_col_w_for(text_w);
+        assert!(
+            w as f32 >= text_w + 12.0 && w >= 40,
+            "{label}: {w} vs {text_w}"
+        );
+    }
+    assert!(sw as f32 >= app.ui_font.measure(&tr("col.status"), px) + 12.0);
     // 기본 숨김 열을 다시 켜면 옛 세션의 폭이 아니라 정의의 기본 폭(숨긴 열의 폭은 보관하지 않는다).
     let mut inv = Invalidations::default();
     p.apply_col_layout(
@@ -3671,7 +3819,7 @@ fn dock_info_shows_display_name_for_virtual_root() {
     assert!(lines[0].contains(&ndir_i18n::tr("nav.mypc")), "{lines:?}");
 }
 
-/// 퀵 런처 바 크기/간격 설정(사용자 10-03 "퀵 런처 바도 설정으로"): 기본 = dir2(아이콘 16 · 바 24) · `launcher.icon_size` 32 = 바 40 +
+/// 퀵 런처 바 크기/간격 설정(사용자 10-03 "퀵 런처 바도 설정으로"): 기본 = 상단 툴바와 같은 20(바 28 · dir2는 16) · `launcher.icon_size` 32 = 바 40 +
 /// 아래 영역이 따라 내려감 · `launcher.item_gap` 0 = 아이콘 칸이 맞닿음 — 전부 즉시 반영.
 #[test]
 fn launcher_bar_size_and_gap_settings_apply_live() {
@@ -3682,7 +3830,7 @@ fn launcher_bar_size_and_gap_settings_apply_live() {
         .set("launcher.items", "A|ndir-no-such-a|;;B|ndir-no-such-b|");
     app.after_setting_changed("launcher.items");
     app.layout_for(1200, 800, 1.0);
-    assert_eq!(app.launcherbar.bounds().h, 24, "기본 = dir2 24");
+    assert_eq!(app.launcherbar.bounds().h, 28, "기본 = 아이콘 20 + 여백");
     let panel_y = app.panels[0].bounds().y;
     let gap = |app: &App| {
         let (a, b) = (
@@ -3691,11 +3839,11 @@ fn launcher_bar_size_and_gap_settings_apply_live() {
         );
         (a.w, b.x - a.right())
     };
-    assert_eq!(gap(&app), (20, 4), "칸 = 16 + 여백 4 · 간격 4");
+    assert_eq!(gap(&app), (24, 4), "칸 = 20 + 여백 4 · 간격 4");
     let _ = app.settings.set("launcher.icon_size", "32");
     app.after_setting_changed("launcher.icon_size");
     assert_eq!(app.launcherbar.bounds().h, 40);
-    assert_eq!(app.panels[0].bounds().y, panel_y + 16);
+    assert_eq!(app.panels[0].bounds().y, panel_y + 12);
     assert_eq!(gap(&app).0, 36);
     let _ = app.settings.set("launcher.item_gap", "0");
     app.after_setting_changed("launcher.item_gap");

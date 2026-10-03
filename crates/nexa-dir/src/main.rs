@@ -365,8 +365,9 @@ fn columns_for(panel_w: i32, s: f32) -> Vec<Column> {
 /// 열 정의 전부(기본 숨김 열 포함 · 정의 순 = 이름 · 상태 · 크기 · 수정한 날짜 · 확장자 · 종류) — 숨긴 열을 순서 편집에서 다시
 /// 켤 때 이 폭으로 나타난다. 이름 폭은 **기본 표시 열**의 합이 패널을 넘지 않게 줄인다.
 fn all_columns_for(panel_w: i32, s: f32) -> Vec<Column> {
+    // 상태 열 = 머리글이 다 보이는 폭(언어마다 다르다 — `app::fonts::measure_status_col_w`가 잰 값).
     let (status_w, ext_w, size_w, mod_w, kind_w) = (
-        px(56.0, s),
+        px(app::fonts::status_col_w() as f32, s),
         px(64.0, s),
         px(96.0, s),
         px(140.0, s),
@@ -399,6 +400,7 @@ impl App {
         platform: Platform,
     ) -> App {
         let session = session.filter(|s| start.is_none() && !s.is_empty());
+        app::fonts::measure_status_col_w(&ui_font, &settings); // 패널(열)을 만들기 전에
         let licensing = Self::licensing_for(start.as_deref());
         let start_dir = start
             .or_else(|| std::env::current_dir().ok())
@@ -695,6 +697,8 @@ impl App {
 
     /// 전체 배치(dir2 `win.rs::layout`): 메뉴 / 도구 모음 / [좌 ║ 우 패널] / 상태바. winit 무관.
     fn layout_core(&mut self) {
+        // 상태 열 기본 폭 = 지금 언어의 머리글 폭(언어 · 목록 글꼴 · 머리 굵게가 바뀌면 달라진다).
+        app::fonts::measure_status_col_w(&self.ui_font, &self.settings);
         let (w, h) = self.viewport;
         let s = self.scale;
         let mut inv = Invalidations::default();

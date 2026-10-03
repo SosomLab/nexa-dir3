@@ -985,6 +985,29 @@ impl Panel {
     }
 
     /// 사용자가 열 폭을 바꿨는가(1회성 · 호스트가 동기에 쓴다).
+    /// 열 하나의 폭을 호스트가 정한다(자동 맞춤 · T-132) — 사용자 폭으로 남는다(배치가 기본 열로 덮지 않고 세션에 저장).
+    /// 바뀌었으면 `true`.
+    pub(crate) fn set_col_width_user(
+        &mut self,
+        col: usize,
+        w: i32,
+        inv: &mut Invalidations,
+    ) -> bool {
+        let i = self.active;
+        self.tabs[i].rows.set_col_width(col, w, inv);
+        if !self.tabs[i].rows.take_col_resized() {
+            return false;
+        }
+        self.user_cols = true;
+        self.session_dirty = true;
+        true
+    }
+
+    /// 눌러서 끄는 중인가(열 폭 · 열 순서 · 탭 · 선택 드래그) — 포인터가 창을 벗어나도 hover 정리 사건을 보내지 않는다.
+    pub(crate) fn is_pressed(&self) -> bool {
+        self.pressed.is_some()
+    }
+
     pub(crate) fn take_col_changed(&mut self) -> bool {
         std::mem::take(&mut self.col_changed)
     }
