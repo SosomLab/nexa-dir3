@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **`term.font_face` 쉼표 목록 결함 수정**(목록 전체를 이름 하나로 찾아 OS 기본으로 떨어지던 것 · `split_face_list`) · **터미널 글꼴 설정 즉시 적용**(`NEEDS_RESTART` 제거 · 고정폭 체인 즉시 재구성) · 87b4740 → [journal 10-05 §5](journal/2026-10-05.md)
 - **터미널 글꼴 크기 = Linux 경로와 같은 계산**(따르기 끔일 때 본문 지표 환산 + Mono 보정 1.15배 + 줄 높이 +3으로 너무 크던 것 · 크기 원천만 다름) · "터미널 글꼴 크기 기준" 결정 해소(끔 = Linux 기준 · 켬 = WT pt) · 716f0b3 → [journal 10-05 §4](journal/2026-10-05.md)
 - **상태줄 메모리 칸(M) 폭**: 견본 128.0GB 하나(`MEM_HINT`) · 숫자와 단위 빈칸 제거(`11.6GB`) · CPU 100.0% 기준 유지(사용자 확정) · 1e4520b · e7cd2b4 → [journal 10-05 §3](journal/2026-10-05.md)
 - **메뉴 ∧/∨ 띠 누르고 있기 = 계속 이동**(350 ms 뒤 70 ms마다 · nexa-ui 150) · **설정 `menu.wrap_around`**(메뉴 ↑/↓ 순환 · 기본 on · NEW-030) · ⚠ **gate.sh 시험 판정 오판 수정**(런처 시험 자식의 `error: Unrecognized option: 'version'` 줄 → 종료 코드 + 실패 수) · dff8a77 · 094997f → [journal 10-05 §2](journal/2026-10-05.md)

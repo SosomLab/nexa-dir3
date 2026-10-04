@@ -90,6 +90,7 @@
 | DejaVu Sans Mono · (Noto Sans CJK, Noto Sans Mono CJK KR) | `app/fonts.rs` `MONO_FALLBACK_FAMILIES` · `MONO_CJK_FACE`(§98) | 터미널 고정폭 폴백(➜ ✗ 한 칸 폭 · TTC 안 고정폭 한글 얼굴) — 한글 UI 글꼴 앞 · 폴백 em 맞춤(`term_fallback_em_match` = Windows 밖) | — | 상수(후보 목록) | — | — |
 | 16자 평균 반올림 | `termview.rs::grid_dims`(§98) | 터미널 칸 폭(종전 "M" 1자 올림 → 8.21 px가 9 px) — 전 OS 공통 · ⚠ Windows 실기 필요 | — | 상수 | — | — |
 | 12종 · U+E0A0/F07B/E0B0 | `app/fonts.rs` `NERD_FAMILIES` · `NERD_PROBE`(§75) | 자동 폴백 Nerd Font 후보 · 판정 글리프 | `term.fallback_fonts`(사용자 지정 폴백 · 고급 · §75) | 상수(후보 목록) | — | ✅(사용자 지정은 키로) |
+| 다시 시작해야 반영(`NEEDS_RESTART`) → **즉시 적용** | `app/settings.rs::apply_setting` · `app/fonts.rs::split_face_list` | 터미널 글꼴 이름(쉼표 = 폴백 체인 · 설치된 첫 이름 = 주 글꼴 · 나머지 = 대체 글꼴 · `term.fallback_fonts`보다 앞) · `term.fallback_fonts` · `term.follow_windows_terminal` 변경 = 고정폭 글꼴 체인 즉시 재구성 | `term.font_face` | 설정(즉시 적용 · 10-05 §5) | — | ✅ 10-05 §5(87b4740) |
 | 3줄 · 4열 /노치 | `app/input.rs:319,326` | 세로·가로 휠 이동량 | — | 설정 | `term.wheel_lines` · `term.hwheel_cols` | ☐ |
 | 800 | `ndir-term/src/lib.rs:48` | 스크롤백 줄 상한(`MAX_SCROLLBACK`) | — | 설정 | `term.scrollback` | ☐ |
 | 80×24 · 8192 · 4096 · 65535 · 5 ms | `termview.rs:119,223` · `winpty.rs:290` · `ndir-term/src/lib.rs:807` · `unixpty.rs:151` | 초기 PTY 크기 · 읽기 버퍼 · CSI 상한 · 재시도 | — | 상수 | — | — |
