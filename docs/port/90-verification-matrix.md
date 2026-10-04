@@ -19,7 +19,7 @@
 | KEY | 817 | 817 | 752 | 31 | 34 | 0 | 0 |
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
-| N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
+| N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
 | NEW | 30 | 30 | 18 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
@@ -28,7 +28,7 @@
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
-| RENDER | 54 | 54 | 14 | 0 | 40 | 0 | 0 |
+| RENDER | 54 | 54 | 16 | 0 | 38 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
 | SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
 | SHELL | 75 | 75 | 45 | 10 | 11 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 8 | 88 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 44 | 130 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2434 | 982 | 765 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2437 | 981 | 763 | 0 | 0 |
 
 ## 행
 
@@ -147,7 +147,8 @@
 | RENDER-031~044 | 아이콘·SVG·자원(툴바 SVG · exe/파일 아이콘 · ico 리소스) | `icons.rs` · nexa-gfx `svg.rs` · `app/launcher_icons.rs` · `build.rs`/`winres.rs` | T1·T2 | `all_embedded_icons_render_masks` · `toolbar_commands_map_to_assets` · 런처 아이콘 시험 | ✅ | RENDER-040(셸 아이콘 비동기 로드) = nexa-fs `IconService` 워커 + dir3 `app/row_icons.rs` 캐시(상한 512) · `row_icons_tick` 150 ms(§73 · dir2 상한 256 · 틱 80 ms와 수치만 다름) |
 | B-001~021 | 렌더 자원 대조표(화면 표면 · 글리프 래스터 · 기본/고정폭 글꼴 · …) | nexa-gfx `Surface` · ab_glyph · nexa-font | T2 | nexa-ui 시험 | ⚠ | DR-1 대체 표 |
 | N-001 | 클립 스택(가로 스크롤 번짐 차단) | nexa-ui 112차 `RasterCtx.clips` | T2 | nexa-ctl `clip_tests` | ✅ | journal §67 |
-| N-002~015 | "없음 → 추가" 표(끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · 113차 italic | T2 | nexa-gfx svg 시험 · nexa-grid `adapt_forwards_to_ctl_ctx` | 🚧 | SVG ✅ · italic ✅(§68) · ICO ☐ |
+| N-002~015 | "없음 → 추가" 표(끝 말줄임 · 슬롯/장식 · SVG 서브셋 …) | nexa-ui 108차 SVG · 113차 italic | T2 | nexa-gfx svg 시험 · nexa-grid `adapt_forwards_to_ctl_ctx` | 🚧 | SVG ✅ · italic ✅(§68) · ICO ☐ · 10-05 §23: N-02 끝 말줄임 ✅(아래 행) |
+| N-02 · RENDER-010 · 011 · ELLIPSIS-END | 칸 폭을 넘는 이름 · 값의 끝 말줄임(`…`) — 들어가면 원문 빌림 · 넘칠 때만 글자 단위 이분 탐색 · `…`도 못 넣으면 빈 글 · `VirtualRows` 이름 칸 · 일반 칸(좌·우 정렬) | nexa-ui nexa-grid `draw::ellipsize_end`(154차 5cdd2f3) · `rows.rs` 칸 그리기 | T2 · T3 | nexa-grid 시험(154) · `long_names_end_with_ellipsis` | ✅ | 10-05 §23(0a766f4 · T-149 5 · dir2 dw.rs:286 · 438-449 DirectWrite 문자 트리밍) · **원장 N-02와 다른 점**: 제안 = nexa-ctl draw.rs + `text_prefix_widths`였으나 nexa-grid DrawCtx에 접두사 폭 표가 없어 nexa-grid draw.rs에 두고 `text_width` 이분 탐색 · nexa-sql 영향 없음(nexa-grid 미의존) · 실기(이름 열 좁히기) 사용자 |
 | L-001~033 | 실측 교훈(위젯 · 패널 · 클라우드) | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
 | O-001~020 | 클라우드 결함·미처리 목록 | — | — | — | ☐ | CLOUD 미이식(M8) |
 | OS-010~028 | 패널/목록 OS 분기 표(타임존 · 휠 줄 수 · 픽셀 스크롤 · 가로 휠 · 파일 아이콘 · …) | `app/input.rs` · `filelist.rs`(format_time) · `platform/` | T3 | `input` 휠 시험 · `format_time` 시험 | 🚧 | 타임존 = 로컬 변환 ✅ · 파일 아이콘 ☐ · 네비 글리프 = 아래 OS-11 행 |
