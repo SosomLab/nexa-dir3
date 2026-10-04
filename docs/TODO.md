@@ -152,7 +152,8 @@
 | T-136 | ⚠ T4 `delete-confirm` 흔들림 조사 — 10-04 2회(1회째 exit 0 · 300 ms 뒤 dlg.dump 타이밍 · 2회째 **exit 101 패닉**) · 단독 25 + 부하 20회 재현 실패 · 다음 실패 때 `tests/out/delete-confirm/home/crash/` 보존 → 패닉 위치 · 고정 대기(@after:300) → 조건 대기(@idle) 검토 | P1 | 소 | — | CI-108 · T-29 | ☐ |
 | T-137 | T4 반복 실행 화면 격리 — 재현 루프의 시나리오 창이 사용자 데스크톱을 가리고 결함으로 오인(10-04 §21) → xvfb(`xvfb-run` · X11 백엔드 강제) 또는 반복 전 사용자 알림 · 이 PC에 xvfb 없음(설치 = 사용자 결정) · CI ubuntu xvfb(T-117)와 함께 | P2 | 소 | — | CI-108 · T-117 | ☐ |
 | T-138 | **Command Palette** — Ctrl(macOS Cmd)+Shift+P · 명령 검색 · 실행(참고 = nexa-sql `palette.rs` 약 700줄 · 명령 표 `commands.rs` 라벨/단축키 · nexa-ui 승격 권장) — 사용자 요청 10-04 · 검토 완료 · **사용자 진행 승인 대기** | P1 | 중 | — | CMD · NEW | ☐ |
-| T-139 | gate.sh 판정 개선 — 형제 저장소(nexa-ui · nexa-license)는 `crates/` 등 코드 변경만 full 사유로(지금은 HEAD가 바뀌면 문서 커밋에도 full · 10-04 §22) | P2 | 소 | — | DR-26 | ☐ |
+| T-139 | gate.sh 판정 개선 — 형제 저장소(nexa-ui · nexa-license)는 `crates/` 등 코드 변경만 full 사유로(지금은 HEAD가 바뀌면 문서 커밋에도 full · 10-04 §22) | P2 | 소 | — | DR-26 | ☐ — 별건 ✅ 10-05 §2(094997f): 시험 판정 `^error` 줄 오판(런처 시험 자식의 'version' 오류) → cargo 종료 코드 + 실패 수 |
+| T-143 | 메뉴 바(풀다운) ↑/↓ 순환 이동이 `menu.wrap_around`를 따르는지 확인 · 필요하면 연결(10-05 §2 — 이번엔 ContextMenu만) | P2 | 소 | — | NEW-030 | ☐ |
 | T-140 | 사용자 보고 "**파일 클릭이 느리다**"(10-04 Windows) — 당시 CPU 100 % = 개발 세션 백그라운드 빌드(nexa-sql 전체 시험) · 클릭 경로에 무거운 동기 작업 못 찾음 · 계측 미실시 → 부하 없는 상태 재확인(사용자) · 재현되면 클릭 → 그리기 구간 계측(T-92 로그 계측 지점과 함께) | P1 | 소 | — | — | ☐ |
 | T-141 | 사용자 보고 "**프로그램 아이콘이 기본 아이콘으로 보인다**"(10-04 Windows) — exe 리소스 아이콘 · `icon.rs` 정상 확인 · 어디서 보이는지(작업 표시줄 · Alt+Tab · 탐색기) **사용자 답 대기** | P1 | 소 | — | — | ☐ |
 | T-142 | nexa-ui nexa-fs `service_never_blocks_and_settles` 흔들림(shell.rs:945 `elapsed < 5 ms` · 전역 초기화 포함 · CPU 100 %에서 1회 실패 · 평시 13/13 통과 10-04 §24) → 측정 전 `IconService::global()` 선호출 또는 한도 완화(nexa-ui · 개발 세션 판단) | P2 | 소 | — | CI | ☐ |
