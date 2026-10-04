@@ -8,7 +8,7 @@
 use crate::app::ctxmenu::CtxKind;
 use crate::platform::sysload::{self, SysLoad};
 use crate::*;
-use nexa_ctl::{StatusPart, StatusSeg};
+use nexa_ctl::{StatusMarker, StatusPart, StatusSeg};
 
 /// 칸 하나 = `(블록 id, 그 안에 보일 항목 id들)`.
 pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
@@ -56,6 +56,21 @@ pub(crate) fn fmt_rate(bps: u64) -> String {
     format!("{}/s", filelist::format_size(bps))
 }
 
+/// 속도(바이트/초) → 표식 깜빡임 단계(순수): 0 = 송수신 없음(깜빡이지 않음) · 1 = 느림 … 9 = 빠름. 4배마다 한 단계 —
+/// 1: ~4 KB/s · 2: ~16 KB/s · 3: ~64 KB/s · 4: ~256 KB/s · 5: ~1 MB/s · 6: ~4 MB/s · 7: ~16 MB/s · 8: ~64 MB/s · 9: 그 이상.
+pub(crate) fn rate_level(bps: u64) -> u8 {
+    if bps == 0 {
+        return 0;
+    }
+    let mut level = 1u8;
+    let mut limit = 4 * 1024u64;
+    while level < 9 && bps >= limit {
+        level += 1;
+        limit *= 4;
+    }
+    level
+}
+
 /// 두 줄로 쌓는 줄의 글리프 크기(논리 px) — **줄 위아래 · 줄 사이 여백이 최소가 되는 가장 큰 크기**(사용자 10-04):
 /// 상태줄 높이 22에서 위 선 1을 뺀 21을 둘로 나눈 띠(10.5)에 글의 잉크(화살표 꼭대기 −8 ~ `/` 바닥 +2 = 10)가 꼭 맞는다
 /// (실측 — 9.5는 잉크 7이라 줄마다 3.5씩 남았고 · 14는 11이라 위아래 줄이 겹친다).
@@ -81,13 +96,20 @@ impl App {
         let part = StatusPart::new;
         // 디스크 · 네트워크 = 약어 옆에 **두 줄로 쌓는다**(위 ↑ · 아래 ↓ — 사용자 10-04): 한 줄에 `↑ 24.5 MB/s` ·
         // 글꼴은 상태줄 높이에 두 줄이 들어가는 크기로(값 · 단위 같은 크기 — 따로 줄이던 −1/−2는 취소).
+        // 화살표 글자 대신 **작은 삼각형 표식**(▲ 위 · ▼ 아래 — 사용자 10-04): 줄 왼쪽 고정 자리라 글 길이에 따라 움직이지 않고,
+        // 속도에 따라 깜빡인다(0 = 흐리게 멈춤 · 1 느리게 … 9 빠르게 — [`rate_level`]).
         let row_delta = self.status_row_font_delta();
         let row = |up: bool, v: Option<u64>| {
-            let a = if up { "↑ " } else { "↓ " };
-            part(format!("{a}{}", v.map_or_else(dash, fmt_rate)))
+            let marker = if up {
+                StatusMarker::Up
+            } else {
+                StatusMarker::Down
+            };
+            part(v.map_or_else(dash, fmt_rate))
                 .color(if up { up_c } else { down_c })
-                .hints(size_hints(a, "/s"))
+                .hints(size_hints("", "/s"))
                 .font_delta(row_delta)
+                .marker(marker, rate_level(v.unwrap_or(0)))
         };
         // 성능 향상 모드 = 시스템 상태 모니터링 끔(칸도 · 주기 조회도 — 사용자 10-04): 탭 · 라이선스 칸만 남는다.
         let boost = self.settings.flag("perf.boost");

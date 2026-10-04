@@ -2435,8 +2435,8 @@ fn status_segments_and_tab_status_bar() {
     // 약어 + 값(조회 전 = –) · 디스크 = ↑ 읽기 ↓ 쓰기 · 네트워크 = ↑ 업로드 ↓ 다운로드 · 모든 칸을 누를 수 있다.
     assert_eq!(text(&app, "cpu"), "C –");
     assert_eq!(text(&app, "mem"), "M –");
-    assert_eq!(text(&app, "disk"), "D ↑ – ↓ –");
-    assert_eq!(text(&app, "net"), "N ↑ – ↓ –");
+    assert_eq!(text(&app, "disk"), "D ▲ – ▼ –");
+    assert_eq!(text(&app, "net"), "N ▲ – ▼ –");
     assert!(app.statusbar.segments().iter().all(|s| s.clickable));
     // 디스크 · 네트워크 = 약어 옆에 두 줄로 쌓는다(위 ↑ 빨강 · 아래 ↓ 파랑) · 줄 글꼴은 두 줄이 들어가는 작은 크기 ·
     // 폭 견본으로 기본 너비 확보. CPU · 메모리 = 한 줄 · 상태줄 글꼴 그대로.
@@ -2452,7 +2452,25 @@ fn status_segments_and_tab_status_bar() {
     assert_eq!((net.parts.len(), net.rows.len()), (1, 2));
     assert_eq!(net.rows[0].color, Some(app.theme.danger));
     assert_eq!(net.rows[1].color, Some(app.theme.accent));
-    assert!(net.rows[0].hints.iter().any(|h| h == "↑ 999.9 MB/s"));
+    assert!(net.rows[0].hints.iter().any(|h| h == "999.9 MB/s"));
+    // 화살표 글자 대신 삼각형 표식(줄 왼쪽 고정 자리) · 조회 전 = 단계 0(깜빡이지 않음 → 깨우지 않는다).
+    use nexa_ctl::StatusMarker;
+    assert_eq!(
+        (net.rows[0].marker, net.rows[1].marker),
+        (Some(StatusMarker::Up), Some(StatusMarker::Down))
+    );
+    assert!(net.rows.iter().all(|r| r.blink == 0));
+    assert_eq!(app.statusbar.next_blink_ms(0), None);
+    // 깜빡임 단계: 0 = 없음 · 4배마다 한 단계 · 9가 끝.
+    use crate::app::statusline::rate_level;
+    assert_eq!(rate_level(0), 0);
+    assert_eq!(
+        (rate_level(1), rate_level(4095), rate_level(4096)),
+        (1, 1, 2)
+    );
+    assert_eq!((rate_level(1 << 20), rate_level(64 << 20)), (6, 9));
+    assert_eq!(rate_level(u64::MAX), 9);
+    assert!((0..40).all(|s| rate_level(1u64 << s) <= rate_level(1u64 << (s + 1))));
     let row_delta = (app.status_row_font_delta() * 100.0).round() as i32;
     assert!(row_delta < 0, "두 줄용 글꼴은 상태줄 글꼴보다 작다");
     assert_eq!(net.rows[0].font_delta_c, Some(row_delta));
@@ -2552,8 +2570,8 @@ fn status_segments_and_tab_status_bar() {
         "statusbar.layout",
         "tab:1|cpu:1|mem:1|disk:1[write:1,read:0]|net:1[download:1,upload:1]|appmem:1|license:1",
     );
-    assert!(text(&app, "disk").starts_with("D ↓ ") && !text(&app, "disk").contains('↑'));
-    assert!(text(&app, "net").starts_with("N ↓ "));
+    assert!(text(&app, "disk").starts_with("D ▼ ") && !text(&app, "disk").contains('▲'));
+    assert!(text(&app, "net").starts_with("N ▼ "));
     // 성능 향상 모드: 시스템 상태 칸이 사라지고 주기 조회도 멈춘다(탭 · 라이선스만) · 끄면 그대로 돌아온다(저장값 불변).
     let _ = app.settings.set("perf.boost", "on");
     app.after_setting_changed("perf.boost");

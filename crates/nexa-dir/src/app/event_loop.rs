@@ -178,6 +178,13 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.mem_tick(now) {
             next = next.min(t);
         }
+        // 상태줄 표식(디스크 · 네트워크 ▲▼) 깜빡임 — 위상이 바뀔 때만 다시 그리고, 송수신이 있을 때만 다음 전환 시각에 깬다.
+        if self.statusbar.tick(now_ms) {
+            self.redraw();
+        }
+        if let Some(ms) = self.statusbar.next_blink_ms(now_ms) {
+            next = next.min(now + Duration::from_millis(ms.max(1)));
+        }
         // 우클릭 메뉴의 오버레이 스크롤 막대 — 감출 시각이 지났으면 감추고 다시 그린다.
         if self.tab_menu.tick(now) {
             self.redraw();
