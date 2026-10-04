@@ -5353,3 +5353,27 @@ fn trash_failure_selects_leftovers_and_offers_retry() {
     assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 열 머리글 우클릭(dir2 win.rs:6262-6304 · T-149 11) = "파일 컬럼…" → 열 배치 편집 창. 종전 dir3 = 빈 곳 메뉴가 떴다.
+#[test]
+fn header_right_click_opens_column_layout_menu() {
+    let (mut app, dir) = fixture("hdrmenu");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let b = app.panels[0].rows().bounds();
+    let (x, y) = (b.x + 30, b.y + 4);
+    assert!(app.panels[0].rows().header_area(x, y), "머리글 자리");
+    app.cursor = (x, y);
+    app.route(InputEvent::RightDown { x, y });
+    let m = app.dump_of("ctx").unwrap_or_default();
+    assert!(m.contains("aux.col.order"), "{m}");
+    assert!(
+        !m.contains("aux.prefs") && !m.contains("ctx."),
+        "열 메뉴만: {m}"
+    );
+    assert!(!app.open_order, "우클릭만으로는 편집 창이 열리지 않는다");
+    app.ctx_pick("aux.col.order");
+    assert!(app.open_order, "파일 컬럼… = 열 배치 편집 창");
+    let _ = std::fs::remove_dir_all(&dir);
+}

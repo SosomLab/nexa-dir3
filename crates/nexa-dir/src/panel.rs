@@ -84,6 +84,8 @@ pub(crate) struct Panel {
     pending_rename: Option<(usize, String)>,
     /// 목록 우클릭(행 위 = true · 빈 영역 = false) — 호스트가 컨텍스트 메뉴를 연다.
     pending_ctx: Option<bool>,
+    /// 열 머리글 우클릭(메뉴 표시는 호스트 · 1회성 — dir2 win.rs:6262 `show_bar_popup(false)`).
+    pending_header_menu: bool,
     /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
     pending_path_menu: bool,
     session_dirty: bool,
@@ -242,6 +244,7 @@ impl Panel {
             tab_dbl: TabDbl::Close,
             pending_rename: None,
             pending_ctx: None,
+            pending_header_menu: false,
             pending_path_menu: false,
             session_dirty: false,
             m_icon_scale: 1.0,
@@ -516,6 +519,10 @@ impl Panel {
 
     pub(crate) fn take_ctx(&mut self) -> Option<bool> {
         self.pending_ctx.take()
+    }
+
+    pub(crate) fn take_header_menu(&mut self) -> bool {
+        std::mem::take(&mut self.pending_header_menu)
     }
 
     /// 경로 편집 필드 위인가 — 편집 중 + 경로 바 영역(그리기 캐시에 기대지 않는다: 편집 필드는 경로 바 전체를 차지한다).
@@ -1711,6 +1718,11 @@ impl Panel {
                 // 경로 편집 중 필드 우클릭 = 편집 메뉴(dir2 win.rs:7472-7532) — 처음 우클릭(편집 진입)과 구분.
                 if matches!(ev, InputEvent::RightDown { .. }) && self.path_edit_at(x, y) {
                     self.pending_path_menu = true;
+                    return;
+                }
+                // 열 머리글 우클릭 = 열 배치 메뉴(dir2 win.rs:6262-6304) — 종전에는 빈 곳 메뉴가 떴다.
+                if matches!(ev, InputEvent::RightDown { .. }) && self.rows().header_area(x, y) {
+                    self.pending_header_menu = true;
                     return;
                 }
                 if let Some(part) = self.part_at(Point { x, y }) {

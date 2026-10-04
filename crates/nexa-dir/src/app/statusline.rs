@@ -583,6 +583,15 @@ impl App {
         self.open_ctx(CtxKind::Aux(self.active), items);
     }
 
+    /// 열 머리글 우클릭 메뉴(dir2 win.rs:6262-6304 `show_bar_popup(false)`): 파일 컬럼… = 열 배치(표시/숨김 · 순서) 편집 창.
+    pub(crate) fn open_header_menu(&mut self) {
+        let items = vec![CtxItem::item(
+            "aux.col.order",
+            format!("{}…", tr("pref.colLayout")),
+        )];
+        self.open_ctx(CtxKind::Aux(self.active), items);
+    }
+
     /// 상태줄 우클릭 메뉴(툴바 우클릭과 같은 모양): 상태바 편집… · 설정….
     pub(crate) fn open_statusbar_menu(&mut self) {
         let items = vec![
@@ -695,6 +704,7 @@ impl App {
         }
         match id {
             "aux.tb.order" => self.open_order_editor("toolbar.layout"),
+            "aux.col.order" => self.open_order_editor("list.col_layout"),
             "aux.prefs" => self.command("file.prefs"),
             "aux.launch.add" => self.ask_launcher_item(None),
             "aux.launch.addsep" => {

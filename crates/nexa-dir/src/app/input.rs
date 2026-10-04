@@ -612,6 +612,12 @@ impl App {
                 }
                 self.open_path_edit_menu(i);
             }
+            if self.panels[i].take_header_menu() {
+                if i != self.active {
+                    self.set_active(i);
+                }
+                self.open_header_menu();
+            }
             if let Some(on_row) = self.panels[i].take_ctx() {
                 if i != self.active {
                     self.set_active(i);
