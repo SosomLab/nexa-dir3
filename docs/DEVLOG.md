@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **상태줄 우클릭 = 툴바와 같은 메뉴**(상태바 편집… · 설정…) · 새 게이트 첫 quick 적용 · nexa-ui 139 · 140차(다른 PC) ff-pull 뒤 full 통과 → [journal 10-04 §17](journal/2026-10-04.md)
 - **게이트 단계화**(DR-26 · `scripts/gate.sh` auto/quick/full · 사용자 "전수는 기록 없음 · 오래됨 · 핵심 변경 · 중요 시점에만") · docs/18 §3 단일 원천 재작성 · docs/15 DoD ④ → [journal 10-04 §16](journal/2026-10-04.md)
 - **i18n 사용자 결정 4건**(KB 유지 · ja OK 유지 · 런처 시드 라벨 유지 · 대체 언어 = 시스템 언어 → 영어) · `load_with_system` · **상태줄 팝업 토글**(같은 칸 다시 누르면 닫힘) · ⚠ T4 delete-confirm 타이밍 흔들림 1회(관찰) → [journal 10-04 §15](journal/2026-10-04.md)
 - **Git 상태 요약**(탭 상태바 `↑앞섬 ↓뒤짐 ●변경` · porcelain v2 워커 · T-95 2차) · **메모리 창 영역 세분**(아이콘 캐시 · 터미널 버퍼 · T-93 2차 일부) · macOS 디스크 칸은 Mac 실기로 미룸 · 묶음 마감 → [journal 10-04 §14](journal/2026-10-04.md)

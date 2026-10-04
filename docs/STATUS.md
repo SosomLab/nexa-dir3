@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `a54275e`(138차 + CI 기록 · 다른 PC) · nexa-license `54c8d71` · nexa-dir3 `bba4739`. 마지막 전수(full): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI d16e1f1까지 3-OS 녹색.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `1850166`(139 · 140차 + 문서 · 다른 PC) · nexa-license `54c8d71` · nexa-dir3 `375cab3`. 마지막 전수(full · nexa-ui 1850166 위): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI 0faf7d7까지 3-OS 녹색.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
@@ -16,10 +16,20 @@
 
 ---
 
+## 10-04 120차 — 상태줄 우클릭 = 툴바와 같은 메뉴 · 새 게이트 첫 적용
+
+- **한 일**: 상태줄 우클릭이 바로 편집 창을 열던 것을 툴바처럼 메뉴(상태바 편집… · 설정…)로 · DR-26 게이트 첫 quick push · nexa-ui 139 · 140차(다른 PC) 반영 뒤 dir3 full 통과.
+- **지금 상태**: 375cab3 앱 재시작(PID 449374). CI dfcd2f5 · 0faf7d7 성공 · 375cab3 감시 중(quick push → CI가 전수).
+- **걸린 것**: nexa-ui에도 단계형 게이트를 둘지(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
+
+→ [journal/2026-10-04 §17](journal/2026-10-04.md)
+
+---
+
 ## 10-04 119차 — 게이트 단계화(DR-26 · scripts/gate.sh)
 
 - **한 일**: 사용자 지시로 push 전 게이트를 단계형으로 — `scripts/gate.sh` auto(평소 quick · 기록 없음/24시간/핵심 경로/형제 저장소 변경이면 full) · 중요 시점 full · 결과 문자열 판정 · docs/18 §3 단일 원천 재작성 · docs/15 DoD ④ · DR-26.
-- **지금 상태**: bba4739(스크립트 · CLAUDE.md만 — 앱 재시작 없음 · PID 439623 유지). CI dfcd2f5 · 0faf7d7 감시 중.
+- **지금 상태**: bba4739(스크립트 · CLAUDE.md만 — 앱 재시작 없음 · PID 439623 유지). CI dfcd2f5 · 0faf7d7 성공.
 - **걸린 것**: nexa-ui에도 같은 절차를 둘지(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
 
 → [journal/2026-10-04 §16](journal/2026-10-04.md)
@@ -29,7 +39,7 @@
 ## 10-04 118차 — i18n 결정 4건 반영(대체 언어 = 시스템 언어 → 영어) · 상태줄 팝업 토글
 
 - **한 일**: 사용자 결정 = 크기 단위 KB 유지 · ja OK 유지 · 런처 시드 라벨 유지 · 대체 언어 = 시스템 기본 언어 → 영어(`load_with_system`) · 상태줄 상세 팝업을 같은 칸 다시 누르면 닫힘.
-- **지금 상태**: 0faf7d7 앱 재시작(PID 439623). CI 3a6fd52 · d16e1f1 성공 · dfcd2f5 · 0faf7d7 진행 중. T4 delete-confirm 타이밍 흔들림 1회(관찰).
+- **지금 상태**: 0faf7d7 앱 재시작(PID 439623). CI 3a6fd52 · d16e1f1 · dfcd2f5 · 0faf7d7 성공. T4 delete-confirm 타이밍 흔들림 1회(관찰).
 - **걸린 것**: T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
 
 → [journal/2026-10-04 §15](journal/2026-10-04.md)
