@@ -58,11 +58,10 @@ jobs:
       - name: scenarios (T4 · windows)
         if: runner.os == 'Windows'
         run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
-      # T-117: Linux는 화면이 없어 xvfb 가상 화면에서 돈다. **관찰 단계** — 처음 켜는 것이라 실패해도 빨강으로 만들지 않고
-      # (continue-on-error) 결과 표와 산출물을 본 뒤 필수로 올린다. `.scn`의 `키@os:` 줄이 OS 분기를 담는다.
-      - name: scenarios (T4 · linux xvfb · 관찰)
+      # T-117: Linux는 화면이 없어 xvfb 가상 화면에서 돈다(X 런타임 라이브러리는 winit이 dlopen — 러너에 없어 설치한다).
+      # `.scn`의 `키@os:` 줄이 OS 분기를 담는다. 관찰 2회차(run 37231460856)에서 20/20 통과 → 필수 단계.
+      - name: scenarios (T4 · linux xvfb)
         if: runner.os == 'Linux'
-        continue-on-error: true
         run: |
           sudo apt-get install -y xvfb libxkbcommon-x11-0 libxkbcommon0 libx11-xcb1 libxcursor1 libxi6 libxrandr2
           cargo build -q -p nexa-dir
