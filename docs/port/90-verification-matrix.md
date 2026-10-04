@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 1 | 14 | 0 | 0 | 0 |
-| NEW | 28 | 28 | 16 | 7 | 0 | 0 | 0 |
+| NEW | 28 | 28 | 16 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 37 | 137 | 0 | 0 | 0 |
-| **합계** | 4317 | 4317 | 2400 | 1009 | 766 | 0 | 0 |
+| **합계** | 4317 | 4317 | 2400 | 1010 | 766 | 0 | 0 |
 
 ## 행
 
@@ -262,7 +262,9 @@
 | GAP-009 · UNIX-DIR-LINK | Unix 폴더 심볼릭 링크 = `Dir` + `is_link()`(진입 가능) · 깨진 링크 = `Symlink` + 표식 | ndir-vfs `unix_link_attrs` | T1(cfg(unix)) | `unix_dir_symlink_is_an_enterable_dir`(CI ubuntu·macos) | ✅ | §84 · §85 CI run 37110558207 ubuntu·macos 실행·통과 · 전송 링크 안전(BUG-001 `link_moves_and_deletes_never_touch_the_target`)도 3-OS 통과 |
 | GAP-013 · PATH-SUGGEST | 경로 자동완성(dir2 `pathinput.rs` 이식 · 입력마다 폴더 제안 최대 20 · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 `%VAR%`/`$env:VAR` 확장) | `pathinput.rs` · `panel.rs::update_path_suggest` · `app/ops.rs::path_edit` | T1·T3 | `nav_buttons_and_path_edit`(확장) · pathinput 이식 시험 4 | ✅ | §85 · dir2 win.rs:7199-7206 · 8000-8007 · 한계: UI 스레드 `read_dir` |
 | NEW-010 | 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 7(즉시 반영) | `app/settings.rs` · `app/input.rs` · `app/paint.rs` · `app/launcher_icons.rs` · nexa-ui 117차 | T2·T3 | `toolbar_groups_move_by_drag_and_size_gap_settings_apply_live` · `launcher_bar_size_and_gap_settings_apply_live` · `gaps_and_padding_are_configurable` | ✅ | §74 · §76 icon_pad · §78 상태 표시 = 부드러운 채움·테두리·알약(`toolbar.hover_fill_pct/on_fill_pct/on_line_pct/state_step_pct/state_radius`) · §101 "항상 위" = 새로 고침 그룹(`[refresh, ontop]` · dir2 기본 순서와 의도된 차이 · 옛 저장값 normalize 이행 `roundtrip_and_merge` · T4 `order-editor.scn` c1dc5a3) · 플로팅 창 · 배치 초기화 명령 = 잔여 · 실기(크기·간격·상태 모양 · 항상 위 위치) 사용자 |
-| NEW-001 · 006~008 | dir3 신규 기능(dir2에 없음) — 로그 창 · 진행 UI 개편 · 대량 전송 엔진 · 성능 향상 모드(NEW-002~005는 아래 행) | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
+| NEW-001 · 006 · 007 | dir3 신규 기능(dir2에 없음) — 로그 창 · 진행 UI 개편 · 대량 전송 엔진(NEW-002~005 · 008은 아래 행) | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · NEW-009 = PANEL-064 행 |
+| NEW-008 | 성능 향상 모드 1차(`perf.boost` · 켜면 시스템 상태 모니터링 칸 제거 · 조회/깨우기 없음 · 저장값 불변 · 갱신 주기 DEPENDS) | `app/statusline.rs::{is_monitor_item, status_wants_load}` · ndir-settings registry | T3 + 실기 | `status_segments_and_tab_status_bar`(켜기/끄기) | 🚧 | 10-04 §23 · 2차 = BOOST 표(effective 강제) · 아이콘/애니메이션/폴링/스크롤백 · ⚡ 표시(T-99 · T-130) |
+| MENU-RADIO · 10-04 | 보기 메뉴 택일 묶음 선택 표시(보기 모드 · 패널 · 정보 · 테마 · 언어 — set_radio + set_checked) | `app/menus.rs::sync_menu_checks` | T3 | `view_menu_radio_groups_show_selection` | ✅ | 10-04 §23 결함 수정(종전 = 다섯 묶음 전부 표시 없음) |
 | NEW-002 | 메모리 창(모덜리스 · Dir 메모리 OS 값 · 영역별 추정 + 기타 · 막대 · 시스템 메모리 · 상태줄 주기 갱신 · 언어 전환 relabel) | `mem_win.rs` · `app/statusline.rs`(appmem 칸 클릭) · sysload `mem_app` | T1 · T3 + 실기 | mem_win `rows_with_other` · `status_segments_and_tab_status_bar`(메모리 창 요청 · mem_view) | 🚧 | 10-04 §11 1차 · §14 2차 일부(아이콘 캐시 · 터미널 버퍼) · 남은 것 = 미리보기/플러그인 · 실행 취소 · 힙 정리(T-93) · 실기 사용자 |
 | NEW-003 | 상태줄 오른쪽 칸 [탭][CPU][메모리][디스크 I/O][네트워크][라이선스] · **시스템 전체 부하**(3-OS) · 네트워크 다운/업 · `statusbar.layout` 순서/표시 편집(상태줄 우클릭 · 설정 [편집…]) · 주기 · 라이선스 칸 클릭 | nexa-ui 133 StatusBar 칸 · `platform/sysload.rs` · `app/statusline.rs` · `order.rs` STATUSBAR_BLOCKS | T1 · T3 + 실기 | sysload 순수 파서 · `sample_is_available_on_supported_os` · statusline · `status_segments_and_tab_status_bar` · `statusbar_settings_are_grouped` | 🚧 | 10-04 §2 1차(이 프로세스) · §9 시스템 값 + 네트워크 + 순서 편집 · §10 칸 안 항목(mem app/system · disk write/read · net download/upload · DR-25) · CI 0ad7599 · 9a8ed19 성공 · §11 약어 · 칸 팝업(`open_status_popup` · `refresh_status_popup`) · 조각 색/견본(nexa-ui 137 `parts_keep_width_and_colors`) · appmem 칸 · Dir CPU(`parse_self_stat_cpu`) · Windows/macOS 실행 = CI 확인 · §17 상태줄 우클릭 = 메뉴(상태바 편집… · 설정… · `open_statusbar_menu`) · §18 값 −1 · 단위 −2(철회) → §19 D/N 두 줄 ↑/↓(nexa-ui 142 `StatusSeg.rows`) · §20 줄 글꼴 12 px · 띠 누적 비율(nexa-ui 143) · macOS 디스크(IOKit) · 메모리 칸 클릭(T-93) 후속 · 실기(값 · 클릭 · 우클릭 편집) 사용자 |
 | NEW-004 · 005 | 탭 상태바(패널마다 목록 아래 · `layout.tab_statusbar`) · 칸 folder 항목 수 · git 브랜치(.git/HEAD · worktree) · 선택 요약 · 칸 클릭 메뉴 | `panel.rs` `Part::Status` · `dirinfo.rs` · `app/ctxmenu.rs`(CtxKind::Aux) | T1 · T3 + 실기 | dirinfo 2 · `status_segments_and_tab_status_bar` · 골든 layout-1200x800 | 🚧 | 10-04 §2 1차 · §14 2차(GitDetail · `parse_porcelain_v2` · `porcelain_v2_summary` · 워커 · `quiet_command`) · 남은 것 = HEAD/index 감시 · 플라이아웃 · DirInfoProvider 일반화 |

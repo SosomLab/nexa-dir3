@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `c393924`(144차 + docs) · nexa-license `54c8d71` · nexa-dir3 `494a9f8`. 마지막 전수(full · 494a9f8): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 657679c까지 3-OS 녹색.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `c393924`(144차 + docs) · nexa-license `54c8d71` · nexa-dir3 `fad2ca8`. 마지막 전수(full · 494a9f8 · 그 뒤 quick 2): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 494a9f8까지 3-OS 녹색.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
@@ -16,10 +16,20 @@
 
 ---
 
+## 10-04 126차 — 보기 메뉴 ● 표시 · 성능 향상 모드 1차(perf.boost)
+
+- **한 일**: 보기 메뉴 다섯 택일 묶음(보기 모드 · 패널 · 정보 · 테마 · 언어)에 선택 표시가 없던 결함 수정 · `perf.boost` 1차 — 켜면 시스템 상태 모니터링 칸 제거 · 조회 중지(T-99 · NEW-008).
+- **지금 상태**: fad2ca8 앱 재시작(PID 496361). CI 494a9f8 성공 · e9ae500 · fad2ca8 감시 중(quick → CI가 전수). Command Palette = 사용자 진행 승인 대기.
+- **걸린 것**: T-99 2차(BOOST 표 · 덮을 동작) · T-138 승인 · T-139 · T-136 · T-137(xvfb = 사용자) · nexa-ui 단계형 게이트 여부(사용자) · T-134 남은 것 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
+
+→ [journal/2026-10-04 §23](journal/2026-10-04.md)
+
+---
+
 ## 10-04 125차 — 첫 덮어쓰기 질문도 진행 창 안(사전 확인 창 제거) · Command Palette 등재
 
 - **한 일**: 첫 덮어쓰기 질문만 별도 확인 창으로 뜨던 657679c 결함 수정(진행 창 생성 전 판정 → `is_active() && window`) · Command Palette(Ctrl/Cmd+Shift+P) 요청 등재 · gate.sh가 형제 저장소 문서 커밋에도 full을 부르는 점 기록.
-- **지금 상태**: 494a9f8 앱 재시작(PID 490277). CI 5eb3fb4 · 657679c 성공 · 494a9f8 감시 중. 개발 세션 = Command Palette 검토.
+- **지금 상태**: 494a9f8 앱 재시작(PID 490277). CI 5eb3fb4 · 657679c · 494a9f8 성공. 개발 세션 = Command Palette 검토.
 - **걸린 것**: 덮어쓰기 인라인 실기 판정 · T-138 · T-139 · T-136 · T-137(xvfb = 사용자) · nexa-ui 단계형 게이트 여부(사용자) · T-134 남은 것 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
 
 → [journal/2026-10-04 §22](journal/2026-10-04.md)

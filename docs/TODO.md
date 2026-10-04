@@ -112,7 +112,7 @@
 | T-102 | 창 투명도 `window.transparency`(3-OS 포트 · 보조 창 · 성능 향상 모드면 0) | P2 | 소 | — | NEW-013 · DR-22 | ☐ |
 | T-95 | (사용자 10-03 재요청: "상태바를 각 탭(패널) 하단에") 탭 상태바 + `DirInfoProvider` + 폴더 상태(`FolderStats` · 1번 칸) + Git 공급자(2번 칸 · 1차 읽기 전용) | P1 | 중 | T-94 | NEW-004 · NEW-005 · DR-16 | 🚧 1차 10-04 §2 · 2차 §14(3a6fd52 · Git 앞섬/뒤짐/변경 수 · porcelain v2 워커) · 남은 것 = HEAD/index 감시 · 플라이아웃 |
 | T-100 | 값 추출 1차(DR-19 · [23](23-settings-extraction.md) §2 1차 — 감시 · 아이콘 폴링/캐시 · 스크롤백 · 프레임 · 토스트 · 미리보기 줄 + 범위 불일치 2 정렬) | P1 | 중 | — | DR-19 | ☐ |
-| T-99 | 성능 향상 모드 — `perf.boost` + `BOOST` 표(읽을 때 덮어쓰기) · 설정 창 잠금 표시 · 덮을 동작의 설정 키 먼저 신설(아이콘 · 폴링 · 애니메이션 · 스크롤백 …) | P2 | 중 | T-93 | NEW-008 · DR-18 | ☐ |
+| T-99 | 성능 향상 모드 — `perf.boost` + `BOOST` 표(읽을 때 덮어쓰기) · 설정 창 잠금 표시 · 덮을 동작의 설정 키 먼저 신설(아이콘 · 폴링 · 애니메이션 · 스크롤백 …) | P2 | 중 | T-93 | NEW-008 · DR-18 | 🚧 1차 10-04 §23(fad2ca8 · `perf.boost` = 시스템 상태 모니터링 칸 제거 · 조회 중지 · DEPENDS) · 2차 = BOOST 표 · 아이콘/애니메이션/폴링/스크롤백 · 설정 창 ⚡ 표시(T-130과 묶음) |
 
 ## 다음 세션(10-04 마감 · Linux에서 이어감 · 순서 = T-134 남은 것 → T-93 3차 → T-95 3차 → macOS 디스크 칸(IOKit · Mac 실기) → T-113 → T-131 → T-130 · T-129 → T-128 → T-117 → T-114 → 남은 T-103~T-108 — 완료 항목은 상태 칸 ✅)
 
@@ -151,7 +151,7 @@
 | T-135 | ⚠ macOS 휴지통 — **운영 결함**: `SystemTrash::trash_one`이 trashItemAtURL 성공 + resultingItemURL nil이면 실패 판정 → HomeTrash 폴백이 이미 없는 원본 rename → ENOENT(성공했는데 실패 토스트 · undo 기록 없음 · 10-04 §2 원인 규명) · 시험 `system_trash_round_trip` 흔들림 2회 · 실제 시스템 휴지통 사용(규약 위반 소지) → 판정 순수 함수 + MC/DC · 폴백은 원본이 남아 있을 때만 · 시험은 #[ignore]/env 가드/자가 점검 opt-in | P1 | 소 | — | SHELL-049 · T-52 · CI | ✅ 10-04 §3(e73e06a · `trash_outcome` · 시험 = CI 전용 · CI 성공) |
 | T-136 | ⚠ T4 `delete-confirm` 흔들림 조사 — 10-04 2회(1회째 exit 0 · 300 ms 뒤 dlg.dump 타이밍 · 2회째 **exit 101 패닉**) · 단독 25 + 부하 20회 재현 실패 · 다음 실패 때 `tests/out/delete-confirm/home/crash/` 보존 → 패닉 위치 · 고정 대기(@after:300) → 조건 대기(@idle) 검토 | P1 | 소 | — | CI-108 · T-29 | ☐ |
 | T-137 | T4 반복 실행 화면 격리 — 재현 루프의 시나리오 창이 사용자 데스크톱을 가리고 결함으로 오인(10-04 §21) → xvfb(`xvfb-run` · X11 백엔드 강제) 또는 반복 전 사용자 알림 · 이 PC에 xvfb 없음(설치 = 사용자 결정) · CI ubuntu xvfb(T-117)와 함께 | P2 | 소 | — | CI-108 · T-117 | ☐ |
-| T-138 | **Command Palette** — Ctrl(macOS Cmd)+Shift+P · 명령 검색 · 실행(참고 = nexa-sql `palette.rs` · 명령 표 `commands.rs` 라벨/단축키) — 사용자 요청 10-04 · 개발 세션 검토 중 | P1 | 중 | — | CMD · NEW | ☐ |
+| T-138 | **Command Palette** — Ctrl(macOS Cmd)+Shift+P · 명령 검색 · 실행(참고 = nexa-sql `palette.rs` 약 700줄 · 명령 표 `commands.rs` 라벨/단축키 · nexa-ui 승격 권장) — 사용자 요청 10-04 · 검토 완료 · **사용자 진행 승인 대기** | P1 | 중 | — | CMD · NEW | ☐ |
 | T-139 | gate.sh 판정 개선 — 형제 저장소(nexa-ui · nexa-license)는 `crates/` 등 코드 변경만 full 사유로(지금은 HEAD가 바뀌면 문서 커밋에도 full · 10-04 §22) | P2 | 소 | — | DR-26 | ☐ |
 | T-117 | T4 시나리오 Linux 실행 — Windows 전제 3개 분기(`ctx-menu` 셸 배경 항목 · `launcher` · `selfcheck-win`) · CI ubuntu xvfb 단계(T-06 후속) | P1 | 소 | — | CI-108 | ☐ |
 | T-114 | macOS 실기 맞춤(사용자 "동일한 과정을 맥에서도") — 이미 적용: 점 파일 = 숨김 · 선 쉐브론 · 터미널 폴백 em · 칸 폭 반올림 / 남음: 행 아이콘(NSWorkspace iconForFile) · 시스템 터미널 글꼴(Terminal.app 프로필) · 우클릭 통합 | P1 | 중 | T-112 | NEW-012 · NEW-016 | ☐ |
