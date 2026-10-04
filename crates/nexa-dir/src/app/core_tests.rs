@@ -5405,3 +5405,48 @@ fn context_targets_keep_only_carets_parent() {
     assert_eq!(context_targets(sel.clone(), None), sel);
     assert_eq!(context_targets(sel.clone(), Some(&p("/other/x.txt"))), sel);
 }
+
+/// 감시 다시 읽기 미루기(dir2 win.rs:9457-9485 · X-35 D4 · T-149 14): 인라인 이름 편집 중에는 폴더가 바뀌어도 다시 읽지 않고,
+/// 편집이 끝난 다음 틱에 반영한다. 종전 dir3 = 편집 중에도 다시 읽어 편집 행이 흔들릴 수 있었다.
+#[test]
+fn watch_reload_waits_while_renaming() {
+    use crate::app::watch::reload_deferred;
+    // MC/DC: 셋 중 하나만 참이어도 미룬다 · 전부 거짓 = 바로.
+    assert!(!reload_deferred(false, false, false));
+    assert!(reload_deferred(true, false, false));
+    assert!(reload_deferred(false, true, false));
+    assert!(reload_deferred(false, false, true));
+    let (mut app, dir) = fixture("watchdefer");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let tick = |app: &mut App| {
+        app.watch_next = Instant::now();
+        app.watch_tick(Instant::now());
+    };
+    tick(&mut app);
+    let n0 = app.panels[0].rows().source().len();
+    app.startup_cmd("list.select:1");
+    app.command("edit.rename");
+    assert!(app.panels[0].rows().is_renaming());
+    std::fs::write(dir.join("zz-late.txt"), b"new").expect("write");
+    log.borrow_mut().changed = vec![dir.clone()];
+    tick(&mut app);
+    assert!(app.panels[0].rows().is_renaming(), "편집 유지");
+    assert_eq!(
+        app.panels[0].rows().source().len(),
+        n0,
+        "편집 중 = 다시 읽지 않음"
+    );
+    tick(&mut app); // 새 변경 통지 없이도 미뤄 둔 것이 남아 있다.
+    assert_eq!(app.panels[0].rows().source().len(), n0);
+    app.startup_cmd("ui.press:escape");
+    assert!(!app.panels[0].rows().is_renaming());
+    tick(&mut app);
+    assert_eq!(
+        app.panels[0].rows().source().len(),
+        n0 + 1,
+        "편집이 끝난 뒤 반영"
+    );
+    assert!(app.watch_deferred.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}

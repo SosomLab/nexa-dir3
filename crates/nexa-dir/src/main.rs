@@ -332,6 +332,8 @@ struct App {
     platform: Platform,
     /// 폴더 감시 폴링 시각(1 s 간격 · 자동 재열람 PANEL-036).
     watch_next: Instant,
+    /// 편집·전송 중이라 미뤄 둔 감시 변경 폴더(`app/watch.rs::watch_tick`이 다음 틱에 다시 본다).
+    watch_deferred: Vec<PathBuf>,
     /// "내 PC" 볼륨 구성 감시(`app/watch.rs::drives_tick`): 다음 확인 시각 · 마지막으로 본 지문.
     drives_next: Instant,
     drives_seen: Option<u64>,
@@ -586,6 +588,7 @@ impl App {
             dnd_drop: Vec::new(),
             platform,
             watch_next: Instant::now(),
+            watch_deferred: Vec::new(),
             drives_next: Instant::now(),
             drives_seen: None,
             clip: None,

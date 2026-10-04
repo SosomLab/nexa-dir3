@@ -2,6 +2,11 @@
 
 use crate::*;
 
+/// 감시 다시 읽기를 미룰 것인가(순수 · dir2 win.rs:9463-9467): 인라인 이름 편집 · 경로 바 편집 · 전송 중 하나라도면 미룬다.
+pub(crate) fn reload_deferred(renaming: bool, path_editing: bool, transfer: bool) -> bool {
+    renaming || path_editing || transfer
+}
+
 /// "내 PC" 볼륨 구성 확인 간격(ms).
 const DRIVES_POLL_MS: u64 = 1000;
 
@@ -65,13 +70,35 @@ impl App {
         self.watch_next = now + Duration::from_millis(self.platform.watcher.poll_interval_ms());
         self.drives_tick(now);
         self.watch_sync();
-        let changed = self.platform.watcher.poll();
+        // 미뤄 둔 변경(편집·전송 중이던 것)을 이번 변경과 합친다.
+        let mut changed = std::mem::take(&mut self.watch_deferred);
+        for c in self.platform.watcher.poll() {
+            if !changed.contains(&c) {
+                changed.push(c);
+            }
+        }
         if !changed.is_empty() {
             let mut inv = Invalidations::default();
+            let transfer = self.transfer.is_some();
+            let mut reloaded = false;
             for p in &mut self.panels {
-                if changed.iter().any(|c| *c == p.root_path()) {
-                    p.reopen(&mut inv);
+                let root = p.root_path();
+                if !changed.contains(&root) {
+                    continue;
                 }
+                // 인라인 이름 편집 · 경로 편집 · 전송 중에는 미룬다(dir2 win.rs:9457-9485 · X-35 D4: 다시 읽기가 편집 행을 흔들거나
+                // 진행 중인 전송의 중간 상태를 보여 주지 않게) — 다음 틱에 다시 본다.
+                if reload_deferred(p.rows().is_renaming(), p.pathbar.is_editing(), transfer) {
+                    if !self.watch_deferred.contains(&root) {
+                        self.watch_deferred.push(root);
+                    }
+                } else {
+                    p.reopen(&mut inv);
+                    reloaded = true;
+                }
+            }
+            if !reloaded {
+                return self.watch_next;
             }
             // 준비해 둔 셸 메뉴는 옛 폴더 상태 기준 — 버리고 머무름부터 다시(선행 구축 무효화).
             self.platform.ctxmenu.invalidate();
