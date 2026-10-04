@@ -31,7 +31,7 @@
 | RENDER | 54 | 54 | 16 | 0 | 38 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
 | SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
-| SHELL | 75 | 75 | 45 | 19 | 11 | 0 | 0 |
+| SHELL | 75 | 75 | 47 | 17 | 11 | 0 | 0 |
 | SKEL | 291 | 291 | 150 | 91 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 90 | 0 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 65 | 53 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4320 | 4320 | 2491 | 937 | 763 | 0 | 0 |
+| **합계** | 4320 | 4320 | 2493 | 935 | 763 | 0 | 0 |
 
 ## 행
 
@@ -174,7 +174,8 @@
 | SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | 🚧 | DnD 2차(docs/port/19 §4-7 2~4차) · 10-05 §28: 발신 1차 ✅(DND-SEND 행) · 수신 보강(자체 IDropTarget · 가상 파일 · 텍스트 · 자동 스크롤 · 호버 열기) ☐ |
 | SHELL-063 · 064 · 065 · 066 · WINC-093 · CMD-406 · DND-SEND | 파일 드래그 발신(Windows OLE): 선택된 행을 누른 채 4 px 넘게 끌면 선택 전체를 DoDragDrop(COPY|MOVE) · 데이터 = CF_HDROP · MOVE여도 원본 안 지움(dir2 동일) · 끝나면 press 소거 + 놓였으면 다시 읽기 · 제자리 놓기 = 무동작 · macOS/Linux 미지원 | `platform/windrag.rs`(IDropSource + IDataObject) · `Platform.drag` = `NativeDrag`(Windows) · `app/dnd.rs::drag_out_after` · `app/slowclick.rs`(`drag_press`) | T1 · T3 + 실기 | `dragging_selected_rows_starts_os_drag`(가짜 포트) · `windrag::data_object_offers_hdrop_only`(COM 왕복) | 🚧 | 10-05 §28(d24bc51 · T-147 1차 · dir2 dnd.rs:270-389 · win.rs:8338-8377) · **실기 필요** = 탐색기 · Windows Terminal · VMware 게스트 · 자기 창 다른 패널 · Esc 취소 · 드래그 뒤 선택/클릭 · 한계 = 드래그 중 우리 창 다시 그리기 멈춤(winit 모달) · CF_UNICODETEXT(경로 텍스트) 미제공 · 드래그 이미지 없음 |
 | SHELL-070~075 | 삭제·휴지통(확인 대화상자 · 잠긴 항목 · 완전 삭제 · 복원) | `app/ops.rs` · `trashop.rs` · `platform/*recycle*`·`macos.rs`·`linux.rs` | T1·T3·T5 | `dialogs_delete_permanent_and_paste_conflict` · `new_folder_rename_and_undo` · 휴지통 OS별 시험 · 자가 점검 trash | ✅ | |
-| SHELL-080~085 | 파일 정보(도크 Info — 종류 이름 · 크기 · 시각 · 속성) | `dockinfo.rs` · nexa-fs `kind_name` | T3 | `dock` core 시험 | 🚧 | OS 종류 이름 macOS/Linux = nexa-fs 후속 |
+| SHELL-080~085 | 파일 정보(도크 Info — 종류 이름 · 크기 · 시각 · 속성) | `dockinfo.rs` · nexa-fs `kind_name` | T3 | `dock` core 시험 | 🚧 | OS 종류 이름 macOS/Linux = nexa-fs 후속 · 10-05 §31: 081 디스크 할당 크기 ✅ · 085 중 할당 크기 생략(온라인 전용 · 네트워크) ✅(SIZE-ON-DISK 행) · 083/084 형식별 상세(IShellItem2 · 전용 스레드) ☐ |
+| SHELL-081 · 085(일부) · SIZE-ON-DISK | 도크 정보 "디스크 할당 크기" 줄(크기 아래) — Windows = GetCompressedFileSizeW → 클러스터 올림 · Unix = st_blocks × 512 · 폴더 · 온라인 전용(플레이스홀더) 파일 · 네트워크 경로 제외(다운로드/느린 조회 방지) | `platform/mod.rs::Disk::size_on_disk` · 순수 `round_up_cluster` · `wants_size_on_disk` · `platform/{windows,linux,macos,fake}.rs` · `dockinfo.rs::info_lines(…, on_disk)` · i18n `info.sizeOnDisk`(기존) | T1 · T3 | `cluster_round_up`(dir2 시험 이식) · `native_size_on_disk_for_file_not_folder` · `info_and_preview_on_temp_tree`(보강) | ✅ | 10-05 §31(1b0b1a4 · T-149 18 일부 · dir2 fileinfo.rs:83-143) · 실기(도크 정보 줄) 사용자 |
 | EXT-204~215 · 401~418 | i18n 구성안 세부(식별자 규칙 · 레지스트리 연결 · 호출부 전환) · nexa-sql에서 가져올 것 잔여 | `ndir-i18n` · `ndir-settings` | T1 | i18n/settings 시험 | 🚧 | |
 | PLUG-009~013 · 040~047 · 050~062 · 110~127 잔여 | 테마 신호 · 표시 폭 · 상한 · 메타 목록 · 라인 태그 세부 · 창 세부 · 동봉/배포 세부 | `preview/mod.rs` · `preview_win.rs` · `packaging/` | T1·T3 | `render_svg_writes_bmp_and_caches` · `plugin_manager_install_and_remove` · T-62 시험 | 🚧 | |
 | SKEL-414~439 | 재그리기 3원칙 · 통지 규약 · Focus 초안 · 메뉴/명령 규약 · 자원 · platform 시그니처 · 하네스 훅 | `app/event_loop.rs` · `platform/mod.rs` · `app/startup_cmd.rs` | — | — | 🚧 | 규약 초안 = docs/01에 흡수 |
@@ -262,7 +263,7 @@
 | GAP-017 · SORT-EXT | 확장자 열 정렬 = `SortKey::Ext`(dir2 PANEL-065 · 종전 dir3는 Kind로 잘못 매핑) | `filelist.rs::sort_key_of` | T3 | `header_sort_marks_trail_and_shift_cycles`(sort_key_of 단언) | ✅ | §112 · 이식 실수 회귀 수정 |
 | WINB-100 · WINC-098 · 101 · 116 · TAB-DND | 탭을 끌어 좌우 패널 사이로 이동(놓을 때 · 탭 위 = 그 앞 · 그 밖 = 끝 · 활성 이동 · Esc 취소 · 마지막/잠긴 탭 거부 · 보기 옵션 채택 규칙 = 메뉴 경로와 같음) | `app/input.rs::tab_cross_drop` · `App.tab_drop_hint` · `app/paint.rs` · `panel.rs::{tab_dragging, cancel_tab_drag, tab_drop_target, tabbar_bounds}` | T3 | `tab_drag_moves_between_panels` | ✅ | §113 · **의도된 차이**: WINC-098 끄는 중 미리 보기 이동 대신 놓을 때 이동 + 끄는 중 대상 탭 바 강조 · 2 px 삽입선(dir2에 없던 표식) · 실기(끌기 · 표식 · Esc) 사용자 |
 | GAP-018 · CLOUD-LINK | 클라우드 플레이스홀더를 링크로 보지 않기(REPARSE ∧ 클라우드 비트 없음만 링크) | ndir-vfs `is_link_attrs` · `filelist.rs` | T1 | `cloud_status_link_and_network_rules` | ✅ | §113 발견 · §116 해소(6965a76) · 실기(Windows OneDrive 폴더에 링크 화살표 없음) 사용자 |
-| GAP-019 · SHELL-085 | 클라우드 전용 파일 = 미리보기 · 상세 · 할당 크기 생략(다운로드 유발 방지) | 예정 = `dockinfo.rs` · ndir-vfs 판정 함수 | — | — | ☐ | §113 · dir2 fileinfo.rs:414 시험 · T-129 · Windows OneDrive 실기 필요 |
+| GAP-019 · SHELL-085 | 클라우드 전용 파일 = 미리보기 · 상세 · 할당 크기 생략(다운로드 유발 방지) | 예정 = `dockinfo.rs` · ndir-vfs 판정 함수 | — | — | ☐ | §113 · dir2 fileinfo.rs:414 시험 · T-129 · Windows OneDrive 실기 필요 · 10-05 §31: 할당 크기 줄은 온라인 전용 파일 제외 ✅(SIZE-ON-DISK) · 미리보기 다운로드 방지는 클라우드 대기 |
 | GAP-020 · COL-LAYOUT-BOOT | `list.col_layout` 기동 적용(또는 세션 우선 문서화) | `app/settings.rs:145-151` · `main.rs` 기동 | — | — | ☐ | §113 · 의도 확인 대기(T-126과 함께) |
 | PANEL-045 · WINB-069 · WINC-006 · 015 · CMD-022 · 023 · PREFS-131 | 탭별 보기 옵션 — 숨김 · Dot · 폴더 우선의 값 주인 = 탭 · 토글 = `list.view_scope`(tab/panel/global)만큼 · 설정 = 새 탭 기본값 · 보호 파일 · 대소문자 정렬 = 전역 · 탭 복제/패널 간 이동 채택 · 체크 추종 · 툴팁 범위 · 세션 `panel{i}.views` | `panel.rs::{set_view, active_view_values, tab_opts, session_view_flags, set_opts}` · `app/menus.rs::{toggle_view_option, view_scope, sync_view_checks}` · `app/sessions.rs` · `filelist.rs` | T3 | `view_options_belong_to_tabs` · 기존 4개 기대값 · migrate 기본값 | ✅ | §102 · 출처 dir2 71baf67 · **의도된 차이 3**: 설정 창 체크박스 = 새 탭 기본값(dir2 WINC-006 = 전체 일괄) · 새 탭 = 설정 기본값(dir2 = 활성 탭 계승) · 토글이 설정을 안 바꿈(dir2 = 미러 갱신) · `list.view_scope` 기본 tab(dir2 panel · docs/23) → §104에서 기본 dir(NEW-018) · §105 대소문자 구분 정렬이 4번째 보기 옵션으로 합류(`list.sort_case_sensitive` = 새 탭 기본값 · 보호 항목만 전역) · 실기(탭 전환 시 버튼 상태 · 툴팁) 사용자 |
 | GAP-010 · OS-OPEN | Windows 파일 열기 = ShellExecuteW(`cmd /C start` 제거 — 이름의 & ^ % 위험) · reveal = `explorer.exe /select,` | `platform/windows.rs::NativeOpener` | — | — | 🖐 | §83 · 실제 창을 띄우는 동작이라 자동 시험 없음 — 실기: `&`가 든 이름의 txt 더블클릭 → 연결 프로그램 · .lnk 열림 |
