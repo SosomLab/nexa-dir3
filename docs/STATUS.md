@@ -4,16 +4,26 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋 · 10-04 Windows PC 갱신): nexa-ui `e0f794c`(150차 + docs `7e56882`) · nexa-license `54c8d71` · nexa-dir3 `e7cd2b4`(quick · CI가 전수). 마지막 전수(**full · 094997f · 10-05 Windows** · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 448/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 781ba90까지 3-OS 녹색(42ccb5a = macOS/Linux `procmem.rs` 첫 실행 통과) · 89df13a · daa499d · 14c6866 · 6c42c90 · 094997f(dff8a77 포함) 녹색 · 1e4520b · e7cd2b4 = 협업 세션 감시.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋 · 10-04 Windows PC 갱신): nexa-ui `e0f794c`(150차 + docs `7e56882`) · nexa-license `54c8d71` · nexa-dir3 `716f0b3`(quick · CI가 전수). 마지막 전수(**full · 094997f · 10-05 Windows** · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 448/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 781ba90까지 3-OS 녹색(42ccb5a = macOS/Linux `procmem.rs` 첫 실행 통과) · 89df13a · daa499d · 14c6866 · 6c42c90 · 094997f(dff8a77 포함) · 1e4520b · e7cd2b4 녹색 · 716f0b3 = 협업 세션 감시.
 - **이 PC가 Windows일 때**(10-04 §25): 사용자 인스턴스 = `target\debug\nexa-dir.exe`(협업 세션 전용 빌드 · `explorer.exe`로 실행해 에이전트 env 상속 회피) · 개발 세션 검증 = `CARGO_TARGET_DIR=target/dev` · 협업 세션 시험 = `target/collab`.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
 - **10-03 ~ 10-04 Linux 세션에서 바뀐 것(요약)**: 아이콘 테마 행/런처 아이콘 · 선 쉐브론 · 터미널 시스템 글꼴/한글 폴백 · Unix 점 파일 = 숨김 · 스플리터 3종 · 탭 여러 줄 · 탭 패널 간 드래그 · 보기 관리 4택(폴더 기본) · 다중 정렬 머리 · 컬럼 이동 표식 · 열 경계 더블클릭 자동 맞춤 · 기본 열 + 상태 열(클라우드) · 설정 종속 UX 1단계 · Linux 우클릭 통합 1차 · 상태줄(시스템 부하 · 네트워크 · 약어 · 칸 팝업 · 앱 메모리/라이선스) · 탭 상태바 · 메모리 창(영역 세분 2차 일부) · macOS 휴지통 결함 수정 · i18n 언어 전환 미반영 10곳 · 툴바/빠른 실행 우클릭 · Git 상태 요약(↑↓●) — 상세 = journal 10-03 §97~§118 · 10-04 §1~§14.
 - **Linux 미구현 · 알려진 차이**: 셸 컨텍스트 메뉴 = xdg 1차(순서 편집 · 배경 메뉴 · 아이콘 2차 T-131) · 드래그 앤 드롭 없음 · Wayland 전용 세션 파일 클립보드 = 앱 안 사본만 · 도크 정보 OS 종류 이름 없음 · .lnk/링크 오버레이 = Windows 전용 · 볼륨 라벨 미표시 · 상태 열 = 네트워크 마운트만(클라우드 상태는 Windows/macOS) · 자가 점검 미구현 그룹 · T4 Windows 전제 3개(T-117).
-- **사용자 결정 대기**: (i18n 4건 = 10-04 §15에서 결정 · 해소) · T-126 권장안 5건 확인(동기화 중 제외 · Linux 네트워크만 · 내 PC 제외 · 정렬은 사용자 요청으로 지원 · GAP-018 함께) · GAP-015 정리(연결 vs INTERNAL · T-125) · GAP-020(`list.col_layout` 기동 미적용 의도?) · 정렬 후속(T-128 — Shift 없는 클릭 리셋 · 정렬 영속) · 터미널 글꼴 크기 기준(Windows) · 설정 창 "클라우드 연결" 빈 페이지 · ↔ 아이콘 · dir2 BUG-001 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" · "바로가기" vs "바로 가기" · nexa-sql `split_d.tick` 누락 수정 · 릴리스 태그.
+- **사용자 결정 대기**: (i18n 4건 = 10-04 §15에서 결정 · 해소) · T-126 권장안 5건 확인(동기화 중 제외 · Linux 네트워크만 · 내 PC 제외 · 정렬은 사용자 요청으로 지원 · GAP-018 함께) · GAP-015 정리(연결 vs INTERNAL · T-125) · GAP-020(`list.col_layout` 기동 미적용 의도?) · 정렬 후속(T-128 — Shift 없는 클릭 리셋 · 정렬 영속) · (터미널 글꼴 크기 기준 = 10-05 §4에서 해소 — 따르기 끔 = Linux 기준 · 켬 = WT pt) · 설정 창 "클라우드 연결" 빈 페이지 · ↔ 아이콘 · dir2 BUG-001 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" · "바로가기" vs "바로 가기" · nexa-sql `split_d.tick` 누락 수정 · 릴리스 태그.
 - **실기(화면) 판정이 남은 것**: 10-03 ~ 10-04 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표 53항목) — 특히 상태줄 약어/팝업/색 · 메모리 창 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 스플리터 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 남은 것(자가 점검 창 · 라이선스/허용값/unsupported 문구 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 · Command Prompt 비교) → T-93 3차(미리보기/플러그인 · 실행 취소 영역 · 힙 정리) → T-95 3차(HEAD/index 감시 · 플라이아웃) → macOS 디스크 칸(IOKit — **Mac 실기에서** · T-114와 함께) → T-113 개발용 .desktop → T-131 우클릭 2차 → T-130 설정 종속 2단계 · T-129(GAP-019 클라우드 미리보기) → T-128 정렬 후속 → T-117 T4 Linux → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-05 136차 — 터미널 글꼴 크기 계산을 Linux 경로와 통일(따르기 끔일 때 너무 크던 것)
+
+- **한 일**: 고정폭 글꼴이 있으면 따르기 여부와 무관하게 같은 계산(글꼴 지표 환산 · 보정 상쇄 · 줄 높이 = 글꼴 줄 높이) · 크기 원천만 다름(716f0b3) · "터미널 글꼴 크기 기준" 결정 해소.
+- **지금 상태**: 716f0b3 앱 재시작(PID 30992). quick 게이트 → CI 716f0b3 감시 중.
+- **걸린 것**: 터미널 크기 화면 판정(Windows 따르기 끔 · macOS는 Mac 실기) · M 칸 화면 판정 · T-143 · ⚠ 깜빡임 CPU · 전송 창 화면 판정 · T-92 순서 · T-140 · T-141 사용자 답.
+
+→ [journal/2026-10-05 §4](journal/2026-10-05.md)
 
 ---
 
