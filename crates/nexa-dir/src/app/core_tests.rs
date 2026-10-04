@@ -5377,3 +5377,31 @@ fn header_right_click_opens_column_layout_menu() {
     assert!(app.open_order, "파일 컬럼… = 열 배치 편집 창");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 우클릭 대상 축소(dir2 win.rs:2779-2801 · T-149 13): 트리에서 여러 폴더에 걸친 선택 = 캐럿 항목의 부모 폴더 것만 셸 메뉴 대상.
+#[test]
+fn context_targets_keep_only_carets_parent() {
+    use crate::app::ctxmenu::context_targets;
+    let p = |s: &str| PathBuf::from(s);
+    let sel = vec![
+        p("/r/a.txt"),
+        p("/r/sub/b.txt"),
+        p("/r/sub/c.txt"),
+        p("/r/d.txt"),
+    ];
+    // 캐럿이 sub 안 = sub의 것만.
+    assert_eq!(
+        context_targets(sel.clone(), Some(&p("/r/sub/c.txt"))),
+        vec![p("/r/sub/b.txt"), p("/r/sub/c.txt")]
+    );
+    // 캐럿이 위 폴더 = 위 폴더 것만.
+    assert_eq!(
+        context_targets(sel.clone(), Some(&p("/r/a.txt"))),
+        vec![p("/r/a.txt"), p("/r/d.txt")]
+    );
+    // 한 부모뿐 = 그대로 · 캐럿 없음 = 그대로 · 캐럿 부모에 선택이 없음 = 그대로(빈 대상 금지).
+    let one = vec![p("/r/a.txt"), p("/r/d.txt")];
+    assert_eq!(context_targets(one.clone(), Some(&p("/r/d.txt"))), one);
+    assert_eq!(context_targets(sel.clone(), None), sel);
+    assert_eq!(context_targets(sel.clone(), Some(&p("/other/x.txt"))), sel);
+}

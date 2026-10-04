@@ -6,6 +6,7 @@
 
 use crate::platform::{MenuEvent, MenuTarget, ShellMenuItem};
 use crate::*;
+use std::path::Path;
 
 /// 열린 메뉴의 주인(탭 메뉴는 `tab_menu_at`가 따로 든다).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +115,24 @@ fn has_id(items: &[CtxItem], id: &str) -> bool {
     })
 }
 
+/// 우클릭 메뉴 대상(순수 · dir2 `context_targets`): 선택을 **캐럿 항목의 부모 폴더** 것으로 줄인다 — 셸 메뉴(`GetUIObjectOf`)는
+/// 한 부모의 항목만 표현할 수 있다. 캐럿이 없거나 부모가 없으면(최상위) · 줄인 결과가 비면 그대로 둔다.
+pub(crate) fn context_targets(sel: Vec<PathBuf>, caret: Option<&Path>) -> Vec<PathBuf> {
+    let Some(parent) = caret.and_then(Path::parent) else {
+        return sel;
+    };
+    let kept: Vec<PathBuf> = sel
+        .iter()
+        .filter(|p| p.parent() == Some(parent))
+        .cloned()
+        .collect();
+    if kept.is_empty() {
+        sel
+    } else {
+        kept
+    }
+}
+
 impl App {
     pub(crate) fn open_ctx(&mut self, kind: CtxKind, items: Vec<CtxItem>) {
         self.ctx_anchor = self.ctx_anchor_next.take().unwrap_or(self.cursor);
@@ -151,6 +170,12 @@ impl App {
         if sel.is_empty() {
             return self.open_bg_menu(panel);
         }
+        // 트리에서 여러 폴더에 걸쳐 고른 선택 = 캐럿 항목의 부모 폴더 것만(dir2 win.rs:2779-2801 — 셸 메뉴는 한 부모만 표현한다).
+        let caret = {
+            let rows = self.panels[panel].rows();
+            rows.caret().and_then(|c| rows.source().row_path(c))
+        };
+        let sel = context_targets(sel, caret.as_deref());
         self.ctx_set_owner();
         // Shift를 누른 채 열면 확장 동사까지(dir2 SHELL-004) — 선행 구축분(평소 메뉴)과 대상이 달라 새로 구축한다.
         self.ctx_extended = self.shift;
