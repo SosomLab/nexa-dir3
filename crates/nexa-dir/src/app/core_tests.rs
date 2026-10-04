@@ -5766,3 +5766,195 @@ fn watch_covers_expanded_folders() {
     assert_eq!(app.panels[0].rows().source().len(), n0 + 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-150 ⑬ 마우스 X버튼(dir2 WINC-106 · win.rs WM_XBUTTONDOWN): 1 = 뒤로 · 2 = 앞으로.
+#[test]
+fn xbuttons_navigate_back_and_forward() {
+    let (mut app, dir) = fixture("xbtn");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(sub.clone(), &mut inv);
+    assert_eq!(app.panels[0].root_path(), sub);
+    let b = app.panels[0].bounds();
+    let (x, y) = (b.x + 20, b.y + 80);
+    app.route(InputEvent::XButton {
+        x,
+        y,
+        forward: false,
+    });
+    assert_eq!(app.panels[0].root_path(), dir, "X1 = 뒤로");
+    app.route(InputEvent::XButton {
+        x,
+        y,
+        forward: true,
+    });
+    assert_eq!(app.panels[0].root_path(), sub, "X2 = 앞으로");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑭ 타입어헤드(dir2 WINC-146 · PANEL-135): 글자 입력 = 그 글자로 시작하는 행으로 캐럿 이동.
+#[test]
+fn typeahead_char_moves_caret_to_matching_row() {
+    let (mut app, dir) = fixture("typeahead");
+    app.layout_for(1200, 800, 1.0);
+    let caret_path = |app: &App| {
+        let rows = app.panels[0].rows();
+        rows.caret().and_then(|c| rows.source().row_path(c))
+    };
+    app.route(InputEvent::Char {
+        c: 'b',
+        now_ms: 1_000,
+    });
+    assert_eq!(caret_path(&app), Some(dir.join("b.md")), "b → b.md");
+    // 한참 뒤의 다른 글자 = 새 검색.
+    app.route(InputEvent::Char {
+        c: 'a',
+        now_ms: 60_000,
+    });
+    assert_eq!(caret_path(&app), Some(dir.join("a.txt")), "a → a.txt");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑦ 휠 = 커서 아래 패널(dir2 WINB-110/111 · WINC-067 · PANEL-134): 활성 패널이 아니라 포인터가 있는 패널이 스크롤된다.
+#[test]
+fn wheel_scrolls_panel_under_cursor_not_active() {
+    let (mut app, dir) = fixture("wheelpanel");
+    for i in 0..300 {
+        std::fs::write(dir.join(format!("f{i:03}.txt")), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    for p in &mut app.panels {
+        p.reopen(&mut inv);
+    }
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(app.dual, "기본 = 두 패널");
+    assert_eq!(app.active, 0);
+    let b = app.panels[1].rows().bounds();
+    app.cursor = (b.x + b.w / 2, b.y + b.h / 2);
+    let top = |app: &App, i: usize| app.panels[i].rows().scroll_row();
+    assert_eq!((top(&app, 0), top(&app, 1)), (0, 0));
+    for _ in 0..3 {
+        app.route(InputEvent::Wheel { delta: -120 });
+    }
+    assert!(top(&app, 1) > 0, "커서 아래(패널 1)가 스크롤");
+    assert_eq!(top(&app, 0), 0, "활성 패널(0)은 그대로");
+    assert_eq!(app.active, 0, "휠은 활성 패널을 바꾸지 않는다");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ① 항상 맨 위(dir2 WINA-013/059 · WINB-070): 명령 = 설정 토글 + 메뉴 체크 동기.
+#[test]
+fn always_on_top_toggles_setting_and_menu_check() {
+    let (mut app, dir) = fixture("ontop");
+    app.layout_for(1200, 800, 1.0);
+    assert!(!app.settings.flag("window.always_on_top"), "기본 = 끔");
+    app.command("view.always_on_top");
+    assert!(app.settings.flag("window.always_on_top"));
+    assert_eq!(app.menubar.is_checked("view.always_on_top"), Some(true));
+    app.command("view.always_on_top");
+    assert!(!app.settings.flag("window.always_on_top"));
+    assert_eq!(app.menubar.is_checked("view.always_on_top"), Some(false));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ④ 붙여넣기 대상(dir2 WINA-071 `paste_dest`): 선택 1개가 폴더 = 그 폴더 · 파일 = 그 부모 · 여러 개/없음 = 패널 폴더.
+#[test]
+fn paste_dest_folder_file_and_multi() {
+    let (mut app, dir) = fixture("pastedest");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    assert_eq!(app.paste_dest(), dir, "선택 없음 = 패널 폴더");
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    assert_eq!(app.paste_dest(), dir.join("sub"), "폴더 1개 = 그 폴더");
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    assert_eq!(app.paste_dest(), dir, "파일 1개 = 그 부모");
+    app.panels[0].select_paths(&[dir.join("sub"), dir.join("a.txt")], &mut inv);
+    assert_eq!(app.panels[0].selected_paths().len(), 2);
+    assert_eq!(app.paste_dest(), dir, "여러 개 = 패널 폴더");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑰ F3 · Tab · Ctrl+Tab이 키맵을 거쳐 명령에 닿는다(dir2 WINC-117/118 — 10-05 §11/§13의 "키맵 id와 분기 id 불일치" 유형 예방).
+#[test]
+fn f3_tab_and_ctrl_tab_through_the_keymap() {
+    use ndir_settings::keymap::Chord;
+    let (mut app, dir) = fixture("keypaths");
+    app.layout_for(1200, 800, 1.0);
+    let next_tab = if cfg!(target_os = "macos") {
+        "control+tab"
+    } else {
+        "ctrl+tab"
+    };
+    let expect = [
+        ("f3", "view.preview_window"),
+        ("tab", "panel.switch"),
+        (next_tab, "tab.next"),
+    ];
+    for (code, cmd) in expect {
+        let chord = Chord::parse(code).expect(code);
+        assert_eq!(app.keymap.lookup(&chord), Some(cmd), "{code}");
+    }
+    // Tab = 반대 패널로 · 다시 = 돌아온다.
+    assert_eq!(app.active, 0);
+    assert!(app.key_chord(Chord::parse("tab").unwrap(), false));
+    assert_eq!(app.active, 1, "Tab = 패널 전환");
+    assert!(app.key_chord(Chord::parse("tab").unwrap(), false));
+    assert_eq!(app.active, 0);
+    // Ctrl+Tab = 다음 탭(순환).
+    app.command("file.new_tab");
+    assert_eq!(app.panels[0].active_index(), 1);
+    assert!(app.key_chord(Chord::parse(next_tab).unwrap(), false));
+    assert_eq!(
+        app.panels[0].active_index(),
+        0,
+        "Ctrl+Tab = 다음 탭(끝에서 처음으로)"
+    );
+    // F3 = 미리보기 창 요청 — 처리됨(분기가 있다).
+    assert!(
+        app.key_chord(Chord::parse("f3").unwrap(), false),
+        "F3 = 처리됨"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑲ 세션 디바운스(dir2 WINB-063 · WINC-147 · PREFS-051): 잇따른 변경은 조용해진 뒤 한 번만 쓴다 · 쓴 뒤에는 깨우지 않는다.
+#[test]
+fn session_writes_once_after_debounce() {
+    let (mut app, dir) = fixture("sessdebounce");
+    app.layout_for(1200, 800, 1.0);
+    let out = dir.join("sess-out");
+    std::fs::create_dir_all(&out).expect("mkdir");
+    app.session_dir = Some(out.clone());
+    let files = |out: &PathBuf| std::fs::read_dir(out).unwrap().count();
+    let t0 = Instant::now();
+    assert_eq!(app.session_tick(t0), None, "깨끗함 = 깨우지 않음");
+    // 0 · 300 · 600 ms에 변경(탭 추가) — 그때마다 틱이 돌아도 조용해지기 전에는 쓰지 않는다.
+    for step in 0..3u64 {
+        let now = t0 + Duration::from_millis(step * 300);
+        app.command("file.new_tab");
+        app.session_collect_dirty(now);
+        assert!(app.session_tick(now).is_some(), "더러움 = 다시 깨운다");
+        assert_eq!(files(&out), 0, "변경이 이어지는 동안은 쓰지 않는다({step})");
+    }
+    // 마지막 변경(600 ms) 뒤 1초가 지나기 전 = 아직.
+    assert!(app.session_tick(t0 + Duration::from_millis(1500)).is_some());
+    assert_eq!(files(&out), 0);
+    // 조용한 1초가 지났다 = 한 번 쓴다 → 이후 틱은 쓰지도 깨우지도 않는다.
+    assert_eq!(app.session_tick(t0 + Duration::from_millis(1700)), None);
+    assert_eq!(files(&out), 1, "세션 파일 1개");
+    let stamp = |out: &PathBuf| {
+        std::fs::read_dir(out)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter_map(|e| std::fs::read(e.path()).ok())
+            .map(|b| b.len())
+            .sum::<usize>()
+    };
+    let size = stamp(&out);
+    assert_eq!(app.session_tick(t0 + Duration::from_millis(5000)), None);
+    assert_eq!(stamp(&out), size, "변경 없음 = 다시 쓰지 않는다");
+    let _ = std::fs::remove_dir_all(&dir);
+}
