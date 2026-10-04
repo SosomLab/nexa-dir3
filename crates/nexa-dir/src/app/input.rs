@@ -152,7 +152,7 @@ impl App {
     }
 
     /// 자리 → 영역.
-    fn area_at(&self, p: Point) -> Option<Area> {
+    pub(crate) fn area_at(&self, p: Point) -> Option<Area> {
         if self.menubar.bounds().contains(p) {
             Some(Area::Menu)
         } else if self.toolbar.bounds().contains(p) {

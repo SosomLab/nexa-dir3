@@ -5958,3 +5958,179 @@ fn session_writes_once_after_debounce() {
     assert_eq!(stamp(&out), size, "변경 없음 = 다시 쓰지 않는다");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-150 ⑫ 터미널 [→] = 현재 폴더로 cd(dir2 WINC-080): 살아 있는 셸에 `cd "<패널 폴더>"`를 보내고 포커스를 준다.
+#[test]
+fn dock_goto_sends_cd_to_terminal() {
+    let (mut app, dir) = fixture("termgoto");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("dock.kind:2");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(app.terms[0].alive(), "{}", app.term_dump());
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.join("sub"), &mut inv);
+    app.set_term_focus(None, &mut inv);
+    app.term_goto(0, &mut inv);
+    assert_eq!(app.term_focus, Some(0), "포커스를 준다");
+    assert_eq!(app.terms[0].view_off, 0, "맨 아래로");
+    app.term_tick(100);
+    // 가짜 PTY는 받은 것을 되돌린다 → 화면에 보낸 명령이 보인다(긴 경로는 줄이 넘어가므로 줄바꿈을 지우고 본다).
+    let flat: String = app.term_dump().replace(['\n', '\r'], "");
+    assert!(flat.contains("cd \""), "{flat}");
+    assert!(flat.contains("sub\""), "대상 = 패널의 현재 폴더: {flat}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑥ 키 라우팅(dir2 WINB-107 · WINC-114/173 `KeyRoute`): 터미널 포커스 중 키는 셸로 가고 목록은 움직이지 않는다 ·
+/// 포커스가 풀리면 다시 목록으로.
+#[test]
+fn keys_go_to_terminal_while_focused_then_back_to_list() {
+    let (mut app, dir) = fixture("keyroute");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("dock.kind:2");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    let caret = app.panels[0].rows().caret();
+    app.set_term_focus(Some(0), &mut inv);
+    app.startup_cmd("ui.press:down");
+    assert_eq!(
+        app.panels[0].rows().caret(),
+        caret,
+        "터미널 포커스 = 목록은 그대로"
+    );
+    app.route(InputEvent::Char { c: 'b', now_ms: 5 });
+    assert_eq!(
+        app.panels[0].rows().caret(),
+        caret,
+        "글자도 셸로(타입어헤드 아님)"
+    );
+    app.term_tick(100);
+    assert!(app.term_dump().contains('b'), "{}", app.term_dump());
+    // 포커스 해제 → 같은 키가 목록을 움직인다.
+    app.set_term_focus(None, &mut inv);
+    app.startup_cmd("ui.press:down");
+    assert_ne!(app.panels[0].rows().caret(), caret, "목록으로 복귀");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑱ 잘라내기 흐림 동기(dir2 WINA-060 · WINC-165 — 시작 · 창 포커스 복귀 때 `sync_cut_marks`): 클립보드에 잘라낸 파일이
+/// 있으면 그 행이 흐려지고, 클립보드가 바뀌면(복사 · 비움) 풀린다.
+#[test]
+fn cut_marks_follow_the_clipboard() {
+    use nexa_grid::RowSource as _;
+    let (mut app, dir) = fixture("cutsync");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let ghosted = |app: &App, name: &str| {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .find(|&i| src.row_path(i).is_some_and(|p| p.ends_with(name)))
+            .is_some_and(|i| src.is_ghosted(i))
+    };
+    assert!(!ghosted(&app, "a.txt"));
+    // 다른 프로그램(또는 이전 실행)이 잘라내기를 올려 둔 상태로 포커스가 돌아왔다.
+    log.borrow_mut().clipboard = Some((vec![dir.join("a.txt")], true));
+    app.sync_cut_marks();
+    assert!(ghosted(&app, "a.txt"), "잘라낸 행 = 흐림");
+    assert!(!ghosted(&app, "b.md"));
+    // 복사로 바뀜 = 흐림 해제.
+    log.borrow_mut().clipboard = Some((vec![dir.join("a.txt")], false));
+    app.sync_cut_marks();
+    assert!(!ghosted(&app, "a.txt"), "복사 = 흐림 없음");
+    // 비워짐 = 그대로 없음.
+    log.borrow_mut().clipboard = Some((vec![dir.join("b.md")], true));
+    app.sync_cut_marks();
+    log.borrow_mut().clipboard = None;
+    app.sync_cut_marks();
+    assert!(!ghosted(&app, "b.md"), "클립보드가 비면 풀린다");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-150 ⑮ OS 테마 변경(dir2 WINC-163): System 모드만 창이 알려 준 OS 테마를 따른다 · 명시 모드는 무시한다.
+#[test]
+fn system_theme_mode_follows_os_theme_only() {
+    use crate::theme::resolve;
+    use ndir_settings::ThemeMode;
+    use winit::window::Theme as Wt;
+    let dark = Theme::dark().panel_bg;
+    let light = Theme::light().panel_bg;
+    assert_ne!(dark, light);
+    assert_eq!(resolve(ThemeMode::System, Some(Wt::Dark)).panel_bg, dark);
+    assert_eq!(resolve(ThemeMode::System, Some(Wt::Light)).panel_bg, light);
+    for wt in [Some(Wt::Dark), Some(Wt::Light), None] {
+        assert_eq!(resolve(ThemeMode::Dark, wt).panel_bg, dark, "명시 dark");
+        assert_eq!(resolve(ThemeMode::Light, wt).panel_bg, light, "명시 light");
+    }
+}
+
+/// T-150 ② 히트 존(dir2 WINA-037/038 · WINC-170 `hit_zone_table`): 자리 → 영역이 배치와 맞는다 — 메뉴 · 도구 모음 · 두 패널 ·
+/// 도크 · 상태줄 · 창 밖 = 없음 · 한 패널 모드에서는 오른쪽 패널 자리가 패널 1이 아니다.
+#[test]
+fn hit_zones_match_layout() {
+    let (mut app, dir) = fixture("hitzones");
+    app.layout_for(1200, 800, 1.0);
+    let mid = |r: Rect| Point {
+        x: r.x + r.w / 2,
+        y: r.y + r.h / 2,
+    };
+    assert!(app.dual);
+    assert!(matches!(
+        app.area_at(mid(app.menubar.bounds())),
+        Some(Area::Menu)
+    ));
+    assert!(matches!(
+        app.area_at(mid(app.toolbar.bounds())),
+        Some(Area::Tool)
+    ));
+    assert!(matches!(
+        app.area_at(mid(app.panels[0].bounds())),
+        Some(Area::Panel(0))
+    ));
+    assert!(matches!(
+        app.area_at(mid(app.panels[1].bounds())),
+        Some(Area::Panel(1))
+    ));
+    assert!(matches!(
+        app.area_at(mid(app.statusbar.bounds())),
+        Some(Area::Status)
+    ));
+    for i in 0..2 {
+        let d = app.docks[i].bounds();
+        if d.w > 0 && d.h > 0 {
+            assert!(
+                matches!(app.area_at(mid(d)), Some(Area::Dock(j)) if j == i),
+                "도크 {i}"
+            );
+        }
+    }
+    assert!(app.area_at(Point { x: -5, y: -5 }).is_none(), "창 밖");
+    assert!(app.area_at(Point { x: 5000, y: 5000 }).is_none(), "창 밖");
+    // 패널 경계의 스플리터 = 패널이 아니라 스플리터.
+    let (l, r) = (app.panels[0].bounds(), app.panels[1].bounds());
+    if r.x > l.right() {
+        let gap = Point {
+            x: (l.right() + r.x) / 2,
+            y: l.y + l.h / 2,
+        };
+        assert!(
+            matches!(app.area_at(gap), Some(Area::Split(_))),
+            "패널 사이 = 스플리터"
+        );
+    }
+    // 한 패널 모드: 종전 오른쪽 패널 자리는 패널 1로 판정하지 않는다.
+    let right_mid = mid(r);
+    let _ = app.settings.set("layout.panel_mode", "single");
+    assert!(app.apply_setting("layout.panel_mode"));
+    app.layout_for(1200, 800, 1.0);
+    assert!(!app.dual);
+    if !app.dual {
+        assert!(
+            !matches!(app.area_at(right_mid), Some(Area::Panel(1))),
+            "한 패널 모드 = 패널 1 없음"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

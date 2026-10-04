@@ -991,4 +991,42 @@ mod tests {
             "보통으로 복귀"
         );
     }
+
+    /// T-150 ⑧ 선택 드래그가 격자 밖으로 나가면 한 줄씩 스크롤하고 끝 자리는 격자 안으로 묶는다(dir2 WINB-114 · WINC-092).
+    #[test]
+    fn selection_drag_outside_grid_scrolls_one_line() {
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        let shell = p.shell.default_shell();
+        assert!(t.start(&p, shell, Path::new("."), 40, 5));
+        let style = TermStyle::default();
+        let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
+        let th = Theme::dark();
+        let rc = Rect::new(0, 0, 300, 100);
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), false, 20, &style);
+        for i in 0..30 {
+            t.screen.feed(&format!("L{i}\r\n"));
+        }
+        assert!(t.screen.scrollback_count() >= 3, "스크롤백이 쌓였다");
+        // 끌지 않는 중의 이동 = 아무 일도 없다.
+        assert!(!t.mouse_move(10, -50));
+        assert_eq!(t.view_off, 0);
+        // 격자 안에서 누르고 위로 벗어남 = 이동마다 한 줄 위로.
+        t.mouse_down(10, 30, false);
+        assert!(t.mouse_move(10, -50));
+        assert_eq!(t.view_off, 1, "한 번에 한 줄");
+        assert!(t.mouse_move(10, -500));
+        assert_eq!(t.view_off, 2, "멀리 나가도 한 줄씩");
+        // 끝 자리는 격자 안으로 묶인다(맨 윗줄).
+        let top = t.cell_at(10, 0);
+        assert_eq!(t.sel.map(|s| s.1), Some(top));
+        // 아래로 벗어남 = 한 줄 아래로 · 바닥(0)에서 멈춘다.
+        assert!(t.mouse_move(10, 5000));
+        assert_eq!(t.view_off, 1);
+        assert!(t.mouse_move(10, 5000));
+        assert!(t.mouse_move(10, 5000));
+        assert_eq!(t.view_off, 0, "바닥 아래로는 가지 않는다");
+        t.mouse_up();
+        assert!(t.sel.is_some(), "끌어서 생긴 선택은 남는다");
+    }
 }
