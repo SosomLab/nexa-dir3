@@ -307,7 +307,7 @@ mod imp {
         storage_manager_name: [u16; 8],
     }
 
-    /// `PROCESS_MEMORY_COUNTERS`(psapi.h).
+    /// `PROCESS_MEMORY_COUNTERS_EX`(psapi.h) — `procmem.rs`와 같은 모양(같은 함수를 두 곳에서 선언하므로 맞춰 둔다).
     #[repr(C)]
     #[derive(Default)]
     struct Pmc {
@@ -321,6 +321,7 @@ mod imp {
         quota_non_paged_pool_usage: usize,
         pagefile_usage: usize,
         peak_pagefile_usage: usize,
+        private_usage: usize,
     }
 
     const IOCTL_DISK_PERFORMANCE: u32 = 0x0007_0020;

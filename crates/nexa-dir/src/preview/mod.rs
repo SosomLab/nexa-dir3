@@ -365,6 +365,20 @@ fn with_providers<R>(
     })
 }
 
+/// 올라와 있는 플러그인 모듈의 어림 바이트(메모리 창) = 로드한 `.wasm` 파일 크기 합. 공급자 캐시가 아직 없으면 0 —
+/// 재려고 플러그인을 올리지 않는다(처음 미리보기를 쓸 때 늘어나는 것이 보인다).
+pub(crate) fn loaded_plugin_bytes() -> u64 {
+    PROVIDERS.with(|c| {
+        c.borrow().as_ref().map_or(0, |(_, infos, _)| {
+            infos
+                .iter()
+                .filter_map(|i| std::fs::metadata(&i.path).ok())
+                .map(|m| m.len())
+                .sum()
+        })
+    })
+}
+
 /// 공급자 캐시를 버린다(설치/삭제 뒤 — 다음 사용 때 폴더를 다시 읽는다).
 pub(crate) fn invalidate() {
     PROVIDERS.with(|c| *c.borrow_mut() = None);

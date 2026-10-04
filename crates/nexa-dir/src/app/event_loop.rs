@@ -175,6 +175,9 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.row_icons_tick(now) {
             next = next.min(t);
         }
+        if let Some(t) = self.mem_tick(now) {
+            next = next.min(t);
+        }
         // 우클릭 메뉴의 오버레이 스크롤 막대 — 감출 시각이 지났으면 감추고 다시 그린다.
         if self.tab_menu.tick(now) {
             self.redraw();

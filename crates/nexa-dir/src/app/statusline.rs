@@ -345,36 +345,6 @@ impl App {
         items
     }
 
-    /// 메모리 창의 보기(지금 값): 이 프로그램의 메모리(운영체제 값) · 영역별 추정(목록 · 창 표면) + 기타(차이) · 시스템.
-    pub(crate) fn mem_view(&self) -> crate::mem_win::MemView {
-        let cur = sysload::sample();
-        let app = cur.and_then(|s| s.mem_app);
-        let lists: u64 = self.panels.iter().map(Panel::mem_estimate).sum();
-        // 창 표면 = 메인 창의 프레임 버퍼(가로 × 세로 × 4바이트).
-        let surfaces =
-            u64::from(self.viewport.0.max(0) as u32) * u64::from(self.viewport.1.max(0) as u32) * 4;
-        crate::mem_win::MemView {
-            app,
-            rows: crate::mem_win::rows_with_other(
-                vec![
-                    (tr("mem.cat.lists"), lists),
-                    (
-                        tr("mem.cat.icons"),
-                        app::row_icons::cache_bytes() + app::launcher_icons::cache_bytes(),
-                    ),
-                    (
-                        tr("mem.cat.terminal"),
-                        self.terms.iter().map(TermView::mem_estimate).sum(),
-                    ),
-                    (tr("mem.cat.surfaces"), surfaces),
-                ],
-                app,
-                tr("mem.cat.other"),
-            ),
-            system: cur.map(|s| (s.mem_used, s.mem_total)),
-        }
-    }
-
     /// 칸의 상세 팝업을 그 칸 위에 연다(값은 조회 주기마다 갱신 — [`Self::refresh_status_popup`]).
     pub(crate) fn open_status_popup(&mut self, id: &str) {
         let Some(r) = self.statusbar.seg_rect(id) else {

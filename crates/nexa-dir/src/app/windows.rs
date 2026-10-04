@@ -89,6 +89,7 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.mem_win.open(el, theme, over, owner.as_deref());
+            self.mem_next = Instant::now(); // 첫 표본은 다음 유휴 틱에
         }
         if std::mem::take(&mut self.open_license) && self.window.is_some() {
             self.licensing.refresh();
@@ -302,9 +303,9 @@ impl App {
             match self.mem_win.handle(event) {
                 crate::mem_win::MemAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
-                    let view = self.mem_view();
-                    self.mem_win.paint(view, &font, &self.theme, ui_px);
+                    self.mem_win.paint(&font, &self.theme, ui_px);
                 }
+                crate::mem_win::MemAction::Trim => self.mem_trim(),
                 crate::mem_win::MemAction::Close => {
                     self.mem_win.close();
                     if let Some(w) = &self.window {

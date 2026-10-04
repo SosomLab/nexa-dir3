@@ -31,6 +31,7 @@ mod keys_win;
 mod launcher;
 mod license_win;
 mod mem_win;
+mod memstat;
 mod nav;
 mod order;
 mod order_win;
@@ -241,6 +242,8 @@ struct App {
     license_win: LicenseWin,
     /// 메모리 창(상태줄 앱 메모리 칸 → 모덜리스 · mem_win.rs) · 열기 요청.
     mem_win: mem_win::MemWin,
+    /// 메모리 창의 다음 표본 시각(창이 열려 있을 때만 쓰인다 · `app/memory.rs`).
+    mem_next: Instant,
     open_memory: bool,
     open_license: bool,
     file_win: FileWin,
@@ -545,6 +548,7 @@ impl App {
             licensing,
             license_win: LicenseWin::new(),
             mem_win: mem_win::MemWin::new(),
+            mem_next: Instant::now(),
             open_memory: false,
             open_license: false,
             file_win: FileWin::new(),

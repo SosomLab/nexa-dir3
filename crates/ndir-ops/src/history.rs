@@ -68,6 +68,11 @@ impl OperationHistory {
         }
     }
 
+    /// 쥐고 있는 작업 수(실행 취소 + 다시 실행) — 호스트의 메모리 계측용(dir3 신규 · dir2에 없음).
+    pub fn depth(&self) -> usize {
+        self.undo.len() + self.redo.len()
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }

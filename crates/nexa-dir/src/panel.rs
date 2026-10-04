@@ -809,12 +809,25 @@ impl Panel {
     }
 
     /// 목록이 쓰는 메모리 추정(바이트 · 메모리 창) — 모든 탭의 행 수 × 행당 어림값(이름 · 메타 · 트리 노드).
+    #[cfg(test)]
     pub(crate) fn mem_estimate(&self) -> u64 {
+        let (active, background) = self.mem_estimate_split();
+        active + background
+    }
+
+    /// 파일 목록 어림을 `(보이는 탭, 배경 탭)`으로 나눈 것(메모리 창 — 탭을 닫거나 다른 폴더로 가면 줄어드는 것이 보인다).
+    pub(crate) fn mem_estimate_split(&self) -> (u64, u64) {
         const PER_ROW: u64 = 256;
-        self.tabs
-            .iter()
-            .map(|t| t.rows.source().len() as u64 * PER_ROW)
-            .sum()
+        let (mut active, mut background) = (0u64, 0u64);
+        for (i, t) in self.tabs.iter().enumerate() {
+            let bytes = t.rows.source().len() as u64 * PER_ROW;
+            if i == self.active {
+                active += bytes;
+            } else {
+                background += bytes;
+            }
+        }
+        (active, background)
     }
 
     /// 탭 상태바 칸 클릭(1회성 수거).

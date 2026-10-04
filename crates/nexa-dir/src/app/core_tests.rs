@@ -2453,18 +2453,35 @@ fn status_segments_and_tab_status_bar() {
     // 앱 메모리 칸 = 메모리 창 요청 · 보기 = 영역별 추정 + 기타.
     click(&mut app, "appmem");
     assert!(app.open_memory, "메모리 창");
-    let view = app.mem_view();
-    assert!(view.app.is_some_and(|v| v > 0) && view.system.is_some());
-    assert_eq!(
-        view.rows.len(),
-        5,
-        "목록 · 아이콘 캐시 · 터미널 · 창 표면 · 기타"
-    );
-    assert_eq!(view.rows[3].1, 1200 * 800 * 4, "창 표면 = 가로 × 세로 × 4");
-    assert_eq!(
-        view.rows[0].1,
-        app.panels.iter().map(Panel::mem_estimate).sum::<u64>()
-    );
+    {
+        use crate::memstat::{Cat, Group};
+        let s = app.mem_sample();
+        assert!(s.sys.footprint > 0 && s.machine.is_some(), "{s:?}");
+        assert_eq!(
+            s.data.get(Cat::SurfaceMain),
+            1200 * 800 * 4,
+            "창 표면 = 가로 × 세로 × 4"
+        );
+        assert_eq!(
+            s.data.group_sum(Group::Lists),
+            app.panels.iter().map(Panel::mem_estimate).sum::<u64>(),
+            "보이는 탭 + 배경 탭(이력 없음)"
+        );
+        assert!(s.data.get(Cat::Fonts) > 0, "UI 글꼴 파일");
+        assert_eq!(s.other(), s.sys.footprint.saturating_sub(s.data.sum()));
+        // 늘고 주는 과정: 탭을 하나 더 열면 배경 탭 목록이 늘고(▲) · 닫으면 준다(▼).
+        let mut win = crate::mem_win::MemWin::new();
+        win.set_sample(s, 1000);
+        app.command("file.new_tab");
+        let grown = app.mem_sample();
+        assert!(grown.data.group_sum(Group::Lists) > s.data.group_sum(Group::Lists));
+        win.set_sample(grown, 1000);
+        let bg = Cat::ListsBackground.idx();
+        assert!(win.trend().shown(bg).is_some_and(|d| d > 0), "늘었다");
+        app.command("file.close_tab");
+        win.set_sample(app.mem_sample(), 1000);
+        assert!(win.trend().shown(bg).is_some_and(|d| d < 0), "줄었다");
+    }
     // 항목 순서/표시: 디스크 = 쓰기만 · 네트워크 = 다운 → 업.
     app.order_changed(
         "statusbar.layout",
