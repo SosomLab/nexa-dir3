@@ -57,9 +57,11 @@ if [[ "$MODE" == quick ]]; then
         echo "  · 바뀐 크레이트 없음 — 시험 생략"
     else
         ARGS=(); for p in $PKGS; do ARGS+=(-p "$p"); done
-        OUT="$(cargo test -q "${ARGS[@]}" 2>&1)"
+        # 판정 = cargo 종료 코드 + 실패 수. 출력의 `^error` 줄로 판정하지 않는다 — 런처 시험이 띄운 자식 프로세스(시험 바이너리 --version)의
+        # stderr "error: Unrecognized option"이 줄 맨 앞에 떨어지면 통과한 시험을 실패로 읽었다(10-05 적발 · 흔들림).
+        OUT="$(cargo test -q "${ARGS[@]}" 2>&1)"; RC=$?
         T="$(echo "$OUT" | grep -E '^test result' | awk '{p+=$4;f+=$6} END{print p+0" "f+0}')"
-        [[ "$T" == *" 0" ]] && ! echo "$OUT" | grep -q "^error" || { echo "$OUT" | grep -E "FAILED|panicked|^error" -A10 | head -50; fail "시험($PKGS)"; }
+        [[ $RC -eq 0 && "$T" == *" 0" ]] || { echo "$OUT" | grep -E "FAILED|panicked|^error" -A10 | head -50; fail "시험($PKGS)"; }
         echo "  ✓ 시험($PKGS) — 통과/실패 $T"
     fi
     SM="$(cargo run -q -p nexa-dir -- --smoke 2>&1 | tail -1)"; [[ "$SM" == "smoke ok"* ]] || fail "smoke: $SM"; echo "  ✓ $SM"
@@ -71,9 +73,9 @@ fi
 OUT="$(bash scripts/check-3os.sh 2>&1)"
 [[ "$OUT" == *"검사 통과"* ]] || { echo "$OUT" | grep -E "^(error|warning)" -A12 | head -60; fail "fmt/clippy(3-OS)"; }
 echo "  ✓ fmt + clippy(3-OS)"
-OUT="$(cargo test --workspace -q 2>&1)"
+OUT="$(cargo test --workspace -q 2>&1)"; RC=$?
 T="$(echo "$OUT" | grep -E '^test result' | awk '{p+=$4;f+=$6} END{print p+0" "f+0}')"
-[[ "$T" == *" 0" ]] && ! echo "$OUT" | grep -q "^error" || { echo "$OUT" | grep -E "FAILED|panicked|^error" -A10 | head -50; fail "시험(전체)"; }
+[[ $RC -eq 0 && "$T" == *" 0" ]] || { echo "$OUT" | grep -E "FAILED|panicked|^error" -A10 | head -50; fail "시험(전체)"; }
 echo "  ✓ 시험(전체) — 통과/실패 $T"
 SM="$(cargo run -q -p nexa-dir -- --smoke 2>&1 | tail -1)"; [[ "$SM" == "smoke ok"* ]] || fail "smoke: $SM"; echo "  ✓ $SM"
 SC="$(cargo run -q -p nexa-dir -- --selfcheck --ci 2>&1 | tail -1)"; [[ "$SC" == *"fail 0"* ]] || fail "selfcheck: $SC"; echo "  ✓ selfcheck $SC"
