@@ -5490,3 +5490,144 @@ fn path_bar_resolves_shell_alias() {
     assert_eq!(app.panels[0].root_path(), sub, "모르는 별칭 = 자리 유지");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 느린 재클릭 = 이름 바꾸기(dir2 win.rs:8132-8149 · 8572-8581 · 9583-9601 · T-149 4): 선택된 행을 1초 넘게 지나 다시 누르고
+/// 끌지 않고 떼면 더블클릭 시간 뒤 이름 바꾸기 · 그 사이 다른 입력 · 캐럿 이동은 버린다.
+#[test]
+fn slow_second_click_starts_rename() {
+    use crate::app::slowclick::{rename_should_fire, slow_click_arms};
+    let now = Instant::now();
+    let old = now.checked_sub(Duration::from_millis(1500)).expect("clock");
+    let p = |s: &str| PathBuf::from(s);
+    let prev = (0usize, p("/r/a.txt"), old);
+    let arms = |prev: Option<&(usize, PathBuf, Instant)>, panel, path: &str, sel, mods, ren| {
+        slow_click_arms(prev, panel, &p(path), now, sel, mods, ren)
+    };
+    assert!(arms(Some(&prev), 0, "/r/a.txt", true, false, false));
+    // 조건 하나씩만 어기면 예약 안 함(MC/DC).
+    assert!(
+        !arms(None, 0, "/r/a.txt", true, false, false),
+        "직전 클릭 없음"
+    );
+    assert!(
+        !arms(Some(&prev), 1, "/r/a.txt", true, false, false),
+        "다른 패널"
+    );
+    assert!(
+        !arms(Some(&prev), 0, "/r/b.txt", true, false, false),
+        "다른 행"
+    );
+    assert!(
+        !arms(Some(&prev), 0, "/r/a.txt", false, false, false),
+        "선택 안 됨"
+    );
+    assert!(
+        !arms(Some(&prev), 0, "/r/a.txt", true, true, false),
+        "수식키"
+    );
+    assert!(
+        !arms(Some(&prev), 0, "/r/a.txt", true, false, true),
+        "편집을 끝낸 클릭"
+    );
+    let quick = (0usize, p("/r/a.txt"), now);
+    assert!(
+        !arms(Some(&quick), 0, "/r/a.txt", true, false, false),
+        "짧은 간격"
+    );
+    // 발화 대조(dir2 시험 이식): 대소문자 · 끝 구분자 무시 · 패널/행이 다르면 버린다.
+    let pend = (0usize, p("C:\\Dir\\File.txt"));
+    assert!(rename_should_fire(
+        Some(&pend),
+        0,
+        Some(&p("C:\\Dir\\File.txt"))
+    ));
+    assert!(rename_should_fire(
+        Some(&pend),
+        0,
+        Some(&p("c:\\dir\\file.TXT"))
+    ));
+    assert!(!rename_should_fire(
+        Some(&pend),
+        1,
+        Some(&p("C:\\Dir\\File.txt"))
+    ));
+    assert!(!rename_should_fire(
+        Some(&pend),
+        0,
+        Some(&p("C:\\Dir\\Other.txt"))
+    ));
+    assert!(!rename_should_fire(Some(&pend), 0, None));
+    assert!(!rename_should_fire(None, 0, Some(&p("C:\\Dir\\File.txt"))));
+
+    let (mut app, dir) = fixture("slowclick");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let at = app.panels[0].rows().row_anchor(1).expect("row 1");
+    let (x, y) = (at.x + 40, at.y);
+    let click = |app: &mut App| {
+        app.route(down(x, y));
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    let age = |app: &mut App| {
+        // 직전 클릭을 1.5초 전으로(시험은 기다리지 않는다).
+        if let Some(c) = app.slow_click.as_mut() {
+            c.2 = c.2.checked_sub(Duration::from_millis(1500)).expect("clock");
+        }
+    };
+    let fire = |app: &mut App| {
+        let due = app.rename_due.as_ref().map(|d| d.2);
+        if let Some(due) = due {
+            let _ = app.slow_click_tick(due);
+        }
+    };
+    // 첫 클릭 = 선택만 · 곧바로 다시 = 예약 없음(더블클릭 시도).
+    click(&mut app);
+    assert!(app.rename_due.is_none());
+    click(&mut app);
+    assert!(app.rename_due.is_none(), "짧은 간격 = 예약 없음");
+    // 1초 넘게 지나 다시 = 예약 → 지연이 끝나면 이름 바꾸기.
+    age(&mut app);
+    click(&mut app);
+    assert!(app.rename_due.is_some(), "느린 재클릭 = 예약");
+    assert!(!app.panels[0].rows().is_renaming(), "지연 중에는 아직");
+    assert!(
+        app.slow_click_tick(Instant::now()).is_some(),
+        "아직 때가 아님 = 깨울 시각"
+    );
+    fire(&mut app);
+    assert!(app.panels[0].rows().is_renaming(), "지연 뒤 이름 바꾸기");
+    assert_eq!(
+        app.slow_click_tick(Instant::now()),
+        None,
+        "예약 없음 = 깨우지 않음"
+    );
+    app.startup_cmd("ui.press:escape");
+    assert!(!app.panels[0].rows().is_renaming());
+    // 지연 중 키 입력 = 버린다.
+    click(&mut app);
+    age(&mut app);
+    click(&mut app);
+    assert!(app.rename_due.is_some());
+    app.startup_cmd("ui.press:down");
+    assert!(app.rename_due.is_none(), "키 입력 = 예약 폐기");
+    // 끌다가 뗌 = 클릭이 아니다.
+    click(&mut app);
+    age(&mut app);
+    app.route(down(x, y));
+    app.route(InputEvent::MouseUp { x: x + 30, y });
+    assert!(app.rename_due.is_none(), "끌기 = 예약 없음");
+    // 지연 중 캐럿이 다른 행으로 = 발화하지 않는다.
+    click(&mut app);
+    age(&mut app);
+    click(&mut app);
+    assert!(app.rename_due.is_some());
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    fire(&mut app);
+    assert!(
+        !app.panels[0].rows().is_renaming(),
+        "다른 행이 캐럿 = 버린다"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

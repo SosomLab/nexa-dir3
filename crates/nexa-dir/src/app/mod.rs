@@ -19,6 +19,7 @@ mod previewcmd;
 pub(crate) mod row_icons;
 mod sessions;
 mod settings;
+pub(crate) mod slowclick;
 mod startup_cmd;
 pub(crate) mod statusline;
 pub(crate) mod term;

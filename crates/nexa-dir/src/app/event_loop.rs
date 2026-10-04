@@ -178,6 +178,9 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.mem_tick(now) {
             next = next.min(t);
         }
+        if let Some(t) = self.slow_click_tick(now) {
+            next = next.min(t);
+        }
         // 상태줄 표식(디스크 · 네트워크 ▲▼) 깜빡임 — 위상이 바뀔 때만 다시 그리고, 송수신이 있을 때만 다음 전환 시각에 깬다.
         if self.statusbar.tick(now_ms) {
             self.redraw();

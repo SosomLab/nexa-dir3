@@ -200,6 +200,10 @@ struct App {
     pressed: Option<Area>,
     /// 더블클릭 합성(winit은 더블클릭 사건이 없다 · dir2 Win32 `WM_LBUTTONDBLCLK` 대응): 마지막 좌클릭 시각·자리.
     last_click: Option<(Instant, i32, i32)>,
+    /// 느린 재클릭 = 이름 바꾸기(`app/slowclick.rs`): 직전 행 클릭 · 뗄 때 확정할 예약(누른 자리) · 지연 중인 대상(패널, 경로, 발화 시각).
+    slow_click: Option<app::slowclick::SlowClick>,
+    rename_on_up: Option<(i32, i32)>,
+    rename_due: Option<(usize, PathBuf, Instant)>,
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,
@@ -528,6 +532,9 @@ impl App {
             pending_chord: None,
             pressed: None,
             last_click: None,
+            slow_click: None,
+            rename_on_up: None,
+            rename_due: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),

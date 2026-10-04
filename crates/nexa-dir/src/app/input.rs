@@ -310,6 +310,7 @@ impl App {
 
     pub(crate) fn route(&mut self, ev: InputEvent) {
         let mut inv = Invalidations::default();
+        self.slow_click_before(&ev); // 느린 재클릭 = 이름 바꾸기 예약/폐기(선택이 바뀌기 전 상태로 판정)
         self.route_inner(ev, &mut inv);
         self.after_event(&mut inv);
         if !inv.is_empty() || inv.tick_requested() {
