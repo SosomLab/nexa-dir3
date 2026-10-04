@@ -2656,6 +2656,39 @@ fn toolbar_and_launcher_right_click_menus() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 보기 메뉴의 택일 묶음(사용자 10-04 "테마 · 언어가 시스템인데 선택 표시가 없다"): 고른 항목만 켜져 있고 나머지는 꺼져 있다 ·
+/// 바꾸면 표시가 옮겨 간다.
+#[test]
+fn view_menu_radio_groups_show_selection() {
+    let (mut app, dir) = fixture("menuradio");
+    app.sync_menu_checks();
+    let on = |app: &App, id: &str| app.menubar.is_checked(id);
+    // 시험 기준 설정: 테마 = dark(고정) · 언어 = 시스템(기본) · 보기 = tree · 패널/정보 = dual.
+    assert_eq!(on(&app, "view.theme_dark"), Some(true));
+    assert_eq!(on(&app, "view.theme_system"), Some(false));
+    assert_eq!(on(&app, "view.theme_light"), Some(false));
+    assert_eq!(on(&app, "view.lang_system"), Some(true));
+    assert_eq!(on(&app, "lang:en"), Some(false));
+    // 언어를 고르면 표시가 그 언어로 옮겨 간다(전역 언어 표는 건드리지 않고 설정값만 바꿔 확인).
+    let _ = app.settings.set("ui.lang", "en");
+    app.sync_menu_checks();
+    assert_eq!(on(&app, "lang:en"), Some(true));
+    assert_eq!(on(&app, "view.lang_system"), Some(false));
+    assert_eq!(on(&app, "view.mode_tree"), Some(true));
+    assert_eq!(on(&app, "view.mode_flat"), Some(false));
+    assert_eq!(on(&app, "view.panel_dual"), Some(true));
+    assert_eq!(on(&app, "view.info_dual"), Some(true));
+    // 테마를 시스템으로 → 표시가 옮겨 간다.
+    let _ = app.settings.set("ui.theme", "system");
+    app.sync_menu_checks();
+    assert_eq!(on(&app, "view.theme_system"), Some(true));
+    assert_eq!(on(&app, "view.theme_dark"), Some(false));
+    app.command("view.mode_flat");
+    assert_eq!(on(&app, "view.mode_flat"), Some(true));
+    assert_eq!(on(&app, "view.mode_tree"), Some(false));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자동 맞춤의 머리글 = 제목 + 정렬 삼각형 + 다중 정렬 순번(사용자 10-03): 정렬·다중 정렬을 걸면 머리글이 더 넓어지고
 /// 자동 맞춤 폭도 그만큼 늘어난다(데이터가 더 길면 데이터가 이긴다).
 #[test]

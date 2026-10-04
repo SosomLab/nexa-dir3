@@ -170,16 +170,54 @@ impl App {
         for (id, on) in checks {
             self.menubar.set_checked(id, on, &mut inv);
         }
-        self.menubar.set_radio(&format!("view.mode_{mode}"));
-        self.menubar.set_radio(&format!("view.panel_{panel}"));
-        self.menubar.set_radio(&format!("view.info_{info}"));
-        self.menubar
-            .set_radio(&format!("view.theme_{}", theme.as_str()));
-        self.menubar.set_radio(&if lang == "system" {
+        // 택일 묶음(보기 모드 · 패널 · 정보 · 테마 · 언어): 묶음의 모든 항목을 라디오 모양으로 표시하고 **고른 것만 켠다**.
+        // (종전 = 고른 항목에 "라디오 모양" 표시만 하고 켜지 않아 ●이 어디에도 안 보였다 — `set_radio`는 모양만 정한다 ·
+        // 사용자 10-04 "테마 · 언어가 시스템인데 선택 표시가 없다".)
+        let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
+        let mut lang_ids = vec!["view.lang_system".to_string()];
+        lang_ids.extend(
+            ndir_i18n::discover(&home)
+                .into_iter()
+                .map(|(code, _)| format!("lang:{code}")),
+        );
+        let lang_sel = if lang == "system" {
             "view.lang_system".to_string()
         } else {
             format!("lang:{lang}")
-        });
+        };
+        let groups: [(Vec<String>, String); 5] = [
+            (
+                ["tree", "flat", "tiles"]
+                    .map(|m| format!("view.mode_{m}"))
+                    .to_vec(),
+                format!("view.mode_{mode}"),
+            ),
+            (
+                ["single", "dual"]
+                    .map(|m| format!("view.panel_{m}"))
+                    .to_vec(),
+                format!("view.panel_{panel}"),
+            ),
+            (
+                ["single", "dual"]
+                    .map(|m| format!("view.info_{m}"))
+                    .to_vec(),
+                format!("view.info_{info}"),
+            ),
+            (
+                ["system", "light", "dark"]
+                    .map(|m| format!("view.theme_{m}"))
+                    .to_vec(),
+                format!("view.theme_{}", theme.as_str()),
+            ),
+            (lang_ids, lang_sel),
+        ];
+        for (ids, selected) in &groups {
+            for id in ids {
+                self.menubar.set_radio(id);
+                self.menubar.set_checked(id, id == selected, &mut inv);
+            }
+        }
         // 툴바 토글도 같은 출처.
         let tool = [
             ("view.panel_toggle", panel == "dual"),
