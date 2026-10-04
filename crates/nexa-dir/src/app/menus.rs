@@ -778,7 +778,9 @@ impl App {
                 }
             }
             "view.preview_window" => self.open_preview_window(a),
-            "cmd.contextMenu" => self.open_row_menu_at_caret(a),
+            // `list.context_menu` = 키맵 id(Shift+F10 · 메뉴 키 · macOS ⌃Return) · `cmd.contextMenu` = 기동 명령/시험이 부르던 이름 — 같은 일.
+            // 종전에는 뒤 이름만 받아 **키로는 메뉴가 열리지 않았다**(키맵이 가로챈 뒤 분기가 없었다 · 10-05 매트릭스 대조에서 적발).
+            "list.context_menu" | "cmd.contextMenu" => self.open_row_menu_at_caret(a),
             // 활성화(Enter와 같은 일 — 폴더 = 진입 · 파일 = 열기): 기동 명령·키맵에서 이름으로 부를 수 있게(행 메뉴의 "열기"와 같은 id).
             // `nav.activate` = 키맵 id(Enter · Alt+↓ · macOS ⌘↓/⌘O) · `cmd.activate` = 행 메뉴 "열기"의 id — 같은 일.
             "nav.activate" | "cmd.activate" => {

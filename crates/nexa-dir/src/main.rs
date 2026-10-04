@@ -1072,7 +1072,7 @@ fn main() -> ExitCode {
             }
             ExitCode::from(report.exit_code())
         }
-        Ok(cli::Mode::Gui) => run_gui(),
+        Ok(cli::Mode::Gui(path)) => run_gui(path.as_deref().and_then(cli::start_dir)),
     }
 }
 
@@ -1095,7 +1095,7 @@ fn run_smoke() -> ExitCode {
 }
 
 /// GUI 기동(SKEL-002 순서): 설정 → i18n → 글꼴 → 이벤트 루프 → `App` → `run_app`.
-fn run_gui() -> ExitCode {
+fn run_gui(start: Option<PathBuf>) -> ExitCode {
     // 설정 — 폴더를 모르면 임시 경로의 기본값(저장은 실패해도 앱은 뜬다).
     let settings = Settings::open_default().unwrap_or_else(|_| {
         Settings::open(
@@ -1136,16 +1136,11 @@ fn run_gui() -> ExitCode {
         eprintln!("nexa-dir: event loop creation failed");
         return ExitCode::FAILURE;
     };
-    // 시작 폴더 = 현재 폴더(없으면 홈) — 세션 복원(T-45)이 마지막 탭으로 바꾼다.
-    let start = std::env::current_dir()
-        .ok()
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."));
+    // 시작 폴더: 명령행 경로(dir2 KEY-301 · 세션보다 우선) → 세션 복원(T-45) → 현재 폴더/홈(`App::new`가 고른다).
     // 세션 복원(dir2 PREFS-054 — 창 생성 전) · 저장 폴더 = 설정 폴더.
     let session_dir = ndir_settings::config_dir();
     let session = session_dir.as_deref().and_then(Session::load);
-    let mut app = App::new(settings, ui.font, None, session, Platform::native());
+    let mut app = App::new(settings, ui.font, start, session, Platform::native());
     app.session_dir = session_dir;
     // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
     if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {
@@ -1155,7 +1150,6 @@ fn run_gui() -> ExitCode {
             trf("crash.reported", &[&p.display().to_string()]),
         );
     }
-    let _ = start;
     if let Err(e) = el.run_app(&mut app) {
         eprintln!("nexa-dir: event loop error: {e}");
         return ExitCode::FAILURE;

@@ -1394,6 +1394,37 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 키보드로 행 메뉴 열기(**키맵 경로 그대로** — 조합 → 키맵 → 명령): Shift+F10 · 메뉴 키(macOS ⌃Return)가 `list.context_menu`로
+/// 풀리고 그 명령이 캐럿 행 메뉴를 연다. 종전에는 `cmd.contextMenu` 이름만 처리해 키로는 열리지 않았다(시험이 명령을 직접 불러 놓쳤다).
+/// 모든 키맵 명령이 "미구현" 안내로 떨어지지 않는지도 본다(이름 불일치 재발 방지).
+#[test]
+fn context_menu_key_opens_the_row_menu_through_the_keymap() {
+    use ndir_settings::keymap::Chord;
+    let (mut app, dir) = fixture("ctxkey");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    let keys: &[&str] = if cfg!(target_os = "macos") {
+        &["control+enter"]
+    } else {
+        &["shift+f10", "contextmenu"]
+    };
+    for code in keys {
+        let chord = Chord::parse(code).expect(code);
+        assert_eq!(
+            app.keymap.lookup(&chord),
+            Some("list.context_menu"),
+            "{code}"
+        );
+        assert!(app.key_chord(chord, false), "{code} = 처리됨");
+        let d = app.dump_of("ctx").unwrap();
+        assert!(d.starts_with("row "), "{code}: {d}");
+        app.startup_cmd("ui.press:escape");
+        assert_eq!(app.dump_of("ctx").unwrap(), "none\n");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// IME 조합 창 자리(GAP-014 · dir2 A/win.rs:4792): 편집 중이 아니면 없음 · 경로 바 편집 중이면 필드 안 캐럿 자리(필드 높이) ·
 /// 글자가 늘면 오른쪽으로 · 필드 밖으로 나가지 않는다 · 인라인 이름 바꾸기도 같은 길.
 #[test]

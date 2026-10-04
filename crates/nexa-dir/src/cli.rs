@@ -1,12 +1,13 @@
 //! 명령행 인자 해석 — 순수 함수(창·OS 없음 · 단위 시험 가능).
 //!
 //! 어휘(docs/18 §3·§5): `--version` · `--help` · `--smoke` · `--selfcheck [--ci] [--json] [--only <그룹>] [--with-clipboard]`.
-//! 그 밖의 인자(시작 경로 등)는 M3에서 `Mode::Gui`에 실어 보낸다.
+//! 그 밖의 첫 인자 = **시작 경로**(dir2 KEY-301 · WINA-042) — `Mode::Gui(Some(경로))`로 실어 보낸다(폴더 = 그 폴더 · 파일 = 그 파일의
+//! 폴더 — [`start_dir`]). 주면 세션 복원보다 우선한다.
 
 use crate::selfcheck::Options;
 
 pub(crate) const USAGE: &str =
-    "usage: nexa-dir [--version | --help | --smoke | --selfcheck [--ci] [--json] [--only <group>] [--with-clipboard]]";
+    "usage: nexa-dir [<path>] [--version | --help | --smoke | --selfcheck [--ci] [--json] [--only <group>] [--with-clipboard]]";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Mode {
@@ -14,13 +15,29 @@ pub(crate) enum Mode {
     Help,
     Smoke,
     SelfCheck(Options),
-    Gui,
+    /// 창 실행 — `Some` = 명령행으로 준 시작 경로(따옴표는 셸이 벗긴다 · 해석은 [`start_dir`]).
+    Gui(Option<String>),
+}
+
+/// 시작 경로 인자 → 열 폴더(순수 판정 + 파일 시스템 조회): 폴더면 그 폴더 · 파일이면 그 파일이 든 폴더 · 없는 경로면 `None`
+/// (세션 복원 · 현재 폴더로 넘어간다).
+pub(crate) fn start_dir(arg: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::PathBuf::from(arg.trim().trim_matches('"'));
+    if p.is_dir() {
+        Some(p)
+    } else if p.is_file() {
+        p.parent()
+            .filter(|d| !d.as_os_str().is_empty())
+            .map(std::path::Path::to_path_buf)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn parse(args: &[String]) -> Result<Mode, String> {
     let mut it = args.iter().map(String::as_str).peekable();
     let Some(first) = it.next() else {
-        return Ok(Mode::Gui);
+        return Ok(Mode::Gui(None));
     };
     match first {
         "--version" | "-V" => Ok(Mode::Version),
@@ -45,8 +62,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Mode, String> {
             Ok(Mode::SelfCheck(o))
         }
         other if other.starts_with("--") => Err(format!("unknown option: {other}")),
-        // 경로 인자 등 — M3에서 해석. 지금은 GUI 모드로 흘린다.
-        _ => Ok(Mode::Gui),
+        // 시작 경로(dir2 KEY-301) — 종전에는 버렸다("M3에서 해석" 주석만 있고 구현이 빠져 있었다 · 10-05 매트릭스 대조 적발).
+        path => Ok(Mode::Gui(Some(path.to_string()))),
     }
 }
 
@@ -60,8 +77,22 @@ mod tests {
 
     #[test]
     fn no_args_is_gui() {
-        assert_eq!(p(&[]), Ok(Mode::Gui));
-        assert_eq!(p(&["C:/"]), Ok(Mode::Gui));
+        assert_eq!(p(&[]), Ok(Mode::Gui(None)));
+        assert_eq!(p(&["C:/"]), Ok(Mode::Gui(Some("C:/".into()))));
+        // 시작 경로 해석: 폴더 = 그대로 · 파일 = 그 폴더 · 없는 경로 = 없음 · 따옴표/빈칸은 벗긴다.
+        let dir = std::env::temp_dir().join(format!("ndir-cli-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let file = dir.join("a.txt");
+        std::fs::write(&file, b"x").expect("write");
+        assert_eq!(start_dir(&dir.display().to_string()), Some(dir.clone()));
+        assert_eq!(start_dir(&file.display().to_string()), Some(dir.clone()));
+        assert_eq!(
+            start_dir(&format!(" \"{}\" ", dir.display())),
+            Some(dir.clone())
+        );
+        assert_eq!(start_dir(&dir.join("nope").display().to_string()), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
