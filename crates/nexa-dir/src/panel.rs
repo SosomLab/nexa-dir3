@@ -42,6 +42,9 @@ pub(crate) struct Tab {
     /// 탭 잠금(닫기 제외 · dir2 TAB-MENU) · 고정(📌 핀 그룹 앞 정렬) — 세션 영속.
     pub locked: bool,
     pub pinned: bool,
+    /// 내용이 낡았을 수 있다(dir2 X-44 S1): 배경 탭은 폴더 감시 대상이 아니라 그동안의 바깥 변경을 모른다 —
+    /// 전환·닫기로 드러날 때 세우고, 호스트(`update_status`)가 [`Panel::refresh_stale`]로 다시 읽어 내린다.
+    pub stale: bool,
 }
 
 /// 포인터 캡처 대상(눌린 곳이 뗄 때까지 받는다).
@@ -223,6 +226,7 @@ impl Panel {
                 nav: History::new(path.to_path_buf()),
                 locked: false,
                 pinned: false,
+                stale: false,
             }],
             active: 0,
             bounds: Rect::default(),
@@ -932,6 +936,7 @@ impl Panel {
             nav: History::new(path),
             locked: false,
             pinned: false,
+            stale: false,
         });
         self.active = self.tabs.len() - 1;
         self.navigated = true;
@@ -946,9 +951,14 @@ impl Panel {
             return;
         }
         self.session_dirty = true;
+        let was_active = self.active == i;
         self.tabs.remove(i);
         if self.active >= self.tabs.len() || self.active > i {
             self.active = self.active.saturating_sub(1).min(self.tabs.len() - 1);
+        }
+        if was_active {
+            // 이웃 탭이 새로 드러난다 — 배경에 있던 동안의 낡음 해소(dir2 panel.rs:730-733).
+            self.tabs[self.active].stale = true;
         }
         self.sync_chrome(inv);
         inv.push(self.bounds);
@@ -957,6 +967,8 @@ impl Panel {
     pub(crate) fn switch_tab(&mut self, i: usize, inv: &mut Invalidations) {
         if i < self.tabs.len() && i != self.active {
             self.active = i;
+            // 활성화 = 갱신 계기(dir2 panel.rs:741-744): 배경 탭은 감시 대상이 아니다 → 호스트가 다시 읽는다.
+            self.tabs[i].stale = true;
             self.session_dirty = true;
             self.sync_columns_for_root(inv);
             self.sync_chrome(inv);
@@ -1062,6 +1074,7 @@ impl Panel {
                 nav: History::new(path),
                 locked: false,
                 pinned: false,
+                stale: false,
             },
         );
         self.active = i + 1;
@@ -1528,8 +1541,30 @@ impl Panel {
             let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
             tab.rows.source_mut().reload();
             tab.rows.restore_view(caret, sr, sx, inv);
+            tab.stale = false;
         }
         self.sync_chrome(inv);
+    }
+
+    /// 활성 탭이 낡았는가(전환·닫기로 드러난 뒤 아직 다시 읽지 않음 · dir2 `active_tab_stale`).
+    #[cfg(test)]
+    pub(crate) fn active_tab_stale(&self) -> bool {
+        self.tabs[self.active].stale
+    }
+
+    /// 낡은 활성 탭만 다시 읽는다(캐럿·스크롤 유지 · dir2 win.rs:4967-4976 "전환 수렴") — 읽었으면 `true`.
+    /// 인라인 이름 편집 중이면 미룬다(편집 행이 바뀌면 안 된다 — 다음 길목에서 다시 본다).
+    pub(crate) fn refresh_stale(&mut self, inv: &mut Invalidations) -> bool {
+        if !self.tabs[self.active].stale || self.rows().is_renaming() {
+            return false;
+        }
+        let tab = &mut self.tabs[self.active];
+        let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
+        tab.rows.source_mut().reload();
+        tab.rows.restore_view(caret, sr, sx, inv);
+        tab.stale = false;
+        self.sync_chrome(inv);
+        true
     }
 
     /// 잘라내기 표식(SHELL-044) 전 탭 적용 — 바뀐 탭의 목록만 무효화.

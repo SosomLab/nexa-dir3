@@ -662,6 +662,8 @@ impl App {
             let mut inv = Invalidations::default();
             let disk = &*self.platform.disk;
             for p in &mut self.panels {
+                // 전환·닫기로 드러난 배경 탭은 그동안의 바깥 변경을 모른다 → 여기서 다시 읽는다(dir2 X-44 S1 · win.rs:4967-4976).
+                p.refresh_stale(&mut inv);
                 p.fill_drive_space(&|root| disk.space(root), &mut inv);
             }
         }

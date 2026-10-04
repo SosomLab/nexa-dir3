@@ -5248,3 +5248,52 @@ fn tab_double_click_follows_setting_and_empty_area_opens_tab() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 배경 탭 낡음 해소(dir2 X-44 S1 · panel.rs:720-746 · T-149 7): 배경 탭은 폴더 감시 대상이 아니라 그동안 생긴 파일을 모른다 →
+/// 전환·닫기로 드러나면 다시 읽는다. 종전 dir3 = F5 전까지 낡은 목록.
+#[test]
+fn background_tab_reloads_when_revealed() {
+    let (mut app, dir) = fixture("stale");
+    app.layout_for(1200, 800, 1.0);
+    let has = |app: &App, name: &str| {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .filter_map(|i| src.row_path(i))
+            .any(|p| p.ends_with(name))
+    };
+    assert!(!app.panels[0].active_tab_stale(), "처음 = 낡지 않음");
+    app.command("file.new_tab"); // 탭 1(같은 폴더) 활성 → 탭 0은 배경.
+    assert!(
+        !app.panels[0].active_tab_stale(),
+        "새 탭 직후 = 다시 읽을 것 없음"
+    );
+    std::fs::write(dir.join("late-1.txt"), b"x").expect("write");
+    let mut inv = Invalidations::default();
+    app.panels[0].switch_tab(0, &mut inv);
+    assert!(app.panels[0].active_tab_stale(), "전환 = 낡음 표시");
+    assert!(!has(&app, "late-1.txt"), "아직 안 읽음");
+    app.update_status();
+    assert!(!app.panels[0].active_tab_stale(), "길목에서 해소");
+    assert!(
+        has(&app, "late-1.txt"),
+        "전환으로 드러난 탭이 새 파일을 본다"
+    );
+    // 활성 탭을 닫아 드러난 이웃도 같다.
+    app.panels[0].switch_tab(1, &mut inv);
+    app.update_status();
+    std::fs::write(dir.join("late-2.txt"), b"x").expect("write");
+    app.panels[0].close_tab(1, &mut inv);
+    assert_eq!(app.panels[0].active_index(), 0);
+    assert!(
+        app.panels[0].active_tab_stale(),
+        "닫기로 드러난 이웃 = 낡음"
+    );
+    app.update_status();
+    assert!(has(&app, "late-2.txt"), "닫기로 드러난 탭이 새 파일을 본다");
+    // 배경 탭을 닫는 것은 활성 탭을 낡게 하지 않는다.
+    app.command("file.new_tab");
+    app.update_status();
+    app.panels[0].close_tab(0, &mut inv);
+    assert!(!app.panels[0].active_tab_stale(), "배경 탭 닫기 = 그대로");
+    let _ = std::fs::remove_dir_all(&dir);
+}
