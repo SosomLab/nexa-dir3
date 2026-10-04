@@ -56,6 +56,46 @@ pub(crate) fn fmt_rate(bps: u64) -> String {
     format!("{}/s", filelist::format_size(bps))
 }
 
+/// 사용률 단계(CPU · 메모리 — 사용자 10-04): 20 이하 적음 · 40 이하 보통 · 60 이하 바쁨 · 80 이하 경고 · 90 이하 위험 · 그 위 심각.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum LoadLevel {
+    Low,
+    Normal,
+    Busy,
+    Warn,
+    Danger,
+    Critical,
+}
+
+/// 사용률(%) → 단계(순수 · 경계값은 낮은 쪽에 든다 — 정확히 60 = 바쁨).
+pub(crate) fn load_level(pct: f32) -> LoadLevel {
+    match pct {
+        p if p <= 20.0 => LoadLevel::Low,
+        p if p <= 40.0 => LoadLevel::Normal,
+        p if p <= 60.0 => LoadLevel::Busy,
+        p if p <= 80.0 => LoadLevel::Warn,
+        p if p <= 90.0 => LoadLevel::Danger,
+        _ => LoadLevel::Critical,
+    }
+}
+
+/// 단계 → 표시 방법(순수): `(글 색, 칸 바탕 색과 농도 %)`. **알림이 강해질수록 표시도 강해진다** —
+/// 적음 = 흐린 글 · 보통 = 기본 글 · 바쁨 = 강조색 글 · 경고 = 경고색(주황) 글 · 위험 = 위험색(빨강) 글 + 옅은 바탕 ·
+/// 심각 = 위험색 글 + 진한 바탕(색만으로는 놓치기 쉬운 수준부터 바탕을 칠해 눈에 띄게 한다).
+pub(crate) fn load_style(
+    level: LoadLevel,
+    th: &Theme,
+) -> (nexa_ctl::theme::Color, Option<(nexa_ctl::theme::Color, u8)>) {
+    match level {
+        LoadLevel::Low => (th.text_dim, None),
+        LoadLevel::Normal => (th.text, None),
+        LoadLevel::Busy => (th.accent, None),
+        LoadLevel::Warn => (th.warn, None),
+        LoadLevel::Danger => (th.danger, Some((th.danger, 14))),
+        LoadLevel::Critical => (th.danger, Some((th.danger, 30))),
+    }
+}
+
 /// 속도(바이트/초) → 표식 깜빡임 단계(순수): 0 = 송수신 없음(깜빡이지 않음) · 1 = 느림 … 9 = 빠름. 4배마다 한 단계 —
 /// 1: ~4 KB/s · 2: ~16 KB/s · 3: ~64 KB/s · 4: ~256 KB/s · 5: ~1 MB/s · 6: ~4 MB/s · 7: ~16 MB/s · 8: ~64 MB/s · 9: 그 이상.
 pub(crate) fn rate_level(bps: u64) -> u8 {
@@ -111,6 +151,17 @@ impl App {
                 .font_delta(row_delta)
                 .marker(marker, rate_level(v.unwrap_or(0)))
         };
+        let leveled = |id: &str, abbr: StatusPart, value: StatusPart, pct: Option<f32>| {
+            let Some(pct) = pct else {
+                return StatusSeg::with_parts(id, vec![abbr, value]);
+            };
+            let (color, tint) = load_style(load_level(pct), &self.theme);
+            let seg = StatusSeg::with_parts(id, vec![abbr, value.color(color)]);
+            match tint {
+                Some((c, pct)) => seg.tint(c, pct),
+                None => seg,
+            }
+        };
         // 성능 향상 모드 = 시스템 상태 모니터링 끔(칸도 · 주기 조회도 — 사용자 10-04): 탭 · 라이선스 칸만 남는다.
         let boost = self.settings.flag("perf.boost");
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
@@ -130,21 +181,20 @@ impl App {
                         ))],
                     )
                 }
-                "cpu" => StatusSeg::with_parts(
+                // CPU · 메모리 = 사용률 단계에 따라 값의 색과 칸 바탕을 바꾼다(조회 전 = 색 없음).
+                "cpu" => leveled(
                     id,
-                    vec![
-                        part(tr("status.abbr.cpu")),
-                        part(load.map_or_else(dash, |l| format!("{:.1}%", l.cpu_pct)))
-                            .hints(vec!["100.0%".into()]),
-                    ],
+                    part(tr("status.abbr.cpu")),
+                    part(load.map_or_else(dash, |l| format!("{:.1}%", l.cpu_pct)))
+                        .hints(vec!["100.0%".into()]),
+                    load.map(|l| l.cpu_pct),
                 ),
-                "mem" => StatusSeg::with_parts(
+                "mem" => leveled(
                     id,
-                    vec![
-                        part(tr("status.abbr.mem")),
-                        part(load.map_or_else(dash, |l| filelist::format_size(l.mem_used)))
-                            .hints(size_hints("", "")),
-                    ],
+                    part(tr("status.abbr.mem")),
+                    part(load.map_or_else(dash, |l| filelist::format_size(l.mem_used)))
+                        .hints(size_hints("", "")),
+                    load.map(|l| l.mem_pct()),
                 ),
                 "disk" => {
                     let d = load.and_then(|l| l.disk_bps);

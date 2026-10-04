@@ -199,6 +199,8 @@ impl App {
         let (grid, grid_extra, ctl) = Self::scroll_configs(&self.settings);
         nexa_grid::fastscroll::set_fast_scroll(grid);
         nexa_grid::fastscroll::set_fast_scroll_grid(grid_extra);
+        // 키보드 이동(↑/↓)에도 적용할지 — 고속 스크롤이 꺼져 있으면 어차피 배수 1이라 이 값은 영향이 없다.
+        nexa_grid::fastscroll::set_fast_scroll_keys(self.settings.flag("scroll.fast_keys"));
         nexa_ctl::set_fast_scroll(ctl);
         if let Some(n) = platform::wheel_lines() {
             nexa_ctl::set_wheel_lines(n);

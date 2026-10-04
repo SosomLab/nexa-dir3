@@ -49,7 +49,16 @@ pub(crate) struct MemWin {
     trend: Trend,
     /// 갱신 주기(ms · 바닥 안내 글).
     every_ms: u64,
+    /// [힙 정리] 진행 표시(사용자 10-04 "눌러도 무엇이 진행 중인지 모르겠다"): 누른 뒤 **결과가 반영된 표본이 한 번 더 올 때까지**
+    /// 버튼을 잠그고 글을 "정리 중…"으로 · 남은 표본 수(0 = 평소).
+    trim_hold: u8,
+    /// 마지막 정리 결과 안내(바닥 줄 · 남은 표시 표본 수).
+    trim_note: Option<(String, u8)>,
 }
+
+/// [힙 정리] 뒤 버튼을 잠가 두는 표본 수(즉시 표본 1 + 다음 주기 1) · 결과 안내가 남는 표본 수.
+const TRIM_HOLD: u8 = 2;
+const TRIM_NOTE_HOLD: u8 = 8;
 
 impl MemWin {
     pub(crate) fn new() -> Self {
@@ -64,7 +73,40 @@ impl MemWin {
             hist: VecDeque::new(),
             trend: Trend::default(),
             every_ms: 1000,
+            trim_hold: 0,
+            trim_note: None,
         }
+    }
+
+    /// [힙 정리]를 누른 직후 — 버튼을 잠그고 글을 "정리 중…"으로(호스트가 정리를 마치고 [`Self::set_trim_result`]를 부른다).
+    fn begin_trim(&mut self) {
+        self.trim_hold = TRIM_HOLD;
+        self.btn_trim.set_enabled(false);
+        self.btn_trim.set_label(tr("mem.trimming"));
+        self.redraw();
+    }
+
+    /// 정리 결과(전 · 후 전용 메모리 · 걸린 µs) → 바닥 안내 글(줄었으면 반환량 · 아니면 "반환할 것이 없음").
+    pub(crate) fn set_trim_result(&mut self, before: u64, after: u64, us: u128) {
+        let ms = format!("{:.1}", us as f64 / 1000.0);
+        let text = if before > after {
+            trf("mem.trimmed", &[&fmt(before - after), &ms])
+        } else {
+            trf("mem.trimmedNone", &[&ms])
+        };
+        self.trim_note = Some((text, TRIM_NOTE_HOLD));
+        self.redraw();
+    }
+
+    /// 정리 중인가(버튼이 잠겨 있다).
+    #[cfg(test)]
+    pub(crate) fn trimming(&self) -> bool {
+        self.trim_hold > 0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn trim_note(&self) -> Option<&str> {
+        self.trim_note.as_ref().map(|n| n.0.as_str())
     }
 
     pub(crate) fn open(
@@ -111,6 +153,10 @@ impl MemWin {
         self.sample = None;
         self.hist = VecDeque::new();
         self.trend = Trend::default();
+        self.trim_hold = 0;
+        self.trim_note = None;
+        self.btn_trim.set_enabled(true);
+        self.btn_trim.set_label(tr("mem.trim"));
     }
 
     pub(crate) fn is_open(&self) -> bool {
@@ -134,6 +180,20 @@ impl MemWin {
         }
         self.hist.push_back(s.sys.footprint);
         self.trend.update(&s);
+        // 정리 뒤 표본이 오면 잠금을 하나씩 푼다(0이 되면 버튼 복귀) · 결과 안내는 몇 표본 뒤 사라진다.
+        if self.trim_hold > 0 {
+            self.trim_hold -= 1;
+            if self.trim_hold == 0 {
+                self.btn_trim.set_enabled(true);
+                self.btn_trim.set_label(tr("mem.trim"));
+            }
+        }
+        if let Some((_, left)) = &mut self.trim_note {
+            *left = left.saturating_sub(1);
+            if *left == 0 {
+                self.trim_note = None;
+            }
+        }
         self.sample = Some(s);
         self.every_ms = every_ms;
         self.redraw();
@@ -155,7 +215,11 @@ impl MemWin {
     /// 언어 전환 — 버튼 글 · 창 제목.
     pub(crate) fn relabel(&mut self) {
         self.btn_close.set_label(tr("license.btn.close"));
-        self.btn_trim.set_label(tr("mem.trim"));
+        self.btn_trim.set_label(tr(if self.trim_hold > 0 {
+            "mem.trimming"
+        } else {
+            "mem.trim"
+        }));
         if let Some(w) = &self.window {
             w.set_title(&format!("Nexa Dir — {}", tr("mem.title")));
         }
@@ -219,7 +283,8 @@ impl MemWin {
                 if self.btn_close.take_clicked() {
                     return MemAction::Close;
                 }
-                if self.btn_trim.take_clicked() {
+                if self.btn_trim.take_clicked() && self.trim_hold == 0 {
+                    self.begin_trim();
                     return MemAction::Trim;
                 }
             }
@@ -273,7 +338,11 @@ impl MemWin {
             let title_w = dc.text_width(&tr("mem.title"));
             dc.select_font(FontSlot::Base, false);
             self.btn_trim.set_scale(s);
-            let trim_w = dc.text_width(&tr("mem.trim")) + px(28.0);
+            // 버튼 폭 = 두 글("힙 정리" · "정리 중…") 중 넓은 쪽 — 눌러도 자리가 흔들리지 않는다.
+            let trim_w = dc
+                .text_width(&tr("mem.trim"))
+                .max(dc.text_width(&tr("mem.trimming")))
+                + px(28.0);
             self.btn_trim
                 .set_bounds(Rect::new(wi - pad - trim_w, y, trim_w, head_h), inv);
             self.btn_trim.paint(&mut dc, th);
@@ -489,6 +558,12 @@ impl MemWin {
                 th.window_bg,
             );
             let note = match sample {
+                // 방금 정리했으면 그 결과를 먼저 보여 준다(몇 초 뒤 평소 안내로 돌아간다).
+                Some(_) if self.trim_note.is_some() => self
+                    .trim_note
+                    .as_ref()
+                    .map(|n| n.0.clone())
+                    .unwrap_or_default(),
                 Some(sm) => trf(
                     "mem.updated",
                     &[
@@ -508,5 +583,50 @@ impl MemWin {
         }
         let _ = buf.present();
         self.surface = Some(surface);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memstat::Acc;
+
+    fn sample() -> Sample {
+        Sample {
+            at: std::time::Instant::now(),
+            sys: Default::default(),
+            data: Acc::default(),
+            machine: None,
+        }
+    }
+
+    /// [힙 정리] 진행 표시: 누르면 잠기고("정리 중…") · 결과가 바닥 안내에 뜨고 · 표본이 두 번 온 뒤 버튼이 풀리며 ·
+    /// 안내는 몇 표본 뒤 사라진다 · 줄지 않았으면 "반환할 것이 없음" 쪽 문구.
+    #[test]
+    fn trim_locks_the_button_until_samples_arrive_and_reports_the_result() {
+        let mut w = MemWin::new();
+        assert!(!w.trimming() && w.trim_note().is_none());
+        w.begin_trim();
+        assert!(w.trimming());
+        w.set_trim_result(10 << 20, 4 << 20, 1500);
+        let note = w.trim_note().expect("결과 안내").to_string();
+        assert!(note.contains("6.00 MB") && note.contains("1.5"), "{note}");
+        w.set_sample(sample(), 1000);
+        assert!(w.trimming(), "즉시 표본 = 아직 잠김");
+        w.set_sample(sample(), 1000);
+        assert!(!w.trimming(), "다음 주기 표본 = 풀림");
+        for _ in 0..TRIM_NOTE_HOLD {
+            w.set_sample(sample(), 1000);
+        }
+        assert!(w.trim_note().is_none(), "안내는 사라진다");
+        w.set_trim_result(4 << 20, 4 << 20, 300);
+        assert_eq!(
+            w.trim_note(),
+            Some(trf("mem.trimmedNone", &["0.3"]).as_str())
+        );
+        // 닫으면 잠금 · 안내가 초기화된다.
+        w.begin_trim();
+        w.close();
+        assert!(!w.trimming() && w.trim_note().is_none());
     }
 }

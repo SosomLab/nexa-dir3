@@ -781,6 +781,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 키보드 이동(↑/↓ 자동 반복)에도 고속 스크롤 적용 — dir3 신규(사용자 10-04 · 기본 켜짐 = 종전 동작).
+    e!(
+        "scroll.fast_keys",
+        CAT_SCROLL,
+        "pref.fsKeys",
+        "pref.fsKeys.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "scroll.fast_grid_extra",
         CAT_SCROLL,
@@ -1516,6 +1525,7 @@ pub const OS_DEFAULTS: &[(&str, &str, &str)] = &[
 
 /// (자식, 부모, 조건) — 부모가 조건을 만족하지 않으면 자식은 설정 화면에서 잠긴다(값은 유지). dir2 PREFS-144~152 · KEY-515.
 pub const DEPENDS: &[(&str, &str, Dep)] = &[
+    ("scroll.fast_keys", "scroll.fast", Dep::On),
     ("scroll.fast_grid_extra", "scroll.fast", Dep::On),
     ("scroll.fast_step", "scroll.fast", Dep::On),
     ("scroll.fast_max", "scroll.fast", Dep::On),

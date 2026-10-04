@@ -2461,6 +2461,42 @@ fn status_segments_and_tab_status_bar() {
     );
     assert!(net.rows.iter().all(|r| r.blink == 0));
     assert_eq!(app.statusbar.next_blink_ms(0), None);
+    // 사용률 단계(CPU · 메모리): 경계값은 낮은 쪽 · 단계가 오를수록 표시가 강해진다(색 → 색 + 옅은 바탕 → 색 + 진한 바탕) ·
+    // 조회 전(값 없음) = 색 · 바탕 없음.
+    {
+        use crate::app::statusline::{load_level, load_style, LoadLevel as L};
+        let levels: Vec<L> = [
+            0.0, 20.0, 20.1, 40.0, 60.0, 60.1, 80.0, 80.1, 90.0, 90.1, 100.0,
+        ]
+        .iter()
+        .map(|p| load_level(*p))
+        .collect();
+        assert_eq!(
+            levels,
+            [
+                L::Low,
+                L::Low,
+                L::Normal,
+                L::Normal,
+                L::Busy,
+                L::Warn,
+                L::Warn,
+                L::Danger,
+                L::Danger,
+                L::Critical,
+                L::Critical
+            ]
+        );
+        let th = &app.theme;
+        assert_eq!(load_style(L::Low, th), (th.text_dim, None));
+        assert_eq!(load_style(L::Busy, th), (th.accent, None));
+        assert_eq!(load_style(L::Warn, th), (th.warn, None));
+        let (d, c) = (load_style(L::Danger, th), load_style(L::Critical, th));
+        assert_eq!((d.0, c.0), (th.danger, th.danger));
+        assert!(d.1.unwrap().1 < c.1.unwrap().1, "심각 = 더 진한 바탕");
+        let cpu = seg("cpu");
+        assert_eq!((cpu.parts[1].color, cpu.tint), (None, None), "조회 전");
+    }
     // 깜빡임 단계: 0 = 없음 · 4배마다 한 단계 · 9가 끝.
     use crate::app::statusline::rate_level;
     assert_eq!(rate_level(0), 0);

@@ -77,7 +77,10 @@ impl App {
 
     /// [힙 정리] — 할당자가 들고 있는 빈 조각을 운영체제에 돌려주고 곧바로 새 표본(줄어든 값이 바로 보이게).
     pub(crate) fn mem_trim(&mut self) {
-        let _ = platform::procmem::trim();
+        let before = platform::procmem::sys().footprint;
+        let us = platform::procmem::trim();
+        let after = platform::procmem::sys().footprint;
+        self.mem_win.set_trim_result(before, after, us);
         self.mem_next = Instant::now();
     }
 }
