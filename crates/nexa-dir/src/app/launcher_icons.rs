@@ -68,7 +68,7 @@ pub(crate) fn launcher_icon(item: &launcher::LauncherItem, logical: i32) -> (Too
     let Some(path) = found else {
         return (glyph, false);
     };
-    match IconService::global().icon(&IconKey::Path(path), large) {
+    match IconService::global().icon(&IconKey::PathPlain(path), large) {
         Lookup::Ready(Some(icon)) => (
             ToolIcon::Image(Rc::new(nexa_gfx::IconImage {
                 w: icon.w,
