@@ -336,8 +336,25 @@ impl Drop for ClipGuard {
     }
 }
 
+/// DROPFILES HGLOBAL → 경로 목록(클립보드 읽기 · 드래그 데이터 객체 시험 공용).
+///
+/// # Safety
+/// `h`는 유효한 CF_HDROP 블록(DROPFILES 헤더 + 이중 NUL 목록)이어야 한다.
+pub(super) unsafe fn paths_from_hdrop_global(h: *mut c_void) -> Vec<PathBuf> {
+    let n = DragQueryFileW(h, u32::MAX, std::ptr::null_mut(), 0);
+    let mut out = Vec::with_capacity(n as usize);
+    for i in 0..n {
+        let len = DragQueryFileW(h, i, std::ptr::null_mut(), 0);
+        let mut buf = vec![0u16; len as usize + 1];
+        let got = DragQueryFileW(h, i, buf.as_mut_ptr(), buf.len() as u32);
+        buf.truncate(got as usize);
+        out.push(PathBuf::from(std::ffi::OsString::from_wide(&buf)));
+    }
+    out
+}
+
 /// DROPFILES HGLOBAL 만들기(소유권은 SetClipboardData로 넘긴다 · 실패 시 GlobalFree).
-fn hdrop_global(paths: &[PathBuf]) -> Option<*mut c_void> {
+pub(super) fn hdrop_global(paths: &[PathBuf]) -> Option<*mut c_void> {
     let list = double_null_list(paths);
     let total = DROPFILES_LEN + list.len() * 2;
     // SAFETY: GMEM_MOVEABLE 블록 할당 → 잠금 → 헤더·목록 복사 → 해제.
@@ -401,16 +418,7 @@ impl NativeFileClipboard {
             if h.is_null() {
                 return None;
             }
-            let n = DragQueryFileW(h, u32::MAX, std::ptr::null_mut(), 0);
-            let mut out = Vec::with_capacity(n as usize);
-            for i in 0..n {
-                let len = DragQueryFileW(h, i, std::ptr::null_mut(), 0);
-                let mut buf = vec![0u16; len as usize + 1];
-                let got = DragQueryFileW(h, i, buf.as_mut_ptr(), buf.len() as u32);
-                buf.truncate(got as usize);
-                out.push(PathBuf::from(std::ffi::OsString::from_wide(&buf)));
-            }
-            Some((out, cut))
+            Some((paths_from_hdrop_global(h), cut))
         }
     }
 }

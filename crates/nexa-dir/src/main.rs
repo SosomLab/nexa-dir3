@@ -204,6 +204,8 @@ struct App {
     slow_click: Option<app::slowclick::SlowClick>,
     rename_on_up: Option<(i32, i32)>,
     rename_due: Option<(usize, PathBuf, Instant)>,
+    /// 드래그 발신 후보(`app/dnd.rs::drag_out_after`): 선택된 행을 누른 (패널, 자리) — 임계 넘게 끌면 OS 드래그를 시작한다.
+    drag_press: Option<(usize, i32, i32)>,
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,
@@ -535,6 +537,7 @@ impl App {
             slow_click: None,
             rename_on_up: None,
             rename_due: None,
+            drag_press: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),

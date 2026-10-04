@@ -543,6 +543,12 @@ impl Panel {
         self.pending_alias.take()
     }
 
+    /// OS 드래그에서 돌아온 뒤 누름 상태 정리(그리드의 클릭 확정 보류 · 러버밴드 + 패널의 포인터 캡처) — 선택은 그대로.
+    pub(crate) fn abort_press(&mut self) {
+        self.tabs[self.active].rows.abort_press();
+        self.pressed = None;
+    }
+
     pub(crate) fn take_rename_menu(&mut self) -> bool {
         std::mem::take(&mut self.pending_rename_menu)
     }

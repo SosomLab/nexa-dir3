@@ -70,6 +70,7 @@ impl App {
             } => {
                 self.rename_due = None;
                 self.rename_on_up = None;
+                self.drag_press = None;
                 // 모달(대화상자 · 열린 메뉴) 위 클릭은 목록 클릭이 아니다.
                 let hit = if self.dlg.is_open() || self.tab_menu.is_open() {
                     None
@@ -90,6 +91,15 @@ impl App {
                     self.slow_click = None;
                     return;
                 };
+                // 이미 선택된 행을 수식키 없이 눌렀다 = 드래그 발신 후보(`app/dnd.rs::drag_out_after` · 내 PC의 드라이브는 제외).
+                if selected
+                    && !renaming
+                    && !shift
+                    && !primary
+                    && !self.panels[i].rows().source().is_virtual_root()
+                {
+                    self.drag_press = Some((i, x, y));
+                }
                 let now = Instant::now();
                 if slow_click_arms(
                     self.slow_click.as_ref(),

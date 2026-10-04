@@ -917,6 +917,7 @@ dependencies = [
  "wasmi",
  "wat",
  "windows",
+ "windows-core",
  "winit",
  "x11rb",
 ]

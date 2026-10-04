@@ -44,14 +44,20 @@ softbuffer = { version = "0.4", features = ["wayland-dlopen"] }
 
 # ── Windows: 셸 컨텍스트 메뉴(IContextMenu · T-51 B) · 폴더 감시(ReadDirectoryChangesW · T-51 B-2b) — DR-8 허용 OS 바인딩 · dir2와 같은 판(0.62).
 [target.'cfg(windows)'.dependencies]
+# `#[implement]` 매크로가 펼친 코드가 `::windows_core` 경로를 직접 가리킨다(OLE 드래그 발신 `platform/windrag.rs` · dir2 동일 ·
+# windows 크레이트가 이미 끌어오는 같은 판 — 의존 트리 증가 0).
+windows-core = "0.62"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
     "Win32_System_IO",
+    "Win32_System_Ole",
     "Win32_System_Registry",
+    "Win32_System_SystemServices",
     "Win32_System_Threading",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",

@@ -317,6 +317,7 @@ impl App {
         let mut inv = Invalidations::default();
         self.slow_click_before(&ev); // 느린 재클릭 = 이름 바꾸기 예약/폐기(선택이 바뀌기 전 상태로 판정)
         self.route_inner(ev, &mut inv);
+        self.drag_out_after(&ev, &mut inv); // 선택된 행을 끌면 OS 드래그 발신(T-147)
         self.after_event(&mut inv);
         if !inv.is_empty() || inv.tick_requested() {
             self.redraw();

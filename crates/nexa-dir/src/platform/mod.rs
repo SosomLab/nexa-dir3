@@ -33,6 +33,8 @@ mod unixpty;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
+mod windrag;
+#[cfg(windows)]
 mod winpty;
 #[cfg(windows)]
 mod winrecycle;
@@ -746,6 +748,10 @@ impl Platform {
             ctxmenu,
             trash,
             clipboard,
+            // 드래그 발신: Windows = OLE(`windrag`) · macOS(NSDraggingSource) · Linux(XDND 발신)는 후속 — 그때까지 미지원.
+            #[cfg(windows)]
+            drag: Box::new(windrag::NativeDrag),
+            #[cfg(not(windows))]
             drag: Box::new(Unsupported),
             watcher,
             opener,

@@ -6134,3 +6134,82 @@ fn hit_zones_match_layout() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-147 드래그 발신(dir2 win.rs `drag_press` · dnd.rs `begin_drag` · SHELL-063~066): 이미 선택된 행을 임계 넘게 끌면 선택 전체로
+/// OS 드래그를 시작한다 · 임계 안 = 시작 안 함 · 선택 안 된 행 = 러버밴드(드래그 아님) · 수식키 = 아님 · 돌아온 뒤 선택 유지 ·
+/// 느린 재클릭 예약은 버린다.
+#[test]
+fn dragging_selected_rows_starts_os_drag() {
+    use crate::app::dnd::drag_started;
+    assert!(!drag_started((10, 10), (14, 14)), "임계 안");
+    assert!(drag_started((10, 10), (15, 10)) && drag_started((10, 10), (10, 5)));
+    let (mut app, dir) = fixture("dragout");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let drags = |log: &Rc<std::cell::RefCell<crate::platform::fake::FakeLog>>| -> Vec<String> {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("drag:"))
+            .cloned()
+            .collect()
+    };
+    let row_xy = |app: &App, name: &str| {
+        let rows = app.panels[0].rows();
+        let src = rows.source();
+        let r = (0..src.len())
+            .find(|&i| src.row_path(i).is_some_and(|p| p.ends_with(name)))
+            .expect(name);
+        let a = rows.row_anchor(r).expect("anchor");
+        (a.x + 40, a.y)
+    };
+    // 선택 안 된 행을 끌기 = 러버밴드(드래그 발신 아님).
+    let (ax, ay) = row_xy(&app, "a.txt");
+    app.route(down(ax, ay));
+    app.route(InputEvent::MouseMove { x: ax + 30, y: ay });
+    app.route(InputEvent::MouseUp { x: ax + 30, y: ay });
+    assert!(drags(&log).is_empty(), "선택 안 된 행 = 드래그 아님");
+    // a.txt + b.md 선택 → a.txt를 누르고 임계 안에서만 움직임 = 아직 아님.
+    let mut inv = Invalidations::default();
+    app.panels[0].select_paths(&[dir.join("a.txt"), dir.join("b.md")], &mut inv);
+    assert_eq!(app.panels[0].selected_paths().len(), 2);
+    let (ax, ay) = row_xy(&app, "a.txt");
+    app.route(down(ax, ay));
+    app.route(InputEvent::MouseMove { x: ax + 3, y: ay });
+    assert!(drags(&log).is_empty(), "임계 안 = 시작 안 함");
+    // 임계를 넘으면 선택 전체로 시작 · 돌아온 뒤 선택 유지 · 누름 정리.
+    app.route(InputEvent::MouseMove { x: ax + 12, y: ay });
+    assert_eq!(drags(&log), ["drag:2"], "선택 2개로 드래그");
+    assert_eq!(app.panels[0].selected_paths().len(), 2, "선택 유지");
+    assert!(app.drag_press.is_none() && app.rename_due.is_none());
+    // 같은 누름에서 더 움직여도 다시 시작하지 않는다.
+    app.route(InputEvent::MouseMove { x: ax + 40, y: ay });
+    assert_eq!(drags(&log).len(), 1);
+    // Ctrl/Shift 누름 = 선택 조작이지 드래그가 아니다.
+    app.route(InputEvent::MouseDown {
+        x: ax,
+        y: ay,
+        shift: false,
+        primary: true,
+    });
+    app.route(InputEvent::MouseMove { x: ax + 30, y: ay });
+    app.route(InputEvent::MouseUp { x: ax + 30, y: ay });
+    assert_eq!(drags(&log).len(), 1, "수식키 = 드래그 아님");
+    // 제자리 놓기(자기 창의 같은 폴더) = 아무 일도 하지 않는다.
+    let p0 = app.panels[0].rows().bounds();
+    assert_eq!(
+        app.external_drop(
+            vec![dir.join("a.txt")],
+            Point {
+                x: p0.x + 10,
+                y: p0.bottom() - 4
+            }
+        ),
+        None,
+        "같은 폴더에 놓기 = 무동작"
+    );
+    assert!(app.transfer.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
