@@ -439,6 +439,10 @@ impl Panel {
         self.rows().source().selected_paths()
     }
 
+    pub(crate) fn selected_paths_in_view_order(&self) -> Vec<PathBuf> {
+        self.rows().source().selected_paths_in_view_order()
+    }
+
     pub(crate) fn root_path(&self) -> PathBuf {
         self.rows().source().path().to_path_buf()
     }

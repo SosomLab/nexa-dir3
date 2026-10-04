@@ -350,6 +350,27 @@ impl TreeSource {
             .unwrap_or_default()
     }
 
+    /// 선택된 항목의 전체 경로를 **화면에 보이는 순서**(위 → 아래)로 — 경로/이름 복사용(dir2 `display_order_targets` · win.rs:2759:
+    /// 선택 순은 화면 순서와 다르다). 보이는 행에 선택이 없으면 선택 순 그대로.
+    pub(crate) fn selected_paths_in_view_order(&self) -> Vec<PathBuf> {
+        let Some(t) = self.tree.as_ref() else {
+            return Vec::new();
+        };
+        let out: Vec<PathBuf> = (0..t.visible_len())
+            .filter_map(|i| {
+                let id = t.visible_id(i)?;
+                if !t.is_selected(id) {
+                    return None;
+                }
+                t.node_path(id).map(Path::to_path_buf)
+            })
+            .collect();
+        if out.is_empty() {
+            return self.selected_paths();
+        }
+        out
+    }
+
     pub(crate) fn selection_count(&self) -> usize {
         self.tree.as_ref().map_or(0, Tree::selection_count)
     }

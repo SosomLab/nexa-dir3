@@ -39,6 +39,12 @@ fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
         return CtxItem::Separator;
     }
     let id = intercept(&it.verb).map_or_else(|| it.id.clone(), str::to_string);
+    // 경로 복사 = 셸 항목 자리 그대로 · 라벨만 앱 언어로(dir2 제자리 대체 · win.rs:3024 — OS 라벨 "경로로 복사(A)" 대신).
+    let label = if id == "ctx.copy_path" {
+        tr("ctx.copyPath")
+    } else {
+        it.label.clone()
+    };
     // 셸 확장 아이콘(SHELL-011) — 하나라도 있으면 nexa-ctl 메뉴가 전 행에 아이콘 칸을 예약한다.
     let icon = it
         .icon
@@ -46,14 +52,9 @@ fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
         .filter(|i| i.rgba.len() == (i.w * i.h * 4) as usize && i.w > 0 && i.h > 0)
         .map(|i| nexa_ctl::controls::MenuIcon::from_rgba(i.w, i.h, &i.rgba));
     if it.children.is_empty() {
-        CtxItem::maybe(id, it.label.clone(), it.enabled).with_icon(icon)
+        CtxItem::maybe(id, label, it.enabled).with_icon(icon)
     } else {
-        CtxItem::submenu(
-            id,
-            it.label.clone(),
-            it.children.iter().map(shell_to_ctx).collect(),
-        )
-        .with_icon(icon)
+        CtxItem::submenu(id, label, it.children.iter().map(shell_to_ctx).collect()).with_icon(icon)
     }
 }
 
@@ -230,11 +231,26 @@ impl App {
     }
 
     /// 행 메뉴 항목 조립 — `shell` = 셸 항목(`None` = 구축 중).
-    fn row_menu_items(&mut self, sel: &[PathBuf], shell: Option<&[ShellMenuItem]>) -> Vec<CtxItem> {
+    pub(crate) fn row_menu_items(
+        &mut self,
+        sel: &[PathBuf],
+        shell: Option<&[ShellMenuItem]>,
+    ) -> Vec<CtxItem> {
         let loading = shell.is_none();
         let has_clip = self.clip_sources().is_some();
         let single_dir = matches!(sel, [one] if one.is_dir());
-        let shell: Vec<CtxItem> = shell.unwrap_or_default().iter().map(shell_to_ctx).collect();
+        let mut shell: Vec<CtxItem> = shell.unwrap_or_default().iter().map(shell_to_ctx).collect();
+        // 앱 고유 항목(dir2 CTXMENU_BLOCKS `row`) — 순서/표시 = 설정 `ctxmenu.layout`(T-71 DLG-069 · 그룹 숨김 = 전부 제외 · `new`는 하단 고정 섹션).
+        let own = self.ctx_layout("row");
+        let vis = |k: &str| own.iter().any(|(x, v)| x == k && *v);
+        // 이름 복사 = 셸의 경로 복사 **바로 아래** 고정(dir2 `after_id` · win.rs:2996 — 설정 순서보다 우선) · 그 항목이 없으면 아래 고유 구역.
+        let copy_path_at = shell
+            .iter()
+            .position(|c| matches!(c, CtxItem::Item { id, .. } if id == "ctx.copy_path"));
+        let name_anchored = vis("copyName") && copy_path_at.is_some();
+        if let Some(at) = copy_path_at.filter(|_| name_anchored) {
+            shell.insert(at + 1, CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
+        }
         let have = |id: &str| has_id(&shell, id);
         let mut items: Vec<CtxItem> = Vec::new();
         if !shell.is_empty() {
@@ -269,9 +285,6 @@ impl App {
         if !have("edit.delete") {
             items.push(CtxItem::item("edit.delete", tr("menu.edit.delete")));
         }
-        // 앱 고유 항목(dir2 CTXMENU_BLOCKS `row`) — 순서/표시 = 설정 `ctxmenu.layout`(T-71 DLG-069 · 그룹 숨김 = 전부 제외 · `new`는 하단 고정 섹션).
-        let own = self.ctx_layout("row");
-        let vis = |k: &str| own.iter().any(|(x, v)| x == k && *v);
         if vis("deletePermanent") {
             items.push(CtxItem::item(
                 "edit.delete_permanent",
@@ -294,7 +307,9 @@ impl App {
                 continue;
             }
             match k.as_str() {
-                "copyName" => items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName"))),
+                "copyName" if !name_anchored => {
+                    items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
+                }
                 "pasteInto" => items.push(CtxItem::maybe(
                     "ctx.paste_into",
                     tr("ctx.pasteInto"),
@@ -570,9 +585,10 @@ impl App {
             return;
         }
         match id {
+            // 경로/이름 복사 = 선택 전체(교차 폴더 포함)를 **화면에 보이는 순서**로 · 한 줄에 하나(dir2 win.rs:3105-3124).
             "ctx.copy_path" => {
                 let text = self.panels[panel]
-                    .selected_paths()
+                    .selected_paths_in_view_order()
                     .iter()
                     .map(|p| p.display().to_string())
                     .collect::<Vec<_>>()
@@ -581,7 +597,7 @@ impl App {
             }
             "ctx.copy_name" => {
                 let text = self.panels[panel]
-                    .selected_paths()
+                    .selected_paths_in_view_order()
                     .iter()
                     .map(|p| ndir_ops::leaf_name(p))
                     .collect::<Vec<_>>()

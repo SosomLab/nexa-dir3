@@ -1383,6 +1383,91 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만
+/// 앱 언어로 · 이름 복사는 그 **바로 아래**(설정 순서보다 우선) · 셸에 없으면 둘 다 아래 고유 구역 · 이름 복사를 숨기면 어디에도 없다 ·
+/// 복사 내용 = 한 줄에 하나(전체 경로 / 이름만).
+#[test]
+fn copy_path_and_name_follow_dir2_menu_rules() {
+    use crate::platform::ShellMenuItem;
+    let ids = |items: &[CtxItem]| -> Vec<String> {
+        items
+            .iter()
+            .map(|c| match c {
+                CtxItem::Item { id, .. } => id.clone(),
+                CtxItem::Separator => "-".into(),
+            })
+            .collect()
+    };
+    let (mut app, dir) = fixture("ctxcopy");
+    app.layout_for(1200, 800, 1.0);
+    let a = dir.join("a.txt");
+    let shell = vec![
+        ShellMenuItem {
+            id: "shell:1".into(),
+            label: "Open".into(),
+            enabled: true,
+            ..Default::default()
+        },
+        ShellMenuItem {
+            id: "shell:2".into(),
+            label: "경로로 복사(&A)".into(),
+            verb: "copyaspath".into(),
+            enabled: true,
+            ..Default::default()
+        },
+        ShellMenuItem {
+            id: "shell:3".into(),
+            label: "Properties".into(),
+            enabled: true,
+            ..Default::default()
+        },
+    ];
+    let items = app.row_menu_items(std::slice::from_ref(&a), Some(&shell));
+    let got = ids(&items);
+    let at = got.iter().position(|i| i == "ctx.copy_path").unwrap();
+    assert_eq!(at, 1, "셸 항목 자리 그대로: {got:?}");
+    assert_eq!(got[at + 1], "ctx.copy_name", "바로 아래: {got:?}");
+    assert_eq!(
+        got.iter().filter(|i| i.starts_with("ctx.copy_")).count(),
+        2,
+        "중복 없음: {got:?}"
+    );
+    assert!(
+        matches!(&items[at], CtxItem::Item { label, .. } if *label == tr("ctx.copyPath")),
+        "라벨 = 앱 언어"
+    );
+    // 셸에 경로 복사가 없으면 아래 고유 구역에 경로 복사 → 이름 복사 순.
+    let items = app.row_menu_items(std::slice::from_ref(&a), Some(&shell[..1]));
+    let got = ids(&items);
+    let at = got.iter().position(|i| i == "ctx.copy_path").unwrap();
+    assert!(at > 1 && got[at + 1] == "ctx.copy_name", "{got:?}");
+    // 이름 복사 숨김(순서 편집 창) = 어디에도 없다 · 경로 복사는 그대로.
+    app.settings
+        .set(
+            "ctxmenu.layout",
+            "row:1[new:1,deletePermanent:0,copyName:0,pasteInto:1]|bg:1[paste:1,undo:1,redo:1]",
+        )
+        .expect("ctxmenu.layout");
+    let got = ids(&app.row_menu_items(std::slice::from_ref(&a), Some(&shell)));
+    assert!(
+        got.contains(&"ctx.copy_path".to_string()) && !got.contains(&"ctx.copy_name".to_string()),
+        "{got:?}"
+    );
+    // 실행 = 전체 경로 / 이름만.
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&a, &mut inv);
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("ctx.copy_path");
+    assert_eq!(
+        crate::clipboard::read_text().as_deref(),
+        Some(a.display().to_string().as_str())
+    );
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("ctx.copy_name");
+    assert_eq!(crate::clipboard::read_text().as_deref(), Some("a.txt"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 행/배경 컨텍스트 메뉴: 행 우클릭 = 행 메뉴(열기·편집·삭제·경로/이름 복사·새로 만들기) · 빈 영역 = 배경 메뉴(붙여넣기·undo·새 폴더·새로 고침) ·
 /// ctx.pick = 항목 실행(새 폴더 생성) · Shift+F10 명령 = 캐럿 행 메뉴 · 덤프 `ctx`.
 #[test]
