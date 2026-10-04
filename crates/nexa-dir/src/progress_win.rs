@@ -75,6 +75,7 @@ impl ProgressWin {
         self.closing = None;
         self.active = true;
         self.btn.set_label(tr("ops.cancel"));
+        self.btn.set_tone(nexa_ctl::controls::ButtonTone::Default);
         self.redraw();
     }
 
@@ -108,6 +109,9 @@ impl ProgressWin {
         self.label = label.to_string();
         self.closing = Some((ms, now_ms));
         self.btn.set_label(self.close_label(ms));
+        // 완료 뒤 [닫기 (N)] = 시간이 지나면 저절로 눌리는 **기본 버튼** → 기본 버튼 색(강조 톤 · 흰 글씨)으로 구별한다
+        // (사용자 10-04 · 기본 버튼 = `ButtonTone::Accent` — nexa-sql journal 09-22 §47 "열기 창 확정 버튼"과 같은 규칙).
+        self.btn.set_tone(nexa_ctl::controls::ButtonTone::Accent);
         self.redraw();
     }
 
@@ -411,6 +415,11 @@ mod tests {
         w.set_done("Done - closing shortly", 2000, 10_000);
         assert!(w.is_closing());
         assert_eq!(w.btn.label(), "Close (2)");
+        assert_eq!(
+            w.btn.tone(),
+            nexa_ctl::controls::ButtonTone::Accent,
+            "완료 뒤 닫기 = 기본 버튼 색"
+        );
         assert!(!w.tick(10_500), "같은 초 = 변화 없음");
         assert!(w.tick(11_100), "남은 0.9 s → (1)");
         assert_eq!(w.btn.label(), "Close (1)");
