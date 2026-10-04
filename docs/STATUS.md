@@ -4,7 +4,7 @@
 
 ## ▶ 다음 세션 시작점(10-05 마감 · Windows PC 세션 · 139차 갱신)
 
-- **원격 main**(10-05 §15 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `3587451`(코드 · quick · CI가 전수) · nexa-ui `5bd83aa`(153차 6a55ef3 + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
+- **원격 main**(10-05 §16 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `126c4ad`(코드 · quick · CI가 전수) · nexa-ui `5bd83aa`(153차 6a55ef3 + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
 - **마지막 전수**(`gate.sh full` · ba98ee9 + nexa-ui 153 · 10-05 Windows · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 456/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 · T-136).
 - **CI**: 10-04 ~ 10-05 Windows 세션의 코드 커밋 전부 3-OS 녹색(42ccb5a · 9137085 · 89df13a · daa499d · 14c6866 · 6c42c90 · 094997f(dff8a77 포함) · 1e4520b · e7cd2b4 · 716f0b3 · 87b4740 · 57943de) · 2682cf2(nexa-ui 152 첫 반영) = 마감 기록 시점 진행 중(협업 세션 감시 → 결과는 다음 세션 첫 확인 거리).
 - **이 PC 세션 분담**(Windows · 10-04 §25 · 10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 코드 커밋 · pull/push · 검증 빌드 `CARGO_TARGET_DIR=target/dev` / 협업 세션 = `docs/` 기록 커밋(push는 개발 세션) · 사용자 인스턴스 빌드 `target\debug` + **`explorer.exe`로 재실행**(에이전트 셸 env `NO_COLOR` · `CLAUDE_*` 상속 회피) · 시험 반복 `target/collab` · 사전 분석 · CI 감시(`gh run watch`). 같은 작업 트리 · 커밋 직전 서로 알림 · 커밋은 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`(이 PC git config의 메일은 다름 · config 불변). **재시작 = 자기가 띄운 PID만 종료**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10). **세션 시작 때 `ListAgents`로 서로 확인**(10-04에 개발 세션이 1시간 넘게 혼자 기록 · 빌드 · 재시작까지 한 일이 있었다).
@@ -18,6 +18,16 @@
   - 10-04 ~ 10-05 Windows 세션 변경 = **화면 판정 완료**(사용자 10-05 · port/92 결과 기록) — 남은 것 = nexa-sql 글꼴 이름(152 · T-146). dir2 나란히 대조 QA는 사용자가 필요할 때 개별 요청.
   - 그 전(10-03 ~ 10-04 Linux): 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표) — 상태줄 약어/팝업 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — **진행 중 = T-148 "그 밖" 6건**(SHCNE · Shift 확장 동사 · 잠금 확인 · RTF 복사 · IME 위치 · ICO — 개발 세션 ②⑤부터) · 등재 = T-147 DnD 완성(P0) · 대기 = 클라우드(T-72 · T-129) · 이번 세션 후속 = T-143 메뉴 바 순환 · T-93 남은 것(셸 자식 프로세스 · 다른 보조 창 표면 · 도크 이미지 · 창 여는 기동 명령/덤프) · T-144 상태줄 깜빡임 부분 다시 그리기 · T-145(사용자 결정) · T-146 nexa-sql 152 실기 · T-92 로그 창(사용자가 로그 확인 방법을 물음) → 종전 대기열: T-134 남은 것 → T-95 3차 → macOS 디스크 칸(IOKit · Mac 실기) → T-113 → T-131 → T-130 · T-129 → T-128 → T-117 → T-114 → 남은 T-103~T-108 → T-102 투명도 → T-99 2차 → T-96 남은 것 → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-05 148차 — 배경 탭 낡음 해소(T-149 7)
+
+- **한 일**: 126c4ad(`Tab.stale` · `refresh_stale` · 시험 +1) · 매트릭스 PANEL-012·014~017 ✅.
+- **지금 상태**: 126c4ad 앱 재시작(PID 19488). CI 3587451 · 126c4ad 감시 중. 개발 세션 = T-149 10 삭제 실패 재시도.
+- **걸린 것**: 화면 판정(§11 · §13~§16) · T-149 나머지 · T-150 · T-147.
+
+→ [journal/2026-10-05 §16](journal/2026-10-05.md)
 
 ---
 
