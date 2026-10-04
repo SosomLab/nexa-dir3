@@ -56,17 +56,22 @@ impl App {
         let base = self.font_px("statusbar.font_size");
         // Windows Terminal 따라가기: 글꼴 크기 pt → DIP(×96/72) → **그 고정폭 글꼴의** px. nexa-ctl의 Mono 슬롯은 숫자 높이를
         // 본문 글꼴에 맞추는 광학 보정(0.75~1.15배)을 곱하므로 그만큼 나눠 실제 크기가 Windows Terminal과 같게 한다.
-        let wt = self
-            .wt_profile
-            .as_ref()
-            .zip(self.mono_font.as_ref())
-            .map(|(wt, mono)| {
-                // 크기: 프로필이 주면 그 pt → DIP · 안 주면(Linux) 설정 `term.font_size`(em) — 어느 쪽이든 **그 고정폭 글꼴의**
-                // 지표로 px를 구한다(본문 글꼴 지표로 환산하면 글꼴마다 실제 크기가 달라진다).
-                let em = wt.size_pt.map_or_else(
-                    || self.settings.font_px("term.font_size"),
-                    |pt| pt * 96.0 / 72.0,
-                );
+        // ★ 기본 터미널을 따르지 않을 때(`term.follow_windows_terminal` 꺼짐 · 프로필 없음)도 **같은 계산**을 쓴다(사용자 10-05
+        //   "리눅스 기준으로 · 터미널 글꼴이 너무 크다"): 종전에는 그 경우만 본문 글꼴 지표로 환산한 크기에 Mono 슬롯의 광학 보정
+        //   (최대 1.15배)이 그대로 곱해지고 줄 높이도 "글자 높이 + 3"이라, 같은 `term.font_size`가 Linux(프로필에 크기 없음 →
+        //   이 계산)보다 크게 나왔다.
+        let wt = self.mono_font.as_ref().map(|mono| {
+            {
+                // 크기: 따르는 프로필이 주면 그 pt → DIP · 그 밖(Linux · 따르지 않음)은 설정 `term.font_size`(em) — 어느 쪽이든
+                // **그 고정폭 글꼴의** 지표로 px를 구한다(본문 글꼴 지표로 환산하면 글꼴마다 실제 크기가 달라진다).
+                let em = self
+                    .wt_profile
+                    .as_ref()
+                    .and_then(|wt| wt.size_pt)
+                    .map_or_else(
+                        || self.settings.font_px("term.font_size"),
+                        |pt| pt * 96.0 / 72.0,
+                    );
                 let target = mono.em_to_px(em);
                 let mult =
                     (self.ui_font.digit_height(100.0) / mono.digit_height(100.0)).clamp(0.75, 1.15);
@@ -74,7 +79,8 @@ impl App {
                 // 본문 글꼴 상자 높이 기준이라 줄 간격이 더 벌어졌다(10-03 캡처: 24.5 px ↔ WT 약 19~20 px).
                 let cell_h = (mono.line_height(target) * self.scale).ceil() as i32;
                 (target / mult, cell_h)
-            });
+            }
+        });
         let want = wt.map_or_else(|| self.font_px("term.font_size"), |w| w.0);
         TermStyle {
             cell_h: wt.map(|w| w.1),

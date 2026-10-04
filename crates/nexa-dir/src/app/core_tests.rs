@@ -3219,6 +3219,31 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
     );
     assert_eq!(app.prefs_win.is_locked("term.font_face"), Some(false));
     assert_eq!(app.prefs_win.lock_reason("term.font_face"), None);
+    // 터미널 글꼴 크기 계산은 따르든 안 따르든 같다(사용자 10-05 "리눅스 기준"): 고정폭 글꼴이 있으면 그 글꼴의 지표로 줄 높이를
+    // 정하고(cell_h = Some) · 프로필이 크기를 주지 않으면(Linux · 따르지 않음) 설정 `term.font_size`를 쓴다 → 둘이 같은 결과.
+    if app.mono_font.is_some() {
+        app.wt_profile = None; // 따르지 않음
+        let off = app.term_style();
+        assert!(
+            off.cell_h.is_some(),
+            "따르지 않아도 고정폭 글꼴 지표로 줄 높이"
+        );
+        app.wt_profile = Some(platform::WtProfile {
+            faces: vec!["System Mono".into()],
+            size_pt: None, // Linux: 프로필에 크기 없음
+            scheme: None,
+            commandline: None,
+        });
+        let linux_like = app.term_style();
+        assert_eq!(
+            (off.cell_h, off.font_delta),
+            (linux_like.cell_h, linux_like.font_delta),
+            "따르지 않음 = Linux 경로와 같은 크기"
+        );
+        // 크기를 주는 프로필(Windows Terminal 12 pt = 16 DIP)은 설정 12보다 크다.
+        app.wt_profile.as_mut().unwrap().size_pt = Some(12.0);
+        assert!(app.term_style().font_delta > off.font_delta);
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
