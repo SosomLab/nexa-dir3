@@ -5,7 +5,7 @@ pub(crate) mod dialogs;
 pub(crate) mod dnd;
 mod event_loop;
 pub(crate) mod fonts;
-mod input;
+pub(crate) mod input;
 pub(crate) mod keywinit;
 pub(crate) mod launcher_icons;
 pub(crate) mod license;

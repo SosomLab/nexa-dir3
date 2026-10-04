@@ -1394,6 +1394,48 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// IME 조합 창 자리(GAP-014 · dir2 A/win.rs:4792): 편집 중이 아니면 없음 · 경로 바 편집 중이면 필드 안 캐럿 자리(필드 높이) ·
+/// 글자가 늘면 오른쪽으로 · 필드 밖으로 나가지 않는다 · 인라인 이름 바꾸기도 같은 길.
+#[test]
+fn ime_composition_area_follows_the_edit_caret() {
+    use crate::app::input::ime_caret;
+    let field = Rect::new(100, 40, 300, 24);
+    let info = |s: &str| (s.to_string(), field, 6);
+    let w = |t: &str| t.chars().count() as i32 * 8;
+    assert_eq!(ime_caret(&info(""), w), (106, 40, 1, 24));
+    assert_eq!(ime_caret(&info("abc"), w), (130, 40, 1, 24));
+    assert_eq!(
+        ime_caret(&info(&"x".repeat(500)), w).0,
+        field.right() - 1,
+        "필드 안"
+    );
+
+    let (mut app, dir) = fixture("ime");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(app.ime_area(), None, "편집 중이 아님");
+    let mut inv = Invalidations::default();
+    app.panels[0].pathbar.begin_edit(&mut inv);
+    let bar = app.panels[0].pathbar.bounds();
+    let (x, y, _, h) = app.ime_area().expect("경로 바 편집 중");
+    assert!(
+        x >= bar.x && x < bar.right() && y == bar.y && h == bar.h,
+        "{x} {y} {h} {bar:?}"
+    );
+    // 이름 바꾸기: 편집 필드(행 안) 자리.
+    app.panels[0].pathbar.cancel_edit(&mut inv);
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.command("edit.rename");
+    if app.panels[0].rows().is_renaming() {
+        let list = app.panels[0].rows().bounds();
+        let (x, y, _, _) = app.ime_area().expect("이름 바꾸기 편집 중");
+        assert!(
+            x >= list.x && y >= list.y && y < list.bottom(),
+            "{x} {y} {list:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 삭제 전 잠금 확인(dir2 WINB-024): 다른 프로그램이 쓰는 항목이 섞여 있으면 휴지통으로 보내기 전에 묻는다 —
 /// [건너뛰고 삭제(n개)] = 잠긴 것만 빼고 · [다시 시도] = 다시 검사(풀렸으면 바로 삭제) · [취소] = 아무것도 안 함 ·
 /// 전부 잠겼으면 건너뛰기 버튼이 없다 · 잠긴 것이 없으면 묻지 않는다.

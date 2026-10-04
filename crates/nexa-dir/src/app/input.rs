@@ -5,7 +5,49 @@
 
 use crate::*;
 
+/// IME 조합 창을 둘 캐럿 자리(순수 · dir2 GAP-014 `edit_info` 계약): `(캐럿 앞 글, 편집 필드 rect, 안쪽 여백)` + 글 폭 재는 함수 →
+/// `(x, y, 폭 1, 높이)` — 캐럿 = `rect.x + pad + 폭(캐럿 앞 글)` · 필드 오른쪽 끝을 넘지 않는다.
+pub(crate) fn ime_caret(
+    info: &(String, Rect, i32),
+    measure: impl Fn(&str) -> i32,
+) -> (i32, i32, i32, i32) {
+    let (text, rect, pad) = info;
+    let x = (rect.x + pad + measure(text))
+        .min(rect.right() - 1)
+        .max(rect.x);
+    (x, rect.y, 1, rect.h.max(1))
+}
+
 impl App {
+    /// 지금 글자를 편집 중인 필드의 IME 조합 창 자리 — 경로 바 편집(dir2 A/win.rs:4792) 또는 목록의 인라인 이름 바꾸기 ·
+    /// 편집 중이 아니면 `None`.
+    pub(crate) fn ime_area(&self) -> Option<(i32, i32, i32, i32)> {
+        let p = self.panels.get(self.active)?;
+        let (info, key) = match p.pathbar.edit_info() {
+            Some(i) => (i, "ui.font_size"),
+            None => (p.rows().rename_edit_info()?, "list.font_size"),
+        };
+        let px = self.font_px(key) * self.scale;
+        Some(ime_caret(&info, |t| {
+            self.ui_font.measure(t, px).round() as i32
+        }))
+    }
+
+    /// 조합 창 자리가 바뀌었으면 창에 알린다(그린 뒤마다 · 편집이 끝나면 다음 편집 때 다시 알린다).
+    pub(crate) fn sync_ime_area(&mut self) {
+        let area = self.ime_area();
+        if area == self.ime_last {
+            return;
+        }
+        self.ime_last = area;
+        if let (Some(w), Some((x, y, cw, ch))) = (&self.window, area) {
+            w.set_ime_cursor_area(
+                winit::dpi::PhysicalPosition::new(x, y),
+                winit::dpi::PhysicalSize::new(cw.max(1) as u32, ch.max(1) as u32),
+            );
+        }
+    }
+
     /// winit 창 사건 → 컨트롤 입력(장치 px · 수식키 반영). 더블클릭은 합성(`ui.dblclick_ms` · 같은 자리 ±4px).
     pub(crate) fn ctl_event(&mut self, event: &WindowEvent) -> Option<InputEvent> {
         let (x, y) = self.cursor;

@@ -276,6 +276,8 @@ struct App {
     ctx_invoke_panel: Option<usize>,
     /// 지금 행 메뉴를 Shift+우클릭(확장 동사)으로 열었는가 — 실행 때 같은 대상을 쓴다.
     ctx_extended: bool,
+    /// 창에 마지막으로 알린 IME 조합 창 자리(편집 중이 아니면 `None`) — 바뀔 때만 OS에 알린다.
+    ime_last: Option<(i32, i32, i32, i32)>,
     /// 선행 구축(선택 머무름 300 ms · dir2 `CTX_PREBUILD_MS`): 지금 대상 · 머문 시작 · 구축 요청함.
     ctx_dwell_target: Option<platform::MenuTarget>,
     ctx_dwell_since: Instant,
@@ -573,6 +575,7 @@ impl App {
             ctx_anchor_next: None,
             ctx_invoke_panel: None,
             ctx_extended: false,
+            ime_last: None,
             ctx_dwell_target: None,
             ctx_dwell_since: Instant::now(),
             ctx_dwell_done: false,

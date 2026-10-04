@@ -367,6 +367,7 @@ impl ApplicationHandler<Wake> for App {
             }
             WindowEvent::RedrawRequested => {
                 self.paint();
+                self.sync_ime_area();
                 // 첫 프레임 뒤 = `@ready` 큐(초기 열거는 `App::new`에서 이미 끝났다).
                 if !self.ready_fired {
                     self.fire_ready();
