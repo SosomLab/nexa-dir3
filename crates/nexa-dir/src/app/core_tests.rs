@@ -5631,3 +5631,34 @@ fn slow_second_click_starts_rename() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 끝 말줄임(dir2 RENDER-010 · 원장 N-02 · nexa-ui 154 · T-149 5): 칸보다 긴 이름은 글자 중간에서 잘리지 않고 `…`로 끝난다 ·
+/// 들어가는 이름은 그대로.
+#[test]
+fn long_names_end_with_ellipsis() {
+    let (mut app, dir) = fixture("ellipsis");
+    let long = format!("{}.txt", "very-long-file-name-".repeat(12));
+    std::fs::write(dir.join(&long), b"x").expect("write");
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let cut: Vec<&String> = rec
+        .texts
+        .iter()
+        .map(|t| &t.3)
+        .filter(|t| t.starts_with("very-long-file-name-"))
+        .collect();
+    assert_eq!(cut.len(), 1, "{cut:?}");
+    assert!(
+        cut[0].ends_with('…') && cut[0].len() < long.len(),
+        "{}",
+        cut[0]
+    );
+    assert!(
+        rec.texts.iter().any(|t| t.3 == "a.txt"),
+        "짧은 이름은 그대로"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
