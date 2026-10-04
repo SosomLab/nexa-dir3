@@ -115,6 +115,7 @@ kind.extFile = {0} file
 
 # ── File ops (M3-1 transfer · M3-2 delete/rename/new) ──
 ops.progress = transferring {0}%
+ops.total = {0} total
 ops.done = transferred {0}
 ops.skipped = {0} skipped
 ops.errors = {0} failed

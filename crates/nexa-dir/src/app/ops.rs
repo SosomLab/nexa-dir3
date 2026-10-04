@@ -107,6 +107,26 @@ pub(crate) fn skipped_total(count: usize, out: &Outcome) -> usize {
     }
 }
 
+/// 결과 안내 조각(토스트 · 상태줄 — ` · `로 잇는다): **전체 n** · 전송 a · 건너뜀 b · 실패 c · 취소됨. 전체 대상 수를 맨 앞에 두어
+/// 숫자의 합이 맞는지 한눈에 보인다(사용자 10-04 "전체 대상이 포함되도록") · 건너뜀/실패는 있을 때만 · 취소는 끝에.
+pub(crate) fn result_parts(count: usize, out: &Outcome) -> Vec<String> {
+    let mut parts = vec![
+        trf("ops.total", &[&count.to_string()]),
+        trf("ops.done", &[&out.transferred.len().to_string()]),
+    ];
+    let skipped = skipped_total(count, out);
+    if skipped > 0 {
+        parts.push(trf("ops.skipped", &[&skipped.to_string()]));
+    }
+    if !out.errors.is_empty() {
+        parts.push(trf("ops.errors", &[&out.errors.len().to_string()]));
+    }
+    if out.canceled {
+        parts.push(tr("ops.canceled"));
+    }
+    parts
+}
+
 impl App {
     /// 붙여넣을 원본(OS 파일 클립보드 우선 · 없으면 앱 내 사본) → (경로, 잘라내기).
     pub(crate) fn clip_sources(&self) -> Option<(Vec<PathBuf>, bool)> {
@@ -468,17 +488,7 @@ impl App {
             self.clip = None;
         }
         self.sync_cut_marks();
-        let mut parts = vec![trf("ops.done", &[&out.transferred.len().to_string()])];
-        let skipped = skipped_total(job.count, &out);
-        if skipped > 0 {
-            parts.push(trf("ops.skipped", &[&skipped.to_string()]));
-        }
-        if !out.errors.is_empty() {
-            parts.push(trf("ops.errors", &[&out.errors.len().to_string()]));
-        }
-        if out.canceled {
-            parts.push(tr("ops.canceled"));
-        }
+        let parts = result_parts(job.count, &out);
         let kind = if out.errors.is_empty() {
             toast::ToastKind::Info
         } else {

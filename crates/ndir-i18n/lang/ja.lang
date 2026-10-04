@@ -115,6 +115,7 @@ kind.extFile = {0} ファイル
 
 # ── File ops (M3-1 transfer · M3-2 delete/rename/new) ──
 ops.progress = 転送中 {0}%
+ops.total = 全体 {0}
 ops.done = 転送 {0}
 ops.skipped = スキップ {0}
 ops.errors = 失敗 {0}

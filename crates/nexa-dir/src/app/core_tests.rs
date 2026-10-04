@@ -1423,6 +1423,29 @@ fn canceled_transfer_counts_untouched_items_as_skipped() {
         ..Default::default()
     };
     assert_eq!(skipped_total(3, &out), 1);
+    // 결과 안내는 전체 대상 수로 시작한다(시험 언어 = 영어): 2개 덮어쓰고 3번째에서 취소 = "3 total · transferred 2 · 1 skipped · canceled".
+    let out = Outcome {
+        transferred: vec![(p("a"), p("x/a")), (p("b"), p("x/b"))],
+        skipped: vec![p("c")],
+        canceled: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        crate::app::ops::result_parts(3, &out).join(" · "),
+        format!(
+            "{} · {} · {} · {}",
+            trf("ops.total", &["3"]),
+            trf("ops.done", &["2"]),
+            trf("ops.skipped", &["1"]),
+            tr("ops.canceled")
+        )
+    );
+    // 전부 전송 = 전체 · 전송만.
+    let out = Outcome {
+        transferred: vec![(p("a"), p("x/a"))],
+        ..Default::default()
+    };
+    assert_eq!(crate::app::ops::result_parts(1, &out).len(), 2);
 }
 
 /// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만

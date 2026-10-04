@@ -114,6 +114,7 @@ kind.extFile = {0} 파일
 
 # ── 파일 조작(M3-1 전송 · M3-2 삭제/이름변경/새로 만들기) ──
 ops.progress = 전송 {0}%
+ops.total = 전체 {0}
 ops.done = 전송 {0}
 ops.skipped = 건너뜀 {0}
 ops.errors = 실패 {0}
