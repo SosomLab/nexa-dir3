@@ -134,14 +134,27 @@ fn merged_table(code: &str, home: &Path) -> HashMap<String, String> {
 
 /// 언어 로드 — 폴백은 en(기준 언어). en 자신은 폴백 없음. `home` = 설정 폴더(오버레이 `lang/` 하위).
 pub fn load(code: &str, home: &Path) -> Lang {
+    load_with_system(code, "", home)
+}
+
+/// 언어 로드 + **대체 언어 순서 = 시스템 기본 언어 → 영어**(사용자 10-04 결정 — 언어 파일의 `@fallback` 지정은 쓰지 않는다):
+/// 고른 언어에 없는 글은 시스템 언어의 글로 · 그것도 없으면 영어로. `system` = 시스템 언어 코드(모르면 빈 글 · 쓸 수 있는
+/// 언어가 아니면 건너뛴다 — 표가 비면 영어만 남는다).
+pub fn load_with_system(code: &str, system: &str, home: &Path) -> Lang {
+    let mut fallback = if code == "en" {
+        HashMap::new()
+    } else {
+        merged_table("en", home)
+    };
+    if !system.is_empty() && system != code && system != "en" {
+        for (k, v) in merged_table(system, home) {
+            fallback.insert(k, v);
+        }
+    }
     Lang {
         code: code.to_string(),
         table: merged_table(code, home),
-        fallback: if code == "en" {
-            HashMap::new()
-        } else {
-            merged_table("en", home)
-        },
+        fallback,
     }
 }
 
@@ -245,6 +258,41 @@ pub fn trf(key: &str, args: &[&str]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 대체 언어 순서(사용자 10-04 결정): 고른 언어에 없는 글 = 시스템 기본 언어 → 영어. 시스템 언어를 모르거나 쓸 수 없으면 영어.
+    #[test]
+    fn fallback_is_system_language_then_english() {
+        let home = std::env::temp_dir().join(format!("ndir-i18n-fb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("lang")).unwrap();
+        // 사용자 언어 파일: 글 하나만 번역했다.
+        std::fs::write(
+            home.join("lang").join("xx.lang"),
+            "@name = Test\nmenu.file.exit = XX-EXIT\n",
+        )
+        .unwrap();
+        let (ko, en) = (load("ko", &home), load("en", &home));
+        let key = "menu.file.prefs";
+        assert_ne!(
+            ko.get(key),
+            en.get(key),
+            "두 언어의 글이 달라야 시험이 뜻이 있다"
+        );
+        let with_ko = load_with_system("xx", "ko", &home);
+        assert_eq!(
+            with_ko.get("menu.file.exit"),
+            Some("XX-EXIT"),
+            "고른 언어가 먼저"
+        );
+        assert_eq!(with_ko.get(key), ko.get(key), "없으면 시스템 언어");
+        assert_eq!(load_with_system("xx", "", &home).get(key), en.get(key));
+        assert_eq!(load_with_system("xx", "zz", &home).get(key), en.get(key));
+        assert_eq!(load_with_system("xx", "en", &home).get(key), en.get(key));
+        // 고른 언어 = 시스템 언어면 영어만 대체로 남는다 · load()는 종전과 같다.
+        assert_eq!(load_with_system("ko", "ko", &home).get(key), ko.get(key));
+        assert_eq!(load("xx", &home).get(key), en.get(key));
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     /// 전역 표를 바꾸는 시험은 직렬화한다(시험은 병렬로 돈다 — nexa-ui 규칙).
     static GLOBAL: std::sync::Mutex<()> = std::sync::Mutex::new(());

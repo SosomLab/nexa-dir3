@@ -984,12 +984,11 @@ impl App {
 fn init_i18n(settings: &Settings) {
     let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
     let avail = ndir_i18n::discover(&home);
-    let code = ndir_i18n::resolve_code(
-        settings.lang_setting(),
-        &ndir_i18n::syslang::system_lang_code(),
-        &avail,
-    );
-    ndir_i18n::activate(ndir_i18n::load(&code, &home));
+    let system = ndir_i18n::syslang::system_lang_code();
+    let code = ndir_i18n::resolve_code(settings.lang_setting(), &system, &avail);
+    // 대체 언어 = 시스템 기본 언어(쓸 수 있을 때) → 영어(사용자 10-04 결정).
+    let sys_code = ndir_i18n::resolve_code("system", &system, &avail);
+    ndir_i18n::activate(ndir_i18n::load_with_system(&code, &sys_code, &home));
 }
 
 /// nexa-ctl 내장 메뉴(우클릭 편집) 라벨을 앱 i18n에 잇는다 — `fn` 포인터 계약이라 `'static` 글이 필요해 누수한다.
