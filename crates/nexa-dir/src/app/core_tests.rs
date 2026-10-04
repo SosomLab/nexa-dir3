@@ -2546,6 +2546,11 @@ fn status_segments_and_tab_status_bar() {
     assert!(app.load.is_some_and(|l| l.mem_total > 0 && l.mem_used > 0));
     assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
     assert!(text(&app, "mem").starts_with("M ") && text(&app, "mem") != "M –");
+    assert!(
+        !text(&app, "mem")["M ".len()..].contains(' '),
+        "메모리 값 = 숫자와 단위 사이 빈칸 없음(11.6GB): {}",
+        text(&app, "mem")
+    );
     assert_ne!(text(&app, "appmem"), "–");
     // 칸 클릭 = 상세 팝업(그 칸 위 · 조회 주기마다 내용 갱신) — CPU = 전체 + 이 프로그램.
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
