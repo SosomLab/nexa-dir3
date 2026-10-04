@@ -640,6 +640,8 @@ impl App {
         app.tab_menu.set_overlay_scrollbar(true);
         app.tab_menu
             .set_wrap_around(app.settings.flag("menu.wrap_around"));
+        app.menubar
+            .set_wrap_around(app.settings.flag("menu.wrap_around"));
         app.tab_menu
             .set_char_jump(app.settings.flag("menu.char_jump"));
         app.apply_window_sizes();

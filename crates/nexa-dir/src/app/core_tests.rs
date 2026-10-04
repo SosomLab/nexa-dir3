@@ -1623,11 +1623,12 @@ fn menu_wrap_around_setting_reaches_the_menu() {
         .expect("menu.wrap_around");
     app.after_setting_changed("menu.wrap_around");
     assert!(!app.tab_menu.wrap_around());
+    assert!(!app.menubar.wrap_around(), "메뉴 바도 같은 설정(T-143)");
     app.settings
         .set("menu.wrap_around", "on")
         .expect("menu.wrap_around");
     app.after_setting_changed("menu.wrap_around");
-    assert!(app.tab_menu.wrap_around());
+    assert!(app.tab_menu.wrap_around() && app.menubar.wrap_around());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

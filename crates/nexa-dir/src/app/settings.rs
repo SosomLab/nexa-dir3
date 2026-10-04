@@ -150,9 +150,11 @@ impl App {
             }
             "list.icon_overrides" => self.apply_icon_overrides(),
             // 메뉴 키보드 순환 이동(wrap-around) — 우클릭 · 탭 · 상태줄 메뉴 공통(같은 메뉴 컨트롤).
-            "menu.wrap_around" => self
-                .tab_menu
-                .set_wrap_around(self.settings.flag("menu.wrap_around")),
+            "menu.wrap_around" => {
+                let on = self.settings.flag("menu.wrap_around");
+                self.tab_menu.set_wrap_around(on);
+                self.menubar.set_wrap_around(on); // 메뉴 바 드롭다운도 같은 설정(T-143 · nexa-ui 156)
+            }
             "menu.char_jump" => self
                 .tab_menu
                 .set_char_jump(self.settings.flag("menu.char_jump")),
