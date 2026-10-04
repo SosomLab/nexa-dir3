@@ -51,6 +51,14 @@ pub(crate) fn fmt_rate(bps: u64) -> String {
     format!("{}/s", filelist::format_size(bps))
 }
 
+/// 크기 글(`24.5 MB`) → `(값, 단위)`(순수 · 빈칸이 없으면 단위 = 빈 글).
+pub(crate) fn split_size(text: &str) -> (String, String) {
+    match text.rsplit_once(' ') {
+        Some((n, u)) => (n.to_string(), u.to_string()),
+        None => (text.to_string(), String::new()),
+    }
+}
+
 /// 크기 글의 폭 견본 — **기본 너비 확보용**(사용자 10-04 "완전 고정이 아니라 되도록 변하지 않게"): 흔한 값(세 자리 + 소수
 /// 한 자리 · KB/MB/GB)의 폭을 미리 잡아 두고, 그보다 넓은 값이 오면 그때만 칸이 늘어난다. `suffix` = `/s` 등.
 fn size_hints(prefix: &str, suffix: &str) -> Vec<String> {
@@ -69,12 +77,42 @@ impl App {
         let load: Option<SysLoad> = self.load;
         let (up_c, down_c) = (self.theme.danger, self.theme.accent);
         let part = StatusPart::new;
+        // 시스템 상태 칸(C · M · D · N)은 상태줄 글꼴보다 1 작게(사용자 10-04 — 설정 숫자 기준 −1 → 글리프 px 증분).
+        // 칸 폭도 그 크기로 잰다(견본 포함) — 그만큼 좁아진다.
+        let sys_delta = self.sys_seg_font_delta();
         // 화살표 조각: `↑ 1.2 MB/s`(견본 = 화살표 + 가장 넓은 속도 글).
+        // 값 + 단위 두 조각: 값 = 칸 크기(−1) · **단위는 한 단계 더 작게(−2)**(사용자 10-04 — 상태줄 13이면 값 12 · 단위 11).
+        // 값이 없으면(조회 전) `–` + 기본 단위. `suffix` = `/s`.
+        let unit_delta = self.sys_unit_font_delta();
+        let sized =
+            |prefix: &str, v: Option<u64>, suffix: &str, color: Option<nexa_ctl::theme::Color>| {
+                let (num, unit) = match v {
+                    Some(b) => split_size(&filelist::format_size(b)),
+                    None => (dash(), "MB".to_string()),
+                };
+                let mut n = part(format!("{prefix}{num}")).hints(vec![format!("{prefix}999.9")]);
+                let mut u = part(format!("{unit}{suffix}"))
+                    .hints(
+                        ["KB", "MB", "GB"]
+                            .iter()
+                            .map(|x| format!("{x}{suffix}"))
+                            .collect(),
+                    )
+                    .font_delta(unit_delta);
+                if let Some(c) = color {
+                    n = n.color(c);
+                    u = u.color(c);
+                }
+                [n, u]
+            };
+        // 화살표 조각: `↑ 1.2` + `MB/s`.
         let arrow = |up: bool, v: Option<u64>| {
-            let a = if up { "↑ " } else { "↓ " };
-            part(format!("{a}{}", v.map_or_else(dash, fmt_rate)))
-                .color(if up { up_c } else { down_c })
-                .hints(size_hints(a, "/s"))
+            sized(
+                if up { "↑ " } else { "↓ " },
+                v,
+                "/s",
+                Some(if up { up_c } else { down_c }),
+            )
         };
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
@@ -96,35 +134,34 @@ impl App {
                     id,
                     vec![
                         part(tr("status.abbr.cpu")),
-                        part(load.map_or_else(dash, |l| format!("{:.1}%", l.cpu_pct)))
-                            .hints(vec!["100.0%".into()]),
+                        part(load.map_or_else(dash, |l| format!("{:.1}", l.cpu_pct)))
+                            .hints(vec!["100.0".into()]),
+                        part("%".to_string()).font_delta(unit_delta),
                     ],
-                ),
-                "mem" => StatusSeg::with_parts(
-                    id,
-                    vec![
-                        part(tr("status.abbr.mem")),
-                        part(load.map_or_else(dash, |l| filelist::format_size(l.mem_used)))
-                            .hints(size_hints("", "")),
-                    ],
-                ),
+                )
+                .font_delta(sys_delta),
+                "mem" => {
+                    let mut parts = vec![part(tr("status.abbr.mem"))];
+                    parts.extend(sized("", load.map(|l| l.mem_used), "", None));
+                    StatusSeg::with_parts(id, parts).font_delta(sys_delta)
+                }
                 "disk" => {
                     let d = load.and_then(|l| l.disk_bps);
                     let mut parts = vec![part(tr("status.abbr.disk"))];
-                    parts.extend(kids.iter().map(|k| match *k {
+                    parts.extend(kids.iter().flat_map(|k| match *k {
                         "read" => arrow(true, d.map(|v| v.0)),
                         _ => arrow(false, d.map(|v| v.1)),
                     }));
-                    StatusSeg::with_parts(id, parts)
+                    StatusSeg::with_parts(id, parts).font_delta(sys_delta)
                 }
                 "net" => {
                     let n = load.and_then(|l| l.net_bps);
                     let mut parts = vec![part(tr("status.abbr.net"))];
-                    parts.extend(kids.iter().map(|k| match *k {
+                    parts.extend(kids.iter().flat_map(|k| match *k {
                         "upload" => arrow(true, n.map(|v| v.1)),
                         _ => arrow(false, n.map(|v| v.0)),
                     }));
-                    StatusSeg::with_parts(id, parts)
+                    StatusSeg::with_parts(id, parts).font_delta(sys_delta)
                 }
                 // 이 프로그램의 메모리(누르면 메모리 창).
                 "appmem" => StatusSeg::with_parts(
@@ -138,6 +175,20 @@ impl App {
                 _ => StatusSeg::new(id, self.license_badge()),
             })
             .collect()
+    }
+
+    /// 시스템 상태 칸의 글꼴 크기 증분(논리 px): 상태줄 글꼴 설정 숫자에서 1을 뺀 크기와의 차이(최소 크기 8).
+    pub(crate) fn sys_seg_font_delta(&self) -> f32 {
+        let size = self.settings.font_px("statusbar.font_size");
+        let smaller = (size - 1.0).max(8.0);
+        self.ui_font.em_to_px(smaller) - self.ui_font.em_to_px(size)
+    }
+
+    /// 시스템 상태 칸의 **단위** 조각 글꼴 크기 증분(논리 px): 상태줄 글꼴 설정 숫자에서 2를 뺀 크기와의 차이(최소 8).
+    pub(crate) fn sys_unit_font_delta(&self) -> f32 {
+        let size = self.settings.font_px("statusbar.font_size");
+        let smaller = (size - 2.0).max(8.0);
+        self.ui_font.em_to_px(smaller) - self.ui_font.em_to_px(size)
     }
 
     /// 부하 칸이 하나라도 있는가.
@@ -695,6 +746,12 @@ mod tests {
             ]
         );
         assert_eq!(fmt_rate(0), "0 B/s");
+        assert_eq!(
+            split_size("24.5 MB"),
+            ("24.5".to_string(), "MB".to_string())
+        );
+        assert_eq!(split_size("0 B"), ("0".to_string(), "B".to_string()));
+        assert_eq!(split_size("–"), ("–".to_string(), String::new()));
         assert_eq!(fmt_rate(1536), "1.5 KB/s");
     }
 }

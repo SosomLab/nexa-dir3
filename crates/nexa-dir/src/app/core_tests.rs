@@ -2283,10 +2283,10 @@ fn status_segments_and_tab_status_bar() {
             .unwrap()
     };
     // 약어 + 값(조회 전 = –) · 디스크 = ↑ 읽기 ↓ 쓰기 · 네트워크 = ↑ 업로드 ↓ 다운로드 · 모든 칸을 누를 수 있다.
-    assert_eq!(text(&app, "cpu"), "C –");
-    assert_eq!(text(&app, "mem"), "M –");
-    assert_eq!(text(&app, "disk"), "D ↑ – ↓ –");
-    assert_eq!(text(&app, "net"), "N ↑ – ↓ –");
+    assert_eq!(text(&app, "cpu"), "C – %");
+    assert_eq!(text(&app, "mem"), "M – MB");
+    assert_eq!(text(&app, "disk"), "D ↑ – MB/s ↓ – MB/s");
+    assert_eq!(text(&app, "net"), "N ↑ – MB/s ↓ – MB/s");
     assert!(app.statusbar.segments().iter().all(|s| s.clickable));
     // ↑ = 빨강(danger) · ↓ = 파랑(accent) · 값 조각에는 폭 견본이 있다(기본 너비 확보).
     let net = app
@@ -2296,16 +2296,47 @@ fn status_segments_and_tab_status_bar() {
         .find(|s| s.id == "net")
         .cloned()
         .unwrap();
+    // 조각 = 약어 · (↑ 값 · 단위) · (↓ 값 · 단위) — 값과 단위가 같은 색 · 단위는 값보다 한 단계 더 작다.
+    assert_eq!(net.parts.len(), 5);
     assert_eq!(net.parts[1].color, Some(app.theme.danger));
-    assert_eq!(net.parts[2].color, Some(app.theme.accent));
-    assert!(net.parts[1].hints.iter().any(|h| h == "↑ 999.9 MB/s"));
+    assert_eq!(net.parts[2].color, Some(app.theme.danger));
+    assert_eq!(net.parts[3].color, Some(app.theme.accent));
+    assert!(net.parts[1].hints.iter().any(|h| h == "↑ 999.9"));
+    assert!(net.parts[2].hints.iter().any(|h| h == "MB/s"));
+    assert_eq!(net.parts[1].font_delta_c, None, "값 = 칸 크기(−1)");
+    assert_eq!(
+        net.parts[2].font_delta_c,
+        Some((app.sys_unit_font_delta() * 100.0).round() as i32),
+        "단위 = −2"
+    );
+    assert!(app.sys_unit_font_delta() < app.sys_seg_font_delta());
+    // 시스템 상태 칸(C · M · D · N) = 상태줄 글꼴보다 1 작게 · 탭 · 앱 메모리 · 라이선스는 그대로.
+    let delta = |id: &str| {
+        app.statusbar
+            .segments()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.font_delta_c)
+            .unwrap()
+    };
+    assert!(app.sys_seg_font_delta() < 0.0);
+    for id in ["cpu", "mem", "disk", "net"] {
+        assert_eq!(
+            delta(id),
+            (app.sys_seg_font_delta() * 100.0).round() as i32,
+            "{id}"
+        );
+    }
+    for id in ["tab", "appmem", "license"] {
+        assert_eq!(delta(id), 0, "{id}");
+    }
     // 부하: 첫 틱 = 메모리 · 주기 전 재조회 없음.
     let t0 = Instant::now();
     let next = app.status_load_tick(t0).expect("wake");
     assert!(next > t0);
     assert!(app.load.is_some_and(|l| l.mem_total > 0 && l.mem_used > 0));
     assert_eq!(app.status_load_tick(t0), Some(next), "주기 전 = 그대로");
-    assert!(text(&app, "mem").starts_with("M ") && text(&app, "mem") != "M –");
+    assert!(text(&app, "mem").starts_with("M ") && !text(&app, "mem").starts_with("M –"));
     assert_ne!(text(&app, "appmem"), "–");
     // 칸 클릭 = 상세 팝업(그 칸 위 · 조회 주기마다 내용 갱신) — CPU = 전체 + 이 프로그램.
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
