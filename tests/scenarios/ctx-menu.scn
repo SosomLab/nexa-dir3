@@ -18,7 +18,9 @@ cmd: @ready:ctx.dump:<out>/row.txt
 cmd: @ready:ctx.pick:edit.copy
 cmd: @ready:assert.ops:clip 1 copy
 cmd: @ready:quit
-check: bg.txt: bg shell:
+# 셸 배경 항목(`shell:` 묶음)은 Windows 셸 확장이 채운다 — 다른 OS는 자체 항목만(T-117).
+check@windows: bg.txt: bg shell:
+check@unix: bg.txt: bg
 check: bg.txt: edit.paste
 check: bg.txt: file.new_folder
 check: list.txt: New Folder

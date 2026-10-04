@@ -58,6 +58,22 @@ jobs:
       - name: scenarios (T4 · windows)
         if: runner.os == 'Windows'
         run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
+      # T-117: Linux는 화면이 없어 xvfb 가상 화면에서 돈다. **관찰 단계** — 처음 켜는 것이라 실패해도 빨강으로 만들지 않고
+      # (continue-on-error) 결과 표와 산출물을 본 뒤 필수로 올린다. `.scn`의 `키@os:` 줄이 OS 분기를 담는다.
+      - name: scenarios (T4 · linux xvfb · 관찰)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y xvfb
+          cargo build -q -p nexa-dir
+          xvfb-run -a -s "-screen 0 1280x900x24" cargo run -q -p ndir-check -- --ci
+      - name: scenarios 산출물(linux)
+        if: runner.os == 'Linux' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: t4-linux
+          path: nexa-dir3/tests/out
+          if-no-files-found: ignore
       # 예산 게이트(dir2 B2/B3 · docs/port/44 §3-4 ② · T-82): 릴리스 exe ≤ 10 MB(실측 10-03 5.2 MB) + 임포트 = OS 인박스 DLL만(정적 CRT).
       - name: budget (release exe ≤ 10 MB · imports inbox only · windows)
         if: runner.os == 'Windows'

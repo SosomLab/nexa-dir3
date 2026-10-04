@@ -5,7 +5,9 @@ tree: file a.txt 3
 settings: ui.lang=en
 settings: launcher.visible=on
 settings: launcher.seed=2
-settings: launcher.items=Shell|cmd.exe|/c exit
+# 실행 대상은 OS마다 다르다(T-117): Windows = cmd /c exit · Unix = /bin/sh -c exit.
+settings@windows: launcher.items=Shell|cmd.exe|/c exit
+settings@unix: launcher.items=Shell|/bin/sh|-c exit
 cmd: @ready:layout.dump:<out>/layout.txt
 cmd: @ready:launch:0
 cmd: @ready:launcher.dump:<out>/launcher.txt
@@ -16,4 +18,5 @@ cmd: @ready:quit
 check: layout.txt: launcher 0,53 1200x28 items 1
 check: layout2.txt: launcher 0,53 1200x0
 check: launcher.txt: last Shell launched
-check: launcher.txt: Shell|cmd.exe|/c exit
+check@windows: launcher.txt: Shell|cmd.exe|/c exit
+check@unix: launcher.txt: Shell|/bin/sh|-c exit

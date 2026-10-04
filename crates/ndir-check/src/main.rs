@@ -15,6 +15,8 @@
 //! exit: 0                      # 기대 종료 코드(기본 0)
 //! timeout: 20                  # 초(기본 20)
 //! check: <out>/panel.txt: caret Some(     # <파일>: <부분 문자열> · 앞에 `!` = 없어야 · 파일 `stderr` = 앱 stderr
+//! settings@windows: launcher.items=Shell|cmd.exe|/c exit   # 키 뒤 `@<os>` = 그 OS에서만 읽는 줄(T-117)
+//! settings@unix: launcher.items=Shell|/bin/sh|-c exit      # os = windows | linux | macos | unix(linux + macos)
 //! ```
 //!
 //! 사용: `ndir-check [--bin <nexa-dir 경로>] [--out <폴더>] [--filter <부분>] [--ci] [<.scn 파일|폴더>…]`
@@ -51,8 +53,33 @@ struct Scenario {
     timeout: Duration,
 }
 
-/// `.scn` 본문 → 시나리오(순수 · 시험). `id`가 없으면 오류.
+/// 이 실행기가 도는 OS 이름(`@<os>` 줄 판정용).
+fn host_os() -> &'static str {
+    if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    }
+}
+
+/// `@<os>` 꼬리표가 이 OS에 해당하는가(순수): windows · linux · macos · unix(= linux 또는 macos). 모르는 꼬리표 = `None`(오류).
+fn os_matches(tag: &str, os: &str) -> Option<bool> {
+    match tag {
+        "windows" | "linux" | "macos" => Some(tag == os),
+        "unix" => Some(os != "windows"),
+        _ => None,
+    }
+}
+
+/// `.scn` 본문 → 시나리오(이 OS 기준).
 fn parse(text: &str) -> Result<Scenario, String> {
+    parse_for(text, host_os())
+}
+
+/// `.scn` 본문 → 시나리오(순수 · 시험). `id`가 없으면 오류. 키 뒤 `@<os>`가 붙은 줄은 `os`가 맞을 때만 읽는다.
+fn parse_for(text: &str, os: &str) -> Result<Scenario, String> {
     let mut s = Scenario {
         id: String::new(),
         title: String::new(),
@@ -73,7 +100,16 @@ fn parse(text: &str) -> Result<Scenario, String> {
             .split_once(':')
             .ok_or_else(|| format!("line {}: expected `key: value`", n + 1))?;
         let v = v.trim();
-        match k.trim() {
+        // `키@os` = 그 OS에서만(다른 OS = 줄을 건너뛴다 · T-117: Windows 전제 줄과 Unix 대응 줄을 한 파일에).
+        let k = match k.trim().split_once('@') {
+            Some((key, tag)) => match os_matches(tag.trim(), os) {
+                Some(true) => key.trim(),
+                Some(false) => continue,
+                None => return Err(format!("line {}: unknown os tag `@{}`", n + 1, tag.trim())),
+            },
+            None => k.trim(),
+        };
+        match k {
             "id" => s.id = v.to_string(),
             "title" => s.title = v.to_string(),
             "tree" => {
@@ -483,6 +519,27 @@ mod tests {
         );
         assert!(parse("title: x\n").unwrap_err().contains("id"));
         assert!(parse("id: a\nbogus: 1\n").unwrap_err().contains("bogus"));
+        // OS 꼬리표(T-117): 맞는 OS의 줄만 읽는다 · unix = linux + macos · 모르는 꼬리표 = 오류.
+        assert_eq!(os_matches("windows", "windows"), Some(true));
+        assert_eq!(os_matches("windows", "linux"), Some(false));
+        assert_eq!(os_matches("unix", "linux"), Some(true));
+        assert_eq!(os_matches("unix", "macos"), Some(true));
+        assert_eq!(os_matches("unix", "windows"), Some(false));
+        assert_eq!(os_matches("macos", "linux"), Some(false));
+        assert_eq!(os_matches("bsd", "linux"), None);
+        let src = "id: a\nsettings@windows: k=w\nsettings@unix: k=u\nsettings: z=1\ncheck@linux: f.txt: only-linux\n";
+        let w = parse_for(src, "windows").unwrap();
+        assert_eq!(w.settings, ["k=w", "z=1"]);
+        assert!(w.checks.is_empty());
+        let l = parse_for(src, "linux").unwrap();
+        assert_eq!(l.settings, ["k=u", "z=1"]);
+        assert_eq!(l.checks.len(), 1);
+        let m = parse_for(src, "macos").unwrap();
+        assert_eq!(m.settings, ["k=u", "z=1"]);
+        assert!(m.checks.is_empty());
+        assert!(parse_for("id: a\ncmd@bsd: quit\n", "linux")
+            .unwrap_err()
+            .contains("@bsd"));
         assert!(parse("id: a\ntree: link x\n").is_err());
     }
 
