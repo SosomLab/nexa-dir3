@@ -6213,3 +6213,36 @@ fn dragging_selected_rows_starts_os_drag() {
     assert!(app.transfer.is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 메뉴 글자 키(UIK-221 · nexa-ui 155 · 설정 `menu.char_jump` 기본 on · T-149 16): 우클릭 메뉴가 열린 채 글자를 누르면 그 글자의
+/// 항목으로 간다(하나뿐이면 실행) · 끄면 종전대로 글자 키가 메뉴를 닫는다 · 글자는 목록의 타입어헤드로 새지 않는다.
+#[test]
+fn menu_letter_keys_pick_items() {
+    let (mut app, dir) = fixture("menuchar");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.settings.flag("menu.char_jump"), "기본 = 켬");
+    // `App::new`는 기동 배선(main.rs) 전이다 — 설정 적용 길목으로 넣는다.
+    app.after_setting_changed("menu.char_jump");
+    assert!(app.tab_menu.char_jump());
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    let caret = app.panels[0].rows().caret();
+    app.open_header_menu(); // 항목 1개("File columns…") — 'f' = 하나뿐 = 실행.
+    assert!(app.tab_menu.is_open());
+    app.route(InputEvent::Char { c: 'f', now_ms: 10 });
+    assert!(app.open_order, "글자 키 = 그 항목 실행(열 배치 편집 창)");
+    assert_eq!(
+        app.panels[0].rows().caret(),
+        caret,
+        "목록 타입어헤드로 새지 않는다"
+    );
+    // 끔 = 글자 키가 메뉴를 닫는다(실행 안 함).
+    app.open_order = false;
+    let _ = app.settings.set("menu.char_jump", "off");
+    app.after_setting_changed("menu.char_jump");
+    assert!(!app.tab_menu.char_jump());
+    app.open_header_menu();
+    app.route(InputEvent::Char { c: 'f', now_ms: 20 });
+    assert!(!app.tab_menu.is_open() && !app.open_order, "끔 = 닫기만");
+    let _ = std::fs::remove_dir_all(&dir);
+}

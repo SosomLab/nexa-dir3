@@ -640,6 +640,8 @@ impl App {
         app.tab_menu.set_overlay_scrollbar(true);
         app.tab_menu
             .set_wrap_around(app.settings.flag("menu.wrap_around"));
+        app.tab_menu
+            .set_char_jump(app.settings.flag("menu.char_jump"));
         app.apply_window_sizes();
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)

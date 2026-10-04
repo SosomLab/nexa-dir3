@@ -153,6 +153,9 @@ impl App {
             "menu.wrap_around" => self
                 .tab_menu
                 .set_wrap_around(self.settings.flag("menu.wrap_around")),
+            "menu.char_jump" => self
+                .tab_menu
+                .set_char_jump(self.settings.flag("menu.char_jump")),
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {
                 let v = self

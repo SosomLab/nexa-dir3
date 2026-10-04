@@ -872,6 +872,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 메뉴 글자 키로 항목 고르기 — dir3 신규(dir2는 네이티브 팝업이라 OS가 해 줬다 · UIK-221 · 기본 켜짐).
+    e!(
+        "menu.char_jump",
+        CAT_CTXMENU,
+        "pref.menuChar",
+        "pref.menuChar.desc",
+        Bool,
+        "on"
+    ),
     // ── 파일 목록 › 파일 전송
     e!(
         "transfer.close_ms",

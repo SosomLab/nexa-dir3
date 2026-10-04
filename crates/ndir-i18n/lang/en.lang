@@ -381,6 +381,8 @@ pref.launcherItemGap = Quick launcher: gap between icons (px)
 pref.launcherItemGap.desc = Space between icons in the quick launcher bar. 0 = icons touch.
 pref.menuWrap = Wrap-around menu navigation
 pref.menuWrap.desc = When moving through a menu with the Up/Down keys, Down on the last item jumps to the first and Up on the first item jumps to the last. When off, movement stops at both ends.
+pref.menuChar = Pick menu items by letter key
+pref.menuChar.desc = While a menu is open, pressing a letter goes to the item that starts with it. A single match runs immediately; several matches cycle with each press. When off, letter keys close the menu.
 pref.ctxMenuOrder = Context Menu Items
 pref.ctxMenuOrder.desc = Show/hide and reorder the app's own context menu items (shell verbs are not affected).
 pref.ctxm.grpRow = Item Menu
