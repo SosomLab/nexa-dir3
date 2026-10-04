@@ -43,7 +43,21 @@ pub(crate) struct ProgressWin {
     closing: Option<(u64, u64)>,
     /// 전송이 이 창을 쓰는 중(`reset` ~ 닫힘) — 창 생성 전/창 없는 시험에서도 `set_done`을 받는다.
     active: bool,
+    /// **덮어쓰기 질문을 이 창 안에서 묻는다**(사용자 10-04 — 따로 뜬 확인 창이 진행 창을 덮어 목록 · 진행이 안 보였다):
+    /// 질문 글(있으면 버튼 자리에 4버튼 · 창이 그만큼 커진다) · 버튼 · 고른 답(1회성 — 호스트가 꺼낸다).
+    conflict: Option<String>,
+    cf_btns: [Button; 4],
+    cf_choice: Option<i32>,
 }
+
+/// 충돌 질문이 있을 때 창이 더 커지는 높이(논리 px · 질문 두 줄 + 버튼 행).
+const CONFLICT_EXTRA_H: f32 = 78.0;
+/// 창 안쪽 크기(논리 px · dir2 DLG-059: 폭 400).
+const WIN_W: f32 = 400.0;
+const WIN_H: f32 = 132.0;
+/// 충돌 버튼의 답 id(대화상자와 같다): 1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 4 취소.
+const CF_IDS: [i32; 4] = [1, 2, 3, 4];
+const CF_KEYS: [&str; 4] = ["ops.yes", "ops.yesAll", "ops.skip", "ops.cancel"];
 
 impl ProgressWin {
     pub(crate) fn new() -> Self {
@@ -60,6 +74,51 @@ impl ProgressWin {
             cancelled: false,
             closing: None,
             active: false,
+            conflict: None,
+            cf_btns: CF_KEYS.map(|k| Button::new(tr(k))),
+            cf_choice: None,
+        }
+    }
+
+    /// 덮어쓰기 질문을 창 안에 띄운다(`Some(질문)`) · 거둔다(`None`) — 창 높이를 그만큼 늘리고 줄인다.
+    pub(crate) fn set_conflict(&mut self, question: Option<String>) {
+        if self.conflict == question {
+            return;
+        }
+        self.conflict = question;
+        self.cf_choice = None;
+        for (b, k) in self.cf_btns.iter_mut().zip(CF_KEYS) {
+            b.set_label(tr(k));
+            b.clear_transient();
+        }
+        if let Some(w) = &self.window {
+            let h = WIN_H
+                + if self.conflict.is_some() {
+                    CONFLICT_EXTRA_H
+                } else {
+                    0.0
+                };
+            let _ = w.request_inner_size(winit::dpi::LogicalSize::new(WIN_W, h));
+            w.focus_window();
+        }
+        self.layout();
+        self.redraw();
+    }
+
+    /// 창 안에서 질문 중인가.
+    pub(crate) fn conflict_pending(&self) -> bool {
+        self.conflict.is_some()
+    }
+
+    /// 사용자가 고른 답(1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 4 취소 — 1회성).
+    pub(crate) fn take_conflict_choice(&mut self) -> Option<i32> {
+        self.cf_choice.take()
+    }
+
+    /// 답을 고른다(버튼 · Esc = 취소 · 창 닫기 = 취소 · 기동 명령/시험).
+    pub(crate) fn pick_conflict(&mut self, id: i32) {
+        if self.conflict.is_some() {
+            self.cf_choice = Some(id);
         }
     }
 
@@ -132,6 +191,9 @@ impl ProgressWin {
     /// 틱: 닫기 카운트다운(1초마다 라벨 · 0 = 닫힘) · 버튼 애니메이션. 다시 그려야 하면 true.
     pub(crate) fn tick(&mut self, now_ms: u64) -> bool {
         let mut any = self.btn.tick(now_ms);
+        for b in &mut self.cf_btns {
+            any |= b.tick(now_ms);
+        }
         if let Some((remain, last)) = self.closing {
             let elapsed = now_ms.saturating_sub(last);
             if elapsed >= remain {
@@ -211,7 +273,15 @@ impl ProgressWin {
             return;
         }
         // dir2 DLG-059: 폭 400 · 소유자 중앙에서 110px 위.
-        let (lw, lh) = (400.0, 132.0);
+        let (lw, lh) = (
+            WIN_W,
+            WIN_H
+                + if self.conflict.is_some() {
+                    CONFLICT_EXTRA_H
+                } else {
+                    0.0
+                },
+        );
         let mut attrs = Window::default_attributes()
             .with_title(format!("Nexa Dir — {}", tr("ops.progressTitle")))
             .with_theme(theme)
@@ -239,6 +309,7 @@ impl ProgressWin {
         self.window = None;
         self.closing = None;
         self.active = false;
+        self.conflict = None;
         self.btn.clear_transient();
     }
 
@@ -252,13 +323,25 @@ impl ProgressWin {
         self.btn.set_scale(self.scale);
         self.btn
             .set_bounds(Rect::new(w - pad - bw, h - pad - bh, bw, bh), &mut inv);
+        // 충돌 버튼 4개 = 아래쪽 한 줄을 고르게 나눈다.
+        let gap = self.s(6.0);
+        let cw = (w - pad * 2 - gap * 3) / 4;
+        for (i, b) in self.cf_btns.iter_mut().enumerate() {
+            b.set_scale(self.scale);
+            b.set_bounds(
+                Rect::new(pad + (cw + gap) * i as i32, h - pad - bh, cw, bh),
+                &mut inv,
+            );
+        }
     }
 
     pub(crate) fn handle(&mut self, ev: &WindowEvent) -> ProgAction {
         match ev {
             WindowEvent::CloseRequested => {
-                // 진행 중 X = 취소 기록만(창 유지) · 닫기 모드 X = 즉시 닫힘.
-                if self.closing.is_some() {
+                // 질문 중 X = 취소(전체 중단) · 진행 중 X = 취소 기록만(창 유지) · 닫기 모드 X = 즉시 닫힘.
+                if self.conflict.is_some() {
+                    self.pick_conflict(4);
+                } else if self.closing.is_some() {
                     self.close();
                 } else {
                     self.cancelled = true;
@@ -279,7 +362,15 @@ impl ProgressWin {
             }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
                 if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Escape)) {
-                    self.press_button();
+                    if self.conflict.is_some() {
+                        self.pick_conflict(4);
+                    } else {
+                        self.press_button();
+                    }
+                } else if self.conflict.is_some()
+                    && matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Enter))
+                {
+                    self.pick_conflict(1); // Enter = 기본(덮어쓰기)
                 }
                 return ProgAction::None;
             }
@@ -287,7 +378,14 @@ impl ProgressWin {
                 self.cursor = (position.x as i32, position.y as i32);
                 let (x, y) = self.cursor;
                 let mut inv = Invalidations::default();
-                self.btn.on_event(&InputEvent::MouseMove { x, y }, &mut inv);
+                let mv = InputEvent::MouseMove { x, y };
+                if self.conflict.is_some() {
+                    for b in &mut self.cf_btns {
+                        b.on_event(&mv, &mut inv);
+                    }
+                } else {
+                    self.btn.on_event(&mv, &mut inv);
+                }
                 if !inv.is_empty() {
                     self.redraw();
                 }
@@ -306,6 +404,23 @@ impl ProgressWin {
                 };
                 let mut inv = Invalidations::default();
                 let p = Point { x, y };
+                if self.conflict.is_some() {
+                    let up = matches!(e, InputEvent::MouseUp { .. });
+                    let mut picked = None;
+                    for (b, id) in self.cf_btns.iter_mut().zip(CF_IDS) {
+                        if up || b.bounds().contains(p) {
+                            b.on_event(&e, &mut inv);
+                        }
+                        if b.take_clicked() {
+                            picked = Some(id);
+                        }
+                    }
+                    if let Some(id) = picked {
+                        self.pick_conflict(id);
+                    }
+                    self.redraw();
+                    return ProgAction::None;
+                }
                 if matches!(e, InputEvent::MouseUp { .. }) || self.btn.bounds().contains(p) {
                     self.btn.on_event(&e, &mut inv);
                 }
@@ -369,7 +484,22 @@ impl ProgressWin {
             self.bar
                 .set_bounds(Rect::new(pad, y, wi - pad * 2, th_txt.max(10)), &mut inv);
             self.bar.paint(&mut dc, th);
-            self.btn.paint(&mut dc, th);
+            match &self.conflict {
+                // 질문(막대 아래 두 줄까지 — 줄 바꿈 문자로 나눈 앞 두 줄 · 길면 가운데 생략) + 4버튼.
+                Some(q) => {
+                    let mut qy = y + th_txt.max(10) + (10.0 * s).round() as i32;
+                    for line in q.split('\n').take(2) {
+                        let l = nexa_ctl::draw::ellipsize_middle(&mut dc, line, wi - pad * 2);
+                        dc.text(pad, qy, clip, &l, th.text);
+                        qy += th_txt + (2.0 * s).round() as i32;
+                    }
+                    for (i, b) in self.cf_btns.iter().enumerate() {
+                        let _ = i;
+                        b.paint(&mut dc, th);
+                    }
+                }
+                None => self.btn.paint(&mut dc, th),
+            }
         }
         let _ = buf.present();
     }
@@ -423,6 +553,20 @@ mod tests {
         assert!(!w.tick(10_500), "같은 초 = 변화 없음");
         assert!(w.tick(11_100), "남은 0.9 s → (1)");
         assert_eq!(w.btn.label(), "Close (1)");
+        // 덮어쓰기 질문을 창 안에서: 질문 중에만 답을 받는다 · Esc/닫기 = 취소(4) · 거두면 답도 지운다.
+        let mut c = ProgressWin::new();
+        c.reset("Transferring...");
+        c.pick_conflict(1);
+        assert_eq!(c.take_conflict_choice(), None, "질문 중이 아니면 무시");
+        c.set_conflict(Some("'a.txt' already exists.".into()));
+        assert!(c.conflict_pending());
+        c.pick_conflict(2);
+        assert_eq!(c.take_conflict_choice(), Some(2));
+        assert_eq!(c.take_conflict_choice(), None, "1회성");
+        c.pick_conflict(3);
+        c.set_conflict(None);
+        assert!(!c.conflict_pending());
+        assert_eq!(c.take_conflict_choice(), None);
         assert!(w.tick(12_100), "만료 = 닫힘");
         assert!(!w.is_closing() && !w.is_open());
         assert!(

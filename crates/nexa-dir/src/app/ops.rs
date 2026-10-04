@@ -322,7 +322,26 @@ impl App {
         let Some(job) = &self.transfer else {
             return false;
         };
-        // 충돌 질문 수거 → 대화상자(동시 1건 · 작업 스레드는 회신까지 대기).
+        // 진행 창 안에서 묻던 덮어쓰기 질문의 답 → 워커에 회신(창이 닫혔으면 취소로 본다).
+        if self.conflict_inline.is_some() {
+            let choice = match self.progress_win.take_conflict_choice() {
+                Some(1) => Some(ConflictChoice::Overwrite),
+                Some(2) => Some(ConflictChoice::OverwriteAll),
+                Some(3) => Some(ConflictChoice::Skip),
+                Some(_) => Some(ConflictChoice::Cancel),
+                None if !self.progress_win.conflict_pending() => Some(ConflictChoice::Cancel),
+                None => None,
+            };
+            let Some(choice) = choice else {
+                return true; // 답을 기다린다
+            };
+            if let Some(tx) = self.conflict_inline.take() {
+                let _ = tx.send(choice);
+            }
+            self.progress_win.set_conflict(None);
+            return true;
+        }
+        // 충돌 질문 수거 → 진행 창 안 질문 또는 대화상자(동시 1건 · 작업 스레드는 회신까지 대기).
         if let Ok((path, tx)) = job.conflict_rx.try_recv() {
             self.conflict_ask(&path, tx);
             return true;

@@ -317,6 +317,8 @@ struct App {
     clip: Option<(Vec<PathBuf>, bool)>,
     /// 진행 중 전송(동시 1건).
     transfer: Option<app::ops::TransferJob>,
+    /// 진행 창 안에서 묻고 있는 덮어쓰기 질문의 회신 통로(워커가 기다린다 · app/dialogs.rs `conflict_ask`).
+    conflict_inline: Option<std::sync::mpsc::Sender<app::ops::ConflictChoice>>,
     /// 파일 작업 undo/redo(세션 한정 100).
     history: ndir_ops::history::OperationHistory,
     /// 플랫폼 포트 묶음(DR-5 · ADR-0001) — 운영 `Platform::native()` · 시험 `Platform::fake()`.
@@ -573,6 +575,7 @@ impl App {
             watch_next: Instant::now(),
             clip: None,
             transfer: None,
+            conflict_inline: None,
             history: ndir_ops::history::OperationHistory::default(),
             launcherbar,
             launcher_items,
