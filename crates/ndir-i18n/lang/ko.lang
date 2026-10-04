@@ -376,6 +376,8 @@ pref.launcherSize = 퀵 런처 아이콘 크기
 pref.launcherSize.desc = 퀵 런처 바 아이콘의 크기입니다. 바꾸면 바로 적용되고 바 높이도 따라 바뀝니다.
 pref.launcherItemGap = 퀵 런처: 아이콘 사이 간격(px)
 pref.launcherItemGap.desc = 퀵 런처 바에서 아이콘과 아이콘 사이의 간격입니다. 0 = 붙여서 배치.
+pref.menuWrap = 메뉴 순환 이동(Wrap-around)
+pref.menuWrap.desc = ↑/↓ 키로 메뉴를 이동할 때 마지막 항목에서 ↓를 누르면 처음으로, 처음 항목에서 ↑를 누르면 마지막으로 넘어갑니다. 끄면 양 끝에서 멈춥니다.
 pref.ctxMenuOrder = 컨텍스트 메뉴 항목
 pref.ctxMenuOrder.desc = 앱 고유 우클릭 메뉴 항목의 표시/숨김과 순서를 별도 창에서 변경합니다(셸 제공 항목은 대상 아님).
 pref.ctxm.grpRow = 항목 메뉴

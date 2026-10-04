@@ -614,6 +614,8 @@ impl App {
         }
         // 창보다 긴 우클릭 메뉴의 스크롤 막대 = 스크롤할 때만 나타나는 오버레이(사용자 10-04).
         app.tab_menu.set_overlay_scrollbar(true);
+        app.tab_menu
+            .set_wrap_around(app.settings.flag("menu.wrap_around"));
         app.apply_window_sizes();
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)

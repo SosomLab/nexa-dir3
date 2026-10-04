@@ -863,6 +863,15 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    // 메뉴 키보드 순환 이동(wrap-around) — dir3 신규(사용자 10-05 · 기본 켜짐 = 종전 동작 · 끝에서 ↓ = 처음).
+    e!(
+        "menu.wrap_around",
+        CAT_CTXMENU,
+        "pref.menuWrap",
+        "pref.menuWrap.desc",
+        Bool,
+        "on"
+    ),
     // ── 파일 목록 › 파일 전송
     e!(
         "transfer.close_ms",

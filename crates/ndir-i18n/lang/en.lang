@@ -379,6 +379,8 @@ pref.launcherSize = Quick launcher icon size
 pref.launcherSize.desc = Size of the quick launcher bar icons. Applied immediately; the bar height follows.
 pref.launcherItemGap = Quick launcher: gap between icons (px)
 pref.launcherItemGap.desc = Space between icons in the quick launcher bar. 0 = icons touch.
+pref.menuWrap = Wrap-around menu navigation
+pref.menuWrap.desc = When moving through a menu with the Up/Down keys, Down on the last item jumps to the first and Up on the first item jumps to the last. When off, movement stops at both ends.
 pref.ctxMenuOrder = Context Menu Items
 pref.ctxMenuOrder.desc = Show/hide and reorder the app's own context menu items (shell verbs are not affected).
 pref.ctxm.grpRow = Item Menu

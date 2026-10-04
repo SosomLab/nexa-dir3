@@ -379,6 +379,8 @@ pref.launcherSize = クイックランチャーのアイコンサイズ
 pref.launcherSize.desc = クイックランチャーバーのアイコンの大きさです。変更はすぐに反映され、バーの高さも変わります。
 pref.launcherItemGap = クイックランチャー: アイコン間の間隔(px)
 pref.launcherItemGap.desc = クイックランチャーバーのアイコン同士の間隔です。0 = 隙間なし。
+pref.menuWrap = メニューの循環移動（Wrap-around）
+pref.menuWrap.desc = ↑/↓ キーでメニューを移動するとき、最後の項目で ↓ を押すと先頭へ、先頭の項目で ↑ を押すと最後へ移動します。オフにすると両端で止まります。
 pref.ctxMenuOrder = コンテキストメニュー項目
 pref.ctxMenuOrder.desc = アプリ独自のコンテキストメニュー項目の表示/非表示と並べ替え (シェル動詞には影響しません)。
 pref.ctxm.grpRow = 項目メニュー

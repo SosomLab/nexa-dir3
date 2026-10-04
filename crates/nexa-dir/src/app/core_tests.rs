@@ -1394,6 +1394,24 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 설정 `menu.wrap_around`(메뉴 순환 이동 · 기본 on): 기동 때 메뉴 컨트롤에 들어가고 · 바꾸면 즉시 반영된다.
+#[test]
+fn menu_wrap_around_setting_reaches_the_menu() {
+    let (mut app, dir) = fixture("menuwrap");
+    assert!(app.settings.flag("menu.wrap_around") && app.tab_menu.wrap_around());
+    app.settings
+        .set("menu.wrap_around", "off")
+        .expect("menu.wrap_around");
+    app.after_setting_changed("menu.wrap_around");
+    assert!(!app.tab_menu.wrap_around());
+    app.settings
+        .set("menu.wrap_around", "on")
+        .expect("menu.wrap_around");
+    app.after_setting_changed("menu.wrap_around");
+    assert!(app.tab_menu.wrap_around());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 전송 결과의 "건너뜀" 수: 취소면 손대지 못한 항목까지(3개 중 첫 질문에서 취소 = 3) · 취소가 아니면 엔진 값 그대로 ·
 /// 전송 · 실패한 항목은 빼고 센다.
 #[test]

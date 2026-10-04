@@ -148,6 +148,10 @@ impl App {
                 self.layout();
             }
             "list.icon_overrides" => self.apply_icon_overrides(),
+            // 메뉴 키보드 순환 이동(wrap-around) — 우클릭 · 탭 · 상태줄 메뉴 공통(같은 메뉴 컨트롤).
+            "menu.wrap_around" => self
+                .tab_menu
+                .set_wrap_around(self.settings.flag("menu.wrap_around")),
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {
                 let v = self
