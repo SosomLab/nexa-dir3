@@ -12,7 +12,7 @@
 | B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
 | CI | 119 | 119 | 92 | 27 | 0 | 0 | 0 |
 | CLOUD | 99 | 99 | 1 | 0 | 0 | 0 | 0 |
-| CMD | 430 | 430 | 180 | 140 | 110 | 0 | 0 |
+| CMD | 430 | 430 | 186 | 134 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
 | GUI | 95 | 95 | 30 | 35 | 30 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 40 | 134 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2419 | 997 | 765 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2425 | 991 | 765 | 0 | 0 |
 
 ## 행
 
@@ -281,7 +281,7 @@
 | CMD-056~062 | 퀵 런처 토글 · 네비 바(홈·뒤·앞·위) · 탭 바([+]·닫기) 버튼 | `panel.rs`(navbtns·tabbar) · `app/menus.rs` | T3 | `tabs_and_panels` · `launcher_bar_layout_and_launch` · 네비 core 시험 | ✅ | 버튼별 ID 대조 행 없음(동작은 시험) · 10-05 §12 정리: 시험 이름 정정(`tabs_and_panels`는 없음) → `nav_buttons_and_path_edit` · `tabs_open_switch_close_keep_at_least_one` · `launcher_bar_layout_and_launch` |
 | CMD-068~082 | 행/배경 컨텍스트 메뉴 항목(셸 실행 · 삭제 · 이름 바꾸기 · 잘라내기/복사 · 경로/이름 복사 · 완전 삭제 · 폴더에 붙여넣기 · 새로 만들기 · 배경 붙여넣기 · undo/redo) | `app/ctxmenu.rs` | T3 | `row_and_background_context_menus` · `row_menu_new_submenu_creates_from_template` · `dialogs_delete_permanent_and_paste_conflict` | ✅ | 076(폴더에 붙여넣기)·080 실기 |
 | CMD-086~096 | 텍스트 편집 컨텍스트 팝업(경로바·이름 바꾸기·도크 텍스트·터미널 — 되돌리기/잘라내기/복사/붙여넣기/삭제/전체 선택/서식 복사) | nexa-ctl `EditCtxAction`(TextBox) · `termview` 복사 | T2 | nexa-ctl TextBox 시험 · `fixed_columns_horizontal_scroll_and_mouse_report`(HTML 복사) | 🚧 | 도크 텍스트 선택/복사 ✅(T-62 C-3) · 터미널 붙여넣기 CR 변환 실기 · 경로 바 편집 중 Ctrl+C/X/V/Z = 글자 편집 ✅ §78(`path_edit` · `path_edit_shortcuts_edit_text_not_files` · GAP-011) · 경로 바 편집 우클릭 6항목 메뉴 · 더블클릭 전체 선택 ✅ §86(`open_path_edit_menu` · `path_edit_right_click_opens_text_menu` · GAP-012 · dir2 win.rs:7472-7532 · 8638-8647 — 누를 때 열림이 dir2와 다름) |
-| CMD-097~099 · 102~104 | 도구 모음/헤더 우클릭 → 순서 편집 창 · 설정 창 · 컬럼 편집 · 일괄 이름 변경 프리셋 불러오기/저장/관리 | `order_win.rs` · `bulk_win.rs` · `app/bulk.rs` | T3 | `order_editor_applies_toolbar_ctxmenu_and_columns` · `bulk_rename_window_apply_undo_and_presets` | 🚧 | 우클릭 진입점 ✅ 10-04 §13(툴바 우클릭 = 도구 모음 순서 · 설정 · a29094b · `toolbar_and_launcher_right_click_menus` · dir2와 달리 버튼 위에서도 뜸) · 프리셋 관리 = 폴더 열기 · 10-05 §12 정리: ⚠ 머리글 우클릭 → 열 배치 편집 경로 없음(panel.rs 머리글 우클릭 = `pending_ctx` 배경 셸 메뉴 · WINB-117 · dir2 win.rs:6264) |
+| CMD-097~099 · 102~104 | 도구 모음/헤더 우클릭 → 순서 편집 창 · 설정 창 · 컬럼 편집 · 일괄 이름 변경 프리셋 불러오기/저장/관리 | `order_win.rs` · `bulk_win.rs` · `app/bulk.rs` | T3 | `order_editor_applies_toolbar_ctxmenu_and_columns` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 우클릭 진입점 ✅ 10-04 §13(툴바 우클릭 = 도구 모음 순서 · 설정 · a29094b · `toolbar_and_launcher_right_click_menus` · dir2와 달리 버튼 위에서도 뜸) · 프리셋 관리 = 폴더 열기 · 10-05 §12 정리: ⚠ 머리글 우클릭 → 열 배치 편집 경로 없음(panel.rs 머리글 우클릭 = `pending_ctx` 배경 셸 메뉴 · WINB-117 · dir2 win.rs:6264) · 10-05 §18 수정(dca2406): 머리글 자리 우클릭 = `pending_header_menu` → `open_header_menu`("파일 컬럼…" `aux.col.order`) → `open_order_editor("list.col_layout")` · 시험 `header_right_click_opens_column_layout_menu` · dir2 win.rs:6262-6304 |
 | CMD-105~116 | 하위 창 버튼(미리보기 창 · 삭제 확인 · 재프로브 · 충돌 4버튼 · 인증 URL · 위치 선택) | `preview_win.rs` · `dlg_win.rs` · `app/dialogs.rs` | T3 | `dialogs_delete_permanent_and_paste_conflict` · `preview_window` 시험 | 🚧 | 114(클라우드) 미이식 · 116 PositionDropdown ✅ · 10-05 §12 정리: 105~111 · 113 · 116 ✅(111 = e66a973 `delete_asks_first_when_items_are_in_use`) · 112 삭제 실패 → 남은 항목 선택 + [다시 시도]/[닫기] ✅ 10-05 §17(1233db2 · 아래 행) · 114/115 클라우드 대기 |
 | CMD-160~259 | 컨텍스트 메뉴·팝업 지역 **숫자** ID 대역(셸 1..0x6FFF · New 0x7000 · 고유 0x8000+) | — | — | — | ⚠ | dir3는 문자열 id(SHELL-013 N 판정) — 대역 개념 없음 |
 | CMD-260~286 · 330~356 | 단축키 문맥 ①~③(경로바 편집 · 터미널 포커스 · 인라인 이름 바꾸기) · Alt/시스템 키 · 하위 창 공용 키 | `app/input.rs` · `termview.rs` · 각 창 `handle` | T3 | `route_and_commands_without_window` · 창별 Esc/Enter 시험 | 🚧 | 문맥 ④ 전역(287~329)은 별도 행 ✅ |
