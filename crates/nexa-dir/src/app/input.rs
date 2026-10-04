@@ -600,6 +600,15 @@ impl App {
         }
         for i in 0..2 {
             self.panels[i].drain_actions(inv);
+            if let Some(alias) = self.panels[i].take_alias() {
+                // `shell:` 별칭(dir2 shellpath.rs): 풀리면 그 폴더로 · 못 풀면 원문 그대로 열어 본다(열기 실패 = 자리 유지).
+                let target = self
+                    .platform
+                    .opener
+                    .resolve_alias(&alias)
+                    .unwrap_or_else(|| PathBuf::from(&alias));
+                let _ = self.panels[i].navigate_to(target, inv);
+            }
             if let Some(path) = self.panels[i].take_open() {
                 self.open_external(&path);
             }

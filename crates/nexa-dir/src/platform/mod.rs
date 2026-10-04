@@ -305,6 +305,12 @@ pub(crate) trait Opener {
     fn link_target(&self, _path: &Path) -> Option<PathBuf> {
         None
     }
+    /// **`shell:` 특수 폴더 별칭** → 실제 폴더 경로(dir2 shellpath.rs — 탐색기와 같은 이름: `shell:startup` · `shell:downloads` ·
+    /// `shell:sendto` · `shell:::{GUID}`). 모르는 이름 · 파일 시스템 경로가 없는 가상 폴더 · 이 스킴이 없는 OS = `None`
+    /// (호출부는 원문 그대로 열어 보고 "열기 실패 = 자리 유지"로 처리한다).
+    fn resolve_alias(&self, _input: &str) -> Option<PathBuf> {
+        None
+    }
 }
 
 pub(crate) trait Disk {

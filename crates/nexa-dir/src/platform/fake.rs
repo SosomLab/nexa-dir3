@@ -15,6 +15,8 @@ pub(crate) struct FakeLog {
     pub clipboard: Option<(Vec<PathBuf>, bool)>,
     pub changed: Vec<PathBuf>,
     pub open_fails: bool,
+    /// 주입: `shell:` 별칭 표(`resolve_alias` — 이름은 소문자로 비교).
+    pub aliases: Vec<(String, PathBuf)>,
     /// 주입: 바로 가기 대상(`link_target`이 돌려줄 값).
     pub link_target: Option<PathBuf>,
     pub watched: Vec<PathBuf>,
@@ -223,6 +225,16 @@ impl Watcher for FakeWatch {
 }
 
 impl Opener for FakeOpen {
+    fn resolve_alias(&self, input: &str) -> Option<PathBuf> {
+        let key = input.trim().to_lowercase();
+        self.0
+            .borrow()
+            .aliases
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, p)| p.clone())
+    }
+
     fn open(&self, path: &Path) -> Result<(), PlatformError> {
         note(&self.0, format!("open:{}", path.display()));
         if self.0.borrow().open_fails {

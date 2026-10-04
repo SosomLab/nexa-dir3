@@ -8,6 +8,15 @@
 //! - [`suggest_folders`]: 입력을 "베이스 폴더 + 마지막 세그먼트 접두사"로 분해해
 //!   일치하는 하위 폴더 전체 경로 목록(탐색기식 — 구분자 입력=전체 목록, 타이핑=필터).
 
+/// `shell:` 특수 폴더 스킴인가(dir2 shellpath.rs:16-27 — `shell:startup` · `shell:downloads` · `shell:::{GUID}` · 대소문자 무시).
+/// 바이트 슬라이스 금지: 6번째 바이트가 다중 바이트 글자 중간이면 `[..6]`이 panic한다(dir2 09-22 설치본 크래시) → `get`.
+pub(crate) fn is_shell_scheme(input: &str) -> bool {
+    input
+        .trim()
+        .get(..6)
+        .is_some_and(|p| p.eq_ignore_ascii_case("shell:"))
+}
+
 /// 환경변수 확장 — 원본 PathInterpreter.Expand 대응.
 pub(crate) fn expand_env(input: &str) -> String {
     let mut s = input.trim().to_string();

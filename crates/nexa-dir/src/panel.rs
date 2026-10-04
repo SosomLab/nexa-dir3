@@ -86,6 +86,8 @@ pub(crate) struct Panel {
     pending_ctx: Option<bool>,
     /// 열 머리글 우클릭(메뉴 표시는 호스트 · 1회성 — dir2 win.rs:6262 `show_bar_popup(false)`).
     pending_header_menu: bool,
+    /// 경로 바에 넣은 `shell:` 별칭(해석은 호스트의 플랫폼 포트 · 1회성 — dir2 panel.rs:1530).
+    pending_alias: Option<String>,
     /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
     pending_path_menu: bool,
     session_dirty: bool,
@@ -245,6 +247,7 @@ impl Panel {
             pending_rename: None,
             pending_ctx: None,
             pending_header_menu: false,
+            pending_alias: None,
             pending_path_menu: false,
             session_dirty: false,
             m_icon_scale: 1.0,
@@ -519,6 +522,10 @@ impl Panel {
 
     pub(crate) fn take_ctx(&mut self) -> Option<bool> {
         self.pending_ctx.take()
+    }
+
+    pub(crate) fn take_alias(&mut self) -> Option<String> {
+        self.pending_alias.take()
     }
 
     pub(crate) fn take_header_menu(&mut self) -> bool {
@@ -1859,7 +1866,12 @@ impl Panel {
         if let Some(path) = self.pathbar.take_navigation() {
             // 입력 해석(dir2 PathInterpreter): 감싼 따옴표 제거 · `%VAR%` · `$env:VAR` 확장 — 미정의 변수는 원문 그대로(열기 실패로 드러난다).
             let path = crate::pathinput::expand_env(&path);
-            let _ = self.navigate_to(PathBuf::from(path), inv);
+            if crate::pathinput::is_shell_scheme(&path) {
+                // `shell:` 별칭 = OS가 해석한다(패널은 OS를 모른다 — 호스트가 포트로 풀어 이동).
+                self.pending_alias = Some(path);
+            } else {
+                let _ = self.navigate_to(PathBuf::from(path), inv);
+            }
         }
         if self.tabs[self.active].rows.take_col_resized() {
             self.user_cols = true;

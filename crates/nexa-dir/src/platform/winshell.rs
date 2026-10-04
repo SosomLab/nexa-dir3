@@ -938,3 +938,54 @@ mod tests {
         assert!(bgra_to_rgba(&[]).is_empty());
     }
 }
+
+/// `shell:` 별칭 → 폴더 경로(dir2 shellpath.rs:16-45): 셸의 정식 해석기 `SHParseDisplayName`에 맡긴다 — KnownFolders에 등록된
+/// 이름 전부(앞으로 OS가 추가하는 것까지)를 표 없이 받는다. 모르는 이름 · 파일 시스템 경로가 없는 가상 폴더 = `None`.
+pub(crate) fn resolve_shell_alias(input: &str) -> Option<PathBuf> {
+    use ::windows::Win32::UI::Shell::{SHGetPathFromIDListEx, GPFIDL_DEFAULT};
+    let wide: Vec<u16> = input
+        .trim()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: 셸 COM — 이미 초기화된 STA면 S_FALSE(무시) · `wide`는 NUL로 끝나고 호출 동안 살아 있다 · PIDL은 CoTaskMemFree.
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+        if SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut pidl, 0, None).is_err() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let ok = SHGetPathFromIDListEx(pidl, &mut buf, GPFIDL_DEFAULT).as_bool();
+        CoTaskMemFree(Some(pidl as *const core::ffi::c_void));
+        if !ok {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Some(PathBuf::from(String::from_utf16_lossy(&buf[..end])))
+    }
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use super::resolve_shell_alias;
+
+    /// dir2 shellpath.rs 시험 이식: 대표 이름 · 대소문자 무시 · 모르는 이름 = None.
+    #[test]
+    fn resolves_known_shell_names() {
+        let startup = resolve_shell_alias("shell:startup").expect("startup");
+        assert!(
+            startup
+                .to_string_lossy()
+                .to_lowercase()
+                .ends_with("startup"),
+            "{startup:?}"
+        );
+        let dl = resolve_shell_alias("Shell:Downloads").expect("downloads");
+        assert!(
+            dl.to_string_lossy().to_lowercase().contains("downloads"),
+            "{dl:?}"
+        );
+        assert_eq!(resolve_shell_alias("shell:no-such-folder-xyz"), None);
+    }
+}

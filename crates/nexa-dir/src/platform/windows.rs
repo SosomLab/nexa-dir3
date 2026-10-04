@@ -50,6 +50,10 @@ pub(super) fn opener() -> NativeOpener {
 }
 
 impl Opener for NativeOpener {
+    fn resolve_alias(&self, input: &str) -> Option<PathBuf> {
+        super::winshell::resolve_shell_alias(input)
+    }
+
     fn open(&self, path: &Path) -> Result<(), PlatformError> {
         let file = wide(path);
         let verb: Vec<u16> = "open\0".encode_utf16().collect();

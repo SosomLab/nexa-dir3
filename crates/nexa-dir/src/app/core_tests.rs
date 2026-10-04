@@ -5450,3 +5450,43 @@ fn watch_reload_waits_while_renaming() {
     assert!(app.watch_deferred.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 경로 바 `shell:` 별칭(dir2 shellpath.rs:16-45 · T-149 19): 풀리면 그 폴더로 이동 · 못 풀면 자리 유지 · 스킴 판정은 다중 바이트에 안전.
+#[test]
+fn path_bar_resolves_shell_alias() {
+    use crate::pathinput::is_shell_scheme;
+    assert!(is_shell_scheme("shell:startup") && is_shell_scheme(" Shell:Downloads "));
+    assert!(is_shell_scheme(
+        "shell:::{645FF040-5081-101B-9F08-00AA002F954E}"
+    ));
+    for s in [
+        "C:\\Windows",
+        "shel",
+        "",
+        "C:\\ㅔ",
+        "ㅔㅔ",
+        "다운로드",
+        "shelㅔ",
+    ] {
+        assert!(!is_shell_scheme(s), "{s}");
+    }
+    let (mut app, dir) = fixture("alias");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let log = app.platform.log.clone().expect("fake log");
+    log.borrow_mut().aliases = vec![("shell:fake".into(), sub.clone())];
+    let submit = |app: &mut App, text: &str| {
+        let mut inv = Invalidations::default();
+        app.panels[0].pathbar.begin_edit(&mut inv);
+        app.panels[0]
+            .pathbar
+            .edit_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+        app.startup_cmd(&format!("ui.type:{text}"));
+        app.startup_cmd("ui.press:enter");
+    };
+    submit(&mut app, "Shell:Fake");
+    assert_eq!(app.panels[0].root_path(), sub, "별칭 = 그 폴더로");
+    submit(&mut app, "shell:unknown");
+    assert_eq!(app.panels[0].root_path(), sub, "모르는 별칭 = 자리 유지");
+    let _ = std::fs::remove_dir_all(&dir);
+}
