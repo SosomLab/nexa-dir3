@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `128b958`(142차) · nexa-license `54c8d71` · nexa-dir3 `245269c`. 마지막 전수(full · nexa-ui 128b958 위): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI 332e970까지 3-OS 녹색.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `a8442b2`(143차) · nexa-license `54c8d71` · nexa-dir3 `bb7da08`. 마지막 전수(full · nexa-ui a8442b2 위): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI 245269c까지 3-OS 녹색.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
@@ -16,10 +16,20 @@
 
 ---
 
+## 10-04 123차 — 두 줄 칸 여백 최소화(줄 글꼴 12 px)
+
+- **한 일**: 디스크 · 네트워크 두 줄 칸의 상하 · 줄 사이 여백을 최소로(줄 글꼴 9.5 → 12 px · 잉크 높이 실측) · nexa-ui 143차 세로 줄 띠 누적 비율 분할.
+- **지금 상태**: bb7da08 앱 재시작(PID 470654). CI 245269c 성공 · bb7da08 감시 중.
+- **걸린 것**: 두 줄 겹침/잘림 화면 판정 · nexa-ui 단계형 게이트 여부(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
+
+→ [journal/2026-10-04 §20](journal/2026-10-04.md)
+
+---
+
 ## 10-04 122차 — 디스크 · 네트워크 칸 = 두 줄(↑ · ↓) · 글꼴 차등 철회
 
 - **한 일**: 상태줄 D/N 칸을 위 ↑ · 아래 ↓ 두 줄로 쌓기(9.5 px 고정 · 상태줄 글꼴과 무관) · nexa-ui 142차 `StatusSeg.rows` · §18의 값 −1 · 단위 −2 철회(C/M = 한 줄 · 상태줄 글꼴).
-- **지금 상태**: 245269c 앱 재시작(PID 464273). CI 332e970 성공 · 245269c 감시 중.
+- **지금 상태**: 245269c 앱 재시작(PID 464273). CI 332e970 · 245269c 성공.
 - **걸린 것**: 9.5 px 두 줄 가독성 화면 판정 · nexa-ui 단계형 게이트 여부(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
 
 → [journal/2026-10-04 §19](journal/2026-10-04.md)
