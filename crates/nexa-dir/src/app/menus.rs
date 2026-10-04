@@ -477,9 +477,15 @@ impl App {
             Some("split") => ScrollButtons::Split,
             _ => ScrollButtons::End,
         };
+        let dbl = self
+            .settings
+            .get("tabs.dblclick")
+            .unwrap_or("close")
+            .to_string();
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.set_tab_style(multiline, buttons, &mut inv);
+            p.set_tab_dblclick(&dbl);
         }
         self.layout();
         self.redraw();

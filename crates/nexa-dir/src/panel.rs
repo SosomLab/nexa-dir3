@@ -75,6 +75,8 @@ pub(crate) struct Panel {
     pending_open: Option<PathBuf>,
     /// 탭 우클릭 메뉴 요청(표시는 호스트 · 1회성).
     pending_tab_menu: Option<usize>,
+    /// 탭 본체 더블클릭 동작(설정 `tabs.dblclick` · 기본 닫기).
+    tab_dbl: TabDbl,
     /// 인라인 이름 바꾸기 확정(행, 새 이름) — 실행(fs)은 호스트(`App::apply_rename`).
     pending_rename: Option<(usize, String)>,
     /// 목록 우클릭(행 위 = true · 빈 영역 = false) — 호스트가 컨텍스트 메뉴를 연다.
@@ -183,6 +185,25 @@ fn nav_buttons() -> Toolbar {
     t
 }
 
+/// 탭 본체 더블클릭 동작(설정 `tabs.dblclick` · dir2 `tab_dblclick`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum TabDbl {
+    Close,
+    Pin,
+    Lock,
+}
+
+impl TabDbl {
+    /// 설정 값 → 동작(dir2와 같이 모르는 값 = 닫기).
+    pub(crate) fn parse(value: &str) -> Self {
+        match value {
+            "pin" => Self::Pin,
+            "lock" => Self::Lock,
+            _ => Self::Close,
+        }
+    }
+}
+
 impl Panel {
     /// 첫 탭을 `path`로 시작(열기 실패여도 패널은 만들어진다 — 빈 목록 + 오류 문구).
     pub(crate) fn new(path: &Path, opts: ListOpts, m: PanelMetrics, columns: Vec<Column>) -> Panel {
@@ -214,6 +235,7 @@ impl Panel {
             base_columns: Vec::new(),
             pending_open: None,
             pending_tab_menu: None,
+            tab_dbl: TabDbl::Close,
             pending_rename: None,
             pending_ctx: None,
             pending_path_menu: false,
@@ -1443,6 +1465,11 @@ impl Panel {
         inv.push(self.bounds);
     }
 
+    /// 탭 본체 더블클릭 동작(설정 `tabs.dblclick` 값 — close/pin/lock · 모르는 값 = 닫기).
+    pub(crate) fn set_tab_dblclick(&mut self, value: &str) {
+        self.tab_dbl = TabDbl::parse(value);
+    }
+
     /// 탭 바 줄 수가 바뀌었는가(그리기가 측정 · 1회성) — 참이면 호스트가 다시 배치한다(dir2 win.rs:4941).
     pub(crate) fn take_tab_lines_changed(&self) -> bool {
         self.tabbar.take_lines_changed()
@@ -1596,6 +1623,19 @@ impl Panel {
                 // 경로 편집 필드 더블클릭 = 전체 선택(dir2 win.rs:8638-8647).
                 if self.path_edit_at(x, y) {
                     self.pathbar.edit_key(EditKey::SelectAll, false, inv);
+                    return;
+                }
+                // 탭 본체 더블클릭 = 설정 동작(dir2 win.rs:8648-8657 · 기본 닫기) · 탭 바 빈 곳 더블클릭 = 새 탭(win.rs:8658-8665).
+                if let Some(ti) = self.tabbar.tab_index_at(x, y) {
+                    match self.tab_dbl {
+                        TabDbl::Pin => self.toggle_tab_pin(ti, inv),
+                        TabDbl::Lock => self.toggle_tab_lock(ti, inv),
+                        TabDbl::Close => self.close_tab(ti, inv),
+                    }
+                    return;
+                }
+                if self.tabbar.empty_area_at(x, y) {
+                    self.new_tab(inv);
                     return;
                 }
                 if let Some(part) = self.part_at(Point { x, y }) {

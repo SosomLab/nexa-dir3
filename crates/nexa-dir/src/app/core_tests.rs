@@ -5181,3 +5181,70 @@ fn nav_shortcuts_work_through_the_keymap() {
     assert!(!press(&mut app, "a"), "글자 = 타이핑");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 탭 더블클릭(dir2 win.rs:8648-8665 · T-149 3): 본체 = 설정 `tabs.dblclick`(기본 닫기 · pin · lock) · 탭 바 빈 곳 = 새 탭.
+/// 종전 dir3 = 설정 키만 있고 읽는 곳이 없었다.
+#[test]
+fn tab_double_click_follows_setting_and_empty_area_opens_tab() {
+    let (mut app, dir) = fixture("tabdbl");
+    app.layout_for(1200, 800, 1.0);
+    app.apply_tab_style();
+    let paint = |app: &mut App| {
+        for _ in 0..2 {
+            let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+            app.paint_into(&mut rec, 1200, 800, 1.0);
+        }
+    };
+    let dbl = |app: &mut App, x: i32, y: i32| {
+        app.route(InputEvent::DoubleClick {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        });
+    };
+    let mid = |app: &App, i: usize| {
+        let r = app.panels[0].tab_rect(i).expect("tab rect");
+        (r.x + 8, r.y + r.h / 2)
+    };
+    app.command("file.new_tab");
+    app.command("file.new_tab");
+    paint(&mut app);
+    assert_eq!(app.panels[0].tab_count(), 3);
+    // 기본 = 닫기.
+    let (x, y) = mid(&app, 1);
+    dbl(&mut app, x, y);
+    assert_eq!(app.panels[0].tab_count(), 2, "기본 = 닫기");
+    paint(&mut app);
+    // 빈 곳 = 새 탭.
+    let bar = app.panels[0].tabbar_bounds();
+    let (ex, ey) = (bar.x + bar.w - 4, bar.y + bar.h / 2);
+    assert!(app.panels[0].tabbar.empty_area_at(ex, ey), "빈 곳");
+    dbl(&mut app, ex, ey);
+    assert_eq!(app.panels[0].tab_count(), 3, "빈 곳 = 새 탭");
+    paint(&mut app);
+    // lock: 잠금 토글(닫지 않는다) · 잠긴 탭은 닫기 설정으로도 안 닫힌다.
+    let _ = app.settings.set("tabs.dblclick", "lock");
+    app.after_setting_changed("tabs.dblclick");
+    let (x, y) = mid(&app, 1);
+    dbl(&mut app, x, y);
+    assert_eq!(app.panels[0].tab_count(), 3);
+    assert!(app.panels[0].tab_locked(1), "lock = 잠금");
+    let _ = app.settings.set("tabs.dblclick", "close");
+    app.after_setting_changed("tabs.dblclick");
+    dbl(&mut app, x, y);
+    assert_eq!(app.panels[0].tab_count(), 3, "잠긴 탭은 안 닫힌다");
+    // pin: 고정 토글 → 핀 그룹(맨 앞)으로.
+    let _ = app.settings.set("tabs.dblclick", "pin");
+    app.after_setting_changed("tabs.dblclick");
+    paint(&mut app);
+    let (x, y) = mid(&app, 2);
+    dbl(&mut app, x, y);
+    assert!(app.panels[0].tab_pinned(0), "pin = 고정 · 맨 앞으로");
+    assert_eq!(app.panels[0].tab_count(), 3);
+    assert_eq!(
+        crate::panel::TabDbl::parse("?"),
+        crate::panel::TabDbl::Close
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
