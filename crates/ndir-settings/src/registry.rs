@@ -517,6 +517,16 @@ pub const REGISTRY: &[Entry] = &[
         Size { min: 8, max: 32 },
         "12"
     ),
+    // 성능 향상 모드(docs/22 NEW-008 · DR-18 — 1차): 켜면 무거운 부가 기능을 끈다. 지금 덮는 것 = 상태줄의 시스템 상태
+    // 모니터링(CPU · 메모리 · 디스크 · 네트워크 · 앱 메모리 칸과 주기 조회 — 사용자 10-04). 저장값은 건드리지 않는다.
+    e!(
+        "perf.boost",
+        CAT_APPEARANCE,
+        "pref.perfBoost",
+        "pref.perfBoost.desc",
+        Bool,
+        "off"
+    ),
     // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
     e!(
         "statusbar.layout",
@@ -1515,6 +1525,8 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
+    // 성능 향상 모드가 켜져 있으면 시스템 상태 조회 주기는 쓰이지 않는다.
+    ("statusbar.load_interval_ms", "perf.boost", Dep::Eq("off")),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (

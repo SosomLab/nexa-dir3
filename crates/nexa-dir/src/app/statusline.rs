@@ -46,6 +46,11 @@ pub(crate) fn status_items_of(value: &str) -> Vec<StatusBlock> {
         .collect()
 }
 
+/// 시스템 상태를 주기적으로 조회해야 하는 칸인가(성능 향상 모드에서 꺼지는 칸).
+pub(crate) fn is_monitor_item(id: &str) -> bool {
+    matches!(id, "cpu" | "mem" | "disk" | "net" | "appmem")
+}
+
 /// 바이트/초 → 짧은 속도 글(`0 B/s` · `1.2 MB/s`).
 pub(crate) fn fmt_rate(bps: u64) -> String {
     format!("{}/s", filelist::format_size(bps))
@@ -84,8 +89,11 @@ impl App {
                 .hints(size_hints(a, "/s"))
                 .font_delta(row_delta)
         };
+        // 성능 향상 모드 = 시스템 상태 모니터링 끔(칸도 · 주기 조회도 — 사용자 10-04): 탭 · 라이선스 칸만 남는다.
+        let boost = self.settings.flag("perf.boost");
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
+            .filter(|(id, _)| !(boost && is_monitor_item(id)))
             .map(|(id, kids)| match id {
                 "tab" => {
                     let p = &self.panels[self.active];
@@ -163,9 +171,10 @@ impl App {
 
     /// 부하 칸이 하나라도 있는가.
     fn status_wants_load(&self) -> bool {
-        status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
-            .iter()
-            .any(|(k, _)| matches!(*k, "cpu" | "mem" | "disk" | "net" | "appmem"))
+        !self.settings.flag("perf.boost")
+            && status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
+                .iter()
+                .any(|(k, _)| is_monitor_item(k))
     }
 
     /// 유휴 틱 — 주기가 됐으면 부하를 조회해 칸을 갱신하고 다음 조회 시각을 돌려준다(부하 칸이 없으면 `None` = 깨우지 않음).

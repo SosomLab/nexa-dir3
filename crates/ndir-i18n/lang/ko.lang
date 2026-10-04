@@ -935,3 +935,5 @@ mem.cat.terminal = 터미널 버퍼
 tabstatus.git.upstream = 업스트림: {0} (앞섬 {1} · 뒤짐 {2})
 tabstatus.git.clean = 작업 트리 깨끗함
 tabstatus.git.changes = 스테이지 {0} · 변경 {1} · 미추적 {2} · 충돌 {3}
+pref.perfBoost = 성능 향상 모드
+pref.perfBoost.desc = 무거운 부가 기능을 꺼서 앱을 가볍게 합니다. 지금 끄는 것: 상태바의 시스템 상태 모니터링(CPU · 메모리 · 디스크 · 네트워크 · 앱 메모리). 다른 설정값은 그대로 유지됩니다.

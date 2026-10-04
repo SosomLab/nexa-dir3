@@ -936,3 +936,5 @@ mem.cat.terminal = ターミナルバッファ
 tabstatus.git.upstream = アップストリーム: {0} (先行 {1}・遅れ {2})
 tabstatus.git.clean = 作業ツリーはクリーン
 tabstatus.git.changes = ステージ {0} · 変更 {1} · 未追跡 {2} · 競合 {3}
+pref.perfBoost = パフォーマンスモード
+pref.perfBoost.desc = 重い付加機能をオフにしてアプリを軽くします。現在オフにするもの: ステータスバーのシステム状態モニタリング（CPU・メモリ・ディスク・ネットワーク・アプリメモリ）。他の設定値はそのまま保持されます。

@@ -2387,6 +2387,19 @@ fn status_segments_and_tab_status_bar() {
     );
     assert!(text(&app, "disk").starts_with("D ↓ ") && !text(&app, "disk").contains('↑'));
     assert!(text(&app, "net").starts_with("N ↓ "));
+    // 성능 향상 모드: 시스템 상태 칸이 사라지고 주기 조회도 멈춘다(탭 · 라이선스만) · 끄면 그대로 돌아온다(저장값 불변).
+    let _ = app.settings.set("perf.boost", "on");
+    app.after_setting_changed("perf.boost");
+    assert_eq!(ids(&app), ["tab", "license"]);
+    assert_eq!(
+        app.status_load_tick(Instant::now()),
+        None,
+        "조회 없음 · 깨우지 않음"
+    );
+    let _ = app.settings.set("perf.boost", "off");
+    app.after_setting_changed("perf.boost");
+    assert_eq!(ids(&app).len(), 7);
+    assert!(app.status_load_tick(Instant::now()).is_some());
     // 순서 편집 창이 값을 바꾼다(툴바 순서 편집과 같은 길) — 숨긴 칸은 빠지고 순서가 따른다.
     app.order_changed(
         "statusbar.layout",
