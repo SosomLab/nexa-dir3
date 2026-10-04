@@ -4,7 +4,8 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `c393924`(144차 + docs) · nexa-license `54c8d71` · nexa-dir3 `fad2ca8`. 마지막 전수(full · 494a9f8 · 그 뒤 quick 2): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 494a9f8까지 3-OS 녹색.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋 · 10-04 Windows PC 갱신): nexa-ui `465b939`(146차 + docs `373a5c1`) · nexa-license `54c8d71` · nexa-dir3 `42ccb5a`. 마지막 전수(**full · 42ccb5a · 10-04 Windows** · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 445/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI d8fef5c까지 3-OS 녹색 · 42ccb5a = 협업 세션 감시(macOS/Linux `procmem.rs` 첫 실행).
+- **이 PC가 Windows일 때**(10-04 §25): 사용자 인스턴스 = `target\debug\nexa-dir.exe`(협업 세션 전용 빌드 · `explorer.exe`로 실행해 에이전트 env 상속 회피) · 개발 세션 검증 = `CARGO_TARGET_DIR=target/dev` · 협업 세션 시험 = `target/collab`.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
@@ -13,6 +14,26 @@
 - **사용자 결정 대기**: (i18n 4건 = 10-04 §15에서 결정 · 해소) · T-126 권장안 5건 확인(동기화 중 제외 · Linux 네트워크만 · 내 PC 제외 · 정렬은 사용자 요청으로 지원 · GAP-018 함께) · GAP-015 정리(연결 vs INTERNAL · T-125) · GAP-020(`list.col_layout` 기동 미적용 의도?) · 정렬 후속(T-128 — Shift 없는 클릭 리셋 · 정렬 영속) · 터미널 글꼴 크기 기준(Windows) · 설정 창 "클라우드 연결" 빈 페이지 · ↔ 아이콘 · dir2 BUG-001 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" · "바로가기" vs "바로 가기" · nexa-sql `split_d.tick` 누락 수정 · 릴리스 태그.
 - **실기(화면) 판정이 남은 것**: 10-03 ~ 10-04 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표 53항목) — 특히 상태줄 약어/팝업/색 · 메모리 창 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 스플리터 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 남은 것(자가 점검 창 · 라이선스/허용값/unsupported 문구 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 · Command Prompt 비교) → T-93 3차(미리보기/플러그인 · 실행 취소 영역 · 힙 정리) → T-95 3차(HEAD/index 감시 · 플라이아웃) → macOS 디스크 칸(IOKit — **Mac 실기에서** · T-114와 함께) → T-113 개발용 .desktop → T-131 우클릭 2차 → T-130 설정 종속 2단계 · T-129(GAP-019 클라우드 미리보기) → T-128 정렬 후속 → T-117 T4 Linux → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-04 128차 — 메모리 창 개편(T-93 3차 · nexa-ui 146) · Windows PC 분담 재정렬
+
+- **한 일**: 메모리 창 = 누적 정보(전용 · 상주 · 힙 여유 · 60 표본 그래프 · 영역 색 막대) + 기능별 묶음 6 · 영역 13 · ▲/▼ 변화량 6 표본 · [힙 정리] · 1초 갱신(창 닫힘 = 비용 0) · OS 값/정리 = `platform/procmem.rs` · 시험 445 ✓(42ccb5a).
+- **지금 상태**: 42ccb5a 앱 재시작(PID 13256 · explorer 경유). `gate.sh full` 녹색(시험 445/0 · selfcheck 23/0 · T4 20/0) → 943e6e8 · 42ccb5a push 완료 · CI 감시 중(협업 세션).
+- **걸린 것**: T-93 남은 것(셸 자식 프로세스 · 보조 창 표면 · 도크 이미지 · 기동 명령/덤프) · 메모리 창 화면 판정 · T-140 · T-141 사용자 답 · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-04 §25](journal/2026-10-04.md)
+
+---
+
+## 10-04 127차 — 우클릭 메뉴 스크롤(nexa-ui 145) · 경로/이름 복사 = dir2 기준 · 사용자 보고 2
+
+- **한 일**: 우클릭 메뉴 오버레이 막대 · 양 끝 맞춤 · 더 있음 ∧/∨(사용자 ∧/∨ OK) · 경로 복사 = 셸 "경로로 복사" 자리 대체 · 이름 복사 바로 아래 · 복사 순서 = 화면 순서(943e6e8 · 시험 +1) · 사용자 보고 2건 등재(T-140 클릭 느림 · T-141 기본 아이콘) · nexa-fs 흔들림 13/13 재현 안 됨(T-142).
+- **지금 상태**: 943e6e8 = 42ccb5a와 함께 push(전수 게이트 녹색).
+- **걸린 것**: 막대/끝 맞춤/복사 위치 화면 판정 · T-140(부하 없는 상태 재확인) · T-141(어디서 기본 아이콘인지 — 사용자 답).
+
+→ [journal/2026-10-04 §24](journal/2026-10-04.md)
 
 ---
 
