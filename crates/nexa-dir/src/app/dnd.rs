@@ -9,6 +9,30 @@ use ndir_ops::Op;
 /// 누른 자리에서 이만큼 넘게 움직이면 끌기다(px · Windows 기본 드래그 임계 `SM_CXDRAG` = 4와 같은 뜻).
 const DRAG_SLOP: i32 = 4;
 
+/// 끌어오는 동안 목록 가장자리에서 자동 스크롤을 시작하는 띠의 두께(px · 배율 전 · 위쪽은 열 머리글(약 24)을 포함한다).
+const EDGE_BAND: i32 = 40;
+/// 자동 스크롤 · 포인터 추적 간격(ms · dir2 TIMER_DND 100).
+pub(crate) const DND_TRACK_MS: u64 = 100;
+
+/// 화면 좌표 → 창 안 좌표(순수): 창 내용 영역의 화면 자리를 뺀다.
+pub(crate) fn client_point(screen: (i32, i32), inner: (i32, i32)) -> (i32, i32) {
+    (screen.0 - inner.0, screen.1 - inner.1)
+}
+
+/// 가장자리 자동 스크롤 방향(순수 · dir2 win.rs:3349): 목록 위쪽 띠 = 위로(+1) · 아래쪽 띠 = 아래로(-1) · 그 밖 = 0.
+/// 목록 밖(위 · 아래로 벗어남)은 스크롤하지 않는다.
+pub(crate) fn edge_scroll(y: i32, top: i32, bottom: i32, band: i32) -> i32 {
+    if y < top || y >= bottom || bottom - top < band * 3 {
+        0
+    } else if y < top + band {
+        1
+    } else if y >= bottom - band {
+        -1
+    } else {
+        0
+    }
+}
+
 /// 끌기가 시작됐는가(순수): 가로나 세로로 임계를 넘었다.
 pub(crate) fn drag_started(press: (i32, i32), now: (i32, i32)) -> bool {
     (now.0 - press.0).abs() > DRAG_SLOP || (now.1 - press.1).abs() > DRAG_SLOP
@@ -63,6 +87,39 @@ impl App {
             InputEvent::MouseUp { .. } => self.drag_press = None,
             _ => {}
         }
+    }
+
+    /// 다른 프로그램에서 끌어오는 중인가(창 위에 파일이 떠 있다 — 추적 틱이 돌아야 하는 동안).
+    pub(crate) fn dnd_hovering(&self) -> bool {
+        !self.dnd_hover.is_empty()
+    }
+
+    /// 끌어오는 동안의 포인터 반영(T-147 수신 보강 · dir2 `DropHooks::track` · win.rs:3326-3349): 호스트가 OS에서 읽은
+    /// 창 안 좌표 · 수식키를 넣는다 → 놓는 자리 · 복사/이동 판정이 **지금 포인터** 기준이 되고(종전 = 드래그가 들어오기 전
+    /// 마지막 자리), 목록 가장자리 띠에서는 그쪽으로 한 노치씩 스크롤한다. 스크롤했으면 `true`.
+    pub(crate) fn dnd_track(&mut self, at: (i32, i32), ctrl: bool, shift: bool) -> bool {
+        self.cursor = at;
+        self.primary = ctrl;
+        self.shift = shift;
+        let p = Point { x: at.0, y: at.1 };
+        let band = (EDGE_BAND as f32 * self.scale).round() as i32;
+        for i in 0..2 {
+            if i == 1 && !self.dual {
+                continue;
+            }
+            let b = self.panels[i].rows().bounds();
+            if !b.contains(p) {
+                continue;
+            }
+            let dir = edge_scroll(at.1, b.y, b.bottom(), band);
+            if dir != 0 {
+                let before = self.panels[i].rows().scroll_row();
+                let mut inv = Invalidations::default();
+                self.panels[i].on_event(&InputEvent::Wheel { delta: dir * 120 }, &mut inv);
+                return self.panels[i].rows().scroll_row() != before;
+            }
+        }
+        false
     }
 
     pub(crate) fn dnd_hover(&mut self, path: PathBuf) {

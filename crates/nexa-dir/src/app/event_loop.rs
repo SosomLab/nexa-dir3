@@ -114,8 +114,28 @@ impl ApplicationHandler<Wake> for App {
         let aux_live = self.aux_tick(now_ms);
         let term_live = self.term_tick(now_ms);
         let ops_live = self.ops_tick();
+        // 다른 프로그램에서 끌어오는 동안 · 놓은 직후: OS에서 포인터 자리 · 수식키를 읽어 반영한다(winit은 드래그 중 그 사건을
+        // 주지 않는다 — T-147 수신 보강). 수식키는 판정에만 쓰고 되돌린다(창이 포커스를 받으면 winit이 다시 알려 준다).
+        let dnd_active = self.dnd_hovering() || !self.dnd_drop.is_empty();
+        let mods = (self.shift, self.primary);
+        if dnd_active {
+            let inner = self
+                .window
+                .as_ref()
+                .and_then(|w| w.inner_position().ok())
+                .map(|p| (p.x, p.y));
+            if let (Some(ps), Some(inner)) = (platform::pointer_state(), inner) {
+                let at = app::dnd::client_point((ps.x, ps.y), inner);
+                if self.dnd_track(at, ps.ctrl, ps.shift) {
+                    redraw = true;
+                }
+            }
+        }
         if self.dnd_flush() {
             redraw = true;
+        }
+        if dnd_active {
+            (self.shift, self.primary) = mods;
         }
         self.open_requested_windows(el);
         if !self.startup_timed.is_empty() {
@@ -157,6 +177,10 @@ impl ApplicationHandler<Wake> for App {
             next = next.min(t);
         }
         next = next.min(self.watch_tick(now));
+        if self.dnd_hovering() {
+            // 끌어오는 동안은 사건이 오지 않는다 → 추적 간격으로 스스로 깬다(가장자리 자동 스크롤 · 놓는 자리 갱신).
+            next = next.min(now + Duration::from_millis(app::dnd::DND_TRACK_MS));
+        }
         if let Some(t) = self.session_tick(now) {
             next = next.min(t);
         }

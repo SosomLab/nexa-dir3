@@ -155,6 +155,25 @@ extern "system" {
     fn SetLastError(code: u32);
 }
 
+/// 지금의 포인터 자리(화면 좌표) · Ctrl/Shift 눌림 — 다른 프로그램의 드래그가 우리 창 위에 있는 동안에도 읽힌다.
+pub(super) fn pointer_state() -> Option<super::PointerState> {
+    const VK_SHIFT: i32 = 0x10;
+    const VK_CONTROL: i32 = 0x11;
+    let mut pt = [0i32; 2];
+    // SAFETY: POINT(LONG x, LONG y)와 같은 배치의 출력 자리 · 키 조회는 인자만 받는다(최상위 비트 = 지금 눌림).
+    unsafe {
+        if GetCursorPos(&mut pt) == 0 {
+            return None;
+        }
+        Some(super::PointerState {
+            x: pt[0],
+            y: pt[1],
+            ctrl: GetAsyncKeyState(VK_CONTROL) < 0,
+            shift: GetAsyncKeyState(VK_SHIFT) < 0,
+        })
+    }
+}
+
 /// 파일 속성: 폴더 · 오프라인(온라인 전용) · 접근하면 내려받는 플레이스홀더(dir2 SHELL-085).
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000;
@@ -172,6 +191,8 @@ pub(super) fn wants_size_on_disk(attrs: u32) -> bool {
 
 #[link(name = "user32")]
 extern "system" {
+    fn GetCursorPos(pt: *mut [i32; 2]) -> i32;
+    fn GetAsyncKeyState(vk: i32) -> i16;
     fn OpenClipboard(hwnd: isize) -> i32;
     fn CloseClipboard() -> i32;
     fn EmptyClipboard() -> i32;

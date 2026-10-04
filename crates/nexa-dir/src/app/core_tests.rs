@@ -6247,3 +6247,51 @@ fn menu_letter_keys_pick_items() {
     assert!(!app.tab_menu.is_open() && !app.open_order, "끔 = 닫기만");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-147 수신 보강: 끌어오는 동안 호스트가 OS에서 읽은 포인터 자리 · 수식키로 놓는 자리와 복사/이동을 정한다(winit은 드래그 중
+/// 그 사건을 주지 않는다) · 목록 가장자리 띠 = 자동 스크롤.
+#[test]
+fn incoming_drag_tracks_pointer_and_auto_scrolls() {
+    use crate::app::dnd::{client_point, edge_scroll};
+    assert_eq!(client_point((500, 400), (120, 80)), (380, 320));
+    // 위 띠 = 위로 · 아래 띠 = 아래로 · 가운데 · 목록 밖 = 0 · 띠 둘이 겹칠 만큼 낮은 목록 = 0.
+    assert_eq!(edge_scroll(105, 100, 500, 24), 1);
+    assert_eq!(edge_scroll(490, 100, 500, 24), -1);
+    assert_eq!(edge_scroll(300, 100, 500, 24), 0);
+    assert_eq!(edge_scroll(90, 100, 500, 24), 0);
+    assert_eq!(edge_scroll(500, 100, 500, 24), 0);
+    assert_eq!(edge_scroll(105, 100, 150, 24), 0);
+
+    let (mut app, dir) = fixture("dndtrack");
+    for i in 0..300 {
+        std::fs::write(dir.join(format!("f{i:03}.txt")), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    for p in &mut app.panels {
+        p.reopen(&mut inv);
+    }
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(!app.dnd_hovering());
+    app.dnd_hover(PathBuf::from("/elsewhere/x.bin"));
+    assert!(app.dnd_hovering(), "끌어오는 중");
+    let b = app.panels[1].rows().bounds();
+    // 가운데 = 자리 · 수식키만 반영(스크롤 없음).
+    assert!(!app.dnd_track((b.x + 40, b.y + b.h / 2), true, false));
+    assert_eq!(app.cursor, (b.x + 40, b.y + b.h / 2));
+    assert!(app.primary && !app.shift, "Ctrl = 복사 판정에 쓰인다");
+    // 아래 띠 = 아래로 스크롤 · 위 띠 = 다시 위로.
+    assert!(app.dnd_track((b.x + 40, b.bottom() - 5), false, false));
+    let down = app.panels[1].rows().scroll_row();
+    assert!(down > 0, "아래 가장자리 = 아래로");
+    assert_eq!(app.panels[0].rows().scroll_row(), 0, "다른 패널은 그대로");
+    assert!(app.dnd_track((b.x + 40, b.y + 30), false, false));
+    assert!(
+        app.panels[1].rows().scroll_row() < down,
+        "위 가장자리 = 위로"
+    );
+    app.dnd_cancel();
+    assert!(!app.dnd_hovering());
+    let _ = std::fs::remove_dir_all(&dir);
+}

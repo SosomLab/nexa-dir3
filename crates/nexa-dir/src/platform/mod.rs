@@ -332,6 +332,29 @@ pub(crate) trait Disk {
     }
 }
 
+/// 지금의 포인터 자리(화면 좌표)와 수식키 — **다른 프로그램에서 끌어오는 동안**의 상태를 묻는다(T-147 수신 보강).
+/// winit은 OS 드래그 중에는 포인터 이동 · 수식키 사건을 주지 않고 `HoveredFile`/`DroppedFile`에도 자리가 없다 →
+/// 놓는 자리 · 복사/이동 판정을 위해 직접 읽는다. 읽을 수 없는 OS = `None`(호출부는 마지막으로 본 값으로 간다).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PointerState {
+    pub x: i32,
+    pub y: i32,
+    pub ctrl: bool,
+    pub shift: bool,
+}
+
+/// [`PointerState`] 조회 — Windows = `GetCursorPos` + `GetAsyncKeyState` · macOS · Linux = 후속(`None`).
+pub(crate) fn pointer_state() -> Option<PointerState> {
+    #[cfg(windows)]
+    {
+        windows::pointer_state()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// 클러스터 올림(순수 · dir2 fileinfo.rs `round_up_cluster`): 클러스터 0(모름)이면 점유 바이트 그대로 · 0바이트 = 0.
 /// 압축 파일은 점유가 논리 크기보다 작을 수 있다(그대로 둔다).
 #[cfg_attr(not(windows), allow(dead_code))]
