@@ -194,6 +194,9 @@ fn nav_buttons() -> Toolbar {
     t
 }
 
+/// 패널당 폴더 감시 상한(dir2 `WATCH_CAP` · 현재 폴더 포함).
+const WATCH_CAP: usize = 64;
+
 /// 탭 본체 더블클릭 동작(설정 `tabs.dblclick` · dir2 `tab_dblclick`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum TabDbl {
@@ -480,6 +483,15 @@ impl Panel {
 
     pub(crate) fn root_path(&self) -> PathBuf {
         self.rows().source().path().to_path_buf()
+    }
+
+    /// 폴더 감시 대상(dir2 WINB-014 `sync_watchers`): 현재 폴더 + 화면에 펼쳐진 하위 폴더(패널당 [`WATCH_CAP`]개까지 ·
+    /// 넘는 것은 감시하지 않는다 = F5). 종전 dir3 = 현재 폴더만 → 펼친 폴더 안의 바깥 변경이 안 보였다.
+    pub(crate) fn watch_dirs(&self) -> Vec<PathBuf> {
+        let src = self.rows().source();
+        let mut dirs = vec![src.path().to_path_buf()];
+        dirs.extend(src.expanded_dirs(WATCH_CAP - 1));
+        dirs
     }
 
     pub(crate) fn bounds(&self) -> Rect {

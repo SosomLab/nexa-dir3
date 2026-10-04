@@ -52,13 +52,18 @@ impl App {
 
     /// 감시 대상 = 두 패널 활성 탭의 폴더(바뀌었을 때만 재지정 — `Watcher::watch`가 같은 집합이면 무시).
     pub(crate) fn watch_sync(&mut self) {
-        let mut dirs: Vec<PathBuf> = self
-            .panels
-            .iter()
-            .map(|p| p.root_path())
-            .filter(|p| !ndir_vfs::is_virtual_root(p))
-            .collect();
-        dirs.dedup();
+        // 현재 폴더 + 화면에 펼쳐진 하위 폴더(dir2 WINB-014 · 패널당 64개 상한). 내 PC(가상 최상위)는 드라이브 감시가 본다.
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        for p in &self.panels {
+            if ndir_vfs::is_virtual_root(p.root_path()) {
+                continue;
+            }
+            for d in p.watch_dirs() {
+                if !dirs.contains(&d) {
+                    dirs.push(d);
+                }
+            }
+        }
         self.platform.watcher.watch(&dirs);
     }
 
@@ -83,7 +88,8 @@ impl App {
             let mut reloaded = false;
             for p in &mut self.panels {
                 let root = p.root_path();
-                if !changed.contains(&root) {
+                // 현재 폴더나 펼쳐진 하위 폴더가 바뀌었으면 이 패널을 다시 읽는다(펼침 · 선택 · 캐럿 · 스크롤 유지).
+                if !p.watch_dirs().iter().any(|d| changed.contains(d)) {
                     continue;
                 }
                 // 인라인 이름 편집 · 경로 편집 · 전송 중에는 미룬다(dir2 win.rs:9457-9485 · X-35 D4: 다시 읽기가 편집 행을 흔들거나

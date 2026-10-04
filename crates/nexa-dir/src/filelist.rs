@@ -323,6 +323,26 @@ impl TreeSource {
         self.error.as_deref()
     }
 
+    /// 화면에 **펼쳐져 있는** 폴더들의 경로(위에서부터 최대 `cap`개) — 폴더 감시 대상(dir2 WINB-014 "가시 펼침 폴더").
+    pub(crate) fn expanded_dirs(&self, cap: usize) -> Vec<PathBuf> {
+        let Some(t) = self.tree.as_ref() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for i in 0..t.visible_len() {
+            if out.len() >= cap {
+                break;
+            }
+            let Some(id) = t.visible_id(i) else { continue };
+            if t.is_expanded(id) == Some(true) {
+                if let Some(p) = t.node_path(id) {
+                    out.push(p.to_path_buf());
+                }
+            }
+        }
+        out
+    }
+
     /// 가시 행의 전체 경로.
     pub(crate) fn row_path(&self, index: usize) -> Option<PathBuf> {
         let t = self.tree.as_ref()?;

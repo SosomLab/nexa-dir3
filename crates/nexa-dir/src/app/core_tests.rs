@@ -5715,3 +5715,54 @@ fn text_edit_menus_for_rename_terminal_and_dock() {
     assert!(!app.tab_menu.is_open());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 펼친 하위 폴더 감시(dir2 WINB-014 `sync_watchers` · T-149 8): 감시 대상 = 현재 폴더 + 화면에 펼쳐진 폴더 · 펼친 폴더 안의
+/// 바깥 변경도 다시 읽기로 반영된다(펼침 유지). 종전 dir3 = 현재 폴더만.
+#[test]
+fn watch_covers_expanded_folders() {
+    let (mut app, dir) = fixture("watchexp");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let tick = |app: &mut App| {
+        app.watch_next = Instant::now();
+        app.watch_tick(Instant::now());
+    };
+    tick(&mut app);
+    assert_eq!(
+        log.borrow().watched,
+        vec![dir.clone()],
+        "접힌 상태 = 현재 폴더만"
+    );
+    // sub를 펼친다 → 감시 대상에 들어온다.
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&sub, &mut inv);
+    app.startup_cmd("ui.press:right");
+    assert_eq!(
+        app.panels[0].rows().source().expanded_dirs(8),
+        vec![sub.clone()]
+    );
+    tick(&mut app);
+    assert_eq!(log.borrow().watched, vec![dir.clone(), sub.clone()]);
+    // 펼친 폴더 안에 새 파일 → sub 변경 통지 = 다시 읽기(새 행이 보이고 펼침은 그대로).
+    let n0 = app.panels[0].rows().source().len();
+    std::fs::write(sub.join("late.rs"), b"x").expect("write");
+    log.borrow_mut().changed = vec![sub.clone()];
+    tick(&mut app);
+    assert_eq!(
+        app.panels[0].rows().source().len(),
+        n0 + 1,
+        "펼친 폴더 안의 변경 반영"
+    );
+    assert_eq!(
+        app.panels[0].rows().source().expanded_dirs(8),
+        vec![sub.clone()],
+        "펼침 유지"
+    );
+    // 상관없는 폴더의 통지는 무시.
+    std::fs::write(sub.join("late2.rs"), b"x").expect("write");
+    log.borrow_mut().changed = vec![dir.join("elsewhere")];
+    tick(&mut app);
+    assert_eq!(app.panels[0].rows().source().len(), n0 + 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
