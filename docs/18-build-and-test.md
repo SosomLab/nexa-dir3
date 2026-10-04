@@ -20,7 +20,20 @@ cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
 
 `plugins/sdk/plugins.list`(단일 출처)의 게스트 크레이트를 `scripts/plugin-build.sh`(mac/Linux) · `scripts/plugin-build.ps1`(Windows)이 `wasm32-unknown-unknown`으로 빌드해 `plugins/<이름>.wasm`(동봉본)에 복사한다. 사전 준비 `rustup target add wasm32-unknown-unknown`. 옵션 `--out-dir <폴더>`(스테이징) · `--skip-dist`(동봉본 유지). 동봉본은 dir2 dist **무수정**이 회귀 기준(DR-7)이므로 소스를 고친 뒤에만 갱신한다. 앱이 보는 폴더는 `NDIR_PLUGINS_DIR` → `<설정 폴더>/plugins` → `<exe>/plugins`(docs/port/20 §4-7).
 
-## 3. push 전 게이트(순서 고정 — 빨강이면 push 금지)
+## 3. push 전 게이트(단계형 · 빨강이면 push 금지 · DR-26)
+
+**기본 = `bash scripts/gate.sh`**(사용자 10-04 "모든 기능 수정에 전수 테스트를 수행할 필요는 없다 — 최근 수행 기록이 없거나 핵심 로직이 수정되어 영향도가 높은 경우가 아니라면 일정 기간 테스트가 되지 않은 경우에만 전수 · 배포 전 같은 중요 시점에 한 번 더"). 첫 줄에 고른 단계와 이유를 출력하고, 각 단계를 **종료 코드 · 결과 문자열로 판정**한 뒤에만 다음으로 간다(파이프 끝 명령의 종료 코드로 판정하지 않는다 — 10-03 §101 · 10-04 §1 교훈).
+
+| 단계 | 하는 일 |
+| --- | --- |
+| `quick` | fmt + 호스트 clippy(`check-3os.sh --quick` · `-D warnings`) + **마지막 전수 뒤 바뀐 크레이트만** `cargo test -p …`(ndir-i18n · ndir-settings가 바뀌면 nexa-dir 포함) + `--smoke` |
+| `full` | `check-3os.sh`(fmt + 3-OS clippy) + `cargo test --workspace` + `--smoke` + `--selfcheck --ci` + T4(`ndir-check --ci` — Windows 전제 3개 `ctx-menu` · `launcher` · `selfcheck-win`는 다른 OS에서 실패가 기준선 · T-117) → 통과하면 `target/gate/last-full`에 `시각 HEAD nexa-ui-HEAD nexa-license-HEAD` 기록(PC별 · git 미추적) |
+| `auto`(기본) | **full을 고르는 때**(하나라도): ① 이 PC에 전수 기록 없음 ② 마지막 전수가 `NDIR_GATE_FULL_HOURS`(기본 24)시간 경과 ③ 형제 저장소(nexa-ui · nexa-license) HEAD 변경 ④ 마지막 전수 뒤 **핵심 경로** 변경 — `crates/{ndir-core,ndir-vfs,ndir-tree,ndir-ops,ndir-term,ndir-license}/` · `crates/ndir-settings/src/lib.rs` · `crates/nexa-dir/src/platform/` · `crates/nexa-dir/Cargo.toml` · `crates/ndir-check/` · `Cargo.toml`/`Cargo.lock` · `.github/` · `scripts/` · `tests/scenarios/`. 그 밖 = quick |
+
+- **중요 시점 = `gate.sh full` 한 번 더**: 배포(패키징) · 버전 태그 · 마일스톤 마감 · 브랜치 병합 전.
+- **quick으로 push했으면 CI(3-OS 전수)가 전수 역할** — push 뒤 CI 결과 확인이 필수다(협업 세션이 감시 · 빨강이면 즉시 보고).
+- `scripts/check-all.sh`는 **형제 저장소까지 도는 최대 전수**로 남긴다(nexa-ui → nexa-license → dir3 · 필요할 때 수동).
+- 아래는 각 단계를 손으로 돌릴 때의 명령(gate.sh가 내부에서 쓰는 것과 같다).
 
 ```bash
 scripts/check-all.sh [--quick]                  # ★ push 전 전체 게이트(T-05): 형제 저장소 → dir3 fmt·clippy·test → check-3os → smoke → selfcheck → 시나리오 → target/check-all/summary.txt
@@ -30,7 +43,7 @@ cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자�
 cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용자 자원 필요 항목 SKIP)
 ```
 
-**Linux 개발 세션**(§101): 위 4단계에 더해 push 전 `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4)도 돈다 — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 3개(`ctx-menu` · `launcher` · `selfcheck-win`)의 실패는 제외(T-117).
+**Linux 개발 세션**(10-03 §101 · 이제 `gate.sh full`에 포함): `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4) — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 3개(`ctx-menu` · `launcher` · `selfcheck-win`)의 실패는 제외(T-117).
 
 한 번에: `scripts/check-all.sh`(T-05에서 작성 · nexa-ui → nexa-license → dir3 순으로 fmt·clippy·test → 위 4단계 → `tests/out/summary.txt`).
 
