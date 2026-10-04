@@ -112,6 +112,7 @@
 | 키보드 ↑/↓에도 고속 스크롤(늘 켜짐) | nexa-grid `fastscroll`(키 경로) · `app/settings.rs` | 키보드 이동 가속 여부(dir2 = 끌 수 없음 · NEW-029) | — | 설정(취향 · 부모 `scroll.fast`) | `scroll.fast_keys`(기본 on) | ✅ 10-05 §1(6c42c90) |
 | **컨텍스트 메뉴(dir3 신규 키)** | | | | | | |
 | 메뉴 ↑/↓ 끝 ↔ 처음 순환(늘 켜짐) | nexa-ctl `ContextMenu`(키 이동) · `app/settings.rs` | 메뉴 키보드 순환 이동 여부(NEW-030) | — | 설정(취향) | `menu.wrap_around`(기본 on) | ✅ 10-05 §2(dff8a77) |
+| 메뉴 글자 키(종전 = 글자 키가 메뉴 닫음) | nexa-ctl `ContextMenu::set_char_jump` · `app/settings.rs` | 메뉴에서 글자 키로 항목 고르기 여부(NEW-031) | — | 설정(취향) | `menu.char_jump`(기본 on) | ✅ 10-05 §30(8370165) |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |
 | 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |

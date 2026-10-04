@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 30 | 30 | 18 | 8 | 0 | 0 | 0 |
+| NEW | 31 | 31 | 19 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -36,12 +36,12 @@
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 90 | 0 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 5 | 0 | 230 | 0 | 0 |
-| UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
+| UIK | 67 | 67 | 13 | 8 | 46 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 65 | 53 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2489 | 938 | 763 | 0 | 0 |
+| **합계** | 4320 | 4320 | 2491 | 937 | 763 | 0 | 0 |
 
 ## 행
 
@@ -226,7 +226,7 @@
 | UIK-001~116 | nexa-ctl 컨트롤 표 · nexa-sql 앱 내 범용 UI | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 |
 | UIK-107 · 213 | 토스트 `Toasts`(범용 승격) | nexa-ui 114차 `nexa_ctl::controls::toast` · dir3 `main.rs` `use` | T2 · T3 | nexa-ctl toast 시험 3 · `bulk_*`(`toasts.animating`) | ✅ | journal §69 · 앱 사본 삭제(DR-2) |
 | UIK-210 · 214 | FolderTree(지연 로딩) · FilterBox | — | — | — | ⚠ | dir2에 실체 없음(widgets = chrome/dock/menubar/overlaybar/pathbar/rows/tabbar · 검색 상자는 설정 창뿐) → 추가하지 않음(journal §69) |
-| UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 |
+| UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 · 10-05 §30: UIK-221 메뉴 글자 키 ✅(NEW-031 행) |
 | UIX-001 · 005 · 010~014 · 020 · 024 | nexa-ui 보조 크레이트 중 dir3가 쓰는 것 — TextBox(한 줄) · 기록기 · nexa-grid `EditState`(이름 바꾸기 · 경로 바) · FilePicker(Open/Folder · 틱) | `prefs_win.rs` · `bulk_win.rs` · `dlg_win.rs` · `file_win.rs` · `license_win.rs` · `app/ops.rs::begin_rename` | T2·T3 | `new_folder_rename_and_undo` · `bulk_rename_window_apply_undo_and_presets` · nexa-grid `edit.rs` 단위 | ✅ | [52](52-nexa-ui-dlg-fs-status.md) §1~§3 |
 | UIX-002~004 · 022 · 023 · 025 · 030~032 · 034~036 | nexa-ui 보조 API 중 dir3 미사용 — 편집기 기능 · 편집 명령(TextBox 내부 간접) · 클릭 정책 · FilePicker 다중/저장/시험 보조 · nexa-fs 목록/드라이브/외부 열기/감시/경로·시간 | nexa-ui(DR-2) · dir3 대체 = ndir-vfs/ndir-tree · `platform::{Opener, Watcher}` · `dockinfo.rs` | — | — | ⚠ | DR-2/DR-5 — nexa-sql 전용이거나 dir2 이식 크레이트·`platform/`이 대신 · [52](52-nexa-ui-dlg-fs-status.md) |
 | UIX-021 | FilePicker 상태 주입(최근 목록 · 숨김 파일) | `file_win.rs:160~163` | — | — | 🚧 | GAP-004 · [52](52-nexa-ui-dlg-fs-status.md) §5 |
@@ -251,6 +251,7 @@
 | NEW-028 | 빠른 실행 우클릭 = 항목 편집/삭제/추가/구분선/숨기기/설정 · 한 줄 입력 대화상자 | `app/statusline.rs` · `app/input.rs` · `DlgReply::LauncherItem` | T3 + 실기 | `toolbar_and_launcher_right_click_menus` | ✅ | 10-04 §13 · dir2에 없음(PREFS-165 · 166 파일 직접 편집) · 실기(입력 형식 · 실행) 사용자 |
 | NEW-029 | 키보드 ↑/↓ 이동 고속 스크롤 스위치 `scroll.fast_keys`(기본 on · 부모 `scroll.fast` · 끄면 키 = 1행 · 휠만 가속) | nexa-grid `fastscroll::set_fast_scroll_keys`(nexa-ui 148) · `ndir-settings` registry · `app/settings.rs` | T1 + 실기 | nexa-grid 시험(148) · 설정 레지스트리 무결성 시험 | ✅ | 10-05 §1(6c42c90) · dir2에 없음(키 가속 늘 켜짐) · 실기(키 길게 누름) 사용자 |
 | NEW-030 | 메뉴 순환 이동 스위치 `menu.wrap_around`(기본 on · 끄면 양 끝 멈춤 · 우클릭/탭/상태줄 메뉴 공통 · 즉시 반영) | nexa-ctl `ContextMenu::set_wrap_around`(nexa-ui 150) · `ndir-settings` registry · `app/settings.rs` | T3 + 실기 | `menu_wrap_around_setting_reaches_the_menu` · nexa-ctl 시험(150) | ✅ | 10-05 §2(dff8a77) · 메뉴 바(풀다운) 순환은 미적용 · 미확인 · 실기 사용자 |
+| NEW-031 · UIK-221 | 메뉴 글자 키 스위치 `menu.char_jump`(파일 목록 › 컨텍스트 메뉴 · 기본 on) — `ContextMenu::set_char_jump`(nexa-ui 155 · 기본 꺼짐) — `&x` 니모닉 우선 · 없으면 라벨 첫 글자/숫자 · 하나 = 실행(하위 메뉴면 열기) · 여럿 = 순환 · 없음 = 그대로 · 우클릭 · 탭 · 상태줄 메뉴 공통 · 즉시 적용 | nexa-ctl `ContextMenu::set_char_jump`(nexa-ui 155 · 280f0ac) · `ndir-settings` registry · `app/settings.rs` · `main.rs` 기동 배선 | T3 + 실기 | `menu_letter_keys_pick_items` · nexa-ctl 시험(155) | ✅ | 10-05 §30(8370165 · T-149 16) · dir2 = 네이티브 TrackPopupMenuEx 니모닉(win.rs:3034-3072) · 종전 dir3 = 글자 키가 메뉴를 닫음 · 실기(한글 UI 글자 · 영어 UI c) 사용자 |
 | T-96 · CONFLICT-INLINE | 덮어쓰기 충돌 질문을 진행 창 안에서(4버튼 · Enter = 덮어쓰기 · Esc/X = 취소 · 진행 창 없으면 종전 대화상자) · 완료 [닫기 (N)] = 강조(기본) 버튼 | `progress_win.rs::{set_conflict, take_conflict_choice, pick_conflict}` · `app/dialogs.rs::conflict_ask` · `app/ops.rs::ops_tick` · nexa-ui 144 `Button::tone` | T2(모듈) + 실기 | progress_win 모듈 시험(질문 · 답 · 1회성 · 거두기) | 🚧 | 10-04 §21 · §22 첫 질문도 인라인(판정 = `is_active() && window` · 657679c 결함 수정 · 494a9f8) · T3는 창이 없어 대화상자 길 · **실기 판정 필수**(같은 이름 3개 복사 → 진행 창 안 질문 3번 · 막대 유지 · 파란 [닫기]) · T-96 나머지(카드형 · 상태바 진행 칸 · 완료 토스트) 후속 |
 | T-134 · I18N-RELABEL | 언어 전환 때 일회성 라벨 갱신(편집 메뉴 · 설정 창 · 도크 · 네비 · 보조 창 6종) · 하드코딩 문자열 일부 · 낡은 문구 | `main.rs::install_ctl_labels` · `App::relabel` · `Panel::relabel` · `*_win.rs::relabel` | T2 · T3 | `relabel_refreshes_one_time_labels` · keys_win/prefs_win relabel 시험 | 🚧 | 10-04 §13 · §15 대체 언어 = 시스템 언어 → 영어(`load_with_system` · `fallback_is_system_language_then_english`) · 남은 것 = 자가 점검 창 · 라이선스 문구 · 허용값 · unsupported · Command Prompt 비교 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 |
 | WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |
