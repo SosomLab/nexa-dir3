@@ -79,7 +79,13 @@ fn kind_of(path: &Path, b: &Basic) -> String {
 }
 
 /// 정보 줄(dir2 `dock_info`): 선택 1 = 기본 정보 8줄 · 여럿 = 개수 · 없음 = 현재 폴더.
-pub(crate) fn info_lines(selected: &[PathBuf], current: &Path) -> Vec<String> {
+///
+/// `on_disk` = 디스크 할당 크기 조회(플랫폼 `Disk::size_on_disk` · dir2 SHELL-081) — 파일이고 값이 있을 때만 크기 아래 한 줄.
+pub(crate) fn info_lines(
+    selected: &[PathBuf],
+    current: &Path,
+    on_disk: &dyn Fn(&Path) -> Option<u64>,
+) -> Vec<String> {
     match selected {
         // 가상 최상위는 내부 표식(`::PC::`)이 아니라 경로 바와 같은 표시명으로(10-03 캡처 검토에서 적발).
         [] => {
@@ -103,6 +109,9 @@ pub(crate) fn info_lines(selected: &[PathBuf], current: &Path) -> Vec<String> {
                 ];
                 if let Some(sz) = b.size {
                     v.push(trf("info.size", &[&fmt_size_long(sz)]));
+                    if let Some(used) = on_disk(one) {
+                        v.push(trf("info.sizeOnDisk", &[&fmt_size_long(used)]));
+                    }
                 }
                 let t = |ms: Option<i64>| ms.map(format_time).unwrap_or_default();
                 v.push(trf("info.created", &[&t(b.created)]));
@@ -190,19 +199,39 @@ mod tests {
         std::fs::write(dir.join("e.txt"), b"").unwrap();
         std::fs::write(dir.join("b.bin"), b"a\0b").unwrap();
         let a = dir.join("a.txt");
-        let lines = info_lines(std::slice::from_ref(&a), &dir);
+        let none = |_: &Path| None;
+        let lines = info_lines(std::slice::from_ref(&a), &dir, &none);
         assert_eq!(lines[0], "Name: a.txt");
+        assert!(!lines.iter().any(|l| l.contains("on disk")), "모르면 생략");
+        // 디스크 할당 크기(SHELL-081): 값이 있으면 크기 바로 아래 한 줄 · 폴더에는 묻지 않는다.
+        let some = |_: &Path| Some(4096u64);
+        let with = info_lines(std::slice::from_ref(&a), &dir, &some);
+        assert_eq!(with[3], "Size: 11 bytes");
+        assert!(
+            with[4].starts_with("Size on disk: 4.0") && with[4].contains("4,096"),
+            "{}",
+            with[4]
+        );
+        assert!(
+            !info_lines(std::slice::from_ref(&dir.join("sub")), &dir, &some)
+                .iter()
+                .any(|l| l.contains("on disk")),
+            "폴더 = 줄 없음"
+        );
         assert_eq!(lines[1], "Kind: TXT");
         assert!(lines[2].starts_with("Path: "));
         assert_eq!(lines[3], "Size: 11 bytes");
         assert!(lines.iter().any(|l| l.starts_with("Modified: 20")));
         assert_eq!(
-            info_lines(&[], &dir)[0],
+            info_lines(&[], &dir, &none)[0],
             format!("Current folder: {}", dir.display())
         );
-        assert_eq!(info_lines(&[a, dir.join("sub")], &dir), vec!["2 selected"]);
         assert_eq!(
-            info_lines(std::slice::from_ref(&dir.join("sub")), &dir)[1],
+            info_lines(&[a, dir.join("sub")], &dir, &none),
+            vec!["2 selected"]
+        );
+        assert_eq!(
+            info_lines(std::slice::from_ref(&dir.join("sub")), &dir, &none)[1],
             "Kind: Folder"
         );
         let one = |name: &str, map: &str, dis: &str| {

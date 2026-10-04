@@ -735,7 +735,13 @@ impl App {
                     (out.lines, out.image)
                 }
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
-                _ => (dockinfo::info_lines(&selected, &current), None),
+                _ => {
+                    let disk = &*self.platform.disk;
+                    (
+                        dockinfo::info_lines(&selected, &current, &|p| disk.size_on_disk(p)),
+                        None,
+                    )
+                }
             };
             let subject = selected.first().map_or_else(
                 || current.display().to_string(),

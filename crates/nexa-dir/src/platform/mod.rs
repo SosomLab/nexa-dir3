@@ -324,6 +324,30 @@ pub(crate) trait Disk {
     fn volumes_stamp(&self) -> u64 {
         0
     }
+    /// **디스크 할당 크기**(dir2 SHELL-081 — 탐색기 속성의 "디스크 할당 크기"): 파일이 실제로 차지하는 바이트(압축 · 스파스 반영)를
+    /// 클러스터 단위로 올린 값. 모르면 · 물으면 안 되는 경우(네트워크 경로 = 왕복이 UI를 멈춘다 · 클라우드 온라인 전용 파일 ·
+    /// 폴더)는 `None` → 호출부가 그 줄을 생략한다.
+    fn size_on_disk(&self, _path: &Path) -> Option<u64> {
+        None
+    }
+}
+
+/// 클러스터 올림(순수 · dir2 fileinfo.rs `round_up_cluster`): 클러스터 0(모름)이면 점유 바이트 그대로 · 0바이트 = 0.
+/// 압축 파일은 점유가 논리 크기보다 작을 수 있다(그대로 둔다).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn round_up_cluster(used: u64, cluster: u64) -> u64 {
+    if cluster == 0 || used == 0 {
+        return used;
+    }
+    used.div_ceil(cluster) * cluster
+}
+
+/// Unix의 디스크 할당 크기 = `st_blocks` × 512(POSIX 단위 · 이미 블록 단위로 올려진 값) — 파일만.
+#[cfg(unix)]
+pub(crate) fn unix_size_on_disk(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    let md = std::fs::symlink_metadata(path).ok()?;
+    md.is_file().then(|| md.blocks() * 512)
 }
 
 /// Unix의 볼륨 구성 지문 = "내 PC" 항목 이름들의 해시(`ndir_vfs::drive_entries` — `/proc/self/mounts` · `/Volumes` 읽기).
@@ -1036,6 +1060,34 @@ pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
 
 #[cfg(test)]
 mod tests {
+    /// 디스크 할당 크기의 클러스터 올림(dir2 fileinfo.rs:431 시험 이식): 올림 · 딱 맞음 · 클러스터 모름 · 0바이트.
+    #[test]
+    fn cluster_round_up() {
+        use super::round_up_cluster;
+        assert_eq!(round_up_cluster(1, 4096), 4096);
+        assert_eq!(round_up_cluster(4096, 4096), 4096);
+        assert_eq!(round_up_cluster(4097, 4096), 8192);
+        assert_eq!(round_up_cluster(123, 0), 123, "클러스터 모름 = 그대로");
+        assert_eq!(round_up_cluster(0, 4096), 0, "0바이트 = 0");
+    }
+
+    /// 실제 파일의 디스크 할당 크기(이 OS 구현): 내용이 있는 파일 = 논리 크기 이상의 블록 배수 · 폴더 = 없음.
+    #[test]
+    fn native_size_on_disk_for_file_not_folder() {
+        let dir = std::env::temp_dir().join(format!("ndir-ondisk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let f = dir.join("data.bin");
+        std::fs::write(&f, vec![7u8; 5000]).expect("write");
+        let p = super::Platform::native();
+        assert_eq!(p.disk.size_on_disk(&dir), None, "폴더 = 묻지 않는다");
+        // 파일 시스템에 따라(압축 · 지연 할당) 값이 다를 수 있다 — 주면 512의 배수여야 한다.
+        if let Some(used) = p.disk.size_on_disk(&f) {
+            assert_eq!(used % 512, 0, "{used}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     /// 글꼴 지정 문자열: 끝 숫자 = 크기 · 굵기 낱말 제거 · 따옴표/공백 · 크기 없음/범위 밖 = None.

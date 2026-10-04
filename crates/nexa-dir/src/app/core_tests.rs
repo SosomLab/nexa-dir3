@@ -4819,7 +4819,7 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
 /// 도크 정보: 내 PC(가상 최상위)에서는 내부 표식 `::PC::`가 아니라 표시명을 보인다.
 #[test]
 fn dock_info_shows_display_name_for_virtual_root() {
-    let lines = crate::dockinfo::info_lines(&[], std::path::Path::new(ndir_vfs::MY_PC));
+    let lines = crate::dockinfo::info_lines(&[], std::path::Path::new(ndir_vfs::MY_PC), &|_| None);
     assert_eq!(lines.len(), 1);
     assert!(!lines[0].contains("::PC::"), "{lines:?}");
     assert!(lines[0].contains(&ndir_i18n::tr("nav.mypc")), "{lines:?}");

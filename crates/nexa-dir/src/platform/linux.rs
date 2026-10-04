@@ -475,6 +475,10 @@ impl FileClipboard for X11Files {
 pub(super) struct NativeDisk;
 
 impl Disk for NativeDisk {
+    fn size_on_disk(&self, path: &Path) -> Option<u64> {
+        super::unix_size_on_disk(path)
+    }
+
     fn volumes_stamp(&self) -> u64 {
         super::unix_volumes_stamp()
     }

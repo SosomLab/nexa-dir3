@@ -20,6 +20,8 @@ pub(crate) struct FakeLog {
     /// 주입: 바로 가기 대상(`link_target`이 돌려줄 값).
     pub link_target: Option<PathBuf>,
     pub watched: Vec<PathBuf>,
+    /// 주입: 디스크 할당 크기(`Disk::size_on_disk` · `None` = 모름).
+    pub size_on_disk: Option<u64>,
     /// 주입: 볼륨 구성 지문(`Disk::volumes_stamp` · 0 = 모름).
     pub volumes: u64,
     /// 주입: 휴지통으로 보내지 못하는 경로(`Trash::trash`가 이것만 남긴다 → `remaining`이 돌려준다).
@@ -253,6 +255,10 @@ impl Opener for FakeOpen {
 }
 
 impl Disk for FakeDisk {
+    fn size_on_disk(&self, _path: &Path) -> Option<u64> {
+        self.0.borrow().size_on_disk
+    }
+
     fn volumes_stamp(&self) -> u64 {
         self.0.borrow().volumes
     }

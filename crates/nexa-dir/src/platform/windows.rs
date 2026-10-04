@@ -143,6 +143,31 @@ extern "system" {
     ) -> isize;
     fn CloseHandle(h: isize) -> i32;
     fn GetLogicalDrives() -> u32;
+    fn GetCompressedFileSizeW(name: *const u16, high: *mut u32) -> u32;
+    fn GetDiskFreeSpaceW(
+        root: *const u16,
+        sectors_per_cluster: *mut u32,
+        bytes_per_sector: *mut u32,
+        free_clusters: *mut u32,
+        total_clusters: *mut u32,
+    ) -> i32;
+    fn GetFileAttributesW(name: *const u16) -> u32;
+    fn SetLastError(code: u32);
+}
+
+/// 파일 속성: 폴더 · 오프라인(온라인 전용) · 접근하면 내려받는 플레이스홀더(dir2 SHELL-085).
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000;
+const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x0040_0000;
+
+/// 디스크 할당 크기를 물어도 되는 대상인가(순수): 속성을 읽지 못함 · 폴더 · 클라우드 온라인 전용(오프라인/플레이스홀더)은 아니다.
+pub(super) fn wants_size_on_disk(attrs: u32) -> bool {
+    attrs != u32::MAX
+        && attrs
+            & (FILE_ATTRIBUTE_DIRECTORY
+                | FILE_ATTRIBUTE_OFFLINE
+                | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+            == 0
 }
 
 #[link(name = "user32")]
@@ -197,6 +222,50 @@ const DROPEFFECT_MOVE: u32 = 2;
 pub(super) struct NativeDisk;
 
 impl Disk for NativeDisk {
+    fn size_on_disk(&self, path: &Path) -> Option<u64> {
+        // 네트워크 경로(`\\server\share`)는 묻지 않는다 — 볼륨 조회가 네트워크 왕복이라 UI 스레드를 멈춘다(dir2 fileinfo.rs:83).
+        let text = path.as_os_str().to_string_lossy();
+        if text.starts_with("\\\\") {
+            return None;
+        }
+        let w = wide(path);
+        // SAFETY: NUL 종단 UTF-16 경로 · 출력 포인터는 살아 있는 지역 변수. GetCompressedFileSizeW는 실패를 0xFFFF_FFFF +
+        // GetLastError ≠ 0으로 알린다(정상 값일 수도 있어 호출 전에 오류 코드를 비운다).
+        let used = unsafe {
+            if !wants_size_on_disk(GetFileAttributesW(w.as_ptr())) {
+                return None;
+            }
+            let mut high = 0u32;
+            SetLastError(0);
+            let low = GetCompressedFileSizeW(w.as_ptr(), &mut high);
+            if low == u32::MAX && GetLastError() != 0 {
+                return None;
+            }
+            (u64::from(high) << 32) | u64::from(low)
+        };
+        // 클러스터 크기는 볼륨 루트("C:\")에 묻는다.
+        let root = path
+            .components()
+            .next()?
+            .as_os_str()
+            .to_string_lossy()
+            .into_owned();
+        let root: Vec<u16> = format!("{root}\\")
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let (mut spc, mut bps, mut free, mut total) = (0u32, 0u32, 0u32, 0u32);
+        // SAFETY: NUL 종단 UTF-16 루트 · 출력 포인터는 살아 있는 지역 변수 · 실패 = 0 반환.
+        let ok =
+            unsafe { GetDiskFreeSpaceW(root.as_ptr(), &mut spc, &mut bps, &mut free, &mut total) };
+        let cluster = if ok != 0 {
+            u64::from(spc) * u64::from(bps)
+        } else {
+            0
+        };
+        Some(super::round_up_cluster(used, cluster))
+    }
+
     fn volumes_stamp(&self) -> u64 {
         // SAFETY: 인자 없는 조회(드라이브 문자 비트맵 · A = 비트 0).
         u64::from(unsafe { GetLogicalDrives() }).max(1)
