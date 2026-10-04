@@ -4,6 +4,7 @@
 
 ## 2026-10-04
 
+- **디스크 · 네트워크 칸 = 두 줄**(위 ↑ 빨강 · 아래 ↓ 파랑 · 9.5 px 고정 · nexa-ui 142 `StatusSeg.rows`) · 값/단위 글꼴 차등(§18) 철회 → [journal 10-04 §19](journal/2026-10-04.md)
 - **시스템 상태 칸 글꼴**(값 = 상태줄 −1 · 단위 = −2 · 폭도 그 크기로 · 아래쪽 맞춤 · nexa-ui 141 `font_delta`) → [journal 10-04 §18](journal/2026-10-04.md)
 - **상태줄 우클릭 = 툴바와 같은 메뉴**(상태바 편집… · 설정…) · 새 게이트 첫 quick 적용 · nexa-ui 139 · 140차(다른 PC) ff-pull 뒤 full 통과 → [journal 10-04 §17](journal/2026-10-04.md)
 - **게이트 단계화**(DR-26 · `scripts/gate.sh` auto/quick/full · 사용자 "전수는 기록 없음 · 오래됨 · 핵심 변경 · 중요 시점에만") · docs/18 §3 단일 원천 재작성 · docs/15 DoD ④ → [journal 10-04 §16](journal/2026-10-04.md)
