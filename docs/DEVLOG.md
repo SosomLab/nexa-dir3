@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **T4 시나리오 OS 분기**(`.scn` 모든 키에 `@windows`/`@linux`/`@macos`/`@unix` · ctx-menu · launcher 분기) · **CI Linux xvfb T4 관찰 단계**(continue-on-error · 산출물 t4-linux) · 864a0de · T-117 → [journal 10-05 §29](journal/2026-10-05.md)
 - **드래그 발신 1차**(Windows OLE · 선택 파일을 다른 프로그램으로 끌어다 놓기 · CF_HDROP · 원본 안 지움 · d24bc51 · T-147 · 실기 6항목 대기) · §27 정정 철회(협업 세션 오류) · T-117 사전 분석 → [journal 10-05 §28](journal/2026-10-05.md)
 - **T-147 DnD 사전 분석**(dir2 = CF_HDROP만 발신 · 텍스트 드롭 수신 없음 · 7-Zip 지연 렌더링 스테이징 · VMware/WT 근거 0 → 실측 필요 · dir3 = winit 드롭 끄기 + OleInitialize 필요) · CI 36ee393 · 77ffa74 녹색 → [journal 10-05 §27](journal/2026-10-05.md)
 - **T-150 시험 보강 +13**(X버튼 · 타입어헤드 · 커서 아래 휠 · 항상 맨 위 · 붙여넣기 대상 · F3/Tab/Ctrl+Tab 키 경로 · 세션 디바운스 · 터미널 cd · 키 라우팅 · 선택 드래그 스크롤 · 잘라내기 흐림 · OS 테마 · 히트 존 · 36ee393 · 77ffa74) · T-147 DnD 사전 분석 착수 → [journal 10-05 §26](journal/2026-10-05.md)
