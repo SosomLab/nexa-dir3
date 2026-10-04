@@ -96,6 +96,17 @@ fn materialize(dest: &std::path::Path, src: &platform::TemplateSource) -> std::i
     }
 }
 
+/// 결과 안내의 "건너뜀" 수(순수): 엔진이 건너뛴 항목 + **취소로 손대지 못한 항목**(전체 − 전송 − 건너뜀 − 실패). 취소가 아니면
+/// 엔진 값 그대로(사용자 10-04 "취소하면 건너뛴 파일은 전체가 되어야 한다").
+pub(crate) fn skipped_total(count: usize, out: &Outcome) -> usize {
+    let handled = out.transferred.len() + out.skipped.len() + out.errors.len();
+    if out.canceled {
+        out.skipped.len() + count.saturating_sub(handled)
+    } else {
+        out.skipped.len()
+    }
+}
+
 impl App {
     /// 붙여넣을 원본(OS 파일 클립보드 우선 · 없으면 앱 내 사본) → (경로, 잘라내기).
     pub(crate) fn clip_sources(&self) -> Option<(Vec<PathBuf>, bool)> {
@@ -404,12 +415,20 @@ impl App {
         if self.progress_win.is_active() {
             let ms = self.settings.int("transfer.close_ms").max(0) as u64;
             let now = self.started.elapsed().as_millis() as u64;
-            let items = job
+            let mut items = job
                 .shared
                 .items
                 .lock()
                 .map(|v| v.clone())
                 .unwrap_or_default();
+            // 취소 = 손대지 못한 항목(아직 미처리 · 하던 중)도 "건너뜀"으로 결정된 것이다 — 밝은 회색(미처리)으로 남기지 않는다.
+            if out.canceled {
+                for i in &mut items {
+                    if matches!(i.status, SegStatus::Pending | SegStatus::Active) {
+                        i.status = SegStatus::Skipped;
+                    }
+                }
+            }
             self.progress_win.update(
                 job.shared.done.load(Ordering::Relaxed),
                 job.shared.total.load(Ordering::Relaxed),
@@ -450,8 +469,9 @@ impl App {
         }
         self.sync_cut_marks();
         let mut parts = vec![trf("ops.done", &[&out.transferred.len().to_string()])];
-        if !out.skipped.is_empty() {
-            parts.push(trf("ops.skipped", &[&out.skipped.len().to_string()]));
+        let skipped = skipped_total(job.count, &out);
+        if skipped > 0 {
+            parts.push(trf("ops.skipped", &[&skipped.to_string()]));
         }
         if !out.errors.is_empty() {
             parts.push(trf("ops.errors", &[&out.errors.len().to_string()]));

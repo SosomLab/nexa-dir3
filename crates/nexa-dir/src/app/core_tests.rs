@@ -1394,6 +1394,37 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 전송 결과의 "건너뜀" 수: 취소면 손대지 못한 항목까지(3개 중 첫 질문에서 취소 = 3) · 취소가 아니면 엔진 값 그대로 ·
+/// 전송 · 실패한 항목은 빼고 센다.
+#[test]
+fn canceled_transfer_counts_untouched_items_as_skipped() {
+    use crate::app::ops::skipped_total;
+    use ndir_ops::Outcome;
+    let p = |s: &str| PathBuf::from(s);
+    // 첫 항목의 덮어쓰기 질문에서 [취소]: 엔진은 그 항목만 건너뜀으로 적고 멈춘다.
+    let out = Outcome {
+        skipped: vec![p("a")],
+        canceled: true,
+        ..Default::default()
+    };
+    assert_eq!(skipped_total(3, &out), 3);
+    // 1개 전송 · 1개 실패 뒤 취소(5개 중) = 나머지 3.
+    let out = Outcome {
+        transferred: vec![(p("a"), p("x/a"))],
+        errors: vec![(p("b"), "denied".into())],
+        canceled: true,
+        ..Default::default()
+    };
+    assert_eq!(skipped_total(5, &out), 3);
+    // 취소가 아니면 엔진 값 그대로.
+    let out = Outcome {
+        transferred: vec![(p("a"), p("x/a"))],
+        skipped: vec![p("b")],
+        ..Default::default()
+    };
+    assert_eq!(skipped_total(3, &out), 1);
+}
+
 /// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만
 /// 앱 언어로 · 이름 복사는 그 **바로 아래**(설정 순서보다 우선) · 셸에 없으면 둘 다 아래 고유 구역 · 이름 복사를 숨기면 어디에도 없다 ·
 /// 복사 내용 = 한 줄에 하나(전체 경로 / 이름만).
