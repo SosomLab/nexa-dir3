@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **메뉴 바도 순환 이동**(`menu.wrap_around` · nexa-ui 156 · 1990a54 · T-143 ✅) · **Linux T4 CI 필수 단계**(관찰 2회차 20/20 · 7de27b1 · T-117 ✅) · 회차 요약(T-148 6/6 · T-149 13건 · T-150 13/19) → [journal 10-05 §32](journal/2026-10-05.md)
 - **도크 정보 "디스크 할당 크기"**(Windows 압축/클러스터 올림 · Unix st_blocks · 폴더/온라인 전용/네트워크 제외 · 1b0b1a4 · T-149 18 일부 · SHELL-081) → [journal 10-05 §31](journal/2026-10-05.md)
 - **메뉴 글자 키**(`&` 니모닉 → 첫 글자 · 하나 = 실행 · 여럿 = 순환 · 설정 `menu.char_jump` 기본 on · NEW-031 · nexa-ui 155 · 8370165 · T-149 16) · T-117 관찰 1회차 = Linux 러너 X 런타임 없음 → 3a0157b → [journal 10-05 §30](journal/2026-10-05.md)
 - **T4 시나리오 OS 분기**(`.scn` 모든 키에 `@windows`/`@linux`/`@macos`/`@unix` · ctx-menu · launcher 분기) · **CI Linux xvfb T4 관찰 단계**(continue-on-error · 산출물 t4-linux) · 864a0de · T-117 → [journal 10-05 §29](journal/2026-10-05.md)
