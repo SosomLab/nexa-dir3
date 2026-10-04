@@ -151,6 +151,8 @@
 | T-135 | ⚠ macOS 휴지통 — **운영 결함**: `SystemTrash::trash_one`이 trashItemAtURL 성공 + resultingItemURL nil이면 실패 판정 → HomeTrash 폴백이 이미 없는 원본 rename → ENOENT(성공했는데 실패 토스트 · undo 기록 없음 · 10-04 §2 원인 규명) · 시험 `system_trash_round_trip` 흔들림 2회 · 실제 시스템 휴지통 사용(규약 위반 소지) → 판정 순수 함수 + MC/DC · 폴백은 원본이 남아 있을 때만 · 시험은 #[ignore]/env 가드/자가 점검 opt-in | P1 | 소 | — | SHELL-049 · T-52 · CI | ✅ 10-04 §3(e73e06a · `trash_outcome` · 시험 = CI 전용 · CI 성공) |
 | T-136 | ⚠ T4 `delete-confirm` 흔들림 조사 — 10-04 2회(1회째 exit 0 · 300 ms 뒤 dlg.dump 타이밍 · 2회째 **exit 101 패닉**) · 단독 25 + 부하 20회 재현 실패 · 다음 실패 때 `tests/out/delete-confirm/home/crash/` 보존 → 패닉 위치 · 고정 대기(@after:300) → 조건 대기(@idle) 검토 | P1 | 소 | — | CI-108 · T-29 | ☐ |
 | T-137 | T4 반복 실행 화면 격리 — 재현 루프의 시나리오 창이 사용자 데스크톱을 가리고 결함으로 오인(10-04 §21) → xvfb(`xvfb-run` · X11 백엔드 강제) 또는 반복 전 사용자 알림 · 이 PC에 xvfb 없음(설치 = 사용자 결정) · CI ubuntu xvfb(T-117)와 함께 | P2 | 소 | — | CI-108 · T-117 | ☐ |
+| T-138 | **Command Palette** — Ctrl(macOS Cmd)+Shift+P · 명령 검색 · 실행(참고 = nexa-sql `palette.rs` · 명령 표 `commands.rs` 라벨/단축키) — 사용자 요청 10-04 · 개발 세션 검토 중 | P1 | 중 | — | CMD · NEW | ☐ |
+| T-139 | gate.sh 판정 개선 — 형제 저장소(nexa-ui · nexa-license)는 `crates/` 등 코드 변경만 full 사유로(지금은 HEAD가 바뀌면 문서 커밋에도 full · 10-04 §22) | P2 | 소 | — | DR-26 | ☐ |
 | T-117 | T4 시나리오 Linux 실행 — Windows 전제 3개 분기(`ctx-menu` 셸 배경 항목 · `launcher` · `selfcheck-win`) · CI ubuntu xvfb 단계(T-06 후속) | P1 | 소 | — | CI-108 | ☐ |
 | T-114 | macOS 실기 맞춤(사용자 "동일한 과정을 맥에서도") — 이미 적용: 점 파일 = 숨김 · 선 쉐브론 · 터미널 폴백 em · 칸 폭 반올림 / 남음: 행 아이콘(NSWorkspace iconForFile) · 시스템 터미널 글꼴(Terminal.app 프로필) · 우클릭 통합 | P1 | 중 | T-112 | NEW-012 · NEW-016 | ☐ |
 
