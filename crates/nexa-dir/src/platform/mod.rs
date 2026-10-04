@@ -144,6 +144,9 @@ pub(crate) struct ShellIcon {
 pub(crate) enum MenuTarget {
     /// 선택 항목들.
     Rows(Vec<PathBuf>),
+    /// 선택 항목들 + **확장 동사**(Shift+우클릭 · dir2 SHELL-004 `CMF_EXTENDEDVERBS` — "경로로 복사" · "PowerShell 창 열기" 등
+    /// 평소 숨는 항목까지). 캐시 · 구축 · 실행이 평소 메뉴와 따로 간다(대상이 다르다).
+    RowsExtended(Vec<PathBuf>),
     /// 폴더 배경.
     Bg(PathBuf),
 }
@@ -219,7 +222,7 @@ pub(crate) trait ContextMenuProvider {
     fn try_items(&self, target: &MenuTarget) -> Option<Vec<ShellMenuItem>> {
         Some(
             match target {
-                MenuTarget::Rows(paths) => self.items(paths),
+                MenuTarget::Rows(paths) | MenuTarget::RowsExtended(paths) => self.items(paths),
                 MenuTarget::Bg(dir) => self.bg_items(dir),
             }
             .unwrap_or_default(),

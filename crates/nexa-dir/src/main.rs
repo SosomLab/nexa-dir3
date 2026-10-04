@@ -274,6 +274,8 @@ struct App {
     ctx_anchor_next: Option<(i32, i32)>,
     /// 비동기 셸 실행을 건 패널(`Invoked` 통지 처리용).
     ctx_invoke_panel: Option<usize>,
+    /// 지금 행 메뉴를 Shift+우클릭(확장 동사)으로 열었는가 — 실행 때 같은 대상을 쓴다.
+    ctx_extended: bool,
     /// 선행 구축(선택 머무름 300 ms · dir2 `CTX_PREBUILD_MS`): 지금 대상 · 머문 시작 · 구축 요청함.
     ctx_dwell_target: Option<platform::MenuTarget>,
     ctx_dwell_since: Instant,
@@ -570,6 +572,7 @@ impl App {
             ctx_anchor: (0, 0),
             ctx_anchor_next: None,
             ctx_invoke_panel: None,
+            ctx_extended: false,
             ctx_dwell_target: None,
             ctx_dwell_since: Instant::now(),
             ctx_dwell_done: false,

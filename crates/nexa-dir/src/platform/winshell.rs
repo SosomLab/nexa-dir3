@@ -31,7 +31,8 @@ use ::windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_APARTM
 use ::windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use ::windows::Win32::UI::Shell::{
     IContextMenu, IContextMenu2, IShellFolder, SHBindToParent, SHGetDesktopFolder,
-    SHParseDisplayName, CMF_NORMAL, CMINVOKECOMMANDINFO, CMINVOKECOMMANDINFOEX, GCS_VERBW,
+    SHParseDisplayName, CMF_EXTENDEDVERBS, CMF_NORMAL, CMINVOKECOMMANDINFO, CMINVOKECOMMANDINFOEX,
+    GCS_VERBW,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, DispatchMessageW, GetMenuItemCount, GetMenuItemInfoW,
@@ -113,7 +114,11 @@ struct Worker {
 
 impl Worker {
     /// 경로들 → IContextMenu + HMENU(QueryContextMenu). 접근 불가 항목은 제외 · 부모가 다른 항목은 첫 부모 기준으로 축소(SHELL-002).
-    unsafe fn build(owner: isize, paths: &[PathBuf]) -> Result<Built, PlatformError> {
+    unsafe fn build(
+        owner: isize,
+        paths: &[PathBuf],
+        extended: bool,
+    ) -> Result<Built, PlatformError> {
         let hwnd = HWND(owner as *mut core::ffi::c_void);
         let mut pidls: Vec<*mut ITEMIDLIST> = Vec::new();
         let mut children: Vec<*const ITEMIDLIST> = Vec::new();
@@ -159,14 +164,24 @@ impl Worker {
                 return Err(PlatformError::Failed(format!("CreatePopupMenu: {e}")));
             }
         };
-        let hr = icm.QueryContextMenu(hmenu, 0, ID_FIRST, ID_LAST, CMF_NORMAL);
+        // Shift+우클릭 = 확장 동사까지(dir2 SHELL-004).
+        let flags = if extended {
+            CMF_NORMAL | CMF_EXTENDEDVERBS
+        } else {
+            CMF_NORMAL
+        };
+        let hr = icm.QueryContextMenu(hmenu, 0, ID_FIRST, ID_LAST, flags);
         if hr.is_err() {
             let _ = DestroyMenu(hmenu);
             free(&pidls);
             return Err(PlatformError::Failed(format!("QueryContextMenu: {hr}")));
         }
         Ok(Built {
-            key: MenuTarget::Rows(paths.to_vec()),
+            key: if extended {
+                MenuTarget::RowsExtended(paths.to_vec())
+            } else {
+                MenuTarget::Rows(paths.to_vec())
+            },
             icm,
             hmenu,
             pidls,
@@ -232,7 +247,8 @@ impl Worker {
 
     unsafe fn build_for(owner: isize, target: &MenuTarget) -> Result<Built, PlatformError> {
         match target {
-            MenuTarget::Rows(paths) => Self::build(owner, paths),
+            MenuTarget::Rows(paths) => Self::build(owner, paths, false),
+            MenuTarget::RowsExtended(paths) => Self::build(owner, paths, true),
             MenuTarget::Bg(dir) => Self::build_bg(owner, dir),
         }
     }
@@ -270,7 +286,7 @@ impl Worker {
         };
         b.hwnd_owner = owner as *mut core::ffi::c_void;
         match target {
-            MenuTarget::Rows(_) => {
+            MenuTarget::Rows(_) | MenuTarget::RowsExtended(_) => {
                 // SAFETY: icm은 살아 있는 COM 객체 · 오프셋은 범위 검사됨.
                 unsafe { invoke_offset(b, offset)? };
                 Ok(None)

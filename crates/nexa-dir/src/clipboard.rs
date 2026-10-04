@@ -61,10 +61,13 @@ pub(crate) fn write_text(text: &str) -> bool {
 /// 텍스트 + HTML(서식 · 구문 색) 동시 게시(사용자 09-14 — PPT/Word에 같은 모양으로 붙여넣기).
 /// Windows = `CF_UNICODETEXT` + 등록 형식 `HTML Format`(CF_HTML) · macOS = osascript(«class HTML» + 문자열) ·
 /// Linux = 텍스트만(CLI 도구가 다중 형식을 못 올린다 — 후속). 실패 = `false`.
-pub(crate) fn write_rich(text: &str, html: &str) -> bool {
+///
+/// `rtf`(터미널 복사 서식 `rtf`/`both` · dir2 X-50): Windows = 등록 형식 `Rich Text Format`도 함께 게시(평문 → HTML → RTF 순 ·
+/// dir2 `write_text_html_rtf`) · macOS · Linux = 아직 게시하지 않는다(평문/HTML만 — 후속).
+pub(crate) fn write_rich(text: &str, html: Option<&str>, rtf: Option<&str>) -> bool {
     #[cfg(test)]
     {
-        let _ = html;
+        let _ = (html, rtf);
         write_text(text)
     }
     #[cfg(not(test))]
@@ -72,7 +75,7 @@ pub(crate) fn write_rich(text: &str, html: &str) -> bool {
         if crate::platform::fake_clipboard() {
             return write_text(text);
         }
-        imp::write_rich(text, html)
+        imp::write_rich(text, html, rtf)
     }
 }
 
@@ -189,26 +192,39 @@ mod imp {
         true
     }
 
-    pub(super) fn write_rich(text: &str, html: &str) -> bool {
+    pub(super) fn write_rich(text: &str, html: Option<&str>, rtf: Option<&str>) -> bool {
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-        let name: Vec<u16> = "HTML Format"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        let mut cf = super::cf_html(html);
-        cf.push(0);
+        let name_of =
+            |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+        // 등록 형식 = (이름, NUL로 끝나는 바이트) — 평문 뒤에 차례로 얹는다(실패해도 평문은 남는다).
+        let mut extra: Vec<(Vec<u16>, Vec<u8>)> = Vec::new();
+        if let Some(h) = html {
+            let mut cf = super::cf_html(h);
+            cf.push(0);
+            extra.push((name_of("HTML Format"), cf));
+        }
+        if let Some(r) = rtf {
+            let mut bytes = r.as_bytes().to_vec();
+            bytes.push(0);
+            extra.push((name_of("Rich Text Format"), bytes));
+        }
         if !open() {
             return false;
         }
         // SAFETY: 위에서 열었다 · 블록은 put()이 소유권을 넘긴다.
         let ok = unsafe {
-            let fmt = RegisterClipboardFormatW(name.as_ptr());
-            EmptyClipboard() != 0
+            let mut ok = EmptyClipboard() != 0
                 && put(
                     CF_UNICODETEXT,
                     std::slice::from_raw_parts(wide.as_ptr().cast::<u8>(), wide.len() * 2),
-                )
-                && (fmt == 0 || put(fmt, &cf))
+                );
+            if ok {
+                for (name, bytes) in &extra {
+                    let fmt = RegisterClipboardFormatW(name.as_ptr());
+                    ok &= fmt == 0 || put(fmt, bytes);
+                }
+            }
+            ok
         };
         // SAFETY: 위에서 열었다.
         unsafe {
@@ -293,9 +309,10 @@ mod imp {
     }
 
     /// macOS: AppleScript로 HTML + 문자열을 함께 올린다 · 실패/다른 OS = 텍스트만.
-    pub(super) fn write_rich(text: &str, html: &str) -> bool {
+    pub(super) fn write_rich(text: &str, html: Option<&str>, rtf: Option<&str>) -> bool {
+        let _ = rtf; // macOS · Linux: RTF 게시는 후속(평문/HTML만).
         #[cfg(target_os = "macos")]
-        {
+        if let Some(html) = html {
             let hex: String = html.bytes().map(|b| format!("{b:02X}")).collect();
             let esc = text.replace('\\', "\\\\").replace('"', "\\\"");
             let script =
@@ -356,7 +373,11 @@ mod fake_tests {
         assert_eq!(super::read_text(), None);
         assert!(super::write_text("ndir-test"));
         assert_eq!(super::read_text().as_deref(), Some("ndir-test"));
-        assert!(super::write_rich("plain", "<b>plain</b>"));
+        assert!(super::write_rich(
+            "plain",
+            Some("<b>plain</b>"),
+            Some("{\\rtf1 plain}")
+        ));
         assert_eq!(super::read_text().as_deref(), Some("plain"));
         let other = std::thread::spawn(super::read_text).join().unwrap();
         assert_eq!(other, None, "다른 시험(스레드)과 섞이지 않는다");

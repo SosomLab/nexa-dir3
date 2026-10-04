@@ -1394,6 +1394,53 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 터미널 복사 서식(`term.copy_format` · dir2 win.rs:7413-7414): text = 평문만 · html · rtf · both = 둘 다 · 모르는 값 = 평문만.
+/// RTF 본문은 ndir-term `export::to_rtf`(dir2 이식 · 그 크레이트 시험)가 만든다 — 여기서는 어느 서식을 게시할지의 판정만.
+#[test]
+fn terminal_copy_format_selects_html_and_rtf() {
+    use crate::app::term::copy_formats;
+    assert_eq!(copy_formats("text"), (false, false));
+    assert_eq!(copy_formats("html"), (true, false));
+    assert_eq!(copy_formats("rtf"), (false, true));
+    assert_eq!(copy_formats("both"), (true, true));
+    assert_eq!(copy_formats("???"), (false, false));
+}
+
+/// Shift+우클릭 = 확장 동사(dir2 SHELL-004): Shift를 누른 채 행 메뉴를 열면 셸에 확장 대상으로 묻고(평소 숨는 항목까지) ·
+/// 실행도 그 메뉴 대상으로 한다 · Shift 없이 열면 평소 메뉴.
+#[test]
+fn shift_right_click_asks_for_extended_shell_verbs() {
+    let (mut app, dir) = fixture("ctxshift");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.cursor = (300, 200);
+    app.open_row_menu(0);
+    let plain = app.dump_of("ctx").unwrap();
+    assert!(
+        plain.contains("fake.open") && !plain.contains("fake.extended"),
+        "{plain}"
+    );
+    app.startup_cmd("ui.press:escape");
+    app.shift = true;
+    app.open_row_menu(0);
+    let ext = app.dump_of("ctx").unwrap();
+    assert!(
+        ext.contains("fake.open") && ext.contains("fake.extended"),
+        "{ext}"
+    );
+    app.shift = false; // 메뉴가 뜬 뒤 Shift를 떼도 실행은 본 메뉴(확장 대상) 그대로.
+    app.startup_cmd("ctx.pick:fake.extended");
+    let log = app.platform.log.clone().expect("fake log");
+    let calls = log.borrow().calls.clone();
+    assert!(calls.iter().any(|c| c == "menu.extended:1"), "{calls:?}");
+    assert!(
+        calls.iter().any(|c| c == "menu.invoke:fake.extended:1"),
+        "{calls:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 설정 `menu.wrap_around`(메뉴 순환 이동 · 기본 on): 기동 때 메뉴 컨트롤에 들어가고 · 바꾸면 즉시 반영된다.
 #[test]
 fn menu_wrap_around_setting_reaches_the_menu() {

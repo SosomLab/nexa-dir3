@@ -21,7 +21,7 @@ mod sessions;
 mod settings;
 mod startup_cmd;
 pub(crate) mod statusline;
-mod term;
+pub(crate) mod term;
 mod watch;
 mod windows;
 

@@ -152,7 +152,9 @@ impl App {
             return self.open_bg_menu(panel);
         }
         self.ctx_set_owner();
-        let target = MenuTarget::Rows(sel.clone());
+        // Shift를 누른 채 열면 확장 동사까지(dir2 SHELL-004) — 선행 구축분(평소 메뉴)과 대상이 달라 새로 구축한다.
+        self.ctx_extended = self.shift;
+        let target = self.rows_target(sel.clone());
         match self.platform.ctxmenu.try_items(&target) {
             Some(shell) => {
                 let items = self.row_menu_items(&sel, Some(&shell));
@@ -218,10 +220,21 @@ impl App {
         false
     }
 
+    /// 행 메뉴의 셸 대상 — 이번 메뉴를 Shift로 열었으면([`Self::open_row_menu`]) 확장 동사 대상.
+    fn rows_target(&self, sel: Vec<PathBuf>) -> MenuTarget {
+        if self.ctx_extended {
+            MenuTarget::RowsExtended(sel)
+        } else {
+            MenuTarget::Rows(sel)
+        }
+    }
+
     /// 기다림이 끝났다 — 연 자리(`ctx_anchor`)에 완성된 메뉴를 한 번 연다.
     fn ctx_open_waited(&mut self, kind: CtxKind, target: &MenuTarget, shell: &[ShellMenuItem]) {
         let items = match (kind, target) {
-            (CtxKind::Row(_), MenuTarget::Rows(sel)) => self.row_menu_items(sel, Some(shell)),
+            (CtxKind::Row(_), MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel)) => {
+                self.row_menu_items(sel, Some(shell))
+            }
             _ => self.bg_menu_items(Some(shell)),
         };
         self.update_status();
@@ -452,9 +465,10 @@ impl App {
                         continue;
                     }
                     let filled = match (self.ctx_kind, &target) {
-                        (Some(CtxKind::Row(_)), MenuTarget::Rows(sel)) => {
-                            self.row_menu_items(sel, Some(&items))
-                        }
+                        (
+                            Some(CtxKind::Row(_)),
+                            MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel),
+                        ) => self.row_menu_items(sel, Some(&items)),
                         (Some(CtxKind::Bg(_)), MenuTarget::Bg(_)) => {
                             self.bg_menu_items(Some(&items))
                         }
@@ -650,14 +664,15 @@ impl App {
                 let target = if matches!(kind, CtxKind::Bg(_)) {
                     MenuTarget::Bg(self.panels[panel].root_path())
                 } else {
-                    MenuTarget::Rows(self.panels[panel].selected_paths())
+                    // 사용자가 본 메뉴와 같은 대상(확장 동사로 열었으면 그 메뉴)으로 실행한다 — id는 그 메뉴의 것이다.
+                    self.rows_target(self.panels[panel].selected_paths())
                 };
                 if self.platform.ctxmenu.invoke_async(other, &target) {
                     self.ctx_invoke_panel = Some(panel);
                 } else {
                     let result = match &target {
                         MenuTarget::Bg(dir) => self.platform.ctxmenu.invoke_bg(other, dir),
-                        MenuTarget::Rows(sel) => {
+                        MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel) => {
                             self.platform.ctxmenu.invoke(other, sel).map(|()| None)
                         }
                     };

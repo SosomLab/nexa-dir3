@@ -5,6 +5,16 @@ use crate::platform::ShellSpec;
 use crate::termview::{TermStyle, TermView, POLL_MS};
 use crate::*;
 
+/// 설정 `term.copy_format` → `(HTML도 게시, RTF도 게시)`(순수 · dir2 win.rs:7413-7414): text = 평문만 · html · rtf · both.
+pub(crate) fn copy_formats(value: &str) -> (bool, bool) {
+    match value {
+        "html" => (true, false),
+        "rtf" => (false, true),
+        "both" => (true, true),
+        _ => (false, false),
+    }
+}
+
 impl App {
     /// 설정 `term.shell`(빈 값 = 자동 탐지 · 아니면 후보 중 파일명/라벨 일치 · 없으면 그 경로 그대로).
     pub(crate) fn term_shell(&self) -> Option<ShellSpec> {
@@ -312,13 +322,10 @@ impl App {
         let Some(text) = self.terms[i].selected_text() else {
             return false;
         };
-        // 복사 서식(dir2 X-50 `term.copy_format`): html/both = 평문 + HTML 동시 게시(색·글꼴 = 현재 팔레트/설정) · rtf는 dir3 클립보드가 HTML만 게시(평문 폴백).
-        let fmt = self
-            .settings
-            .get("term.copy_format")
-            .unwrap_or("text")
-            .to_string();
-        let ok = if matches!(fmt.as_str(), "html" | "both") {
+        // 복사 서식(dir2 X-50 `term.copy_format`): html = 평문 + HTML · rtf = 평문 + RTF · both = 셋 다(색·글꼴 = 현재 팔레트/설정).
+        let (want_html, want_rtf) =
+            copy_formats(self.settings.get("term.copy_format").unwrap_or("text"));
+        let ok = if want_html || want_rtf {
             let pal = self.term_palette();
             let font = self
                 .settings
@@ -333,8 +340,12 @@ impl App {
             let px = self.settings.font_px("term.font_size").round() as i32;
             match self.terms[i].selected_runs() {
                 Some(runs) => {
-                    let html = ndir_term::export::to_html(&runs, &pal, &font, px.max(8));
-                    clipboard::write_rich(&text, &html) || clipboard::write_text(&text)
+                    let px = px.max(8);
+                    let html =
+                        want_html.then(|| ndir_term::export::to_html(&runs, &pal, &font, px));
+                    let rtf = want_rtf.then(|| ndir_term::export::to_rtf(&runs, &pal, &font, px));
+                    clipboard::write_rich(&text, html.as_deref(), rtf.as_deref())
+                        || clipboard::write_text(&text)
                 }
                 None => clipboard::write_text(&text),
             }

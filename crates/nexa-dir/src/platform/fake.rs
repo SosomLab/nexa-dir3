@@ -115,6 +115,26 @@ impl ContextMenuProvider for FakeMenu {
         note(&self.0, format!("menu.invoke:{id}:{}", paths.len()));
         Ok(())
     }
+    /// 확장 동사 대상(Shift+우클릭)이면 평소 항목 + `fake.extended` 한 개를 더 준다(시험이 구별할 수 있게).
+    fn try_items(&self, target: &MenuTarget) -> Option<Vec<ShellMenuItem>> {
+        Some(
+            match target {
+                MenuTarget::Rows(paths) => self.items(paths),
+                MenuTarget::RowsExtended(paths) => self.items(paths).map(|mut v| {
+                    note(&self.0, format!("menu.extended:{}", paths.len()));
+                    v.push(ShellMenuItem {
+                        id: "fake.extended".into(),
+                        label: "Fake Extended".into(),
+                        enabled: true,
+                        ..Default::default()
+                    });
+                    v
+                }),
+                MenuTarget::Bg(dir) => self.bg_items(dir),
+            }
+            .unwrap_or_default(),
+        )
+    }
     fn bg_items(&self, dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
         note(&self.0, format!("menu.bg_items:{}", dir.display()));
         Ok(vec![ShellMenuItem {
