@@ -195,6 +195,11 @@ impl App {
                     self.status_click(&id, right);
                 }
             }
+            // 도크 우클릭 = 글자 편집 메뉴(dir2 win.rs:7486-7491): 터미널 격자 = 복사 · 붙여넣기 · 모두 선택 /
+            // 정보 · 미리보기 글 = 복사 · 모두 선택. 해당 없으면 아래 일반 처리로.
+            Area::Dock(i)
+                if matches!(ev, InputEvent::RightDown { .. })
+                    && self.open_dock_edit_menu(i, inv) => {}
             Area::Dock(i) => {
                 // 도크 탭으로 터미널을 고르면 바로 입력할 수 있게 포커스를 준다(사용자 10-03 Linux 실기 — 종전에는 격자를 한 번 더
                 // 눌러야 했다). 셸은 다음 paint에서 시작한다.
@@ -621,6 +626,12 @@ impl App {
                     self.set_active(i);
                 }
                 self.open_path_edit_menu(i);
+            }
+            if self.panels[i].take_rename_menu() {
+                if i != self.active {
+                    self.set_active(i);
+                }
+                self.open_rename_edit_menu(i);
             }
             if self.panels[i].take_header_menu() {
                 if i != self.active {

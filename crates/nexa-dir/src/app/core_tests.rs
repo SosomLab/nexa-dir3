@@ -5662,3 +5662,56 @@ fn long_names_end_with_ellipsis() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 우클릭 글자 편집 메뉴 3곳(dir2 win.rs:7460-7600 `show_edit_popup` · CMD-086~096 · T-149 12): 이름 바꾸기 필드 = 경로 바와 같은
+/// 6항목(행 메뉴가 아니다) · 터미널 = 복사 · 붙여넣기 · 모두 선택 · 도크 글 = 복사 · 모두 선택.
+#[test]
+fn text_edit_menus_for_rename_terminal_and_dock() {
+    let (mut app, dir) = fixture("editmenus");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.command("edit.rename");
+    assert!(app.panels[0].rows().is_renaming());
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let (_, field, _) = app.panels[0].rows().rename_edit_info().expect("field");
+    let (x, y) = (field.x + 4, field.y + field.h / 2);
+    app.cursor = (x, y);
+    let entries = std::fs::read_dir(&dir).unwrap().count();
+    app.route(InputEvent::RightDown { x, y });
+    assert_eq!(
+        app.dump_of("ctx").unwrap().trim(),
+        "renameedit edit.undo edit.cut edit.copy edit.paste edit.delete edit.select_all"
+    );
+    assert!(app.panels[0].rows().is_renaming(), "메뉴가 떠도 편집 유지");
+    // 모두 선택 → 삭제 = 이름 글자만 지운다(파일은 그대로).
+    app.ctx_pick("edit.select_all");
+    app.route(InputEvent::RightDown { x, y });
+    app.ctx_pick("edit.delete");
+    assert_eq!(
+        app.panels[0].rows().rename_state().map(|s| s.1),
+        Some(String::new())
+    );
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        entries,
+        "파일 변화 없음"
+    );
+    app.startup_cmd("ui.press:escape");
+    // 터미널 · 도크 글 메뉴 구성.
+    app.open_term_edit_menu(0);
+    assert_eq!(
+        app.dump_of("ctx").unwrap().trim(),
+        "termedit edit.copy edit.paste edit.select_all"
+    );
+    app.ctx_pick("edit.select_all");
+    app.open_dock_text_menu(0);
+    assert_eq!(
+        app.dump_of("ctx").unwrap().trim(),
+        "docktext edit.copy edit.select_all"
+    );
+    app.ctx_pick("edit.select_all");
+    assert!(!app.tab_menu.is_open());
+    let _ = std::fs::remove_dir_all(&dir);
+}

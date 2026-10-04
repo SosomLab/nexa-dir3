@@ -17,6 +17,12 @@ pub(crate) enum CtxKind {
     Bg(usize),
     /// 경로 바 편집 필드의 글자 편집 메뉴(GAP-012).
     PathEdit(usize),
+    /// 이름 바꾸기 편집 필드의 글자 편집 메뉴(dir2 `EditMenuTarget::Rename` · CMD-086~091).
+    RenameEdit(usize),
+    /// 도크 정보 · 미리보기 글 메뉴(복사 · 모두 선택 — CMD-092/093) · 값 = 도크 자리.
+    DockText(usize),
+    /// 도크 터미널 메뉴(복사 · 붙여넣기 · 모두 선택 — CMD-094~096) · 값 = 도크 자리.
+    TermEdit(usize),
     /// 보조 메뉴(탭 상태바 칸 · 툴바 · 런처) — 항목 id가 스스로 뜻을 가진다(`aux.*` → `App::aux_menu_action`).
     Aux(usize),
 }
@@ -233,6 +239,110 @@ impl App {
         ];
         self.ctx_wait = None;
         self.open_ctx(CtxKind::PathEdit(panel), items);
+    }
+
+    /// 이름 바꾸기 편집 필드 메뉴(dir2 win.rs:7513-7531 — 경로 바와 같은 6항목 · 실행 = [`Self::rename_edit`]).
+    pub(crate) fn open_rename_edit_menu(&mut self, panel: usize) {
+        let Some((can_undo, has_sel, empty)) = self.panels[panel].rows().rename_menu_state() else {
+            return;
+        };
+        let has_text = clipboard::read_text().is_some_and(|t| !t.is_empty());
+        let items = vec![
+            CtxItem::maybe("edit.undo", tr("menu.edit.undo"), can_undo),
+            CtxItem::Separator,
+            CtxItem::maybe("edit.cut", tr("menu.edit.cut"), has_sel),
+            CtxItem::maybe("edit.copy", tr("menu.edit.copy"), has_sel),
+            CtxItem::maybe("edit.paste", tr("menu.edit.paste"), has_text),
+            CtxItem::maybe("edit.delete", tr("menu.edit.delete"), has_sel),
+            CtxItem::Separator,
+            CtxItem::maybe("edit.select_all", tr("menu.edit.selectAll"), !empty),
+        ];
+        self.ctx_wait = None;
+        self.open_ctx(CtxKind::RenameEdit(panel), items);
+    }
+
+    /// 도크 우클릭(dir2 win.rs:7486-7491 · 7533-7548): 터미널 격자 위 = 터미널 메뉴(포커스도 옮긴다 — 붙여넣기 대상 확정 ·
+    /// TUI 마우스 모드면 셸 몫이라 열지 않는다) · 고를 수 있는 글 위 = 글 메뉴. 열었으면 `true`.
+    pub(crate) fn open_dock_edit_menu(&mut self, dock: usize, inv: &mut Invalidations) -> bool {
+        let (x, y) = self.cursor;
+        if self.term_hit_at(x, y) == Some(dock) && self.terms[dock].started() {
+            if self.terms[dock].mouse_report(x, y, 2, true).is_some() {
+                return false;
+            }
+            self.set_term_focus(Some(dock), inv);
+            self.open_term_edit_menu(dock);
+            return true;
+        }
+        if self.docks[dock].text_selectable()
+            && self.docks[dock].content_rect().contains(Point { x, y })
+        {
+            self.open_dock_text_menu(dock);
+            return true;
+        }
+        false
+    }
+
+    /// 터미널 메뉴: 복사(선택이 있을 때) · 붙여넣기(클립보드에 글이 있을 때) · 모두 선택.
+    pub(crate) fn open_term_edit_menu(&mut self, dock: usize) {
+        let has_sel = self.terms[dock].selected_text().is_some();
+        let has_text = clipboard::read_text().is_some_and(|t| !t.is_empty());
+        let items = vec![
+            CtxItem::maybe("edit.copy", tr("menu.edit.copy"), has_sel),
+            CtxItem::maybe("edit.paste", tr("menu.edit.paste"), has_text),
+            CtxItem::Separator,
+            CtxItem::item("edit.select_all", tr("menu.edit.selectAll")),
+        ];
+        self.ctx_wait = None;
+        self.open_ctx(CtxKind::TermEdit(dock), items);
+    }
+
+    /// 도크 글(정보 · 미리보기) 메뉴: 복사(선택이 있을 때) · 모두 선택.
+    pub(crate) fn open_dock_text_menu(&mut self, dock: usize) {
+        let has_sel = self.docks[dock].selected_text().is_some();
+        let selectable = self.docks[dock].text_selectable();
+        let items = vec![
+            CtxItem::maybe("edit.copy", tr("menu.edit.copy"), has_sel),
+            CtxItem::Separator,
+            CtxItem::maybe("edit.select_all", tr("menu.edit.selectAll"), selectable),
+        ];
+        self.ctx_wait = None;
+        self.open_ctx(CtxKind::DockText(dock), items);
+    }
+
+    /// 도크 글 · 터미널 메뉴 실행.
+    fn dock_edit_action(&mut self, kind: CtxKind, id: &str) {
+        match kind {
+            CtxKind::TermEdit(i) => {
+                let mut inv = Invalidations::default();
+                self.set_term_focus(Some(i), &mut inv);
+                match id {
+                    "edit.copy" => {
+                        self.term_copy();
+                    }
+                    "edit.paste" => {
+                        self.term_paste();
+                    }
+                    "edit.select_all" => {
+                        self.term_select_all();
+                    }
+                    _ => {}
+                }
+            }
+            CtxKind::DockText(i) => match id {
+                "edit.copy" => {
+                    if let Some(t) = self.docks[i].selected_text() {
+                        let _ = clipboard::write_text(&t);
+                    }
+                }
+                "edit.select_all" => {
+                    let mut inv = Invalidations::default();
+                    self.docks[i].select_all_text(&mut inv);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        self.redraw();
     }
 
     /// 기다리던 메뉴 취소(다른 곳 클릭 · Esc · 키 입력).
@@ -612,8 +722,9 @@ impl App {
             return;
         };
         let panel = match kind {
-            CtxKind::Row(p) | CtxKind::Bg(p) | CtxKind::PathEdit(p) => p,
+            CtxKind::Row(p) | CtxKind::Bg(p) | CtxKind::PathEdit(p) | CtxKind::RenameEdit(p) => p,
             CtxKind::Aux(p) => return self.aux_menu_action(p, id),
+            CtxKind::DockText(_) | CtxKind::TermEdit(_) => return self.dock_edit_action(kind, id),
         };
         if panel != self.active {
             self.set_active(panel);
@@ -621,6 +732,11 @@ impl App {
         if matches!(kind, CtxKind::PathEdit(_)) {
             // 글자 편집 명령만(파일 명령으로 빠지지 않는다 — 편집이 이미 끝났으면 아무 일도 하지 않는다).
             let _ = self.path_edit(id);
+            return;
+        }
+        if matches!(kind, CtxKind::RenameEdit(_)) {
+            // 이름 글자 편집 명령만(편집이 이미 끝났으면 아무 일도 하지 않는다 — 파일 명령으로 빠지지 않는다).
+            let _ = self.rename_edit(id);
             return;
         }
         match id {
@@ -718,6 +834,9 @@ impl App {
             (Some(CtxKind::Row(_)), _) => "row",
             (Some(CtxKind::Bg(_)), _) => "bg",
             (Some(CtxKind::PathEdit(_)), _) => "pathedit",
+            (Some(CtxKind::RenameEdit(_)), _) => "renameedit",
+            (Some(CtxKind::DockText(_)), _) => "docktext",
+            (Some(CtxKind::TermEdit(_)), _) => "termedit",
             (None, Some(_)) => "tab",
             _ => "?",
         };

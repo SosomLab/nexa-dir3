@@ -86,6 +86,8 @@ pub(crate) struct Panel {
     pending_ctx: Option<bool>,
     /// 열 머리글 우클릭(메뉴 표시는 호스트 · 1회성 — dir2 win.rs:6262 `show_bar_popup(false)`).
     pending_header_menu: bool,
+    /// 이름 바꾸기 편집 필드 우클릭(글자 편집 메뉴 · 표시는 호스트 · 1회성 — dir2 `EditMenuTarget::Rename`).
+    pending_rename_menu: bool,
     /// 경로 바에 넣은 `shell:` 별칭(해석은 호스트의 플랫폼 포트 · 1회성 — dir2 panel.rs:1530).
     pending_alias: Option<String>,
     /// 경로 편집 필드 우클릭 — 호스트가 편집 메뉴(실행 취소 · 잘라내기 · 복사 · 붙여넣기 · 삭제 · 전체 선택)를 연다(GAP-012).
@@ -247,6 +249,7 @@ impl Panel {
             pending_rename: None,
             pending_ctx: None,
             pending_header_menu: false,
+            pending_rename_menu: false,
             pending_alias: None,
             pending_path_menu: false,
             session_dirty: false,
@@ -526,6 +529,10 @@ impl Panel {
 
     pub(crate) fn take_alias(&mut self) -> Option<String> {
         self.pending_alias.take()
+    }
+
+    pub(crate) fn take_rename_menu(&mut self) -> bool {
+        std::mem::take(&mut self.pending_rename_menu)
     }
 
     pub(crate) fn take_header_menu(&mut self) -> bool {
@@ -1725,6 +1732,14 @@ impl Panel {
                 // 경로 편집 중 필드 우클릭 = 편집 메뉴(dir2 win.rs:7472-7532) — 처음 우클릭(편집 진입)과 구분.
                 if matches!(ev, InputEvent::RightDown { .. }) && self.path_edit_at(x, y) {
                     self.pending_path_menu = true;
+                    return;
+                }
+                // 이름 바꾸기 편집 필드 우클릭 = 글자 편집 메뉴(dir2 win.rs:7478 `EditMenuTarget::Rename`) — 종전에는 행 메뉴가 떴다.
+                if matches!(ev, InputEvent::RightDown { .. })
+                    && self.rows().is_renaming()
+                    && self.rows().rename_hit(x, y)
+                {
+                    self.pending_rename_menu = true;
                     return;
                 }
                 // 열 머리글 우클릭 = 열 배치 메뉴(dir2 win.rs:6262-6304) — 종전에는 빈 곳 메뉴가 떴다.
