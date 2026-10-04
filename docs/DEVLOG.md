@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **상태줄 메모리 칸(M) 폭**: 견본 128.0GB 하나(`MEM_HINT`) · 숫자와 단위 빈칸 제거(`11.6GB`) · CPU 100.0% 기준 유지(사용자 확정) · 1e4520b · e7cd2b4 → [journal 10-05 §3](journal/2026-10-05.md)
 - **메뉴 ∧/∨ 띠 누르고 있기 = 계속 이동**(350 ms 뒤 70 ms마다 · nexa-ui 150) · **설정 `menu.wrap_around`**(메뉴 ↑/↓ 순환 · 기본 on · NEW-030) · ⚠ **gate.sh 시험 판정 오판 수정**(런처 시험 자식의 `error: Unrecognized option: 'version'` 줄 → 종료 코드 + 실패 수) · dff8a77 · 094997f → [journal 10-05 §2](journal/2026-10-05.md)
 - **사용자 요청 5건 묶음**: 상태줄 CPU · 메모리 사용률 단계 색(적음 ~ 심각 · 위험/심각 = 빨강 바탕 · nexa-ui 149 `tint`) · 메모리 창 [힙 정리] "정리 중…" 잠금 + 결과 줄 · 설정 `scroll.fast_keys`(키보드 ↑/↓ 고속 스크롤 · NEW-029) · 메뉴 ∧/∨ 띠 hover/클릭 3행 · D/N 두 줄 1 px 간격 가운데(nexa-ui 148) · 6c42c90 → [journal 10-05 §1](journal/2026-10-05.md)
 
