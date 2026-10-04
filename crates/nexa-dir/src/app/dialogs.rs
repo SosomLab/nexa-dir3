@@ -165,7 +165,10 @@ impl App {
     ) {
         // 진행 창이 떠 있으면 **그 창 안에서** 묻는다(사용자 10-04 — 따로 뜬 확인 창이 진행 창을 덮어 목록 · 진행 상태가
         // 안 보였다 · Wayland는 창 자리를 지정할 수 없어 겹침을 피할 길이 없다). 창이 없으면(진행 창 끔 · 시험) 대화상자.
-        if self.progress_win.is_open() {
+        // ★ "떠 있으면"이 아니라 **이 전송이 진행 창을 쓰면**으로 판정한다 — 첫 질문은 진행 창이 만들어지기 전에(같은 틱에)
+        // 도착해서, 창이 떠 있는지로 보면 첫 질문만 따로 뜬 확인 창으로 갔다(사용자 10-04 캡처). 진행 창은 질문을 먼저
+        // 받아 두었다가 그 크기로 열린다. 메인 창이 없는 시험은 종전 대화상자 길 그대로.
+        if self.progress_win.is_active() && self.window.is_some() {
             self.progress_win
                 .set_conflict(Some(trf("ops.overwrite", &[&ndir_ops::leaf_name(path)])));
             self.conflict_inline = Some(tx);
