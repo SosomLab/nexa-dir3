@@ -40,8 +40,8 @@
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 8 | 88 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 40 | 134 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2426 | 990 | 765 | 0 | 0 |
+| WINC | 174 | 174 | 41 | 133 | 0 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2427 | 989 | 765 | 0 | 0 |
 
 ## 행
 
@@ -167,6 +167,7 @@
 | SHELL-010 · 013 · 018 · 090~100 | 내 PC 클라우드 메뉴 · 숫자 ID 대역 · 진단 계측 · 접근성(UIA) · 비밀/코어 공용 · 예제 | — | — | — | ⚠ | 010 = CLOUD ☐ · 013 = 문자열 id · 018 = 단계 계측 로그(dir2 `NEXA_CTX_TIMING` → `%TEMP%` append)는 미이식 — `--selfcheck --only ctxmenu`(구축 ms · `prepared menu is instant` · 아이콘 수)가 대신(§71) · 접근성 = nexa-ui 범위 밖(후속 결정) |
 | SHELL-034~038 | 셸 수준 통지(SHCNE) · 프로브 스윕 · 감시 자가 치유 | `platform/winwatch.rs` · `PollWatcher` | T1 | winwatch 시험 | 🚧 | SHCNE(034) ☐ · 프로브/치유 ✅ · 10-05 §12 정리: ⚠ "프로브/치유 ✅"는 과대 — 치유(031)만 맞음 · 034 SHCNE 0건(T-148 ①) · 035 PollWatcher = mtime + 항목 수만(서명 2단계 없음) · 036 감시 = 두 패널 루트만(펼친 폴더 · 뷰포트 · 3 s/30 s 주기 없음) · 037 포커스 복귀 재열람 없음 · 038 WM_DEVICECHANGE 0건 · 10-05 §14: 038 장치 변경 = ✅(아래 행) · 034 SHCNE = 클라우드 묶음과 함께 대기(T-72 · dir2 용도 = OneDrive 플레이스홀더 감지) |
 | SHELL-038 · WINC-061 · DEV-CHANGE | 드라이브/볼륨이 붙거나 떨어지면 "내 PC" 재열람 + 용량 열 다시 채움 — dir2 `WM_DEVICECHANGE`(win.rs:7772-7787) 대신 3-OS 폴링 포트(`Disk::volumes_stamp` — Windows = GetLogicalDrives 비트맵 · Linux/macOS = 마운트 목록 해시 · 가짜 = 주입) · 1초 · 내 PC를 보는 패널이 있을 때만 | `platform/{mod,windows,linux,macos,fake}.rs` · `app/watch.rs::drives_tick` | T3 | `drive_set_changes_reload_my_pc` | ✅ | 10-05 §14(ba98ee9 · T-148 ①) · 한계 = 같은 드라이브 문자의 미디어 교체(CD)는 감지 못 함 · 실기(USB 꽂기/빼기) 사용자 |
+| WINC-151 · X-35 D4 · WATCH-DEFER | 이름 편집 · 경로 편집 · 전송 중에는 감시 다시 읽기를 미룬다(순수 판정 `reload_deferred`) · 미룬 폴더는 `App.watch_deferred`에 두고 다음 틱에 새 통지와 합쳐 다시 봄(통지 유실 없음) | `app/watch.rs::{reload_deferred, watch_tick}` · `App.watch_deferred` | T1 · T3 | `watch_reload_waits_while_renaming`(판정 4조합 + T3) | ✅ | 10-05 §20(5eda239 · T-149 14 · dir2 win.rs:9457-9485) · dir2 `pending_delete`(비동기 휴지통 삭제 중) 조건은 dir3 휴지통이 동기라 해당 없음 |
 | SHELL-045 · 050~052 | 클립보드 열기 재시도 · 텍스트/서식 복사 · 포커스 문맥 디스패치 | `platform/windows.rs::ClipGuard` · `clipboard.rs` · `app/input.rs` | T1·T3 | windows 클립보드 시험 · `fixed_columns…`(HTML 복사) | ✅ | |
 | SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | ☐ | DnD 2차(docs/port/19 §4-7 2~4차) |
 | SHELL-070~075 | 삭제·휴지통(확인 대화상자 · 잠긴 항목 · 완전 삭제 · 복원) | `app/ops.rs` · `trashop.rs` · `platform/*recycle*`·`macos.rs`·`linux.rs` | T1·T3·T5 | `dialogs_delete_permanent_and_paste_conflict` · `new_folder_rename_and_undo` · 휴지통 OS별 시험 · 자가 점검 trash | ✅ | |
