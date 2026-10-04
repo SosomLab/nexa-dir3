@@ -51,7 +51,7 @@
 | `windows 0.62`(cfg(windows)) | 셸 컨텍스트 메뉴(IContextMenu · HMENU 열거 · InvokeCommand) — 기능 Foundation·Graphics_Gdi·System_Com·UI_Shell(+Common)·UI_WindowsAndMessaging | MIT/Apache-2.0 | DR-8 OS 바인딩 | dir2와 같은 판 · 10-03 T-51 B-1부터 |
 | `wat 1`(dev) | 시험 전용 — WAT 텍스트 → .wasm 조립(격리·브레이커·ABI v2 시험) | Apache-2.0 WITH LLVM-exception | DR-7 | dir2 dev-dependency 동일 · 배포 바이너리에 안 들어간다 |
 | `regex-lite 0.1` | 일괄 이름 변경 정규식 | MIT/Apache-2.0 | DR-8 | dir2 `nexa-ops` 계승 |
-| `windows`/`windows-core 0.62` | Win32 바인딩(platform/windows만) | MIT/Apache-2.0 | DR-8 | 기능 플래그는 필요한 것만 |
+| `windows`/`windows-core 0.62` | Win32 바인딩(platform/windows만) | MIT/Apache-2.0 | DR-8 | 기능 플래그는 필요한 것만 · 10-05 d24bc51(T-147 OLE 드래그 발신): 기능 `Win32_System_Ole` · `Win32_System_Com_StructuredStorage` · `Win32_System_SystemServices` 추가 · `windows-core 0.62` 직접 의존(`#[implement]`가 `::windows_core` 경로를 가리킴 · 이미 끌려오던 같은 판 · Cargo.lock 1줄) |
 | `objc2` · `objc2-app-kit` · `objc2-foundation` | macOS(platform/macos · Dock 아이콘) | MIT | DR-8 | winit과 같은 판 |
 | `x11rb 0.13` | Linux 모달 transient 속성 | MIT/Apache-2.0 | DR-8 | nexa-sql 선례 |
 | (dev) `wat` | WASM 격리 시험 조립 | MIT/Apache-2.0 | DR-11 | dir2 dev-dep 계승 |

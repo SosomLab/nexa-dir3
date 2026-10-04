@@ -31,7 +31,7 @@
 | RENDER | 54 | 54 | 16 | 0 | 38 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
 | SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
-| SHELL | 75 | 75 | 45 | 10 | 11 | 0 | 0 |
+| SHELL | 75 | 75 | 45 | 19 | 11 | 0 | 0 |
 | SKEL | 291 | 291 | 150 | 91 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 90 | 0 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 65 | 53 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2489 | 929 | 763 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2489 | 938 | 763 | 0 | 0 |
 
 ## 행
 
@@ -171,7 +171,8 @@
 | WINC-151 · X-35 D4 · WATCH-DEFER | 이름 편집 · 경로 편집 · 전송 중에는 감시 다시 읽기를 미룬다(순수 판정 `reload_deferred`) · 미룬 폴더는 `App.watch_deferred`에 두고 다음 틱에 새 통지와 합쳐 다시 봄(통지 유실 없음) | `app/watch.rs::{reload_deferred, watch_tick}` · `App.watch_deferred` | T1 · T3 | `watch_reload_waits_while_renaming`(판정 4조합 + T3) | ✅ | 10-05 §20(5eda239 · T-149 14 · dir2 win.rs:9457-9485) · dir2 `pending_delete`(비동기 휴지통 삭제 중) 조건은 dir3 휴지통이 동기라 해당 없음 |
 | WINB-014 · PANEL-042 · WATCH-EXPANDED | 감시 대상 = 현재 폴더 + 화면에 펼쳐진 하위 폴더(`WATCH_CAP` 64) · 두 패널 합집합 · 통지가 그중 하나면 그 패널 다시 읽기(펼침 유지) | `filelist.rs::expanded_dirs(cap)` · `panel.rs::watch_dirs` · `app/watch.rs` | T3 | `watch_covers_expanded_folders` | ✅ | 10-05 §25(4bf2a2f · T-149 8 · dir2 win.rs:3545-3572) · **옮기지 않은 것** = WINB-018 서명 프로브(접힌 폴더 포함 뷰포트 폴더) — dir3 감시 포트가 OS 통지 + 폴링 폴백을 겸해 별도 프로브를 두지 않음 |
 | SHELL-045 · 050~052 | 클립보드 열기 재시도 · 텍스트/서식 복사 · 포커스 문맥 디스패치 | `platform/windows.rs::ClipGuard` · `clipboard.rs` · `app/input.rs` | T1·T3 | windows 클립보드 시험 · `fixed_columns…`(HTML 복사) | ✅ | |
-| SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | ☐ | DnD 2차(docs/port/19 §4-7 2~4차) |
+| SHELL-046~049 · 063~069 | 가상 파일(FileGroupDescriptor) 붙여넣기/드롭 · OLE DnD 완전(최적화 이동 · 자동 스크롤 · 발신 · 스테이징) | — | — | — | 🚧 | DnD 2차(docs/port/19 §4-7 2~4차) · 10-05 §28: 발신 1차 ✅(DND-SEND 행) · 수신 보강(자체 IDropTarget · 가상 파일 · 텍스트 · 자동 스크롤 · 호버 열기) ☐ |
+| SHELL-063 · 064 · 065 · 066 · WINC-093 · CMD-406 · DND-SEND | 파일 드래그 발신(Windows OLE): 선택된 행을 누른 채 4 px 넘게 끌면 선택 전체를 DoDragDrop(COPY|MOVE) · 데이터 = CF_HDROP · MOVE여도 원본 안 지움(dir2 동일) · 끝나면 press 소거 + 놓였으면 다시 읽기 · 제자리 놓기 = 무동작 · macOS/Linux 미지원 | `platform/windrag.rs`(IDropSource + IDataObject) · `Platform.drag` = `NativeDrag`(Windows) · `app/dnd.rs::drag_out_after` · `app/slowclick.rs`(`drag_press`) | T1 · T3 + 실기 | `dragging_selected_rows_starts_os_drag`(가짜 포트) · `windrag::data_object_offers_hdrop_only`(COM 왕복) | 🚧 | 10-05 §28(d24bc51 · T-147 1차 · dir2 dnd.rs:270-389 · win.rs:8338-8377) · **실기 필요** = 탐색기 · Windows Terminal · VMware 게스트 · 자기 창 다른 패널 · Esc 취소 · 드래그 뒤 선택/클릭 · 한계 = 드래그 중 우리 창 다시 그리기 멈춤(winit 모달) · CF_UNICODETEXT(경로 텍스트) 미제공 · 드래그 이미지 없음 |
 | SHELL-070~075 | 삭제·휴지통(확인 대화상자 · 잠긴 항목 · 완전 삭제 · 복원) | `app/ops.rs` · `trashop.rs` · `platform/*recycle*`·`macos.rs`·`linux.rs` | T1·T3·T5 | `dialogs_delete_permanent_and_paste_conflict` · `new_folder_rename_and_undo` · 휴지통 OS별 시험 · 자가 점검 trash | ✅ | |
 | SHELL-080~085 | 파일 정보(도크 Info — 종류 이름 · 크기 · 시각 · 속성) | `dockinfo.rs` · nexa-fs `kind_name` | T3 | `dock` core 시험 | 🚧 | OS 종류 이름 macOS/Linux = nexa-fs 후속 |
 | EXT-204~215 · 401~418 | i18n 구성안 세부(식별자 규칙 · 레지스트리 연결 · 호출부 전환) · nexa-sql에서 가져올 것 잔여 | `ndir-i18n` · `ndir-settings` | T1 | i18n/settings 시험 | 🚧 | |
