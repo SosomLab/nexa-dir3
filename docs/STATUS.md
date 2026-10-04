@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋 · 10-04 Windows PC 갱신): nexa-ui `465b939`(146차 + docs `373a5c1`) · nexa-license `54c8d71` · nexa-dir3 `9137085`(quick · CI가 전수). 마지막 전수(**full · 42ccb5a · 10-04 Windows** · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 445/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 2cdeecd까지 3-OS 녹색(42ccb5a = macOS/Linux `procmem.rs` 첫 실행 통과) · 9137085 = 협업 세션 감시.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋 · 10-04 Windows PC 갱신): nexa-ui `465b939`(146차 + docs `373a5c1`) · nexa-license `54c8d71` · nexa-dir3 `89df13a`(quick · CI가 전수). 마지막 전수(**full · 42ccb5a · 10-04 Windows** · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 445/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 2회 — 2회째 패닉 · T-136). CI 781ba90까지 3-OS 녹색(42ccb5a = macOS/Linux `procmem.rs` 첫 실행 통과) · 89df13a = 협업 세션 감시.
 - **이 PC가 Windows일 때**(10-04 §25): 사용자 인스턴스 = `target\debug\nexa-dir.exe`(협업 세션 전용 빌드 · `explorer.exe`로 실행해 에이전트 env 상속 회피) · 개발 세션 검증 = `CARGO_TARGET_DIR=target/dev` · 협업 세션 시험 = `target/collab`.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
@@ -14,6 +14,16 @@
 - **사용자 결정 대기**: (i18n 4건 = 10-04 §15에서 결정 · 해소) · T-126 권장안 5건 확인(동기화 중 제외 · Linux 네트워크만 · 내 PC 제외 · 정렬은 사용자 요청으로 지원 · GAP-018 함께) · GAP-015 정리(연결 vs INTERNAL · T-125) · GAP-020(`list.col_layout` 기동 미적용 의도?) · 정렬 후속(T-128 — Shift 없는 클릭 리셋 · 정렬 영속) · 터미널 글꼴 크기 기준(Windows) · 설정 창 "클라우드 연결" 빈 페이지 · ↔ 아이콘 · dir2 BUG-001 수정 여부 · `term.color`와 NO_COLOR · 로그 "파일로 저장" · "바로가기" vs "바로 가기" · nexa-sql `split_d.tick` 누락 수정 · 릴리스 태그.
 - **실기(화면) 판정이 남은 것**: 10-03 ~ 10-04 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표 53항목) — 특히 상태줄 약어/팝업/색 · 메모리 창 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 스플리터 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**: [TODO](TODO.md) "다음 세션" 표 — T-134 남은 것(자가 점검 창 · 라이선스/허용값/unsupported 문구 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 · Command Prompt 비교) → T-93 3차(미리보기/플러그인 · 실행 취소 영역 · 힙 정리) → T-95 3차(HEAD/index 감시 · 플라이아웃) → macOS 디스크 칸(IOKit — **Mac 실기에서** · T-114와 함께) → T-113 개발용 .desktop → T-131 우클릭 2차 → T-130 설정 종속 2단계 · T-129(GAP-019 클라우드 미리보기) → T-128 정렬 후속 → T-117 T4 Linux → T-114 macOS 실기 맞춤 → 남은 T-103~T-108 → T-92 로그 창 → T-102 투명도 → T-99 성능 향상 → T-96 전송 UI → T-97·98 대량 전송 엔진.
+
+---
+
+## 10-04 130차 — 전송 취소 = 손대지 못한 항목도 건너뜀(T-96 일부)
+
+- **한 일**: 취소 때 미처리 · 하던 중 항목을 건너뜀(진한 회색)으로 마감 · 결과 안내 건너뜀 수 = 엔진 + 미처리(`skipped_total`) · 시험 +1(nexa-dir 243 · 89df13a).
+- **지금 상태**: 89df13a 앱 재시작(PID 3432). quick 게이트 → CI 89df13a 감시 중. CI 9137085 3-OS 녹색.
+- **걸린 것**: 전송 창 화면 판정(§26 · §27 — 사용자) · T-140 · T-141 사용자 답 · T-93 남은 것 · 위 "사용자 결정 대기".
+
+→ [journal/2026-10-04 §27](journal/2026-10-04.md)
 
 ---
 
