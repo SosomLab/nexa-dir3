@@ -2514,6 +2514,11 @@ fn status_segments_and_tab_status_bar() {
         assert!(d.1.unwrap().1 < c.1.unwrap().1, "심각 = 더 진한 바탕");
         let cpu = seg("cpu");
         assert_eq!((cpu.parts[1].color, cpu.tint), (None, None), "조회 전");
+        // 메모리 칸 값의 폭 견본 = 128 GB 한 가지(999.9 견본 3종보다 좁다 — 약어와 값 사이가 벌어지지 않게).
+        assert_eq!(
+            seg("mem").parts[1].hints,
+            vec![crate::app::statusline::MEM_HINT.to_string()]
+        );
     }
     // 깜빡임 단계: 0 = 없음 · 4배마다 한 단계 · 9가 끝.
     use crate::app::statusline::rate_level;

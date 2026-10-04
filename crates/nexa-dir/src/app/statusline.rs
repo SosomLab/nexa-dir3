@@ -116,6 +116,9 @@ pub(crate) fn rate_level(bps: u64) -> u8 {
 /// (실측 — 9.5는 잉크 7이라 줄마다 3.5씩 남았고 · 14는 11이라 위아래 줄이 겹친다).
 pub(crate) const STATUS_ROW_PX: f32 = 12.0;
 
+/// 메모리 칸(M) 값의 폭 견본 — 시스템 메모리 사용량이 넘지 않을 크기.
+pub(crate) const MEM_HINT: &str = "128.0 GB";
+
 /// 크기 글의 폭 견본 — **기본 너비 확보용**(사용자 10-04 "완전 고정이 아니라 되도록 변하지 않게"): 흔한 값(세 자리 + 소수
 /// 한 자리 · KB/MB/GB)의 폭을 미리 잡아 두고, 그보다 넓은 값이 오면 그때만 칸이 늘어난다. `suffix` = `/s` 등.
 fn size_hints(prefix: &str, suffix: &str) -> Vec<String> {
@@ -192,8 +195,10 @@ impl App {
                 "mem" => leveled(
                     id,
                     part(tr("status.abbr.mem")),
+                    // 폭 견본 = 시스템 메모리 사용량의 현실적인 최대(128 GB — 사용자 10-05): 종전 `999.9 GB` 견본은 값 앞에
+                    // 빈 자리가 넓었다. 그보다 큰 값이 오면 그때만 칸이 늘어난다.
                     part(load.map_or_else(dash, |l| filelist::format_size(l.mem_used)))
-                        .hints(size_hints("", "")),
+                        .hints(vec![MEM_HINT.into()]),
                     load.map(|l| l.mem_pct()),
                 ),
                 "disk" => {
