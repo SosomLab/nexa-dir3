@@ -15,6 +15,8 @@ pub(crate) enum DlgReply {
         paths: Vec<PathBuf>,
         locked: Vec<PathBuf>,
     },
+    /// 휴지통 삭제 실패 안내(dir2 X-35) — 1 = 실패분만 다시 시도(잠금 검사부터).
+    DeleteFailed(Vec<PathBuf>),
     /// 전송 충돌 — 작업 스레드가 기다린다(1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 그 외 취소).
     Conflict(mpsc::Sender<ConflictChoice>),
     /// 압축 암호(마스킹 입력) — 확인(1)이면 입력 텍스트로 재조회(T-62 B).
@@ -103,6 +105,11 @@ impl App {
                 2 => self.trash_checked(paths),
                 _ => {}
             },
+            DlgReply::DeleteFailed(failed) => {
+                if id == 1 {
+                    self.trash_checked(failed);
+                }
+            }
             DlgReply::ArchivePassword(path) => self.archive_password_result(path, id, text),
             DlgReply::About => {
                 if id == 2 {

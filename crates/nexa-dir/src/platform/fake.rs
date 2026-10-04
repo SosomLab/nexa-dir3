@@ -20,6 +20,8 @@ pub(crate) struct FakeLog {
     pub watched: Vec<PathBuf>,
     /// 주입: 볼륨 구성 지문(`Disk::volumes_stamp` · 0 = 모름).
     pub volumes: u64,
+    /// 주입: 휴지통으로 보내지 못하는 경로(`Trash::trash`가 이것만 남긴다 → `remaining`이 돌려준다).
+    pub trash_fail: Vec<PathBuf>,
     /// 주입: 다른 프로그램이 쓰고 있다고 볼 경로(`probe_locked`가 이 중 요청에 든 것을 돌려준다).
     pub locked: Vec<PathBuf>,
 }
@@ -163,7 +165,13 @@ impl ContextMenuProvider for FakeMenu {
 impl Trash for FakeTrash {
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
         note(&self.0, format!("trash:{}", paths.len()));
-        Ok(paths.len())
+        let failed = self.remaining(paths).len();
+        Ok(paths.len() - failed)
+    }
+    /// 가짜는 파일을 지우지 않는다 → "남은 것" = 주입한 실패 목록에 든 것만.
+    fn remaining(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        let fail = self.0.borrow().trash_fail.clone();
+        paths.iter().filter(|p| fail.contains(p)).cloned().collect()
     }
     fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
         note(&self.0, format!("trash.restore:{}", original.len()));

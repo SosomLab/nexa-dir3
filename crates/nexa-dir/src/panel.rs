@@ -1337,6 +1337,30 @@ impl Panel {
         self.nav_up_align = align;
     }
 
+    /// 여러 경로의 행을 선택(첫 경로 = 캐럿 + 단일 선택 · 나머지 = 선택에 더함) — 목록에 없는 경로는 건너뛴다.
+    /// 삭제 실패분 강조용(dir2 win.rs `select_paths`).
+    pub(crate) fn select_paths(&mut self, paths: &[PathBuf], inv: &mut Invalidations) {
+        let align = self.nav_up_align;
+        let rows = &mut self.tabs[self.active].rows;
+        let n = rows.source().len();
+        let mut first = true;
+        for i in 0..n {
+            let hit = rows
+                .source()
+                .row_path(i)
+                .is_some_and(|p| paths.contains(&p));
+            if hit {
+                let op = if first {
+                    SelectOp::Single
+                } else {
+                    SelectOp::Toggle
+                };
+                rows.select_program_aligned(i, op, align, inv);
+                first = false;
+            }
+        }
+    }
+
     /// 경로의 행을 캐럿 + 단일 선택(뷰 정렬 = `nav_up_align`).
     pub(crate) fn select_path(&mut self, path: &Path, inv: &mut Invalidations) {
         let align = self.nav_up_align;

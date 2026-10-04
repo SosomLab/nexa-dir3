@@ -5297,3 +5297,59 @@ fn background_tab_reloads_when_revealed() {
     assert!(!app.panels[0].active_tab_stale(), "배경 탭 닫기 = 그대로");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 휴지통 삭제 일부 실패(dir2 X-35 · win.rs:3926-3976 · T-149 10): 성패 = 삭제 뒤에도 남아 있는가. 지워진 것만 실행 취소 기록 ·
+/// 남은 것은 선택해 보이고 [다시 시도](실패분만) / [닫기]. 종전 dir3 = 반환값만 믿어 일부 실패를 알리지 않았다.
+#[test]
+fn trash_failure_selects_leftovers_and_offers_retry() {
+    let (mut app, dir) = fixture("delfail");
+    app.layout_for(1200, 800, 1.0);
+    let (a, b) = (dir.join("a.txt"), dir.join("b.md"));
+    let log = app.platform.log.clone().expect("fake log");
+    let trashed = |log: &Rc<std::cell::RefCell<crate::platform::fake::FakeLog>>| -> Vec<String> {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("trash:"))
+            .cloned()
+            .collect()
+    };
+    // 전부 성공 = 묻지 않는다.
+    app.trash_now(vec![a.clone()]);
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    // b가 남는다: 실패 안내 + 남은 행 선택 · 실행 취소 기록은 지워진 1개만.
+    log.borrow_mut().trash_fail = vec![b.clone()];
+    app.trash_now(vec![a.clone(), b.clone()]);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains(&tr("del.failTitle")) && d.contains("b.md") && !d.contains("a.txt"),
+        "{d}"
+    );
+    assert_eq!(
+        app.panels[0].selected_paths(),
+        vec![b.clone()],
+        "남은 것 선택"
+    );
+    assert!(
+        app.history
+            .undo_description()
+            .is_some_and(|l| l.contains("1")),
+        "지워진 1개만 기록"
+    );
+    // 다시 시도 = 실패분만 · 아직 실패면 다시 묻는다.
+    app.startup_cmd("dlg.pick:1");
+    assert_eq!(trashed(&log).last().map(String::as_str), Some("trash:1"));
+    assert!(app.dump_of("dlg").unwrap().contains("b.md"), "다시 묻는다");
+    // 풀리면 조용히 끝난다.
+    log.borrow_mut().trash_fail.clear();
+    app.startup_cmd("dlg.pick:1");
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    // 닫기 = 더 시도하지 않는다.
+    log.borrow_mut().trash_fail = vec![a.clone(), b.clone()];
+    app.trash_now(vec![a, b]);
+    let before = trashed(&log).len();
+    app.startup_cmd("dlg.pick:0");
+    assert_eq!(trashed(&log).len(), before);
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}

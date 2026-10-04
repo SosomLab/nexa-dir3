@@ -256,6 +256,15 @@ pub(crate) trait Trash {
     fn probe_locked(&self, _paths: &[PathBuf]) -> Vec<PathBuf> {
         Vec::new()
     }
+    /// **삭제 뒤에도 남아 있는 항목**(dir2 X-35 `on_delete_message`: 셸 일괄 삭제의 반환값으로는 항목별 성패를 알 수 없어
+    /// "아직 있는가"가 판정 원천이다) — 호출부가 이것으로 성공/실패를 가른다. 기본 = 파일 시스템 조회.
+    fn remaining(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        paths
+            .iter()
+            .filter(|p| p.symlink_metadata().is_ok())
+            .cloned()
+            .collect()
+    }
 }
 
 pub(crate) trait FileClipboard {

@@ -92,19 +92,25 @@ pub(crate) const MENU_IDS: &[&str] = &[
 
 /// 잠긴 항목 안내 글(순수 · dir2 `del.lockedMsg`): 개수 + 이름 목록(최대 10줄 · 넘으면 "…외 n개").
 pub(crate) fn locked_message(locked: &[PathBuf]) -> String {
+    list_message("del.lockedMsg", locked)
+}
+
+/// 삭제 실패 안내 글(dir2 `del.failMsg`) — 이름 목록 규칙은 [`locked_message`]와 같다.
+pub(crate) fn fail_message(failed: &[PathBuf]) -> String {
+    list_message("del.failMsg", failed)
+}
+
+fn list_message(key: &str, paths: &[PathBuf]) -> String {
     const SHOWN: usize = 10;
-    let mut lines: Vec<String> = locked
+    let mut lines: Vec<String> = paths
         .iter()
         .take(SHOWN)
         .map(|p| ndir_ops::leaf_name(p))
         .collect();
-    if locked.len() > SHOWN {
-        lines.push(trf("del.listMore", &[&(locked.len() - SHOWN).to_string()]));
+    if paths.len() > SHOWN {
+        lines.push(trf("del.listMore", &[&(paths.len() - SHOWN).to_string()]));
     }
-    trf(
-        "del.lockedMsg",
-        &[&locked.len().to_string(), &lines.join("\n")],
-    )
+    trf(key, &[&paths.len().to_string(), &lines.join("\n")])
 }
 
 impl App {
@@ -382,38 +388,71 @@ impl App {
         self.ask(spec, app::dialogs::DlgReply::DeleteLocked { paths, locked });
     }
 
-    /// 휴지통으로(검사 없이 — [`Self::trash_checked`]가 부른다).
+    /// 휴지통으로(검사 없이 — [`Self::trash_checked`]가 부른다). 성패는 **삭제 뒤에도 남아 있는가**로 가른다(dir2 X-35
+    /// `on_delete_message` · win.rs:3926-3976): 지워진 것만 실행 취소 기록에 올리고, 남은 것은 다시 읽은 목록에서 선택해 보인 뒤
+    /// [다시 시도](실패분만 · 잠금 검사부터) / [닫기]를 묻는다. 종전 dir3 = 포트 반환값만 믿어 일부 실패를 알리지 않았다.
     pub(crate) fn trash_now(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             return;
         }
         let mut inv = Invalidations::default();
-        match self.platform.trash.trash(&paths) {
-            Ok(n) => {
-                self.history.push(Box::new(trashop::TrashOp::new(
-                    paths.clone(),
-                    trf("del.recycleOp", &[&n.to_string()]),
-                    Rc::clone(&self.platform.trash),
-                )));
-                self.toasts.push(
-                    toast::ToastKind::Info,
-                    tr("menu.edit.delete"),
-                    trf("status.deletedCount", &[&n.to_string()]),
-                );
-                let dir = self.panels[self.active].root_path();
-                for p in &mut self.panels {
-                    if p.root_path() == dir {
-                        p.reopen(&mut inv);
-                    }
-                }
-            }
-            Err(e) => {
+        let result = self.platform.trash.trash(&paths);
+        let failed = self.platform.trash.remaining(&paths);
+        let deleted: Vec<PathBuf> = paths
+            .iter()
+            .filter(|p| !failed.contains(p))
+            .cloned()
+            .collect();
+        if !deleted.is_empty() {
+            let n = deleted.len().to_string();
+            self.history.push(Box::new(trashop::TrashOp::new(
+                deleted,
+                trf("del.recycleOp", &[&n]),
+                Rc::clone(&self.platform.trash),
+            )));
+            self.toasts.push(
+                toast::ToastKind::Info,
+                tr("menu.edit.delete"),
+                trf("status.deletedCount", &[&n]),
+            );
+        } else if failed.is_empty() {
+            // 지운 것도 남은 것도 없다(대상이 이미 없음 등) — 포트 오류만 알린다.
+            if let Err(e) = &result {
                 self.toasts.push(
                     toast::ToastKind::Warn,
                     tr("menu.edit.delete"),
                     e.to_string(),
                 );
             }
+        }
+        let dir = self.panels[self.active].root_path();
+        for p in &mut self.panels {
+            if p.root_path() == dir {
+                p.reopen(&mut inv);
+            }
+        }
+        if failed.is_empty() {
+            return;
+        }
+        self.panels[self.active].select_paths(&failed, &mut inv);
+        let spec = crate::dlg_win::DlgSpec {
+            title: tr("del.failTitle"),
+            text: fail_message(&failed),
+            buttons: vec![(1, tr("del.retry")), (0, tr("del.close"))],
+            default: 1,
+            cancel: 0,
+            input: None,
+        };
+        if !self.ask(spec, app::dialogs::DlgReply::DeleteFailed(failed)) {
+            // 다른 대화상자가 열려 있다 — 알림으로라도 남긴다.
+            self.toasts.push(
+                toast::ToastKind::Warn,
+                tr("del.failTitle"),
+                match result {
+                    Err(e) => e.to_string(),
+                    Ok(_) => tr("del.failTitle"),
+                },
+            );
         }
     }
 
