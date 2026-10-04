@@ -10,6 +10,11 @@ use std::sync::mpsc;
 pub(crate) enum DlgReply {
     /// 확인(1)이면 영구 삭제.
     DeletePermanent(Vec<PathBuf>),
+    /// 삭제 전 잠금 안내(WINB-024) — 1 = 잠긴 것만 빼고 삭제 · 2 = 다시 검사 · 그 외 = 취소.
+    DeleteLocked {
+        paths: Vec<PathBuf>,
+        locked: Vec<PathBuf>,
+    },
     /// 전송 충돌 — 작업 스레드가 기다린다(1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 그 외 취소).
     Conflict(mpsc::Sender<ConflictChoice>),
     /// 압축 암호(마스킹 입력) — 확인(1)이면 입력 텍스트로 재조회(T-62 B).
@@ -88,6 +93,16 @@ impl App {
                     self.delete_permanent(&paths);
                 }
             }
+            DlgReply::DeleteLocked { paths, locked } => match id {
+                1 => {
+                    let rest: Vec<PathBuf> =
+                        paths.into_iter().filter(|p| !locked.contains(p)).collect();
+                    self.trash_now(rest);
+                }
+                // 다시 시도 = 처음부터 다시 검사(그 사이 풀렸으면 바로 삭제 · 아니면 다시 묻는다).
+                2 => self.trash_checked(paths),
+                _ => {}
+            },
             DlgReply::ArchivePassword(path) => self.archive_password_result(path, id, text),
             DlgReply::About => {
                 if id == 2 {

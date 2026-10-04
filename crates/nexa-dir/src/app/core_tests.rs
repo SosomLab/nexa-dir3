@@ -1394,6 +1394,62 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 삭제 전 잠금 확인(dir2 WINB-024): 다른 프로그램이 쓰는 항목이 섞여 있으면 휴지통으로 보내기 전에 묻는다 —
+/// [건너뛰고 삭제(n개)] = 잠긴 것만 빼고 · [다시 시도] = 다시 검사(풀렸으면 바로 삭제) · [취소] = 아무것도 안 함 ·
+/// 전부 잠겼으면 건너뛰기 버튼이 없다 · 잠긴 것이 없으면 묻지 않는다.
+#[test]
+fn delete_asks_first_when_items_are_in_use() {
+    use crate::app::menus::locked_message;
+    let (mut app, dir) = fixture("dellock");
+    app.layout_for(1200, 800, 1.0);
+    let (a, b) = (dir.join("a.txt"), dir.join("b.md"));
+    let log = app.platform.log.clone().expect("fake log");
+    let trashed = |log: &Rc<std::cell::RefCell<crate::platform::fake::FakeLog>>| -> Vec<String> {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("trash:"))
+            .cloned()
+            .collect()
+    };
+    // 잠긴 것 없음 = 바로 삭제.
+    app.trash_checked(vec![a.clone()]);
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    assert_eq!(trashed(&log), ["trash:1"]);
+    // b가 잠김: 묻는다 → 건너뛰고 삭제 = a만.
+    log.borrow_mut().locked = vec![b.clone()];
+    app.trash_checked(vec![a.clone(), b.clone()]);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains(&tr("del.lockedTitle")) && d.contains("b.md") && d.contains("1:"),
+        "{d}"
+    );
+    assert_eq!(trashed(&log).len(), 1, "묻는 동안은 지우지 않는다");
+    app.startup_cmd("dlg.pick:1");
+    assert_eq!(trashed(&log), ["trash:1", "trash:1"]);
+    // 다시 시도: 아직 잠김 = 다시 묻는다 · 풀리면 전부 삭제.
+    app.trash_checked(vec![a.clone(), b.clone()]);
+    app.startup_cmd("dlg.pick:2");
+    assert!(app.dump_of("dlg").unwrap().contains("b.md"), "다시 묻는다");
+    log.borrow_mut().locked.clear();
+    app.startup_cmd("dlg.pick:2");
+    assert_eq!(trashed(&log).last().map(String::as_str), Some("trash:2"));
+    // 전부 잠김 = 건너뛰기 버튼 없음 · 취소 = 그대로.
+    log.borrow_mut().locked = vec![a.clone(), b.clone()];
+    app.trash_checked(vec![a, b]);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(!d.contains("1:") && d.contains("2:"), "{d}");
+    let before = trashed(&log).len();
+    app.startup_cmd("dlg.pick:0");
+    assert_eq!(trashed(&log).len(), before);
+    // 안내 글: 10개까지 이름 · 넘으면 "…외 n개".
+    let many: Vec<PathBuf> = (0..13).map(|i| dir.join(format!("f{i}.txt"))).collect();
+    let msg = locked_message(&many);
+    assert!(msg.contains("13") && msg.contains("f9.txt") && !msg.contains("f10.txt"));
+    assert!(msg.contains(&trf("del.listMore", &["3"])), "{msg}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 터미널 복사 서식(`term.copy_format` · dir2 win.rs:7413-7414): text = 평문만 · html · rtf · both = 둘 다 · 모르는 값 = 평문만.
 /// RTF 본문은 ndir-term `export::to_rtf`(dir2 이식 · 그 크레이트 시험)가 만든다 — 여기서는 어느 서식을 게시할지의 판정만.
 #[test]

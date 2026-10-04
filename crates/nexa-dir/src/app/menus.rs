@@ -90,6 +90,23 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "help.selfcheck",
 ];
 
+/// 잠긴 항목 안내 글(순수 · dir2 `del.lockedMsg`): 개수 + 이름 목록(최대 10줄 · 넘으면 "…외 n개").
+pub(crate) fn locked_message(locked: &[PathBuf]) -> String {
+    const SHOWN: usize = 10;
+    let mut lines: Vec<String> = locked
+        .iter()
+        .take(SHOWN)
+        .map(|p| ndir_ops::leaf_name(p))
+        .collect();
+    if locked.len() > SHOWN {
+        lines.push(trf("del.listMore", &[&(locked.len() - SHOWN).to_string()]));
+    }
+    trf(
+        "del.lockedMsg",
+        &[&locked.len().to_string(), &lines.join("\n")],
+    )
+}
+
 impl App {
     /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
@@ -334,6 +351,39 @@ impl App {
     /// 선택 항목을 휴지통으로(Trash 포트 · 실패/미지원 = 토스트 한 번) → 히스토리(undo = 복원 · T-51 B-2c) → 그 폴더를 보는 탭 전부 재열람.
     pub(crate) fn delete_to_trash(&mut self) {
         let paths = self.panels[self.active].selected_paths();
+        self.trash_checked(paths);
+    }
+
+    /// 삭제 전 잠금 확인(dir2 WINB-024 · win.rs:3777-3811): 다른 프로그램이 쓰고 있는 항목이 있으면 먼저 묻는다 —
+    /// [건너뛰고 삭제(n개)](남는 것이 있을 때만) · [다시 시도] · [취소]. 없으면 바로 휴지통으로. 휴지통 삭제에만 적용한다(dir2와 같음).
+    pub(crate) fn trash_checked(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let locked = self.platform.trash.probe_locked(&paths);
+        if locked.is_empty() {
+            return self.trash_now(paths);
+        }
+        let rest = paths.len() - locked.len();
+        let mut buttons = Vec::new();
+        if rest > 0 {
+            buttons.push((1, trf("del.skipLocked", &[&rest.to_string()])));
+        }
+        buttons.push((2, tr("del.retry")));
+        buttons.push((0, tr("del.cancel")));
+        let spec = crate::dlg_win::DlgSpec {
+            title: tr("del.lockedTitle"),
+            text: locked_message(&locked),
+            buttons,
+            default: 2,
+            cancel: 0,
+            input: None,
+        };
+        self.ask(spec, app::dialogs::DlgReply::DeleteLocked { paths, locked });
+    }
+
+    /// 휴지통으로(검사 없이 — [`Self::trash_checked`]가 부른다).
+    pub(crate) fn trash_now(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             return;
         }

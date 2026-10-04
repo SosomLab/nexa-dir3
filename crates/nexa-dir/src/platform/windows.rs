@@ -128,6 +128,16 @@ extern "system" {
     fn GlobalSize(h: *mut c_void) -> usize;
     fn GlobalFree(h: *mut c_void) -> *mut c_void;
     fn GetLastError() -> u32;
+    fn CreateFileW(
+        name: *const u16,
+        access: u32,
+        share: u32,
+        security: *const c_void,
+        disposition: u32,
+        flags: u32,
+        template: *const c_void,
+    ) -> isize;
+    fn CloseHandle(h: isize) -> i32;
 }
 
 #[link(name = "user32")]
@@ -209,6 +219,42 @@ fn double_null_list(paths: &[PathBuf]) -> Vec<u16> {
 impl Trash for NativeTrash {
     fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
         super::winrecycle::restore_by_original_paths(original)
+    }
+
+    /// dir2 `win.rs:3849-3880`: 삭제 권한으로 열어 본다(공유 = 읽기·쓰기·삭제 전부 허용) — **공유 위반**만 "잠김"으로 본다
+    /// (없는 파일 · 권한 없음 등 다른 오류는 잠김이 아니다 — 삭제 단계가 따로 알린다). 폴더도 열리게 BACKUP_SEMANTICS.
+    fn probe_locked(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        const DELETE: u32 = 0x0001_0000;
+        const SHARE_ALL: u32 = 0x1 | 0x2 | 0x4;
+        const OPEN_EXISTING: u32 = 3;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        const ERROR_SHARING_VIOLATION: u32 = 32;
+        const INVALID_HANDLE: isize = -1;
+        paths
+            .iter()
+            .filter(|p| {
+                let w = wide(p);
+                // SAFETY: NUL로 끝나는 경로 버퍼 · 나머지 인자는 값 · 받은 핸들은 바로 닫는다.
+                unsafe {
+                    let h = CreateFileW(
+                        w.as_ptr(),
+                        DELETE,
+                        SHARE_ALL,
+                        std::ptr::null(),
+                        OPEN_EXISTING,
+                        FILE_FLAG_BACKUP_SEMANTICS,
+                        std::ptr::null(),
+                    );
+                    if h == INVALID_HANDLE {
+                        GetLastError() == ERROR_SHARING_VIOLATION
+                    } else {
+                        CloseHandle(h);
+                        false
+                    }
+                }
+            })
+            .cloned()
+            .collect()
     }
 
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
@@ -402,6 +448,28 @@ impl FileClipboard for NativeFileClipboard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 잠금 확인(WINB-024): 공유 없이 열어 둔 파일 = 잠김 · 닫으면 풀림 · 없는 파일 · 그냥 있는 파일 = 잠김 아님.
+    #[test]
+    fn probe_locked_reports_only_sharing_violations() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = std::env::temp_dir().join(format!("ndir-lock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let (held, free, gone) = (dir.join("held.txt"), dir.join("free.txt"), dir.join("gone"));
+        std::fs::write(&held, b"x").expect("write");
+        std::fs::write(&free, b"x").expect("write");
+        let all = [held.clone(), free, gone, dir.clone()];
+        let guard = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0) // 아무와도 공유하지 않는다 = 다른 프로그램이 쓰는 중
+            .open(&held)
+            .expect("exclusive open");
+        assert_eq!(NativeTrash.probe_locked(&all), vec![held]);
+        drop(guard);
+        assert!(NativeTrash.probe_locked(&all).is_empty(), "닫으면 풀린다");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn double_null_list_layout() {

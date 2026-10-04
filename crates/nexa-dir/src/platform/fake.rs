@@ -18,6 +18,8 @@ pub(crate) struct FakeLog {
     /// 주입: 바로 가기 대상(`link_target`이 돌려줄 값).
     pub link_target: Option<PathBuf>,
     pub watched: Vec<PathBuf>,
+    /// 주입: 다른 프로그램이 쓰고 있다고 볼 경로(`probe_locked`가 이 중 요청에 든 것을 돌려준다).
+    pub locked: Vec<PathBuf>,
 }
 
 type Log = Rc<RefCell<FakeLog>>;
@@ -164,6 +166,14 @@ impl Trash for FakeTrash {
     fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
         note(&self.0, format!("trash.restore:{}", original.len()));
         Ok(original.len())
+    }
+    fn probe_locked(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        let locked = self.0.borrow().locked.clone();
+        paths
+            .iter()
+            .filter(|p| locked.contains(p))
+            .cloned()
+            .collect()
     }
 }
 

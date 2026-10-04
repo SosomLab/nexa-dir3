@@ -10,7 +10,7 @@ pub(crate) mod keywinit;
 pub(crate) mod launcher_icons;
 pub(crate) mod license;
 pub(crate) mod memory;
-mod menus;
+pub(crate) mod menus;
 pub(crate) mod ops;
 pub(crate) mod order;
 mod paint;

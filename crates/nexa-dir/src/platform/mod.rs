@@ -251,6 +251,11 @@ pub(crate) trait Trash {
     fn restore(&self, _original: &[PathBuf]) -> Result<usize, PlatformError> {
         Err(PlatformError::Unsupported("trash.restore"))
     }
+    /// **삭제 전 잠금 확인**(dir2 WINB-024 `probe_locked`): 다른 프로그램이 쓰고 있어 지금 지울 수 없는 항목들. 폴더는 자신만 본다
+    /// (하위 항목은 보지 않는다). 기본 = 없음(검사하지 않는 OS · 파일을 열어 둔 채 지울 수 있는 Unix).
+    fn probe_locked(&self, _paths: &[PathBuf]) -> Vec<PathBuf> {
+        Vec::new()
+    }
 }
 
 pub(crate) trait FileClipboard {
