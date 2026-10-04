@@ -22,7 +22,7 @@ mod settings;
 mod startup_cmd;
 pub(crate) mod statusline;
 pub(crate) mod term;
-mod watch;
+pub(crate) mod watch;
 mod windows;
 
 #[cfg(test)]

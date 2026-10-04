@@ -18,6 +18,8 @@ pub(crate) struct FakeLog {
     /// 주입: 바로 가기 대상(`link_target`이 돌려줄 값).
     pub link_target: Option<PathBuf>,
     pub watched: Vec<PathBuf>,
+    /// 주입: 볼륨 구성 지문(`Disk::volumes_stamp` · 0 = 모름).
+    pub volumes: u64,
     /// 주입: 다른 프로그램이 쓰고 있다고 볼 경로(`probe_locked`가 이 중 요청에 든 것을 돌려준다).
     pub locked: Vec<PathBuf>,
 }
@@ -231,6 +233,10 @@ impl Opener for FakeOpen {
 }
 
 impl Disk for FakeDisk {
+    fn volumes_stamp(&self) -> u64 {
+        self.0.borrow().volumes
+    }
+
     fn space(&self, root: &Path) -> Option<(u64, u64)> {
         note(&self.0, format!("disk:{}", root.display()));
         self.0.borrow().space

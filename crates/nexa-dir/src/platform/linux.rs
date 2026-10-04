@@ -475,6 +475,10 @@ impl FileClipboard for X11Files {
 pub(super) struct NativeDisk;
 
 impl Disk for NativeDisk {
+    fn volumes_stamp(&self) -> u64 {
+        super::unix_volumes_stamp()
+    }
+
     fn space(&self, root: &Path) -> Option<(u64, u64)> {
         let c = std::ffi::CString::new(root.as_os_str().as_encoded_bytes()).ok()?;
         let mut st = std::mem::MaybeUninit::<StatVfs>::zeroed();

@@ -301,6 +301,23 @@ pub(crate) trait Opener {
 pub(crate) trait Disk {
     /// (전체, 여유) 바이트 · 모르면 `None`.
     fn space(&self, root: &Path) -> Option<(u64, u64)>;
+    /// **볼륨 구성 지문** — 드라이브/볼륨이 붙거나 떨어지면 값이 바뀐다(dir2 WINC-061 `WM_DEVICECHANGE` 대응: "내 PC"를 보는 패널이
+    /// 이 값이 바뀌면 다시 읽는다). 디스크 I/O 없이 싸게(Windows = `GetLogicalDrives` 비트맵 · Unix = 마운트 목록).
+    /// 0 = 모름(다시 읽지 않는다).
+    fn volumes_stamp(&self) -> u64 {
+        0
+    }
+}
+
+/// Unix의 볼륨 구성 지문 = "내 PC" 항목 이름들의 해시(`ndir_vfs::drive_entries` — `/proc/self/mounts` · `/Volumes` 읽기).
+#[cfg(unix)]
+pub(crate) fn unix_volumes_stamp() -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for e in ndir_vfs::drive_entries() {
+        e.name.hash(&mut h);
+    }
+    h.finish().max(1)
 }
 
 /// "새로 만들기 ▸" 템플릿 하나(SHELL-008 · dir2 ShellNew 전체 목록의 3-OS 대응): 라벨(OS 종류 이름 또는 파일 이름) · 확장자(점 없음) · 원천.

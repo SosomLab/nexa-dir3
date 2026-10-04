@@ -138,6 +138,7 @@ extern "system" {
         template: *const c_void,
     ) -> isize;
     fn CloseHandle(h: isize) -> i32;
+    fn GetLogicalDrives() -> u32;
 }
 
 #[link(name = "user32")]
@@ -192,6 +193,11 @@ const DROPEFFECT_MOVE: u32 = 2;
 pub(super) struct NativeDisk;
 
 impl Disk for NativeDisk {
+    fn volumes_stamp(&self) -> u64 {
+        // SAFETY: 인자 없는 조회(드라이브 문자 비트맵 · A = 비트 0).
+        u64::from(unsafe { GetLogicalDrives() }).max(1)
+    }
+
     fn space(&self, root: &Path) -> Option<(u64, u64)> {
         let w = wide(root);
         let (mut total, mut free) = (0u64, 0u64);

@@ -1394,6 +1394,49 @@ fn preview_window_and_archive_password_flow() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 드라이브/볼륨 구성 변경(dir2 WINC-061 `WM_DEVICECHANGE` 대응): 지문이 바뀌면 "내 PC"를 보는 탭을 다시 읽는다 ·
+/// 처음 본 값과 모름(0)은 기준만 잡는다 · 내 PC를 보는 패널이 없으면 조회하지 않고 기준을 버린다.
+#[test]
+fn drive_set_changes_reload_my_pc() {
+    use crate::app::watch::volumes_changed;
+    let mut seen = None;
+    assert!(!volumes_changed(&mut seen, 0), "모름");
+    assert_eq!(seen, None);
+    assert!(!volumes_changed(&mut seen, 0b0100), "처음 = 기준");
+    assert!(!volumes_changed(&mut seen, 0b0100), "그대로");
+    assert!(volumes_changed(&mut seen, 0b1100), "드라이브 추가");
+    assert!(volumes_changed(&mut seen, 0b0100), "드라이브 제거");
+    assert!(!volumes_changed(&mut seen, 0), "모름 = 기준 유지");
+    assert_eq!(seen, Some(0b0100));
+
+    let (mut app, dir) = fixture("drives");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    log.borrow_mut().volumes = 0b0100;
+    let t0 = Instant::now();
+    // 일반 폴더만 보는 동안 = 조회 없음.
+    app.drives_tick(t0);
+    assert_eq!(app.drives_seen, None);
+    // 내 PC로 가면 기준을 잡고, 지문이 바뀌면 다시 읽는다(1초 간격).
+    app.command("nav.home");
+    assert!(
+        ndir_vfs::is_virtual_root(app.panels[0].root_path()),
+        "홈 = 내 PC"
+    );
+    app.drives_tick(t0 + Duration::from_millis(1100));
+    assert_eq!(app.drives_seen, Some(0b0100));
+    log.borrow_mut().volumes = 0b1100;
+    app.drives_tick(t0 + Duration::from_millis(1200));
+    assert_eq!(app.drives_seen, Some(0b0100), "간격 전에는 보지 않는다");
+    app.drives_tick(t0 + Duration::from_millis(2200));
+    assert_eq!(app.drives_seen, Some(0b1100));
+    assert!(
+        ndir_vfs::is_virtual_root(app.panels[0].root_path()),
+        "다시 읽어도 내 PC"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 키보드로 행 메뉴 열기(**키맵 경로 그대로** — 조합 → 키맵 → 명령): Shift+F10 · 메뉴 키(macOS ⌃Return)가 `list.context_menu`로
 /// 풀리고 그 명령이 캐럿 행 메뉴를 연다. 종전에는 `cmd.contextMenu` 이름만 처리해 키로는 열리지 않았다(시험이 명령을 직접 불러 놓쳤다).
 /// 모든 키맵 명령이 "미구현" 안내로 떨어지지 않는지도 본다(이름 불일치 재발 방지).
