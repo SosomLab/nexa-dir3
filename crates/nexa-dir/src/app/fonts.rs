@@ -168,11 +168,18 @@ impl App {
                 return Some(Rc::new(f));
             }
         }
-        let face = settings
-            .get("term.font_face")
-            .map(str::trim)
-            .filter(|f| !f.is_empty());
-        mono_chain(face, extra).map(Rc::new)
+        // `term.font_face`는 **쉼표 목록**이다(라벨 "쉼표 = 폴백 체인" · dir2 계승): 설치돼 있는 첫 글꼴 = 주 글꼴 · 나머지 = 대체 글꼴
+        // (적은 순서 그대로 · `term.fallback_fonts`보다 앞). 종전에는 목록 전체를 글꼴 이름 하나로 찾아 실패 → OS 기본 고정폭으로
+        // 떨어졌다(사용자 10-05 "D2Coding, JetBrainsMono Nerd Font가 반영되지 않는다").
+        let (face, rest) = split_face_list(settings.get("term.font_face").unwrap_or(""), |f| {
+            nexa_font::find_font_by_family(f).is_some()
+        });
+        let extra = if rest.is_empty() {
+            extra.to_string()
+        } else {
+            format!("{},{extra}", rest.join(","))
+        };
+        mono_chain(face.as_deref(), &extra).map(Rc::new)
     }
 
     /// 설정 `term.follow_windows_terminal`이 켜져 있으면 이 PC의 기본 터미널 글꼴(Windows = Windows Terminal 기본 프로필 ·
@@ -211,6 +218,27 @@ const MONO_FALLBACK_FAMILIES: [&str; 1] = ["DejaVu Sans Mono"];
 /// (파일 패밀리, 그 컬렉션 안의 얼굴) — fontconfig가 터미널 한글·한자에 골라 주는 고정폭판(`NotoSansCJK-*.ttc` 안에 일반판과
 /// 함께 들어 있다). 한글 폭은 이 얼굴도 0.92 em이라 두 칸 안에서 조금 남는다(우분투 터미널과 같은 모양).
 const MONO_CJK_FACE: (&str, &str) = ("Noto Sans CJK", "Noto Sans Mono CJK KR");
+
+/// 글꼴 쉼표 목록 → `(주 글꼴, 나머지)`(순수 · `installed` = 그 글꼴이 설치돼 있는가): 주 글꼴 = 설치돼 있는 **첫** 이름 ·
+/// 나머지 = 그 밖의 이름(적은 순서 그대로 · 주 글꼴 앞에 있던 미설치 이름도 남긴다 — 찾을 때 걸러진다). 하나도 없으면 `None`.
+pub(crate) fn split_face_list(
+    list: &str,
+    installed: impl Fn(&str) -> bool,
+) -> (Option<String>, Vec<String>) {
+    let names: Vec<&str> = list
+        .split(',')
+        .map(str::trim)
+        .filter(|f| !f.is_empty())
+        .collect();
+    let primary = names.iter().position(|f| installed(f));
+    let rest = names
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != primary)
+        .map(|(_, f)| (*f).to_string())
+        .collect();
+    (primary.map(|i| names[i].to_string()), rest)
+}
 
 /// 터미널용 고정폭 글꼴 체인: **주 글꼴**(`term.font_face` → OS 고정폭) → **사용자 지정 폴백**(`term.fallback_fonts` · 쉼표) →
 /// **설치된 Nerd Font**(주 글꼴이 그 글리프를 못 가질 때만) → 한글 UI 글꼴 → 기호 폴백. nexa-font `mono_font`와 같은 구성에 폴백 두 단계를
@@ -273,6 +301,35 @@ mod chevron_tests {
         );
         assert_eq!(fallback_chevrons(|c| c.is_ascii()), (">", "v"));
         assert_eq!(fallback_chevrons(|_| false), (">", "v"));
+    }
+
+    /// 글꼴 쉼표 목록: 설치된 첫 이름이 주 글꼴 · 나머지는 순서대로 대체 글꼴 · 빈칸/빈 항목 무시 · 하나도 없으면 주 글꼴 없음.
+    #[test]
+    fn face_list_picks_first_installed_and_keeps_the_rest_in_order() {
+        let has = |f: &str| matches!(f, "D2Coding" | "JetBrainsMono Nerd Font");
+        assert_eq!(
+            split_face_list("D2Coding, JetBrainsMono Nerd Font", has),
+            (
+                Some("D2Coding".to_string()),
+                vec!["JetBrainsMono Nerd Font".to_string()]
+            )
+        );
+        assert_eq!(
+            split_face_list(" Missing ,, JetBrainsMono Nerd Font ,D2Coding", has),
+            (
+                Some("JetBrainsMono Nerd Font".to_string()),
+                vec!["Missing".to_string(), "D2Coding".to_string()]
+            )
+        );
+        assert_eq!(
+            split_face_list("Nope", has),
+            (None, vec!["Nope".to_string()])
+        );
+        assert_eq!(split_face_list("", has), (None, Vec::new()));
+        assert_eq!(
+            split_face_list("D2Coding", has),
+            (Some("D2Coding".to_string()), Vec::new())
+        );
     }
 
     /// 터미널 글꼴 체인: 폴백 em 맞춤은 플랫폼 판정대로(Linux·macOS 켬 · Windows 종전).

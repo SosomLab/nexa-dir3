@@ -12,7 +12,6 @@ pub(crate) const NEEDS_RESTART: &[&str] = &[
     "ui.menu_font_face",
     "list.font_face",
     "statusbar.font_face",
-    "term.font_face",
     "ui.dialog_font_face",
     "ui.text_gdi",
     "ui.text_hint",
@@ -142,9 +141,11 @@ impl App {
             "list.folder_bold" | "list.header_bold" | "list.header_italic" => {
                 self.apply_font_decor();
             }
-            "term.follow_windows_terminal" => {
-                // 크기는 즉시 · 글꼴 얼굴은 다음 실행부터(안내는 설정 설명에).
+            // 터미널 글꼴(따르기 · 글꼴 목록 · 대체 글꼴) = 즉시: 고정폭 글꼴 체인을 다시 만들어 다음 그리기부터 쓴다
+            // (종전 = 글꼴 얼굴은 다시 시작해야 반영 — 사용자 10-05 "바꿨는데 반영이 안 된다").
+            "term.follow_windows_terminal" | "term.font_face" | "term.fallback_fonts" => {
                 self.wt_profile = App::load_wt_profile(&self.settings);
+                self.mono_font = App::load_mono_font(&self.settings, self.wt_profile.as_ref());
                 self.layout();
             }
             "list.icon_overrides" => self.apply_icon_overrides(),
