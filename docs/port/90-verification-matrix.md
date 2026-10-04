@@ -12,7 +12,7 @@
 | B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
 | CI | 119 | 119 | 92 | 27 | 0 | 0 | 0 |
 | CLOUD | 99 | 99 | 1 | 0 | 0 | 0 | 0 |
-| CMD | 430 | 430 | 177 | 143 | 110 | 0 | 0 |
+| CMD | 430 | 430 | 179 | 141 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
 | GUI | 95 | 95 | 30 | 35 | 30 | 0 | 0 |
@@ -40,8 +40,8 @@
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 7 | 89 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 59 | 59 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 38 | 136 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2414 | 1002 | 765 | 0 | 0 |
+| WINC | 174 | 174 | 40 | 134 | 0 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2418 | 998 | 765 | 0 | 0 |
 
 ## 행
 
@@ -284,7 +284,8 @@
 | CMD-105~116 | 하위 창 버튼(미리보기 창 · 삭제 확인 · 재프로브 · 충돌 4버튼 · 인증 URL · 위치 선택) | `preview_win.rs` · `dlg_win.rs` · `app/dialogs.rs` | T3 | `dialogs_delete_permanent_and_paste_conflict` · `preview_window` 시험 | 🚧 | 114(클라우드) 미이식 · 116 PositionDropdown ✅ · 10-05 §12 정리: 105~111 · 113 · 116 ✅(111 = e66a973 `delete_asks_first_when_items_are_in_use`) · 112 삭제 실패 → [다시 시도]/[닫기] 모달 ☐(지금 토스트) · 114/115 클라우드 대기 |
 | CMD-160~259 | 컨텍스트 메뉴·팝업 지역 **숫자** ID 대역(셸 1..0x6FFF · New 0x7000 · 고유 0x8000+) | — | — | — | ⚠ | dir3는 문자열 id(SHELL-013 N 판정) — 대역 개념 없음 |
 | CMD-260~286 · 330~356 | 단축키 문맥 ①~③(경로바 편집 · 터미널 포커스 · 인라인 이름 바꾸기) · Alt/시스템 키 · 하위 창 공용 키 | `app/input.rs` · `termview.rs` · 각 창 `handle` | T3 | `route_and_commands_without_window` · 창별 Esc/Enter 시험 | 🚧 | 문맥 ④ 전역(287~329)은 별도 행 ✅ |
-| CMD-400~456 | 마우스 제스처(파일 목록 클릭/더블클릭/우클릭/드래그 · 휠 · 탭 바/경로바/네비/도구 모음/메뉴바 · 스플리터/도크/터미널/DnD) | `app/input.rs` · `panel.rs` · nexa-grid | T2·T3 | `row_and_background_context_menus` · `splitter`/`dock` core 시험 · `external_drop_…` · nexa-grid 시험 | 🚧 | 제스처별 ID 대조 행은 T-91 QA 표에서 |
+| CMD-400~456 | 마우스 제스처(파일 목록 클릭/더블클릭/우클릭/드래그 · 휠 · 탭 바/경로바/네비/도구 모음/메뉴바 · 스플리터/도크/터미널/DnD) | `app/input.rs` · `panel.rs` · nexa-grid | T2·T3 | `row_and_background_context_menus` · `splitter`/`dock` core 시험 · `external_drop_…` · nexa-grid 시험 | 🚧 | 제스처별 ID 대조 행은 T-91 QA 표에서 · 10-05 §15: 438/439 탭 더블클릭 ✅(아래 행) |
+| CMD-438 · 439 · WINC-108 · 109 · TAB-DBL | 탭 더블클릭 = 설정 `tabs.dblclick`(close/pin/lock) · 탭 바 빈 곳 더블클릭 = 새 탭 · 설정 변경 즉시 적용(종전 = 설정 키만 있고 읽는 곳 0건) | `panel.rs::TabDbl` · DoubleClick 분기 · `apply_tab_style`(nexa-ctl `tab_index_at`/`empty_area_at` 기존) | T3 | `tab_double_click_follows_setting_and_empty_area_opens_tab` | ✅ | 10-05 §15(3587451 · T-149 3 · dir2 win.rs:8648-8665) · 실기 사용자 |
 | KEY-1001~1498 | dir2 i18n 키 전수(498) = dir3 en/ko/ja 내장 카탈로그에 전부 존재(자원 유지) | `crates/ndir-i18n/lang/*.lang` | T1 | `dir2_catalog_i18n_keys_present_in_all_langs`(원장 §2-6을 읽어 대조) | ✅ | 사문 61키(§2-4)도 유지 |
 | KEY-001~071 | dir2 `settings.cfg` 키 전수(66) = 변환표 옛 이름 또는 레지스트리 키 | `ndir-settings/src/migrate.rs::MAP` · `registry.rs` | T1 | `dir2_catalog_settings_keys_are_mapped`(원장 §1-1 대조) · `map_targets_exist_and_dir2_defaults_validate` | ✅ | ⚠ KEY-065 `launcher_count` = `launcher.items` 목록이 대신(DR-3) |
 | KEY-141~150 | 이름 변경 프리셋 필드(`renames/*.cfg` 10) | `ndir-ops/src/batch_rename.rs`(serialize_ops/parse_ops) | T1 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` | ✅ | |
