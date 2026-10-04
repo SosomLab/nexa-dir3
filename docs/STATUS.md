@@ -4,7 +4,7 @@
 
 ## ▶ Linux에서 이어갈 때(10-04 마감 · 다음 세션 시작점 · 117차 갱신)
 
-- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `1850166`(139 · 140차 + 문서 · 다른 PC) · nexa-license `54c8d71` · nexa-dir3 `375cab3`. 마지막 전수(full · nexa-ui 1850166 위): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI 0faf7d7까지 3-OS 녹색.
+- **원격 main**(이 절을 고친 시점의 코드 커밋 — 그 뒤 docs 커밋): nexa-ui `219c85c`(141차) · nexa-license `54c8d71` · nexa-dir3 `332e970`. 마지막 전수(full · nexa-ui 219c85c 위): check-3os ✓ · 시험 433 · `--smoke` · `--selfcheck --ci` 20/0 · T4(Linux) 17/20(Windows 전제 3 · T-117 · delete-confirm 타이밍 흔들림 관찰). CI 375cab3까지 3-OS 녹색.
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
 - **이 PC 세션 분담**(10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 커밋 · pull/push / 협업 세션 = `docs/` 기록 · 빌드 · 앱 재시작(격리 `NDIR_HOME`) · 사전 분석 · CI 감시. 같은 작업 트리 · 커밋 직전 서로 알림 · dir3 저장소에 git 사용자 정보가 없어 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`로 커밋(git config 불변). **재시작 = 빌드 성공 뒤 자기가 띄운 PID만 `kill`**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10 · 10-04 §10).
 - **받기 · 빌드**: 세 저장소를 **같은 폴더에 나란히** clone(path 의존) → `sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core`(CI와 같은 한글 글꼴) → `cd nexa-dir3 && cargo test --workspace` → 격리 실행 `NDIR_HOME=/tmp/ndir-home NDIR_PLUGINS_DIR=$PWD/plugins cargo run -p nexa-dir`. Wayland GNOME에서 앱 아이콘이 톱니바퀴면 사용자 영역 `.desktop` + hicolor PNG 필요(10-03 §100 · 스크립트화 T-113).
@@ -16,10 +16,20 @@
 
 ---
 
+## 10-04 121차 — 시스템 상태 칸 글꼴(값 −1 · 단위 −2)
+
+- **한 일**: 상태줄 C/M/D/N 칸의 값은 상태줄 글꼴보다 1 작게, 단위는 2 작게(폭도 그 크기로 · 아래쪽 맞춤) · nexa-ui 141차 `StatusSeg/StatusPart.font_delta`.
+- **지금 상태**: 332e970 앱 재시작(PID 456008). CI 375cab3 성공 · 332e970 감시 중.
+- **걸린 것**: nexa-ui 단계형 게이트 여부(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
+
+→ [journal/2026-10-04 §18](journal/2026-10-04.md)
+
+---
+
 ## 10-04 120차 — 상태줄 우클릭 = 툴바와 같은 메뉴 · 새 게이트 첫 적용
 
 - **한 일**: 상태줄 우클릭이 바로 편집 창을 열던 것을 툴바처럼 메뉴(상태바 편집… · 설정…)로 · DR-26 게이트 첫 quick push · nexa-ui 139 · 140차(다른 PC) 반영 뒤 dir3 full 통과.
-- **지금 상태**: 375cab3 앱 재시작(PID 449374). CI dfcd2f5 · 0faf7d7 성공 · 375cab3 감시 중(quick push → CI가 전수).
+- **지금 상태**: 375cab3 앱 재시작(PID 449374). CI dfcd2f5 · 0faf7d7 · 375cab3 성공(quick push의 전수 확인).
 - **걸린 것**: nexa-ui에도 단계형 게이트를 둘지(사용자) · T-134 남은 것 · T4 delete-confirm 재발 여부 · 위 "사용자 결정 대기" · "실기 판정이 남은 것" · 다음 할 일 대기열.
 
 → [journal/2026-10-04 §17](journal/2026-10-04.md)
