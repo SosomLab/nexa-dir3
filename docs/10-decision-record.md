@@ -66,6 +66,6 @@
 | Q-3 | 예산 게이트 수치(dir2 exe ≤10 MB · RSS ≤30 MB) | 측정만 하고 게이트는 M7에서 | winit·softbuffer·wasmi 증가분 실측 뒤 |
 | Q-4 | macOS/Linux 셸 컨텍스트 메뉴 범위 | 자체 메뉴(열기·연결 프로그램·파일 관리자에서 보기·속성) + "OS 메뉴 열기" 없음 | [port/19](port/19-dir2-shell-integration.md) |
 | Q-5 | `kind=org` 라이선스 단독 설치 허용 | nexa-sql과 같이 허용(경고 없음) | LIC-172 |
-| Q-6 | 클라우드(OAuth) 기능의 3-OS HTTP 스택 | M6에서 결정(OS 네이티브 API별 vs 최소 crate) | [port/21](port/21-dir2-cloud.md) |
+| Q-6 | 클라우드(OAuth) 기능의 3-OS HTTP 스택 | M6에서 결정(OS 네이티브 API별 vs 최소 crate) — **사용자 10-05: 클라우드 묶음(CLOUD-001~099 · WINB-036~042 · O-001~020 · GAP-019)은 TODO에 올리고 대기**(T-72 · T-129 · 착수할 때 이 결정을 연다) | [port/21](port/21-dir2-cloud.md) |
 | Q-7 | 성능 거버너(nexa-sql `perf.mode`/`perf.boost` · `nexa-sys` 신호) 도입 여부 | 도입하지 않음(dir2에 대응 기능 없음 · `ndir-settings`에 `perf.rs` 없음) — 부하원이 늘면 재검토 | [port/41](port/41-sql-settings.md) SET-051~053 |
 | Q-8 | macOS 화면 제출 경로(nexa-sql `gfx.mac_present` = softbuffer/iosurface) 설정 노출 여부 | 노출하지 않음(`present::set_mode` 미호출 = softbuffer 기본 · dir2에 대응 키 없음) — 맥 실기 계측 뒤 재검토 | [port/40](port/40-sql-app-skeleton.md) §1-10 |

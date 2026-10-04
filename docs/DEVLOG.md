@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **사용자 결정 3건**: 클라우드 = 목록 등재 · 대기(T-72 · T-129 · Q-6) · DnD = 요구 확정(보내기 · 받기 · 가상 머신 · Windows Terminal · T-147 P0) · "그 밖" 6건 = 진행(T-148) · 6건 사전 분석(dir3 `WM_DEVICECHANGE` 0건 발견 · RTF 내보내기는 이미 이식 · dir2엔 ICO 디코더 없음) → [journal 10-05 §9](journal/2026-10-05.md)
 - **Windows PC 세션 마감**(10-04 ~ 10-05 · dir3 코드 13 · nexa-ui 145~152 · 병합할 브랜치 없음) — STATUS 시작점 재작성 · 후속 T-144~146 · 분담 = 세션 시작 때 `ListAgents` 확인 → [journal 10-05 §8](journal/2026-10-05.md)
 - **글꼴 이름 탐색 = 실제 이름까지**(nexa-ui 152 · 파일명 접두 실패 시 name 테이블 · TTC 얼굴) — "굴림체" 미적용 · ⚠ 기본값 Consolas가 D2Coding으로 그려지던 것(파일명 consola.ttf) 같은 원인 · 기본 터미널 글꼴이 실제 Consolas로 바뀜 → [journal 10-05 §7](journal/2026-10-05.md)
 - **빠른 실행 아이콘의 바로 가기 화살표 제거**(전역 링크 오버레이가 앱 실행 별칭 wt.exe · pwsh에 번지던 것 · nexa-ui 151 `IconKey::PathPlain` · 파일 목록 화살표 유지 · 57943de) → [journal 10-05 §6](journal/2026-10-05.md)
