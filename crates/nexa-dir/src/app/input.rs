@@ -284,6 +284,17 @@ impl App {
             return;
         }
         // 열린 탭 메뉴 = 모달(안 = 고르기 · Esc/바깥 클릭 = 닫기 · 바깥 클릭은 아래로 흘린다 — 팝업 UX 규칙).
+        // 상태줄 상세 팝업 토글: 누르기 시작할 때 떠 있던 팝업의 칸을 기억한다(바깥 클릭이 팝업을 닫고 아래로 흘러
+        // 같은 칸을 다시 누르게 되는데, 그때 다시 열지 않는다 — 사용자 10-04 "다시 클릭하면 감춤").
+        if matches!(
+            ev,
+            InputEvent::MouseDown { .. } | InputEvent::DoubleClick { .. }
+        ) {
+            self.status_popup_was = self
+                .status_popup
+                .clone()
+                .filter(|_| self.tab_menu.is_open());
+        }
         if self.tab_menu.is_open() {
             let outside = self.tab_menu.is_outside_click(&ev);
             let _ = self.tab_menu.on_event(&ev);

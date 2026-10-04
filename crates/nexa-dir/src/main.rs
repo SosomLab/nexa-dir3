@@ -294,6 +294,8 @@ struct App {
     load_next: Instant,
     /// 떠 있는 상태줄 상세 팝업의 칸 id(조회 주기마다 내용을 갱신한다).
     status_popup: Option<String>,
+    /// 누르기 시작할 때 떠 있던 상세 팝업의 칸 id — 같은 칸을 다시 누르면 닫기만 한다(토글).
+    status_popup_was: Option<String>,
     /// Git 상태(탭 상태바 · NEW-005 2차): 저장소 루트 → 요약 · 조회 중인 루트 · 워커 결과 통로.
     git_detail: std::collections::HashMap<PathBuf, dirinfo::GitDetail>,
     git_busy: std::collections::HashSet<PathBuf>,
@@ -582,6 +584,7 @@ impl App {
             load: None,
             load_next: Instant::now(),
             status_popup: None,
+            status_popup_was: None,
             git_detail: std::collections::HashMap::new(),
             git_busy: std::collections::HashSet::new(),
             git_enabled: !cfg!(test),

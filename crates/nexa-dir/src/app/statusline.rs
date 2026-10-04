@@ -185,6 +185,11 @@ impl App {
         if right {
             return;
         }
+        // 이 칸의 상세 팝업이 떠 있던 채로 다시 눌렀다 = 닫기만(토글).
+        if self.status_popup_was.take().as_deref() == Some(id) {
+            self.status_popup = None;
+            return;
+        }
         match id {
             "license" => self.command("help.license"),
             // 메모리 창(모덜리스 · 열려 있으면 닫기 토글 — 라이선스 창과 같은 규칙).

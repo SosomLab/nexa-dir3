@@ -2323,6 +2323,22 @@ fn status_segments_and_tab_status_bar() {
     };
     click(&mut app, "cpu");
     assert_eq!(app.status_popup.as_deref(), Some("cpu"));
+    assert!(app.tab_menu.is_open());
+    // 같은 칸을 다시 누르면 닫힌다(토글) · 또 누르면 다시 열린다 · 다른 칸을 누르면 그 칸의 팝업으로 바뀐다.
+    click(&mut app, "cpu");
+    assert!(
+        !app.tab_menu.is_open() && app.status_popup.is_none(),
+        "다시 클릭 = 감춤"
+    );
+    click(&mut app, "cpu");
+    assert!(app.tab_menu.is_open());
+    click(&mut app, "mem");
+    assert!(app.tab_menu.is_open());
+    assert_eq!(app.status_popup.as_deref(), Some("mem"));
+    click(&mut app, "mem");
+    assert!(!app.tab_menu.is_open());
+    click(&mut app, "cpu");
+    assert_eq!(app.status_popup.as_deref(), Some("cpu"));
     let items = app.status_popup_items("cpu");
     assert_eq!(items.len(), 5, "전체 · Dir · 코어 · 구분선 · 편집");
     let labels: Vec<String> = app
