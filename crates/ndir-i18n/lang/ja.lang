@@ -863,7 +863,7 @@ tabstatus.total = すべての項目(隠し含む): {0}
 tabstatus.folders = フォルダー: {0}
 tabstatus.files = ファイル: {0}
 pref.statusLayout = ステータスバーの項目
-pref.statusLayout.desc = ステータスバー右側の項目の表示/非表示と順序を別ウィンドウで変更します（ステータスバーを右クリックしても開きます）。C = CPU・M = メモリ・D = ディスク・N = ネットワークはシステム全体の値で、項目をクリックすると詳細を表示します。
+pref.statusLayout.desc = ステータスバー右側の項目の表示/非表示と順序を別ウィンドウで変更します（ステータスバーの右クリックメニューからも開けます）。C = CPU・M = メモリ・D = ディスク・N = ネットワークはシステム全体の値で、項目をクリックすると詳細を表示します。
 pref.statusInterval = ステータスバー負荷の更新間隔(ms)
 pref.statusInterval.desc = CPU・メモリ・ディスク・ネットワークを読み直す間隔です。
 pref.tabStatusbar = タブのステータスバー

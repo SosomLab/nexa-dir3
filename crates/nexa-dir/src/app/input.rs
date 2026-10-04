@@ -143,9 +143,9 @@ impl App {
             Area::Panel(i) => self.panels[i].on_event(ev, inv),
             Area::Split(k) => self.split_event(k, ev, inv),
             Area::Status => {
-                // 상태줄 우클릭 = 칸 순서/표시 편집 창(툴바 순서 편집과 같은 화면 · 사용자 10-04).
+                // 상태줄 우클릭 = 툴바와 같은 메뉴(상태바 편집… · 설정…) — 바로 편집 창으로 가지 않는다(사용자 10-04).
                 if matches!(ev, InputEvent::RightDown { .. }) {
-                    self.open_order_editor("statusbar.layout");
+                    self.open_statusbar_menu();
                     return;
                 }
                 self.statusbar.on_event(ev, inv);

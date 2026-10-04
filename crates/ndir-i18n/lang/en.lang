@@ -863,7 +863,7 @@ tabstatus.total = All items (incl. hidden): {0}
 tabstatus.folders = Folders: {0}
 tabstatus.files = Files: {0}
 pref.statusLayout = Status bar items
-pref.statusLayout.desc = Show/hide and reorder the items on the right of the status bar in a separate window (right-click the status bar to open it). C = CPU, M = memory, D = disk, N = network show the whole system; click an item for details.
+pref.statusLayout.desc = Show/hide and reorder the items on the right of the status bar in a separate window (also from the status bar's right-click menu). C = CPU, M = memory, D = disk, N = network show the whole system; click an item for details.
 pref.statusInterval = Status bar load refresh (ms)
 pref.statusInterval.desc = How often CPU, memory, disk and network are read.
 pref.tabStatusbar = Tab status bar

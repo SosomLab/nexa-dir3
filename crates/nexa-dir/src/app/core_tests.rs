@@ -2380,13 +2380,17 @@ fn status_segments_and_tab_status_bar() {
         "license:1|tab:1|cpu:0|mem:0|disk:0|net:0|appmem:0",
     );
     assert_eq!(ids(&app), ["license", "tab"]);
-    // 상태줄 우클릭 = 순서 편집 창 요청.
+    // 상태줄 우클릭 = 툴바와 같은 메뉴(상태바 편집… · 설정…) → 편집을 고르면 순서 편집 창.
     let sbb = app.statusbar.bounds();
     app.route(InputEvent::RightDown {
         x: sbb.x + 20,
         y: sbb.y + 5,
     });
-    assert!(app.open_order, "상태줄 우클릭 = 순서 편집 창");
+    assert!(!app.open_order, "우클릭만으로는 편집 창이 열리지 않는다");
+    let m = app.dump_of("ctx").unwrap_or_default();
+    assert!(m.contains("aux.sb.edit aux.prefs"), "{m}");
+    app.ctx_pick("aux.sb.edit");
+    assert!(app.open_order, "상태바 편집… = 순서 편집 창");
     assert_eq!(
         app.status_load_tick(Instant::now()),
         None,

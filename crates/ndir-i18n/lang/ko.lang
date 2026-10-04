@@ -862,7 +862,7 @@ tabstatus.total = 전체 항목(숨김 포함): {0}
 tabstatus.folders = 폴더: {0}
 tabstatus.files = 파일: {0}
 pref.statusLayout = 상태바 칸
-pref.statusLayout.desc = 상태줄 오른쪽 칸의 표시/숨김과 순서를 별도 창에서 변경합니다(상태줄을 우클릭해도 열립니다). C = CPU · M = 메모리 · D = 디스크 · N = 네트워크는 시스템 전체 값이며 칸을 누르면 상세 정보가 보입니다.
+pref.statusLayout.desc = 상태줄 오른쪽 칸의 표시/숨김과 순서를 별도 창에서 변경합니다(상태줄 우클릭 메뉴에서도 열 수 있습니다). C = CPU · M = 메모리 · D = 디스크 · N = 네트워크는 시스템 전체 값이며 칸을 누르면 상세 정보가 보입니다.
 pref.statusInterval = 상태줄 부하 갱신 주기(ms)
 pref.statusInterval.desc = CPU · 메모리 · 디스크 · 네트워크를 다시 읽는 간격입니다.
 pref.tabStatusbar = 탭 상태바

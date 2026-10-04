@@ -502,6 +502,16 @@ impl App {
         self.open_ctx(CtxKind::Aux(self.active), items);
     }
 
+    /// 상태줄 우클릭 메뉴(툴바 우클릭과 같은 모양): 상태바 편집… · 설정….
+    pub(crate) fn open_statusbar_menu(&mut self) {
+        let items = vec![
+            CtxItem::item("aux.sb.edit", tr("sb.edit")),
+            CtxItem::Separator,
+            CtxItem::item("aux.prefs", tr("menu.file.prefs")),
+        ];
+        self.open_ctx(CtxKind::Aux(self.active), items);
+    }
+
     /// 커서 아래 빠른 실행 항목의 자리(`launcher_items` 인덱스 · 빈 곳 · 구분선 = `None`).
     fn launcher_item_at(&self, x: i32, y: i32) -> Option<usize> {
         (0..self.launcher_items.len()).find(|i| {
