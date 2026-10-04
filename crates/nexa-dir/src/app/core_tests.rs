@@ -1274,12 +1274,23 @@ fn dialogs_delete_permanent_and_paste_conflict() {
         "{}",
         app.dump_of("dlg").unwrap()
     );
+    // 질문이 떠 있는 동안에도 진행 스냅숏은 맞는다(종전 = 질문 틱에서 갱신을 건너뛰어 앞 항목 결과가 다음 질문 뒤에야 보였다).
+    let p = app.dump_of("progress").unwrap();
+    assert!(
+        p.contains("| 0/5 ") && p.contains("file 0/1") && p.trim_end().ends_with("pending"),
+        "질문 전에 계획(크기 · 항목)이 이미 들어와 있다: {p}"
+    );
     app.startup_cmd("dlg.pick:3");
     wait(&mut app, Some(3));
     assert_eq!(
         std::fs::read(dir.join("sub/a.txt")).unwrap(),
         b"old",
         "건너뛰기 = 원본 유지"
+    );
+    let p = app.dump_of("progress").unwrap();
+    assert!(
+        p.trim_end().ends_with("skipped"),
+        "건너뜀 = 결정된 상태: {p}"
     );
     // 덮어쓰기.
     app.command("edit.paste");

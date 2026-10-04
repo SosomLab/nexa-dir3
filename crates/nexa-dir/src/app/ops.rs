@@ -317,8 +317,31 @@ impl App {
         }
     }
 
+    /// 진행 창에 지금 진행 상태(바이트 · 항목별 상태 · 몇 번째 파일)를 넣는다 — 바뀐 것이 있을 때만 다시 그린다.
+    fn sync_progress_win(&mut self) {
+        let Some(job) = &self.transfer else {
+            return;
+        };
+        let items = job
+            .shared
+            .items
+            .lock()
+            .map(|v| v.clone())
+            .unwrap_or_default();
+        self.progress_win.update(
+            job.shared.done.load(Ordering::Relaxed),
+            job.shared.total.load(Ordering::Relaxed),
+            items,
+            job.shared.current.load(Ordering::Relaxed),
+            job.count,
+        );
+    }
+
     /// 전송 폴링(틱): 진행률 상태줄 · 완료 수거. 반환 = 아직 진행 중.
     pub(crate) fn ops_tick(&mut self) -> bool {
+        // 진행 창 스냅숏은 **질문을 띄우기 전에도 · 답을 기다리는 동안에도** 맞춘다 — 종전에는 덮어쓰기 질문이 떠 있으면 건너뛰어,
+        // 앞 항목의 결과(덮어씀 = 채움 · 건너뜀 = 진한 회색)와 "파일 n/m"이 다음 질문 뒤에야 반영됐다(사용자 10-04).
+        self.sync_progress_win();
         let Some(job) = &self.transfer else {
             return false;
         };
@@ -358,23 +381,10 @@ impl App {
                     job.shared.done.load(Ordering::Relaxed),
                     job.shared.total.load(Ordering::Relaxed),
                 );
-                // 진행 창(dir2 DLG-059/062): 스냅숏 갱신 · [취소]/X 폴링 → 워커 취소 플래그.
+                // 진행 창(dir2 DLG-059/062): [취소]/X 폴링 → 워커 취소 플래그(스냅숏은 틱 맨 앞에서 맞췄다).
                 if self.progress_win.take_cancelled() {
                     job.shared.cancel.store(true, Ordering::Relaxed);
                 }
-                let items = job
-                    .shared
-                    .items
-                    .lock()
-                    .map(|v| v.clone())
-                    .unwrap_or_default();
-                self.progress_win.update(
-                    done,
-                    total,
-                    items,
-                    job.shared.current.load(Ordering::Relaxed),
-                    job.count,
-                );
                 let pct = (done.min(total) * 100)
                     .checked_div(total)
                     .unwrap_or(0)
