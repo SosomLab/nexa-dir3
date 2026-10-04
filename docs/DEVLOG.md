@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **느린 재클릭 = 이름 바꾸기**(탐색기 관례 · 선택된 항목 1초 뒤 재클릭 → 더블클릭 시간 뒤 편집 · 키/끌기/새 클릭 = 취소 · `app/slowclick.rs` · 25a7a2a · T-149 4 · CMD-407) → [journal 10-05 §22](journal/2026-10-05.md)
 - **경로 바 `shell:` 별칭**(`shell:startup` · `shell:downloads` · `shell:::{GUID}` → 실경로 · Windows SHParseDisplayName · 다른 OS = 없음 · ce75896 · T-149 19 · KEY-131) → [journal 10-05 §21](journal/2026-10-05.md)
 - **이름 편집 · 경로 편집 · 전송 중 감시 재열람 미루기**(`reload_deferred` · 미룬 폴더는 다음 틱에 합침 · 통지 유실 없음 · 5eda239 · T-149 14 · WINC-151) → [journal 10-05 §20](journal/2026-10-05.md)
 - **여러 폴더에 걸친 선택의 우클릭 = 캐럿 항목의 부모 폴더 것만 대상**(`context_targets` · 트리 보기 셸 메뉴 대상 오류 방지 · 99c4be6 · T-149 13 · WINA-084) → [journal 10-05 §19](journal/2026-10-05.md)
