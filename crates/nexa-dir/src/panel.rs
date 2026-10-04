@@ -543,6 +543,49 @@ impl Panel {
         self.pending_alias.take()
     }
 
+    /// 끌어오다 머문 자리의 대상(dir2 win.rs `dnd_hover` 판정 · 탭이 폴더보다 우선): 활성이 아닌 탭 위 = 그 탭 ·
+    /// 폴더 행 위 = 그 폴더 경로. 그 밖 = `None`.
+    pub(crate) fn dnd_dwell_at(&self, x: i32, y: i32) -> Option<crate::app::dnd::Dwell> {
+        use crate::app::dnd::Dwell;
+        if let Some(t) = self.tabbar.tab_index_at(x, y) {
+            return (t != self.active).then_some(Dwell::Tab(t));
+        }
+        let rows = self.rows();
+        let row = rows.row_at(x, y)?;
+        let path = rows.source().row_path(row)?;
+        rows.source().row_is_dir(row).then_some(Dwell::Folder(path))
+    }
+
+    /// 머문 대상을 연다: 탭 = 전환 · 폴더 = 그 행을 펼친다(트리 보기에서 하위에 놓을 수 있게). 바뀌었으면 `true`.
+    pub(crate) fn dnd_dwell_open(
+        &mut self,
+        target: &crate::app::dnd::Dwell,
+        inv: &mut Invalidations,
+    ) -> bool {
+        use crate::app::dnd::Dwell;
+        match target {
+            Dwell::Tab(t) => {
+                let before = self.active;
+                self.switch_tab(*t, inv);
+                self.active != before
+            }
+            Dwell::Folder(path) => {
+                let rows = &mut self.tabs[self.active].rows;
+                let n = rows.source().len();
+                let Some(row) =
+                    (0..n).find(|&i| rows.source().row_path(i).as_deref() == Some(path.as_path()))
+                else {
+                    return false;
+                };
+                let opened = rows.source_mut().expand_row(row);
+                if opened {
+                    inv.push(self.bounds);
+                }
+                opened
+            }
+        }
+    }
+
     /// OS 드래그에서 돌아온 뒤 누름 상태 정리(그리드의 클릭 확정 보류 · 러버밴드 + 패널의 포인터 캡처) — 선택은 그대로.
     pub(crate) fn abort_press(&mut self) {
         self.tabs[self.active].rows.abort_press();

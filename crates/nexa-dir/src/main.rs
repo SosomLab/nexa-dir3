@@ -291,6 +291,8 @@ struct App {
     /// 외부 끌어다 놓기 1차(winit HoveredFile/DroppedFile · 틱에서 처리).
     dnd_hover: Vec<PathBuf>,
     dnd_drop: Vec<PathBuf>,
+    /// 끌어오다 머무는 대상(패널, 대상)과 머물기 시작한 시각 — 설정 시간만큼 머물면 연다(`app/dnd.rs::dnd_track`).
+    dnd_dwell: Option<((usize, app::dnd::Dwell), Instant)>,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -596,6 +598,7 @@ impl App {
             ctx_dwell_done: false,
             dnd_hover: Vec::new(),
             dnd_drop: Vec::new(),
+            dnd_dwell: None,
             platform,
             watch_next: Instant::now(),
             watch_deferred: Vec::new(),

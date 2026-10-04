@@ -323,6 +323,17 @@ impl TreeSource {
         self.error.as_deref()
     }
 
+    /// 접혀 있는 폴더 행을 펼친다(이미 펼쳐졌거나 폴더가 아니면 그대로) — 펼쳤으면 `true`(끌어오다 머물면 열기 · SHELL-067).
+    pub(crate) fn expand_row(&mut self, index: usize) -> bool {
+        let Some(t) = self.tree.as_mut() else {
+            return false;
+        };
+        match t.visible_id(index) {
+            Some(id) if t.is_expanded(id) == Some(false) => t.expand(id).is_ok(),
+            _ => false,
+        }
+    }
+
     /// 화면에 **펼쳐져 있는** 폴더들의 경로(위에서부터 최대 `cap`개) — 폴더 감시 대상(dir2 WINB-014 "가시 펼침 폴더").
     pub(crate) fn expanded_dirs(&self, cap: usize) -> Vec<PathBuf> {
         let Some(t) = self.tree.as_ref() else {

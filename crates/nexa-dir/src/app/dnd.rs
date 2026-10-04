@@ -33,6 +33,36 @@ pub(crate) fn edge_scroll(y: i32, top: i32, bottom: i32, band: i32) -> i32 {
     }
 }
 
+/// 끌어오다 머물면 여는 대상(dir2 X-32 `DndHover`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Dwell {
+    /// 활성이 아닌 탭(자리) — 머물면 그 탭으로 바꾼다.
+    Tab(usize),
+    /// 접힌 폴더 행 — 머물면 펼친다.
+    Folder(PathBuf),
+}
+
+/// 머물기 판정(순수 · dir2 win.rs:3395 `dnd_hover_fire`): 대상이 바뀌면 시계를 다시 재고, 같은 대상 위에 `wait` 이상 있었으면
+/// 발화한다(발화 뒤에는 시계를 다시 재므로 한 번만). 돌려주는 것 = (새 상태, 지금 열 것인가).
+pub(crate) fn dwell_step<T: Clone + PartialEq>(
+    prev: Option<(T, Instant)>,
+    cur: Option<T>,
+    now: Instant,
+    wait: Duration,
+) -> (Option<(T, Instant)>, bool) {
+    match (prev, cur) {
+        (_, None) => (None, false),
+        (Some((p, since)), Some(c)) if p == c => {
+            if now.saturating_duration_since(since) >= wait {
+                (Some((c, now)), true)
+            } else {
+                (Some((c, since)), false)
+            }
+        }
+        (_, Some(c)) => (Some((c, now)), false),
+    }
+}
+
 /// 끌기가 시작됐는가(순수): 가로나 세로로 임계를 넘었다.
 pub(crate) fn drag_started(press: (i32, i32), now: (i32, i32)) -> bool {
     (now.0 - press.0).abs() > DRAG_SLOP || (now.1 - press.1).abs() > DRAG_SLOP
@@ -96,12 +126,42 @@ impl App {
 
     /// 끌어오는 동안의 포인터 반영(T-147 수신 보강 · dir2 `DropHooks::track` · win.rs:3326-3349): 호스트가 OS에서 읽은
     /// 창 안 좌표 · 수식키를 넣는다 → 놓는 자리 · 복사/이동 판정이 **지금 포인터** 기준이 되고(종전 = 드래그가 들어오기 전
-    /// 마지막 자리), 목록 가장자리 띠에서는 그쪽으로 한 노치씩 스크롤한다. 스크롤했으면 `true`.
-    pub(crate) fn dnd_track(&mut self, at: (i32, i32), ctrl: bool, shift: bool) -> bool {
+    /// 마지막 자리), 목록 가장자리 띠에서는 그쪽으로 한 노치씩 스크롤한다. 활성이 아닌 탭 · 폴더 행 위에 설정 시간
+    /// (`transfer.dnd_hover_ms`)만큼 머물면 그 탭으로 바꾸거나 폴더를 펼친다(SHELL-067). 화면이 바뀌었으면 `true`.
+    pub(crate) fn dnd_track(
+        &mut self,
+        at: (i32, i32),
+        ctrl: bool,
+        shift: bool,
+        now: Instant,
+    ) -> bool {
         self.cursor = at;
         self.primary = ctrl;
         self.shift = shift;
         let p = Point { x: at.0, y: at.1 };
+        // 머물면 열기.
+        let cur = (0..2).find_map(|i| {
+            if (i == 1 && !self.dual) || !self.panels[i].bounds().contains(p) {
+                return None;
+            }
+            self.panels[i].dnd_dwell_at(at.0, at.1).map(|d| (i, d))
+        });
+        let wait = Duration::from_millis(
+            self.settings
+                .int("transfer.dnd_hover_ms")
+                .clamp(200, 10_000) as u64,
+        );
+        let (state, fire) = dwell_step(self.dnd_dwell.take(), cur, now, wait);
+        self.dnd_dwell = state;
+        if fire {
+            if let Some(((i, target), _)) = self.dnd_dwell.clone() {
+                let mut inv = Invalidations::default();
+                if self.panels[i].dnd_dwell_open(&target, &mut inv) {
+                    self.update_status();
+                    return true;
+                }
+            }
+        }
         let band = (EDGE_BAND as f32 * self.scale).round() as i32;
         for i in 0..2 {
             if i == 1 && !self.dual {
@@ -129,10 +189,12 @@ impl App {
     }
 
     pub(crate) fn dnd_cancel(&mut self) {
+        self.dnd_dwell = None;
         self.dnd_hover.clear();
     }
 
     pub(crate) fn dnd_dropped(&mut self, path: PathBuf) {
+        self.dnd_dwell = None;
         self.dnd_hover.clear();
         if !self.dnd_drop.contains(&path) {
             self.dnd_drop.push(path);

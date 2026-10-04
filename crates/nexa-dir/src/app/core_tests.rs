@@ -6278,20 +6278,80 @@ fn incoming_drag_tracks_pointer_and_auto_scrolls() {
     assert!(app.dnd_hovering(), "끌어오는 중");
     let b = app.panels[1].rows().bounds();
     // 가운데 = 자리 · 수식키만 반영(스크롤 없음).
-    assert!(!app.dnd_track((b.x + 40, b.y + b.h / 2), true, false));
+    let now = Instant::now();
+    assert!(!app.dnd_track((b.x + 40, b.y + b.h / 2), true, false, now));
     assert_eq!(app.cursor, (b.x + 40, b.y + b.h / 2));
     assert!(app.primary && !app.shift, "Ctrl = 복사 판정에 쓰인다");
     // 아래 띠 = 아래로 스크롤 · 위 띠 = 다시 위로.
-    assert!(app.dnd_track((b.x + 40, b.bottom() - 5), false, false));
+    assert!(app.dnd_track((b.x + 40, b.bottom() - 5), false, false, now));
     let down = app.panels[1].rows().scroll_row();
     assert!(down > 0, "아래 가장자리 = 아래로");
     assert_eq!(app.panels[0].rows().scroll_row(), 0, "다른 패널은 그대로");
-    assert!(app.dnd_track((b.x + 40, b.y + 30), false, false));
+    assert!(app.dnd_track((b.x + 40, b.y + 30), false, false, now));
     assert!(
         app.panels[1].rows().scroll_row() < down,
         "위 가장자리 = 위로"
     );
     app.dnd_cancel();
     assert!(!app.dnd_hovering());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-147 머물면 열기(dir2 X-32 · win.rs:3395 · SHELL-067 · 설정 `transfer.dnd_hover_ms`): 끌어오다 접힌 폴더 행 위에 설정 시간만큼
+/// 머물면 그 폴더를 펼치고, 활성이 아닌 탭 위에 머물면 그 탭으로 바꾼다 · 대상이 바뀌면 시계를 다시 잰다.
+#[test]
+fn incoming_drag_dwell_opens_folder_and_tab() {
+    use crate::app::dnd::dwell_step;
+    let t0 = Instant::now();
+    let ms = Duration::from_millis;
+    // 순수 판정: 처음 = 시계 시작 · 같은 대상 + 시간 미달 = 대기 · 도달 = 발화(시계 재시작) · 대상 바뀜 = 재시작 · 벗어남 = 없음.
+    let (s, f) = dwell_step(None, Some('a'), t0, ms(500));
+    assert!(!f && s == Some(('a', t0)));
+    let (s, f) = dwell_step(s, Some('a'), t0 + ms(499), ms(500));
+    assert!(!f && s == Some(('a', t0)));
+    let (s, f) = dwell_step(s, Some('a'), t0 + ms(500), ms(500));
+    assert!(
+        f && s == Some(('a', t0 + ms(500))),
+        "도달 = 발화 · 시계 재시작"
+    );
+    let (s, f) = dwell_step(s, Some('b'), t0 + ms(600), ms(500));
+    assert!(!f && s == Some(('b', t0 + ms(600))), "대상 바뀜 = 재시작");
+    let (s, f) = dwell_step(s, None, t0 + ms(2000), ms(500));
+    assert!(!f && s.is_none());
+
+    let (mut app, dir) = fixture("dnddwell");
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("transfer.dnd_hover_ms", "500");
+    app.command("file.new_tab"); // 패널 0 = 탭 2개(활성 1).
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    app.dnd_hover(PathBuf::from("/elsewhere/x.bin"));
+    let sub = dir.join("sub");
+    let at = {
+        let rows = app.panels[0].rows();
+        let r = (0..rows.source().len())
+            .find(|&i| rows.source().row_path(i).as_deref() == Some(sub.as_path()))
+            .expect("sub row");
+        let a = rows.row_anchor(r).expect("anchor");
+        (a.x + 60, a.y)
+    };
+    assert!(app.panels[0].rows().source().expanded_dirs(4).is_empty());
+    assert!(!app.dnd_track(at, false, false, t0), "처음 = 대기");
+    assert!(!app.dnd_track(at, false, false, t0 + ms(400)), "시간 미달");
+    assert!(app.dnd_track(at, false, false, t0 + ms(520)), "머묾 = 펼침");
+    assert_eq!(app.panels[0].rows().source().expanded_dirs(4), vec![sub]);
+    // 탭: 활성이 아닌 탭(0) 위에 머물면 그 탭으로.
+    let tr = app.panels[0].tab_rect(0).expect("tab 0");
+    let tab_at = (tr.x + 10, tr.y + tr.h / 2);
+    assert_eq!(app.panels[0].active_index(), 1);
+    assert!(!app.dnd_track(tab_at, false, false, t0 + ms(1000)));
+    assert!(
+        app.dnd_track(tab_at, false, false, t0 + ms(1600)),
+        "머묾 = 탭 전환"
+    );
+    assert_eq!(app.panels[0].active_index(), 0);
+    // 놓거나 벗어나면 머묾 상태가 지워진다.
+    app.dnd_cancel();
+    assert!(app.dnd_dwell.is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }

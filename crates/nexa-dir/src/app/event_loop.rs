@@ -126,7 +126,7 @@ impl ApplicationHandler<Wake> for App {
                 .map(|p| (p.x, p.y));
             if let (Some(ps), Some(inner)) = (platform::pointer_state(), inner) {
                 let at = app::dnd::client_point((ps.x, ps.y), inner);
-                if self.dnd_track(at, ps.ctrl, ps.shift) {
+                if self.dnd_track(at, ps.ctrl, ps.shift, now) {
                     redraw = true;
                 }
             }
