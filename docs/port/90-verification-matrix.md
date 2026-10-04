@@ -24,7 +24,7 @@
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
-| PANEL | 138 | 138 | 131 | 7 | 0 | 0 | 0 |
+| PANEL | 138 | 138 | 133 | 5 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
 | PREFS | 256 | 256 | 149 | 76 | 31 | 0 | 0 |
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
@@ -38,10 +38,10 @@
 | UIC | 235 | 235 | 5 | 0 | 230 | 0 | 0 |
 | UIK | 67 | 67 | 12 | 9 | 46 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
-| WINA | 96 | 96 | 8 | 88 | 0 | 0 | 0 |
-| WINB | 125 | 125 | 60 | 58 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 44 | 130 | 0 | 0 | 0 |
-| **합계** | 4319 | 4319 | 2466 | 952 | 763 | 0 | 0 |
+| WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
+| WINB | 125 | 125 | 65 | 53 | 0 | 0 | 0 |
+| WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
+| **합계** | 4319 | 4319 | 2489 | 929 | 763 | 0 | 0 |
 
 ## 행
 
@@ -184,12 +184,13 @@
 | PROC-060~081 | 빌드·테스트·점검(audit)·UI QA 하네스 | `scripts/check-all.sh` · `check-3os.sh` · `ci.yml` · `selfcheck.rs` · `ndir-check` · `matrix-audit.py` | T0~T5 | CI 3-OS · `--selfcheck --ci` · 시나리오 20 | ✅ | T-05 · T-54 · T-90 |
 | PROC-090~109 | 배포 채널·패키징(MSI·zip·pkg·dmg·deb·rpm · 고지 · 임포트 게이트) | `packaging/**` · `release.yml` · `scripts/third-party-notices.*` · `check-imports.ps1` | T0·T5 | CI-114 행 · 로컬 MSI/zip | ✅ | T-82 · choco/winget/brew 등록 ☐ |
 | PROC-120~130 | 크로스플랫폼 검토 결론(dir2 docs/23) | `docs/10-decision-record.md` DR-1~12 | — | — | ⚠ | 결정 기록으로 흡수 |
-| WINA-001~096 | dir2 `win.rs` A(진입·상수·테마·메뉴/툴바/런처 구성·상태 구조체·기동 순서·레이아웃·클립보드·도크·조작 대상·DnD 훅) | `main.rs`(App) · `app/*.rs` · `platform/` | T3 | `layout_core`·`route_and_commands_without_window`·`launcher_bar_layout_and_launch`·`dock`/`clip` core 시험 | 🚧 | 구조 설명 원장 — 기능별 행(SKEL/CMD/SHELL)이 실제 대조 · WINA-029·054·065 별도 ✅ |
+| WINA-001~096 | dir2 `win.rs` A(진입·상수·테마·메뉴/툴바/런처 구성·상태 구조체·기동 순서·레이아웃·클립보드·도크·조작 대상·DnD 훅) | `main.rs`(App) · `app/*.rs` · `platform/` | T3 | `layout_core`·`route_and_commands_without_window`·`launcher_bar_layout_and_launch`·`dock`/`clip` core 시험 | 🚧 | 구조 설명 원장 — 기능별 행(SKEL/CMD/SHELL)이 실제 대조 · WINA-029·054·065 별도 ✅ · 10-05 §26: 구현됐고 시험 없던 하위 ID 시험 보강 = WIN-TESTS 행 |
 | WINB-009~013 · 022~035 · 043~052 · 066~092 | 실행 취소/다시 실행 · 삭제 · 이름 바꾸기/새로 만들기 · 로컬 전송 UI · 명령 디스패처 | `ndir-ops/history.rs` · `app/ops.rs` · `app/menus.rs::command` | T1·T3 | `history` 시험 · `new_folder_rename_and_undo` · `dialogs_delete_permanent_and_paste_conflict` · `copy_paste` core · `route_and_commands_without_window` | ✅ | |
-| WINB-001~008 · 014~021 · 053~065 · 093~125 | DnD 수신 훅 · 폴더 감시/프로브 · IME/페인트/상태바 · 테마/언어 · 툴팁/탭 교차 이동/포커스 · 터미널 보조/스플리터/휠 · 우클릭 팝업/편집 창 | `app/dnd.rs` · `app/watch.rs` · `app/event_loop.rs` · `app/input.rs` | T3 | `external_drop_…` · `watch` core 시험 · `splitter`/`term` 시험 | 🚧 | IME(SKEL-098~108)·툴팁 실기 |
+| WINB-001~008 · 014~021 · 053~065 · 093~125 | DnD 수신 훅 · 폴더 감시/프로브 · IME/페인트/상태바 · 테마/언어 · 툴팁/탭 교차 이동/포커스 · 터미널 보조/스플리터/휠 · 우클릭 팝업/편집 창 | `app/dnd.rs` · `app/watch.rs` · `app/event_loop.rs` · `app/input.rs` | T3 | `external_drop_…` · `watch` core 시험 · `splitter`/`term` 시험 | 🚧 | IME(SKEL-098~108)·툴팁 실기 · 10-05 §26: 구현됐고 시험 없던 하위 ID 시험 보강 = WIN-TESTS 행 |
 | WINB-036~042 | 클라우드 전송 | — | — | — | ☐ | CLOUD 미이식 |
 | WINC-001~025 | 설정 값 적용 `apply_prefs`(실시간 · 멱등) | `app/settings.rs::apply_setting` | T3 | `every_registry_key_is_applied_or_declared_restart` | ✅ | 레지스트리 전 키 적용 감시 |
-| WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) |
+| WINC-026~174 | 헬퍼·스냅샷·편집 디스패치 · `wndproc` 전 메시지 · dir2 단위 시험 7건 | `app/event_loop.rs` · `app/input.rs` · `app/startup_cmd.rs` | T3 | core 시험 전반 · 시나리오 20 | 🚧 | 메시지 단위 대조는 T-91 QA 표 · dir2 7 시험 이식 여부 확인(DR-11) · 10-05 §26: 구현됐고 시험 없던 하위 ID 시험 보강 = WIN-TESTS 행 |
+| T-150 · WIN-TESTS · WINA-013 · 037 · 038 · 059 · 071 · WINB-063 · 070 · 107 · 110 · 111 · 114 · WINC-067 · 080 · 092 · 106 · 114 · 117 · 118 · 146 · 147 · 163 · 165 · 170 · 173 · PANEL-134 · 135 | 창 관련 구현됐고 자동 시험만 없던 것 보강(§12 목록 19건 중 13건) — X버튼 뒤/앞 · 타입어헤드 문자 · 휠 = 커서 아래 패널 · 항상 맨 위 · 붙여넣기 대상 · F3/Tab/Ctrl+Tab 키 경로 · 세션 디바운스 · 터미널 [→] cd · 키 라우팅(목록 ↔ 터미널) · 터미널 선택 드래그 밖 스크롤 · 잘라내기 흐림 동기 · OS 테마 → system 모드 · 히트 존 표 | `app/core_tests.rs` · `termview.rs` 시험(코드 변경 = `App::area_at` pub(crate)뿐) | T1 · T3 | `xbuttons_navigate_back_and_forward` · `typeahead_char_moves_caret_to_matching_row` · `wheel_scrolls_panel_under_cursor_not_active` · `always_on_top_toggles_setting_and_menu_check` · `paste_dest_folder_file_and_multi` · `f3_tab_and_ctrl_tab_through_the_keymap` · `session_writes_once_after_debounce` · `dock_goto_sends_cd_to_terminal` · `keys_go_to_terminal_while_focused_then_back_to_list` · `selection_drag_outside_grid_scrolls_one_line` · `cut_marks_follow_the_clipboard` · `system_theme_mode_follows_os_theme_only` · `hit_zones_match_layout` | ✅ | 10-05 §26(36ee393 · 77ffa74) · **자동화 안 함**: WINA-048 CP949 zip 이름 = OS 코드페이지(CP_ACP) 종속 → 실기 · WINC-050 붙여넣기 정규화 · WINC-144 Ctrl+C = 실제 OS 글자 클립보드라 시험 규약상 제외("선택 있으면 복사"는 `terminal_dock_with_fake_pty`) · WINB-104/105 포커스 전환은 같은 시험이 봄(강조 색 = 그리기 판정) · WINB-098/099 툴팁 · WINB-119 휠 줄 수 동기 = 후속 ☐ |
 | PANEL-001~035 · 037~053 | 패널 구성·레이아웃 · 탭 · 네비게이션/재열람 · 보기/정렬 옵션 전파 | `panel.rs` · `app/watch.rs` · `app/settings.rs` | T3 | `tabs_and_panels` · `nav_*` core 시험 · `layout_core` 골든 · `apply_list_opts` | ✅ | 탭 잠금/고정·세션 복원 포함 |
 | PANEL-064 · GAP-003 · NEW-009 | 아이콘 키 → 행 셸 아이콘(dir2 `icons::icon_key` · source.rs:426-432) + 아이콘 계층(직접 설정 → 파일 등록 → 확장자 등록 → 시스템 기본 → 자체 그림) | `filelist.rs::{icon_key, RowSource::icon}` · `app/row_icons.rs`(nexa-grid 리졸버) · nexa-ui 116차 `set_icon_resolver` | T1·T3 | `rows_expose_dir2_icon_keys` · `service_key_maps_dir2_icon_keys` · `override_rules_parse_and_match_by_priority` · `resolver_always_yields_an_image` | ✅ | §73 · ICO/SVG 사용자 아이콘 미지원(UIC-317) · 규칙 편집은 Text 한 줄 · 타 OS = nexa-fs 폴백 · 실기(아이콘 모양) 사용자 · 10-05 §13: .ico 사용자 아이콘 = nexa-gfx ICO 디코더로 풀림(nexa-ui 153 · UIC-317 행) |
 | UIX-021 · GAP-004 | FilePicker 최근 목록 · 숨김 파일 설정 주입 | `file_win.rs:160~163`(`set_show_dot`만) | — | — | 🚧 | 구현 예정(GAP-003 뒤) |
