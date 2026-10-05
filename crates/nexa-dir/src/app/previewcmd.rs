@@ -48,7 +48,8 @@ impl App {
                     return;
                 }
                 // 읽어 둔 목록을 그대로 그리드 창에(재조회 없음 · 실패 상태도 사유 줄과 함께 연다).
-                self.archive_win.set_doc(&title, *doc, 0);
+                self.archive_win
+                    .set_doc(&title, *doc, app::bulk::local_tz_min());
                 self.open_archive = true;
                 return;
             }

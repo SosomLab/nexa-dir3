@@ -28,7 +28,7 @@ pub(crate) fn report(info: &str, last_cmd: &str, unix_secs: u64) -> String {
     format!(
         "nexa-dir {} crash\ntime: {} (unix {unix_secs})\nos: {} {}\nlast command: {}\n\n{info}\n",
         env!("CARGO_PKG_VERSION"),
-        crate::filelist::format_time((unix_secs as i64) * 1000),
+        crate::filelist::format_time_local((unix_secs as i64) * 1000),
         std::env::consts::OS,
         std::env::consts::ARCH,
         if last_cmd.is_empty() { "-" } else { last_cmd },
@@ -91,7 +91,12 @@ mod tests {
             1_791_030_896,
         );
         assert!(r.starts_with(&format!("nexa-dir {} crash\n", env!("CARGO_PKG_VERSION"))));
-        assert!(r.contains("time: 2026-10-03 12:34 (unix 1791030896)"));
+        // 시각은 현지(10-06 · 목록과 같은 규칙) — 기대값도 같은 변환으로.
+        let shown = crate::filelist::format_time_local(1_791_030_896_000);
+        assert!(
+            r.contains(&format!("time: {shown} (unix 1791030896)")),
+            "{r}"
+        );
         assert!(r.contains(&format!("os: {} ", std::env::consts::OS)));
         assert!(r.contains("last command: view.hidden"));
         assert!(r.ends_with("boom\n"));

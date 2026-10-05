@@ -7,7 +7,7 @@
 //!
 //! 순수 함수 = 시험(임시 트리).
 
-use crate::filelist::{format_size, format_time};
+use crate::filelist::{format_size, format_time_local};
 use crate::preview::{self, PreviewDoc};
 use ndir_i18n::{tr, trf};
 use std::path::{Path, PathBuf};
@@ -118,7 +118,7 @@ pub(crate) fn info_lines(
                 if b.is_dir {
                     v.extend(dir_size(one));
                 }
-                let t = |ms: Option<i64>| ms.map(format_time).unwrap_or_default();
+                let t = |ms: Option<i64>| ms.map(format_time_local).unwrap_or_default();
                 v.push(trf("info.created", &[&t(b.created)]));
                 v.push(trf("info.modified", &[&t(b.modified)]));
                 v.push(trf("info.accessed", &[&t(b.accessed)]));

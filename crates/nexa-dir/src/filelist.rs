@@ -486,7 +486,23 @@ pub(crate) fn format_iso_utc(unix_secs: i64) -> String {
     )
 }
 
-/// Unix ms(UTC) → `YYYY-MM-DD HH:MM`(로컬 시간대 변환 없음 — 시간대는 platform 층 과제 · T-72). 0 이하 = 빈 값.
+/// Unix ms → **현지 시각** `YYYY-MM-DD HH:MM`(파일 목록 · 정보 도크 · 크래시 기록 — 사용자 10-06 "설정 파일을 수정했는데
+/// 날짜가 안 바뀐다" = UTC로 찍혀 9시간 어긋나 보였다). 시간대 · DST는 OS가 그 순간 기준으로 계산한다(`nexa_fs::local_time`).
+/// 0 이하 = 빈 값.
+pub(crate) fn format_time_local(unix_ms: i64) -> String {
+    if unix_ms <= 0 {
+        return String::new();
+    }
+    let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(unix_ms as u64);
+    let l = nexa_fs::local_time(t);
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}",
+        l.year, l.month, l.day, l.hour, l.min
+    )
+}
+
+/// Unix ms → `YYYY-MM-DD HH:MM` **시간대 변환 없이**(값이 이미 현지 벽시계인 경우 — DOS 시각(zip · cab)처럼 시간대가 없는
+/// 압축 항목 시각 · `preview::archive::fmt_entry_time`이 오프셋을 더해 넘긴다). 화면의 파일 시각은 [`format_time_local`]로.
 pub(crate) fn format_time(unix_ms: i64) -> String {
     if unix_ms <= 0 {
         return String::new();
@@ -636,7 +652,7 @@ impl RowSource for TreeSource {
             COL_STATUS => status_label(self.status_of(index)),
             COL_SIZE if r.kind == FileKind::Dir => String::new(),
             COL_SIZE => format_size(r.size),
-            COL_MODIFIED => format_time(r.modified_unix_ms),
+            COL_MODIFIED => format_time_local(r.modified_unix_ms),
             COL_KIND
                 if (self.drive_space.contains_key(&r.name) || r.name.ends_with(":\\"))
                     && !is_home_dir(&r.name) =>
@@ -942,5 +958,29 @@ mod tests {
         }
         assert_eq!(kind_label(FileKind::File, "a.txt"), "TXT");
         assert_eq!(kind_label(FileKind::Symlink, "x"), link);
+    }
+
+    /// 현지 시각 표시: UTC 서식과의 차이가 그 순간의 OS 시간대 오프셋(분 단위 · DST 포함)과 같다 · 0 = 빈 값.
+    #[test]
+    fn local_time_display_follows_os_zone() {
+        assert_eq!(format_time_local(0), "");
+        let ms = 1_791_030_896_000i64; // 2026-10-03 12:34:56 UTC
+        let shown = format_time_local(ms);
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64);
+        let l = nexa_fs::local_time(t);
+        assert_eq!(
+            shown,
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}",
+                l.year, l.month, l.day, l.hour, l.min
+            )
+        );
+        // 오프셋이 0이 아닌 시간대(한국 +9)에서는 UTC 서식과 달라야 한다 · 0인 곳에서는 같다.
+        let off = crate::app::bulk::tz_min_from(
+            ms / 1000,
+            (l.year, l.month, l.day),
+            (l.hour, l.min, l.sec),
+        );
+        assert_eq!(shown == format_time(ms), off == 0, "offset {off}");
     }
 }
