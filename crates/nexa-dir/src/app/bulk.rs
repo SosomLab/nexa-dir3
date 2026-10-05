@@ -9,6 +9,32 @@ use crate::*;
 use ndir_ops::batch_rename as br;
 use std::path::Path;
 
+/// 지금의 현지 시간대 오프셋(분) — 날짜 토큰(`${YYYY}` …)이 현지 시각으로 찍히게(dir2 `tz_offset_min` · 종전 dir3 = 0 = UTC라
+/// 자정 근처 파일의 날짜가 하루 어긋났다).
+pub(crate) fn local_tz_min() -> i32 {
+    let now = std::time::SystemTime::now();
+    let secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    let lt = nexa_fs::local_time(now);
+    tz_min_from(secs, (lt.year, lt.month, lt.day), (lt.hour, lt.min, lt.sec))
+}
+
+/// UTC 초와 그 순간의 현지 달력 → 오프셋(분 · 순수). 달력을 UTC로 읽은 초와의 차이다.
+pub(crate) fn tz_min_from(utc_secs: i64, ymd: (i32, u32, u32), hms: (u32, u32, u32)) -> i32 {
+    // 그레고리력 → 1970-01-01부터의 날 수(Howard Hinnant `days_from_civil`).
+    let (y, m, d) = (i64::from(ymd.0), i64::from(ymd.1), i64::from(ymd.2));
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    let local = days * 86_400 + i64::from(hms.0) * 3600 + i64::from(hms.1) * 60 + i64::from(hms.2);
+    // 분 단위로 반올림(초 경계의 1초 어긋남 흡수).
+    i32::try_from((local - utc_secs + 30).div_euclid(60)).unwrap_or(0)
+}
+
 impl App {
     /// `edit.bulk_rename` — 선택 없음 = 상태줄 안내(창 열지 않음 · DLG-074).
     pub(crate) fn open_bulk_rename(&mut self) {
@@ -20,7 +46,7 @@ impl App {
             self.redraw();
             return;
         }
-        self.bulk_win.set_items(items, 0);
+        self.bulk_win.set_items(items, local_tz_min());
         self.bulk_win
             .set_presets(Self::preset_names(&Self::presets_dir()));
         self.open_bulk = true;
@@ -131,19 +157,18 @@ impl App {
 
     /// 순차 rename(실패 개별 격리) + undo 1건 + 재열람 + 토스트.
     pub(crate) fn bulk_apply(&mut self, list: Vec<(PathBuf, String)>) {
-        let mut pairs: Vec<(PathBuf, PathBuf)> = Vec::new();
-        let mut failed = 0usize;
-        for (from, new_name) in &list {
-            let to = from.with_file_name(new_name);
-            match std::fs::rename(from, &to) {
-                Ok(()) => pairs.push((from.clone(), to)),
-                Err(_) => failed += 1,
-            }
-        }
+        // 덮어쓰지 않는 적용(직전 재확인 · 연쇄/맞바꾸기 = 임시 이름 2단계 · 대소문자만 변경) — 종전 `std::fs::rename`은 미리보기와
+        // 적용 사이에 생긴 같은 이름의 파일을 조용히 덮어썼다(dir2 = `nexa_ops::rename`이 거부).
+        let targets: Vec<(PathBuf, PathBuf)> = list
+            .iter()
+            .map(|(from, new_name)| (from.clone(), from.with_file_name(new_name)))
+            .collect();
+        let out = br::apply_renames(&targets);
+        let (pairs, failed) = (out.done, out.failed.len());
         let done = pairs.len();
         if done > 0 {
             self.history
-                .push(Box::new(ndir_ops::history::MoveBatchOp::new(
+                .push(Box::new(ndir_ops::history::RenameBatchOp::new(
                     pairs,
                     trf("bulk.done", &[&done.to_string()]),
                 )));

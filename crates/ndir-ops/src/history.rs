@@ -186,6 +186,53 @@ impl ReversibleOp for MoveBatchOp {
     }
 }
 
+/// 일괄 이름 변경 묶음(dir3 보강) — undo: 새 이름 → 이전 이름 / redo: 다시 적용. 둘 다 [`apply_renames`]를 거친다
+/// (덮어쓰지 않음 · 맞바꾸기/연쇄도 되돌린다 — `MoveBatchOp`는 맞바꾼 쌍을 "대상 충돌"로 건너뛰었다).
+///
+/// [`apply_renames`]: crate::batch_rename::apply_renames
+#[derive(Debug)]
+pub struct RenameBatchOp {
+    pairs: Vec<(PathBuf, PathBuf)>,
+    description: String,
+}
+
+impl RenameBatchOp {
+    pub fn new(pairs: Vec<(PathBuf, PathBuf)>, description: String) -> Self {
+        Self { pairs, description }
+    }
+
+    fn run(&self, reverse: bool) -> Result<(), OpError> {
+        let list: Vec<(PathBuf, PathBuf)> = if reverse {
+            self.pairs
+                .iter()
+                .map(|(a, b)| (b.clone(), a.clone()))
+                .collect()
+        } else {
+            self.pairs.clone()
+        };
+        let failed = crate::batch_rename::apply_renames(&list).failed.len();
+        if failed > 0 {
+            Err(OpError::Failed(failed))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl ReversibleOp for RenameBatchOp {
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn undo(&mut self) -> Result<(), OpError> {
+        self.run(true)
+    }
+
+    fn redo(&mut self) -> Result<(), OpError> {
+        self.run(false)
+    }
+}
+
 /// 사본/생성물 제거 방법(앱=휴지통 · 테스트=완전삭제) — Windows 전용 API 격리(원본 Action<string>).
 pub type DeleteFn = Box<dyn FnMut(&Path) -> io::Result<()>>;
 
@@ -566,5 +613,39 @@ mod tests {
         op.redo().unwrap();
         assert!(created.exists());
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// 일괄 이름 변경 묶음: 맞바꾼 쌍도 undo/redo가 된다(`MoveBatchOp`는 "대상 충돌"로 건너뛰었다) · 덮어쓰지 않는다.
+    #[test]
+    fn rename_batch_undo_redo_handles_swap() {
+        let d = fixture("renbatch");
+        fs::write(d.join("a"), "A").unwrap();
+        fs::write(d.join("b"), "B").unwrap();
+        fs::write(d.join("c"), "C").unwrap();
+        let pairs = vec![
+            (d.join("a"), d.join("b")),
+            (d.join("b"), d.join("a")),
+            (d.join("c"), d.join("c2")),
+        ];
+        let out = crate::batch_rename::apply_renames(&pairs);
+        assert_eq!(out.done.len(), 3);
+        let read = |n: &str| fs::read_to_string(d.join(n)).unwrap();
+        assert_eq!((read("a").as_str(), read("b").as_str()), ("B", "A"));
+        let mut op = RenameBatchOp::new(out.done, "ren".into());
+        op.undo().unwrap();
+        assert_eq!(
+            (read("a").as_str(), read("b").as_str(), read("c").as_str()),
+            ("A", "B", "C")
+        );
+        op.redo().unwrap();
+        assert_eq!(
+            (read("a").as_str(), read("b").as_str(), read("c2").as_str()),
+            ("B", "A", "C")
+        );
+        // undo 자리에 다른 파일이 생겼으면 그 항목만 실패 · 덮어쓰지 않는다.
+        fs::write(d.join("c"), "NEW").unwrap();
+        assert!(op.undo().is_err());
+        assert_eq!((read("c").as_str(), read("c2").as_str()), ("NEW", "C"));
+        let _ = fs::remove_dir_all(&d);
     }
 }

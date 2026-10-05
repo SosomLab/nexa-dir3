@@ -489,12 +489,14 @@ impl RowSource for PvSource {
                 }
             }
             COL_APPLY => {
-                if !r.changed || r.conflict != Conflict::None {
+                if !r.changed {
                     String::new()
-                } else if r.apply {
-                    "✓".into()
-                } else {
+                } else if !r.apply {
                     "✗".into()
+                } else if r.conflict != Conflict::None {
+                    "⚠".into()
+                } else {
+                    "✓".into()
                 }
             }
             _ => String::new(),
@@ -569,6 +571,10 @@ pub(crate) struct BulkWin {
     /// 검증 오류(`⚠ #블록: 메시지`) · 건수 · 마지막 수확 서명(변경 감지).
     error: Option<String>,
     count: usize,
+    /// 충돌로 빠지는 행 수(건수 줄에 함께 알린다).
+    conflicts: usize,
+    /// [Rename] 가능(버튼 활성과 같다 — Enter 키가 본다).
+    can_rename: bool,
     sig: String,
     tz_min: i32,
 }
@@ -606,6 +612,8 @@ impl BulkWin {
             btn_rename: Button::new(tr("bulk.rename")),
             error: None,
             count: 0,
+            conflicts: 0,
+            can_rename: false,
             sig: String::new(),
             tz_min: 0,
         };
@@ -620,7 +628,46 @@ impl BulkWin {
         self.cards = vec![Card::new(0)];
         self.scroll = 0;
         self.sig.clear();
+        // 이전 대상의 적용 체크를 버린다(종전에는 행 번호로 이어받아, 지난번에 뺀 행 번호가 새 대상에서도 빠진 채 열렸다).
+        let mut inv = Invalidations::default();
+        self.rows.replace_source(
+            PvSource {
+                rows: Vec::new(),
+                selected: None,
+            },
+            &mut inv,
+        );
         self.recompute(true);
+        // 열자마자 첫 입력칸에서 바로 친다(종전에는 포커스가 없어 먼저 눌러야 했다).
+        if let Some(tb) = self.cards[0].boxes().into_iter().next() {
+            tb.set_focused(true);
+        }
+    }
+
+    /// 건수 줄: "N개 항목이 변경됩니다" · 충돌이 있으면 건너뛰는 수를 함께.
+    fn count_text(&self) -> String {
+        if self.conflicts > 0 {
+            trf(
+                "bulk.countSkip",
+                &[&self.count.to_string(), &self.conflicts.to_string()],
+            )
+        } else {
+            trf("bulk.count", &[&self.count.to_string()])
+        }
+    }
+
+    /// 선택한 미리보기 행의 적용 여부를 뒤집는다(Space · 적용 열 클릭과 같다) — 뒤집었으면 `true`.
+    fn toggle_selected(&mut self) -> bool {
+        let src = self.rows.source_mut();
+        let Some(r) = src.selected.and_then(|i| src.rows.get_mut(i)) else {
+            return false;
+        };
+        if !r.changed {
+            return false;
+        }
+        r.apply = !r.apply;
+        self.recompute(false);
+        true
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -693,15 +740,6 @@ impl BulkWin {
         } else {
             inputs.iter().map(|i| i.name.clone()).collect()
         };
-        let triples: Vec<(String, String, String)> = self
-            .items
-            .iter()
-            .zip(&news)
-            .map(|(it, n)| (it.parent.display().to_string(), it.name.clone(), n.clone()))
-            .collect();
-        let conflicts = br::conflicts(&triples, &|parent, name| {
-            Path::new(parent).join(name).exists()
-        });
         // 적용 체크는 보존(인덱스 기준).
         let old_apply: std::collections::HashMap<usize, bool> = self
             .rows
@@ -710,6 +748,24 @@ impl BulkWin {
             .iter()
             .map(|r| (r.idx, r.apply))
             .collect();
+        // 적용에서 뺀 행은 **바뀌지 않는 항목**으로 넘긴다 — 중복 · 연쇄 판정에서 빠져, 겹치는 둘 중 하나를 빼면 나머지가 풀린다.
+        let triples: Vec<(String, String, String)> = self
+            .items
+            .iter()
+            .zip(&news)
+            .enumerate()
+            .map(|(i, (it, n))| {
+                let new = if old_apply.get(&i).copied().unwrap_or(true) {
+                    n.clone()
+                } else {
+                    it.name.clone()
+                };
+                (it.parent.display().to_string(), it.name.clone(), new)
+            })
+            .collect();
+        let conflicts = br::conflicts(&triples, &|parent, name| {
+            Path::new(parent).join(name).exists()
+        });
         let rows: Vec<PvRow> = self
             .items
             .iter()
@@ -737,10 +793,14 @@ impl BulkWin {
             .iter()
             .filter(|r| r.changed && r.apply && r.conflict == Conflict::None)
             .count();
-        let any_conflict = src.rows.iter().any(|r| r.conflict != Conflict::None);
-        self.btn_rename.set_enabled(
-            !ops.is_empty() && self.count > 0 && self.error.is_none() && !any_conflict,
-        );
+        // 충돌 행은 **그 행만** 빠진다(종전에는 하나라도 있으면 [Rename] 전체가 막혔다 — 사용자 10-05 UX 검토).
+        self.conflicts = src
+            .rows
+            .iter()
+            .filter(|r| r.conflict != Conflict::None)
+            .count();
+        self.can_rename = !ops.is_empty() && self.count > 0 && self.error.is_none();
+        self.btn_rename.set_enabled(self.can_rename);
         self.redraw();
     }
 
@@ -1225,6 +1285,24 @@ impl BulkWin {
                     }
                     return BulkAction::Close;
                 }
+                // Enter = [Rename](버튼이 켜져 있을 때 — 입력칸은 한 줄이라 Enter에 다른 뜻이 없다).
+                if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Enter))
+                    && self.open_combo().is_none()
+                {
+                    if self.can_rename {
+                        return BulkAction::Rename(self.result());
+                    }
+                    return BulkAction::None;
+                }
+                // Space = 선택한 미리보기 행의 적용 토글(입력칸에 포커스가 없을 때).
+                if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Space))
+                    && self.focused_box().is_none()
+                {
+                    if self.toggle_selected() {
+                        self.redraw();
+                    }
+                    return BulkAction::None;
+                }
                 if self.primary && crate::input::shortcut_letter(kev) == Some('a') {
                     if let Some(tb) = self.focused_box() {
                         tb.on_event(&InputEvent::SelectAll, &mut inv);
@@ -1326,7 +1404,8 @@ impl BulkWin {
                         if let Some(row) = self.rows.row_at(x, y) {
                             let src = self.rows.source_mut();
                             if let Some(r) = src.rows.get_mut(row) {
-                                if r.changed && r.conflict == Conflict::None {
+                                // 충돌 행도 뺄 수 있다(빼면 겹치던 상대가 풀린다).
+                                if r.changed {
                                     r.apply = !r.apply;
                                 }
                             }
@@ -1521,10 +1600,7 @@ impl BulkWin {
                 self.presets.paint(&mut dc, th);
             }
             let bottom_y = hi - pad - self.s(BTN_H);
-            let info = self
-                .error
-                .clone()
-                .unwrap_or_else(|| trf("bulk.count", &[&self.count.to_string()]));
+            let info = self.error.clone().unwrap_or_else(|| self.count_text());
             let ix = self.presets.bounds().right() + pad;
             let iw = (self.btn_cancel.bounds().x - pad - ix).max(0);
             let info = nexa_ctl::draw::ellipsize_middle(&mut dc, &info, iw);
@@ -1589,6 +1665,18 @@ mod tests {
         ndir_i18n::activate(ndir_i18n::load("en", std::path::Path::new("nowhere")));
     }
 
+    /// 이름 부분 정규식 치환 규칙.
+    fn rx(find: &str, with: &str) -> RenameOp {
+        RenameOp::Replace {
+            scope: br::Scope::Name,
+            find: find.into(),
+            with: with.into(),
+            match_case: true,
+            regex: true,
+            mode: br::ReplaceMode::All,
+        }
+    }
+
     fn item(dir: &Path, name: &str) -> BulkItem {
         BulkItem {
             parent: dir.to_path_buf(),
@@ -1646,12 +1734,16 @@ mod tests {
         w.recompute(false);
         assert_eq!(w.count, 1);
         assert!(w.dump().contains("photo_a.jpg → img_a.jpg skip"));
-        // 중복 충돌: 전체 교체 → 둘 다 "same" → Duplicate · 기존 파일 존재 → Exists.
+        // 중복 충돌: 전체 교체 → 둘 다 "same" → Duplicate · 기존 파일 존재 → Exists(뺀 행은 충돌 계산에서 빠지므로 다시 넣는다).
+        w.rows.source_mut().rows[0].apply = true;
         w.card_mut(0).mode.select_value("entire");
         w.card_mut(0).with.set_text("same");
         w.recompute(false);
         assert!(w.dump().contains("⚠duplicate"), "{}", w.dump());
-        assert!(!w.btn_rename.base().enabled, "충돌 = 비활성");
+        assert!(
+            !w.btn_rename.base().enabled,
+            "바꿀 수 있는 행이 없음 = 비활성"
+        );
         w.card_mut(0).scope.select_value("nameext");
         w.card_mut(0).with.set_text("taken.txt");
         w.recompute(false);
@@ -1708,6 +1800,46 @@ mod tests {
             w.preset_names,
             vec!["Alpha".to_string(), "zeta".to_string()]
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 충돌 행은 그 행만 빠진다(전체를 막지 않는다) · 건수 줄에 건너뛰는 수 · 겹치는 둘 중 하나를 빼면 나머지가 풀린다 ·
+    /// 맞바꾸기는 충돌이 아니다 · Space = 선택 행 토글 · 열자마자 첫 입력칸 포커스.
+    #[test]
+    fn conflict_rows_skip_only_themselves() {
+        en();
+        let dir = std::env::temp_dir().join(format!("ndir-bulk-skip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for n in ["a1.txt", "a2.txt", "b.txt", "x.txt", "y.txt"] {
+            std::fs::write(dir.join(n), b"").unwrap();
+        }
+        let mut w = BulkWin::new();
+        w.set_items(
+            vec![
+                item(&dir, "a1.txt"),
+                item(&dir, "a2.txt"),
+                item(&dir, "b.txt"),
+            ],
+            0,
+        );
+        assert!(w.focused_box().is_some(), "열자마자 첫 입력칸");
+        // a1 · a2 → 둘 다 "a.txt"(중복) · b → "c.txt"(정상).
+        w.load_ops(&[rx("^a\\d$", "a"), rx("^b$", "c")]);
+        assert_eq!((w.count, w.conflicts), (1, 2));
+        assert!(w.can_rename, "충돌이 있어도 나머지는 바꿀 수 있다");
+        assert!(w.count_text().contains('2'), "{}", w.count_text());
+        assert_eq!(w.result().len(), 1);
+        // a2를 뺀다(Space) → a1이 풀린다.
+        w.rows.source_mut().selected = Some(1);
+        assert!(w.toggle_selected());
+        assert_eq!((w.count, w.conflicts), (2, 0), "{}", w.dump());
+        let names: Vec<String> = w.result().into_iter().map(|(_, n)| n).collect();
+        assert_eq!(names, vec!["a.txt".to_string(), "c.txt".to_string()]);
+        // 맞바꾸기 x ↔ y = 충돌 아님.
+        w.set_items(vec![item(&dir, "x.txt"), item(&dir, "y.txt")], 0);
+        w.load_ops(&[rx("^x$", "tmp"), rx("^y$", "x"), rx("^tmp$", "y")]);
+        assert_eq!((w.count, w.conflicts), (2, 0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

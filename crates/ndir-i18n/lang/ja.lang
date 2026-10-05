@@ -578,6 +578,7 @@ bulk.date.modified = 更新日
 bulk.date.created = 作成日
 bulk.date.fmt = フォーマット (yyyy-MM-dd, MMM, HHmmss...)
 bulk.count = {0} 個の項目の名前が変更されます。
+bulk.countSkip = {0} 個の項目の名前が変更されます · 競合する {1} 件はスキップします。
 # Transfer progress window (07-21) - file count, in-flight lock, close-time setting
 ops.fileCount = ファイル {0}/{1}
 ops.itemBusy = 転送中の項目 — 完了後に開けます

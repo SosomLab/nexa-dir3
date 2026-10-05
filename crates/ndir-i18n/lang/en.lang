@@ -578,6 +578,7 @@ bulk.date.modified = Modification date
 bulk.date.created = Creation date
 bulk.date.fmt = Format (yyyy-MM-dd, MMM, HHmmss...)
 bulk.count = {0} items will be renamed.
+bulk.countSkip = {0} items will be renamed · {1} with conflicts will be skipped.
 # Transfer progress window (07-21) - file count, in-flight lock, close-time setting
 ops.fileCount = File {0}/{1}
 ops.itemBusy = Item is being transferred - available when complete

@@ -169,7 +169,11 @@ pub(crate) fn preview_content(
             provider,
         },
         PreviewDoc::Archive(doc) => PreviewOut {
-            lines: preview::archive::summary_lines(&doc, 0, ARCHIVE_ROWS),
+            lines: preview::archive::summary_lines(
+                &doc,
+                crate::app::bulk::local_tz_min(),
+                ARCHIVE_ROWS,
+            ),
             image: None,
             provider,
         },

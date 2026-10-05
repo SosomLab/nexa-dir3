@@ -7135,3 +7135,45 @@ fn transfer_tuning_follows_settings() {
         "{t:?}"
     );
 }
+
+/// 일괄 이름 변경의 시간대 오프셋(순수): 현지 달력과 UTC 초의 차이(분) — 한국 +540 · 뉴욕 겨울 −300 · 날짜가 넘어가는 경우 · UTC.
+#[test]
+fn tz_offset_from_local_calendar() {
+    use crate::app::bulk::tz_min_from;
+    // 2023-11-14 22:13:20 UTC = 1_700_000_000.
+    assert_eq!(tz_min_from(1_700_000_000, (2023, 11, 15), (7, 13, 20)), 540);
+    assert_eq!(
+        tz_min_from(1_700_000_000, (2023, 11, 14), (17, 13, 20)),
+        -300
+    );
+    assert_eq!(tz_min_from(1_700_000_000, (2023, 11, 14), (22, 13, 20)), 0);
+    assert_eq!(
+        tz_min_from(1_700_000_000, (2023, 11, 15), (3, 43, 21)),
+        330,
+        "1초 어긋남 흡수"
+    );
+    assert_eq!(tz_min_from(0, (1970, 1, 1), (9, 0, 0)), 540);
+    // 실제 값은 ±14시간 안.
+    assert!(crate::app::bulk::local_tz_min().abs() <= 14 * 60);
+}
+
+/// 일괄 이름 변경 적용: 맞바꾸기(a ↔ b)가 되고 실행 취소로 되돌아간다 · 미리보기 뒤에 생긴 같은 이름의 파일은 덮어쓰지 않는다.
+#[test]
+fn bulk_apply_swaps_and_never_overwrites() {
+    let (mut app, dir) = fixture("bulkswap");
+    std::fs::write(dir.join("a.txt"), b"A").expect("write");
+    std::fs::write(dir.join("b.txt"), b"B").expect("write");
+    std::fs::write(dir.join("c.txt"), b"C").expect("write");
+    app.bulk_apply(vec![
+        (dir.join("a.txt"), "b.txt".into()),
+        (dir.join("b.txt"), "a.txt".into()),
+    ]);
+    let read = |n: &str| std::fs::read_to_string(dir.join(n)).expect("read");
+    assert_eq!((read("a.txt").as_str(), read("b.txt").as_str()), ("B", "A"));
+    app.command("edit.undo");
+    assert_eq!((read("a.txt").as_str(), read("b.txt").as_str()), ("A", "B"));
+    // 미리보기 때는 없던 d.txt가 그 사이에 생겼다 → c.txt는 그대로 · d.txt도 그대로.
+    std::fs::write(dir.join("d.txt"), b"D").expect("write");
+    app.bulk_apply(vec![(dir.join("c.txt"), "d.txt".into())]);
+    assert_eq!((read("c.txt").as_str(), read("d.txt").as_str()), ("C", "D"));
+}

@@ -13,6 +13,7 @@
 //! 정규식 = `regex-lite`(DR-8 원장 docs/10 §1-2).
 
 use regex_lite::Regex;
+use std::path::{Path, PathBuf};
 
 // ── 공통 타입(v2) ─────────────────────────────────────────────────
 
@@ -731,12 +732,128 @@ pub fn conflicts(
                 return Conflict::Duplicate;
             }
             // 기존 파일 존재 — 대소문자만 변경(자기 자신)은 허용(원본 CommitRename 규약).
+            // 단 그 이름을 지금 가진 항목이 **이번에 다른 이름으로 바뀌면** 자리가 빈다(연쇄 a→b · b→c, 맞바꾸기 a↔b —
+            // OPS-412 · 적용은 `apply_renames`가 임시 이름을 거쳐 처리한다).
             if lower(new) != lower(old) && exists(parent, new) {
-                return Conflict::Exists;
+                let vacated = items.iter().enumerate().any(|(j, (p, o, n))| {
+                    j != i
+                        && lower(p) == lower(parent)
+                        && lower(o) == lower(new)
+                        && lower(n) != lower(o)
+                });
+                if !vacated {
+                    return Conflict::Exists;
+                }
             }
             Conflict::None
         })
         .collect()
+}
+
+// ── 적용(dir3 보강 — 덮어쓰지 않음 · 연쇄/맞바꾸기 · 대소문자만 변경) ────────────
+
+/// [`apply_renames`]의 결과 — `done` = 실제로 바뀐 (이전 경로, 새 경로) · `failed` = (이전 경로, 사유).
+#[derive(Debug, Default)]
+pub struct ApplyOutcome {
+    pub done: Vec<(PathBuf, PathBuf)>,
+    pub failed: Vec<(PathBuf, String)>,
+}
+
+/// 폴더에 **정확히 그 이름**(대소문자까지)의 항목이 있는가 — 대소문자만 바꾸는 경우의 "자기 자신 vs 다른 파일" 구분용
+/// (대소문자를 가리지 않는 파일 시스템에서 `exists("A.txt")`는 자기 자신 `a.txt`에도 참이다).
+fn exact_entry_exists(path: &Path) -> bool {
+    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+        return false;
+    };
+    std::fs::read_dir(parent)
+        .map(|rd| rd.flatten().any(|e| e.file_name() == name))
+        .unwrap_or(false)
+}
+
+/// (이전 경로 → 새 경로) 목록을 **기존 파일을 덮어쓰지 않고** 적용한다.
+///
+/// - 새 이름의 자리에 다른 항목이 있으면 그 항목은 실패로 격리한다(미리보기와 적용 사이에 생긴 파일을 지키려는 재확인 —
+///   종전 `std::fs::rename`은 Windows · Unix 모두 대상을 조용히 덮어썼다).
+/// - 그 자리를 차지한 항목이 **이번 목록에서 다른 이름으로 바뀌는 항목**이면(연쇄 a→b · b→c, 맞바꾸기 a↔b) 임시 이름을 거쳐
+///   두 단계로 옮긴다. 자리가 끝내 비지 않으면 원래 이름으로 되돌리고 실패로 보고한다.
+/// - 대소문자만 바꾸는 경우(`a.txt` → `A.txt`)는 자기 자신이므로 바로 바꾼다.
+pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let key = |p: &Path| p.to_string_lossy().to_lowercase();
+    let exists = |p: &Path| p.symlink_metadata().is_ok();
+    // 새 자리가 **다른 항목**으로 차 있는가.
+    let occupied = |from: &Path, to: &Path| {
+        if key(from) == key(to) {
+            exact_entry_exists(to)
+        } else {
+            exists(to)
+        }
+    };
+    let taken = || "같은 이름이 이미 있음".to_string();
+    let moving: HashSet<String> = list
+        .iter()
+        .filter(|(f, t)| f != t)
+        .map(|(f, _)| key(f))
+        .collect();
+    let mut out = ApplyOutcome::default();
+    let mut direct: Vec<usize> = Vec::new();
+    let mut staged: Vec<(usize, PathBuf)> = Vec::new();
+    // 1단계: 분류 + 자리가 빌 항목을 임시 이름으로 치운다.
+    for (i, (from, to)) in list.iter().enumerate() {
+        if from == to {
+            continue;
+        }
+        if !exists(from) {
+            out.failed.push((from.clone(), "원본이 없음".into()));
+        } else if !occupied(from, to) {
+            direct.push(i);
+        } else if key(from) != key(to) && moving.contains(&key(to)) {
+            let tmp = from.with_file_name(format!(
+                ".nexa-ren-{}-{}",
+                std::process::id(),
+                SEQ.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::rename(from, &tmp) {
+                Ok(()) => staged.push((i, tmp)),
+                Err(e) => out.failed.push((from.clone(), e.to_string())),
+            }
+        } else {
+            out.failed.push((from.clone(), taken()));
+        }
+    }
+    // 2단계: 바로 옮길 수 있는 것(직전에 한 번 더 확인).
+    for i in direct {
+        let (from, to) = &list[i];
+        if occupied(from, to) {
+            out.failed.push((from.clone(), taken()));
+            continue;
+        }
+        match std::fs::rename(from, to) {
+            Ok(()) => out.done.push((from.clone(), to.clone())),
+            Err(e) => out.failed.push((from.clone(), e.to_string())),
+        }
+    }
+    // 3단계: 임시 이름 → 새 이름(자리가 안 비었으면 원래 이름으로 되돌린다).
+    for (i, tmp) in staged {
+        let (from, to) = &list[i];
+        let moved = if exists(to) {
+            Err(taken())
+        } else {
+            std::fs::rename(&tmp, to).map_err(|e| e.to_string())
+        };
+        match moved {
+            Ok(()) => out.done.push((from.clone(), to.clone())),
+            Err(why) => {
+                if !exists(from) {
+                    let _ = std::fs::rename(&tmp, from);
+                }
+                out.failed.push((from.clone(), why));
+            }
+        }
+    }
+    out
 }
 
 // ── 프리셋 직렬화(v1 하위호환 — 생략 필드 = 기본) ────────────────────
@@ -1434,5 +1551,109 @@ mod tests {
             conflicts(&safe, &exists),
             vec![Conflict::None, Conflict::None]
         );
+    }
+
+    fn ren_fixture(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nexa_ren_{}_{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn names(d: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// 충돌 판정: 자리를 차지한 항목이 이번에 다른 이름으로 바뀌면 `Exists`가 아니다(연쇄 · 맞바꾸기) · 안 바뀌면 그대로 `Exists`.
+    #[test]
+    fn conflicts_allow_chain_and_swap() {
+        let on_disk = |_: &str, n: &str| matches!(n, "a" | "b" | "c");
+        let t = |v: &[(&str, &str)]| -> Vec<(String, String, String)> {
+            v.iter()
+                .map(|(o, n)| ("D".to_string(), (*o).to_string(), (*n).to_string()))
+                .collect()
+        };
+        // 맞바꾸기 a↔b.
+        assert_eq!(
+            conflicts(&t(&[("a", "b"), ("b", "a")]), &on_disk),
+            vec![Conflict::None, Conflict::None]
+        );
+        // 연쇄 a→b · b→c · c→d.
+        assert_eq!(
+            conflicts(&t(&[("a", "b"), ("b", "c"), ("c", "d")]), &on_disk),
+            vec![Conflict::None; 3]
+        );
+        // b가 안 바뀌면(적용에서 뺀 행 = 같은 이름으로 넘어온다) a→b는 막힌다(자리 주인이 목록 안에 있어 "중복"으로 잡힌다).
+        assert_eq!(
+            conflicts(&t(&[("a", "b"), ("b", "b")]), &on_disk),
+            vec![Conflict::Duplicate, Conflict::None]
+        );
+        // 목록 밖 파일 c 위로는 여전히 막힌다.
+        assert_eq!(
+            conflicts(&t(&[("a", "c")]), &on_disk),
+            vec![Conflict::Exists]
+        );
+    }
+
+    /// 적용: 기존 파일을 덮어쓰지 않는다 · 맞바꾸기 · 연쇄 · 대소문자만 변경 · 원본 없음 — 실패는 개별 격리되고 내용이 보존된다.
+    #[test]
+    fn apply_renames_never_overwrites_and_handles_swaps() {
+        let d = ren_fixture("apply");
+        for n in ["a", "b", "c", "keep", "x", "case.txt"] {
+            std::fs::write(d.join(n), n).unwrap();
+        }
+        let p = |n: &str| d.join(n);
+        let read = |n: &str| std::fs::read_to_string(d.join(n)).unwrap();
+        // ① 덮어쓰지 않음: x → keep(목록 밖 기존 파일) = 실패 · 둘 다 그대로.
+        let out = apply_renames(&[(p("x"), p("keep"))]);
+        assert!(out.done.is_empty() && out.failed.len() == 1, "{out:?}");
+        assert_eq!((read("x").as_str(), read("keep").as_str()), ("x", "keep"));
+        // ② 맞바꾸기 a↔b.
+        let out = apply_renames(&[(p("a"), p("b")), (p("b"), p("a"))]);
+        assert!(out.failed.is_empty() && out.done.len() == 2, "{out:?}");
+        assert_eq!((read("a").as_str(), read("b").as_str()), ("b", "a"));
+        // ③ 연쇄 a→b · b→c · c→d (지금 a = "b" 내용, b = "a" 내용).
+        let out = apply_renames(&[(p("a"), p("b")), (p("b"), p("c")), (p("c"), p("d"))]);
+        assert!(out.failed.is_empty() && out.done.len() == 3, "{out:?}");
+        assert_eq!(
+            (read("b").as_str(), read("c").as_str(), read("d").as_str()),
+            ("b", "a", "c")
+        );
+        assert!(!p("a").exists());
+        // ④ 자리가 끝내 안 비는 경우: b→keep(막힘) · c→b(b가 못 떠나니 되돌림) — 아무것도 잃지 않는다.
+        let out = apply_renames(&[(p("b"), p("keep")), (p("c"), p("b"))]);
+        assert!(out.done.is_empty() && out.failed.len() == 2, "{out:?}");
+        assert_eq!(
+            (
+                read("b").as_str(),
+                read("c").as_str(),
+                read("keep").as_str()
+            ),
+            ("b", "a", "keep")
+        );
+        // ⑤ 대소문자만 변경 = 자기 자신 → 된다.
+        let out = apply_renames(&[(p("case.txt"), p("CASE.TXT"))]);
+        assert!(out.failed.is_empty() && out.done.len() == 1, "{out:?}");
+        assert!(
+            names(&d).contains(&"CASE.TXT".to_string()),
+            "{:?}",
+            names(&d)
+        );
+        // ⑥ 원본 없음 · 같은 이름(무동작).
+        let out = apply_renames(&[(p("ghost"), p("g2")), (p("x"), p("x"))]);
+        assert!(out.done.is_empty() && out.failed.len() == 1);
+        // 임시 이름이 남지 않는다.
+        assert!(
+            names(&d).iter().all(|n| !n.starts_with(".nexa-ren-")),
+            "{:?}",
+            names(&d)
+        );
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
