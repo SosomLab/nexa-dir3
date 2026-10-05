@@ -1224,6 +1224,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.edit.select_invert",
+        CAT_KEYS,
+        "menu.edit.selectInvert",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.edit.bulk_rename",
         CAT_KEYS,
         "menu.edit.bulkRename",

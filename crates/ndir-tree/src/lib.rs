@@ -733,6 +733,20 @@ impl Tree {
         self.anchor = self.visible.first().copied();
     }
 
+    /// 선택 반전(dir3 신규 — 탐색기 "선택 영역 반전"): 보이는 노드 중 선택 안 된 것만 선택한다(보이는 순서 · anchor 유지).
+    pub fn invert_selection_visible(&mut self) {
+        let keep: Vec<NodeId> = self
+            .visible
+            .iter()
+            .copied()
+            .filter(|id| !self.sel_set.contains(id))
+            .collect();
+        self.clear_selection();
+        for id in keep {
+            self.add_sel(id);
+        }
+    }
+
     /// 선택 해제(anchor는 유지).
     pub fn clear_selection(&mut self) {
         self.sel_order.clear();

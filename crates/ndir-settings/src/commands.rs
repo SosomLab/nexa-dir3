@@ -100,6 +100,14 @@ pub const COMMANDS: &[Command] = &[
         "cmd+a",
         "ctrl+a"
     ),
+    // 선택 반전(dir3 신규 · 탐색기 "선택 영역 반전").
+    c!(
+        "edit.select_invert",
+        "menu.edit.selectInvert",
+        "ctrl+shift+a",
+        "cmd+shift+a",
+        "ctrl+shift+a"
+    ),
     c!(
         "edit.bulk_rename",
         "menu.edit.bulkRename",

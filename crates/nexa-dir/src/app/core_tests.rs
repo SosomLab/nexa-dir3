@@ -7189,3 +7189,29 @@ fn natural_sort_setting_defaults_on() {
         assert!(cat.get("pref.sortNatural.desc").is_some(), "{lang}");
     }
 }
+
+/// 선택 반전(`edit.select_invert` · dir3 신규): 선택한 것만 빼고 나머지를 선택 · 전체 선택 뒤 = 선택 없음 · 선택 없음 뒤 = 전체.
+#[test]
+fn invert_selection_flips_visible_rows() {
+    let (mut app, dir) = fixture("selinvert");
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        std::fs::write(dir.join(name), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let total = app.panels[0].rows().source().len();
+    assert!(total >= 3);
+    app.panels[0].select_path(&dir.join("b.txt"), &mut inv);
+    app.command("edit.select_invert");
+    let sel = app.panels[0].selected_paths();
+    assert_eq!(sel.len(), total - 1);
+    assert!(!sel.contains(&dir.join("b.txt")) && sel.contains(&dir.join("a.txt")));
+    app.command("edit.select_invert");
+    assert_eq!(app.panels[0].selected_paths(), vec![dir.join("b.txt")]);
+    app.command("edit.select_all");
+    app.command("edit.select_invert");
+    assert!(app.panels[0].selected_paths().is_empty());
+    app.command("edit.select_invert");
+    assert_eq!(app.panels[0].selected_paths().len(), total);
+}

@@ -379,6 +379,17 @@ impl TreeSource {
     }
 
     /// 선택된 항목의 전체 경로(선택 순).
+    /// 선택 반전 — 목록이 있으면 `true`.
+    pub(crate) fn invert_selection(&mut self) -> bool {
+        match self.tree.as_mut() {
+            Some(t) => {
+                t.invert_selection_visible();
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(crate) fn selected_paths(&self) -> Vec<PathBuf> {
         self.tree
             .as_ref()

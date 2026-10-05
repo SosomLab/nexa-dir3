@@ -54,6 +54,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "edit.paste",
     "-",
     "edit.select_all",
+    "edit.select_invert",
     "-",
     "edit.bulk_rename",
     "view.mode_tree",
@@ -120,7 +121,7 @@ impl App {
     /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
         let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
-        let mut view = items(&MENU_IDS[19..43]);
+        let mut view = items(&MENU_IDS[20..44]);
         // 언어 목록(동적 명령 `lang:<code>` — 단축키 재정의 대상 아님).
         for (code, name) in ndir_i18n::discover(&home) {
             view.push(MenuEntry::Item(ComboItem::new(
@@ -131,10 +132,10 @@ impl App {
         let _ = settings;
         vec![
             MenuDef::new(tr("menu.file"), items(&MENU_IDS[..9])),
-            MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..19])),
+            MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..20])),
             MenuDef::new(tr("menu.view"), view),
-            MenuDef::new(tr("menu.go"), items(&MENU_IDS[43..51])),
-            MenuDef::new(tr("menu.help"), items(&MENU_IDS[51..])),
+            MenuDef::new(tr("menu.go"), items(&MENU_IDS[44..52])),
+            MenuDef::new(tr("menu.help"), items(&MENU_IDS[52..])),
         ]
     }
 
@@ -727,6 +728,7 @@ impl App {
             "nav.up" => self.panels[a].nav_up(&mut inv),
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
+            "edit.select_invert" => self.panels[a].invert_selection(&mut inv),
             "edit.delete" => self.delete_to_trash(),
             "edit.delete_permanent" => self.delete_permanent_ask(),
             "edit.copy" => self.clip_write(false),
@@ -878,14 +880,14 @@ mod tests {
         }
         assert_eq!(MENU_IDS[0], "file.new_tab");
         assert_eq!(MENU_IDS[9], "edit.undo");
-        assert_eq!(MENU_IDS[19], "view.mode_tree");
-        assert_eq!(MENU_IDS[42], "view.lang_system");
-        assert!(MENU_IDS[19..43].contains(&"view.preview_window"));
-        assert_eq!(MENU_IDS[43], "nav.back");
-        assert_eq!(MENU_IDS[51], "help.about");
-        assert_eq!(MENU_IDS[52], "help.license");
-        assert_eq!(MENU_IDS[53], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 54);
+        assert_eq!(MENU_IDS[20], "view.mode_tree");
+        assert_eq!(MENU_IDS[43], "view.lang_system");
+        assert!(MENU_IDS[20..44].contains(&"view.preview_window"));
+        assert_eq!(MENU_IDS[44], "nav.back");
+        assert_eq!(MENU_IDS[52], "help.about");
+        assert_eq!(MENU_IDS[53], "help.license");
+        assert_eq!(MENU_IDS[54], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 55);
     }
 
     #[test]

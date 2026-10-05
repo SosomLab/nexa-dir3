@@ -523,6 +523,14 @@ impl Panel {
         self.rows().source().selected_paths()
     }
 
+    /// 선택 반전(`edit.select_invert`) — 활성 탭의 보이는 행.
+    pub(crate) fn invert_selection(&mut self, inv: &mut Invalidations) {
+        let rows = self.rows_mut();
+        if rows.source_mut().invert_selection() {
+            inv.push(rows.bounds());
+        }
+    }
+
     pub(crate) fn selected_paths_in_view_order(&self) -> Vec<PathBuf> {
         self.rows().source().selected_paths_in_view_order()
     }

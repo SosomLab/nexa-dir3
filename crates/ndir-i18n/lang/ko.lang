@@ -21,6 +21,7 @@ menu.edit.copy = 복사
 menu.edit.paste = 붙여넣기
 menu.edit.delete = 삭제
 menu.edit.selectAll = 전체 선택
+menu.edit.selectInvert = 선택 반전
 menu.view = 보기
 menu.view.modeTree = 트리 보기
 menu.view.modeFlat = 플랫 보기

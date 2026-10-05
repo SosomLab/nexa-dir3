@@ -22,6 +22,7 @@ menu.edit.copy = Copy
 menu.edit.paste = Paste
 menu.edit.delete = Delete
 menu.edit.selectAll = Select All
+menu.edit.selectInvert = Invert Selection
 menu.view = View
 menu.view.modeTree = Tree View
 menu.view.modeFlat = Flat View
