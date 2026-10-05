@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **폴더 크기 설계 결정**(T-166 · 정보 도크 자동 · `DirSizes` · 감시 무효화 · `dock.folder_size`) · docs/01 통지 구조 정정(`EventLoopProxy` 미사용) · T-173 → [§53](journal/2026-10-05.md)
 - **폴더 크기 사전 조사**(T-166 · dir2 없음 · 재사용 틀 = 전송 `TransferShared` + 단일 슬롯 · nexa-ui 진행 = `SegProgress`뿐 · ⚠ `EventLoopProxy` 미사용 = 문서 서술과 다름) · c2999b7 CI ✓ → [§52](journal/2026-10-05.md)
 - **자연 정렬 토글**(c2999b7 · 도구 모음 보기 옵션 "1 2 ↓" · `view.natural_sort` · 일괄 이름 변경 미리보기도 같은 순서) → [§51](journal/2026-10-05.md)
 - **내장 해시 분석**(T-167 · sha2는 이미 포함 = SHA-256/512 ≈ 0 KB · 권장 7종 합계 20~40 KB · 사용자 요건 = 별도 스레드 · 진행 확인 · 한 번에 한 작업) → [§50](journal/2026-10-05.md)

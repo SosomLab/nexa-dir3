@@ -49,7 +49,7 @@ nexa-dir3/
 
 - 입력: winit 사건 → `Shell`이 `InputEvent`로 변환 → `AppCore::route` → 포커스 영역 → 컨트롤 `on_event` → `take_action` → `menu_action(id)` → **`finish_input → update_status`** 한 길목.
 - 그리기: `RedrawRequested` → `AppCore::paint(RasterCtx)` 본문 층 → 팝업 층 → present.
-- 배경: 워커(열거·전송·감시·PTY 읽기·플러그인) → `mpsc` + 깨움 → `user_event`에서 `try_recv` 루프 → 세대 가드 → 상태 반영.
+- 배경: 워커(전송·Git·셸 메뉴·아이콘·감시·폴더 크기 등) → **공유 상태(원자값 · `Mutex`) 또는 `mpsc` 큐** → `event_loop.rs` 유휴 틱(`ControlFlow::WaitUntil` · 각 `*_tick`이 다음 깨울 시각을 돌려줌 · 예 `OPS_POLL_MS` 100 ms)이 폴링 · `try_recv` → 세대 번호/대상 일치 가드 → 상태 반영. `EventLoopProxy` 깨움은 쓰지 않는다(10-05 §52~§53 코드 대조 · 종전 서술 "`mpsc` + 깨움 → `user_event`" 정정).
 - 설정: `REGISTRY` → `Settings`(변경분) → `apply_setting(key)` 조각 → 컨트롤 주입. 세션은 `session.conf`(디바운스 저장).
 
 ## 4. 명령 어휘
