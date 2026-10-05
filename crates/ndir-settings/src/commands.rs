@@ -197,6 +197,21 @@ pub const COMMANDS: &[Command] = &[
         repeat
     ),
     c!("nav.up", "cmd.navUp", "alt+up", "cmd+up", "alt+up", repeat),
+    // 폴더 즐겨찾기(dir3 신규 · T-168 · TC 핫리스트 Ctrl+D 관례).
+    c!(
+        "nav.favorites",
+        "cmd.favorites",
+        "ctrl+b",
+        "cmd+b",
+        "ctrl+b"
+    ),
+    c!(
+        "nav.fav_toggle",
+        "cmd.favToggle",
+        "ctrl+d",
+        "cmd+d",
+        "ctrl+d"
+    ),
     c!(
         "nav.activate",
         "cmd.activate",

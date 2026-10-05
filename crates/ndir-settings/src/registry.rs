@@ -220,6 +220,15 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    // 폴더 즐겨찾기(dir3 신규 · T-168) — `;;` 구분 · 메뉴(Ctrl+D · Ctrl+B)로만 바뀐다(HIDDEN).
+    e!(
+        "nav.favorites",
+        CAT_APPEARANCE,
+        "pref.favorites",
+        "pref.favorites.desc",
+        Text,
+        ""
+    ),
     e!(
         "ui.prefs_advanced",
         CAT_APPEARANCE,
@@ -1250,6 +1259,22 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.nav.favorites",
+        CAT_KEYS,
+        "cmd.favorites",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
+        "key.nav.fav_toggle",
+        CAT_KEYS,
+        "cmd.favToggle",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.edit.bulk_rename",
         CAT_KEYS,
         "menu.edit.bulkRename",
@@ -1718,6 +1743,7 @@ pub const HIDDEN: &[&str] = &[
     "launcher.visible",
     "launcher.seed",
     "launcher.items",
+    "nav.favorites",
     "ui.prefs_advanced",
     "toolbar.dock_layout",
     "ui.dblclick_ms",

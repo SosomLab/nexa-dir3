@@ -6,6 +6,7 @@ pub(crate) mod dialogs;
 pub(crate) mod dirsize;
 pub(crate) mod dnd;
 mod event_loop;
+pub(crate) mod favorites;
 pub(crate) mod fonts;
 pub(crate) mod input;
 pub(crate) mod keywinit;

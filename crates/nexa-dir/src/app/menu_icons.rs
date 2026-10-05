@@ -49,6 +49,8 @@ fn spec_of(id: &str) -> Option<(char, Option<GlyphKind>)> {
         "nav.back" => ('\u{E72B}', Some(GlyphKind::ArrowBack)),
         "nav.forward" => ('\u{E72A}', Some(GlyphKind::ArrowForward)),
         "nav.up" => ('\u{E74A}', Some(GlyphKind::ArrowUp)),
+        "nav.favorites" => ('\u{E734}', None),
+        "nav.fav_toggle" => ('\u{E735}', None),
         "aux.info" | "help.about" => ('\u{E946}', None),
         "aux.tb.order" | "aux.sb.edit" | "aux.col.order" => ('\u{E70F}', None),
         "aux.launch.hide" => ('\u{ED1A}', None),

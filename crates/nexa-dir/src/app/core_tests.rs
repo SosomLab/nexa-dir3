@@ -7357,3 +7357,71 @@ fn checksum_window_computes_in_worker_and_refuses_second_job() {
     app.close_checksum();
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }
+
+/// 폴더 즐겨찾기(T-168): Ctrl+D = 현재 폴더 넣기/빼기(설정 `nav.favorites`) · Ctrl+B = 목록 팝업(`aux.fav:<n>` · 끝에 추가/제거) ·
+/// 항목 고르기 = 그 폴더로 이동 · 내 PC(가상 최상위)는 대상이 아니다.
+#[test]
+fn favorites_toggle_menu_and_navigate() {
+    let (mut app, dir) = fixture("favs");
+    let sub = dir.join("sub");
+    std::fs::create_dir_all(&sub).expect("mkdir");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.favorites().is_empty());
+    app.command("nav.fav_toggle");
+    assert_eq!(app.favorites(), vec![dir.clone()]);
+    assert!(app.settings.get("nav.favorites").unwrap().contains("favs"));
+    // 하위로 이동 → 팝업: 항목 1 + 구분선 + "추가".
+    let mut inv = Invalidations::default();
+    assert!(app.panels[0].navigate_to(sub, &mut inv).is_none());
+    app.command("nav.favorites");
+    assert!(app.tab_menu.is_open());
+    let ids: Vec<String> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["aux.fav:0".to_string(), "aux.fav.toggle".to_string()],
+        "{ids:?}"
+    );
+    // 고르면 즐겨찾기 폴더로 이동.
+    app.ctx_pick("aux.fav:0");
+    assert_eq!(app.panels[0].root_path(), dir);
+    // 다시 Ctrl+D = 제거.
+    app.command("nav.fav_toggle");
+    assert!(app.favorites().is_empty());
+    app.command("nav.favorites");
+    let n = app
+        .ctx_items
+        .iter()
+        .filter(|c| matches!(c, CtxItem::Item { id, .. } if id.starts_with("aux.fav:")))
+        .count();
+    assert_eq!(n, 0);
+    app.ctx_pick("aux.fav.toggle");
+    assert_eq!(app.favorites(), vec![dir.clone()]);
+    // 없는 폴더는 회색(고를 수 없음) · 있는 폴더는 활성.
+    let _ = app.settings.set(
+        "nav.favorites",
+        &format!("{};;{}", dir.display(), dir.join("gone").display()),
+    );
+    app.command("nav.favorites");
+    let enabled: Vec<bool> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, enabled, .. } if id.starts_with("aux.fav:") => Some(*enabled),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(enabled, vec![true, false]);
+    app.ctx_pick("aux.fav.toggle");
+    // 내 PC = 대상 아님.
+    let _ = app.panels[0].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    assert_eq!(app.fav_has_current(), None);
+    app.command("nav.fav_toggle");
+    assert_eq!(app.favorites().len(), 1, "{:?}", app.favorites());
+}

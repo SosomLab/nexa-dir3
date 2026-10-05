@@ -685,6 +685,9 @@ impl App {
 
     /// 보조 메뉴(탭 상태바 · 툴바 · 런처) 항목 실행.
     pub(crate) fn aux_menu_action(&mut self, panel: usize, id: &str) {
+        if self.fav_menu_action(panel, id) {
+            return;
+        }
         if let Some(i) = id
             .strip_prefix("aux.launch.edit:")
             .and_then(|n| n.parse::<usize>().ok())

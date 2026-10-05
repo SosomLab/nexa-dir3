@@ -85,6 +85,9 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "nav.forward",
     "nav.up",
     "-",
+    "nav.favorites",
+    "nav.fav_toggle",
+    "-",
     "tab.next",
     "tab.prev",
     "-",
@@ -134,8 +137,8 @@ impl App {
             MenuDef::new(tr("menu.file"), items(&MENU_IDS[..9])),
             MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..20])),
             MenuDef::new(tr("menu.view"), view),
-            MenuDef::new(tr("menu.go"), items(&MENU_IDS[44..52])),
-            MenuDef::new(tr("menu.help"), items(&MENU_IDS[52..])),
+            MenuDef::new(tr("menu.go"), items(&MENU_IDS[44..55])),
+            MenuDef::new(tr("menu.help"), items(&MENU_IDS[55..])),
         ]
     }
 
@@ -734,6 +737,8 @@ impl App {
             "nav.forward" => self.panels[a].nav_forward(&mut inv),
             "nav.up" => self.panels[a].nav_up(&mut inv),
             "nav.home" => self.panels[a].nav_home(&mut inv),
+            "nav.favorites" => self.open_favorites_menu(),
+            "nav.fav_toggle" => self.fav_toggle(),
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
             "edit.select_invert" => self.panels[a].invert_selection(&mut inv),
             "edit.delete" => self.delete_to_trash(),
@@ -900,10 +905,10 @@ mod tests {
         assert_eq!(MENU_IDS[43], "view.lang_system");
         assert!(MENU_IDS[20..44].contains(&"view.preview_window"));
         assert_eq!(MENU_IDS[44], "nav.back");
-        assert_eq!(MENU_IDS[52], "help.about");
-        assert_eq!(MENU_IDS[53], "help.license");
-        assert_eq!(MENU_IDS[54], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 55);
+        assert_eq!(MENU_IDS[55], "help.about");
+        assert_eq!(MENU_IDS[56], "help.license");
+        assert_eq!(MENU_IDS[57], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 58);
     }
 
     #[test]
