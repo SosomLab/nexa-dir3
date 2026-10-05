@@ -1376,6 +1376,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.view.natural_sort",
+        CAT_KEYS,
+        "pref.sortNatural",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.view.dock",
         CAT_KEYS,
         "menu.view.dock",

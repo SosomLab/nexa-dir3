@@ -44,6 +44,10 @@ pub(crate) const EMBEDDED_SVG: &[(&str, &str)] = &[
         "case-sensitive",
         include_str!("../assets/toolbar/case-sensitive.svg"),
     ),
+    (
+        "natural-sort",
+        include_str!("../assets/toolbar/natural-sort.svg"),
+    ),
     // 네비 버튼 4종(아이콘 글꼴 Segoe MDL2가 없는 OS용 — MDL2 HomeSolid · Back · Forward · Up 모양 · dir3 신규 10-03).
     ("nav-home", include_str!("../assets/toolbar/nav-home.svg")),
     ("nav-back", include_str!("../assets/toolbar/nav-back.svg")),
@@ -94,6 +98,7 @@ pub(crate) fn asset_of(cmd_id: &str) -> Option<&'static str> {
         "view.dot" => "dotfiles",
         "view.folders_first" => "folders-first",
         "view.case_sensitive" => "case-sensitive",
+        "view.natural_sort" => "natural-sort",
         _ => return None,
     })
 }
@@ -167,6 +172,7 @@ mod tests {
             "view.dot",
             "view.folders_first",
             "view.case_sensitive",
+            "view.natural_sort",
         ] {
             let a = asset_of(id).unwrap_or_else(|| panic!("{id}"));
             assert!(EMBEDDED_SVG.iter().any(|(n, _)| *n == a), "{id} → {a}");

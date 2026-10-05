@@ -316,6 +316,8 @@ impl App {
                     g("view.case_sensitive", "Aa", "pref.sortCaseSensitive"),
                     "pref.sortCaseSensitive",
                 ),
+                // 자연 정렬(dir3 신규 · 사용자 10-05) — 탭 값이 아니라 전체 설정(`list.sort_natural`)이라 범위 안내를 붙이지 않는다.
+                ("show", "natural") => g("view.natural_sort", "12", "pref.sortNatural"),
                 _ => return None,
             })
         };
@@ -565,6 +567,11 @@ impl App {
         ] {
             self.toolbar.set_item_checked(id, on, &mut inv);
         }
+        self.toolbar.set_item_checked(
+            "view.natural_sort",
+            self.settings.flag("list.sort_natural"),
+            &mut inv,
+        );
         if !inv.is_empty() {
             self.redraw();
         }
@@ -745,6 +752,15 @@ impl App {
             "view.dot" if !platform::has_dotfile_toggle() => {}
             "view.hidden" | "view.dot" | "view.folders_first" | "view.case_sensitive" => {
                 self.toggle_view_option(id);
+            }
+            // 자연 정렬 켬/끔 = 전체 설정 → 정렬 엔진에 알리고 열린 목록을 새 순서로 다시 읽는다.
+            "view.natural_sort" => {
+                self.toggle_flag("list.sort_natural");
+                self.apply_natural_sort();
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
+                self.update_status();
             }
             "view.dock" | "view.launcher" | "view.col_width_sync" => {
                 let key = match id {

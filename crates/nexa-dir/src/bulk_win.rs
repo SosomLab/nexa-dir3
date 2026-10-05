@@ -502,7 +502,8 @@ impl RowSource for PvSource {
             _ => String::new(),
         }
     }
-    /// 정렬(DLG-081): 이전/이후 기준 대소문자 무시 · 안정 · 다중 키 · 빈 사양 = 선택 순서.
+    /// 정렬(DLG-081): 이전/이후 기준 대소문자 무시 · 안정 · 다중 키 · 빈 사양 = 선택 순서. 자연 정렬이 켜져 있으면 파일 목록과
+    /// 같은 순서(숫자를 값으로).
     fn set_sort(&mut self, keys: &[(u32, bool)]) -> bool {
         if keys.is_empty() {
             self.rows.sort_by_key(|r| r.idx);
@@ -517,6 +518,8 @@ impl RowSource for PvSource {
                 };
                 let o = if k == COL_NO {
                     a.idx.cmp(&b.idx)
+                } else if ndir_tree::natural_sort() {
+                    ndir_tree::cmp_natural(&x, &y, true).then_with(|| x.cmp(&y))
                 } else {
                     x.cmp(&y)
                 };

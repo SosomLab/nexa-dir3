@@ -2040,9 +2040,9 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
         .map(|it| it.id.clone())
         .collect();
     assert_eq!(plain, ["view.refresh", "file.prefs"]);
-    // 14개 명령 = SVG 마스크(칸 20px · 그림은 90 % = 18px — `toolbar.icon_scale_pct`) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 13개.
+    // 15개 명령 = SVG 마스크(칸 20px · 그림은 90 % = 18px — `toolbar.icon_scale_pct`) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 14개.
     let dot = usize::from(platform::has_dotfile_toggle());
-    assert_eq!(masks, 13 + dot);
+    assert_eq!(masks, 14 + dot);
     // 대소문자 구분 정렬 토글 = 폴더 우선 바로 다음 · 누르면 전역 설정과 체크가 함께 바뀐다.
     let ids: Vec<String> = app
         .toolbar
@@ -3867,22 +3867,24 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
         // 누락 foldersfirst는 가장 가까운 앞 형제(dot) 뒤로 보충된다(dir2 규칙).
         assert_eq!(after[0], "view.dot");
         assert_eq!(after[1], "view.folders_first");
-        // 누락 casesensitive도 앞 형제(foldersfirst) 뒤로 보충된다 → hidden은 그 다음.
+        // 누락 casesensitive도 앞 형제(foldersfirst) 뒤로 · natural은 그 뒤로 보충된다 → hidden은 그 다음.
         assert_eq!(after[2], "view.case_sensitive");
-        assert_eq!(after[3], "view.hidden");
+        assert_eq!(after[3], "view.natural_sort");
+        assert_eq!(after[4], "view.hidden");
     } else {
         // 점 파일 토글이 없는 OS: dot은 모르는 토큰으로 버려지고 foldersfirst는 앞 형제(hidden) 뒤로 보충된다.
         assert_eq!(after[0], "view.hidden");
         assert_eq!(after[1], "view.folders_first");
         assert_eq!(after[2], "view.case_sensitive");
+        assert_eq!(after[3], "view.natural_sort");
         assert!(!after.contains(&"view.dot".to_string()));
     }
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
         if platform::has_dotfile_toggle() {
-            "show:1[dot:1,foldersfirst:1,casesensitive:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[dot:1,foldersfirst:1,casesensitive:1,natural:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         } else {
-            "show:1[hidden:1,foldersfirst:1,casesensitive:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[hidden:1,foldersfirst:1,casesensitive:1,natural:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
         },
         "정규화 저장"
     );
@@ -7214,4 +7216,26 @@ fn invert_selection_flips_visible_rows() {
     assert!(app.panels[0].selected_paths().is_empty());
     app.command("edit.select_invert");
     assert_eq!(app.panels[0].selected_paths().len(), total);
+}
+
+/// 자연 정렬 토글 명령(`view.natural_sort` · 도구 모음 "보기 옵션" 묶음): 설정 `list.sort_natural`을 뒤집고 도구 모음 체크가 따라간다.
+/// (정렬 엔진의 전역 값은 시험끼리 공유하므로 여기서는 설정 · 체크만 본다 — 순서는 ndir-tree 시험.)
+#[test]
+fn natural_sort_command_toggles_setting_and_toolbar_check() {
+    let (mut app, _dir) = fixture("nattoggle");
+    assert_eq!(
+        crate::icons::asset_of("view.natural_sort"),
+        Some("natural-sort")
+    );
+    assert!(crate::order::TOOLBAR_BLOCKS
+        .iter()
+        .any(|(b, items)| *b == "show" && items.contains(&"natural")));
+    let before = ndir_tree::natural_sort();
+    app.command("view.natural_sort");
+    assert!(!app.settings.flag("list.sort_natural"));
+    assert!(!app.toolbar.item_checked("view.natural_sort"));
+    app.command("view.natural_sort");
+    assert!(app.settings.flag("list.sort_natural"));
+    assert!(app.toolbar.item_checked("view.natural_sort"));
+    ndir_tree::set_natural_sort(before);
 }
