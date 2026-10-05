@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **메인 창 OS 입력기 연결**(종전 = 한 번도 안 붙여 경로 바 한글 불가 · 작업 표시줄 한/영 표시 무반응 · `ime_sink` 모달 > 편집 > 터미널 > 목록 · nexa-ui 158 `typeahead_ime` · c8fe23d) · §35 앱 한/영 토글 = 앱 조합 모드 전용으로 정정 → [journal 10-05 §42](journal/2026-10-05.md)
 - **드롭 대상 = 파일 행 위면 그 파일이 든 폴더**(`drop_folder_of` · 트리 하위 폴더 묶음 강조 · 사용자 요청 · d25ff18) → [journal 10-05 §41](journal/2026-10-05.md)
 - **배포 요청(T-160) 사전 분석**: linux-repo는 정식 latest 릴리스 + 고정 자산 이름(dir3 deb/rpm 이름 그대로 가능) + dispatch 신호 · dir3 release.yml은 늘 초안 → 공개로 바꿔야 linux-repo가 봄 · nexa-clip = 태그 즉시 공개 · winget/choco/brew(kiros33/homebrew-tap) 자동 게시 · dir2 = winget 0.22.0 · choco 0.20.0(0.21.0 대기) · 사용자 결정 = 패키지 ID · 버전 · 게시 승인 → [journal 10-05 §40](journal/2026-10-05.md)
 - **수식키 남은 3건**(빈 곳 Shift+우클릭 확장 동사 · 터미널 Shift+우클릭 로컬 메뉴 · 터미널 Ctrl+V 붙여넣기 · 512021e · T-153) · 개발 세션 회차 마감 · STATUS "다음 할 일" = 다음 회차 후보 8묶음 → [journal 10-05 §39](journal/2026-10-05.md)
