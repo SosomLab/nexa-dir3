@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **폴더 비교 · 동기화 사전 조사**(T-171/T-172 · 경쟁 도구 4종 · 두 패널 `root_path` · 행 색 훅 없음 · `copy_onto_with_progress` + 휴지통) → [§62](journal/2026-10-05.md)
 - **중복 파일 찾기 1차**(NEW-041 · c84ff2d · 크기 → 앞 64 KiB CRC32 → SHA-256 · 묶음/✓ · 보존 규칙 · 휴지통) → [§61](journal/2026-10-05.md)
 - **압축 풀기 1차**(NEW-040 · 89ae2e7 · zip Store/Deflate · tar · gz/tgz · 자체 inflate · zip slip 차단 · 우클릭 "압축 풀기 ▸") · 중복 찾기 사전 조사(T-170) · 704c399 · 89ae2e7 CI ✓ → [§59~§60](journal/2026-10-05.md)
 - **압축 풀기 사전 조사**(T-169 · 목록 전용 · 디코더 0 · 1차 제안 = zip Store/Deflate + tar + gz/tgz · nexa-gfx `inflate_raw` 재사용) → [§58](journal/2026-10-05.md)
