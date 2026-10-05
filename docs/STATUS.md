@@ -27,7 +27,7 @@
 
 - **한 일**: TODO T-160 등재 · ①~④ 사전 분석(nexa-clip 채널 · linux-repo 규칙 · dir3 계획 · dir2 게시 현황 · 릴리스 체크리스트) 개발 세션 전달.
 - **지금 상태**: 사용자 인스턴스 PID 34240(개발 세션 재시작). 작업 트리 = 이 기록뿐.
-- **걸린 것(사용자 결정)**: winget/choco 패키지 ID(dir2와 같은 ID vs 새 ID) · 새 버전 번호(지금 0.23.0) · 태그 · Release 공개 · 외부 게시 승인 · 시크릿/변수 등록(`LINUX_REPO_DISPATCH_TOKEN` · `WINGET_TOKEN` · `CHOCO_API_KEY` · `TAP_TOKEN` · `WINGET_PUBLISH` · `CHOCO_PUSH`).
+- **⏸ 배포 보류**(사용자 10-05 "조금 더 수정하고 나서 배포"): 확정 = 기존 패키지 이름 승계 · 태그 v0.23.0 정식 · 재개 때 시크릿 `TAP_TOKEN` · `WINGET_TOKEN` · `CHOCO_API_KEY` + 변수 `WINGET_PUBLISH` · `CHOCO_PUSH` 등록 필요(사용자) · 재개 메모 = journal §40.
 
 → [journal/2026-10-05 §40](journal/2026-10-05.md)
 
