@@ -62,6 +62,28 @@ impl App {
         }
     }
 
+    /// 메모리 덤프(기동 명령 `mem.dump:<파일>` · T6 측정 · 사용자 10-06 "dir2 대비 메모리 증가 점검"): 운영체제 값 + 영역별 어림 +
+    /// 미집계(런타임 · 라이브러리). 바이트 그대로(표는 보는 쪽이 만든다).
+    pub(crate) fn mem_dump(&self) -> String {
+        let s = self.mem_sample();
+        let mut out = String::new();
+        out.push_str(&format!(
+            "sys footprint {} resident {} anon {} file_backed {} compressed {} heap_used {} heap_held {}\n",
+            s.sys.footprint,
+            s.sys.resident,
+            s.sys.anon,
+            s.sys.file_backed,
+            s.sys.compressed,
+            s.sys.heap_used,
+            s.sys.heap_held
+        ));
+        for c in Cat::ALL {
+            out.push_str(&format!("{:?} {}\n", c, s.data.get(c)));
+        }
+        out.push_str(&format!("other {}\n", s.other()));
+        out
+    }
+
     /// 유휴 틱 — 창이 열려 있으면 주기마다 표본을 넣고 다음 시각을 돌려준다(닫혀 있으면 `None`).
     pub(crate) fn mem_tick(&mut self, now: Instant) -> Option<Instant> {
         if !self.mem_win.is_open() {

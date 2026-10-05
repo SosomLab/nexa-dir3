@@ -316,6 +316,7 @@ impl App {
         }
         Some(match target {
             "layout" => self.layout_dump(),
+            "mem" => self.mem_dump(),
             "panel" => self.panel_dump(self.active),
             "panel0" => self.panel_dump(0),
             "panel1" => self.panel_dump(1),
