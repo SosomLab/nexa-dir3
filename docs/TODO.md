@@ -44,7 +44,7 @@
 | T-28 | Tooltip 관리자 · Overlay z 스택 | P1 | 소 | — | UIK-208·209 | ☐ |
 | T-29 | nexa-dlg: Dialog 프레임 · MessageBox(버튼 N) · Prompt · Progress 창 · 폴더 선택 | P0 | 중 | — | UIK-212·215 · DLG | 🚧 10-03 journal §30(A: 확인/4버튼/마스킹 입력 창 + 영구 삭제·충돌 배선 ✅ · B: 폴더 찾아보기 ✅ journal §36 `file_win` · 진행 창 ✅ journal §46) |
 | T-30 | dir2 전용 소형 컨트롤 대응(fontbox · spin · segmented · ordertree · groupcard · searchbox · iconbutton · menubutton) — 기존 nexa-ctl 대체 또는 추가 · 툴바/런처 아이콘 | P1 | 중 | — | DLG-0xx · GUI-07x | ✅ 10-03(A 툴바 SVG journal §39 · B 런처 exe 아이콘 journal §52 · ordertree = order_win §50 · 나머지 소형 컨트롤 = nexa-ctl 기존으로 대체) |
-| T-31 | DrawCtx `push_clip/pop_clip` · 터미널 셀 텍스트 · italic · 테마 토큰(tab_bar_bg·header_bg·dock_bg·status_bar_bg) · ICO/SVG 디코더 | P1 | 중 | — | UIC-310~317 · RENDER | 🚧 10-03(SVG 래스터 + `draw_image_hint` ✅ nexa-ui 108차 journal §38 · 클립 스택 ✅ 112차 §67 · italic/장식 설정/터미널 굵은 셀 ✅ 113차 §68 · 테마 토큰 = nexa-grid 대체 종결 · ICO ☐) |
+| T-31 | DrawCtx `push_clip/pop_clip` · 터미널 셀 텍스트 · italic · 테마 토큰(tab_bar_bg·header_bg·dock_bg·status_bar_bg) · ICO/SVG 디코더 | P1 | 중 | — | UIC-310~317 · RENDER | 🚧 10-03(SVG 래스터 + `draw_image_hint` ✅ nexa-ui 108차 journal §38 · 클립 스택 ✅ 112차 §67 · italic/장식 설정/터미널 굵은 셀 ✅ 113차 §68 · 테마 토큰 = nexa-grid 대체 종결 · ICO ✅ nexa-ui 153차 6a55ef3 — 10-05 §44 정정) |
 | T-32 | FolderTree(지연 로딩) · Toast 승격 · FilterBox | P1 | 중 | — | UIK-210·213·214 | ✅ 10-03 journal §69(Toast → nexa-ui 114차 `controls::toast` · FolderTree/FilterBox = dir2에 없음 → 범위 밖) |
 
 ## M3 앱 골격
@@ -74,7 +74,7 @@
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-60 | 도크(정보 8줄+형식별 상세 · 미리보기 텍스트/이미지 · 스크롤·선택·복사) | P0 | 중 | T-27 | WINA · GUI-11x | 🚧 10-03 journal §23(배치·정보 기본 8줄·텍스트 미리보기·스트립 ✅ · 이미지 그리기 T-31 · 형식별 상세 T-5x · 터미널 T-61) |
-| T-61 | 터미널 뷰(셀 격자·선택·캐럿·스크롤백·테마 15종·복사 서식 HTML/RTF·cwd 동기·키 라우팅) | P0 | 대 | T-31 · T-51~53 | TERM | 🚧 10-03 journal §24·§34(A ✅ · B 고정 열/가로 스크롤·HTML 복사·TUI 마우스·글꼴 크기 ✅ · 잔여: 픽셀 스크롤·고속 스크롤·RTF) |
+| T-61 | 터미널 뷰(셀 격자·선택·캐럿·스크롤백·테마 15종·복사 서식 HTML/RTF·cwd 동기·키 라우팅) | P0 | 대 | T-31 · T-51~53 | TERM | 🚧 10-03 journal §24·§34(A ✅ · B 고정 열/가로 스크롤·HTML 복사·TUI 마우스·글꼴 크기 ✅ · RTF 복사 ✅ Windows 6ff7410(mac/Linux 잔여) · 잔여: 픽셀 스크롤·고속 스크롤 — 10-05 §44 정정) |
 | T-62 | 플러그인 런타임 이식(dir2 ABI · 탐색 경로 3단 · 내장 폴백 · 격리 시험) + 동봉 `.wasm` 2종 + F3 창 + 압축 미리보기 그리드·암호 | P0 | 대 | T-60 | PLUG · EXT-441~445 | 🚧 10-03 journal §25·§31(A 런타임·시임·동봉 ✅ · B F3 창·암호 입력 ✅ · C-1 압축 그리드 창 ✅ journal §37 · C-2 SVG 래스터·인라인 이미지 ✅ journal §38 · C-3 드래그 선택 ✅ journal §44) |
 | T-63 | 플러그인 설정 페이지 · 매니저(sha256·설치) · `plugins/sdk` · `plugin-build.{ps1,sh}` | P1 | 중 | T-62 | EXT-414~418 | ✅ 10-03(A: sdk·빌드 스크립트·CI journal §26 · B: 체크박스 페이지 journal §51 · 매니저 1차 설치/삭제 journal §59 — 2단계 원격 저장소 보류) |
 
@@ -82,7 +82,7 @@
 
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-70 | 전송(복사/이동 · 진행 창 · 취소 · 충돌 · 스테이징 · 덮어쓰기 확인 상태 기계) · 삭제(휴지통·영구·잠금 프로브) · 새 폴더/파일 · 실행 취소 | P0 | 대 | T-29 · T-50 | OPS · WINB | 🚧 10-03(전송·충돌·undo·휴지통 undo·진행 창 ✅ journal §28·§43·§46 · 잠금 프로브 WINB-024 ☐) |
+| T-70 | 전송(복사/이동 · 진행 창 · 취소 · 충돌 · 스테이징 · 덮어쓰기 확인 상태 기계) · 삭제(휴지통·영구·잠금 프로브) · 새 폴더/파일 · 실행 취소 | P0 | 대 | T-29 · T-50 | OPS · WINB | 🚧 10-03(전송·충돌·undo·휴지통 undo·진행 창 ✅ journal §28·§43·§46 · 잠금 프로브 WINB-024 ✅ e66a973 — 10-05 §44 정정 · 고속 복사 = 개발 세션 진행 중) |
 | T-71 | 인라인 이름 바꾸기 · 일괄 이름 변경 창(규칙·프리셋·미리보기) · 순서 편집기(툴바/메뉴) | P0 | 대 | T-25·30 | DLG · OPS | ✅ 10-03(인라인 §29 · 일괄 창 journal §48 · 순서 편집기 journal §50 — 잔여: 우클릭 진입·접기·프리셋 관리 팝업·TZ) |
 | T-72 | 클라우드(Q-6 결정 뒤): OAuth 루프백·토큰 봉투·가상 FS — 범위 = CLOUD-001~099 + WINB-036~042 · O-001~020 + SHELL-034 SHCNE(OneDrive 플레이스홀더 감지 · 10-05 §14 이관) | P2 | 대 | — | CLOUD · WINB-036~042 · O-001~020 | ⏸ 대기(사용자 10-05 — 목록 등재 · 착수 보류 · 10-05 §9) |
 
@@ -173,8 +173,8 @@
 | T-158 | 다음 보고에 **로그 보는 방법** 포함(사용자 10-05 (g)) — 지금 = 로그 창 없음(T-92) · crash 파일(`<설정 폴더>/crash/`) · Help ▸ 자가 점검 · NDIR_TRACE_* · 덤프 명령 · ⚠ docs/18의 `NDIR_TRACE_FRAMES`/`_WINDOW`는 코드에서 안 읽음 | P2 | 소 | — | NEW-001 · SKEL-436 | ✅ 10-05 §39 — 개발 세션 회차 보고에 포함(로그 창 없음 · crash 파일 · 자가 점검 · NDIR_TRACE_* · 덤프 명령) |
 | T-160 | **배포 채널 전체 + 새 버전 릴리스**(사용자 10-05 "배포에 리눅스 저장소 포함 · 상위에 linux-repo 추가 · rpm 배포 포함 · 새 버전 릴리즈 · brew/pkg 배포 · winget/choco 게시 상태 확인 후 배포") — ① `../linux-repo`(SosomLab/linux-repo · pkg.sosomlab.com)에 `apps/nexa-dir.toml` 등록(deb + rpm · 자산 이름 규칙) + 릴리스 → linux-repo 신호 ② GitHub Release 공개(지금 release.yml = 초안까지) ③ Homebrew(tap · cask) · macOS pkg/dmg ④ winget · Chocolatey 게시 상태 확인 뒤 게시 ⑤ 새 버전 태그(0.23.0 → ? · DR-12 = 태그는 별도 승인 · 배포 전 `gate.sh full`) · 참고 = nexa-clip 배포 구현 · 현황(개발 세션): release.yml = 태그 v* → deb+rpm · pkg+dmg · msi+zip + sha256sums → 초안 · brew/winget/choco/linux-repo 신호 없음 · dir3 태그 0건 | P1 | 대 | T-82 | CI-114 · PROC · DR-9 | ⏸ 보류(사용자 10-05 "조금 더 수정하고 나서 배포") — 확정 = winget/choco **기존 이름 승계**(SosomLab.NexaDir · nexa-dir) · 태그 **v0.23.0 정식** · 재개 때 할 일 · 게시 상태 · 필요한 시크릿 = journal 10-05 §40 '배포 보류' 항목 · 실제 변경 0건 |
 | T-161 | **T4 부하 흔들림**(10-05 §43 관찰) — gate full 1회차 `selfcheck-win` exit 3 · 단독 반복 중 `ctx-menu` 1회 실패 · 재실행 20/20 · 원인 추정 = 고정 대기(`@after:8000`) vs 셸 메뉴 수집 ~2.7 s · 휴지통 ~1.7 s → 고정 대기 대신 "점검 끝남" 신호 대기(기동 명령 · 덤프 조건) | P2 | 소 | — | CI-108 · T-136 | ☐ |
-| T-162 | **일괄 이름 변경 UI/UX · 기능 보완 검토**(사용자 10-05 "UI, UX 개선 방향 검토 + 기능 중 보완 필요한 부분 검토") — 사전 분석 = journal 10-05 §43 이후 | P1 | 중 | — | DLG · OPS · T-71 | 🚧 분석 중 |
-| T-163 | **dir2 기준 남은 기능 · 인기/필수 기능 후보**(사용자 10-05 "확인할 내용 없는 기능은 dir2 기준으로 검토·진행 / 추가로 필요한 것 제안 / 인기·필수는 구현" · 고속 복사 · 클라우드 제외) | P1 | 중 | — | 매트릭스 ☐/🚧 · NEW | 🚧 분석 중 |
+| T-162 | **일괄 이름 변경 UI/UX · 기능 보완 검토**(사용자 10-05 "UI, UX 개선 방향 검토 + 기능 중 보완 필요한 부분 검토") — 사전 분석 = journal 10-05 §43 이후 | P1 | 중 | — | DLG · OPS · T-71 | 🚧 사전 분석 완료 10-05 §44(결함 4: 날짜 UTC · rename 덮어씀 · 충돌 1행이 전체 차단 · 펼친 경로 미갱신) — 개발 세션 착수 대기 |
+| T-163 | **dir2 기준 남은 기능 · 인기/필수 기능 후보**(사용자 10-05 "확인할 내용 없는 기능은 dir2 기준으로 검토·진행 / 추가로 필요한 것 제안 / 인기·필수는 구현" · 고속 복사 · 클라우드 제외) | P1 | 중 | — | 매트릭스 ☐/🚧 · NEW | 🚧 사전 분석 완료 10-05 §44(Top 10 · 결정 거리 5건) — 개발 세션 착수 대기 |
 | T-146 | nexa-sql에서 nexa-ui 152(글꼴 실제 이름 탐색) 실기 확인 — 글꼴 이름 설정이 파일명과 다른 경우(Consolas 등) 표시 글꼴이 바뀌는지(CONSUMER-CHANGES 152 행 · 시험 751 ✓ · 실기 미검증) | P2 | 소 | — | — | ☐ |
 | T-117 | T4 시나리오 Linux 실행 — Windows 전제 3개 분기(`ctx-menu` 셸 배경 항목 · `launcher` · `selfcheck-win`) · CI ubuntu xvfb 단계(T-06 후속) | P1 | 소 | — | CI-108 | ✅ 10-05 §32 — 관찰 1회차 = X 런타임 없음(3a0157b로 설치) · 2회차(run 37231460856) Linux T4 **20/20** · ctx-menu/launcher = `키@os:` 분기 · selfcheck-win은 그대로 통과(10-03 FAIL 재현 안 됨) → 7de27b1 필수 단계 · macOS T4는 T-06 후속 |
 | T-114 | macOS 실기 맞춤(사용자 "동일한 과정을 맥에서도") — 이미 적용: 점 파일 = 숨김 · 선 쉐브론 · 터미널 폴백 em · 칸 폭 반올림 / 남음: 행 아이콘(NSWorkspace iconForFile) · 시스템 터미널 글꼴(Terminal.app 프로필) · 우클릭 통합 | P1 | 중 | T-112 | NEW-012 · NEW-016 | ☐ |
