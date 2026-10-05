@@ -12,7 +12,7 @@
 | B | 21 | 21 | 0 | 0 | 21 | 0 | 0 |
 | CI | 119 | 119 | 92 | 27 | 0 | 0 | 0 |
 | CLOUD | 99 | 99 | 1 | 0 | 0 | 0 | 0 |
-| CMD | 430 | 430 | 199 | 121 | 110 | 0 | 0 |
+| CMD | 430 | 430 | 200 | 120 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
 | GUI | 95 | 95 | 32 | 33 | 30 | 0 | 0 |
@@ -40,8 +40,8 @@
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
-| WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4323 | 4323 | 2500 | 931 | 763 | 0 | 0 |
+| WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
+| **합계** | 4323 | 4323 | 2503 | 928 | 763 | 0 | 0 |
 
 ## 행
 
@@ -332,7 +332,8 @@
 | SHELL §2-1 · §2-2 | 파일 행 메뉴(열기 · 편집 · 삭제/완전 삭제/이름 바꾸기 · 경로/이름 복사 · 폴더에 붙여넣기 · 새로 만들기) · 배경 메뉴(붙여넣기 · undo/redo 설명 · 새로 만들기 · 새로 고침) · 우클릭/Shift+F10 · 비활성 패널 활성화 | `app/ctxmenu.rs` · `panel.rs::pending_ctx` | T2·T4 | `row_and_background_context_menus` · `ctx-menu.scn` | ✅ | 셸 항목(IContextMenu) 합류 = T-51 B · `ctx_menu_order` 설정 = T-51 B |
 | SHELL-001 · 002 · 005 · 006 · 012 · 013 | 셸 컨텍스트 메뉴(PIDL · 공통 부모 축소 · IContextMenu · HMENU 열거 · 서브메뉴 2단 · verb 가로채기 · InvokeCommand 뒤 재열람 · id 대역 `shell:1..0x6FFF`) | `platform/winshell.rs` · `app/ctxmenu.rs::shell_to_ctx` | T2(실기)·T5 | `shell_menu_lists_items_for_temp_file` · `row_and_background_context_menus`(가짜 포트) | ✅ | Windows만 · 네이티브 HMENU 대신 nexa-ctl 그림 |
 | WINA-084 · CTX-TARGETS | 여러 폴더에 걸친 선택(트리 보기)의 우클릭 = 캐럿 항목의 부모 폴더 것만 대상(캐럿 없음 · 최상위 · 결과가 빔 = 그대로) — 종전 = 첫 부모 폴더에 다른 부모의 child PIDL을 넘겨 메뉴가 틀릴 수 있었음 | `app/ctxmenu.rs::context_targets`(순수) · `open_row_menu`(셸 대상 · 메뉴 조립) | T1 | `context_targets_keep_only_carets_parent` | ✅ | 10-05 §19(99c4be6 · T-149 13 · dir2 win.rs:2779-2801) · 실기(트리 보기 다중 폴더 선택 우클릭) 사용자 |
-| SHELL-004 | Shift+우클릭(행) = 셸 확장 동사(`CMF_EXTENDEDVERBS` · `MenuTarget::RowsExtended` · 캐시/구축/실행 따로 · 본 메뉴와 같은 대상) | `platform/winshell.rs` · `app/ctxmenu.rs` | T3 + 실기 | `shift_right_click_asks_for_extended_shell_verbs` | ✅ | 10-05 §11(6ff7410) · 남은 것 = 빈 본문 Shift+우클릭(배경 메뉴 확장 · CMD-417 · `build_bg` CMF_NORMAL 고정) · ⚠ Shift+F10 키 경로는 명령 ID 불일치(`list.context_menu` 분기 없음 · §11) · 실기 사용자 |
+| SHELL-004 | Shift+우클릭(행) = 셸 확장 동사(`CMF_EXTENDEDVERBS` · `MenuTarget::RowsExtended` · 캐시/구축/실행 따로 · 본 메뉴와 같은 대상) | `platform/winshell.rs` · `app/ctxmenu.rs` | T3 + 실기 | `shift_right_click_asks_for_extended_shell_verbs` | ✅ | 10-05 §11(6ff7410) · 빈 본문 Shift+우클릭 = 확장 ✅ 10-05 §39(`MenuTarget::BgExtended` · `build_bg(…, extended)` · 512021e) · ⚠ Shift+F10 키 경로는 명령 ID 불일치(`list.context_menu` 분기 없음 · §11) · 실기 사용자 |
+| T-153 · CMD-417 · WINC-085 · WINC-050(일부) · MODKEYS | 수식키 남은 3건: 빈 곳 Shift+우클릭 = 배경 셸 메뉴 확장 동사(`MenuTarget::BgExtended` · winshell `build_bg(…, extended)` · `bg_target`) · 터미널 Shift+우클릭 = TUI 마우스 모드여도 로컬 편집 메뉴(`open_dock_edit_menu`) · 터미널 Ctrl+V = 붙여넣기(Windows · `platform::term_ctrl_v_pastes` · `term_ctrl`) | `platform/{mod,winshell,fake}.rs` · `app/ctxmenu.rs` · `app/term.rs` | T3 + 실기 | `modifier_variants_for_background_menu_and_terminal` | ✅ | 10-05 §39(512021e · dir2 win.rs:2875 · 8185 · 9354-9361) · 남은 T-153 = mac/Linux 드래그 중 수식키 폴링 · Alt/Ctrl+Shift = 링크(탐색기 규칙 · dir2에도 없음 · 사용자 결정 거리) · 오른쪽 버튼 드래그 메뉴 · 실기 = 빈 곳 Shift+우클릭 확장 항목 · 터미널 Ctrl+V |
 | SHELL-007 · 008 · 009 · 019 | 고유 항목 앵커 삽입(이름 복사 → 경로 복사 아래) · 새로 만들기 ▸ ShellNew · 배경 셸 메뉴 · `ctx_menu_order`(→ `ctxmenu.layout`) | `app/ctxmenu.rs` · `platform/winshell.rs::build_bg` · `ndir-settings` migrate(`ctx_menu_order` → `ctxmenu.layout`) | T3 | `copy_path_and_name_follow_dir2_menu_rules` · `row_menu_new_submenu_creates_from_template` · `background_menu_merges_shell_items_and_handles_created` · `background_menu_lists_items_and_detects_single_creation` · `order_editor_applies_toolbar_ctxmenu_and_columns` | ✅ | 10-05 §11 매트릭스 정리(종전 ☐ = 낡은 표기 · 각각 10-03 §50 · §41 · §50 · 10-04 §24 구현) · 003은 아래 개별 행(§82) · 011·014·015는 아래 개별 행 |
 | SHELL-003 | 키보드로 연 행 메뉴(Shift+F10 · `cmd.contextMenu`)의 앵커 = 캐럿 행 자리(캐럿이 화면 밖이면 목록 왼쪽 위) · 마우스 우클릭은 커서 자리 | `app/ctxmenu.rs::open_row_menu_at_caret` · `App.ctx_anchor_next` · `app/menus.rs` · nexa-grid `row_anchor` | T3 | `keyboard_context_menu_opens_at_the_caret_row` | ✅ | §82(업무 42 캡처: 종전엔 창 왼쪽 위 모서리에 열림) · 실기(위치) 사용자 · 10-05 §13: 키 경로(Shift+F10 · 메뉴 키 · mac ⌃Return = `list.context_menu`)가 `command`에 분기 없어 `cmd.notYet`이던 결함 수정(5e150a5) · 시험 `context_menu_key_opens_the_row_menu_through_the_keymap`(key_chord 경유) |
 | SHELL-011 | 셸 확장 항목 아이콘(메뉴 아이콘 칸) | `platform/winshell.rs`(MIIM_BITMAP `hbmpItem` → GetDIBits 32bpp → `bgra_to_rgba` · 예약 핸들 -1..=11만 거름 · 최상위 메뉴 `HandleMenuMsg(WM_INITMENUPOPUP)`) · `app/ctxmenu.rs::shell_to_ctx`(`MenuIcon::from_rgba`) | T1·T3 | `bgra_premultiplied_to_straight_rgba` · `shell_item_icons_reach_context_menu` | 🚧 | hbmpItem ✅ · owner-draw(`HBMMENU_CALLBACK` · WM_DRAWITEM 2-패스 알파) · 표시 중에만 채워지는 비트맵 = 잔여 · 실기(아이콘 칸) 사용자 · 10-05 §38: 앱 고유 메뉴 항목 아이콘 = OS 아이콘 글꼴(NEW-034 · `menu.icons`) — 셸 owner-draw 아이콘은 여전히 ☐ |
