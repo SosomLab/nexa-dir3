@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **v0.23.0 릴리스 공개**(3차 성공 · 1차 = 셸 스크립트 실행 비트 18b9eac · 2차 = 창 서브시스템 + pwsh 파이프 panic bd801ff · winget PR #447018/#447019 · choco 검수 대기 · brew 29bf953 · pkg.sosomlab.com 71741e2 · T-178 CLI 보조 exe) → [§70](journal/2026-10-05.md)
 - **배포 준비 완료**(T-160 · 64fd96c · winget/choco/brew/linux-repo 파이프라인 · render 게이트 4종 · 사용자 준비물 대기 · choco 제거 인자 실측 반영 afa18c3) · 9b3b0f0 CI ✓ → [§69](journal/2026-10-05.md)
 - **키 이동 디바운스**(T-177 · 9b3b0f0 · 도크 갱신 60 ms · 마지막 선택만) · **배포 재개 사전 조사**(T-160 · 기준 nexa-clip · 조치 17건 · 시크릿 3 + 변수 2 등록 필요 · Inno → MSI 전환) → [§68](journal/2026-10-05.md)
 - **nexa-sql 시험 체계 조사**(층 · V0~V3 · 회귀선 · 누수 기울기 · code-health · dir3 차용 후보 → T-176) → [§67](journal/2026-10-05.md)

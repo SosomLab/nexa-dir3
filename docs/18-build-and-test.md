@@ -105,6 +105,8 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 
 3-OS 매트릭스 · 형제 2 체크아웃 · Linux 한글 글꼴 설치 · fmt → clippy → test → `--smoke` → `--selfcheck --ci` → `plugins` 잡(T-07 ✅: `plugin-build.sh` → `NDIR_PLUGINS_DIR` 자가 점검 `plugin` 로드 검증) → (Windows) 임포트 화이트리스트·용량 측정. 별도 `e2e.yml`(수동·main): Linux `xvfb-run` + `ndir-check`. 릴리스 = `release.yml`(M7).
 
+**릴리스 함정 체크리스트(10-05 §70 · v0.23.0 1·2차 실패)**: ① 셸 스크립트(`packaging/**/*.sh` · `scripts/*.sh`)는 git 모드 **100755** — Windows에서 새로 만들면 100644가 되므로 `git add --chmod=+x`(확인 = `git ls-files -s '*.sh'`) ② 앱은 창 서브시스템이라 PowerShell `& exe --version` 캡처 = 빈 값(기다리지 않음) → 스크립트에서 CLI 출력을 판정할 때는 `Start-Process -Wait -RedirectStandardOutput` 파일 · bash/cmd 리다이렉트 · CLI 출력은 `say!` 매크로(쓰기 실패 무시 · panic 금지) ③ 태그 이동은 **Release 공개 전**에만(`gh release view <tag>` = not found 확인) ④ 게시 규칙 = [packaging/README.md](../packaging/README.md).
+
 ## 9. 검증 매트릭스 · 교차 검증
 
 [port/90-verification-matrix.md](port/90-verification-matrix.md): 행 = 이식 원장 ID · 열 = 구현 위치 · 시험 층 · 시험 이름/시나리오 id · 상태(☐/🚧/✅/의도된 차이/실기 필요). 규칙 "기능 ID 1개 = 시험 1개 이상 또는 사유". 마일스톤 끝마다 빈칸을 센다.
