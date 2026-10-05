@@ -587,6 +587,12 @@ pref.transferClose.desc = コピー/移動の完了後、進行状況ウィン�
 # DnD hover switch (X-32) - dwell on tab/collapsed folder while dragging
 pref.dndHover = ドラッグホバー切り替え時間 (ms, 200-10000)
 pref.dndHover.desc = ドラッグ中にタブや折りたたまれたフォルダーの上に留まったとき、タブ切り替え・フォルダー展開までの待ち時間 (ミリ秒) です。既定値は 3000ms (3 秒)。
+pref.xferNative = OS の高速コピーを使用
+pref.xferNative.desc = ファイルのコピーに OS のコピー機能 (Windows: CopyFileEx) を使います。更新日時や属性が保持され、対応するディスクではブロック複製やサーバー側コピーでさらに速くなります。オフにすると直接読み書きしてコピーします。
+pref.xferThreads = フォルダーコピーの同時実行数 (0 = 自動, 1-16)
+pref.xferThreads.desc = フォルダー内のファイルを同時にいくつコピーするかを指定します。小さなファイルが多いほど効果があります。0 は記憶装置に応じて自動 (SSD・ネットワークは最大 8、それ以外は最大 4)、1 は 1 つずつ順番にコピーします。大きなファイルは常に 1 つずつコピーします。
+pref.xferUnbuffered = キャッシュなしでコピーするサイズ (MB, 0 = 使用しない)
+pref.xferUnbuffered.desc = このサイズ以上のファイルはシステムのファイルキャッシュを通さずにコピーします (Windows)。メモリよりはるかに大きいファイルを移すときに他のプログラムへの影響を減らしますが、通常はコピー自体が遅くなります。既定値は 0 (使用しない)。
 del.progress = 削除中...
 
 # 압축 미리보기(X-46)

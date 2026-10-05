@@ -587,6 +587,12 @@ pref.transferClose.desc = How long (in milliseconds) the progress window stays o
 # DnD hover switch (X-32) - dwell on tab/collapsed folder while dragging
 pref.dndHover = Drag hover switch delay (ms, 200-10000)
 pref.dndHover.desc = How long (in milliseconds) to hover over a tab or a collapsed folder while dragging before it switches or expands. Default 3000 ms (3 s).
+pref.xferNative = Use the operating system's fast copy
+pref.xferNative.desc = Copy files with the operating system's copy function (Windows: CopyFileEx). Modified dates and attributes are kept, and supported disks use block cloning or server-side copy for extra speed. When off, files are copied by reading and writing them directly.
+pref.xferThreads = Parallel jobs for folder copy (0 = auto, 1-16)
+pref.xferThreads.desc = How many files inside a folder are copied at the same time. The more small files, the bigger the gain. 0 picks a value from the storage device (SSD or network up to 8, otherwise up to 4); 1 copies one by one. Large files are always copied one at a time.
+pref.xferUnbuffered = Copy without cache from this size (MB, 0 = off)
+pref.xferUnbuffered.desc = Files at least this large are copied without the system file cache (Windows). This keeps other programs responsive while moving files far larger than memory, but the copy itself is usually slower. Default 0 (off).
 del.progress = Deleting...
 
 # 압축 미리보기(X-46)

@@ -928,6 +928,34 @@ pub const REGISTRY: &[Entry] = &[
         },
         "3000"
     ),
+    // 고속 복사 전략(dir3 신규 · NEW-007 1차 · 사용자 10-05) — 셋 다 고급: 드물게 조절하지만 영향이 크다.
+    e!(
+        "transfer.native",
+        CAT_TRANSFER,
+        "pref.xferNative",
+        "pref.xferNative.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "transfer.threads",
+        CAT_TRANSFER,
+        "pref.xferThreads",
+        "pref.xferThreads.desc",
+        Int { min: 0, max: 16 },
+        "0"
+    ),
+    e!(
+        "transfer.unbuffered_mb",
+        CAT_TRANSFER,
+        "pref.xferUnbuffered",
+        "pref.xferUnbuffered.desc",
+        Int {
+            min: 0,
+            max: 1_048_576
+        },
+        "0"
+    ),
     // ── 탭
     e!(
         "tabs.dblclick",
@@ -1677,6 +1705,9 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.group_gap",
     "toolbar.row_gap",
     "input.scroll_natural",
+    "transfer.native",
+    "transfer.threads",
+    "transfer.unbuffered_mb",
     "ui.text_gdi",
     "ui.text_hint",
     "ui.text_snap",

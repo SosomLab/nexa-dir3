@@ -164,6 +164,9 @@ impl App {
                 .tab_menu
                 .set_char_jump(self.settings.flag("menu.char_jump")),
             k if k.starts_with("typeahead.") => self.apply_typeahead(),
+            "transfer.native" | "transfer.threads" | "transfer.unbuffered_mb" => {
+                self.apply_transfer_tuning();
+            }
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {
                 let v = self
@@ -234,6 +237,22 @@ impl App {
             self.menubar.set_menus(App::build_menus(&self.settings));
         }
         self.redraw();
+    }
+
+    /// 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` → 전송 엔진의 복사 전략(다음 파일부터 적용).
+    pub(crate) fn apply_transfer_tuning(&self) {
+        ndir_ops::fastcopy::set_tuning(Self::transfer_tuning(&self.settings));
+    }
+
+    /// 설정 → 복사 전략(순수).
+    pub(crate) fn transfer_tuning(s: &Settings) -> ndir_ops::fastcopy::Tuning {
+        ndir_ops::fastcopy::Tuning {
+            native: s.flag("transfer.native"),
+            unbuffered_min: u64::try_from(s.int("transfer.unbuffered_mb")).unwrap_or(0)
+                * 1024
+                * 1024,
+            threads: usize::try_from(s.int("transfer.threads")).unwrap_or(0),
+        }
     }
 
     /// 설정 `typeahead.*` → 두 패널(모든 탭)의 목록. 종전에는 키만 있고 적용하는 곳이 없어 늘 그리드 기본값이었다.

@@ -7,10 +7,11 @@
 //! 원본과의 차이: 취소·오류 시 **부분 복사 파일을 정리**한다(원본은 잔존 — 안전 개선, journal 기록).
 
 pub mod batch_rename;
+pub mod fastcopy;
 pub mod history;
 
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -37,9 +38,6 @@ pub struct Outcome {
     pub errors: Vec<(PathBuf, String)>,
     pub canceled: bool,
 }
-
-/// 4MB 청크(원본 CopyBufferSize) — 바이트 진행 보고 단위.
-const COPY_BUF: usize = 4 * 1024 * 1024;
 
 /// 경로 끝 구분자를 제거한 잎(파일/폴더) 이름.
 pub fn leaf_name(path: &Path) -> String {
@@ -177,8 +175,8 @@ fn check_cancel(cancel: &AtomicBool) -> io::Result<()> {
     }
 }
 
-/// 파일을 청크로 복사하며 증분 바이트를 보고(원본 CopyFileWithProgress).
-/// 취소/실패 시 부분 대상 파일을 제거한다(원본 대비 안전 개선).
+/// 파일을 복사하며 증분 바이트를 보고(원본 CopyFileWithProgress). 취소/실패 시 부분 대상 파일을 제거한다(원본 대비 안전 개선).
+/// 복사 방법은 [`fastcopy`] 전략 계층이 고른다(Windows = `CopyFileExW` · 그 밖 = 읽고 쓰는 루프 — NEW-007 1차).
 pub fn copy_file_with_progress(
     src: &Path,
     dest: &Path,
@@ -186,77 +184,38 @@ pub fn copy_file_with_progress(
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> io::Result<()> {
-    let mut input = fs::File::open(src)?;
-    let mut output = if overwrite {
-        fs::File::create(dest)?
-    } else {
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(dest)?
-    };
-    let mut buf = vec![0u8; COPY_BUF];
-    let run = (|| -> io::Result<()> {
-        loop {
-            check_cancel(cancel)?;
-            let n = input.read(&mut buf)?;
-            if n == 0 {
-                return Ok(());
-            }
-            output.write_all(&buf[..n])?;
-            on_bytes(n as u64);
-        }
-    })();
-    if run.is_err() {
-        drop(output);
-        let _ = fs::remove_file(dest); // 부분 파일 정리
-    }
-    run
+    fastcopy::copy_file(
+        src,
+        dest,
+        overwrite,
+        on_bytes,
+        &|| cancel.load(Ordering::Relaxed),
+        &fastcopy::tuning(),
+    )
 }
 
 /// 폴더 재귀 복사. 열거 중 `Err` 엔트리는 **오류로 전파**한다(점검 2차 A14 — 종전 `flatten()`은
 /// SMB 일시 오류·권한 등으로 빠진 항목을 조용히 버리고 Ok를 돌려줘, 교차 볼륨 이동이 원본을
 /// 통째로 지우면 그 항목이 사본에도 원본에도 남지 않았다).
-/// `copied`가 있으면 복사를 마친 원본 경로를 **후위 순서**(자식 → 부모)로 기록한다 — 교차 볼륨
+/// `copied`가 있으면 복사를 마친 원본 경로를 **후위 순서**(파일들 → 폴더는 자식 → 부모)로 기록한다 — 교차 볼륨
 /// 이동이 복사한 항목만 골라 지우는 데 쓴다.
 fn copy_dir_with_progress(
     src: &Path,
     dest: &Path,
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
-    mut copied: Option<&mut Vec<PathBuf>>,
+    copied: Option<&mut Vec<PathBuf>>,
 ) -> io::Result<()> {
-    fs::create_dir_all(dest)?;
-    for e in fs::read_dir(src)? {
-        check_cancel(cancel)?;
-        let e = e?;
-        let p = e.path();
-        let d = dest.join(e.file_name());
-        let ft = e.file_type()?;
-        if ft.is_dir() && !is_link(&p) {
-            copy_dir_with_progress(&p, &d, on_bytes, cancel, copied.as_deref_mut())?;
-        } else if is_link(&p) && fs::metadata(&p).map(|m| m.is_dir()).unwrap_or(false) {
-            // 폴더 링크(심볼릭 링크·정션): 탐색기처럼 **대상 내용**을 복사한다. 단 ① 링크 안쪽 경로는 `copied`에 넣지 않는다 —
-            // 교차 볼륨 이동의 원본 정리(`remove_copied`)가 링크를 통해 **대상의 실제 파일을 지우지 않게**(10-03 데이터 손실 결함)
-            // 링크 경로 하나만 기록되고 정리 때 링크만 제거된다 ② 상위 폴더를 가리키는 링크(순환)는 오류로 멈춘다.
-            if let (Ok(target), Ok(here)) = (fs::canonicalize(&p), fs::canonicalize(src)) {
-                if here.starts_with(&target) {
-                    return Err(io::Error::other(format!(
-                        "링크가 상위 폴더를 가리켜 복사할 수 없음(순환): {}",
-                        leaf_name(&p)
-                    )));
-                }
-            }
-            copy_dir_with_progress(&p, &d, on_bytes, cancel, None)?;
-        } else {
-            // 원본 규약: 디렉터리 재귀 내부는 overwrite 복사
-            copy_file_with_progress(&p, &d, true, on_bytes, cancel)?;
-        }
-        if let Some(c) = copied.as_deref_mut() {
-            c.push(p);
-        }
-    }
-    Ok(())
+    // 순회 규칙(링크 · 순환 · 열거 오류 전파)과 작은 파일 병렬은 `fastcopy::copy_tree`에 있다(NEW-007 1차).
+    check_cancel(cancel)?;
+    fastcopy::copy_tree(
+        src,
+        dest,
+        on_bytes,
+        &|| cancel.load(Ordering::Relaxed),
+        copied,
+        &fastcopy::tuning(),
+    )
 }
 
 /// 교차 볼륨 이동의 원본 정리 — `copied`(후위 순서)에 적힌 항목만 지우고 마지막에 빈 `src`를

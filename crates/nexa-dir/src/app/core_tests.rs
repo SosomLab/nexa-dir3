@@ -7119,3 +7119,19 @@ fn double_and_triple_click_select_text() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 고속 복사 설정(NEW-007 1차): 기본 = OS 복사 켬 · 동시 작업 자동(0) · 캐시 없이 복사 끔 — 설정값이 엔진 조절값으로 옮겨진다(MB → 바이트).
+#[test]
+fn transfer_tuning_follows_settings() {
+    let (mut app, _dir) = fixture("xfertune");
+    let t = App::transfer_tuning(&app.settings);
+    assert!(t.native && t.threads == 0 && t.unbuffered_min == 0, "{t:?}");
+    let _ = app.settings.set("transfer.native", "off");
+    let _ = app.settings.set("transfer.threads", "6");
+    let _ = app.settings.set("transfer.unbuffered_mb", "512");
+    let t = App::transfer_tuning(&app.settings);
+    assert!(
+        !t.native && t.threads == 6 && t.unbuffered_min == 512 * 1024 * 1024,
+        "{t:?}"
+    );
+}
