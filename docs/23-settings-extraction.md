@@ -116,6 +116,7 @@
 | 타입어헤드 켜기/끄기(종전 = 늘 켜짐) · 유지 시간 1000 → 2000 ms | nexa-grid VirtualRows(nexa-ui 157) · `app/settings.rs::apply_typeahead` | 목록 글자 입력 이동 여부 · 입력 유지 시간(nexa-sql 기준 2000 · 상한 60000) | `typeahead.reset_ms`(기존 · 기본값 변경 · dir2 가져온 1000은 변경분으로 유지) | 설정(취향) | `typeahead.enabled`(신규 · 기본 on · NEW-032) | ✅ 10-05 §35(adea995) |
 | 행 아이콘 늘 켜짐 · 메뉴 아이콘 없음 | `App::icon_switches` · `app/menu_icons.rs` | 행 아이콘 · 메뉴 아이콘 켜기/끄기(성능 향상 모드가 강제 끔 · 저장값 유지) | — | 설정(취향 · DEPENDS `perf.boost` Eq off) | `list.row_icons` · `menu.icons`(기본 on · NEW-033/034) | ✅ 10-05 §38(d4aca0d) |
 | 폴더 크기 표시 없음(dir2 · dir3 종전) | `app/dirsize.rs` · `dockinfo.rs` | 정보 도크에서 폴더 크기를 자동으로 잴지 | — | 설정(취향 · 기본 on · DEPENDS `perf.boost` Eq off) | `dock.folder_size`(NEW-037) | ✅ 10-05 §54(85e405d) |
+| 체크섬 없음(dir2 · dir3 종전) | `app/checksum.rs` · `hash_win.rs` · ndir-ops `hash.rs` | 체크섬 창이 기본으로 계산할 알고리즘 목록 | — | 고급(드문 조절 · 기본 `crc32,md5,sha1,sha256` · SHA-512 추가 가능) | `hash.algos`(NEW-038) | ✅ 10-05 §55(0953f27) |
 | 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(취향 · 기본 on · 끄면 dir2 순서) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |

@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **체크섬 1차**(NEW-038 · 0953f27 · 직접 구현 5종 · 체크섬 창 = 진행 · 비교 · 복사 · 작업 슬롯 1 · `hash.algos`) · 85e405d CI ✓ → [§55](journal/2026-10-05.md)
 - **폴더 크기 계산 1차**(NEW-037 · 85e405d · 정보 도크 자동 · 점진 표시 · 감시/전송 뒤 무효화 · `dock.folder_size`) · 체크섬 방침 = 창 안 진행 막대 + 직접 구현 5종 → [§54](journal/2026-10-05.md)
 - **폴더 크기 설계 결정**(T-166 · 정보 도크 자동 · `DirSizes` · 감시 무효화 · `dock.folder_size`) · docs/01 통지 구조 정정(`EventLoopProxy` 미사용) · T-173 → [§53](journal/2026-10-05.md)
 - **폴더 크기 사전 조사**(T-166 · dir2 없음 · 재사용 틀 = 전송 `TransferShared` + 단일 슬롯 · nexa-ui 진행 = `SegProgress`뿐 · ⚠ `EventLoopProxy` 미사용 = 문서 서술과 다름) · c2999b7 CI ✓ → [§52](journal/2026-10-05.md)

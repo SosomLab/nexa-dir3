@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 26 | 8 | 0 | 0 | 0 |
+| NEW | 43 | 43 | 27 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2511 | 925 | 762 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2512 | 925 | 762 | 0 | 0 |
 
 ## 행
 
@@ -265,7 +265,7 @@
 | NEW-035 · NATURAL-SORT | 자연 정렬 — 숫자 구간을 값으로 비교(file2 < file10 · 대소문자 무시 옵션) · 설정 `list.sort_natural`(기본 on · 끄면 dir2 글자 순) · 바꾸면 열린 목록 재열람 | ndir-tree `cmp_natural` · `set_natural_sort` · `app/settings.rs::apply_natural_sort` | T1 · T3 + 실기 | `natural_compare_orders_numbers_by_value` · `natural_sort_setting_defaults_on` | ✅ | 10-05 §47(b54ce4f) · 실기 = 숫자 순 · 끄면 종전 순서 · §51 c2999b7: 도구 모음 토글 `view.natural_sort` · 일괄 이름 변경 미리보기도 따름 · 시험 `natural_sort_command_toggles_setting_and_toolbar_check` · order-editor.scn |
 | NEW-036 · SELECT-INVERT | 선택 반전 — 명령 `edit.select_invert`(편집 메뉴 · Ctrl+Shift+A / Cmd+Shift+A · 단축키 설정 `key.edit.select_invert`) · 보이는 행 기준(안 보이던 선택은 해제) | ndir-tree `invert_selection_visible` · `panel.rs::invert_selection` · `filelist.rs::invert_selection` · `app/menus.rs`(MENU_IDS) | T3 + 실기 | `invert_selection_flips_visible_rows` | ✅ | 10-05 §48(f214492) · 실기 = 메뉴 · 단축키 · 보이는 행 기준 |
 | NEW-037 · FOLDER-SIZE | 폴더 크기 계산 1차 — 정보 도크에 폴더 1개가 보이면 작업 스레드가 재고 점진 표시(계산 중 → 합계 · 파일/폴더 수 · 읽지 못한 폴더 표시) · 선택이 바뀌면 이전 작업 취소 · 경로별 캐시 + 감시 `stale`(자신/안쪽/조상) · 전송/삭제/이름 변경 뒤 전체 무효화 · 링크/재분석 지점 미추적 · 설정 `dock.folder_size` | `app/dirsize.rs::{DirSizes, walk, stale, size_lines}` · `dockinfo.rs` · `app/event_loop.rs`(OPS 틱) · `app/watch.rs` | T1 · T3 + 실기 | `walk_counts_and_cancels` · `stale_rules` · `request_tick_cache_and_invalidate` · T3 `dock_shows_folder_size_after_worker_finishes` | ✅ | 10-05 §54(85e405d) · 남김 = 크기 열 표시 · 수동 명령 · 네트워크/큰 폴더 제외 옵션(T-166) |
-| NEW-038 · CHECKSUM | 체크섬 보기 · 복사(DR-8 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-167 · 요건 §50: 별도 스레드 · 진행 확인/취소 · 작업 슬롯 1개(다른 요청 제한) · 시험 = 표준 벡터 + 두 번째 요청 거부 |
+| NEW-038 · CHECKSUM | 체크섬 1차 — CRC32 · MD5 · SHA-1 · SHA-256 · SHA-512 직접 구현(파일 한 번 읽기 · 여러 해시 동시) · 체크섬 창(모덜리스 · 진행 막대 + 속도 · 값 행 클릭 복사 · 모두 복사 · 비교 입력 자동 대조 · Esc/취소) · 작업 스레드 1 + **슬롯 1**(두 번째 요청 거부 = 상태줄 + 토스트) · 우클릭 "체크섬…"(파일 1개) · 설정 `hash.algos` | ndir-ops `hash.rs` · `hash_win.rs` · `app/checksum.rs` · `app/ctxmenu.rs` · `app/windows.rs` | T1 · T3 + 실기 | `known_vectors` · `hex_normalize_and_guess` · `hash_file_streams_and_cancels` · T3 `checksum_window_computes_in_worker_and_refuses_second_job` · `results_and_compare_without_window` | ✅ | 10-05 §55(0953f27 · 요건 §50) · 남김 = 여러 파일/폴더 일괄 · `.sha256`/`.md5` 검증 파일 읽기·쓰기 · 성능 측정(docs/24식)(T-167) |
 | NEW-039 · FAVORITES | 즐겨찾기(런처 통합 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-168 |
 | NEW-040 · ARCHIVE-OPS | 압축 풀기 · 압축 안 탐색 · 만들기 | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-169 |
 | NEW-041 · DUP-FIND | 중복 찾기(크기 → 부분 해시 → 전체 해시) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-170 |
