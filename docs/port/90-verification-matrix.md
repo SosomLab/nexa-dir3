@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 29 | 9 | 0 | 0 | 0 |
+| NEW | 43 | 43 | 31 | 9 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2514 | 926 | 762 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2516 | 926 | 762 | 0 | 0 |
 
 ## 행
 
@@ -269,8 +269,8 @@
 | NEW-039 · FAVORITES | 폴더 즐겨찾기 1차 — 별도 목록(설정 `nav.favorites` · 최대 64) · `nav.fav_toggle`(Ctrl+D · 현재 폴더 넣기/빼기 · 내 PC 제외 · 상태줄 안내) · `nav.favorites`(Ctrl+B · 경로 바 아래 보조 메뉴 `aux.fav:<n>` · 없는 폴더 회색 · 끝에 추가/제거) · 이동 메뉴 2항목 · 별 아이콘 | `app/favorites.rs` · `app/menus.rs` · `app/statusline.rs` · `app/menu_icons.rs` · `ndir-settings` commands/registry | T1 · T3 + 실기 | `favorites_parse_encode_round_trip` · T3 `favorites_toggle_menu_and_navigate` | ✅ | 10-05 §57(704c399) · 남김 = 이름 붙이기 · 순서 편집(`open_order_editor` 재사용) · 그룹/구분선 · 내 PC 섹션 · 최근 폴더 구획 · 런처 통합 여부(사용자 결정 · B로 1차)(T-168) |
 | NEW-040 · ARCHIVE-OPS | 압축 풀기 1차 — zip(Store/Deflate · Zip64 · SFX 보정) · tar(ustar · GNU 긴 이름 · PAX) · gz(FNAME) · tgz · 자체 inflate · zip slip 차단 · 링크 항목 미생성 · 수정 시각 · 취소 · 항목 1 GiB 상한 · 충돌 = 건너뜀 · 작업 스레드 1(전송과 같은 슬롯) · 진행 창 재사용 · 우클릭 "압축 풀기 ▸ 여기에 / <이름> 폴더에" | ndir-vfs `archive/extract.rs` · `app/extract.rs` · `app/ctxmenu.rs` | T1 · T3 + 실기 | `inflate_vectors`(zlib 벡터) · `zip_store_and_deflate_extract_safely` · `tar_gzip_and_tgz_extract` · `dest_folder_rules` · T3 `extract_archive_into_named_folder` | 🚧 | 10-05 §59(89ae2e7) · 남김 = 7z/rar/cab/bz2/xz 코덱 · 암호 zip · 충돌 질문 · CRC 검증 · 스트리밍 inflate(1차 = 항목 1 GiB 상한) · 압축 만들기 · 압축 안 탐색(T-169) |
 | NEW-041 · DUP-FIND | 중복 파일 찾기 1차 — 크기 → 앞 64 KiB CRC32 → SHA-256 · 0바이트 제외 · 결과 창(묶음 헤더 접기 · ✓ 열/Space · 보존 규칙 최신/오래된/얕은 경로/첫 번째 · 묶음 전부 표시 방지 · 휴지통으로 보내기 · 요약) · 작업 스레드 1 + 슬롯 1 · 닫기 = 취소 · 우클릭 "중복 파일 찾기…" | ndir-ops `dupes.rs::{find, keep_index, DupGroup}` · `dupes_win.rs` · `app/dupes.rs` · `trash_checked` | T1 · T3 + 실기 | `finds_groups_by_size_head_and_full_hash` · `keep_rules` · T3 `duplicate_finder_groups_and_marks` · `marks_follow_keep_rule_and_guard_whole_groups` | ✅ | 10-05 §61(c84ff2d) · 기본값 사용자 확인 대기 · 남김 = 하드링크 대체 · 이동 · 영구 삭제 · 하위 포함/필터 옵션 · 패널로 보내기 · 이름/크기 기준 모드(T-170) |
-| NEW-042 · FOLDER-COMPARE | 폴더 비교(한쪽만 · 다름 · 같음) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-171 |
-| NEW-043 · SYNC | 동기화(미러 · 양방향 · 차등 · 모의 실행 · NEW-007 ③) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-172 |
+| NEW-042 · FOLDER-COMPARE | 폴더 비교 1차 — 두 패널 폴더를 크기+시각(2초 허용 · DST 옵션)으로 재귀 비교 · [내용 비교](SHA-256) · `Verdict` 7종(▷ ◁ = → ← ≠ ✕) · 결과 창 한 표 · 필터 · 비교 워커(취소) · 배경 우클릭 "반대 패널과 폴더 비교…"(두 패널 모드) | ndir-ops `compare.rs::{scan, judge, compare, Verdict}` · `compare_win.rs` · `app/compare.rs` | T1 · T3 + 실기 | `judge_rules` · `compare_and_plan_and_apply` · T3 `compare_two_folders_and_sync_left_to_right` · `filter_summary_and_targets` | ✅ | 10-05 §63(a39d3a1) · 기본값 사용자 확인 대기 · 남김 = 패널 안 표시 · 기준 기본값 설정(T-171) |
+| NEW-043 · SYNC | 동기화 1차 — 비교 결과에서 [→][←][⇄](선택 행/전부) · 한 방향 = 원본 기준 · 양쪽 = 새로운 쪽 · Differ/TypeMismatch = 사람에게(건너뜀) · 미러 삭제 = 계획에만 · 복사 워커(전송/풀기와 상호 배제 · 진행 창 재사용) · 끝나면 자동 재비교 | ndir-ops `compare.rs::{plan, apply_copies, SyncPlan, Direction}` · `app/compare.rs` · `compare_win.rs` | T1 · T3 + 실기 | `compare_and_plan_and_apply` · `compare_two_folders_and_sync_left_to_right` | ✅ | 10-05 §63(a39d3a1 · NEW-007 ③ 1차) · 남김 = 미러 삭제(휴지통) · 양방향 Differ 질문 · 항목별 방향 · 작업 저장(T-172) |
 | T-96 · CONFLICT-INLINE | 덮어쓰기 충돌 질문을 진행 창 안에서(4버튼 · Enter = 덮어쓰기 · Esc/X = 취소 · 진행 창 없으면 종전 대화상자) · 완료 [닫기 (N)] = 강조(기본) 버튼 | `progress_win.rs::{set_conflict, take_conflict_choice, pick_conflict}` · `app/dialogs.rs::conflict_ask` · `app/ops.rs::ops_tick` · nexa-ui 144 `Button::tone` | T2(모듈) + 실기 | progress_win 모듈 시험(질문 · 답 · 1회성 · 거두기) | 🚧 | 10-04 §21 · §22 첫 질문도 인라인(판정 = `is_active() && window` · 657679c 결함 수정 · 494a9f8) · T3는 창이 없어 대화상자 길 · **실기 판정 필수**(같은 이름 3개 복사 → 진행 창 안 질문 3번 · 막대 유지 · 파란 [닫기]) · T-96 나머지(카드형 · 상태바 진행 칸 · 완료 토스트) 후속 |
 | T-134 · I18N-RELABEL | 언어 전환 때 일회성 라벨 갱신(편집 메뉴 · 설정 창 · 도크 · 네비 · 보조 창 6종) · 하드코딩 문자열 일부 · 낡은 문구 | `main.rs::install_ctl_labels` · `App::relabel` · `Panel::relabel` · `*_win.rs::relabel` | T2 · T3 | `relabel_refreshes_one_time_labels` · keys_win/prefs_win relabel 시험 | 🚧 | 10-04 §13 · §15 대체 언어 = 시스템 언어 → 영어(`load_with_system` · `fallback_is_system_language_then_english`) · 남은 것 = 자가 점검 창 · 라이선스 문구 · 허용값 · unsupported · Command Prompt 비교 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 |
 | WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |
