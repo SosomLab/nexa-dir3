@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **메모리 점검 1차**(사용자 10-06 · 격리 비교 = 새 기동 차이 작음 · WS 2/3 = 글꼴 mmap · 실사용 Private 57 MB 미반환 · 핸들 +450 · dir2 재니터 트림 없음 · 개선안 A~I · `mem.dump` 8b45b33 · 현지 시각 표시 e8ec834) → [§72](journal/2026-10-05.md)
 - **v0.23.0 릴리스 공개**(3차 성공 · 1차 = 셸 스크립트 실행 비트 18b9eac · 2차 = 창 서브시스템 + pwsh 파이프 panic bd801ff · winget PR #447018/#447019 · choco 검수 대기 · brew 29bf953 · pkg.sosomlab.com 71741e2 · T-178 CLI 보조 exe) → [§70](journal/2026-10-05.md)
 - **배포 준비 완료**(T-160 · 64fd96c · winget/choco/brew/linux-repo 파이프라인 · render 게이트 4종 · 사용자 준비물 대기 · choco 제거 인자 실측 반영 afa18c3) · 9b3b0f0 CI ✓ → [§69](journal/2026-10-05.md)
 - **키 이동 디바운스**(T-177 · 9b3b0f0 · 도크 갱신 60 ms · 마지막 선택만) · **배포 재개 사전 조사**(T-160 · 기준 nexa-clip · 조치 17건 · 시크릿 3 + 변수 2 등록 필요 · Inno → MSI 전환) → [§68](journal/2026-10-05.md)
