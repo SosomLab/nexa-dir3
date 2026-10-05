@@ -44,6 +44,7 @@
 | NEW-033 | **행 아이콘 스위치**(사용자 10-05 "성능 향상 모드에서 파일 이름 앞 아이콘이 꺼지지 않는다") — `list.row_icons`(파일 목록 · Bool · 기본 on) · `perf.boost` on이면 강제 끔(저장값 유지) | — | `App::icon_switches` · `Panel::set_row_icons` · `filelist.rs::set_icons` | T3 `performance_mode_turns_icons_off` · 실기 | T-99 | ✅ 10-05 §38(d4aca0d · 화면 확인 대기) |
 | NEW-034 | **메뉴 항목 아이콘**(사용자 10-05 "우클릭 · 풀다운 · 보조 메뉴에 OS 정보를 활용한 아이콘") — `menu.icons`(컨텍스트 메뉴 · Bool · 기본 on · `perf.boost` on이면 끔) · Windows = 아이콘 글꼴(Fluent/MDL2) 글리프 · 폴백 = nexa-ctl 코드 도형 · 우클릭/보조/메뉴 바/입력 칸 편집 메뉴 | — | `app/menu_icons.rs` · `set_edit_menu_decor` | T1 `spec_table_and_fallback` · 실기 | T-99 | ✅ 10-05 §38(d4aca0d · macOS/Linux 아이콘 계층 후속 · 화면 확인 대기) |
 | NEW-035 | **자연 정렬**(사용자 10-05 "인기 있거나 필수인 기능" · T-163 추천 2번 · dir2 = 글자 순) — 숫자 구간을 값으로 비교(file2 < file10) · 설정 `list.sort_natural`(파일 목록 · Bool · 기본 on = 탐색기 · Finder 기본 동작 · 끄면 dir2 순서) · 바꾸면 열린 목록 재열람 | — | ndir-tree `cmp_natural` · `set_natural_sort` · `app/settings.rs::apply_natural_sort` | T1 `natural_compare_orders_numbers_by_value` · T3 `natural_sort_setting_defaults_on` · 실기 | T-163 | ✅ 10-05 §47(b54ce4f · 화면 확인 대기) |
+| NEW-036 | **선택 반전**(사용자 10-05 "인기 있거나 필수인 기능" · T-163 추천 1번 · dir2에 없음) — 명령 `edit.select_invert`(편집 ▸ 선택 반전 · Ctrl+Shift+A / macOS Cmd+Shift+A · `key.edit.select_invert`) · 보이는 행 기준(안 보이던 선택은 해제) | — | ndir-tree `invert_selection_visible` · `panel.rs`/`filelist.rs` `invert_selection` · `app/menus.rs` | T3 `invert_selection_flips_visible_rows` · 실기 | T-163 | ✅ 10-05 §48(f214492 · 화면 확인 대기 · 패턴 선택/해제는 후속) |
 
 ## 2. 관리 규칙
 
