@@ -23,6 +23,16 @@
 
 ---
 
+## 10-05 172차 — 배포 요청(T-160) 사전 분석
+
+- **한 일**: TODO T-160 등재 · ①~④ 사전 분석(nexa-clip 채널 · linux-repo 규칙 · dir3 계획 · dir2 게시 현황 · 릴리스 체크리스트) 개발 세션 전달.
+- **지금 상태**: 사용자 인스턴스 PID 34240(개발 세션 재시작). 작업 트리 = 이 기록뿐.
+- **걸린 것(사용자 결정)**: winget/choco 패키지 ID(dir2와 같은 ID vs 새 ID) · 새 버전 번호(지금 0.23.0) · 태그 · Release 공개 · 외부 게시 승인 · 시크릿/변수 등록(`LINUX_REPO_DISPATCH_TOKEN` · `WINGET_TOKEN` · `CHOCO_API_KEY` · `TAP_TOKEN` · `WINGET_PUBLISH` · `CHOCO_PUSH`).
+
+→ [journal/2026-10-05 §40](journal/2026-10-05.md)
+
+---
+
 ## 10-05 171차 — 수식키 남은 3건(T-153) · 회차 마감
 
 - **한 일**: 512021e(배경 메뉴 Shift 확장 · 터미널 Shift+우클릭 · 터미널 Ctrl+V · gate full 502/0) · 매트릭스 MODKEYS 행 · 맨 위 실기 ⓘⓙ · "다음 할 일" = 다음 회차 후보 8묶음.
