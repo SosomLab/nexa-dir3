@@ -27,6 +27,15 @@ pub(crate) fn hangul_key(c: char, hangul: bool) -> char {
     }
 }
 
+/// 이어 누른 횟수의 다음 값(순수): 시간 · 자리 조건(`chained`)이 맞으면 1 → 2 → 3, 아니면(또는 3 뒤에는) 1.
+pub(crate) fn next_click_count(prev: u8, chained: bool) -> u8 {
+    if chained && (1..3).contains(&prev) {
+        prev + 1
+    } else {
+        1
+    }
+}
+
 /// 입력기가 준 글이 **어디로 가는가**(순수 · MC/DC): 글 편집 필드(경로 바 편집 · 이름 바꾸기) → 터미널 → 목록(타입어헤드) 순으로
 /// 먼저 맞는 곳. 대화상자 · 열린 메뉴가 있으면 메뉴/대화상자 몫이라 여기서는 `Other`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +85,57 @@ impl App {
             p.rows().is_renaming(),
             self.term_focused().is_some(),
         )
+    }
+
+    /// **글 영역의 더블/트리플 클릭 선택**(사용자 10-05 — 종전에는 정보 · 미리보기 · 터미널에서 더블클릭해도 선택되지 않았다):
+    /// 더블클릭 = 그 자리 단어 · 트리플 클릭 = 그 줄. 대상 = 터미널 격자(TUI 마우스 모드면 셸 몫 — Shift면 로컬) ·
+    /// 도크의 정보 · 미리보기 글. 처리했으면 `true`(그 사건은 다른 곳으로 보내지 않는다).
+    pub(crate) fn text_click_select(&mut self, ev: &InputEvent) -> bool {
+        let (x, y, shift, count) = match *ev {
+            InputEvent::DoubleClick { x, y, shift, .. } => (x, y, shift, 2),
+            InputEvent::MouseDown { x, y, shift, .. } if self.click_count == 3 => (x, y, shift, 3),
+            _ => return false,
+        };
+        if self.dlg.is_open() || self.tab_menu.is_open() || self.menubar.is_open() {
+            return false;
+        }
+        let mut inv = Invalidations::default();
+        if let Some(i) = self.term_hit_at(x, y) {
+            if !self.terms[i].started()
+                || (!shift && self.terms[i].mouse_report(x, y, 0, true).is_some())
+            {
+                return false;
+            }
+            self.set_term_focus(Some(i), &mut inv);
+            let done = if count == 2 {
+                self.terms[i].select_word_at(x, y)
+            } else {
+                self.terms[i].select_line_at(x, y)
+            };
+            if done {
+                self.redraw();
+            }
+            return done;
+        }
+        for i in 0..2 {
+            let d = &mut self.docks[i];
+            if d.bounds().h <= 0
+                || !d.content_rect().contains(Point { x, y })
+                || !d.text_selectable()
+            {
+                continue;
+            }
+            let done = if count == 2 {
+                d.select_word_at(x, y, &mut inv)
+            } else {
+                d.select_line_at(x, y, &mut inv)
+            };
+            if done {
+                self.redraw();
+            }
+            return done;
+        }
+        false
     }
 
     /// 메인 창에 OS 입력기를 붙일 것인가 — 시스템 입력기 모드면 **늘**(사용자 10-05: 종전에는 한 번도 붙이지 않아 경로 바 ·
@@ -218,8 +278,11 @@ impl App {
                             && (lx - x).abs() <= 4
                             && (ly - y).abs() <= 4
                     });
-                    if double {
-                        self.last_click = None;
+                    // 이어 누른 횟수: 2번째 = 더블클릭 사건 · 3번째 = 트리플(누름 사건으로 보내되 `click_count` = 3 —
+                    // 글 영역은 줄 선택으로 받는다 · `text_click_select`) · 그 뒤는 다시 1부터.
+                    self.click_count = next_click_count(self.click_count, double);
+                    self.last_click = (self.click_count < 3).then_some((now, x, y));
+                    if self.click_count == 2 {
                         InputEvent::DoubleClick {
                             x,
                             y,
@@ -227,7 +290,6 @@ impl App {
                             primary: self.primary,
                         }
                     } else {
-                        self.last_click = Some((now, x, y));
                         InputEvent::MouseDown {
                             x,
                             y,

@@ -455,6 +455,53 @@ impl TermView {
         true
     }
 
+    /// 한 줄의 칸별 글자 — 단어 경계 계산용. 넓은 글자(한글 등 두 칸)의 뒤 칸(`'\0'`)은 **앞 글자와 같은 글자**로 채운다
+    /// (그래야 한글 낱말이 칸마다 끊기지 않는다) · 그 밖의 빈 칸 = 빈칸.
+    fn line_cells(&self, line: usize) -> Vec<char> {
+        let mut out: Vec<char> = Vec::with_capacity(self.screen.cols());
+        for cell in self.screen.line_at(line) {
+            let ch = match cell.ch {
+                '\0' => out.last().copied().unwrap_or(' '),
+                c => c,
+            };
+            out.push(ch);
+        }
+        out.resize(self.screen.cols().max(out.len()), ' ');
+        out
+    }
+
+    /// **단어 선택**(더블클릭): 좌표의 칸이 든 같은 종류 글자 구간(낱말 · 빈칸 · 문장 부호 — 도크 글과 같은 규칙)을 선택한다.
+    /// 빈칸 위(낱말이 아닌 곳)는 선택하지 않는다 — 선택했으면 `true`.
+    pub(crate) fn select_word_at(&mut self, x: i32, y: i32) -> bool {
+        if self.screen.line_count() == 0 {
+            return false;
+        }
+        let (line, col) = self.cell_at(x, y);
+        let cells = self.line_cells(line);
+        match nexa_explorer::dock::word_span(&cells, col) {
+            Some((a, b))
+                if nexa_explorer::dock::char_class(cells[col])
+                    != nexa_explorer::dock::CharClass::Space =>
+            {
+                self.sel = Some(((line, a), (line, b - 1)));
+                self.drag = false;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// **줄 선택**(트리플 클릭): 좌표의 줄 전체.
+    pub(crate) fn select_line_at(&mut self, x: i32, y: i32) -> bool {
+        if self.screen.line_count() == 0 {
+            return false;
+        }
+        let (line, _) = self.cell_at(x, y);
+        self.sel = Some(((line, 0), (line, self.screen.cols().saturating_sub(1))));
+        self.drag = false;
+        true
+    }
+
     pub(crate) fn mouse_up(&mut self) {
         self.drag = false;
         // 클릭만(앵커 == 끝) = 선택 없음.
@@ -1028,5 +1075,60 @@ mod tests {
         assert_eq!(t.view_off, 0, "바닥 아래로는 가지 않는다");
         t.mouse_up();
         assert!(t.sel.is_some(), "끌어서 생긴 선택은 남는다");
+    }
+
+    /// 더블클릭 = 단어 · 트리플 클릭 = 줄(사용자 10-05): 낱말 위 = 그 낱말 · 문장 부호 = 이어진 부호 · 빈칸 = 선택 없음 · 줄 = 그 줄 전체.
+    #[test]
+    fn double_click_selects_word_and_triple_selects_line() {
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        let shell = p.shell.default_shell();
+        assert!(t.start(&p, shell, Path::new("."), 40, 5));
+        let style = TermStyle::default();
+        let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
+        let th = Theme::dark();
+        // RecordCtx 글자 폭 7 · 줄 높이 20 · 격자 원점 (2, 1).
+        t.paint(
+            &mut rec,
+            Rect::new(0, 0, 300, 100),
+            &th,
+            &TermPalette::dark(),
+            false,
+            20,
+            &style,
+        );
+        t.screen.feed("ls -la report_v2.txt\r\nnext line here");
+        let at = |col: i32, row: i32| (2 + 7 * col + 3, 1 + 20 * row + 5);
+        // "report_v2" 위(열 8) = 낱말(`_` 포함 · `.` 앞까지).
+        let (x, y) = at(8, 0);
+        assert!(t.select_word_at(x, y));
+        assert_eq!(t.selected_text().as_deref(), Some("report_v2"));
+        // "-la"의 '-' 위 = 부호 하나.
+        let (x, y) = at(3, 0);
+        assert!(t.select_word_at(x, y));
+        assert_eq!(t.selected_text().as_deref(), Some("-"));
+        // 빈칸 위 = 선택하지 않는다(기존 선택 유지).
+        let (x, y) = at(2, 0);
+        assert!(!t.select_word_at(x, y));
+        assert_eq!(t.selected_text().as_deref(), Some("-"));
+        // 둘째 줄 낱말 · 줄 전체.
+        let (x, y) = at(6, 1);
+        assert!(t.select_word_at(x, y));
+        assert_eq!(t.selected_text().as_deref(), Some("line"));
+        assert!(t.select_line_at(x, y));
+        assert_eq!(
+            t.selected_text()
+                .map(|s| s.trim_end().to_string())
+                .as_deref(),
+            Some("next line here")
+        );
+        // 뗌 = 선택 유지(끌기 아님).
+        t.mouse_up();
+        assert!(t.sel.is_some());
+        // 한글(두 칸 글자) 낱말도 통째로.
+        t.screen.feed("\r\n보고서 최종.txt");
+        let (x, y) = at(2, 2);
+        assert!(t.select_word_at(x, y));
+        assert_eq!(t.selected_text().as_deref(), Some("보고서"));
     }
 }

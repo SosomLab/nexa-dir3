@@ -7035,3 +7035,87 @@ fn ime_text_reaches_path_bar_rename_and_typeahead() {
     app.startup_cmd("ui.press:escape");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 글 영역의 더블/트리플 클릭(사용자 10-05): 도크 정보 글에서 더블클릭 = 단어 · 트리플 = 줄 · 터미널도 같다 · 목록의 더블클릭(열기)은
+/// 그대로 · 이어 누른 횟수 규칙.
+#[test]
+fn double_and_triple_click_select_text() {
+    use crate::app::input::next_click_count;
+    assert_eq!(next_click_count(0, false), 1);
+    assert_eq!(next_click_count(1, true), 2);
+    assert_eq!(next_click_count(2, true), 3);
+    assert_eq!(next_click_count(3, true), 1, "트리플 뒤 = 다시 1");
+    assert_eq!(next_click_count(2, false), 1, "늦거나 멀면 1");
+    let (mut app, dir) = fixture("multiclick");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.update_status();
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    // 도크 0 = 정보(첫 줄 "Name: a.txt"). RecordCtx 글자 폭 7.
+    let cr = app.docks[0].content_rect();
+    assert!(app.docks[0].text_selectable(), "정보 글");
+    let (x, y) = (cr.x + 8 + 7 * 7, cr.y + 6);
+    let dbl = InputEvent::DoubleClick {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    };
+    assert!(app.text_click_select(&dbl), "더블클릭 = 단어 선택");
+    let word = app.docks[0].selected_text().expect("word");
+    assert!(!word.contains(' ') && !word.is_empty(), "{word}");
+    // 트리플 = 그 줄 전체.
+    app.click_count = 3;
+    let down3 = InputEvent::MouseDown {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    };
+    assert!(app.text_click_select(&down3), "트리플 = 줄 선택");
+    let line = app.docks[0].selected_text().expect("line");
+    assert!(
+        line.starts_with("Name:") && line.contains("a.txt"),
+        "{line}"
+    );
+    assert!(line.len() > word.len());
+    // 보통 누름(횟수 1)은 가로채지 않는다 · 목록 위 더블클릭도 가로채지 않는다(열기는 그대로).
+    app.click_count = 1;
+    assert!(!app.text_click_select(&down3));
+    let lb = app.panels[0].rows().bounds();
+    assert!(!app.text_click_select(&InputEvent::DoubleClick {
+        x: lb.x + 40,
+        y: lb.y + 60,
+        shift: false,
+        primary: false,
+    }));
+    // 터미널: 더블 = 단어 · 트리플 = 줄.
+    app.startup_cmd("dock.kind:2");
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    app.startup_cmd("term.send:hello world\\r");
+    app.term_tick(100);
+    let cr = app.docks[0].content_rect();
+    let (tx, ty) = (cr.x + 2 + 7 + 3, cr.y + 6);
+    let ok = app.text_click_select(&InputEvent::DoubleClick {
+        x: tx,
+        y: ty,
+        shift: false,
+        primary: false,
+    });
+    if ok {
+        assert_eq!(app.terms[0].selected_text().as_deref(), Some("hello"));
+        app.click_count = 3;
+        assert!(app.text_click_select(&InputEvent::MouseDown {
+            x: tx,
+            y: ty,
+            shift: false,
+            primary: false,
+        }));
+        assert!(app.terms[0]
+            .selected_text()
+            .is_some_and(|s| s.contains("hello world")));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

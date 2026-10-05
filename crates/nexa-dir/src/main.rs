@@ -208,6 +208,8 @@ struct App {
     pressed: Option<Area>,
     /// 더블클릭 합성(winit은 더블클릭 사건이 없다 · dir2 Win32 `WM_LBUTTONDBLCLK` 대응): 마지막 좌클릭 시각·자리.
     last_click: Option<(Instant, i32, i32)>,
+    /// 같은 자리에서 이어 누른 횟수(1 = 클릭 · 2 = 더블 · 3 = 트리플 — `ctl_event`가 센다 · 트리플 뒤에는 다시 1부터).
+    click_count: u8,
     /// 느린 재클릭 = 이름 바꾸기(`app/slowclick.rs`): 직전 행 클릭 · 뗄 때 확정할 예약(누른 자리) · 지연 중인 대상(패널, 경로, 발화 시각).
     slow_click: Option<app::slowclick::SlowClick>,
     rename_on_up: Option<(i32, i32)>,
@@ -550,6 +552,7 @@ impl App {
             pending_chord: None,
             pressed: None,
             last_click: None,
+            click_count: 0,
             slow_click: None,
             rename_on_up: None,
             rename_due: None,

@@ -454,7 +454,10 @@ impl ApplicationHandler<Wake> for App {
             WindowEvent::Ime(_) => {}
             _ => {
                 if let Some(ev) = self.ctl_event(&event) {
-                    self.route(ev);
+                    // 글 영역의 더블/트리플 클릭 = 단어/줄 선택(처리했으면 여기서 끝).
+                    if !self.text_click_select(&ev) {
+                        self.route(ev);
+                    }
                 }
             }
         }
