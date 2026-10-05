@@ -88,7 +88,7 @@ pub(crate) fn extract_summary(rep: &Report) -> String {
 impl App {
     /// `ctx.extract_here` / `ctx.extract_to` — 풀기 시작(전송 · 다른 풀기가 진행 중이면 거부).
     pub(crate) fn start_extract(&mut self, archive: &Path, here: bool) {
-        if self.transfer.is_some() || self.extract_job.is_some() {
+        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("ops.busy"), &mut inv);
             self.redraw();

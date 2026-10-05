@@ -2,6 +2,7 @@
 
 pub(crate) mod bulk;
 pub(crate) mod checksum;
+pub(crate) mod compare;
 pub(crate) mod dialogs;
 pub(crate) mod dirsize;
 pub(crate) mod dnd;

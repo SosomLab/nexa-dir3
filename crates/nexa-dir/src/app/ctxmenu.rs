@@ -547,9 +547,12 @@ impl App {
             }
         };
         let mut items = self.bg_menu_items(Some(&shell));
-        // 중복 파일 찾기(T-170 · dir3 신규) — 현재 폴더 안에서.
+        // 중복 파일 찾기(T-170 · dir3 신규) — 현재 폴더 안에서 · 폴더 비교(T-171) — 두 패널일 때 반대 패널과.
         items.push(CtxItem::Separator);
         items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
+        if self.dual {
+            items.push(CtxItem::item("ctx.compare_panels", tr("ctx.comparePanels")));
+        }
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
@@ -793,6 +796,7 @@ impl App {
                     self.open_checksum(&p);
                 }
             }
+            "ctx.compare_panels" => self.compare_panels(),
             "ctx.find_dupes" => {
                 let dirs: Vec<PathBuf> = self.panels[panel]
                     .selected_paths()

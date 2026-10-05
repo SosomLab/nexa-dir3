@@ -20,6 +20,7 @@ mod clipboard;
 #[cfg(all(unix, not(target_os = "macos")))]
 #[allow(dead_code)]
 mod clipboard_x11;
+mod compare_win;
 mod copybtn;
 mod crash;
 mod dirinfo;
@@ -277,6 +278,11 @@ struct App {
     dupes_win: dupes_win::DupesWin,
     open_dupes: bool,
     dup_job: Option<app::dupes::DupJob>,
+    /// 폴더 비교 · 동기화(T-171/172 · compare_win.rs) · 열기 요청 · 비교 작업 · 복사 작업.
+    compare_win: compare_win::CompareWin,
+    open_compare: bool,
+    cmp_job: Option<app::compare::CmpJob>,
+    sync_job: Option<app::compare::SyncJob>,
     open_license: bool,
     file_win: FileWin,
     file_purpose: Option<app::license::FilePurpose>,
@@ -613,6 +619,10 @@ impl App {
             dupes_win: dupes_win::DupesWin::new(),
             open_dupes: false,
             dup_job: None,
+            compare_win: compare_win::CompareWin::new(),
+            open_compare: false,
+            cmp_job: None,
+            sync_job: None,
             open_license: false,
             file_win: FileWin::new(),
             file_purpose: None,

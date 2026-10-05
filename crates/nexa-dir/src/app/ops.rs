@@ -229,7 +229,7 @@ impl App {
         if sources.is_empty() {
             return;
         }
-        if self.transfer.is_some() || self.extract_job.is_some() {
+        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
             self.status_note(&tr("ops.busy"));
             return;
         }

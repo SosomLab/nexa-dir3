@@ -103,6 +103,12 @@ impl App {
             let owner = self.window.clone();
             self.dupes_win.open(el, theme, over, owner.as_deref());
         }
+        if std::mem::take(&mut self.open_compare) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.compare_win.open(el, theme, over, owner.as_deref());
+        }
         if std::mem::take(&mut self.open_license) && self.window.is_some() {
             self.licensing.refresh();
             let over = self.main_rect();
@@ -356,6 +362,26 @@ impl App {
             }
             return true;
         }
+        if self.compare_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            match self.compare_win.handle(event) {
+                crate::compare_win::CmpAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.compare_win.paint(&font, &self.theme, ui_px);
+                }
+                crate::compare_win::CmpAction::Rescan(by_content) => {
+                    let (l, r) = (
+                        self.compare_win.left.clone(),
+                        self.compare_win.right.clone(),
+                    );
+                    self.start_compare(&l, &r, by_content);
+                }
+                crate::compare_win::CmpAction::Sync(dir, only) => self.compare_sync(dir, only),
+                crate::compare_win::CmpAction::Close => self.close_compare(),
+                crate::compare_win::CmpAction::None => {}
+            }
+            return true;
+        }
         if self.license_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.license_win.handle(event) {
@@ -462,6 +488,9 @@ impl App {
         if self.dupes_win.is_open() {
             self.dupes_win.redraw();
         }
+        if self.compare_win.is_open() {
+            self.compare_win.redraw();
+        }
         if self.archive_win.is_open() {
             self.archive_win.redraw();
         }
@@ -514,6 +543,9 @@ impl App {
         if self.dupes_win.tick(now_ms) {
             self.dupes_win.redraw();
         }
+        if self.compare_win.tick(now_ms) {
+            self.compare_win.redraw();
+        }
         if self.archive_win.tick(now_ms) {
             self.archive_win.redraw();
         }
@@ -541,6 +573,7 @@ impl App {
             || self.mem_win.animating()
             || self.hash_win.animating()
             || self.dupes_win.animating()
+            || self.compare_win.animating()
             || self.archive_win.animating()
             || self.preview_win.animating()
             || self.progress_win.animating()

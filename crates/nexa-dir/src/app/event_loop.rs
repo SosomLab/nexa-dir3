@@ -125,7 +125,8 @@ impl ApplicationHandler<Wake> for App {
             | self.dirsize_tick()
             | self.hash_tick()
             | self.extract_tick()
-            | self.dupes_tick();
+            | self.dupes_tick()
+            | self.compare_tick();
         // 다른 프로그램에서 끌어오는 동안 · 놓은 직후: OS에서 포인터 자리 · 수식키를 읽어 반영한다(winit은 드래그 중 그 사건을
         // 주지 않는다 — T-147 수신 보강). 수식키는 판정에만 쓰고 되돌린다(창이 포커스를 받으면 winit이 다시 알려 준다).
         // 자체 수신부(Windows)가 쌓아 둔 사건을 먼저 거둔다.

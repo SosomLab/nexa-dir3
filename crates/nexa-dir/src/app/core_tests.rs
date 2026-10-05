@@ -7538,3 +7538,61 @@ fn duplicate_finder_groups_and_marks() {
     app.close_dupes();
     assert!(app.dup_job.is_none() && !app.dupes_win.is_open());
 }
+
+/// 폴더 비교 · 동기화(T-171/172): 두 폴더 → 작업 스레드 → 창에 다른 것만 · [→ 왼쪽 기준] = 복사 워커 → 오른쪽에 생김 → 다시 비교.
+#[test]
+fn compare_two_folders_and_sync_left_to_right() {
+    let (mut app, dir) = fixture("compare");
+    let (l, r) = (dir.join("L"), dir.join("R"));
+    std::fs::create_dir_all(l.join("sub")).expect("mkdir");
+    std::fs::create_dir_all(&r).expect("mkdir");
+    std::fs::write(l.join("only.txt"), b"L").expect("write");
+    std::fs::write(l.join("sub").join("deep.txt"), b"deep").expect("write");
+    std::fs::write(l.join("same.txt"), b"s").expect("write");
+    std::fs::write(r.join("same.txt"), b"s").expect("write");
+    app.layout_for(1200, 800, 1.0);
+    app.start_compare(&l, &r, false);
+    assert!(app.cmp_job.is_some() && app.open_compare && app.compare_win.is_running());
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(!app.compare_win.is_running());
+    // 다른 것만: only.txt · sub(폴더는 오른쪽에 없음) · sub/deep.txt (same.txt는 시각이 거의 같아 Same).
+    assert_eq!(
+        app.compare_win.rows_len(),
+        3,
+        "{}",
+        app.compare_win.status()
+    );
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    assert!(app.sync_job.is_some());
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(std::fs::read(r.join("only.txt")).expect("read"), b"L");
+    assert_eq!(
+        std::fs::read(r.join("sub").join("deep.txt")).expect("read"),
+        b"deep"
+    );
+    // 끝난 뒤 자동 재비교(창이 열려 있지 않은 시험에서는 생략될 수 있다) — 직접 다시 비교해 전부 Same.
+    if app.cmp_job.is_none() {
+        app.start_compare(&l, &r, false);
+    }
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        app.compare_win.rows_len(),
+        0,
+        "{}",
+        app.compare_win.status()
+    );
+    app.close_compare();
+    assert!(app.cmp_job.is_none());
+}
