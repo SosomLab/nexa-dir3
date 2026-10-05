@@ -4,7 +4,7 @@
 
 ## 2026-10-05
 
-- **배포 준비 완료**(T-160 · 64fd96c · winget/choco/brew/linux-repo 파이프라인 · render 게이트 4종 · 사용자 준비물 대기 · ⚠ choco uninstall MSI 인자 확인 필요) · 9b3b0f0 CI ✓ → [§69](journal/2026-10-05.md)
+- **배포 준비 완료**(T-160 · 64fd96c · winget/choco/brew/linux-repo 파이프라인 · render 게이트 4종 · 사용자 준비물 대기 · choco 제거 인자 실측 반영 afa18c3) · 9b3b0f0 CI ✓ → [§69](journal/2026-10-05.md)
 - **키 이동 디바운스**(T-177 · 9b3b0f0 · 도크 갱신 60 ms · 마지막 선택만) · **배포 재개 사전 조사**(T-160 · 기준 nexa-clip · 조치 17건 · 시크릿 3 + 변수 2 등록 필요 · Inno → MSI 전환) → [§68](journal/2026-10-05.md)
 - **nexa-sql 시험 체계 조사**(층 · V0~V3 · 회귀선 · 누수 기울기 · code-health · dir3 차용 후보 → T-176) → [§67](journal/2026-10-05.md)
 - **실기 점검표**(이번 회차 신규 10건 · 41항목 · 조작/기대/결과 칸) → [§66](journal/2026-10-05.md)
