@@ -6460,3 +6460,54 @@ fn typeahead_hangul_settings_and_arrow_cycle() {
     assert!(app.hangul_mode, "그대로");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 경로 입력 확장(사용자 10-05 · `pathexpand`): 경로 바에서 `$PWD` · `$(…)` · 상대 경로 · `..`가 이 패널의 현재 폴더 기준으로
+/// 풀려 이동한다 · 모르는 명령은 실행하지 않고(원문 → 열기 실패) 자리를 지킨다.
+#[test]
+fn path_bar_expands_variables_commands_and_relative_paths() {
+    let (mut app, dir) = fixture("pathexpand");
+    app.layout_for(1200, 800, 1.0);
+    let submit = |app: &mut App, text: &str| {
+        let mut inv = Invalidations::default();
+        app.panels[0].pathbar.begin_edit(&mut inv);
+        app.panels[0]
+            .pathbar
+            .edit_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+        app.startup_cmd(&format!("ui.type:{text}"));
+        app.startup_cmd("ui.press:enter");
+    };
+    let sub = dir.join("sub");
+    // 상대 경로 = 현재 폴더 기준.
+    submit(&mut app, "sub");
+    assert_eq!(app.panels[0].root_path(), sub, "sub = 하위 폴더");
+    submit(&mut app, "..");
+    assert_eq!(app.panels[0].root_path(), dir, ".. = 부모");
+    // $PWD · ${PWD} · 명령 치환(Bash 꼴 · PowerShell 꼴).
+    let sep = std::path::MAIN_SEPARATOR;
+    submit(&mut app, &format!("$PWD{sep}sub"));
+    assert_eq!(app.panels[0].root_path(), sub);
+    submit(&mut app, "$(dirname $PWD)");
+    assert_eq!(app.panels[0].root_path(), dir, "$(dirname $PWD) = 부모");
+    submit(&mut app, "sub");
+    submit(&mut app, "$(Split-Path -Parent $PWD)");
+    assert_eq!(
+        app.panels[0].root_path(),
+        dir,
+        "$(Split-Path -Parent $PWD) = 부모"
+    );
+    submit(
+        &mut app,
+        &format!("${{PWD}}{sep}$(basename {})", sub.display()),
+    );
+    assert_eq!(app.panels[0].root_path(), sub, "${{PWD}} + $(basename …)");
+    // 모르는 명령 = 실행하지 않는다 → 그런 폴더가 없으니 자리 유지.
+    submit(&mut app, "$(echo-nope x)");
+    assert_eq!(app.panels[0].root_path(), sub, "모르는 명령 = 자리 유지");
+    // 패널 도우미: ~ = 홈(환경에 있으면).
+    let home = app.panels[0].expand_path_input("~");
+    assert!(
+        home == "~" || std::path::Path::new(&home).is_absolute(),
+        "{home}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

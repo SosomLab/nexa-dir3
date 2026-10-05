@@ -18,6 +18,8 @@ pub(crate) fn is_shell_scheme(input: &str) -> bool {
 }
 
 /// 환경변수 확장 — 원본 PathInterpreter.Expand 대응.
+// dir2 이식본(패리티 증거 · 시험 유지) — 운영 경로는 윗단 `pathexpand::expand`가 같은 규칙을 포함해 대신한다.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn expand_env(input: &str) -> String {
     let mut s = input.trim().to_string();
     // 붙여넣기 시 흔한 감싸는 따옴표 제거("..." 또는 '...')
@@ -47,6 +49,7 @@ pub(crate) fn expand_env(input: &str) -> String {
 /// 원문에 쓰면 문자 경계 panic(G13-01) — 토큰(`%`·`$env:`·`${env:`)은 전부 ASCII이므로
 /// 바이트 단위 길이 보존 비교로 충분하다. `needle`은 ASCII·비어 있지 않아야 한다.
 /// 반환 오프셋은 `needle`이 ASCII라 항상 문자 경계.
+#[cfg_attr(not(test), allow(dead_code))]
 fn find_ascii_ci(hay: &str, from: usize, needle: &str) -> Option<usize> {
     debug_assert!(needle.is_ascii() && !needle.is_empty());
     let n = needle.as_bytes();
@@ -59,6 +62,7 @@ fn find_ascii_ci(hay: &str, from: usize, needle: &str) -> Option<usize> {
 
 /// `open`…`close` 사이 이름을 `lookup`으로 치환(대소문자 무시 open 매칭·미정의=원문 유지).
 /// 인덱스는 전부 `s` 하나에서만 계산한다([`find_ascii_ci`]).
+#[cfg_attr(not(test), allow(dead_code))]
 fn replace_between(
     s: &str,
     open: &str,
@@ -98,6 +102,7 @@ fn replace_between(
 }
 
 /// PowerShell `$env:NAME`(중괄호 없음 — 이름은 `[A-Za-z0-9_]+`) 치환.
+#[cfg_attr(not(test), allow(dead_code))]
 fn replace_ps_bare(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut i = 0usize;

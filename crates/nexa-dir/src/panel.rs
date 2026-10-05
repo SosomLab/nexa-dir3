@@ -1019,6 +1019,14 @@ impl Panel {
     }
 
     /// 탭 바·경로 바·네비 활성을 활성 탭 상태와 동기화(dir2 `sync_chrome` · PANEL-032).
+    /// 경로 바에 친 글 → 실제 경로 글(`pathexpand` — `%VAR%` · `$env:VAR` · `$HOME` · `${VAR:-기본}` · `$(basename $PWD)` ·
+    /// `~` · 상대 경로). `$PWD`와 상대 경로의 기준 = 이 패널의 현재 폴더(내 PC면 없음).
+    pub(crate) fn expand_path_input(&self, text: &str) -> String {
+        let root = self.root_path();
+        let pwd = (!ndir_vfs::is_virtual_root(&root)).then_some(root.as_path());
+        crate::pathexpand::expand_native(text, pwd)
+    }
+
     /// 타입어헤드 설정 적용(`typeahead.*`) — 지금 있는 탭 전부에 넣고, 뒤에 생기는 탭은 [`Self::sync_chrome`]이 넣는다.
     pub(crate) fn set_typeahead(&mut self, opts: TaOpts, inv: &mut Invalidations) {
         self.ta_opts = opts;
@@ -1973,7 +1981,8 @@ impl Panel {
         let Some(text) = self.pathbar.edit_text() else {
             return;
         };
-        let expanded = crate::pathinput::expand_env(&text);
+        // 제안도 제출과 같은 확장을 거친다(변수 · `~` · 상대 경로 — 셸은 실행하지 않으므로 글자마다 불러도 안전하다).
+        let expanded = self.expand_path_input(&text);
         let items = crate::pathinput::suggest_folders(
             &expanded,
             crate::pathinput::fs_dirs,
@@ -2011,7 +2020,7 @@ impl Panel {
         }
         if let Some(path) = self.pathbar.take_navigation() {
             // 입력 해석(dir2 PathInterpreter): 감싼 따옴표 제거 · `%VAR%` · `$env:VAR` 확장 — 미정의 변수는 원문 그대로(열기 실패로 드러난다).
-            let path = crate::pathinput::expand_env(&path);
+            let path = self.expand_path_input(&path);
             if crate::pathinput::is_shell_scheme(&path) {
                 // `shell:` 별칭 = OS가 해석한다(패널은 OS를 모른다 — 호스트가 포트로 풀어 이동).
                 self.pending_alias = Some(path);

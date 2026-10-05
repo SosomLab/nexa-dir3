@@ -36,6 +36,7 @@ mod nav;
 mod order;
 mod order_win;
 mod panel;
+mod pathexpand;
 mod pathinput;
 mod platform;
 mod prefs_win;
