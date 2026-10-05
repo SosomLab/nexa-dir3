@@ -48,7 +48,7 @@
 | 10회 × 20 ms | `platform/winshell.rs:282,779` | 새로 만들기 뒤 신규 항목 감지 재시도 | — | 고급 | `ctxmenu.detect_retries` | ☐ |
 | **파일 작업** | | | | | | |
 | 100 ms | `app/ops.rs:53` | 전송 진행 폴링 | — | 고급 | `transfer.poll_ms` | ☐ |
-| 4 MiB | `ndir-ops/src/lib.rs:42` | 복사 버퍼(`COPY_BUF`) | — | 고급 | `transfer.copy_buf_kb`(M9 전략 계층과 함께 · NEW-007) | ☐ |
+| 4 MiB | `ndir-ops/src/fastcopy.rs:26` | 복사 버퍼(`COPY_BUF`) | — | 고급 | `transfer.copy_buf_kb`(M9 전략 계층과 함께 · NEW-007) | 상수 유지 · 조절은 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb`(고급 · f458537 · 10-05 §45)로 대체 ✅ |
 | 100 | `ndir-ops/src/history.rs:58` | 실행 취소 기록 상한 | — | 고급 | `history.max` | ☐ |
 | 64 | `app/bulk.rs:51` | 일괄 이름 바꾸기 프리셋 상한 | — | 고급 | `bulk.preset_max` | ☐ |
 | 10×10 · 3×15 · 5×10 ms | `platform/windows.rs:185,191,293,298` · `clipboard.rs:82,87` | 클립보드 열기·HDROP 재시도 | — | 상수 | — | — |

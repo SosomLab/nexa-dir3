@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 34 | 34 | 22 | 8 | 0 | 0 | 0 |
+| NEW | 34 | 34 | 23 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4323 | 4323 | 2506 | 925 | 763 | 0 | 0 |
+| **합계** | 4323 | 4323 | 2507 | 925 | 763 | 0 | 0 |
 
 ## 행
 
@@ -210,6 +210,7 @@
 | TERM-001~033 · 040~052 · 070~087 · 100~125 | VT 파서/셀 그리드 · 테마 · PTY · 키/마우스 · 도크 통합·cwd · 설정 · 퀵 런처 | `ndir-term` · `platform/winpty.rs`·`unixpty.rs` · `termview.rs` · `app/term.rs` · `launcher.rs` | T1·T3·T4 | `ndir-term` 시험(이식) · `lifecycle_with_fake_pty` · `fixed_columns_…mouse_report` · `term-echo.scn` · 런처 시험 | ✅ | |
 | TERM-060~068 · 090~095 · 130~131 | 렌더 세부 · 클립보드/컨텍스트 메뉴 · 품질 자산 | `termview.rs` | T2 | HTML 복사 시험 | ✅ | 셀 텍스트/italic(T-31) · 터미널 우클릭 메뉴 ☐ · 10-05 §12 정리: 093(터미널 우클릭 편집 메뉴)만 ☐ · 나머지 = `italic_cells_select_italic_font` · `sgr_italic_on_off` · `terminal_copy_format_selects_html_and_rtf` · `export_html_rtf_and_cf_html_offsets` · `pump_is_time_boxed_and_reports_backlog` ✅ 후보 · 10-05 §24: 093 터미널 우클릭 편집 메뉴 ✅(CMD-086~096 행) |
 | CLICK-SELECT · TERM-090(일부) · GUI-125(일부) | 더블클릭 = 단어 · 트리플 클릭 = 줄 선택 — 정보 · 미리보기 도크 · 터미널(사용자 10-05 · dir2에도 없던 동작) · 단어 = 글자/숫자/`_`(한글 포함) · 터미널 한글 두 칸 글자 보정 · 트리플 = 물리 행(줄바꿈 플래그 없음) | nexa-ui nexa-explorer `InfoDock::select_word_at`/`select_line_at` · `dock::word_span`(159차 06376cb) · `app/input.rs::{next_click_count, text_click_select}` · `termview.rs::{select_word_at, select_line_at, line_cells}` | T1 · T3 + 실기 | `double_and_triple_click_select_text` · `double_click_selects_word_and_triple_selects_line` · nexa-explorer 시험(159) | ✅ | 10-05 §43(a837ac5) · 경로(`\ / . : -`)는 단어 경계라 조각 선택(통째 선택은 결정 거리) · 실기 사용자 |
+| FASTCOPY · NEW-007(1차) · OPS(전송) | 고속 복사 전략 계층 — 파일 1개 = Windows `CopyFileExW`(블록 복제 · 서버 쪽 복사 · 속성/대체 스트림 · 긴 경로 · 취소) · 다른 OS = 루프 + 수정 시각/권한 보존 · 폴더 = 작업 목록 + 작업 스레드 병렬(자동 = SSD 8 / 그 밖 4 · 32 MiB 이상 한 번에 하나 · 실패 하나에 전부 멈춤) · 고급 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` | `ndir-ops/src/fastcopy.rs` · `ndir-ops/src/lib.rs::{copy_file_with_progress, copy_dir_with_progress}` | T1 · T3 + 실기 | fastcopy 7개(`copy_tree_sequential_and_parallel_agree` · `copy_tree_parallel_stop_and_failure` · `copy_file_keeps_content_mtime_and_respects_existing` 등) · `transfer_tuning_follows_settings` · `bench_copy`(ignored · 수동) | ✅ | 10-05 §45(f458537 · docs/24 실측) · 2차 = T-164 · 실기 = 큰 폴더 체감 · 사본 수정 시각 |
 | PLUG-090~105 | 압축 목록 리더 | `preview/archive.rs` | T1 | `archive::tests`(zip 생성·암호·중첩) | ✅ | |
 | PREFS-001~032 · 040~079 · 201~211 | 설정 창 · 설정/세션 영속 · i18n · session 키 | `prefs_win.rs` · `ndir-settings` · `session.rs` · `ndir-i18n` | T1·T3·T4 | prefs core 시험 · `prefs-open.scn` · settings/keymap/session/i18n 시험 | ✅ | DR-3 구조 차용 |
 | PREFS-401~423 · 501~521 · 701~732 | nexa-ui 매핑 · OS 분기점 · 회귀 테스트 후보 | `prefs_win.rs` · `platform/` | — | — | 🚧 | 회귀 후보 32건 중 미작성분 = 91 |
