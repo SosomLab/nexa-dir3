@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 28 | 9 | 0 | 0 | 0 |
+| NEW | 43 | 43 | 29 | 9 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2513 | 926 | 762 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2514 | 926 | 762 | 0 | 0 |
 
 ## 행
 
@@ -268,7 +268,7 @@
 | NEW-038 · CHECKSUM | 체크섬 1차 — CRC32 · MD5 · SHA-1 · SHA-256 · SHA-512 직접 구현(파일 한 번 읽기 · 여러 해시 동시) · 체크섬 창(모덜리스 · 진행 막대 + 속도 · 값 행 클릭 복사 · 모두 복사 · 비교 입력 자동 대조 · Esc/취소) · 작업 스레드 1 + **슬롯 1**(두 번째 요청 거부 = 상태줄 + 토스트) · 우클릭 "체크섬…"(파일 1개) · 설정 `hash.algos` | ndir-ops `hash.rs` · `hash_win.rs` · `app/checksum.rs` · `app/ctxmenu.rs` · `app/windows.rs` | T1 · T3 + 실기 | `known_vectors` · `hex_normalize_and_guess` · `hash_file_streams_and_cancels` · T3 `checksum_window_computes_in_worker_and_refuses_second_job` · `results_and_compare_without_window` | ✅ | 10-05 §55(0953f27 · 요건 §50) · 남김 = 여러 파일/폴더 일괄 · `.sha256`/`.md5` 검증 파일 읽기·쓰기 · 성능 측정(docs/24식)(T-167) |
 | NEW-039 · FAVORITES | 폴더 즐겨찾기 1차 — 별도 목록(설정 `nav.favorites` · 최대 64) · `nav.fav_toggle`(Ctrl+D · 현재 폴더 넣기/빼기 · 내 PC 제외 · 상태줄 안내) · `nav.favorites`(Ctrl+B · 경로 바 아래 보조 메뉴 `aux.fav:<n>` · 없는 폴더 회색 · 끝에 추가/제거) · 이동 메뉴 2항목 · 별 아이콘 | `app/favorites.rs` · `app/menus.rs` · `app/statusline.rs` · `app/menu_icons.rs` · `ndir-settings` commands/registry | T1 · T3 + 실기 | `favorites_parse_encode_round_trip` · T3 `favorites_toggle_menu_and_navigate` | ✅ | 10-05 §57(704c399) · 남김 = 이름 붙이기 · 순서 편집(`open_order_editor` 재사용) · 그룹/구분선 · 내 PC 섹션 · 최근 폴더 구획 · 런처 통합 여부(사용자 결정 · B로 1차)(T-168) |
 | NEW-040 · ARCHIVE-OPS | 압축 풀기 1차 — zip(Store/Deflate · Zip64 · SFX 보정) · tar(ustar · GNU 긴 이름 · PAX) · gz(FNAME) · tgz · 자체 inflate · zip slip 차단 · 링크 항목 미생성 · 수정 시각 · 취소 · 항목 1 GiB 상한 · 충돌 = 건너뜀 · 작업 스레드 1(전송과 같은 슬롯) · 진행 창 재사용 · 우클릭 "압축 풀기 ▸ 여기에 / <이름> 폴더에" | ndir-vfs `archive/extract.rs` · `app/extract.rs` · `app/ctxmenu.rs` | T1 · T3 + 실기 | `inflate_vectors`(zlib 벡터) · `zip_store_and_deflate_extract_safely` · `tar_gzip_and_tgz_extract` · `dest_folder_rules` · T3 `extract_archive_into_named_folder` | 🚧 | 10-05 §59(89ae2e7) · 남김 = 7z/rar/cab/bz2/xz 코덱 · 암호 zip · 충돌 질문 · CRC 검증 · 스트리밍 inflate(1차 = 항목 1 GiB 상한) · 압축 만들기 · 압축 안 탐색(T-169) |
-| NEW-041 · DUP-FIND | 중복 찾기(크기 → 부분 해시 → 전체 해시) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-170 · 사전 조사 §60 |
+| NEW-041 · DUP-FIND | 중복 파일 찾기 1차 — 크기 → 앞 64 KiB CRC32 → SHA-256 · 0바이트 제외 · 결과 창(묶음 헤더 접기 · ✓ 열/Space · 보존 규칙 최신/오래된/얕은 경로/첫 번째 · 묶음 전부 표시 방지 · 휴지통으로 보내기 · 요약) · 작업 스레드 1 + 슬롯 1 · 닫기 = 취소 · 우클릭 "중복 파일 찾기…" | ndir-ops `dupes.rs::{find, keep_index, DupGroup}` · `dupes_win.rs` · `app/dupes.rs` · `trash_checked` | T1 · T3 + 실기 | `finds_groups_by_size_head_and_full_hash` · `keep_rules` · T3 `duplicate_finder_groups_and_marks` · `marks_follow_keep_rule_and_guard_whole_groups` | ✅ | 10-05 §61(c84ff2d) · 기본값 사용자 확인 대기 · 남김 = 하드링크 대체 · 이동 · 영구 삭제 · 하위 포함/필터 옵션 · 패널로 보내기 · 이름/크기 기준 모드(T-170) |
 | NEW-042 · FOLDER-COMPARE | 폴더 비교(한쪽만 · 다름 · 같음) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-171 |
 | NEW-043 · SYNC | 동기화(미러 · 양방향 · 차등 · 모의 실행 · NEW-007 ③) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-172 |
 | T-96 · CONFLICT-INLINE | 덮어쓰기 충돌 질문을 진행 창 안에서(4버튼 · Enter = 덮어쓰기 · Esc/X = 취소 · 진행 창 없으면 종전 대화상자) · 완료 [닫기 (N)] = 강조(기본) 버튼 | `progress_win.rs::{set_conflict, take_conflict_choice, pick_conflict}` · `app/dialogs.rs::conflict_ask` · `app/ops.rs::ops_tick` · nexa-ui 144 `Button::tone` | T2(모듈) + 실기 | progress_win 모듈 시험(질문 · 답 · 1회성 · 거두기) | 🚧 | 10-04 §21 · §22 첫 질문도 인라인(판정 = `is_active() && window` · 657679c 결함 수정 · 494a9f8) · T3는 창이 없어 대화상자 길 · **실기 판정 필수**(같은 이름 3개 복사 → 진행 창 안 질문 3번 · 막대 유지 · 파란 [닫기]) · T-96 나머지(카드형 · 상태바 진행 칸 · 완료 토스트) 후속 |
