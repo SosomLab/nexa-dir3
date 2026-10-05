@@ -5,6 +5,10 @@
 //! (`present` · `winhost` · `wingeom` · `winfocus` · `theme` · `icon` · `input` · `clipboard` · `toast` — nexa-sql 복사 · SKEL-403).
 //! 화면 = dir2 `win.rs::layout`(docs/port/13 PANEL-001·002): 메뉴 / 도구 모음 / [좌 패널 ║ 우 패널] / 상태바 · 패널 = `panel.rs`.
 //! 규칙: 인자 해석·판정은 순수 함수(`cli.rs` · `selfcheck.rs`) · 그리기는 `RedrawRequested`에서만 · 유휴는 `WaitUntil`(SKEL-414).
+// Windows: **창 프로그램**으로 빌드한다(사용자 10-05 "프로그램 실행 시 cmd 창이 뜬다" — 종전에는 지정이 없어 콘솔 프로그램이었고,
+// 탐색기 · 바로 가기로 띄우면 빈 콘솔 창이 함께 떴다 · nexa-sql · nexa-clip과 같은 처방). 터미널에서 실행한 경우의 출력
+// (`--version` · `--selfcheck`)은 `platform::attach_parent_console`이 부모 콘솔에 붙어 살린다.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod app;
 mod archive_win;
@@ -1114,6 +1118,8 @@ fn install_ctl_labels() {
 }
 
 fn main() -> ExitCode {
+    // 창 프로그램은 콘솔이 없다 — 터미널에서 실행됐으면 그 콘솔에 붙는다(출력 유지 · 더블클릭이면 조용히 실패 = 콘솔 창 없음).
+    platform::attach_parent_console();
     let args: Vec<String> = std::env::args().skip(1).collect();
     match cli::parse(&args) {
         Err(msg) => {

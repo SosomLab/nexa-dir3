@@ -514,6 +514,23 @@ pub(crate) fn register_drop_target(
     }
 }
 
+/// 부모 프로세스의 콘솔에 붙는다 — Windows의 **창 프로그램**(콘솔 없음)이 터미널에서 실행됐을 때 `--version` · `--selfcheck` 같은
+/// 출력이 그 터미널에 보이게(nexa-clip `console::attach_parent`와 같다). 부모에 콘솔이 없으면(탐색기 · 바로 가기) 조용히 실패한다 —
+/// 그게 "콘솔 창이 뜨지 않는" 정상 경로다. 출력이 파이프 · 파일로 돌려져 있으면 그 핸들이 그대로 쓰인다. 다른 OS = 아무것도 안 함.
+pub(crate) fn attach_parent_console() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn AttachConsole(pid: u32) -> i32;
+        }
+        // SAFETY: 인자 하나짜리 단순 호출(ATTACH_PARENT_PROCESS = u32::MAX) — 실패는 무시한다.
+        unsafe {
+            AttachConsole(u32::MAX);
+        }
+    }
+}
+
 /// 지금의 포인터 자리(화면 좌표)와 수식키 — **다른 프로그램에서 끌어오는 동안**의 상태를 묻는다(T-147 수신 보강).
 /// winit은 OS 드래그 중에는 포인터 이동 · 수식키 사건을 주지 않고 `HoveredFile`/`DroppedFile`에도 자리가 없다 →
 /// 놓는 자리 · 복사/이동 판정을 위해 직접 읽는다. 읽을 수 없는 OS = `None`(호출부는 마지막으로 본 값으로 간다).
