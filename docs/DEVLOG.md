@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **폴더 크기 계산 1차**(NEW-037 · 85e405d · 정보 도크 자동 · 점진 표시 · 감시/전송 뒤 무효화 · `dock.folder_size`) · 체크섬 방침 = 창 안 진행 막대 + 직접 구현 5종 → [§54](journal/2026-10-05.md)
 - **폴더 크기 설계 결정**(T-166 · 정보 도크 자동 · `DirSizes` · 감시 무효화 · `dock.folder_size`) · docs/01 통지 구조 정정(`EventLoopProxy` 미사용) · T-173 → [§53](journal/2026-10-05.md)
 - **폴더 크기 사전 조사**(T-166 · dir2 없음 · 재사용 틀 = 전송 `TransferShared` + 단일 슬롯 · nexa-ui 진행 = `SegProgress`뿐 · ⚠ `EventLoopProxy` 미사용 = 문서 서술과 다름) · c2999b7 CI ✓ → [§52](journal/2026-10-05.md)
 - **자연 정렬 토글**(c2999b7 · 도구 모음 보기 옵션 "1 2 ↓" · `view.natural_sort` · 일괄 이름 변경 미리보기도 같은 순서) → [§51](journal/2026-10-05.md)

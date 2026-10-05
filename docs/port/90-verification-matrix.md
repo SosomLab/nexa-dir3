@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 25 | 8 | 0 | 0 | 0 |
+| NEW | 43 | 43 | 26 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2510 | 925 | 762 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2511 | 925 | 762 | 0 | 0 |
 
 ## 행
 
@@ -264,7 +264,7 @@
 | NEW-034 · MENU-ICONS | 메뉴 항목 아이콘 + 스위치 `menu.icons`(기본 on · `perf.boost` on이면 끔) — 명령 id 표(`spec_of`) → ① Windows 아이콘 글꼴(Segoe Fluent/MDL2 글리프를 UI 글꼴 사슬에서 알파 마스크로 래스터) ② nexa-ctl `glyph(GlyphKind)` 폴백 ③ 없음 · 우클릭/보조 메뉴 `decorate`(reopen_ctx) · 메뉴 바 `ComboItem.image`(테마 글자색 RGBA · 체크 항목은 표에 없어 앞 칸 충돌 없음) · 입력 칸 편집 메뉴 4종 = `set_edit_menu_decor` | `app/menu_icons.rs`(신규) · `app/ctxmenu.rs` · `app/menus.rs` | T1 + 실기 | `menu_icons::spec_table_and_fallback` · `performance_mode_turns_icons_off` | ✅ | 10-05 §38(d4aca0d) · dir2엔 앱 메뉴 아이콘 없음(§37 ②) · MDL2 코드포인트는 저장소 안 검증표 없음 → **실기 판정** · macOS(SF Symbols) · Linux(IconTheme edit-copy 등) 계층 후속 |
 | NEW-035 · NATURAL-SORT | 자연 정렬 — 숫자 구간을 값으로 비교(file2 < file10 · 대소문자 무시 옵션) · 설정 `list.sort_natural`(기본 on · 끄면 dir2 글자 순) · 바꾸면 열린 목록 재열람 | ndir-tree `cmp_natural` · `set_natural_sort` · `app/settings.rs::apply_natural_sort` | T1 · T3 + 실기 | `natural_compare_orders_numbers_by_value` · `natural_sort_setting_defaults_on` | ✅ | 10-05 §47(b54ce4f) · 실기 = 숫자 순 · 끄면 종전 순서 · §51 c2999b7: 도구 모음 토글 `view.natural_sort` · 일괄 이름 변경 미리보기도 따름 · 시험 `natural_sort_command_toggles_setting_and_toolbar_check` · order-editor.scn |
 | NEW-036 · SELECT-INVERT | 선택 반전 — 명령 `edit.select_invert`(편집 메뉴 · Ctrl+Shift+A / Cmd+Shift+A · 단축키 설정 `key.edit.select_invert`) · 보이는 행 기준(안 보이던 선택은 해제) | ndir-tree `invert_selection_visible` · `panel.rs::invert_selection` · `filelist.rs::invert_selection` · `app/menus.rs`(MENU_IDS) | T3 + 실기 | `invert_selection_flips_visible_rows` | ✅ | 10-05 §48(f214492) · 실기 = 메뉴 · 단축키 · 보이는 행 기준 |
-| NEW-037 · FOLDER-SIZE | 폴더 크기 계산(워커 + 세대 가드 · 취소) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-166 |
+| NEW-037 · FOLDER-SIZE | 폴더 크기 계산 1차 — 정보 도크에 폴더 1개가 보이면 작업 스레드가 재고 점진 표시(계산 중 → 합계 · 파일/폴더 수 · 읽지 못한 폴더 표시) · 선택이 바뀌면 이전 작업 취소 · 경로별 캐시 + 감시 `stale`(자신/안쪽/조상) · 전송/삭제/이름 변경 뒤 전체 무효화 · 링크/재분석 지점 미추적 · 설정 `dock.folder_size` | `app/dirsize.rs::{DirSizes, walk, stale, size_lines}` · `dockinfo.rs` · `app/event_loop.rs`(OPS 틱) · `app/watch.rs` | T1 · T3 + 실기 | `walk_counts_and_cancels` · `stale_rules` · `request_tick_cache_and_invalidate` · T3 `dock_shows_folder_size_after_worker_finishes` | ✅ | 10-05 §54(85e405d) · 남김 = 크기 열 표시 · 수동 명령 · 네트워크/큰 폴더 제외 옵션(T-166) |
 | NEW-038 · CHECKSUM | 체크섬 보기 · 복사(DR-8 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-167 · 요건 §50: 별도 스레드 · 진행 확인/취소 · 작업 슬롯 1개(다른 요청 제한) · 시험 = 표준 벡터 + 두 번째 요청 거부 |
 | NEW-039 · FAVORITES | 즐겨찾기(런처 통합 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-168 |
 | NEW-040 · ARCHIVE-OPS | 압축 풀기 · 압축 안 탐색 · 만들기 | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-169 |
