@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **압축 풀기 1차**(NEW-040 · 89ae2e7 · zip Store/Deflate · tar · gz/tgz · 자체 inflate · zip slip 차단 · 우클릭 "압축 풀기 ▸") · 중복 찾기 사전 조사(T-170) · 704c399 · 89ae2e7 CI ✓ → [§59~§60](journal/2026-10-05.md)
 - **압축 풀기 사전 조사**(T-169 · 목록 전용 · 디코더 0 · 1차 제안 = zip Store/Deflate + tar + gz/tgz · nexa-gfx `inflate_raw` 재사용) → [§58](journal/2026-10-05.md)
 - **폴더 즐겨찾기 1차**(NEW-039 · 704c399 · Ctrl+D 넣기/빼기 · Ctrl+B 팝업 · 이동 메뉴 · 없는 폴더 회색 · `nav.favorites`) · T-174 런처 폴더 항목 결함 → [§57](journal/2026-10-05.md)
 - **즐겨찾기 사전 조사**(T-168 · 런처는 폴더 패널 이동 없음 · 권장 = 별도 목록 ★ 팝업 + Ctrl+D) · 0953f27 CI ✓ → [§56](journal/2026-10-05.md)
