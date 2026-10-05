@@ -103,6 +103,28 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+/// 콘솔 출력(T-160 2차 교훈 · 10-05): 이 exe는 **창 프로그램**이라 PowerShell은 기다리지 않고 출력 파이프를 먼저 닫을 수 있다 —
+/// `println!`은 그때 `failed printing to stdout`(ERROR_NO_DATA 232)으로 **panic**한다. CLI 출력은 전부 이 매크로로 — 쓰기 실패는 무시한다.
+macro_rules! say {
+    ($($t:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stdout(), $($t)*);
+    }};
+}
+macro_rules! say_raw {
+    ($($t:tt)*) => {{
+        use std::io::Write as _;
+        let _ = write!(std::io::stdout(), $($t)*);
+        let _ = std::io::stdout().flush();
+    }};
+}
+macro_rules! say_err {
+    ($($t:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), $($t)*);
+    }};
+}
+
 /// 도크 갱신 디바운스(ms) — 키 반복(약 30 ms 간격)보다 길고 사람이 멈춤을 느끼기 전(100 ms)보다 짧게(T-177).
 pub(crate) const DOCK_DEBOUNCE_MS: u64 = 60;
 use termview::TermView;
@@ -1196,24 +1218,24 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match cli::parse(&args) {
         Err(msg) => {
-            eprintln!("nexa-dir: {msg}\n{}", cli::USAGE);
+            say_err!("nexa-dir: {msg}\n{}", cli::USAGE);
             ExitCode::from(2)
         }
         Ok(cli::Mode::Version) => {
-            println!("nexa-dir {}", env!("CARGO_PKG_VERSION"));
+            say!("nexa-dir {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         Ok(cli::Mode::Help) => {
-            println!("{}", cli::USAGE);
+            say!("{}", cli::USAGE);
             ExitCode::SUCCESS
         }
         Ok(cli::Mode::Smoke) => run_smoke(),
         Ok(cli::Mode::SelfCheck(opts)) => {
             let report = selfcheck::run(&opts);
             if opts.json {
-                println!("{}", report.to_json());
+                say!("{}", report.to_json());
             } else {
-                print!("{}", report.to_table());
+                say_raw!("{}", report.to_table());
             }
             ExitCode::from(report.exit_code())
         }
@@ -1231,10 +1253,10 @@ fn run_smoke() -> ExitCode {
         with_clipboard: false,
     });
     if report.failed() == 0 {
-        println!("smoke ok (nexa-dir {})", env!("CARGO_PKG_VERSION"));
+        say!("smoke ok (nexa-dir {})", env!("CARGO_PKG_VERSION"));
         ExitCode::SUCCESS
     } else {
-        print!("{}", report.to_table());
+        say_raw!("{}", report.to_table());
         ExitCode::FAILURE
     }
 }
@@ -1260,7 +1282,7 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     let ui_pref = settings.get("ui.font_face").map(str::to_string);
     let Some(ui) = nexa_font::ui_font(ui_pref.as_deref()).or_else(|| nexa_font::ui_font(None))
     else {
-        eprintln!("nexa-dir: no usable UI font");
+        say_err!("nexa-dir: no usable UI font");
         return ExitCode::FAILURE;
     };
     app::row_icons::install(); // 패널 행 셸 아이콘(GAP-003 · dir2 M1-7)
@@ -1280,7 +1302,7 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
             .or_else(|_| EventLoop::<Wake>::with_user_event().build())
     };
     let Ok(el) = built else {
-        eprintln!("nexa-dir: event loop creation failed");
+        say_err!("nexa-dir: event loop creation failed");
         return ExitCode::FAILURE;
     };
     // 시작 폴더: 명령행 경로(dir2 KEY-301 · 세션보다 우선) → 세션 복원(T-45) → 현재 폴더/홈(`App::new`가 고른다).
@@ -1298,7 +1320,7 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
         );
     }
     if let Err(e) = el.run_app(&mut app) {
-        eprintln!("nexa-dir: event loop error: {e}");
+        say_err!("nexa-dir: event loop error: {e}");
         return ExitCode::FAILURE;
     }
     // `quit:<코드>` · 단언 실패(3) = 러너가 종료 코드로 판정(docs/18 §5).

@@ -516,16 +516,24 @@ pub(crate) fn register_drop_target(
 
 /// 부모 프로세스의 콘솔에 붙는다 — Windows의 **창 프로그램**(콘솔 없음)이 터미널에서 실행됐을 때 `--version` · `--selfcheck` 같은
 /// 출력이 그 터미널에 보이게(nexa-clip `console::attach_parent`와 같다). 부모에 콘솔이 없으면(탐색기 · 바로 가기) 조용히 실패한다 —
-/// 그게 "콘솔 창이 뜨지 않는" 정상 경로다. 출력이 파이프 · 파일로 돌려져 있으면 그 핸들이 그대로 쓰인다. 다른 OS = 아무것도 안 함.
+/// 그게 "콘솔 창이 뜨지 않는" 정상 경로다. 부모가 표준 출력/오류 핸들(파이프 · 파일)을 넘겼으면 **붙지 않고 그 핸들을 그대로 쓴다**
+/// (붙으면 핸들이 콘솔로 바뀌어 `$v = & exe --version` 같은 캡처가 비게 된다 — T-160 2차 release 스모크). 다른 OS = 아무것도 안 함.
 pub(crate) fn attach_parent_console() {
     #[cfg(windows)]
     {
         #[link(name = "kernel32")]
         extern "system" {
             fn AttachConsole(pid: u32) -> i32;
+            fn GetStdHandle(which: u32) -> *mut std::ffi::c_void;
         }
-        // SAFETY: 인자 하나짜리 단순 호출(ATTACH_PARENT_PROCESS = u32::MAX) — 실패는 무시한다.
+        const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+        const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+        let given = |h: *mut std::ffi::c_void| !h.is_null() && h as isize != -1;
+        // SAFETY: 인자 하나짜리 단순 호출들 — 실패는 무시한다.
         unsafe {
+            if given(GetStdHandle(STD_OUTPUT_HANDLE)) || given(GetStdHandle(STD_ERROR_HANDLE)) {
+                return;
+            }
             AttachConsole(u32::MAX);
         }
     }

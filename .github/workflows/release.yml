@@ -207,9 +207,13 @@ jobs:
           $p = Start-Process msiexec -ArgumentList "/i `"$msi`" /qn /norestart /l*v install.log" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "msiexec /i 실패 $($p.ExitCode)" }
           $dir = Join-Path $env:ProgramFiles "Nexa Dir"
-          $v = & (Join-Path $dir "nexa-dir.exe") --version
-          if ($v -ne "nexa-dir $env:NDIR_VERSION") { throw "버전 불일치: $v" }
-          & (Join-Path $dir "nexa-dir.exe") --smoke
+          # 창 프로그램(windows_subsystem)이라 `$v = & exe` 캡처는 PowerShell이 기다리지 않는다 → Start-Process -Wait + 파일로 받는다.
+          $exe = Join-Path $dir "nexa-dir.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--version" -Wait -PassThru -NoNewWindow -RedirectStandardOutput ver.txt
+          $v = (Get-Content ver.txt -Raw).Trim()
+          if ($p.ExitCode -ne 0 -or $v -ne "nexa-dir $env:NDIR_VERSION") { throw "버전 불일치: '$v' (exit $($p.ExitCode))" }
+          $p = Start-Process -FilePath $exe -ArgumentList "--smoke" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoke.txt -RedirectStandardError smoke.err
+          Get-Content smoke.txt; if ($p.ExitCode -ne 0) { Get-Content smoke.err; throw "--smoke 실패 $($p.ExitCode)" }
           if (-not (Test-Path (Join-Path $dir "plugins\markdown.wasm"))) { throw "동봉 플러그인 누락" }
           (Get-ItemProperty 'HKLM:\SOFTWARE\SosomLab\Nexa Dir').InstallDir
           $p = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
