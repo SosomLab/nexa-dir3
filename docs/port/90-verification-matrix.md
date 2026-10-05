@@ -22,7 +22,7 @@
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
 | NEW | 34 | 34 | 23 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
-| OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
+| OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
 | PANEL | 138 | 138 | 134 | 4 | 0 | 0 | 0 |
 | PLUG | 100 | 100 | 84 | 15 | 1 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4323 | 4323 | 2507 | 925 | 763 | 0 | 0 |
+| **합계** | 4323 | 4323 | 2508 | 925 | 762 | 0 | 0 |
 
 ## 행
 
@@ -131,7 +131,7 @@
 | PLUG-057 · PLUG-056(복사) | 미리보기 창 드래그 문자 선택(앵커·확장·확정 · 경계 밖 자동 스크롤 · 선택 배경 · Ctrl+C 선택/전체 · Ctrl+A) | `preview_win.rs::{hit, begin_drag, drag_to, end_drag, selected_text, select_all, tick}` | T2 | `drag_selection_without_window` | ✅ | 우클릭 복사 메뉴(PLUG-058) |
 | RENDER 글꼴 크기 · TERM 셀 폭(사용자 10-03) | 설정 `*.font_size`(em · dir2 DIP)를 nexa-gfx 높이 px로 변환해 dir2와 같은 시각 크기 · 슬롯별 prefs · 고정폭 글꼴 `FontSet.mono`(터미널·코드 줄) | `app/fonts.rs` · nexa-ui `nexa-gfx/text.rs::em_to_px` | T2 | `font_sizes_use_em_convention_and_mono_font_loads` · `em_to_px_ratio` | ✅ | 실기 캡처 비교(사용자) |
 | DLG-059 · 060 · 061 · 062 · OPS-216 | 전송 진행 창(비모달 400 · 라벨 · 진행/전체/% · 파일 n/m · 세그먼트 바 크기 비례/5색/최소 3px · [취소] = 워커 취소 · 완료 = [닫기 (N)] 카운트다운 · close_ms 0 = 창 없음) | `progress_win.rs` · `app/ops.rs::{start_transfer, ops_tick, finish_transfer}` · nexa-ui `nexa-ctl/controls/progress.rs` | T2 | `update_cancel_and_countdown_without_window` · `transfer_progress_window_updates_and_closes` · `allocate_widths_proportional_with_min_width` · `control_snapshot_percent_and_paint` · `dialogs_delete_permanent_and_paste_conflict`(질문 중 스냅숏 · 건너뜀 = skipped) · `canceled_transfer_counts_untouched_items_as_skipped` | ✅ | 실기 캡처 비교 · 10-04 §26: 덮어쓰기 질문 중에도 앞 항목 결과 즉시 반영(`sync_progress_win` 틱 맨 앞 · 밝은 회색 = 미처리 · 색 = 결정됨) · §27: 취소 = 미처리/하던 중 항목도 건너뜀 · 결과 안내 건너뜀 수 = 엔진 + 미처리(`skipped_total` · 엔진 결과 불변) · §28: 결과 안내 맨 앞 "전체 N"(`result_parts` · `ops.total`) — 화면 판정 대기 · 10-05 §37: 덮어쓰기 질문 = 이름 줄 · "대상 폴더: {1}" 줄 · 안내 줄(3언어 · 질문 3줄 +20 높이 · `overwrite_question` · 시험 `overwrite_question_names_the_destination_folder` · 3f82b21 · T-156) |
-| DLG-074~077 · 079~083 · 086 · 088 | 일괄 이름 변경 창(880×620 · 카드 스택 6종 · 수확 규칙 · 실시간 미리보기 · 충돌 · 적용 토글 · 정렬 · 프리셋 메뉴/저장/불러오기 · [Rename] 순차 + undo 1건 · 선택 수집) | `bulk_win.rs` · `app/bulk.rs` · `ndir-ops/batch_rename.rs` | T2 | `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` · ndir-ops 코어 14 | ✅ | 관리 팝업(084) · 포맷 도움말(085) · 썸(078) · 라벨 실측(087) · TZ |
+| DLG-074~077 · 079~083 · 086 · 088 | 일괄 이름 변경 창(880×620 · 카드 스택 6종 · 수확 규칙 · 실시간 미리보기 · 충돌 · 적용 토글 · 정렬 · 프리셋 메뉴/저장/불러오기 · [Rename] 순차 + undo 1건 · 선택 수집) | `bulk_win.rs` · `app/bulk.rs` · `ndir-ops/batch_rename.rs` | T2 | `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` · ndir-ops 코어 14 | ✅ | 관리 팝업(084) · 포맷 도움말(085) · 썸(078) · 라벨 실측(087) · TZ ✅ 0d416f8 · Tab 순회 · 충돌 행 색 · 창 크기 조절 = T-162 잔여 |
 | CI-114 · CI-052~066 · T-82 | 패키징 3-OS(`packaging/lib.sh` 공용 · deb/rpm FHS · Universal 2 .app + pkg/dmg · MSI(WiX v4 · Main+PathEnv) + 포터블 zip · 동봉 `plugins/` · THIRD-PARTY-NOTICES · 임포트 게이트 · `release.yml` 설치 스모크) | `packaging/**` · `scripts/third-party-notices.*` · `scripts/check-imports.ps1` · `.github/workflows/release.yml` | T0·T5 | 로컬: `stage_common` · `check-imports` 15종 인박스 · `build-msi.ps1`/`build-zip.ps1` · CI: release.yml 설치→`--version`·`--smoke`→제거 잔여 0 | 🚧 | 태그 릴리스 첫 실행 전 · deb/rpm/pkg/dmg는 CI 몫 |
 | DLG-069 · 070 · 071 · 072 · 073 · T-13 | 순서/표시 편집 창(어댑터 3종 · 블록/자식 이동 규칙 · 표시 체크(잠금·그룹 통째) · 키보드 · 실시간 적용 통지) + 툴바/컨텍스트 메뉴/컬럼 반영 · 세션 `cols` | `order.rs` · `order_win.rs` · `app/order.rs` · `app/menus.rs::build_toolbar` · `app/ctxmenu.rs::ctx_layout` · `panel.rs::apply_col_layout` | T1·T2·T3·T4 | `order::tests` 3 · `order_win::tests` 2 · `order_editor_applies_toolbar_ctxmenu_and_columns` · `order-editor.scn` | ✅ | 우클릭 팝업 진입 ☐ · 셰브론 접기 생략 |
 | KEY-201~222 | 영속 파일 목록(settings.conf · session.conf · crash · license · plugins/ · renames/ · lang 오버레이 · 구 이름) | `ndir-settings::config_dir` · `session.rs` · `crash.rs` · `app/license.rs` · `app/bulk.rs::presets_dir` · `preview::user_plugin_dir` | T1·T3 | settings/session/crash 시험 · T-80/T-71/T-63 core 시험 · `config_dir_honors_env_home` | ✅ | 데이터 폴더 = DR-9(NDIR_HOME → exe 옆 data/ → OS 사용자 폴더) |
@@ -204,7 +204,8 @@
 | PANEL-119~130 | 트리 코어 `nexa-tree` | `ndir-tree` | T1 | `ndir-tree` 시험(dir2 이식 · DR-11) | ✅ | |
 | PANEL-131~138 | 호스트 접점(목록 동작 배선) | `app/input.rs` · `app/menus.rs` | T3 | `route_and_commands_without_window` | 🚧 | · 10-05 §12 정리: 131~136 · 138 = 시험 있음(✅ 후보 · 134 휠 = 커서 아래 패널은 시험 없음) · 137 DnD 추적 ☐(T-147) |
 | OPS-001~039 · 090~099 · 110~118 · 130~142 | 전송 엔진 · 실행 취소 · 가상 파일시스템 · 인라인 트리 코어 · 공용 타입 · 빌드 구성 | `ndir-ops` · `ndir-vfs` · `ndir-tree` · `ndir-core` | T1 | 각 크레이트 시험(dir2 이식 · DR-11) · `copy_paste` core | ✅ | |
-| OPS-050~083 | 일괄 이름 변경 코어 + 대화상자 로직 | `ndir-ops/batch_rename.rs` · `bulk_win.rs` · `app/bulk.rs` | T1·T3 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 순서 편집기 = order_win |
+| OPS-050~083 | 일괄 이름 변경 코어 + 대화상자 로직 | `ndir-ops/batch_rename.rs` · `bulk_win.rs` · `app/bulk.rs` | T1·T3 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` · `bulk_rename_window_apply_undo_and_presets` | ✅ | 순서 편집기 = order_win · OPS-082 `rename_expanded` ☐(T-162 잔여) |
+| BULK-SAFE · OPS-412 · T-162(1차) | 일괄 이름 변경 적용 안전성 · 맞바꾸기 — 적용 직전 대상 재확인(차 있으면 그 항목만 실패 · 덮어쓰지 않음) · 비워지는 이름(vacated) 규칙 + 임시 이름 2단계로 a↔b · 연쇄 · 대소문자만 변경 · 실행 취소 `RenameBatchOp` · 날짜 토큰 현지 시간대(`local_tz_min` · 정보 도크 압축 요약 같은 값) · 충돌 행만 건너뜀(`bulk.countSkip`) · 다시 열 때 적용 체크 초기화 · 첫 칸 포커스 · Enter = Rename · Space = 선택 행 토글 | `ndir-ops/batch_rename.rs::{apply_renames, conflicts}` · `ndir-ops/history.rs::RenameBatchOp` · `app/bulk.rs::{local_tz_min, tz_min_from}` · `bulk_win.rs` · `dockinfo.rs` | T1 · T3 + 실기 | `apply_renames_never_overwrites_and_handles_swaps` · `conflicts_allow_chain_and_swap` · `rename_batch_undo_redo_handles_swap` · `conflict_rows_skip_only_themselves` · `tz_offset_from_local_calendar` · `bulk_apply_swaps_and_never_overwrites` | ✅ | 10-05 §46(0d416f8 · 출처 dir2 win.rs:6424-6460) · 실기 = 맞바꾸기 · 현지 날짜 · 키보드 |
 | OPS-150~153 · 401~416 | 문서 규약 · 실측 교훈/결함 이력 | `docs/10` · `docs/15` | — | — | ⚠ | 규약/교훈은 문서로 계승 |
 | OPS-201~218 · 301~315 · 501~525 | nexa-ui 매핑(진행 창 SegProgress 등) · OS 분기점 · 회귀 테스트 후보 | `progress_win.rs` · `platform/` | T2·T3 | T-70 시험 · platform 시험 | 🚧 | 회귀 후보 25건 중 미작성분 = 91 목록 |
 | TERM-001~033 · 040~052 · 070~087 · 100~125 | VT 파서/셀 그리드 · 테마 · PTY · 키/마우스 · 도크 통합·cwd · 설정 · 퀵 런처 | `ndir-term` · `platform/winpty.rs`·`unixpty.rs` · `termview.rs` · `app/term.rs` · `launcher.rs` | T1·T3·T4 | `ndir-term` 시험(이식) · `lifecycle_with_fake_pty` · `fixed_columns_…mouse_report` · `term-echo.scn` · 런처 시험 | ✅ | |
