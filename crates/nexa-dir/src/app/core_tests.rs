@@ -6797,3 +6797,54 @@ fn performance_mode_turns_icons_off() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 수식키 분기 남은 것(dir2 대조 · T-153): 빈 곳 Shift+우클릭 = 확장 동사 대상 · 터미널 Shift+우클릭 = TUI 마우스 모드여도 로컬 메뉴 ·
+/// Windows 터미널의 Ctrl+V = 붙여넣기 규칙.
+#[test]
+fn modifier_variants_for_background_menu_and_terminal() {
+    let (mut app, dir) = fixture("modvariants");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let extended = |log: &Rc<std::cell::RefCell<crate::platform::fake::FakeLog>>| {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.as_str() == "menu.bg.extended")
+            .count()
+    };
+    // 빈 곳 우클릭: 평소 = 확장 없음 · Shift = 확장 동사 대상.
+    app.open_bg_menu(0);
+    assert_eq!(extended(&log), 0, "평소 = 확장 동사 없음");
+    assert!(!app.dump_of("ctx").unwrap().contains("fake.bg.extended"));
+    app.startup_cmd("ui.press:escape");
+    app.shift = true;
+    app.open_bg_menu(0);
+    app.shift = false;
+    assert_eq!(extended(&log), 1, "Shift = 확장 동사 대상");
+    assert!(app.dump_of("ctx").unwrap().contains("fake.bg.extended"));
+    app.startup_cmd("ui.press:escape");
+    // 터미널: TUI 마우스 모드면 우클릭은 셸 몫 · Shift+우클릭 = 로컬 메뉴.
+    app.startup_cmd("dock.kind:2");
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(app.terms[0].started());
+    let cr = app.docks[0].content_rect();
+    app.cursor = (cr.x + 10, cr.y + 10);
+    let mut inv = Invalidations::default();
+    assert!(app.open_dock_edit_menu(0, &mut inv), "평소 = 로컬 메뉴");
+    app.startup_cmd("ui.press:escape");
+    app.terms[0].screen.feed("\x1b[?1000h\x1b[?1006h"); // TUI 마우스 모드
+    assert!(!app.open_dock_edit_menu(0, &mut inv), "TUI 모드 = 셸 몫");
+    app.shift = true;
+    assert!(
+        app.open_dock_edit_menu(0, &mut inv),
+        "Shift = 그래도 로컬 메뉴"
+    );
+    app.shift = false;
+    assert!(app.dump_of("ctx").unwrap().starts_with("termedit"));
+    app.startup_cmd("ui.press:escape");
+    // Ctrl+V 규칙은 OS가 정한다(Windows = 붙여넣기).
+    assert_eq!(crate::platform::term_ctrl_v_pastes(), cfg!(windows));
+    let _ = std::fs::remove_dir_all(&dir);
+}

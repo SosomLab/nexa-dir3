@@ -279,6 +279,10 @@ impl App {
         if l == 'c' && self.terms[i].sel.is_some() {
             return self.term_copy();
         }
+        // Windows: 수식키 없는 Ctrl+V = 붙여넣기(dir2 · Windows Terminal 관례 — 종전 dir3는 0x16을 셸로 보냈다).
+        if l == 'v' && platform::term_ctrl_v_pastes() {
+            return self.term_paste();
+        }
         if !l.is_ascii_lowercase() {
             return false;
         }

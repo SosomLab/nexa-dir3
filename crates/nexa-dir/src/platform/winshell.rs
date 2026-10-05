@@ -191,7 +191,7 @@ impl Worker {
     }
 
     /// 폴더 배경 메뉴(SHELL-009): 폴더 PIDL → `IShellFolder` → `CreateViewObject::<IContextMenu>` → QueryContextMenu.
-    unsafe fn build_bg(owner: isize, dir: &Path) -> Result<Built, PlatformError> {
+    unsafe fn build_bg(owner: isize, dir: &Path, extended: bool) -> Result<Built, PlatformError> {
         let hwnd = HWND(owner as *mut core::ffi::c_void);
         let wide: Vec<u16> = dir
             .as_os_str()
@@ -229,14 +229,24 @@ impl Worker {
                 return Err(PlatformError::Failed(format!("CreatePopupMenu: {e}")));
             }
         };
-        let hr = icm.QueryContextMenu(hmenu, 0, ID_FIRST, ID_LAST, CMF_NORMAL);
+        // Shift+우클릭 = 확장 동사까지(dir2 win.rs:2875).
+        let flags = if extended {
+            CMF_NORMAL | CMF_EXTENDEDVERBS
+        } else {
+            CMF_NORMAL
+        };
+        let hr = icm.QueryContextMenu(hmenu, 0, ID_FIRST, ID_LAST, flags);
         if hr.is_err() {
             let _ = DestroyMenu(hmenu);
             free();
             return Err(PlatformError::Failed(format!("QueryContextMenu: {hr}")));
         }
         Ok(Built {
-            key: MenuTarget::Bg(dir.to_path_buf()),
+            key: if extended {
+                MenuTarget::BgExtended(dir.to_path_buf())
+            } else {
+                MenuTarget::Bg(dir.to_path_buf())
+            },
             icm,
             hmenu,
             pidls: vec![pidl],
@@ -249,7 +259,8 @@ impl Worker {
         match target {
             MenuTarget::Rows(paths) => Self::build(owner, paths, false),
             MenuTarget::RowsExtended(paths) => Self::build(owner, paths, true),
-            MenuTarget::Bg(dir) => Self::build_bg(owner, dir),
+            MenuTarget::Bg(dir) => Self::build_bg(owner, dir, false),
+            MenuTarget::BgExtended(dir) => Self::build_bg(owner, dir, true),
         }
     }
 
@@ -291,7 +302,7 @@ impl Worker {
                 unsafe { invoke_offset(b, offset)? };
                 Ok(None)
             }
-            MenuTarget::Bg(dir) => {
+            MenuTarget::Bg(dir) | MenuTarget::BgExtended(dir) => {
                 let before = dir_names(dir);
                 // SAFETY: 위와 같음.
                 unsafe { invoke_offset(b, offset)? };

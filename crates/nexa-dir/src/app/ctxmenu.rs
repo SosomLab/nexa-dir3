@@ -267,7 +267,8 @@ impl App {
     pub(crate) fn open_dock_edit_menu(&mut self, dock: usize, inv: &mut Invalidations) -> bool {
         let (x, y) = self.cursor;
         if self.term_hit_at(x, y) == Some(dock) && self.terms[dock].started() {
-            if self.terms[dock].mouse_report(x, y, 2, true).is_some() {
+            // TUI 마우스 모드면 우클릭은 셸 몫 — 단, **Shift+우클릭은 늘 로컬 메뉴**(dir2 win.rs:8185 · 좌클릭의 Shift = 로컬 선택과 같은 규칙).
+            if !self.shift && self.terms[dock].mouse_report(x, y, 2, true).is_some() {
                 return false;
             }
             self.set_term_focus(Some(dock), inv);
@@ -354,6 +355,15 @@ impl App {
             return true;
         }
         false
+    }
+
+    /// 배경 메뉴의 셸 대상 — 이번 메뉴를 Shift로 열었으면 확장 동사 대상.
+    fn bg_target(&self, dir: PathBuf) -> MenuTarget {
+        if self.ctx_extended {
+            MenuTarget::BgExtended(dir)
+        } else {
+            MenuTarget::Bg(dir)
+        }
     }
 
     /// 행 메뉴의 셸 대상 — 이번 메뉴를 Shift로 열었으면([`Self::open_row_menu`]) 확장 동사 대상.
@@ -506,7 +516,9 @@ impl App {
             Vec::new()
         } else {
             self.ctx_set_owner();
-            let target = MenuTarget::Bg(dir);
+            // Shift를 누른 채 열면 확장 동사까지(dir2 win.rs:2875) — 행 메뉴와 같은 규칙.
+            self.ctx_extended = self.shift;
+            let target = self.bg_target(dir);
             match self.platform.ctxmenu.try_items(&target) {
                 Some(shell) => shell,
                 None => return self.ctx_begin_wait(CtxKind::Bg(panel), target),
@@ -605,7 +617,7 @@ impl App {
                             Some(CtxKind::Row(_)),
                             MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel),
                         ) => self.row_menu_items(sel, Some(&items)),
-                        (Some(CtxKind::Bg(_)), MenuTarget::Bg(_)) => {
+                        (Some(CtxKind::Bg(_)), MenuTarget::Bg(_) | MenuTarget::BgExtended(_)) => {
                             self.bg_menu_items(Some(&items))
                         }
                         _ => continue,
@@ -804,7 +816,7 @@ impl App {
                 // 셸 항목(`shell:<id>` · 가짜 `fake.*`) = 플랫폼 포트 실행. 배경 메뉴면 폴더 기준.
                 // 비동기 실행을 지원하면(Windows 메뉴 스레드 — 속성 창 같은 모달이 UI를 붙잡지 않는다) 결과는 틱에서, 아니면 동기.
                 let target = if matches!(kind, CtxKind::Bg(_)) {
-                    MenuTarget::Bg(self.panels[panel].root_path())
+                    self.bg_target(self.panels[panel].root_path())
                 } else {
                     // 사용자가 본 메뉴와 같은 대상(확장 동사로 열었으면 그 메뉴)으로 실행한다 — id는 그 메뉴의 것이다.
                     self.rows_target(self.panels[panel].selected_paths())
@@ -813,7 +825,9 @@ impl App {
                     self.ctx_invoke_panel = Some(panel);
                 } else {
                     let result = match &target {
-                        MenuTarget::Bg(dir) => self.platform.ctxmenu.invoke_bg(other, dir),
+                        MenuTarget::Bg(dir) | MenuTarget::BgExtended(dir) => {
+                            self.platform.ctxmenu.invoke_bg(other, dir)
+                        }
                         MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel) => {
                             self.platform.ctxmenu.invoke(other, sel).map(|()| None)
                         }

@@ -141,6 +141,16 @@ impl ContextMenuProvider for FakeMenu {
                     v
                 }),
                 MenuTarget::Bg(dir) => self.bg_items(dir),
+                MenuTarget::BgExtended(dir) => self.bg_items(dir).map(|mut v| {
+                    note(&self.0, "menu.bg.extended".into());
+                    v.push(ShellMenuItem {
+                        id: "fake.bg.extended".into(),
+                        label: "Fake Bg Extended".into(),
+                        enabled: true,
+                        ..Default::default()
+                    });
+                    v
+                }),
             }
             .unwrap_or_default(),
         )

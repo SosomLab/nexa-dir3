@@ -153,6 +153,14 @@ pub(crate) enum MenuTarget {
     RowsExtended(Vec<PathBuf>),
     /// 폴더 배경.
     Bg(PathBuf),
+    /// 폴더 배경 + **확장 동사**(Shift+우클릭 · dir2 win.rs:2875 — "여기에 PowerShell 창 열기" 등 평소 숨는 항목).
+    BgExtended(PathBuf),
+}
+
+/// 터미널에서 수식키 없는 Ctrl+V가 **붙여넣기**인가 — Windows(dir2 · Windows Terminal 관례)만. 다른 OS의 터미널에서 Ctrl+V는
+/// "다음 글자를 그대로"(0x16)라 셸로 보낸다(붙여넣기 = Ctrl+Shift+V · ⌘V).
+pub(crate) fn term_ctrl_v_pastes() -> bool {
+    cfg!(windows)
 }
 
 /// 셸 메뉴 비동기 통지(`ContextMenuProvider::poll`).
@@ -227,7 +235,7 @@ pub(crate) trait ContextMenuProvider {
         Some(
             match target {
                 MenuTarget::Rows(paths) | MenuTarget::RowsExtended(paths) => self.items(paths),
-                MenuTarget::Bg(dir) => self.bg_items(dir),
+                MenuTarget::Bg(dir) | MenuTarget::BgExtended(dir) => self.bg_items(dir),
             }
             .unwrap_or_default(),
         )
