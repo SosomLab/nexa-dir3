@@ -481,6 +481,20 @@ impl App {
         if matches!(sel, [one] if one.is_file()) {
             items.push(CtxItem::item("ctx.checksum", tr("ctx.checksum")));
         }
+        // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일 1개일 때 — 여기에 / "<이름>" 폴더에.
+        if let [one] = sel {
+            if one.is_file() && app::extract::extract_ext_ok(one) {
+                let folder = ndir_ops::leaf_name(&app::extract::extract_dest(one, false));
+                items.push(CtxItem::submenu(
+                    "ctx.extract",
+                    tr("ctx.extract"),
+                    vec![
+                        CtxItem::item("ctx.extract_here", tr("ctx.extractHere")),
+                        CtxItem::item("ctx.extract_to", trf("ctx.extractTo", &[&folder])),
+                    ],
+                ));
+            }
+        }
         // 새로 만들기 ▸(SHELL-008 · dir2 CLSID_NewMenu 호스팅 → 자체 서브메뉴): 단일 선택일 때만 · 대상 = 폴더 항목 자신 / 파일 항목 부모 ·
         // 자식 = 폴더 · 텍스트 문서(템플릿에 txt가 없을 때) · OS/사용자 템플릿.
         self.ctx_new_dir = None;
@@ -770,6 +784,11 @@ impl App {
             "ctx.checksum" => {
                 if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
                     self.open_checksum(&p);
+                }
+            }
+            "ctx.extract_here" | "ctx.extract_to" => {
+                if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
+                    self.start_extract(&p, id == "ctx.extract_here");
                 }
             }
             "ctx.copy_name" => {

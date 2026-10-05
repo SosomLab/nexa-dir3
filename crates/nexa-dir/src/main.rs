@@ -270,6 +270,8 @@ struct App {
     hash_win: hash_win::HashWin,
     open_hash: bool,
     hash_job: Option<app::checksum::HashJob>,
+    /// 압축 풀기 작업(T-169 · 전송과 같은 슬롯).
+    extract_job: Option<app::extract::ExtractJob>,
     open_license: bool,
     file_win: FileWin,
     file_purpose: Option<app::license::FilePurpose>,
@@ -602,6 +604,7 @@ impl App {
             hash_win: hash_win::HashWin::new(),
             open_hash: false,
             hash_job: None,
+            extract_job: None,
             open_license: false,
             file_win: FileWin::new(),
             file_purpose: None,

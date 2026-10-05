@@ -15,7 +15,7 @@ pub struct Tar;
 const BLOCK: u64 = 512;
 
 /// 8진수 필드(공백·NUL 종료) 또는 GNU base-256(최상위 비트) 해석.
-fn numeric(field: &[u8]) -> Option<u64> {
+pub(super) fn numeric(field: &[u8]) -> Option<u64> {
     if field.first().is_some_and(|b| b & 0x80 != 0) {
         // base-256: 첫 바이트의 부호 비트를 제외한 빅엔디언
         let mut v: u64 = (field[0] & 0x7F) as u64;
@@ -37,13 +37,13 @@ fn numeric(field: &[u8]) -> Option<u64> {
 }
 
 /// NUL 종료 문자열 필드.
-fn cstr(field: &[u8]) -> &[u8] {
+pub(super) fn cstr(field: &[u8]) -> &[u8] {
     let end = field.iter().position(|&b| b == 0).unwrap_or(field.len());
     &field[..end]
 }
 
 /// 헤더 체크섬 검증(시그니처가 없는 구형 tar 판정용).
-fn checksum_ok(h: &[u8]) -> bool {
+pub(super) fn checksum_ok(h: &[u8]) -> bool {
     let Some(want) = numeric(&h[148..156]) else {
         return false;
     };
@@ -77,7 +77,7 @@ fn checksum_ok(h: &[u8]) -> bool {
 /// 길이 필드는 아카이브가 준 **바이트 수**이므로 `&[u8]`로 자른다 — `&str`로 자르면
 /// 손상 레코드의 길이가 멀티바이트 글자 중간에 떨어질 때 경계 panic이 난다(G7-02).
 /// `len <= sp + 1`(빈 레코드·자기 길이보다 짧은 길이)이면 손상으로 보고 중단한다.
-fn parse_pax(body: &[u8]) -> Vec<(String, String)> {
+pub(super) fn parse_pax(body: &[u8]) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut rest = body;
     while let Some(sp) = rest.iter().position(|&b| b == b' ') {

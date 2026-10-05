@@ -29,6 +29,7 @@ use ndir_core::secret::Secret;
 use std::path::Path;
 
 pub mod cab;
+pub mod extract;
 pub mod rar;
 pub mod sevenz;
 pub mod stream;

@@ -112,7 +112,7 @@ fn parse_extra(buf: &[u8], need_size: bool, need_packed: bool) -> Extra {
 }
 
 /// 꼬리에서 EOCD를 역탐색 — (버퍼, 버퍼 내 위치, 파일 절대 위치).
-fn find_eocd(src: &dyn ReadAt) -> Result<(Vec<u8>, usize, u64), ArchiveError> {
+pub(super) fn find_eocd(src: &dyn ReadAt) -> Result<(Vec<u8>, usize, u64), ArchiveError> {
     let size = src.size();
     let want = EOCD_SEARCH.min(size as usize);
     let start = size - want as u64;

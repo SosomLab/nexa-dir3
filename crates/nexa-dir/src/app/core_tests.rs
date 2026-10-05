@@ -7425,3 +7425,80 @@ fn favorites_toggle_menu_and_navigate() {
     app.command("nav.fav_toggle");
     assert_eq!(app.favorites().len(), 1, "{:?}", app.favorites());
 }
+
+/// 압축 풀기(T-169): tar 파일 → "<이름>" 폴더에 풀기(작업 스레드) → 파일 생김 · 결과 안내 · 진행 중 전송/풀기 요청은 거부 ·
+/// 메뉴는 zip/tar/gz/tgz 파일 1개일 때만 하위 메뉴로.
+#[test]
+fn extract_archive_into_named_folder() {
+    let (mut app, dir) = fixture("extract");
+    // 최소 tar: 헤더 512 + 데이터 + 패딩 + 끝 블록 1024.
+    let mut h = vec![0u8; 512];
+    h[..5].copy_from_slice(b"a.txt");
+    h[100..107].copy_from_slice(b"0000644");
+    h[124..135].copy_from_slice(format!("{:011o}", 5).as_bytes());
+    h[136..147].copy_from_slice(format!("{:011o}", 1_700_000_000u64).as_bytes());
+    h[156] = b'0';
+    h[257..263].copy_from_slice(b"ustar\0");
+    h[263..265].copy_from_slice(b"00");
+    let sum: u64 = h
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| {
+            if (148..156).contains(&i) {
+                32
+            } else {
+                u64::from(b)
+            }
+        })
+        .sum();
+    h[148..154].copy_from_slice(format!("{sum:06o}").as_bytes());
+    h[155] = b' ';
+    let mut tar = h;
+    tar.extend_from_slice(b"hello");
+    tar.extend(std::iter::repeat_n(0u8, 507 + 1024));
+    let tp = dir.join("pack.tar");
+    std::fs::write(&tp, &tar).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&tp, &mut inv);
+    let items = app.row_menu_items(std::slice::from_ref(&tp), Some(&[]));
+    assert!(
+        items
+            .iter()
+            .any(|c| matches!(c, CtxItem::Item { id, children, .. } if id == "ctx.extract" && children.len() == 2)),
+        "압축 풀기 하위 메뉴"
+    );
+    app.start_extract(&tp, false);
+    assert!(app.extract_job.is_some());
+    assert_eq!(
+        app.extract_job.as_ref().map(|j| j.dest.clone()),
+        Some(dir.join("pack"))
+    );
+    // 진행 중 전송 시작 = 거부.
+    app.start_transfer(
+        vec![tp.clone()],
+        dir.join("pack"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    assert!(app.transfer.is_none());
+    let at = std::time::Instant::now();
+    while app.extract_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        std::fs::read(dir.join("pack").join("a.txt")).expect("read"),
+        b"hello"
+    );
+    // 순수 요약.
+    let rep = ndir_vfs::archive::extract::Report {
+        files: 2,
+        dirs: 1,
+        skipped_existing: 1,
+        ..Default::default()
+    };
+    let s = crate::app::extract::extract_summary(&rep);
+    assert!(s.contains('2') && s.contains("1"), "{s}");
+}
