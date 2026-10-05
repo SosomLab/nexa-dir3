@@ -243,6 +243,8 @@
 ### 3-4. dir3 패키징에서 정해야 할 것 — **결정(10-03 · T-82 · journal §49)**
 
 > ① **MSI + 포터블 zip**(둘 다 · 같은 스테이징 · choco/winget/brew 등록은 후속) ② **예산 = 단일 exe ≤ 10 MB**(dir2 B2 유지 · 실측 5.2 MB) + 임포트 화이트리스트(`scripts/check-imports.ps1`) ③ 동봉 플러그인 = `plugins/*.wasm` → `stage_common` `plugins/`(Windows `%ProgramFiles%\Nexa Dir\plugins` · macOS `Resources/plugins` · Linux `/usr/share/nexa-dir/plugins`) ④ `.desktop` `MimeType=inode/directory;` + `Categories=System;FileTools;FileManager;`.
+>
+> **10-05 갱신(§68~§69 · 64fd96c)**: choco · winget · Homebrew Cask · pkg.sosomlab.com(linux-repo) 게시 파이프라인 구현 — 채널 표 · 스위치 · 제출 파일 규칙 = [packaging/README.md](../../packaging/README.md) · 기준 = nexa-clip 원격 f3a6781 + nexa-sql MSI 틀 · 사용자 준비물(시크릿 3 + 변수 2) 대기(T-160).
 
 원래의 질문(기록용):
 
