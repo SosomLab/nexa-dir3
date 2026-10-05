@@ -349,6 +349,8 @@ struct App {
     clip: Option<(Vec<PathBuf>, bool)>,
     /// 진행 중 전송(동시 1건).
     transfer: Option<app::ops::TransferJob>,
+    /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
+    dirsizes: app::dirsize::DirSizes,
     /// 진행 창 안에서 묻고 있는 덮어쓰기 질문의 회신 통로(워커가 기다린다 · app/dialogs.rs `conflict_ask`).
     conflict_inline: Option<std::sync::mpsc::Sender<app::ops::ConflictChoice>>,
     /// 파일 작업 undo/redo(세션 한정 100).
@@ -629,6 +631,7 @@ impl App {
             drives_seen: None,
             clip: None,
             transfer: None,
+            dirsizes: app::dirsize::DirSizes::default(),
             conflict_inline: None,
             history: ndir_ops::history::OperationHistory::default(),
             launcherbar,
@@ -763,6 +766,15 @@ impl App {
             .get("plugins.disabled")
             .unwrap_or("")
             .to_string();
+        // 폴더 크기(T-166): 정보 도크가 보여 줄 폴더 1개(활성 패널 또는 각 패널의 선택)가 있으면 재기 시작 · 없으면 멈춘다.
+        let folder: Option<PathBuf> = (0..2)
+            .filter(|&i| self.docks[i].bounds().h > 0 && self.docks[i].active_kind() == 0)
+            .map(|i| if single_info { self.active } else { i })
+            .find_map(|src| match self.panels[src].selected_paths().as_slice() {
+                [one] if one.is_dir() => Some(one.clone()),
+                _ => None,
+            });
+        self.dirsize_sync(folder.as_deref());
         for i in 0..2 {
             if self.docks[i].bounds().h <= 0 {
                 continue;
@@ -780,8 +792,14 @@ impl App {
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => {
                     let disk = &*self.platform.disk;
+                    let sizes = &self.dirsizes;
                     (
-                        dockinfo::info_lines(&selected, &current, &|p| disk.size_on_disk(p)),
+                        dockinfo::info_lines(
+                            &selected,
+                            &current,
+                            &|p| disk.size_on_disk(p),
+                            &|p| app::dirsize::size_lines(sizes.get(p)),
+                        ),
                         None,
                     )
                 }

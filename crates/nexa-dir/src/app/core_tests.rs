@@ -4822,7 +4822,12 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
 /// 도크 정보: 내 PC(가상 최상위)에서는 내부 표식 `::PC::`가 아니라 표시명을 보인다.
 #[test]
 fn dock_info_shows_display_name_for_virtual_root() {
-    let lines = crate::dockinfo::info_lines(&[], std::path::Path::new(ndir_vfs::MY_PC), &|_| None);
+    let lines = crate::dockinfo::info_lines(
+        &[],
+        std::path::Path::new(ndir_vfs::MY_PC),
+        &|_| None,
+        &|_| Vec::new(),
+    );
     assert_eq!(lines.len(), 1);
     assert!(!lines[0].contains("::PC::"), "{lines:?}");
     assert!(lines[0].contains(&ndir_i18n::tr("nav.mypc")), "{lines:?}");
@@ -7238,4 +7243,70 @@ fn natural_sort_command_toggles_setting_and_toolbar_check() {
     assert!(app.settings.flag("list.sort_natural"));
     assert!(app.toolbar.item_checked("view.natural_sort"));
     ndir_tree::set_natural_sort(before);
+}
+
+/// 폴더 크기(T-166): 폴더 1개를 선택하면 정보 도크가 "계산 중" → 합계 · "포함: 파일 N개, 폴더 M개" · 캐시 → 폴더 변경 통지면 다시 ·
+/// 설정 끄면 줄이 사라지고 재지 않는다.
+#[test]
+fn dock_shows_folder_size_after_worker_finishes() {
+    let (mut app, dir) = fixture("dirsize");
+    let sub = dir.join("pack");
+    std::fs::create_dir_all(sub.join("inner")).expect("mkdir");
+    std::fs::write(sub.join("a.bin"), vec![0u8; 1500]).expect("write");
+    std::fs::write(sub.join("inner").join("b.bin"), vec![0u8; 548]).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&sub, &mut inv);
+    app.update_docks();
+    assert!(app.dirsizes.running(), "폴더 선택 = 재기 시작");
+    let at = std::time::Instant::now();
+    while app.dirsize_tick() {
+        assert!(at.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let dock_text = |app: &mut App| {
+        let mut inv = Invalidations::default();
+        app.docks[0].select_all_text(&mut inv);
+        app.docks[0].selected_text().unwrap_or_default()
+    };
+    let lines = dock_text(&mut app);
+    assert!(
+        lines.contains("2,048") && lines.contains("Contains: 2 files, 1 folders"),
+        "{lines}"
+    );
+    let got = app.dirsizes.cached(&sub).expect("cached");
+    assert_eq!(
+        (got.bytes, got.files, got.dirs, got.partial),
+        (2048, 2, 1, false)
+    );
+    // 폴더 안 변경 통지 → 캐시가 버려지고 다음 갱신이 다시 잰다.
+    app.dirsizes.invalidate(&[sub.join("inner")]);
+    assert!(app.dirsizes.cached(&sub).is_none());
+    app.update_docks();
+    assert!(app.dirsizes.running());
+    // 설정 끔 → 멈추고 줄 없음.
+    let _ = app.settings.set("dock.folder_size", "off");
+    app.update_docks();
+    assert!(!app.dirsizes.running());
+    assert!(!dock_text(&mut app).contains("Contains:"));
+    // 순수 서식.
+    let l = crate::app::dirsize::size_lines(Ok(crate::app::dirsize::DirSize {
+        bytes: 2048,
+        files: 2,
+        dirs: 1,
+        partial: true,
+    }));
+    assert_eq!(l.len(), 2);
+    assert!(crate::app::dirsize::size_lines(Err(None)).is_empty());
+    assert_eq!(
+        crate::app::dirsize::size_lines(Err(Some(crate::app::dirsize::DirSize {
+            bytes: 10,
+            files: 1,
+            dirs: 0,
+            partial: false
+        })))
+        .len(),
+        1
+    );
 }

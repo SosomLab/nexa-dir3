@@ -1010,6 +1010,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 정보 도크의 폴더 크기 계산(dir3 신규 · T-166 · 사용자 10-05) — 성능 향상 모드에서는 끈다.
+    e!(
+        "dock.folder_size",
+        CAT_DOCK,
+        "pref.folderSize",
+        "pref.folderSize.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "layout.dock_height_pct",
         CAT_DOCK,
@@ -1643,6 +1652,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("statusbar.load_interval_ms", "perf.boost", Dep::Eq("off")),
     // 성능 향상 모드가 켜져 있으면 아이콘 두 설정은 쓰이지 않는다(늘 끔).
     ("list.row_icons", "perf.boost", Dep::Eq("off")),
+    ("dock.folder_size", "perf.boost", Dep::Eq("off")),
     ("menu.icons", "perf.boost", Dep::Eq("off")),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),

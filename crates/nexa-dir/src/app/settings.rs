@@ -113,6 +113,11 @@ impl App {
                 }
             }
             "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
+            "dock.folder_size" => {
+                self.dirsizes.clear();
+                self.update_docks();
+                self.redraw();
+            }
             "layout.tab_statusbar" => self.layout(),
             "launcher.items" | "launcher.seed" | "launcher.icon_size" | "launcher.item_gap" => {
                 self.rebuild_launcher();

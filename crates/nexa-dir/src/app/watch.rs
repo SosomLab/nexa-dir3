@@ -83,6 +83,7 @@ impl App {
             }
         }
         if !changed.is_empty() {
+            self.dirsizes.invalidate(&changed); // 폴더 크기 캐시(T-166) — 닿는 항목만.
             let mut inv = Invalidations::default();
             let transfer = self.transfer.is_some();
             let mut reloaded = false;
