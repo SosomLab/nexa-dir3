@@ -853,7 +853,8 @@ fn dock_layout_and_contents() {
     app.apply_setting("layout.info_mode");
     assert_eq!(app.docks[0].bounds().w, 1200);
     assert_eq!(app.docks[1].bounds().h, 0);
-    // 정보 줄 = 선택 파일(a.txt) · 선택 없음 = 현재 폴더.
+    app.update_docks(); // 디바운스(T-177) 예약을 바로 흘려보낸다.
+                        // 정보 줄 = 선택 파일(a.txt) · 선택 없음 = 현재 폴더.
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
     app.paint_into(&mut rec, 1200, 800, 1.0);
     assert!(
@@ -866,6 +867,7 @@ fn dock_layout_and_contents() {
         .rows_mut()
         .select_program(1, nexa_grid::SelectOp::Single, &mut inv);
     app.update_status();
+    app.update_docks(); // 디바운스(T-177) 예약을 바로 흘려보낸다.
     rec.clear();
     app.paint_into(&mut rec, 1200, 800, 1.0);
     assert!(rec.drew_text("Name: a.txt") && rec.drew_text("Kind: TXT"));
@@ -883,6 +885,7 @@ fn dock_layout_and_contents() {
         "스트립 클릭으로 미리보기 전환"
     );
     app.update_status();
+    app.update_docks(); // 디바운스(T-177) 예약을 바로 흘려보낸다.
     rec.clear();
     app.paint_into(&mut rec, 1200, 800, 1.0);
     assert!(
@@ -3071,7 +3074,7 @@ fn toolbar_and_launcher_right_click_menus() {
         .set("launcher.items", "A|ndir-no-such-a|;;B|ndir-no-such-b|--x");
     app.after_setting_changed("launcher.items");
     app.layout_for(1200, 800, 1.0);
-    let menu = |app: &App| app.dump_of("ctx").unwrap_or_default();
+    let menu = |app: &mut App| app.dump_of("ctx").unwrap_or_default();
     // 툴바 우클릭.
     let tb = app.toolbar.bounds();
     app.route(InputEvent::MouseMove {
@@ -3083,9 +3086,9 @@ fn toolbar_and_launcher_right_click_menus() {
         y: tb.y + 5,
     });
     assert!(
-        menu(&app).contains("aux.tb.order aux.prefs"),
+        menu(&mut app).contains("aux.tb.order aux.prefs"),
         "{}",
-        menu(&app)
+        menu(&mut app)
     );
     app.ctx_pick("aux.tb.order");
     assert!(app.open_order, "도구 모음 순서 편집 창");
@@ -3094,7 +3097,7 @@ fn toolbar_and_launcher_right_click_menus() {
     let (x, y) = (r.x + 3, r.y + 3);
     app.cursor = (x, y);
     app.route(InputEvent::RightDown { x, y });
-    let m = menu(&app);
+    let m = menu(&mut app);
     assert!(
         m.contains("aux.launch.edit:1 aux.launch.remove:1")
             && m.contains("aux.launch.add aux.launch.addsep")
@@ -3113,7 +3116,11 @@ fn toolbar_and_launcher_right_click_menus() {
         x: lb.right() - 5,
         y: lb.y + 5,
     });
-    assert!(!menu(&app).contains("aux.launch.edit"), "{}", menu(&app));
+    assert!(
+        !menu(&mut app).contains("aux.launch.edit"),
+        "{}",
+        menu(&mut app)
+    );
     app.ctx_pick("aux.launch.addsep");
     assert_eq!(
         app.settings.get("launcher.items"),
@@ -7058,6 +7065,7 @@ fn double_and_triple_click_select_text() {
     let mut inv = Invalidations::default();
     app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
     app.update_status();
+    app.update_docks(); // 디바운스(T-177) 예약을 바로 흘려보낸다.
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
     app.paint_into(&mut rec, 1200, 800, 1.0);
     // 도크 0 = 정보(첫 줄 "Name: a.txt"). RecordCtx 글자 폭 7.
@@ -7595,4 +7603,35 @@ fn compare_two_folders_and_sync_left_to_right() {
     );
     app.close_compare();
     assert!(app.cmp_job.is_none());
+}
+
+/// 도크 갱신 디바운스(T-177): 선택이 바뀌어도 바로 계산하지 않고 예약만 · 때가 되면 틱이 1번 갱신 · 연속 이동은 하나로 합쳐진다.
+#[test]
+fn dock_refresh_is_debounced_after_rapid_moves() {
+    use std::time::{Duration, Instant};
+    let (mut app, dir) = fixture("dockdeb");
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        std::fs::write(dir.join(n), n).expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.update_docks();
+    assert!(app.docks_due.is_none());
+    // 빠르게 세 번 선택 변경 → 예약 1개(마지막 시각) · 도크는 아직 종전 내용.
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        app.panels[0].select_path(&dir.join(n), &mut inv);
+        app.update_status();
+    }
+    let due = app.docks_due.expect("예약");
+    assert!(due > Instant::now() - Duration::from_millis(1));
+    // 아직 때가 아니면 깨울 시각만 돌려준다.
+    assert_eq!(app.docks_tick(Instant::now()), Some(due));
+    // 때가 되면 1번 갱신하고 예약이 사라진다.
+    assert_eq!(app.docks_tick(due + Duration::from_millis(1)), None);
+    assert!(app.docks_due.is_none());
+    let mut inv2 = Invalidations::default();
+    app.docks[0].select_all_text(&mut inv2);
+    let text = app.docks[0].selected_text().unwrap_or_default();
+    assert!(text.contains("c.txt"), "{text}");
 }

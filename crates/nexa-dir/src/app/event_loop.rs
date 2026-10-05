@@ -205,6 +205,9 @@ impl ApplicationHandler<Wake> for App {
             next = next.min(t);
         }
         next = next.min(self.watch_tick(now));
+        if let Some(t) = self.docks_tick(now) {
+            next = next.min(t);
+        }
         if self.panels.iter().any(panel::Panel::typeahead_active) {
             // 타입어헤드 입력 중 = 유지 시간이 지나면 배지를 지워야 한다(사건이 없어도) → 짧게 깬다.
             next = next.min(now + Duration::from_millis(100));

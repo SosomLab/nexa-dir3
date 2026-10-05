@@ -17,6 +17,10 @@ pub(crate) const EXIT_ASSERT: u8 = 3;
 impl App {
     pub(crate) fn startup_cmd(&mut self, id: &str) {
         crash::note_command(id);
+        // 예약된 도크 갱신(T-177 디바운스)은 기동 명령 앞에서 먼저 흘려보낸다 — 덤프 · 단언이 최신 도크를 본다(결정적).
+        if self.docks_due.is_some() {
+            self.update_docks();
+        }
         if let Some((target, path)) = id.split_once(".dump:") {
             if let Some(text) = self.dump_of(target) {
                 let _ = std::fs::write(path, text);
@@ -305,7 +309,11 @@ impl App {
     }
 
     /// 덤프 어휘(CI-107) — `layout` · `panel`(활성) · `list`(활성 패널의 보이는 행) · `tabs` · `status` · `menu` · `all`.
-    pub(crate) fn dump_of(&self, target: &str) -> Option<String> {
+    pub(crate) fn dump_of(&mut self, target: &str) -> Option<String> {
+        // 예약된 도크 갱신(T-177)을 먼저 흘려보낸다 — 덤프는 늘 최신 도크를 본다(시험 · T4 결정성).
+        if self.docks_due.is_some() {
+            self.update_docks();
+        }
         Some(match target {
             "layout" => self.layout_dump(),
             "panel" => self.panel_dump(self.active),

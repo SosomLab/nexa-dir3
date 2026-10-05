@@ -102,6 +102,9 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
+/// 도크 갱신 디바운스(ms) — 키 반복(약 30 ms 간격)보다 길고 사람이 멈춤을 느끼기 전(100 ms)보다 짧게(T-177).
+pub(crate) const DOCK_DEBOUNCE_MS: u64 = 60;
 use termview::TermView;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -369,6 +372,9 @@ struct App {
     transfer: Option<app::ops::TransferJob>,
     /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
     dirsizes: app::dirsize::DirSizes,
+    /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
+    /// 않고 이동이 멈춘 뒤 [`DOCK_DEBOUNCE_MS`]에 한 번만(10개를 빠르게 지나가면 마지막 것만 계산한다).
+    docks_due: Option<Instant>,
     /// 진행 창 안에서 묻고 있는 덮어쓰기 질문의 회신 통로(워커가 기다린다 · app/dialogs.rs `conflict_ask`).
     conflict_inline: Option<std::sync::mpsc::Sender<app::ops::ConflictChoice>>,
     /// 파일 작업 undo/redo(세션 한정 100).
@@ -661,6 +667,7 @@ impl App {
             clip: None,
             transfer: None,
             dirsizes: app::dirsize::DirSizes::default(),
+            docks_due: None,
             conflict_inline: None,
             history: ndir_ops::history::OperationHistory::default(),
             launcherbar,
@@ -779,12 +786,30 @@ impl App {
         self.git_sync(&mut inv);
         self.sync_dir_views();
         self.sync_view_checks();
+        self.schedule_docks();
+    }
+
+    /// 도크 갱신을 예약한다 — 연속 이동은 하나로 합쳐지고, 유휴 틱이 [`DOCK_DEBOUNCE_MS`] 뒤에 [`App::update_docks`]를 부른다.
+    /// 그 전에는 종전 내용이 그대로 보인다(빈 화면으로 깜빡이지 않는다).
+    pub(crate) fn schedule_docks(&mut self) {
+        self.docks_due = Some(Instant::now() + Duration::from_millis(DOCK_DEBOUNCE_MS));
+    }
+
+    /// 예약된 도크 갱신이 때가 됐으면 실행한다(유휴 틱) — 돌려주는 값 = 다음에 깨울 시각(예약이 남았을 때).
+    pub(crate) fn docks_tick(&mut self, now: Instant) -> Option<Instant> {
+        let due = self.docks_due?;
+        if now < due {
+            return Some(due);
+        }
         self.update_docks();
+        self.redraw();
+        None
     }
 
     /// 도크 내용(dir2 `update_dock_info`): 단일 정보 = 좌 도크의 원천은 **활성 패널** · 종류 0 정보 · 1 미리보기 · 2 터미널(T-61).
     /// 키 = 종류 + 대상(선택 경로·없으면 현재 폴더) → 같은 대상의 갱신은 스크롤·선택 유지.
     pub(crate) fn update_docks(&mut self) {
+        self.docks_due = None;
         let single_info =
             !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
         let mut inv = Invalidations::default();
