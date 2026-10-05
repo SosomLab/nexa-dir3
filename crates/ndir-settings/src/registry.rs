@@ -670,6 +670,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 자연 정렬(dir3 신규 · 사용자 10-05 "인기 있거나 필수인 기능") — 탐색기 · Finder 기본 동작이라 기본 켬.
+    e!(
+        "list.sort_natural",
+        CAT_LIST,
+        "pref.sortNatural",
+        "pref.sortNatural.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "list.view_scope",
         CAT_LIST,

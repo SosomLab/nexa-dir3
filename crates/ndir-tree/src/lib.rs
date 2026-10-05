@@ -337,11 +337,20 @@ impl Tree {
                 return a.cmp(&b); // 열거 순서(방향 무시)
             }
             // 대소문자 구분 옵션(07-15) — 알파벳 순서는 유지하되 같은 이름은 대문자 우선
+            let natural = natural_sort();
             let cmp_name = |x: &str, y: &str| {
-                if self.sort.case_sensitive {
-                    cmp_cs_upper_first(x, y)
+                let plain = || {
+                    if self.sort.case_sensitive {
+                        cmp_cs_upper_first(x, y)
+                    } else {
+                        cmp_ci(x, y)
+                    }
+                };
+                if natural {
+                    // 숫자 구간은 값으로(`file2` < `file10`) · 그 밖은 종전 규칙 · 완전 동률이면 종전 비교로 순서를 고정한다.
+                    cmp_natural(x, y, !self.sort.case_sensitive).then_with(plain)
                 } else {
-                    cmp_ci(x, y)
+                    plain()
                 }
             };
             let ord = match key {
@@ -803,6 +812,64 @@ fn cmp_ci(a: &str, b: &str) -> std::cmp::Ordering {
     a.chars()
         .flat_map(char::to_lowercase)
         .cmp(b.chars().flat_map(char::to_lowercase))
+}
+
+/// 자연 정렬 켬/끔(프로세스 전역 · 기본 끔 = dir2 원형의 코드포인트 순 — 앱이 설정 `list.sort_natural`로 켠다).
+static NATURAL_SORT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 이름 · 확장자 정렬에서 숫자 구간을 **값으로** 비교할지 정한다(dir3 신규 — 탐색기 · Finder 기본 동작). 다음 정렬부터 적용.
+pub fn set_natural_sort(on: bool) {
+    NATURAL_SORT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 지금 자연 정렬인가.
+#[must_use]
+pub fn natural_sort() -> bool {
+    NATURAL_SORT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 자연 정렬 비교(순수 · 힙 할당 없음): ASCII 숫자가 이어진 구간은 수의 크기로(앞의 0은 무시 — `007` = `7`), 그 밖의 글자는
+/// 글자 단위로(`ignore_case`면 소문자로 맞춰) 비교한다. 수가 같으면 다음 글자로 넘어간다.
+#[must_use]
+pub fn cmp_natural(a: &str, b: &str, ignore_case: bool) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let (ab, bb) = (a.as_bytes(), b.as_bytes());
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < ab.len() && j < bb.len() {
+        if ab[i].is_ascii_digit() && bb[j].is_ascii_digit() {
+            let run = |s: &[u8], mut k: usize| {
+                let start = k;
+                while k < s.len() && s[k].is_ascii_digit() {
+                    k += 1;
+                }
+                (start, k)
+            };
+            let ((si, ei), (sj, ej)) = (run(ab, i), run(bb, j));
+            let sig = |s: &'_ [u8]| -> usize { s.iter().take_while(|&&c| c == b'0').count() };
+            let (da, db) = (&ab[si..ei], &bb[sj..ej]);
+            let (da, db) = (&da[sig(da)..], &db[sig(db)..]);
+            let ord = da.len().cmp(&db.len()).then_with(|| da.cmp(db));
+            if ord != Ordering::Equal {
+                return ord;
+            }
+            (i, j) = (ei, ej);
+        } else {
+            let (Some(ca), Some(cb)) = (a[i..].chars().next(), b[j..].chars().next()) else {
+                break;
+            };
+            let ord = if ignore_case {
+                ca.to_lowercase().cmp(cb.to_lowercase())
+            } else {
+                ca.cmp(&cb)
+            };
+            if ord != Ordering::Equal {
+                return ord;
+            }
+            i += ca.len_utf8();
+            j += cb.len_utf8();
+        }
+    }
+    (ab.len() - i).cmp(&(bb.len() - j))
 }
 
 /// 대소문자 **구분** 비교(사용자 확정 07-15 — 스크린샷 QA): **코드포인트 순** —
@@ -1613,5 +1680,53 @@ mod tests {
         assert_ne!(names(&t), default_order);
         t.set_sort(SortSpec::name_asc()); // 기본 복귀
         assert_eq!(names(&t), default_order);
+    }
+
+    /// 자연 정렬(dir3 신규): 숫자 구간은 값으로 · 앞의 0 무시 · 글자는 종전처럼 · 한글 · 긴 수(자릿수 비교라 넘침 없음).
+    #[test]
+    fn natural_compare_orders_numbers_by_value() {
+        use std::cmp::Ordering::{Equal, Greater, Less};
+        assert_eq!(cmp_natural("file2.txt", "file10.txt", true), Less);
+        assert_eq!(cmp_natural("file10.txt", "file2.txt", true), Greater);
+        assert_eq!(cmp_natural("a007", "a7", true), Equal, "앞의 0 무시");
+        assert_eq!(cmp_natural("a7b", "a007c", true), Less);
+        assert_eq!(cmp_natural("File1", "file1", true), Equal);
+        assert_eq!(
+            cmp_natural("File1", "file1", false),
+            Less,
+            "구분 = 대문자 먼저"
+        );
+        assert_eq!(cmp_natural("보고서 9차", "보고서 12차", true), Less);
+        assert_eq!(cmp_natural("abc", "abcd", true), Less);
+        assert_eq!(cmp_natural("abc1", "abc", true), Greater);
+        assert_eq!(cmp_natural("1", "a", true), Less);
+        assert_eq!(
+            cmp_natural(
+                "n99999999999999999999999",
+                "n100000000000000000000000",
+                true
+            ),
+            Less
+        );
+        assert_eq!(cmp_natural("", "", true), Equal);
+        assert_eq!(cmp_natural("v1.2.10", "v1.2.9", true), Greater);
+        let mut v = vec![
+            "img12.png",
+            "img1.png",
+            "IMG3.png",
+            "img02.png",
+            "img10.png",
+        ];
+        v.sort_by(|a, b| cmp_natural(a, b, true));
+        assert_eq!(
+            v,
+            [
+                "img1.png",
+                "img02.png",
+                "IMG3.png",
+                "img10.png",
+                "img12.png"
+            ]
+        );
     }
 }

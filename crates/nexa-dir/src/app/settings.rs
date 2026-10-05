@@ -164,6 +164,15 @@ impl App {
                 .tab_menu
                 .set_char_jump(self.settings.flag("menu.char_jump")),
             k if k.starts_with("typeahead.") => self.apply_typeahead(),
+            "list.sort_natural" => {
+                self.apply_natural_sort();
+                // 열린 목록을 새 순서로 다시 읽는다.
+                let mut inv = Invalidations::default();
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
+                self.redraw();
+            }
             "transfer.native" | "transfer.threads" | "transfer.unbuffered_mb" => {
                 self.apply_transfer_tuning();
             }
@@ -242,6 +251,11 @@ impl App {
     /// 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` → 전송 엔진의 복사 전략(다음 파일부터 적용).
     pub(crate) fn apply_transfer_tuning(&self) {
         ndir_ops::fastcopy::set_tuning(Self::transfer_tuning(&self.settings));
+    }
+
+    /// 설정 `list.sort_natural` → 정렬 엔진(다음 정렬부터).
+    pub(crate) fn apply_natural_sort(&self) {
+        ndir_tree::set_natural_sort(self.settings.flag("list.sort_natural"));
     }
 
     /// 설정 → 복사 전략(순수).

@@ -7177,3 +7177,15 @@ fn bulk_apply_swaps_and_never_overwrites() {
     app.bulk_apply(vec![(dir.join("c.txt"), "d.txt".into())]);
     assert_eq!((read("c.txt").as_str(), read("d.txt").as_str()), ("C", "D"));
 }
+
+/// 자연 정렬 설정(dir3 신규): 기본 켬 · 키가 등록돼 있고 3언어 라벨이 있다(정렬 규칙 자체는 ndir-tree `natural_compare_orders_numbers_by_value`).
+#[test]
+fn natural_sort_setting_defaults_on() {
+    let (app, _dir) = fixture("natsort");
+    assert!(app.settings.flag("list.sort_natural"));
+    for lang in ["ko", "en", "ja"] {
+        let cat = ndir_i18n::load(lang, std::path::Path::new("nowhere"));
+        assert!(cat.get("pref.sortNatural").is_some(), "{lang}");
+        assert!(cat.get("pref.sortNatural.desc").is_some(), "{lang}");
+    }
+}
