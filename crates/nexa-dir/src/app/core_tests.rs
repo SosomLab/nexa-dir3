@@ -6848,3 +6848,96 @@ fn modifier_variants_for_background_menu_and_terminal() {
     assert_eq!(crate::platform::term_ctrl_v_pastes(), cfg!(windows));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 놓일 폴더(사용자 10-05): 파일 행 위 = **그 파일이 든 폴더**(트리에서 펼친 하위 폴더 안의 파일이면 그 하위 폴더 · 종전 = 늘 탭의
+/// 최상위 폴더) · 강조 = 그 폴더 행 + 펼쳐진 내용 묶음 · 최상위 폴더의 파일 위 = 목록 전체.
+#[test]
+fn drop_onto_file_targets_its_parent_folder() {
+    use crate::app::dnd::drop_folder_of;
+    use crate::platform::{DropChoice, DropEvent};
+    let p = |s: &str| PathBuf::from(s);
+    // 순수 규칙.
+    assert_eq!(drop_folder_of(&p("/r/sub"), true, &p("/r")), p("/r/sub"));
+    assert_eq!(
+        drop_folder_of(&p("/r/sub/f.txt"), false, &p("/r")),
+        p("/r/sub")
+    );
+    assert_eq!(drop_folder_of(&p("/r/f.txt"), false, &p("/r")), p("/r"));
+    assert_eq!(
+        drop_folder_of(&p("/other/f.txt"), false, &p("/r")),
+        p("/r"),
+        "밖 = 현재 폴더"
+    );
+    let (mut app, dir) = fixture("dropparent");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    std::fs::write(sub.join("second.rs"), b"x").expect("write");
+    // sub를 펼친다 → inner.rs · second.rs가 하위 행으로 보인다.
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&sub, &mut inv);
+    app.startup_cmd("ui.press:right");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let rect_of = |app: &App, path: &std::path::Path| app.panels[0].row_rect_of(path).expect("row");
+    let inner = rect_of(&app, &sub.join("inner.rs"));
+    let on_inner = Point {
+        x: inner.x + 80,
+        y: inner.y + inner.h / 2,
+    };
+    // 하위 폴더 안의 파일 위 = 그 하위 폴더.
+    assert_eq!(app.drop_dest_at(on_inner), Some((0, sub.clone())));
+    // 최상위의 파일 위 = 현재 폴더.
+    let a = rect_of(&app, &dir.join("a.txt"));
+    let on_a = Point {
+        x: a.x + 80,
+        y: a.y + a.h / 2,
+    };
+    assert_eq!(app.drop_dest_at(on_a), Some((0, dir.clone())));
+    // 강조: 하위 폴더 안의 파일 위 = sub 행 + 펼쳐진 두 파일 묶음(3행).
+    let now = Instant::now();
+    let c = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![dir.join("a.txt")],
+            at: (on_inner.x, on_inner.y),
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Move);
+    let m = app.dnd_mark.clone().expect("mark");
+    assert_eq!(m.dest, sub, "대상 = 파일이 든 폴더");
+    let sub_row = rect_of(&app, &sub);
+    assert_eq!(m.rect.y, sub_row.y, "묶음 = 폴더 행부터");
+    assert_eq!(m.rect.h, sub_row.h * 3, "폴더 행 + 하위 2행");
+    assert_eq!(app.panels[0].folder_block_rect(&sub), Some(m.rect));
+    // 최상위의 다른 파일 위 = 목록 전체(sub 안의 것을 끌어 최상위로).
+    let c = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![sub.join("inner.rs")],
+            at: (on_a.x, on_a.y),
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Move);
+    let m = app.dnd_mark.clone().expect("mark");
+    assert_eq!(
+        (m.dest, m.rect),
+        (dir.clone(), app.panels[0].rows().bounds())
+    );
+    // 같은 폴더 안의 다른 파일 위 = 제자리 = 불가.
+    let c = app.dnd_event(
+        DropEvent::Over {
+            at: (on_inner.x, on_inner.y),
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::None, "이미 그 폴더에 있다");
+    app.dnd_event(DropEvent::Leave, now);
+    let _ = std::fs::remove_dir_all(&dir);
+}

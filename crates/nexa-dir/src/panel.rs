@@ -638,6 +638,7 @@ impl Panel {
     }
 
     /// 경로의 행이 화면에서 차지하는 사각형(목록 폭 전체 × 행 높이) — 보이지 않거나 타일 보기면 `None`(놓일 폴더 강조용).
+    #[cfg(test)]
     pub(crate) fn row_rect_of(&self, path: &Path) -> Option<Rect> {
         let rows = self.rows();
         if rows.view_mode() == ViewMode::Tiles {
@@ -649,6 +650,33 @@ impl Panel {
         let b = rows.bounds();
         let h = self.m.row_h;
         Some(Rect::new(b.x, a.y - h / 2, b.w, h))
+    }
+
+    /// 폴더 `dir`의 **화면에 보이는 묶음**(그 폴더 행 + 펼쳐진 하위 행들)이 차지하는 사각형 — 보이는 행이 하나도 없거나
+    /// 타일 보기면 `None`. 보이는 범위의 행만 훑는다(큰 목록에서도 싸다).
+    pub(crate) fn folder_block_rect(&self, dir: &Path) -> Option<Rect> {
+        let rows = self.rows();
+        if rows.view_mode() == ViewMode::Tiles {
+            return None;
+        }
+        let b = rows.bounds();
+        let h = self.m.row_h.max(1);
+        let first = rows.scroll_row();
+        let last = (first + (b.h / h) as usize + 2).min(rows.source().len());
+        let (mut top, mut bottom) = (i32::MAX, i32::MIN);
+        for i in first..last {
+            let Some(path) = rows.source().row_path(i) else {
+                continue;
+            };
+            if path != dir && !path.starts_with(dir) {
+                continue;
+            }
+            if let Some(a) = rows.row_anchor(i) {
+                top = top.min(a.y - h / 2);
+                bottom = bottom.max(a.y - h / 2 + h);
+            }
+        }
+        (top < bottom).then(|| Rect::new(b.x, top, b.w, bottom - top))
     }
 
     /// OS 드래그에서 돌아온 뒤 누름 상태 정리(그리드의 클릭 확정 보류 · 러버밴드 + 패널의 포인터 캡처) — 선택은 그대로.

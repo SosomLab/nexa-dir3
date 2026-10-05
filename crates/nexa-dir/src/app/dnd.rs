@@ -71,6 +71,22 @@ pub(crate) fn dwell_step<T: Clone + PartialEq>(
     }
 }
 
+/// 행 하나가 가리키는 **놓일 폴더**(순수): 폴더 행 = 그 폴더 · 파일 행 = 그 파일이 든 폴더 — 단 탭의 현재 폴더(`root`) 밖을
+/// 가리키게 되면(부모를 알 수 없거나 `root` 바깥) `root`로 둔다.
+pub(crate) fn drop_folder_of(
+    path: &std::path::Path,
+    is_dir: bool,
+    root: &std::path::Path,
+) -> PathBuf {
+    if is_dir {
+        return path.to_path_buf();
+    }
+    match path.parent() {
+        Some(parent) if parent.starts_with(root) => parent.to_path_buf(),
+        _ => root.to_path_buf(),
+    }
+}
+
 /// 끌기가 시작됐는가(순수): 가로나 세로로 임계를 넘었다.
 pub(crate) fn drag_started(press: (i32, i32), now: (i32, i32)) -> bool {
     (now.0 - press.0).abs() > DRAG_SLOP || (now.1 - press.1).abs() > DRAG_SLOP
@@ -200,10 +216,15 @@ impl App {
         let (plan, choice) = self.drop_plan(&sources, Point { x: at.0, y: at.1 });
         (self.shift, self.primary) = mods;
         let mark = plan.map(|(panel, dest)| {
-            // 폴더 행 위 = 그 행만 강조 · 파일 행/빈 곳 = 목록 전체(= 이 패널의 현재 폴더에 놓인다 — 탐색기와 같다).
-            let rect = self.panels[panel]
-                .row_rect_of(&dest)
-                .unwrap_or_else(|| self.panels[panel].rows().bounds());
+            // 강조 = **놓일 폴더**: 탭의 현재 폴더면 목록 전체 · 하위 폴더면 그 폴더 행 + 펼쳐진 내용(파일 행 위에 있어도 그 파일이
+            // 든 폴더 묶음이 강조된다) · 접힌 폴더 행이면 그 행만.
+            let p = &self.panels[panel];
+            let rect = if dest == p.root_path() {
+                p.rows().bounds()
+            } else {
+                p.folder_block_rect(&dest)
+                    .unwrap_or_else(|| p.rows().bounds())
+            };
             DropMark { rect, choice, dest }
         });
         if self.dnd_mark != mark {
@@ -404,11 +425,13 @@ impl App {
         if ndir_vfs::is_virtual_root(&root) {
             return None;
         }
+        // 폴더 행 위 = 그 폴더 · **파일 행 위 = 그 파일이 든 폴더**(트리에서 펼친 하위 폴더 안의 파일이면 그 하위 폴더 —
+        // 사용자 10-05: 종전에는 파일 위면 늘 탭의 최상위 폴더였다) · 빈 곳 = 탭의 현재 폴더.
         let dest = panel
             .rows()
             .row_at(p.x, p.y)
             .and_then(|r| panel.rows().source().row_path(r))
-            .filter(|path| path.is_dir())
+            .map(|path| drop_folder_of(&path, path.is_dir(), &root))
             .unwrap_or(root);
         Some((i, dest))
     }
