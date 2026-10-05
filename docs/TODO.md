@@ -14,7 +14,7 @@
 | T-06 | `ndir-check` 시나리오 러너(`.scn` · 격리 홈 · 샘플 트리 · 검사식) | P1 | 중 | M3 | CI-108 | ✅ 10-03(journal §17 · 시나리오 5 · CI Windows 단계 · Linux xvfb/macOS는 후속) |
 | T-70 | M6 파일 작업 배선(복사/잘라내기/붙여넣기 · 전송 작업 스레드 · undo/redo · 새 폴더/새 파일 · 인라인 이름 바꾸기) | P0 | 중 | T-50 | OPS-001~039 | ✅ 10-03 journal §28·§29(잔여: 확인/진행 창 T-29 · 일괄 이름 변경 창 · 영구 삭제) |
 | T-07 | CI에 `wasm32` 플러그인 빌드 검증 + Windows 임포트 화이트리스트·용량 측정 | P1 | 소 | M5 | CI-113 | 🚧 10-03 journal §26(wasm32 빌드·로드 검증 ✅ · 임포트 화이트리스트·용량 측정 = M7) |
-| T-08 | 성능 스크립트(`perf-*` · 기동 · 대량 폴더 · 누수) | P2 | 중 | M3 | CI-118 | 🚧 10-03 journal §70(`scripts/perf-baseline.sh` 1차 = 기동 `--smoke` 중앙값 · 자가 점검 그룹별 ms · exe 크기 ✅ · 대량 폴더 1만/10만(헤드리스 측정 경로 필요) · RSS/누수 · fps ☐) |
+| T-08 | 성능 스크립트(`perf-*` · 기동 · 대량 폴더 · 누수) | P2 | 중 | M3 | CI-118 | 🚧 10-03 journal §70(`scripts/perf-baseline.sh` 1차 = 기동 `--smoke` 중앙값 · 자가 점검 그룹별 ms · exe 크기 ✅ · 대량 폴더 1만/10만(헤드리스 측정 경로 필요) · RSS/누수 · fps ☐) · T6 1차 전체 측정 10-05 §65(release · 기동 `--smoke` 중앙값 2,749 ms · fs 834 ms · exe 6.4 MB · 복사/해시/트리 벤치 · [perf-2026-10-05](journal/perf-2026-10-05.md)) |
 
 ## M1 기반 크레이트
 
@@ -99,7 +99,7 @@
 | ID | 할 일 | 우선 | 규모 | 의존 | 원장 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-90 | 검증 매트릭스 전수(원장 ID ↔ 구현 ↔ 시험) · 누락 보충 · 의도된 차이 등재 | P0 | 대 | M3~M7 | CI-116 | 🚧 10-03(1차 감사 스크립트 + 91 전수 journal §62 · 2차 원장 기반 시험 + 집단 행 journal §63 · 3차 CMD 대조 journal §64 · 4차 묶음 행 44 journal §65 · 5차 잔여 접두 28 journal §66 = **원장 전 ID 덮음** · 세부 ✅화 = T-91과 함께) |
-| T-91 | dir2 대조 실기 QA 표 · 성능 기준선 · 누락 문서(port/52 nexa-dlg·fs · 98 릴리스 대조 · 99 커버리지) | P1 | 중 | — | — | ✅ 10-03 journal §70(문서 52·92·98·99 + 생성 스크립트 `qa-checklist.py`·`coverage-files.py` + `perf-baseline.sh` 1차 기준선 · check-all 단계 2 · 실기 QA 수행 = 사용자 · 성능 잔여 = T-08) |
+| T-91 | dir2 대조 실기 QA 표 · 성능 기준선 · 누락 문서(port/52 nexa-dlg·fs · 98 릴리스 대조 · 99 커버리지) | P1 | 중 | — | — | ✅ 10-03 journal §70(문서 52·92·98·99 + 생성 스크립트 `qa-checklist.py`·`coverage-files.py` + `perf-baseline.sh` 1차 기준선 · check-all 단계 2 · 실기 QA 수행 = 사용자 · 성능 잔여 = T-08) · 성능 기준선 갱신 10-05 §65(T6 1회) |
 
 ## dir3 신규 기능(dir2에 없음 · 사용자 10-03 · 원장 = [22](22-dir3-features.md))
 
@@ -186,6 +186,7 @@
 | T-172 | **동기화**(NEW-043 · 사용자 10-05 대상 지정 · 제안 순위 7/8) — 결정 거리: 양방향 충돌 규칙 · 삭제 전파 기본값 · 작업 저장 여부 | P2 | 큼 | T-171 · T-98 | NEW-043 | 🚧 1차 ✅ a39d3a1(10-05 §63 · →/←/⇄ · 한 방향 = 원본 기준 · 양쪽 = 새로운 쪽 · 자동 재비교) · 기본값 사용자 확인 대기 · 남김: 미러 삭제(휴지통) · 양방향 Differ 질문 · 항목별 방향 토글 · 작업 저장 |
 | T-173 | **CLAUDE.md §3 통지 서술 정정**(10-05 §53) — "통지 = `mpsc` + `EventLoopProxy` 깨움" → 실제 = 공유 상태/`mpsc` 큐 + `event_loop.rs` 유휴 틱 폴링(`EventLoopProxy` 미사용 · docs/01 §3은 정정함) · CLAUDE.md는 사용자 확인 뒤 | P3 | 소 | — | docs/01 | ☐ 사용자 확인 대기 |
 | T-174 | **런처 폴더 항목 → 패널 이동**(10-05 §56~§57 조사 · 결함) — `launcher::launch`(launcher.rs:295)가 exe가 폴더여도 `Command::new(exe)`(Windows/Linux = 실행 실패 추정) · macOS `open`(Finder) · dir2 = ShellExecute로 탐색기 외부 열기 → 폴더면 활성 패널 `navigate_to` | P2 | 소 | — | NEW-028 · NEW-039 | ☐ |
+| T-175 | **체크섬 여러 알고리즘 병렬**(T-167 2차 · 10-05 §65 T6) — `bench_hash` 5종 함께 32 MB/s(단독 CRC32 278 · MD5 263 · SHA-1 174 · SHA-256 128 · SHA-512 164 MB/s를 차례로 돌려 합산) → 체크섬 창 기본 4종 ≈ 40 MB/s로 SSD보다 느림 → 알고리즘별 스레드 병렬(≈ 가장 느린 것 128 MB/s) 또는 조각 파이프라인(읽기 1 + 해시 N) | P2 | 소 | T-167 | NEW-038 | ☐ |
 | T-146 | nexa-sql에서 nexa-ui 152(글꼴 실제 이름 탐색) 실기 확인 — 글꼴 이름 설정이 파일명과 다른 경우(Consolas 등) 표시 글꼴이 바뀌는지(CONSUMER-CHANGES 152 행 · 시험 751 ✓ · 실기 미검증) | P2 | 소 | — | — | ☐ |
 | T-117 | T4 시나리오 Linux 실행 — Windows 전제 3개 분기(`ctx-menu` 셸 배경 항목 · `launcher` · `selfcheck-win`) · CI ubuntu xvfb 단계(T-06 후속) | P1 | 소 | — | CI-108 | ✅ 10-05 §32 — 관찰 1회차 = X 런타임 없음(3a0157b로 설치) · 2회차(run 37231460856) Linux T4 **20/20** · ctx-menu/launcher = `키@os:` 분기 · selfcheck-win은 그대로 통과(10-03 FAIL 재현 안 됨) → 7de27b1 필수 단계 · macOS T4는 T-06 후속 |
 | T-114 | macOS 실기 맞춤(사용자 "동일한 과정을 맥에서도") — 이미 적용: 점 파일 = 숨김 · 선 쉐브론 · 터미널 폴백 em · 칸 폭 반올림 / 남음: 행 아이콘(NSWorkspace iconForFile) · 시스템 터미널 글꼴(Terminal.app 프로필) · 우클릭 통합 | P1 | 중 | T-112 | NEW-012 · NEW-016 | ☐ |
