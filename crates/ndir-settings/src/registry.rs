@@ -917,6 +917,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 체크섬 창의 알고리즘 묶음(dir3 신규 · T-167 · 고급) — 키 = crc32 · md5 · sha1 · sha256 · sha512(쉼표).
+    e!(
+        "hash.algos",
+        CAT_CTXMENU,
+        "pref.hashAlgos",
+        "pref.hashAlgos.desc",
+        Text,
+        "crc32,md5,sha1,sha256"
+    ),
     // ── 파일 목록 › 파일 전송
     e!(
         "transfer.close_ms",
@@ -1740,6 +1749,7 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.group_gap",
     "toolbar.row_gap",
     "input.scroll_natural",
+    "hash.algos",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",

@@ -27,6 +27,7 @@ mod dlg_win;
 mod dockinfo;
 mod file_win;
 mod filelist;
+mod hash_win;
 mod icon;
 mod icons;
 #[allow(dead_code)]
@@ -265,6 +266,10 @@ struct App {
     /// 메모리 창의 다음 표본 시각(창이 열려 있을 때만 쓰인다 · `app/memory.rs`).
     mem_next: Instant,
     open_memory: bool,
+    /// 체크섬 창(T-167 · hash_win.rs) · 열기 요청 · 진행 중인 계산(슬롯 1개).
+    hash_win: hash_win::HashWin,
+    open_hash: bool,
+    hash_job: Option<app::checksum::HashJob>,
     open_license: bool,
     file_win: FileWin,
     file_purpose: Option<app::license::FilePurpose>,
@@ -594,6 +599,9 @@ impl App {
             mem_win: mem_win::MemWin::new(),
             mem_next: Instant::now(),
             open_memory: false,
+            hash_win: hash_win::HashWin::new(),
+            open_hash: false,
+            hash_job: None,
             open_license: false,
             file_win: FileWin::new(),
             file_purpose: None,

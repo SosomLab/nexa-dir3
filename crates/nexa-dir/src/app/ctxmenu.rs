@@ -477,6 +477,10 @@ impl App {
                 _ => {}
             }
         }
+        // 체크섬(T-167 · dir3 신규): 파일 1개일 때 · 경로/이름 복사 묶음 뒤(이름 복사는 경로 복사 바로 아래여야 한다 — dir2 규칙).
+        if matches!(sel, [one] if one.is_file()) {
+            items.push(CtxItem::item("ctx.checksum", tr("ctx.checksum")));
+        }
         // 새로 만들기 ▸(SHELL-008 · dir2 CLSID_NewMenu 호스팅 → 자체 서브메뉴): 단일 선택일 때만 · 대상 = 폴더 항목 자신 / 파일 항목 부모 ·
         // 자식 = 폴더 · 텍스트 문서(템플릿에 txt가 없을 때) · OS/사용자 템플릿.
         self.ctx_new_dir = None;
@@ -762,6 +766,11 @@ impl App {
                     .collect::<Vec<_>>()
                     .join("\r\n");
                 let _ = clipboard::write_text(&text);
+            }
+            "ctx.checksum" => {
+                if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
+                    self.open_checksum(&p);
+                }
             }
             "ctx.copy_name" => {
                 let text = self.panels[panel]

@@ -8,6 +8,7 @@
 
 pub mod batch_rename;
 pub mod fastcopy;
+pub mod hash;
 pub mod history;
 
 use std::fs;
