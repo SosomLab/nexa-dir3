@@ -65,6 +65,7 @@ impl ApplicationHandler<Wake> for App {
         }
         // 창이 생기면 OS 판정(winit)이 정확해진다 — System 모드는 여기서 확정.
         self.theme = theme::resolve(self.settings.theme_mode(), win.theme());
+        self.apply_icon_switches(); // 메뉴 바 아이콘 색 = 확정된 테마 글자색
         match present::Presenter::new(win.clone()) {
             Ok(p) => self.surface = Some(p),
             Err(e) => eprintln!("nexa-dir: {e}"),
@@ -344,6 +345,7 @@ impl ApplicationHandler<Wake> for App {
                 if self.settings.theme_mode() == ThemeMode::System {
                     let wt = self.window.as_ref().and_then(|w| w.theme());
                     self.theme = theme::resolve(ThemeMode::System, wt);
+                    self.apply_icon_switches();
                     self.redraw();
                 }
             }

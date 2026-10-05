@@ -12,7 +12,10 @@ fn label_key(id: &str) -> &str {
 }
 
 fn item(id: &str) -> MenuEntry {
-    MenuEntry::Item(ComboItem::new(id, tr(label_key(id))))
+    let mut it = ComboItem::new(id, tr(label_key(id)));
+    // 항목 앞 아이콘(체크/라디오 항목은 표에 없어 그 자리(✓ · ●)와 겹치지 않는다 — `menu_icons::spec_of`).
+    it.image = app::menu_icons::bar_image(id);
+    MenuEntry::Item(it)
 }
 
 fn items(ids: &[&str]) -> Vec<MenuEntry> {
@@ -662,6 +665,7 @@ impl App {
         self.set_setting("ui.theme", mode.as_str());
         let wt = self.window.as_ref().and_then(|w| w.theme());
         self.theme = theme::resolve(mode, wt);
+        self.apply_icon_switches();
         if let Some(w) = &self.window {
             w.set_theme(theme::window_theme(mode));
         }

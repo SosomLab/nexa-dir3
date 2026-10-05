@@ -29,6 +29,7 @@ impl App {
                 let mode = self.settings.theme_mode();
                 let wt = self.window.as_ref().and_then(|w| w.theme());
                 self.theme = theme::resolve(mode, wt);
+                self.apply_icon_switches(); // 메뉴 바 아이콘 색 = 새 테마 글자색
                 if let Some(w) = &self.window {
                     w.set_theme(theme::window_theme(mode));
                 }
@@ -107,7 +108,11 @@ impl App {
             }
             "perf.boost" | "statusbar.layout" | "statusbar.load_interval_ms" => {
                 self.load_next = Instant::now();
+                if key == "perf.boost" {
+                    self.apply_icon_switches(); // 성능 향상 모드 = 행 · 메뉴 아이콘도 끈다
+                }
             }
+            "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
             "layout.tab_statusbar" => self.layout(),
             "launcher.items" | "launcher.seed" | "launcher.icon_size" | "launcher.item_gap" => {
                 self.rebuild_launcher();
@@ -206,6 +211,31 @@ impl App {
 
     /// 스크롤 설정 적용(dir2 X-63 f986415 · 7d8b1e9 — 호스트 누락분): `scroll.fast*` → nexa-grid(목록·도크·그리드 창) +
     /// nexa-ctl(설정 창 등 `ScrollBars`) 전역 고속 스크롤 · 파일 그리드 한 단계 더 빠르게 · 시스템 "한 번에 스크롤할 줄 수".
+    /// 아이콘 스위치(순수): (이름 앞 아이콘, 메뉴 아이콘) — 각 설정이 켜져 있고 **성능 향상 모드가 꺼져 있을 때만** 켠다.
+    pub(crate) fn icon_switches(s: &Settings) -> (bool, bool) {
+        let boost = s.flag("perf.boost");
+        (
+            s.flag("list.row_icons") && !boost,
+            s.flag("menu.icons") && !boost,
+        )
+    }
+
+    /// 아이콘 스위치 적용 — 두 패널(모든 탭)의 이름 앞 아이콘 · 메뉴(우클릭 · 메뉴 바) 아이콘. 종전에는 성능 향상 모드를 켜도
+    /// 아이콘이 그대로였다(모니터링 칸만 껐다 — 사용자 10-05).
+    pub(crate) fn apply_icon_switches(&mut self) {
+        let (rows, menus) = Self::icon_switches(&self.settings);
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.set_row_icons(rows, &mut inv);
+        }
+        nexa_ctl::controls::set_menu_icons(menus);
+        // 메뉴 바 그림은 색을 미리 칠한 RGBA다 → 켬/끔 · 테마 글자색이 바뀌면 메뉴를 다시 만든다(단축키 · 체크는 메뉴 바가 기억).
+        if app::menu_icons::set_bar(menus.then_some(self.theme.text)) {
+            self.menubar.set_menus(App::build_menus(&self.settings));
+        }
+        self.redraw();
+    }
+
     /// 설정 `typeahead.*` → 두 패널(모든 탭)의 목록. 종전에는 키만 있고 적용하는 곳이 없어 늘 그리드 기본값이었다.
     pub(crate) fn apply_typeahead(&mut self) {
         let opts = Self::typeahead_opts(&self.settings);

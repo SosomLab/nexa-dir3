@@ -152,7 +152,8 @@ impl App {
         let host = Rect::new(0, 0, self.viewport.0, self.viewport.1);
         let text_w = px(240.0, self.scale);
         let (x, y) = self.ctx_anchor;
-        let items = tidy_separators(items);
+        // 앱 고유 항목 앞 아이콘(복사 · 잘라내기 · 붙여넣기 … — `menu_icons` · 셸 확장이 준 아이콘은 그대로).
+        let items = app::menu_icons::decorate(tidy_separators(items));
         // 창보다 긴 메뉴(셸 확장이 많은 PC)는 아래가 잘렸다 → 창에 들어가는 행 수까지만 보이고 나머지는 스크롤(휠 · 키 · 오른쪽 표시).
         self.tab_menu
             .set_max_rows(Some(ctx_rows_that_fit(self.viewport.1, self.scale)));

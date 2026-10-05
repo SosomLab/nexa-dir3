@@ -711,6 +711,15 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    // 파일 이름 앞 아이콘 켬/끔(dir3 신규 · 사용자 10-05) — 성능 향상 모드(`perf.boost`)가 켜져 있으면 값과 상관없이 끈다.
+    e!(
+        "list.row_icons",
+        CAT_LIST,
+        "pref.rowIcons",
+        "pref.rowIcons.desc",
+        Bool,
+        "on"
+    ),
     // 행 아이콘 계층 1 — 직접 설정한 아이콘(dir3 신규 · 사용자 10-03): `종류:패턴=이미지` · `;` 구분 · 종류 = path|name|dir|ext.
     e!(
         "list.icon_overrides",
@@ -878,6 +887,15 @@ pub const REGISTRY: &[Entry] = &[
         CAT_CTXMENU,
         "pref.menuWrap",
         "pref.menuWrap.desc",
+        Bool,
+        "on"
+    ),
+    // 메뉴 항목 앞 아이콘 켬/끔(dir3 신규 · 사용자 10-05 · nexa-sql `ui.menu_icons` 대응) — 성능 향상 모드면 끈다.
+    e!(
+        "menu.icons",
+        CAT_CTXMENU,
+        "pref.menuIcons",
+        "pref.menuIcons.desc",
         Bool,
         "on"
     ),
@@ -1570,6 +1588,9 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("term.cols", "term.wrap", Dep::Eq("off")),
     // 성능 향상 모드가 켜져 있으면 시스템 상태 조회 주기는 쓰이지 않는다.
     ("statusbar.load_interval_ms", "perf.boost", Dep::Eq("off")),
+    // 성능 향상 모드가 켜져 있으면 아이콘 두 설정은 쓰이지 않는다(늘 끔).
+    ("list.row_icons", "perf.boost", Dep::Eq("off")),
+    ("menu.icons", "perf.boost", Dep::Eq("off")),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (

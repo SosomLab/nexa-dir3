@@ -6745,3 +6745,55 @@ fn drag_dwell_enters_folder_in_flat_view() {
     assert_eq!(app.panels[0].root_path(), sub, "목록 보기 = 들어간다");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 성능 향상 모드 = 아이콘도 끈다(사용자 10-05 "켜도 변경이 안 되는 것 같다" — 종전에는 모니터링 칸만 껐다): 이름 앞 아이콘 ·
+/// 메뉴 아이콘 각 설정 ∧ 성능 모드 꺼짐일 때만 켠다 · 끄면 목록 소스가 아이콘을 내지 않는다(새 탭 포함) · 저장값은 그대로.
+#[test]
+fn performance_mode_turns_icons_off() {
+    use nexa_grid::RowSource as _;
+    let (mut app, dir) = fixture("boosticons");
+    app.layout_for(1200, 800, 1.0);
+    // 순수 판정(MC/DC): 설정 · 성능 모드 하나씩만 바꿔 본다.
+    assert_eq!(
+        App::icon_switches(&app.settings),
+        (true, true),
+        "기본 = 둘 다 켬"
+    );
+    let has_icon = |app: &App| app.panels[0].rows().source().icon(0).is_some();
+    app.apply_icon_switches();
+    assert!(has_icon(&app), "기본 = 이름 앞 아이콘 있음");
+    let _ = app.settings.set("perf.boost", "on");
+    assert_eq!(
+        App::icon_switches(&app.settings),
+        (false, false),
+        "성능 모드 = 둘 다 끔"
+    );
+    app.after_setting_changed("perf.boost");
+    assert!(!has_icon(&app), "성능 모드 = 아이콘 없음");
+    app.command("file.new_tab");
+    assert!(!has_icon(&app), "새 탭에도");
+    assert!(
+        app.settings.flag("list.row_icons"),
+        "저장값은 건드리지 않는다"
+    );
+    let _ = app.settings.set("perf.boost", "off");
+    app.after_setting_changed("perf.boost");
+    assert!(has_icon(&app), "끄면 복귀");
+    // 개별 설정.
+    let _ = app.settings.set("list.row_icons", "off");
+    assert_eq!(App::icon_switches(&app.settings), (false, true));
+    app.after_setting_changed("list.row_icons");
+    assert!(!has_icon(&app));
+    let _ = app.settings.set("list.row_icons", "on");
+    let _ = app.settings.set("menu.icons", "off");
+    assert_eq!(App::icon_switches(&app.settings), (true, false));
+    let _ = app.settings.set("menu.icons", "on");
+    app.after_setting_changed("list.row_icons");
+    app.after_setting_changed("menu.icons");
+    assert_eq!(
+        ndir_settings::dependency("list.row_icons").map(|d| d.0),
+        Some("perf.boost"),
+        "성능 모드가 켜져 있으면 설정 창에서 잠긴다"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

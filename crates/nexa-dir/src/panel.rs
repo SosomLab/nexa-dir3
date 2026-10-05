@@ -88,6 +88,8 @@ pub(crate) struct Panel {
     pending_header_menu: bool,
     /// 타입어헤드 설정(`typeahead.*` — 호스트가 넣는다 · 탭이 생길 때마다 그 탭 그리드에도 적용).
     ta_opts: TaOpts,
+    /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드 — 탭이 생길 때마다 그 탭에도 적용).
+    no_row_icons: bool,
     /// 이름 바꾸기 편집 필드 우클릭(글자 편집 메뉴 · 표시는 호스트 · 1회성 — dir2 `EditMenuTarget::Rename`).
     pending_rename_menu: bool,
     /// 경로 바에 넣은 `shell:` 별칭(해석은 호스트의 플랫폼 포트 · 1회성 — dir2 panel.rs:1530).
@@ -295,6 +297,7 @@ impl Panel {
             pending_ctx: None,
             pending_header_menu: false,
             ta_opts: TaOpts::default(),
+            no_row_icons: false,
             pending_rename_menu: false,
             pending_alias: None,
             pending_path_menu: false,
@@ -1052,9 +1055,19 @@ impl Panel {
         self.apply_typeahead(inv);
     }
 
+    /// 이름 앞 아이콘 켬/끔(모든 탭 · 뒤에 생기는 탭은 [`Self::sync_chrome`]이 넣는다).
+    pub(crate) fn set_row_icons(&mut self, on: bool, inv: &mut Invalidations) {
+        self.no_row_icons = !on;
+        self.apply_typeahead(inv);
+    }
+
     fn apply_typeahead(&mut self, inv: &mut Invalidations) {
         let o = self.ta_opts;
+        let icons = !self.no_row_icons;
         for tab in &mut self.tabs {
+            if tab.rows.source_mut().set_icons(icons) {
+                inv.push(tab.rows.bounds());
+            }
             tab.rows.set_typeahead_opts(
                 o.reset_ms,
                 o.special,

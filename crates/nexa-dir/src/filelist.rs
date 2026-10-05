@@ -192,6 +192,8 @@ pub(crate) struct TreeSource {
     drive_space: std::collections::HashMap<String, (u64, u64)>,
     /// 잘라내기 대기 경로(dir2 SHELL-044/X-32 — 그 행은 흐리게 · 호스트가 클립보드와 동기).
     cut_marks: std::collections::HashSet<PathBuf>,
+    /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
+    no_icons: bool,
 }
 
 impl TreeSource {
@@ -205,9 +207,17 @@ impl TreeSource {
             error: None,
             drive_space: std::collections::HashMap::new(),
             cut_marks: std::collections::HashSet::new(),
+            no_icons: false,
         };
         s.reload();
         s
+    }
+
+    /// 이름 앞 아이콘 켬/끔 — 바뀌었으면 true.
+    pub(crate) fn set_icons(&mut self, on: bool) -> bool {
+        let changed = self.no_icons == on;
+        self.no_icons = !on;
+        changed
     }
 
     /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
@@ -552,6 +562,9 @@ impl RowSource for TreeSource {
 
     /// 행 아이콘 `(키, 경로)`(dir2 `source.rs:426-432` · M1-7 셸 아이콘) — 그리는 쪽(nexa-grid `Adapt::draw_icon`)이 호스트 리졸버에 묻는다.
     fn icon(&self, index: usize) -> Option<(String, String)> {
+        if self.no_icons {
+            return None;
+        }
         let row = self.tree.as_ref()?.row(index)?;
         let is_dir = row.kind == FileKind::Dir;
         let path = self.row_path(index)?;

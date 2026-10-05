@@ -658,6 +658,19 @@ impl App {
         app.tab_menu
             .set_char_jump(app.settings.flag("menu.char_jump"));
         app.apply_typeahead(); // 타입어헤드 켬/끔 · 초기화 시간 · 공백 · 특수문자 · 배지 위치
+                               // 메뉴 아이콘: UI 글꼴 사슬(Windows = Segoe Fluent/MDL2 아이콘 글꼴 포함)을 준 뒤 스위치를 적용한다.
+        app::menu_icons::init(Rc::clone(&app.ui_font));
+        // 입력 칸(설정 창 · 대화상자 등)의 편집 메뉴 4종에도 같은 아이콘(nexa-ctl 공용 편집 메뉴 — nexa-sql과 같은 방식).
+        nexa_ctl::controls::set_edit_menu_decor(nexa_ctl::controls::EditMenuDecor {
+            icons: [
+                app::menu_icons::mask("edit.copy"),
+                app::menu_icons::mask("edit.cut"),
+                app::menu_icons::mask("edit.paste"),
+                app::menu_icons::mask("edit.select_all"),
+            ],
+            shortcuts: Default::default(),
+        });
+        app.apply_icon_switches(); // 이름 앞 아이콘 · 메뉴 아이콘(성능 향상 모드면 끔)
         app.apply_window_sizes();
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)
