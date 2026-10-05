@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **드롭 대상 = 파일 행 위면 그 파일이 든 폴더**(`drop_folder_of` · 트리 하위 폴더 묶음 강조 · 사용자 요청 · d25ff18) → [journal 10-05 §41](journal/2026-10-05.md)
 - **배포 요청(T-160) 사전 분석**: linux-repo는 정식 latest 릴리스 + 고정 자산 이름(dir3 deb/rpm 이름 그대로 가능) + dispatch 신호 · dir3 release.yml은 늘 초안 → 공개로 바꿔야 linux-repo가 봄 · nexa-clip = 태그 즉시 공개 · winget/choco/brew(kiros33/homebrew-tap) 자동 게시 · dir2 = winget 0.22.0 · choco 0.20.0(0.21.0 대기) · 사용자 결정 = 패키지 ID · 버전 · 게시 승인 → [journal 10-05 §40](journal/2026-10-05.md)
 - **수식키 남은 3건**(빈 곳 Shift+우클릭 확장 동사 · 터미널 Shift+우클릭 로컬 메뉴 · 터미널 Ctrl+V 붙여넣기 · 512021e · T-153) · 개발 세션 회차 마감 · STATUS "다음 할 일" = 다음 회차 후보 8묶음 → [journal 10-05 §39](journal/2026-10-05.md)
 - **메뉴 항목 아이콘**(Windows 아이콘 글꼴 글리프 · 폴백 코드 도형 · 우클릭/보조/메뉴 바/입력 칸 편집 메뉴 · `menu.icons` NEW-034) · **성능 향상 모드가 행·메뉴 아이콘을 끈다**(`list.row_icons` NEW-033 · 잠금 · 저장값 유지) · d4aca0d · T-99 2차 일부 → [journal 10-05 §38](journal/2026-10-05.md)
