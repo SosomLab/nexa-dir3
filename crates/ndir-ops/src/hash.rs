@@ -918,4 +918,34 @@ mod tests {
         assert!(hash_file(&d.join("nope"), &[Algo::Md5], &mut |_| {}, &cancel).is_err());
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    /// 성능 측정(수동 · `cargo test -p ndir-ops --release bench_hash -- --ignored --nocapture`): 256 MiB 메모리 입력을 알고리즘별로 ·
+    /// 다섯 개를 한 번에(체크섬 창의 기본 경로 = 파일을 한 번 읽으며 함께).
+    #[test]
+    #[ignore = "수동 성능 측정"]
+    fn bench_hash() {
+        let data: Vec<u8> = (0..256u32 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+        let mb = data.len() as f64 / (1024.0 * 1024.0);
+        for a in Algo::ALL {
+            let at = std::time::Instant::now();
+            let _ = digest(a, &data);
+            let s = at.elapsed().as_secs_f64();
+            println!("{:<8} {:>7.0} MB/s", a.name(), mb / s);
+        }
+        let at = std::time::Instant::now();
+        let mut ds: Vec<Box<dyn Digest>> = Algo::ALL.iter().map(|&a| new_digest(a)).collect();
+        for chunk in data.chunks(1 << 20) {
+            for d in &mut ds {
+                d.update(chunk);
+            }
+        }
+        for d in ds {
+            let _ = d.finish();
+        }
+        println!(
+            "{:<8} {:>7.0} MB/s",
+            "5종 함께",
+            mb / at.elapsed().as_secs_f64()
+        );
+    }
 }
