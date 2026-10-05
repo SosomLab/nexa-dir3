@@ -481,6 +481,10 @@ impl App {
         if matches!(sel, [one] if one.is_file()) {
             items.push(CtxItem::item("ctx.checksum", tr("ctx.checksum")));
         }
+        // 중복 파일 찾기(T-170 · dir3 신규): 선택에 폴더가 있으면 그 폴더들 안에서.
+        if sel.iter().any(|p| p.is_dir()) {
+            items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
+        }
         // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일 1개일 때 — 여기에 / "<이름>" 폴더에.
         if let [one] = sel {
             if one.is_file() && app::extract::extract_ext_ok(one) {
@@ -542,7 +546,10 @@ impl App {
                 None => return self.ctx_begin_wait(CtxKind::Bg(panel), target),
             }
         };
-        let items = self.bg_menu_items(Some(&shell));
+        let mut items = self.bg_menu_items(Some(&shell));
+        // 중복 파일 찾기(T-170 · dir3 신규) — 현재 폴더 안에서.
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
@@ -785,6 +792,19 @@ impl App {
                 if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
                     self.open_checksum(&p);
                 }
+            }
+            "ctx.find_dupes" => {
+                let dirs: Vec<PathBuf> = self.panels[panel]
+                    .selected_paths()
+                    .into_iter()
+                    .filter(|p| p.is_dir())
+                    .collect();
+                let roots = if dirs.is_empty() || matches!(kind, CtxKind::Bg(_)) {
+                    vec![self.panels[panel].root_path()]
+                } else {
+                    dirs
+                };
+                self.start_dupes(roots);
             }
             "ctx.extract_here" | "ctx.extract_to" => {
                 if let Some(p) = self.panels[panel].selected_paths().first().cloned() {

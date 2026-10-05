@@ -25,6 +25,7 @@ mod crash;
 mod dirinfo;
 mod dlg_win;
 mod dockinfo;
+mod dupes_win;
 mod file_win;
 mod filelist;
 mod hash_win;
@@ -272,6 +273,10 @@ struct App {
     hash_job: Option<app::checksum::HashJob>,
     /// 압축 풀기 작업(T-169 · 전송과 같은 슬롯).
     extract_job: Option<app::extract::ExtractJob>,
+    /// 중복 파일 찾기(T-170 · dupes_win.rs) · 열기 요청 · 진행 중인 검색(슬롯 1개).
+    dupes_win: dupes_win::DupesWin,
+    open_dupes: bool,
+    dup_job: Option<app::dupes::DupJob>,
     open_license: bool,
     file_win: FileWin,
     file_purpose: Option<app::license::FilePurpose>,
@@ -605,6 +610,9 @@ impl App {
             open_hash: false,
             hash_job: None,
             extract_job: None,
+            dupes_win: dupes_win::DupesWin::new(),
+            open_dupes: false,
+            dup_job: None,
             open_license: false,
             file_win: FileWin::new(),
             file_purpose: None,

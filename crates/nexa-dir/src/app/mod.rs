@@ -5,6 +5,7 @@ pub(crate) mod checksum;
 pub(crate) mod dialogs;
 pub(crate) mod dirsize;
 pub(crate) mod dnd;
+pub(crate) mod dupes;
 mod event_loop;
 pub(crate) mod extract;
 pub(crate) mod favorites;

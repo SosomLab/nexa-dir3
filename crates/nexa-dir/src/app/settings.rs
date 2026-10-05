@@ -466,6 +466,7 @@ impl App {
         self.bulk_win.relabel();
         self.mem_win.relabel();
         self.hash_win.relabel();
+        self.dupes_win.relabel();
     }
 }
 

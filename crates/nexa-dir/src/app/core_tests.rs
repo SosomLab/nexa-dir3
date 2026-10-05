@@ -7502,3 +7502,39 @@ fn extract_archive_into_named_folder() {
     let s = crate::app::extract::extract_summary(&rep);
     assert!(s.contains('2') && s.contains("1"), "{s}");
 }
+
+/// 중복 파일 찾기(T-170): 폴더 안 같은 내용 2개 → 작업 스레드 → 창에 묶음 1 + 파일 2 · 최신 보존 = 표시 1 · 진행 중 두 번째 요청 거부 ·
+/// 휴지통으로 보낸 뒤 목록에서 사라짐.
+#[test]
+fn duplicate_finder_groups_and_marks() {
+    let (mut app, dir) = fixture("dupes");
+    std::fs::create_dir_all(dir.join("sub")).expect("mkdir");
+    let body = vec![7u8; 4000];
+    std::fs::write(dir.join("one.bin"), &body).expect("write");
+    std::fs::write(dir.join("sub").join("two.bin"), &body).expect("write");
+    std::fs::write(dir.join("other.bin"), vec![8u8; 4000]).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    app.start_dupes(vec![dir.clone()]);
+    assert!(app.dup_job.is_some() && app.open_dupes && app.dupes_win.is_running());
+    app.start_dupes(vec![dir]);
+    let at = std::time::Instant::now();
+    while app.dupes_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(!app.dupes_win.is_running());
+    assert_eq!(
+        app.dupes_win.rows_len(),
+        1 + 2,
+        "{}",
+        app.dupes_win.status()
+    );
+    let marked = app.dupes_win.marked_paths();
+    assert_eq!(marked.len(), 1, "{marked:?}");
+    app.dupes_trash(marked.clone());
+    if !marked[0].exists() {
+        assert_eq!(app.dupes_win.rows_len(), 0);
+    }
+    app.close_dupes();
+    assert!(app.dup_job.is_none() && !app.dupes_win.is_open());
+}
