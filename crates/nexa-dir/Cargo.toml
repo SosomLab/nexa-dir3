@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Nexa Dir — 크로스플랫폼 파일 탐색기(앱 bin). winit 호스트 + nexa-ui 위에 그린다 · --smoke · --selfcheck"
+description = "Nexa Dir - lightweight dual-panel file explorer for Windows, macOS and Linux (app binary; winit host drawing on nexa-ui; --smoke, --selfcheck)"
 # Windows 실행 파일 아이콘·버전 리소스 — rc.exe/windres가 있을 때만 · 외부 crate 0 · 다른 OS 불변(nexa-sql T-62 복사).
 build = "build.rs"
 

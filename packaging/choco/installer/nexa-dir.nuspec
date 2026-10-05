@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>nexa-dir</id>
+    <version>@VERSION@</version>
+    <packageSourceUrl>https://github.com/SosomLab/nexa-dir3/tree/main/packaging/choco/installer</packageSourceUrl>
+    <owners>SosomLab</owners>
+    <title>Nexa Dir</title>
+    <authors>Sangyong Bae</authors>
+    <copyright>Copyright (c) 2026 SosomLab - Nexa Dir</copyright>
+    <projectUrl>https://github.com/SosomLab/nexa-dir3</projectUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/SosomLab/nexa-dir3@v@VERSION@/packaging/branding/nexa-dir-256.png</iconUrl>
+    <licenseUrl>https://github.com/SosomLab/nexa-dir3/blob/main/LICENSE.md</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/SosomLab/nexa-dir3</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/SosomLab/nexa-dir3/issues</bugTrackerUrl>
+    <releaseNotes>https://github.com/SosomLab/nexa-dir3/releases/tag/v@VERSION@</releaseNotes>
+    <tags>file-manager file-explorer dual-panel cross-platform rust</tags>
+    <summary>Lightweight dual-panel file explorer that looks identical on Windows, macOS and Linux</summary>
+    <description>
+A lightweight dual-panel file explorer that looks and behaves the same on
+Windows, macOS and Linux. It is a single statically linked executable written
+entirely in Rust and draws its own UI - no Qt, WebView or Electron.
+
+Features: tabs, inline tree, preview pane (text, images, archive listings,
+WASM plugins), built-in terminal, batch rename, checksums, duplicate finder,
+folder compare and sync, fast copy (CopyFileEx with parallel small files),
+favorites, trash with restore.
+
+This package installs the per-machine MSI (Program Files). Versions 0.22.0 and
+earlier used a per-user Inno Setup installer; it is removed automatically before
+the MSI is installed. User settings are kept.
+
+License: PolyForm Noncommercial 1.0.0 - free for noncommercial use only;
+commercial use requires a license.
+    </description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

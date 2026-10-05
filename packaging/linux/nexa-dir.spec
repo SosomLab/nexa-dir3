@@ -18,10 +18,13 @@ Recommends:     libxkbcommon
 Recommends:     google-noto-sans-cjk-fonts
 
 %description
-Nexa Dir는 Windows · macOS · Linux에서 같은 화면으로 동작하는 경량 듀얼 패널 파일 탐색기입니다.
-전부 Rust로 만든 정적 링크 실행 파일이며 자체 래스터라이저로 그려 Qt·WebView·Electron을 쓰지 않습니다.
-탭 · 인라인 트리 · 미리보기(WASM 플러그인) · 내장 터미널 · 일괄 이름 변경 · 휴지통 복원.
-사용자 데이터는 ~/.config/nexa-dir 에 둡니다.
+Nexa Dir is a lightweight dual-panel file explorer that looks and behaves the
+same on Windows, macOS and Linux. It is a single executable written in Rust
+that draws its own UI (no Qt, WebView or Electron).
+Features: tabs, inline tree, preview pane (WASM plugins), built-in terminal,
+batch rename, checksums, duplicate finder, folder compare and sync, favorites,
+trash with restore. User data lives in ~/.config/nexa-dir.
+License: PolyForm Noncommercial 1.0.0 (noncommercial use only).
 
 %prep
 # 소스 없음 — 스테이징 복사만.

@@ -148,4 +148,17 @@ if ($signtool -and ($env:WINDOWS_SIGN_THUMBPRINT -or $env:WINDOWS_SIGN_PFX)) {
 Step "산출물"
 $sha = (Get-FileHash -Algorithm SHA256 $Msi).Hash.ToLower()
 Note ("{0}  {1:N0} bytes  sha256 {2}" -f (Split-Path -Leaf $Msi), (Get-Item $Msi).Length, $sha)
+# ProductCode 곁 파일(T-160) — WiX v4는 빌드마다 새 ProductCode를 만든다. winget/choco 매니페스트(uninstallPrevious · msiexec /x)가
+# 이 값을 쓰므로 MSI Property 표에서 읽어 `<msi>.productcode.txt`로 남긴다(릴리스 자산에 함께 올라가 render-manifests.sh가 읽는다).
+$installer = New-Object -ComObject WindowsInstaller.Installer
+$db = $installer.OpenDatabase([string](Resolve-Path $Msi).Path, 0)
+$view = $db.OpenView("SELECT Value FROM Property WHERE Property = 'ProductCode'")
+$view.Execute()
+$rec = $view.Fetch()
+if ($null -eq $rec) { throw "ProductCode를 MSI에서 읽지 못했다" }
+$productCode = [string]$rec.StringData(1)
+$view.Close()
+if ($productCode -notmatch '^\{[0-9A-Fa-f-]{36}\}$') { throw "ProductCode 모양이 아니다: $productCode" }
+[IO.File]::WriteAllText("$Msi.productcode.txt", $productCode)
+Note "ProductCode $productCode → $(Split-Path -Leaf $Msi).productcode.txt"
 Write-Output "MSI=$Msi"

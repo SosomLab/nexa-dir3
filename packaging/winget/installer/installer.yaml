@@ -1,0 +1,29 @@
+# Rendered by packaging/render-manifests.sh - version, SHA-256 and the MSI ProductCode come from the released files.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: SosomLab.NexaDir
+PackageVersion: "@VERSION@"
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: 10.0.17763.0
+# WiX v4 MSI, per-machine (Program Files + HKLM). Replaces the per-user Inno Setup build of nexa-dir 0.22.0 and earlier.
+InstallerType: wix
+Scope: machine
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: uninstallPrevious
+ReleaseDate: "@DATE@"
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/SosomLab/nexa-dir3/releases/download/v@VERSION@/nexa-dir-@VERSION@-windows-x64.msi
+    InstallerSha256: @SHA_WIN_X64_MSI@
+    ProductCode: "@PRODUCT_CODE@"
+AppsAndFeaturesEntries:
+  - DisplayName: Nexa Dir
+    Publisher: SosomLab
+    ProductCode: "@PRODUCT_CODE@"
+    UpgradeCode: "{7D1F7E3A-5C2B-4F0E-9A61-3B9D2C8E4F10}"
+    InstallerType: wix
+ManifestType: installer
+ManifestVersion: 1.6.0

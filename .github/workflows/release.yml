@@ -1,4 +1,6 @@
-# release — 태그 `v*` push → 3-OS 설치본(MSI+포터블 zip · pkg+dmg · deb+rpm) + sha256sums.txt → GitHub Release **초안**(T-82 · docs/port/44 §3-4).
+# release — 태그 `v*` push → 3-OS 설치본(MSI+포터블 zip · pkg+dmg · deb+rpm) + sha256sums.txt + 패키지 매니페스트 zip → GitHub Release
+# **즉시 공개**(태그) · 수동 실행은 초안 → 공개 뒤 homebrew · winget/choco 제출 · pkg.sosomlab.com 신호(T-82 · T-160 · docs/port/44 §3-4).
+# 게시 흐름 이식 원천: ../nexa-clip/.github/workflows/release.yml(f3a6781) — 매니페스트는 render-manifests.sh 한 곳에서.
 #
 # 원칙: 설치본 + Windows 포터블 zip(dir2 채널 유지) · exe 1개(nexa-dir) · macOS Universal 2 `.app` + pkg(/usr/local/bin/nexa-dir 링크) · Windows MSI(WiX v4).
 # 스크립트가 원장이다 — 이 워크플로는 `packaging/<os>/build-*.sh|ps1`을 부르기만 한다(로컬과 CI가 같은 명령 · 갈라짐 0).
@@ -18,12 +20,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "릴리스 태그(예: v0.1.0) — 없으면 커밋 SHA로 초안 생성"
+        description: "릴리스 태그(예: v0.23.0) — 없으면 커밋 SHA로 초안 생성"
         required: false
         type: string
+      publish:
+        description: "수동 실행도 초안 대신 바로 공개(태그 push는 늘 공개)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: write # 릴리스 초안 생성·자산 업로드
+  contents: write # 릴리스 생성·자산 업로드
 
 env:
   CARGO_TERM_COLOR: always
@@ -218,7 +225,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          find target/packaging -maxdepth 2 \( -name '*.msi' -o -name '*.zip' -o -name '*.pkg' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) -exec cp {} out/ \;
+          find target/packaging -maxdepth 2 \( -name '*.msi' -o -name '*.zip' -o -name '*.pkg' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.productcode.txt' \) -exec cp {} out/ \;
           ls -lh out
       - uses: actions/upload-artifact@v4
         with:
@@ -226,7 +233,7 @@ jobs:
           path: nexa-dir3/out/*
           if-no-files-found: error
 
-  # ── 릴리스 초안(사용자가 GitHub에서 'Publish release'로 공개 · 채널 = GitHub Release만 · winget/choco/brew 등록은 docs/port/44 §3-4 후속) ──
+  # ── 릴리스 게시(태그 = 즉시 공개 · 수동 = 초안) — 매니페스트(winget · choco · brew)는 여기서 만들어 자산으로 붙여 두고 제출은 전용 워크플로 ──
   publish:
     needs: [meta, package]
     runs-on: ubuntu-latest
@@ -239,6 +246,24 @@ jobs:
           path: nexa-dir3/staged
           pattern: dist-*
           merge-multiple: true
+      - name: 매니페스트 생성(render-manifests.sh 한 곳 · 영어/ASCII · copyright · 자리표시자 게이트)
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          ./packaging/render-manifests.sh "$VERSION" staged manifests
+          (cd manifests && zip -qr "../staged/nexa-dir-$VERSION-package-manifests.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-manifests
+          path: nexa-dir3/manifests/**
+          if-no-files-found: error
+      - name: 크기 게이트(exe 예산 10 MB · MSI 30 MB)
+        run: |
+          set -euo pipefail
+          msi=$(ls staged/*.msi); sz=$(stat -c %s "$msi")
+          [ "$sz" -le $((30 * 1024 * 1024)) ] || { echo "::error::MSI $sz B > 30 MB"; exit 1; }
+          echo "MSI $sz B"
       - name: sha256sums.txt
         run: |
           set -euo pipefail
@@ -259,31 +284,96 @@ jobs:
           | macOS (drag-to-Applications) | \`nexa-dir-$VERSION-macos-universal.dmg\` | 끌어 놓기 · CLI 링크는 dmg 안 안내문 |
           | Linux x86_64 (deb) | \`nexa-dir_${VERSION}_amd64.deb\` | \`sudo dpkg -i\` 또는 \`sudo apt install ./…deb\` |
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
-          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | 압축 해제 후 \`nexa-dir.exe\` 실행(설정은 %APPDATA%\\\\nexa-dir) |
+          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | 압축 해제 후 \`nexa-dir.exe\` 실행(실행 파일 옆에 \`data\` 폴더를 두면 거기에, 아니면 %APPDATA%\\\\nexa-dir에 설정) |
 
           받은 파일은 \`sha256sums.txt\`로 확인하세요. 제거: Windows 프로그램 추가/제거 · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\`/\`dnf remove nexa-dir\`.
-          사용자 데이터(설정·연결 프로필)는 OS 사용자 폴더에 있으며 제거해도 보존됩니다.
+          사용자 데이터(설정 · 세션 · 즐겨찾기 · 이름 변경 프리셋)는 설정 폴더에 있으며 제거해도 보존됩니다. 0.22.0 이하(nexa-dir2)의 설정은 첫 실행 때 한 번 가져옵니다.
+
+          ## 패키지 관리자
+
+          \`\`\`powershell
+          winget install SosomLab.NexaDir            # Windows MSI (replaces the 0.22.0 Inno installer)
+          winget install SosomLab.NexaDir.Portable   # Windows portable
+          choco  install nexa-dir                    # Windows MSI
+          choco  install nexa-dir.portable           # Windows portable
+          \`\`\`
+          \`\`\`bash
+          brew install --cask kiros33/tap/nexa-dir   # macOS (Universal pkg)
+          \`\`\`
+          Linux(apt/rpm 저장소): <https://pkg.sosomlab.com>
+
+          winget·Chocolatey는 중앙 검수를 거쳐야 위 명령이 동작합니다. 함께 올린 \`nexa-dir-$VERSION-package-manifests.zip\`이 실제 제출본입니다.
 
           ## 서명
 
           코드 서명 키가 투입되지 않은 빌드는 macOS Gatekeeper·Windows SmartScreen이 경고합니다(DR-20 · 별도 요청 시 서명).
-          - macOS: \`xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"\`
+          - macOS: \`xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"\`(brew Cask로 설치하면 자동)
           - Windows: SmartScreen "추가 정보 → 실행"
 
-          라이선스: PolyForm Noncommercial 1.0.0 — 변경 내역: docs/DEVLOG.md
+          변경 내역: [docs/DEVLOG.md](https://github.com/SosomLab/nexa-dir3/blob/main/docs/DEVLOG.md)
+
+          License: PolyForm Noncommercial 1.0.0 — free for noncommercial use only; commercial use requires a license.
+          라이선스: PolyForm Noncommercial 1.0.0 (비상업적 사용만 허용 · 상업 사용은 라이선스 필요).
           EOF
-      - name: 릴리스 초안 생성/갱신
+      - name: 릴리스 게시(태그 = 공개 · 수동 = 초안)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.meta.outputs.tag }}
           PRE: ${{ needs.meta.outputs.prerelease }}
         run: |
           set -euo pipefail
-          args=(--draft --title "Nexa Dir ${TAG#v}" --notes-file notes.md --target "$GITHUB_SHA")
+          args=(--title "Nexa Dir ${TAG#v}" --notes-file notes.md --target "$GITHUB_SHA")
           [ "$PRE" = "true" ] && args+=(--prerelease)
+          if [ "${{ github.ref_type }}" != "tag" ] && [ "${{ inputs.publish }}" != "true" ]; then
+            args+=(--draft)
+            echo "수동 실행이라 초안으로 만든다 — GitHub에서 'Publish release'를 눌러 공개한다."
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" staged/* --clobber
+            # 이미 있는 릴리스에 자산을 덧쓰지 않는다(linux-repo가 서명 색인에 넣은 뒤 바뀌면 색인이 깨진다) — 없는 자산만 올린다.
+            have=$(gh release view "$TAG" --json assets -q '.assets[].name')
+            for f in staged/*; do
+              n=$(basename "$f")
+              if echo "$have" | grep -qx "$n"; then echo "건너뜀(이미 있음): $n"; else gh release upload "$TAG" "$f"; fi
+            done
           else
             gh release create "$TAG" staged/* "${args[@]}"
           fi
-          echo "초안 생성 — GitHub Releases에서 'Publish release'로 공개한다."
+
+  # ── 패키지 관리자 제출(릴리스 공개 뒤에만 — 매니페스트가 자산 URL·해시를 가리킨다) ──
+  homebrew:
+    needs: [meta, publish]
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      tag: ${{ needs.meta.outputs.tag }}
+    secrets: inherit
+
+  windows-packages:
+    needs: [meta, publish]
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/publish-windows-packages.yml
+    with:
+      tag: ${{ needs.meta.outputs.tag }}
+    secrets: inherit
+
+  # ── Linux 패키지 저장소(pkg.sosomlab.com) 갱신 신호 — SosomLab/linux-repo의 publish가 받아 서명 색인을 다시 만든다(정식 공개만 ·
+  #    `on: release: published`는 GITHUB_TOKEN이 만든 릴리스에서 발화하지 않으므로 여기서 직접 보낸다 · 첫 공개 뒤 apps/nexa-dir.toml 등록) ──
+  linux-repo:
+    needs: [meta, publish]
+    if: github.ref_type == 'tag' && needs.meta.outputs.prerelease != 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: pkg.sosomlab.com 갱신 신호
+        env:
+          TOKEN: ${{ secrets.LINUX_REPO_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then echo "::notice::LINUX_REPO_DISPATCH_TOKEN 없음 — linux-repo 정기 실행이 반영"; exit 0; fi
+          curl -fsS -X POST https://api.github.com/repos/SosomLab/linux-repo/dispatches \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"event_type\":\"app-released\",\"client_payload\":{\"app\":\"nexa-dir\",\"tag\":\"$GITHUB_REF_NAME\",\"repo\":\"$GITHUB_REPOSITORY\",\"run_url\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}}"
