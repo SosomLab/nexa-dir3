@@ -15,7 +15,7 @@
 | CMD | 430 | 430 | 199 | 121 | 110 | 0 | 0 |
 | DLG | 88 | 88 | 30 | 4 | 54 | 0 | 0 |
 | EXT | 213 | 213 | 126 | 68 | 19 | 0 | 0 |
-| GUI | 95 | 95 | 31 | 34 | 30 | 0 | 0 |
+| GUI | 95 | 95 | 32 | 33 | 30 | 0 | 0 |
 | KEY | 817 | 817 | 752 | 31 | 34 | 0 | 0 |
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4321 | 4321 | 2497 | 932 | 763 | 0 | 0 |
+| **합계** | 4321 | 4321 | 2498 | 931 | 763 | 0 | 0 |
 
 ## 행
 
@@ -303,6 +303,7 @@
 | KEY-141~150 | 이름 변경 프리셋 필드(`renames/*.cfg` 10) | `ndir-ops/src/batch_rename.rs`(serialize_ops/parse_ops) | T1 | `batch_rename::tests` 14 · `preview_count_conflicts_and_presets_without_window` | ✅ | |
 | KEY-121~140 | 값 안의 하위 문법 토큰(도구모음·컨텍스트 메뉴·컬럼 순서 · 런처 항목 · 터미널 스킴) | `order.rs` · `launcher.rs` · `term` 테마 | T1 | `order::tests` 3 · `parse_encode_round_trip_and_separator` | 🚧 | 가상 경로 토큰(`::PC::` 등)은 ndir-vfs 시험 · 터미널 스킴 토큰 ☐ · 10-05 §12 정리: 터미널 스킴 토큰 ☐ 표기 낡음(ndir-term `schemes_are_well_formed` · `resolve_scheme_selector_rules`) · 121~129 · 132~136 · 138~140 ✅ 후보 · 131 `shell:` 별칭 ✅ 10-05 §21(아래 행) · 130/137 클라우드 대기 |
 | KEY-131 · GUI-140 · CMD-260 · SHELL-ALIAS | 경로 바 `shell:` 특수 폴더 별칭(`shell:startup` · `shell:downloads` · `shell:::{GUID}`) → 실경로로 이동 · 못 풀면 원문 → 자리 유지 · macOS/Linux = 스킴 없음(None) | `pathinput.rs::is_shell_scheme` · `platform/mod.rs::Opener::resolve_alias`(기본 None) · `platform/winshell.rs::resolve_shell_alias`(SHParseDisplayName → SHGetPathFromIDListEx) · `platform/fake.rs`(`aliases`) · `panel.rs::pending_alias` · `app/input.rs` | T1 · T3 | `path_bar_resolves_shell_alias` · `winshell::alias_tests::resolves_known_shell_names`(dir2 시험 이식 · 실제 셸 조회 = 읽기만) | ✅ | 10-05 §21(ce75896 · T-149 19 · dir2 shellpath.rs:16-45 · panel.rs:1530) |
+| KEY-314 · OS-4 · D-8 · GUI-130 · PATH-EXPAND | 경로 입력 확장(제출 + 제안 공통): `$NAME`/`${NAME}`(HOME · PWD = 패널 현재 폴더 · USER · 환경 · D-8 권고안 a = 전 OS 허용) + 기존 `%VAR%`/`$env:`/`${env:}` · `${NAME:-기본}` · `${NAME%패턴}`/`%%`/`#`/`##` · `$(…)` **내장만 · 셸 실행 없음**(basename · dirname · pwd · echo · Split-Path -Leaf/-Parent/-LeafBase/-Extension · Get-Location · Join-Path · [IO.Path]::GetFileName/GetFileNameWithoutExtension/GetExtension/GetDirectoryName · 중첩) · `~` · 상대 경로 · 미정의 = 원문(L-26) | `pathexpand.rs`(신규 · 순수 · 환경/현재 폴더/홈 주입) · `panel.rs::expand_path_input` · `pathinput.rs` | T1 · T3 | pathexpand 단위 5 · `path_bar_expands_variables_commands_and_relative_paths` | ✅ | 10-05 §36(bcb706b · T-152 · 사용자 요청 10-05) · dir2보다 확장(dir2 = %VAR% · $env: · ${env:}만) · 셸 실행 없음 = 입력 중 실행 · 지연 위험 회피(§35 권고 (가)) |
 | SHELL-060 · 061 · 062 · 068(1차) | 외부 드롭 수신 — winit DroppedFile 모아 틱 처리 · 대상 = 폴더 행/패널 폴더 · Ctrl 복사·Shift 이동·볼륨 기본 · 자기/하위·전송 중 거부 · 전송 엔진 합류 | `app/dnd.rs` · `app/event_loop.rs` | T3 | `external_drop_moves_or_copies_into_folder_under_cursor` | ✅ | 발신·OLE 완전·자동 스크롤·가상 파일 = 2차 · 드롭 좌표 실기 확인 |
 | SHELL-044 · WINC-165 · X-32 | 잘라낸 항목 흐림 — 클립보드가 잘라내기 파일 목록이면 그 행 이름 text_dim · 동기 = 잘라내기/복사/전송 완료/포커스 복귀 | `filelist.rs::TreeSource::is_ghosted` · `panel.rs::set_cut_marks` · `app/ops.rs::sync_cut_marks` | T3 | `cut_marks_ghost_rows_until_clipboard_changes` | ✅ | 클립보드 변경 통지 대신 포커스 복귀 1회 동기(3-OS 공통) |
 | EXT-415(1차) · EXT-409 · T-63 | 플러그인 매니저 — [설치…](파일 창 → 검증 → 사용자 폴더 복사) · [삭제](사용자분) · 공급자 캐시 무재시작 재구성 · 동봉분 안내 | `app/plugins.rs` · `preview/mod.rs::invalidate/user_plugin_dir/validate_plugin` · `prefs_win.rs` | T3 | `plugin_manager_install_and_remove` | ✅ | 원격 저장소/업데이트 = 2단계 보류 |
