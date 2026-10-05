@@ -265,7 +265,7 @@
 | NEW-035 · NATURAL-SORT | 자연 정렬 — 숫자 구간을 값으로 비교(file2 < file10 · 대소문자 무시 옵션) · 설정 `list.sort_natural`(기본 on · 끄면 dir2 글자 순) · 바꾸면 열린 목록 재열람 | ndir-tree `cmp_natural` · `set_natural_sort` · `app/settings.rs::apply_natural_sort` | T1 · T3 + 실기 | `natural_compare_orders_numbers_by_value` · `natural_sort_setting_defaults_on` | ✅ | 10-05 §47(b54ce4f) · 실기 = 숫자 순 · 끄면 종전 순서 |
 | NEW-036 · SELECT-INVERT | 선택 반전 — 명령 `edit.select_invert`(편집 메뉴 · Ctrl+Shift+A / Cmd+Shift+A · 단축키 설정 `key.edit.select_invert`) · 보이는 행 기준(안 보이던 선택은 해제) | ndir-tree `invert_selection_visible` · `panel.rs::invert_selection` · `filelist.rs::invert_selection` · `app/menus.rs`(MENU_IDS) | T3 + 실기 | `invert_selection_flips_visible_rows` | ✅ | 10-05 §48(f214492) · 실기 = 메뉴 · 단축키 · 보이는 행 기준 |
 | NEW-037 · FOLDER-SIZE | 폴더 크기 계산(워커 + 세대 가드 · 취소) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-166 |
-| NEW-038 · CHECKSUM | 체크섬 보기 · 복사(DR-8 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-167 |
+| NEW-038 · CHECKSUM | 체크섬 보기 · 복사(DR-8 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-167 · 요건 §50: 별도 스레드 · 진행 확인/취소 · 작업 슬롯 1개(다른 요청 제한) · 시험 = 표준 벡터 + 두 번째 요청 거부 |
 | NEW-039 · FAVORITES | 즐겨찾기(런처 통합 결정 대기) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-168 |
 | NEW-040 · ARCHIVE-OPS | 압축 풀기 · 압축 안 탐색 · 만들기 | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-169 |
 | NEW-041 · DUP-FIND | 중복 찾기(크기 → 부분 해시 → 전체 해시) | — | — | — | ☐ | 사용자 지정 대상 10-05 §49 · T-170 |
