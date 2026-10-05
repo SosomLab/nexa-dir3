@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 31 | 31 | 19 | 8 | 0 | 0 | 0 |
+| NEW | 32 | 32 | 20 | 8 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 85 | 57 | 20 | 0 | 0 |
 | OS | 19 | 19 | 1 | 18 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 56 | 118 | 0 | 0 | 0 |
-| **합계** | 4320 | 4320 | 2496 | 932 | 763 | 0 | 0 |
+| **합계** | 4321 | 4321 | 2497 | 932 | 763 | 0 | 0 |
 
 ## 행
 
@@ -97,7 +97,7 @@
 | UIK-206 · GUI-074 | Toolbar 토글 켜짐(강조색 38 % 블렌드) | nexa-ui `controls/toolbar.rs` | T2 | `checked_toggle_draws_accent_blend_background` | ✅ | 104차 · 오버플로 보류 |
 | UIK-207 · GUI-040·046 | TabBar 아이콘·툴팁·가운데 클릭 | nexa-ui `controls/tabbar.rs` | T2 | `icons_tips_and_middle_click` | ✅ | 104차 · press 전환 옵션 보류 |
 | UIK-203 · GUI-080 | StatusBar | nexa-ui `controls/statusbar.rs` | T2 | `set_text_invalidates_only_on_change_and_right_aligns` · `right_text_never_goes_left_of_pad` | ✅ | 104차 |
-| UIK-201·216·217 · PANEL-1F(rows·columns·typeahead) · GUI(fastscroll·edit) | 가상 행 그리드 엔진(가상화·컬럼·정렬·선택·계층·인라인 이름 바꾸기·보기 모드·픽셀/고속 스크롤·타입어헤드) | nexa-ui `crates/nexa-grid` | T1·T2 | dir2 테스트 52(rows 34 · edit 8 · fastscroll 5 · typeahead 4 · columns 1) + `adapt_forwards_to_ctl_ctx` | ✅ G-1 | 아이콘(`draw_icon`)·italic은 G-2/U-5 |
+| UIK-201·216·217 · PANEL-1F(rows·columns·typeahead) · GUI(fastscroll·edit) | 가상 행 그리드 엔진(가상화·컬럼·정렬·선택·계층·인라인 이름 바꾸기·보기 모드·픽셀/고속 스크롤·타입어헤드) | nexa-ui `crates/nexa-grid` | T1·T2 | dir2 테스트 52(rows 34 · edit 8 · fastscroll 5 · typeahead 4 · columns 1) + `adapt_forwards_to_ctl_ctx` | ✅ G-1 | 아이콘(`draw_icon`)·italic은 G-2/U-5 · 10-05 §35: 타입어헤드 = nexa-ctl TypeAhead(한글) · 설정 적용 결함 수정(NEW-032 행) |
 | UIC-310 | DrawCtx 클립 스택(`push_clip` 교차 쌓기 · `pop_clip` · 모든 어휘가 꼭대기 안) | nexa-ui 112차 `nexa-ctl/raster.rs` `RasterCtx.clips` · nexa-grid `paint_grid` `push_clip(bounds)` | T2 · T3 | nexa-ctl `clip_tests`(픽셀 2) · `panel_grid_pushes_its_bounds_as_clip` | ✅ | journal §67 · 실기 = 넘친 셀이 패널 경계에서 잘림 |
 | UIC-311 | 터미널 셀 그리기(고정폭 격자 · SGR 1 굵게) | `termview.rs` `grid_dims`(Mono + 증분 · `text_width("M")`) · 굵은 런 = `select_font_sized(Mono, true, Δ)` 바뀔 때만 | T2 | `termview::lifecycle_with_fake_pty`(굵게 선택/복귀) | ✅ | journal §68 · 전용 슬롯 없이 Mono+증분으로 충분 |
 | UIC-313 | 이탤릭(헤더) · 굵게(헤더/폴더) | nexa-ui 113차 `select_font_styled` · nexa-grid `Adapt` 전달 · `app/menus.rs::apply_font_decor` | T3 | `font_decor_settings_reach_grid_font_selection` | ✅ | journal §68 · 밑줄/취소선은 dir2에도 없음 |
@@ -255,6 +255,7 @@
 | NEW-029 | 키보드 ↑/↓ 이동 고속 스크롤 스위치 `scroll.fast_keys`(기본 on · 부모 `scroll.fast` · 끄면 키 = 1행 · 휠만 가속) | nexa-grid `fastscroll::set_fast_scroll_keys`(nexa-ui 148) · `ndir-settings` registry · `app/settings.rs` | T1 + 실기 | nexa-grid 시험(148) · 설정 레지스트리 무결성 시험 | ✅ | 10-05 §1(6c42c90) · dir2에 없음(키 가속 늘 켜짐) · 실기(키 길게 누름) 사용자 |
 | NEW-030 | 메뉴 순환 이동 스위치 `menu.wrap_around`(기본 on · 끄면 양 끝 멈춤 · 우클릭/탭/상태줄 메뉴 공통 · 즉시 반영) | nexa-ctl `ContextMenu::set_wrap_around`(nexa-ui 150) · `ndir-settings` registry · `app/settings.rs` | T3 + 실기 | `menu_wrap_around_setting_reaches_the_menu` · nexa-ctl 시험(150) | ✅ | 10-05 §2(dff8a77) · 메뉴 바(풀다운)도 적용 ✅ 10-05 §32(1990a54 · nexa-ui 156 `MenuBar::set_wrap_around`) · 실기 사용자 |
 | NEW-031 · UIK-221 | 메뉴 글자 키 스위치 `menu.char_jump`(파일 목록 › 컨텍스트 메뉴 · 기본 on) — `ContextMenu::set_char_jump`(nexa-ui 155 · 기본 꺼짐) — `&x` 니모닉 우선 · 없으면 라벨 첫 글자/숫자 · 하나 = 실행(하위 메뉴면 열기) · 여럿 = 순환 · 없음 = 그대로 · 우클릭 · 탭 · 상태줄 메뉴 공통 · 즉시 적용 | nexa-ctl `ContextMenu::set_char_jump`(nexa-ui 155 · 280f0ac) · `ndir-settings` registry · `app/settings.rs` · `main.rs` 기동 배선 | T3 + 실기 | `menu_letter_keys_pick_items` · nexa-ctl 시험(155) | ✅ | 10-05 §30(8370165 · T-149 16) · dir2 = 네이티브 TrackPopupMenuEx 니모닉(win.rs:3034-3072) · 종전 dir3 = 글자 키가 메뉴를 닫음 · 실기(한글 UI 글자 · 영어 UI c) 사용자 |
+| NEW-032 · PANEL-1F(typeahead) · TYPEAHEAD-HANGUL | 타입어헤드 보완(사용자 10-05): 한글 입력(nexa-ctl `typeahead::TypeAhead` 조합기 · Windows 한/영 키 = 목록 입력 한글 모드 토글 · 자판 → 두벌식 자모) · 입력 중 ↑/↓ = 접두사 같은 항목 사이 순환 + 유지 시간 리셋 · Esc 취소 · 같은 글자 반복 = 누적 · 설정 `typeahead.enabled`(신규 · on) · `typeahead.reset_ms` 기본 1000 → 2000(nexa-sql 기준 · 상한 60000) · DEPENDS 6줄 · ★ 종전 `typeahead.*`를 그리드에 적용하는 곳이 없던 결함 수정(`App::apply_typeahead` · `Panel::set_typeahead` · 새 탭 포함) | nexa-ui nexa-grid VirtualRows(157차 d54064b · `typeahead_composing/active/cancel` · `set_typeahead_enabled` · `RowSource::find_prefix_rev`) · `app/input.rs::{hangul_key, typeahead_target_of, toggle_hangul_mode}` · `app/settings.rs::apply_typeahead` · `panel.rs::set_typeahead` · `app/event_loop.rs`(한/영 키 · 입력 중 100 ms 깨움) · `ndir-settings` registry/migrate | T1 · T3 + 실기 | `typeahead_hangul_settings_and_arrow_cycle`(T3 + 순수 판정 MC/DC) · nexa-grid 시험(157) | ✅ | 10-05 §35(adea995 · nexa-ui 157) · dir2에서 가져온 reset_ms 1000은 변경분으로 남음(쓰던 값 보존) · 실기 = Windows 한/영 키 · macOS/Linux 한글 자판(자모가 그대로 오는지) · ↑/↓ 일치 항목 · 2초 뒤 배지 · 이동하면 연장 · Esc |
 | T-96 · CONFLICT-INLINE | 덮어쓰기 충돌 질문을 진행 창 안에서(4버튼 · Enter = 덮어쓰기 · Esc/X = 취소 · 진행 창 없으면 종전 대화상자) · 완료 [닫기 (N)] = 강조(기본) 버튼 | `progress_win.rs::{set_conflict, take_conflict_choice, pick_conflict}` · `app/dialogs.rs::conflict_ask` · `app/ops.rs::ops_tick` · nexa-ui 144 `Button::tone` | T2(모듈) + 실기 | progress_win 모듈 시험(질문 · 답 · 1회성 · 거두기) | 🚧 | 10-04 §21 · §22 첫 질문도 인라인(판정 = `is_active() && window` · 657679c 결함 수정 · 494a9f8) · T3는 창이 없어 대화상자 길 · **실기 판정 필수**(같은 이름 3개 복사 → 진행 창 안 질문 3번 · 막대 유지 · 파란 [닫기]) · T-96 나머지(카드형 · 상태바 진행 칸 · 완료 토스트) 후속 |
 | T-134 · I18N-RELABEL | 언어 전환 때 일회성 라벨 갱신(편집 메뉴 · 설정 창 · 도크 · 네비 · 보조 창 6종) · 하드코딩 문자열 일부 · 낡은 문구 | `main.rs::install_ctl_labels` · `App::relabel` · `Panel::relabel` · `*_win.rs::relabel` | T2 · T3 | `relabel_refreshes_one_time_labels` · keys_win/prefs_win relabel 시험 | 🚧 | 10-04 §13 · §15 대체 언어 = 시스템 언어 → 영어(`load_with_system` · `fallback_is_system_language_then_english`) · 남은 것 = 자가 점검 창 · 라이선스 문구 · 허용값 · unsupported · Command Prompt 비교 · 중복 키 · PositionDropdown · 일괄 이름 카드 콤보 |
 | WINC-029 · WINC-110 · PANEL-081 · PREFS-135 | 열 경계 더블클릭 자동 맞춤(보이는 행 + 머리글 · 정렬 표시 포함 · 상한 `list.col_autofit_max` · 하한 40 · 같은 패널 탭 항상 + 동기면 반대 패널 · 사용자 폭으로 세션) | `app/input.rs::autofit_column` · `panel.rs::set_col_width_user` · nexa-grid `autofit_col_at`/`autofit_texts` | T3 | `header_edge_double_click_autofits_column` · `autofit_counts_sort_mark_and_order_in_header` | ✅ | §118 · 실기(더블클릭 · 상한) 사용자 |

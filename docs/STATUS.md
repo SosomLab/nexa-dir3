@@ -4,8 +4,8 @@
 
 ## ▶ 다음 세션 시작점(10-05 마감 · Windows PC 세션 · 139차 갱신)
 
-- **원격 main**(10-05 §34 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `123a430`(코드 · quick · CI가 전수) · nexa-ui `e4202c1`(156차 5e844a0 + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
-- **마지막 전수**(`gate.sh full` · c0084e2 + nexa-ui 156 · 10-05 Windows · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 487/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 · T-136).
+- **원격 main**(10-05 §35 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `adea995`(코드) · nexa-ui `960045b`(157차 d54064b + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
+- **마지막 전수**(`gate.sh full` · adea995 + nexa-ui 157 · 10-05 Windows · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 489/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 · T-136).
 - **CI**: 10-04 ~ 10-05 Windows 세션의 코드 커밋 전부 3-OS 녹색(42ccb5a · 9137085 · 89df13a · daa499d · 14c6866 · 6c42c90 · 094997f(dff8a77 포함) · 1e4520b · e7cd2b4 · 716f0b3 · 87b4740 · 57943de) · 2682cf2(nexa-ui 152 첫 반영) = 마감 기록 시점 진행 중(협업 세션 감시 → 결과는 다음 세션 첫 확인 거리).
 - **이 PC 세션 분담**(Windows · 10-04 §25 · 10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 코드 커밋 · pull/push · 검증 빌드 `CARGO_TARGET_DIR=target/dev` / 협업 세션 = `docs/` 기록 커밋(push는 개발 세션) · 사용자 인스턴스 빌드 `target\debug` + **`explorer.exe`로 재실행**(에이전트 셸 env `NO_COLOR` · `CLAUDE_*` 상속 회피) · 시험 반복 `target/collab` · 사전 분석 · CI 감시(`gh run watch`). 같은 작업 트리 · 커밋 직전 서로 알림 · 커밋은 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`(이 PC git config의 메일은 다름 · config 불변). **재시작 = 자기가 띄운 PID만 종료**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10). **세션 시작 때 `ListAgents`로 서로 확인**(10-04에 개발 세션이 1시간 넘게 혼자 기록 · 빌드 · 재시작까지 한 일이 있었다).
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 시험 판정 = cargo 종료 코드 + 실패 수(10-05 §2 — 로그의 `error: Unrecognized option: 'version'` 줄은 런처 시험의 정상 출력) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
@@ -19,6 +19,16 @@
   - **★ 드래그 실기 11항목**(발신 1차 §28 d24bc51 · 수신 보강 §33 c0084e2 · 머물면 열기 §34 123a430): ① 파일 선택 → 끌어서 탐색기 창에 놓기(복사/이동) ② Windows Terminal에 놓기(경로 입력) ③ VMware 게스트 창에 놓기 ④ 자기 창의 다른 패널/폴더 행에 놓기 ⑤ Esc 취소 ⑥ 드래그 뒤 선택 유지 · 다음 클릭 정상 ⑦ 탐색기에서 끌어와 폴더 행 위에 놓기 = 그 폴더로 ⑧ Ctrl(복사)/Shift(이동) 누른 채 놓기 ⑨ 긴 목록 위/아래 가장자리에서 자동 스크롤 ⑩ 끌어오다 접힌 폴더 위에 3초 머물면 펼쳐짐 ⑪ 배경 탭 위에 3초 머물면 그 탭으로 — 결과를 보고 T-147 남은 것(강조 · 가상 파일 · 글자 드롭 · 자체 IDropTarget) 설계.
   - 그 전(10-03 ~ 10-04 Linux): 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표) — 상태줄 약어/팝업 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**(10-05 §34 갱신 · 개발 세션 회차 마감 기준): 이번 회차 결과 = T-148 ✅ 6/6 · T-149 ✅ 13건 · T-150 ✅ 13/19 · T-143 ✅ · T-117 ✅(Linux T4 필수) · T-147 = 발신 1차 + 수신 보강(포인터/수식키 · 자동 스크롤 · 머물면 열기) · 실기 11항목 대기. **다음 회차 후보** = ① ★ 드래그 실기 11항목(사용자) ② T-147 남은 것 — 놓일 폴더 강조 · 가상 파일(FileGroupDescriptor) · 글자 드롭 · 지연 렌더링 스테이징(자체 IDropTarget · winit `with_drag_and_drop(false)`) · macOS/Linux 발신 · 포인터 조회 ③ T-149 = 글꼴 입력 상자(PREFS-412) · owner-draw 셸 메뉴 아이콘(SHELL-011) · 형식별 상세(SHELL-083/084) ④ T-150 = 툴팁(WINB-098/099) · 휠 줄 수 동기(WINB-119) · CP949 zip · 붙여넣기 정규화(실기) ⑤ T-114 macOS 실기 · macOS T4(T-06) · 종전 대기열(T-134 남은 것 · T-95 3차 · T-113 · T-131 · T-130 · T-129 · T-128 · T-102 · T-99 2차 · T-96 남은 것 · T-97·98) · 클라우드(T-72 · T-129 일부) = 대기.
+
+---
+
+## 10-05 167차 — 새 회차: 타입어헤드 보완(NEW-032 · nexa-ui 157) · 경로 입력 확장 사전 분석
+
+- **한 일**: adea995(한글 타입어헤드 · ↑/↓ 일치 순환 · 설정 적용 결함 수정 · gate full 489/0) · NEW-032 등재(docs/22 · 23 · 매트릭스) · TODO T-151 ✅ · T-152 사전 분석 전달.
+- **지금 상태**: adea995 앱 재시작(PID 24028). CI adea995 감시 중. 개발 세션 = T-152 경로 입력 확장.
+- **걸린 것**: 타입어헤드 실기(한/영 키) · ★ 드래그 실기 11항목 · T-152 `$(...)` 범위(셸 실행 여부 — 사용자 결정 거리).
+
+→ [journal/2026-10-05 §35](journal/2026-10-05.md)
 
 ---
 
