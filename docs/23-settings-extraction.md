@@ -115,6 +115,7 @@
 | 메뉴 글자 키(종전 = 글자 키가 메뉴 닫음) | nexa-ctl `ContextMenu::set_char_jump` · `app/settings.rs` | 메뉴에서 글자 키로 항목 고르기 여부(NEW-031) | — | 설정(취향) | `menu.char_jump`(기본 on) | ✅ 10-05 §30(8370165) |
 | 타입어헤드 켜기/끄기(종전 = 늘 켜짐) · 유지 시간 1000 → 2000 ms | nexa-grid VirtualRows(nexa-ui 157) · `app/settings.rs::apply_typeahead` | 목록 글자 입력 이동 여부 · 입력 유지 시간(nexa-sql 기준 2000 · 상한 60000) | `typeahead.reset_ms`(기존 · 기본값 변경 · dir2 가져온 1000은 변경분으로 유지) | 설정(취향) | `typeahead.enabled`(신규 · 기본 on · NEW-032) | ✅ 10-05 §35(adea995) |
 | 행 아이콘 늘 켜짐 · 메뉴 아이콘 없음 | `App::icon_switches` · `app/menu_icons.rs` | 행 아이콘 · 메뉴 아이콘 켜기/끄기(성능 향상 모드가 강제 끔 · 저장값 유지) | — | 설정(취향 · DEPENDS `perf.boost` Eq off) | `list.row_icons` · `menu.icons`(기본 on · NEW-033/034) | ✅ 10-05 §38(d4aca0d) |
+| 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(취향 · 기본 on · 끄면 dir2 순서) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |
 | 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |

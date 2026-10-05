@@ -4,8 +4,8 @@
 
 ## ▶ 다음 세션 시작점(10-05 마감 · Windows PC 세션 · 139차 갱신)
 
-- **원격 main**(10-05 §46 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `0d416f8`(코드) · nexa-ui `e9a7a65`(159차 06376cb + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
-- **마지막 전수**(`gate.sh full` · 0d416f8 + nexa-ui 159 · 10-05 Windows · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 520/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 · T-136).
+- **원격 main**(10-05 §47 갱신 · 네 저장소 main · 병합할 브랜치 없음): nexa-dir3 `b54ce4f`(코드) · nexa-ui `e9a7a65`(159차 06376cb + docs) · nexa-license `54c8d71` · nexa-sql `74440fc`.
+- **마지막 전수**(`gate.sh full` · b54ce4f + nexa-ui 159 · 10-05 Windows · `CARGO_TARGET_DIR=target/dev`): fmt + clippy(3-OS) ✓ · 시험 522/0 · `--smoke` ok(0.23.0) · `--selfcheck --ci` pass 23 · fail 0 · warn 2 · skip 11 · T4 20 시나리오 0 실패(Windows · 전제 3 포함 전부). 그 전 Linux 전수(494a9f8): T4 17/20(Windows 전제 3 · T-117 · ⚠ delete-confirm 흔들림 · T-136).
 - **CI**: 10-04 ~ 10-05 Windows 세션의 코드 커밋 전부 3-OS 녹색(42ccb5a · 9137085 · 89df13a · daa499d · 14c6866 · 6c42c90 · 094997f(dff8a77 포함) · 1e4520b · e7cd2b4 · 716f0b3 · 87b4740 · 57943de) · 2682cf2(nexa-ui 152 첫 반영) = 마감 기록 시점 진행 중(협업 세션 감시 → 결과는 다음 세션 첫 확인 거리).
 - **이 PC 세션 분담**(Windows · 10-04 §25 · 10-03 §100): 개발 세션 = 설계 · `crates/` · `scripts/` · 코드 커밋 · pull/push · 검증 빌드 `CARGO_TARGET_DIR=target/dev` / 협업 세션 = `docs/` 기록 커밋(push는 개발 세션) · 사용자 인스턴스 빌드 `target\debug` + **`explorer.exe`로 재실행**(에이전트 셸 env `NO_COLOR` · `CLAUDE_*` 상속 회피) · 시험 반복 `target/collab` · 사전 분석 · CI 감시(`gh run watch`). 같은 작업 트리 · 커밋 직전 서로 알림 · 커밋은 `git -c user.name="Sangyong Bae" -c user.email=kiros33@gmail.com`(이 PC git config의 메일은 다름 · config 불변). **재시작 = 자기가 띄운 PID만 종료**(이름으로 죽이면 T4 시나리오도 죽는다 — docs/18 §10). **세션 시작 때 `ListAgents`로 서로 확인**(10-04에 개발 세션이 1시간 넘게 혼자 기록 · 빌드 · 재시작까지 한 일이 있었다).
 - **게이트 = `bash scripts/gate.sh`**(DR-26 · docs/18 §3): 평소 auto(quick = 호스트 clippy + 바뀐 크레이트 시험 + smoke / full = 기록 없음 · 24시간 경과 · 핵심 경로 · 형제 저장소 변경 때) · 시험 판정 = cargo 종료 코드 + 실패 수(10-05 §2 — 로그의 `error: Unrecognized option: 'version'` 줄은 런처 시험의 정상 출력) · 배포 · 태그 · 마일스톤 마감 전 = `gate.sh full` · quick으로 push했으면 CI 3-OS 결과 확인이 전수 역할.
@@ -21,9 +21,20 @@
   - **클릭 선택 · 콘솔 창(10-05 §43)**: 정보 · 미리보기 · 터미널에서 더블클릭 = 단어 · 트리플 = 줄 · 탐색기/바로 가기로 띄울 때 빈 콘솔 창이 더는 뜨지 않는지.
   - **고속 복사(10-05 §45 · f458537)**: 큰 폴더(작은 파일 많은 것) 복사 체감 · 사본의 수정한 날짜가 원본과 같은지 · 설정 ▸ 파일 전송(고급) 3항목(`transfer.native` · `transfer.threads` · `transfer.unbuffered_mb`) 표시/동작.
   - **일괄 이름 변경(10-05 §46 · 0d416f8)**: 창을 열자마자 바로 타이핑 · Enter로 적용 · 충돌 행이 있어도 나머지는 바뀌는지 · a↔b 맞바꾸기 · 날짜 토큰이 현지 날짜인지 · 적용 뒤 Ctrl+Z 되돌리기.
+  - **자연 정렬(10-05 §47 · b54ce4f)**: file2 · file10 같은 이름이 숫자 순으로 서는지 · 설정 ▸ 파일 목록 ▸ "숫자를 값으로 정렬"을 끄면 종전(글자) 순서로 돌아가는지.
   - **메뉴 아이콘 · 성능 향상 모드(10-05 §38 · d4aca0d)**: ⓖ 우클릭 메뉴(행 · 빈 곳 · 툴바 · 상태줄)와 메뉴 바(파일 · 편집 · 이동 · 도움말) 항목 앞 아이콘이 보이는지 · 뜻과 맞는지(MDL2 코드포인트 검증표 없음) ⓗ 설정에서 성능 향상 모드 on → 파일 이름 앞 아이콘 · 메뉴 아이콘이 즉시 사라지고 두 설정이 잠기는지 · off → 복귀. ⓘ 빈 곳에서 Shift+우클릭 → "여기에 PowerShell 창 열기" 같은 확장 항목 ⓙ 터미널에서 Ctrl+V 붙여넣기(§39 · 512021e). 그 밖 이번 회차: 한글 타입어헤드(한/영 키 · ↑/↓ · §35) · 경로 확장(`$HOME` · `~` · `$(Split-Path -Leaf $PWD)` · §36) · 덮어쓰기 질문 대상 폴더(§37).
   - 그 전(10-03 ~ 10-04 Linux): 각 절의 "화면 확인 대기"(검증 매트릭스 92 QA 표) — 상태줄 약어/팝업 · 우클릭 메뉴 실행 · 열 자동 맞춤 · 탭 패널 간 드래그 · 스플리터 3종. Windows 실기: 터미널 칸 폭 반올림 · 네비 SVG · 탭 배율 · OneDrive 상태 아이콘 · GAP-019.
 - **다음 할 일**(10-05 §39 갱신 · 개발 세션 회차 마감 · 사용자 보고): 이번 회차 결과 = T-151 타입어헤드 ✅ · T-152 경로 확장 ✅ · T-147 자체 드롭 수신부(커서 · 강조 · 안내 · 머물면 열기) · T-154~157 ✅ · T-156 충돌 창 대상 폴더 ✅ · T-99 2차 일부(행/메뉴 아이콘 끄기) · NEW-033/034 메뉴 아이콘 · T-153 수식키 4/7 · T-158 로그 보는 방법 보고. **다음 회차 후보** = ① ★ 실기(STATUS 위 목록 · 드래그 ⓐ~ⓕ · 아이콘 ⓖ · 성능 향상 모드 ⓗ · 수식키 ⓘⓙ · 타입어헤드 · 경로 확장) ② T-147 남은 것 — 가상 파일(FileGroupDescriptor) · 글자 드롭 · 7-Zip 지연 렌더링 스테이징 · macOS/Linux 발신·수신·포인터 ③ T-149 큰 항목 — 글꼴 입력 상자(PREFS-412) · owner-draw 셸 메뉴 아이콘(SHELL-011) · 형식별 상세(SHELL-083/084) ④ T-150 남은 시험 — 툴팁(WINB-098/099) · 휠 줄 수 동기(WINB-119) ⑤ **T-92 로그 창**(사용자가 로그 보는 방법을 물음 · 지금은 없음) ⑥ T-99 3차 BOOST 표 일반화 · 메뉴 아이콘 macOS(SF Symbols)/Linux(아이콘 테마) 계층 ⑦ T-153 남은 것(mac/Linux 수식키 폴링 · Alt/Ctrl+Shift 링크 = 사용자 결정 · 오른쪽 버튼 드래그 메뉴) ⑧ T-114 macOS 실기 · macOS T4 · 종전 대기열(T-134 남은 것 · T-95 3차 · T-113 · T-131 · T-130 · T-129 · T-128 · T-102 · T-96 남은 것 · T-97·98) · 클라우드(T-72 · T-129 일부) = 대기.
+
+---
+
+## 10-05 178차 — 자연 정렬(NEW-035)
+
+- **한 일**: b54ce4f(`cmp_natural` · `list.sort_natural` 기본 켬 · gate full 522/0 · T4 20/20) · docs/22 NEW-035 · docs/23 행 · 매트릭스 NEW-035 행 · 0d416f8 CI ✓.
+- **지금 상태**: b54ce4f 앱 재시작(PID 40148). CI b54ce4f 감시 중. 개발 세션 다음 = 선택 반전 → 패턴 선택 → 경로 복사 변형(T-163).
+- **걸린 것**: ★ 실기(맨 위 목록) · 배포(T-160) 보류.
+
+→ [journal/2026-10-05 §47](journal/2026-10-05.md)
 
 ---
 
