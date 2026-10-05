@@ -288,7 +288,7 @@ pub(crate) fn platform() -> Platform {
         ctxmenu: Box::new(FakeMenu(log.clone())),
         trash: Rc::new(FakeTrash(log.clone())),
         clipboard: Box::new(FakeClip(log.clone())),
-        drag: Box::new(FakeDrag(log.clone())),
+        drag: Rc::new(FakeDrag(log.clone())),
         watcher: Box::new(FakeWatch(log.clone())),
         opener: Box::new(FakeOpen(log.clone())),
         disk: Box::new(FakeDisk(log.clone())),

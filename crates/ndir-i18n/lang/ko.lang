@@ -163,6 +163,9 @@ new.fileOp = 새 파일
 ctx.new = 새로 만들기
 dnd.rejected = 자기 자신이나 그 하위 폴더에는 놓을 수 없습니다.
 dnd.dropped = {0}개 항목을 {1}에 놓았습니다
+dnd.willMove = 이동 → {0}   (Ctrl = 복사)
+dnd.willCopy = 복사 → {0}   (Shift = 이동)
+dnd.cannot = 여기에는 놓을 수 없습니다
 new.menuFolder = 폴더
 new.menuTextFile = 텍스트 문서
 new.named = 새 {0}

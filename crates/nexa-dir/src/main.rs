@@ -297,6 +297,9 @@ struct App {
     dnd_drop: Vec<PathBuf>,
     /// 끌어오다 머무는 대상(패널, 대상)과 머물기 시작한 시각 — 설정 시간만큼 머물면 연다(`app/dnd.rs::dnd_track`).
     dnd_dwell: Option<((usize, app::dnd::Dwell), Instant)>,
+    /// 자체 드롭 수신부와 나눠 쓰는 상태(Windows · 없으면 winit 기본 수신 경로) · 지금 놓일 자리의 표시(강조 사각형 · 효과).
+    drop_shared: Option<Rc<std::cell::RefCell<platform::DropShared>>>,
+    dnd_mark: Option<app::dnd::DropMark>,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -604,6 +607,8 @@ impl App {
             dnd_hover: Vec::new(),
             dnd_drop: Vec::new(),
             dnd_dwell: None,
+            drop_shared: None,
+            dnd_mark: None,
             platform,
             watch_next: Instant::now(),
             watch_deferred: Vec::new(),

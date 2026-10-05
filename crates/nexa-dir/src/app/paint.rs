@@ -52,6 +52,17 @@ impl App {
             dc.fill_rect_alpha(self.panels[dst].tabbar_bounds(), th.accent, 0.12);
             dc.fill_rect(line, th.accent);
         }
+        // 끌어오는 중: **놓일 자리만** 강조한다(폴더 행 = 그 행 · 파일 행/빈 곳 = 목록 전체 = 현재 폴더 — 탐색기와 같다 ·
+        // 놓을 수 없는 곳은 표시 없음 + 금지 커서). 옅은 강조색 채움 + 2px 테두리.
+        if let Some(m) = &self.dnd_mark {
+            let r = m.rect;
+            let t = (2.0 * s).round().max(1.0) as i32;
+            dc.fill_rect_alpha(r, th.accent, 0.14);
+            dc.fill_rect(Rect::new(r.x, r.y, r.w, t), th.accent);
+            dc.fill_rect(Rect::new(r.x, r.bottom() - t, r.w, t), th.accent);
+            dc.fill_rect(Rect::new(r.x, r.y, t, r.h), th.accent);
+            dc.fill_rect(Rect::new(r.right() - t, r.y, t, r.h), th.accent);
+        }
         // 도크 경계 2종(비어 있으면 안 그린다 — 도크 숨김 · 단일 정보).
         self.dock_split_h.paint(dc, &th);
         self.dock_split_v.paint(dc, &th);

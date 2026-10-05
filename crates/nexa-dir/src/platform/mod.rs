@@ -35,6 +35,8 @@ mod windows;
 #[cfg(windows)]
 mod windrag;
 #[cfg(windows)]
+mod windrop;
+#[cfg(windows)]
 mod winpty;
 #[cfg(windows)]
 mod winrecycle;
@@ -332,6 +334,178 @@ pub(crate) trait Disk {
     }
 }
 
+// ───────────────────────── 드롭 수신(자체 수신부 — Windows `windrop` · 다른 OS는 winit 기본 수신 + 포인터 조회)
+
+/// 끌려온 것이 창 위에서 겪는 일 — 좌표는 **창 안**(내용 영역) 기준.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DropEvent {
+    Enter {
+        paths: Vec<PathBuf>,
+        at: (i32, i32),
+        ctrl: bool,
+        shift: bool,
+    },
+    Over {
+        at: (i32, i32),
+        ctrl: bool,
+        shift: bool,
+    },
+    Leave,
+    Drop {
+        paths: Vec<PathBuf>,
+        at: (i32, i32),
+        ctrl: bool,
+        shift: bool,
+    },
+}
+
+/// 놓았을 때 일어날 일(= 커서 모양): 불가 · 복사 · 이동.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum DropChoice {
+    #[default]
+    None,
+    Copy,
+    Move,
+}
+
+/// 복사/이동 규칙(순수 · 탐색기 관례 · dir2 `op_for`): **Ctrl = 복사 · Shift = 이동 · 그 밖 = 같은 볼륨이면 이동 / 다르면 복사**.
+/// Ctrl이 Shift보다 먼저다(둘 다 = 복사 — dir2 계승 · 탐색기의 "바로 가기 만들기"는 없다).
+pub(crate) fn drop_choice(ctrl: bool, shift: bool, same_volume: bool) -> DropChoice {
+    if ctrl {
+        DropChoice::Copy
+    } else if shift || same_volume {
+        DropChoice::Move
+    } else {
+        DropChoice::Copy
+    }
+}
+
+/// 패널 한 칸의 요약(창 안 사각형 + 그 패널의 현재 폴더) — 다른 프로그램의 드래그에 **즉시** 효과를 답하려고 수신부가 본다
+/// (정확한 대상 · 금지 판정은 앱이 사건을 거둘 때 다시 한다).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DropZone {
+    pub rect: (i32, i32, i32, i32),
+    pub root: PathBuf,
+}
+
+/// 수신부와 앱이 나눠 쓰는 상태: 쌓인 사건 · 패널 요약 · 지금 끌려오는 경로.
+#[derive(Debug, Default)]
+pub(crate) struct DropShared {
+    pub events: Vec<DropEvent>,
+    pub zones: Vec<DropZone>,
+    pub dragging: Vec<PathBuf>,
+}
+
+/// 요약만으로 정하는 효과(순수): 포인터가 어느 패널 위에도 없으면 불가 · 끌려오는 것이 그 폴더 자신이거나 그 폴더를 품으면 불가 ·
+/// 아니면 [`drop_choice`].
+pub(crate) fn zone_choice(
+    zones: &[DropZone],
+    dragging: &[PathBuf],
+    at: (i32, i32),
+    ctrl: bool,
+    shift: bool,
+) -> DropChoice {
+    let Some(zone) = zones.iter().find(|z| {
+        let (x, y, w, h) = z.rect;
+        at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h
+    }) else {
+        return DropChoice::None;
+    };
+    let Some(first) = dragging.first() else {
+        return DropChoice::None;
+    };
+    if dragging
+        .iter()
+        .any(|s| s == &zone.root || ndir_ops::is_same_or_sub(s, &zone.root))
+    {
+        return DropChoice::None;
+    }
+    drop_choice(ctrl, shift, ndir_ops::same_volume(first, &zone.root))
+}
+
+/// 실시간 수신기 — 우리 창에서 시작한 드래그가 도는 동안 앱이 걸어 둔다(사건을 그 자리에서 처리하고 효과를 답한다).
+pub(crate) type DropSink = Box<dyn FnMut(&DropEvent) -> DropChoice>;
+
+thread_local! {
+    static LIVE_SINK: RefCell<Option<DropSink>> = const { RefCell::new(None) };
+}
+
+/// `f`가 도는 동안 실시간 수신기를 걸어 둔다(끝나면 걷는다) — `f` = OS 드래그 호출.
+pub(crate) fn with_live_drop_sink<R>(sink: DropSink, f: impl FnOnce() -> R) -> R {
+    LIVE_SINK.with(|s| *s.borrow_mut() = Some(sink));
+    let out = f();
+    LIVE_SINK.with(|s| *s.borrow_mut() = None);
+    out
+}
+
+/// 수신부가 만든 사건의 갈 곳: 실시간 수신기가 걸려 있으면 그리로(앱이 바로 처리) · 아니면 큐에 쌓고 요약으로 효과를 정한다.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn drop_dispatch(shared: &Rc<RefCell<DropShared>>, ev: DropEvent) -> DropChoice {
+    // 수신기를 잠시 꺼내 부른다(부르는 동안 thread_local을 빌려 두지 않는다 — 수신기 안에서 다시 들어와도 안전).
+    let sink = LIVE_SINK.with(|s| s.borrow_mut().take());
+    if let Some(mut sink) = sink {
+        let choice = sink(&ev);
+        LIVE_SINK.with(|s| {
+            let mut slot = s.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(sink);
+            }
+        });
+        return choice;
+    }
+    let mut sh = shared.borrow_mut();
+    let choice = match &ev {
+        DropEvent::Enter {
+            paths,
+            at,
+            ctrl,
+            shift,
+        } => {
+            sh.dragging.clone_from(paths);
+            zone_choice(&sh.zones, &sh.dragging, *at, *ctrl, *shift)
+        }
+        DropEvent::Over { at, ctrl, shift } => {
+            zone_choice(&sh.zones, &sh.dragging, *at, *ctrl, *shift)
+        }
+        DropEvent::Leave => {
+            sh.dragging.clear();
+            DropChoice::None
+        }
+        DropEvent::Drop {
+            paths,
+            at,
+            ctrl,
+            shift,
+        } => {
+            let c = zone_choice(&sh.zones, paths, *at, *ctrl, *shift);
+            sh.dragging.clear();
+            c
+        }
+    };
+    sh.events.push(ev);
+    choice
+}
+
+/// 메인 창에 자체 드롭 수신부를 단다 — Windows만(창은 `with_drag_and_drop(false)`로 만들어져 있어야 한다). 다른 OS · 실패 =
+/// `None`(winit 기본 수신 경로를 쓴다).
+pub(crate) fn register_drop_target(
+    window: &winit::window::Window,
+) -> Option<Rc<RefCell<DropShared>>> {
+    #[cfg(windows)]
+    {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        match window.window_handle().ok()?.as_raw() {
+            RawWindowHandle::Win32(h) => windrop::register(h.hwnd.get()),
+            _ => None,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        None
+    }
+}
+
 /// 지금의 포인터 자리(화면 좌표)와 수식키 — **다른 프로그램에서 끌어오는 동안**의 상태를 묻는다(T-147 수신 보강).
 /// winit은 OS 드래그 중에는 포인터 이동 · 수식키 사건을 주지 않고 `HoveredFile`/`DroppedFile`에도 자리가 없다 →
 /// 놓는 자리 · 복사/이동 판정을 위해 직접 읽는다. 읽을 수 없는 OS = `None`(호출부는 마지막으로 본 값으로 간다).
@@ -505,7 +679,8 @@ pub(crate) struct Platform {
     /// 휴지통 — `Rc`(히스토리 CopyBatchOp의 삭제 주입이 공유 · M6).
     pub trash: Rc<dyn Trash>,
     pub clipboard: Box<dyn FileClipboard>,
-    pub drag: Box<dyn DragSource>,
+    /// 드래그 발신 — `Rc`(호출 동안 앱을 빌리지 않으려고 복제해 부른다: 드래그 중 드롭 수신부가 앱을 다시 부른다).
+    pub drag: Rc<dyn DragSource>,
     pub watcher: Box<dyn Watcher>,
     pub opener: Box<dyn Opener>,
     pub disk: Box<dyn Disk>,
@@ -797,9 +972,9 @@ impl Platform {
             clipboard,
             // 드래그 발신: Windows = OLE(`windrag`) · macOS(NSDraggingSource) · Linux(XDND 발신)는 후속 — 그때까지 미지원.
             #[cfg(windows)]
-            drag: Box::new(windrag::NativeDrag),
+            drag: Rc::new(windrag::NativeDrag),
             #[cfg(not(windows))]
-            drag: Box::new(Unsupported),
+            drag: Rc::new(Unsupported),
             watcher,
             opener,
             disk,

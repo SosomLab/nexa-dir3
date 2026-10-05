@@ -613,6 +613,11 @@ impl Panel {
                 self.active != before
             }
             Dwell::Folder(path) => {
+                // 트리 보기 = 그 행을 펼친다(하위에 놓을 수 있게) · 그 밖의 보기(목록 · 타일) = 그 폴더 안으로 들어간다
+                // (사용자 10-05 — 펼칠 수 없는 보기에서는 들어가야 하위에 놓을 수 있다 · Finder 스프링 폴더와 같은 뜻).
+                if self.rows().view_mode() != ViewMode::Tree {
+                    return self.navigate_to(path.clone(), inv).is_none();
+                }
                 let rows = &mut self.tabs[self.active].rows;
                 let n = rows.source().len();
                 let Some(row) =
@@ -627,6 +632,20 @@ impl Panel {
                 opened
             }
         }
+    }
+
+    /// 경로의 행이 화면에서 차지하는 사각형(목록 폭 전체 × 행 높이) — 보이지 않거나 타일 보기면 `None`(놓일 폴더 강조용).
+    pub(crate) fn row_rect_of(&self, path: &Path) -> Option<Rect> {
+        let rows = self.rows();
+        if rows.view_mode() == ViewMode::Tiles {
+            return None;
+        }
+        let n = rows.source().len();
+        let row = (0..n).find(|&i| rows.source().row_path(i).as_deref() == Some(path))?;
+        let a = rows.row_anchor(row)?;
+        let b = rows.bounds();
+        let h = self.m.row_h;
+        Some(Rect::new(b.x, a.y - h / 2, b.w, h))
     }
 
     /// OS 드래그에서 돌아온 뒤 누름 상태 정리(그리드의 클릭 확정 보류 · 러버밴드 + 패널의 포인터 캡처) — 선택은 그대로.

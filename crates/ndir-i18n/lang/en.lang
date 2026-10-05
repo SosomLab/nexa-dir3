@@ -164,6 +164,9 @@ new.fileOp = new file
 ctx.new = New
 dnd.rejected = Cannot drop onto itself or its own subfolder.
 dnd.dropped = Dropped {0} item(s) into {1}
+dnd.willMove = Move → {0}   (Ctrl = copy)
+dnd.willCopy = Copy → {0}   (Shift = move)
+dnd.cannot = Cannot drop here
 new.menuFolder = Folder
 new.menuTextFile = Text Document
 new.named = New {0}

@@ -28,12 +28,19 @@ impl ApplicationHandler<Wake> for App {
                     winit::dpi::LogicalSize::new(w, h)
                 }),
         );
+        // Windows: winit 기본 드롭 수신을 끄고 자체 수신부를 단다(포인터 자리 · 수식키 · 효과(커서)를 직접 다룬다 — T-147).
+        #[cfg(windows)]
+        let attrs = {
+            use winit::platform::windows::WindowAttributesExtWindows as _;
+            attrs.with_drag_and_drop(false)
+        };
         let Ok(win) = el.create_window(attrs) else {
             eprintln!("nexa-dir: window creation failed");
             el.exit();
             return;
         };
         let win = Rc::new(win);
+        self.drop_shared = platform::register_drop_target(&win);
         {
             let mons: Vec<_> = win.available_monitors().collect();
             let place = self
@@ -116,6 +123,10 @@ impl ApplicationHandler<Wake> for App {
         let ops_live = self.ops_tick();
         // 다른 프로그램에서 끌어오는 동안 · 놓은 직후: OS에서 포인터 자리 · 수식키를 읽어 반영한다(winit은 드래그 중 그 사건을
         // 주지 않는다 — T-147 수신 보강). 수식키는 판정에만 쓰고 되돌린다(창이 포커스를 받으면 winit이 다시 알려 준다).
+        // 자체 수신부(Windows)가 쌓아 둔 사건을 먼저 거둔다.
+        if self.drop_pump(now) {
+            redraw = true;
+        }
         let dnd_active = self.dnd_hovering() || !self.dnd_drop.is_empty();
         let mods = (self.shift, self.primary);
         if dnd_active {
@@ -126,7 +137,18 @@ impl ApplicationHandler<Wake> for App {
                 .map(|p| (p.x, p.y));
             if let (Some(ps), Some(inner)) = (platform::pointer_state(), inner) {
                 let at = app::dnd::client_point((ps.x, ps.y), inner);
-                if self.dnd_track(at, ps.ctrl, ps.shift, now) {
+                // 멈춰 있는 포인터도 계속 본다(머물면 열기의 시간 · 수식키만 바꾼 경우 · 가장자리 자동 스크롤).
+                if self.dnd_hovering() {
+                    let _ = self.dnd_event(
+                        platform::DropEvent::Over {
+                            at,
+                            ctrl: ps.ctrl,
+                            shift: ps.shift,
+                        },
+                        now,
+                    );
+                    redraw = true;
+                } else if self.dnd_track(at, ps.ctrl, ps.shift, now) {
                     redraw = true;
                 }
             }

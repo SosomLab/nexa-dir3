@@ -6531,3 +6531,217 @@ fn overwrite_question_names_the_destination_folder() {
     assert!(lines[1].contains(&folder), "대상 폴더 줄: {q}");
     assert!(!lines[1].contains("MP_PEGGING.zip"), "폴더 줄에는 폴더만");
 }
+
+/// T-147 드롭 수신(자체 수신부 · 사용자 10-05): 사건 → 효과(= 커서 모양)와 **놓일 자리 표시**. Ctrl = 복사 · Shift = 이동 ·
+/// 기본 = 같은 볼륨 이동 · 폴더 행 위 = 그 행만 강조 · 파일 행/빈 곳 = 목록 전체(현재 폴더) · 자기 자신/하위 · 제자리 = 불가(표시 없음) ·
+/// 상태줄에 "이동/복사 → 대상" · 벗어나면 걷힌다 · 놓으면 전송 시작.
+#[test]
+fn drop_events_choose_effect_and_mark_the_target() {
+    use crate::platform::{drop_choice, zone_choice, DropChoice, DropEvent, DropZone};
+    // 순수 규칙(MC/DC): Ctrl이 먼저 · Shift = 이동 · 그 밖 = 볼륨.
+    assert_eq!(drop_choice(false, false, true), DropChoice::Move);
+    assert_eq!(drop_choice(false, false, false), DropChoice::Copy);
+    assert_eq!(drop_choice(true, false, true), DropChoice::Copy);
+    assert_eq!(drop_choice(false, true, false), DropChoice::Move);
+    assert_eq!(
+        drop_choice(true, true, true),
+        DropChoice::Copy,
+        "Ctrl이 Shift보다 먼저"
+    );
+    let (mut app, dir) = fixture("dropevents");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let inner = sub.join("inner.rs");
+    let now = Instant::now();
+    let list = app.panels[0].rows().bounds();
+    let empty = (list.x + 40, list.bottom() - 6);
+    let sub_rect = app.panels[0].row_rect_of(&sub).expect("sub row");
+    let on_sub = (sub_rect.x + 60, sub_rect.y + sub_rect.h / 2);
+    // 요약만으로 답하는 효과: 패널 밖 = 불가 · 그 폴더를 품은 것 = 불가.
+    let zones = vec![DropZone {
+        rect: (list.x, list.y, list.w, list.h),
+        root: dir.clone(),
+    }];
+    assert_eq!(app.drop_zones()[0].root, dir);
+    assert_eq!(
+        zone_choice(&zones, std::slice::from_ref(&inner), empty, false, false),
+        DropChoice::Move
+    );
+    assert_eq!(
+        zone_choice(&zones, std::slice::from_ref(&inner), empty, true, false),
+        DropChoice::Copy
+    );
+    assert_eq!(
+        zone_choice(&zones, std::slice::from_ref(&inner), (-5, -5), false, false),
+        DropChoice::None
+    );
+    assert_eq!(
+        zone_choice(&zones, std::slice::from_ref(&dir), empty, false, false),
+        DropChoice::None
+    );
+    assert_eq!(
+        zone_choice(&zones, &[], empty, false, false),
+        DropChoice::None
+    );
+    // 들어옴(빈 곳) = 현재 폴더로 이동 · 목록 전체 강조 · 상태줄 안내.
+    let c = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![inner.clone()],
+            at: empty,
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Move, "같은 볼륨 = 이동");
+    let m = app.dnd_mark.clone().expect("mark");
+    assert_eq!(
+        (m.rect, m.dest.clone(), m.choice),
+        (list, dir.clone(), DropChoice::Move)
+    );
+    assert!(app.dnd_hovering());
+    // Ctrl = 복사(자리 그대로 · 효과만 바뀐다).
+    let c = app.dnd_event(
+        DropEvent::Over {
+            at: empty,
+            ctrl: true,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Copy);
+    assert_eq!(
+        app.dnd_mark.as_ref().map(|m| m.choice),
+        Some(DropChoice::Copy)
+    );
+    assert!(!app.primary, "수식키는 판정에만 쓰고 되돌린다");
+    // 그려 보면 강조가 실제로 칠해진다.
+    rec.clear();
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    // 벗어남 = 표시 걷힘.
+    assert_eq!(app.dnd_event(DropEvent::Leave, now), DropChoice::None);
+    assert!(app.dnd_mark.is_none() && !app.dnd_hovering());
+    // 폴더 행 위 = 그 행만 강조 · 대상 = 그 폴더.
+    let a = dir.join("a.txt");
+    let c = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![a.clone()],
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Move);
+    let m = app.dnd_mark.clone().expect("row mark");
+    assert_eq!((m.rect, m.dest), (sub_rect, sub.clone()), "폴더 행만 강조");
+    // 같은 것을 빈 곳으로 = 제자리(이미 그 폴더에 있다) = 불가 · 표시 없음.
+    let c = app.dnd_event(
+        DropEvent::Over {
+            at: empty,
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::None, "제자리 = 불가");
+    assert!(app.dnd_mark.is_none());
+    app.dnd_event(DropEvent::Leave, now);
+    // 폴더를 자기 자신 위로 = 불가.
+    let c = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![sub],
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::None, "자기 자신 = 불가");
+    assert!(app.dnd_mark.is_none());
+    app.dnd_event(DropEvent::Leave, now);
+    // 놓음 = 전송 시작 + 표시 걷힘.
+    let c = app.dnd_event(
+        DropEvent::Drop {
+            paths: vec![inner.clone()],
+            at: empty,
+            ctrl: true,
+            shift: false,
+        },
+        now,
+    );
+    assert_eq!(c, DropChoice::Copy);
+    assert!(app.dnd_mark.is_none() && !app.dnd_hovering());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.transfer.is_some() && Instant::now() < deadline {
+        app.ops_tick();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        dir.join("inner.rs").is_file() && inner.is_file(),
+        "Ctrl = 복사(원본 유지)"
+    );
+    // 큐 경로(다른 프로그램의 드래그): 수신부가 쌓은 사건을 틱이 거둔다 + 패널 요약을 넣는다.
+    let shared = Rc::new(std::cell::RefCell::new(
+        crate::platform::DropShared::default(),
+    ));
+    app.drop_shared = Some(Rc::clone(&shared));
+    let c = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Enter {
+            paths: vec![a],
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+    );
+    assert_eq!(c, DropChoice::None, "요약이 아직 없다 = 불가(첫 틱 전)");
+    assert!(app.drop_pump(now));
+    assert!(app.dnd_mark.is_some(), "거둔 사건이 표시를 만든다");
+    assert!(!shared.borrow().zones.is_empty(), "요약을 넣었다");
+    let c = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Over {
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+    );
+    assert_eq!(c, DropChoice::Move, "요약이 있으면 즉시 답한다");
+    // 실시간 수신기(우리 창에서 시작한 드래그): 걸려 있으면 큐가 아니라 그리로.
+    let hits = Rc::new(std::cell::Cell::new(0));
+    let h2 = Rc::clone(&hits);
+    let got = crate::platform::with_live_drop_sink(
+        Box::new(move |_| {
+            h2.set(h2.get() + 1);
+            DropChoice::Copy
+        }),
+        || crate::platform::drop_dispatch(&shared, DropEvent::Leave),
+    );
+    assert_eq!((got, hits.get()), (DropChoice::Copy, 1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 머물면 열기 — 보기 모드별(사용자 10-05): 트리 = 폴더 행을 펼친다 · 그 밖(목록) = 그 폴더 안으로 들어간다.
+#[test]
+fn drag_dwell_enters_folder_in_flat_view() {
+    use crate::app::dnd::Dwell;
+    let (mut app, dir) = fixture("dwellflat");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    // 트리(기본): 펼침 · 폴더는 그대로.
+    assert!(app.panels[0].dnd_dwell_open(&Dwell::Folder(sub.clone()), &mut inv));
+    assert_eq!(app.panels[0].root_path(), dir);
+    assert_eq!(
+        app.panels[0].rows().source().expanded_dirs(4),
+        vec![sub.clone()]
+    );
+    // 목록 보기: 그 폴더 안으로.
+    app.panels[0].set_view_mode(nexa_grid::ViewMode::Flat, &mut inv);
+    assert!(app.panels[0].dnd_dwell_open(&Dwell::Folder(sub.clone()), &mut inv));
+    assert_eq!(app.panels[0].root_path(), sub, "목록 보기 = 들어간다");
+    let _ = std::fs::remove_dir_all(&dir);
+}

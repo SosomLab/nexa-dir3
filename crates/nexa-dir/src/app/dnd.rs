@@ -33,6 +33,14 @@ pub(crate) fn edge_scroll(y: i32, top: i32, bottom: i32, band: i32) -> i32 {
     }
 }
 
+/// 지금 놓일 자리의 표시: 강조 사각형(폴더 행 또는 목록 전체) · 효과 · 대상 폴더.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DropMark {
+    pub rect: Rect,
+    pub choice: platform::DropChoice,
+    pub dest: PathBuf,
+}
+
 /// 끌어오다 머물면 여는 대상(dir2 X-32 `DndHover`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Dwell {
@@ -92,7 +100,21 @@ impl App {
                 }
                 self.rename_on_up = None;
                 self.rename_due = None;
-                let result = self.platform.drag.begin_drag(&paths);
+                // 드래그가 도는 동안(OS 모달) 앱은 여기 멈춰 있다 → 우리 창 위에서의 추적 · 그리기 · 효과 판정은 드롭 수신부가
+                // **실시간 수신기**로 바로 불러 준다(사용자 10-05 실기: 머물러도 안 열리고 커서도 안 바뀌던 원인).
+                // SAFETY(아래 `&mut *app`): 수신기는 `begin_drag`가 도는 동안에만, 같은 UI 스레드에서, OLE 콜백으로 불린다.
+                // 그동안 이 함수는 `self`를 쓰지 않고(`drag` · `paths`는 지역 복제) 돌아온 뒤에야 다시 쓴다 → 동시에 살아 있는
+                // 두 접근이 없다.
+                let app: *mut App = self;
+                let sink: platform::DropSink = Box::new(move |ev| {
+                    let app = unsafe { &mut *app };
+                    let choice = app.dnd_event(ev.clone(), Instant::now());
+                    app.paint(); // 모달 중에는 RedrawRequested가 오지 않는다 — 직접 그린다
+                    choice
+                });
+                let drag = Rc::clone(&self.platform.drag);
+                let result = platform::with_live_drop_sink(sink, || drag.begin_drag(&paths));
+                self.dnd_end();
                 // 뗌은 OS가 삼켰다 — 누름 상태 정리(선택은 유지).
                 self.panels[i].abort_press();
                 self.pressed = None;
@@ -117,6 +139,163 @@ impl App {
             InputEvent::MouseUp { .. } => self.drag_press = None,
             _ => {}
         }
+    }
+
+    /// 드롭 수신부의 사건 하나를 처리하고 **효과**(= 커서 모양)를 돌려준다 — 자체 수신부(Windows)의 큐 · 실시간 수신기 ·
+    /// 포인터 폴링이 모두 이 한 길로 온다.
+    /// - 들어옴/위에 있음: 포인터 반영(자동 스크롤 · 머물면 열기) → 놓일 자리 판정 → 강조 사각형 + 상태줄 안내("이동 → 폴더").
+    /// - 벗어남: 표시를 걷는다.
+    /// - 놓음: 그 자리 · 그 수식키로 전송을 시작한다.
+    pub(crate) fn dnd_event(
+        &mut self,
+        ev: platform::DropEvent,
+        now: Instant,
+    ) -> platform::DropChoice {
+        use platform::{DropChoice, DropEvent};
+        match ev {
+            DropEvent::Enter {
+                paths,
+                at,
+                ctrl,
+                shift,
+            } => {
+                self.dnd_hover = paths;
+                self.dnd_over(at, ctrl, shift, now)
+            }
+            DropEvent::Over { at, ctrl, shift } => self.dnd_over(at, ctrl, shift, now),
+            DropEvent::Leave => {
+                self.dnd_end();
+                DropChoice::None
+            }
+            DropEvent::Drop {
+                paths,
+                at,
+                ctrl,
+                shift,
+            } => {
+                let mods = (self.shift, self.primary);
+                self.cursor = at;
+                (self.shift, self.primary) = (shift, ctrl);
+                let (plan, choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
+                self.dnd_end();
+                if plan.is_some() {
+                    self.external_drop(paths, Point { x: at.0, y: at.1 });
+                }
+                (self.shift, self.primary) = mods;
+                choice
+            }
+        }
+    }
+
+    fn dnd_over(
+        &mut self,
+        at: (i32, i32),
+        ctrl: bool,
+        shift: bool,
+        now: Instant,
+    ) -> platform::DropChoice {
+        let mods = (self.shift, self.primary);
+        self.dnd_track(at, ctrl, shift, now);
+        let sources = self.dnd_hover.clone();
+        let (plan, choice) = self.drop_plan(&sources, Point { x: at.0, y: at.1 });
+        (self.shift, self.primary) = mods;
+        let mark = plan.map(|(panel, dest)| {
+            // 폴더 행 위 = 그 행만 강조 · 파일 행/빈 곳 = 목록 전체(= 이 패널의 현재 폴더에 놓인다 — 탐색기와 같다).
+            let rect = self.panels[panel]
+                .row_rect_of(&dest)
+                .unwrap_or_else(|| self.panels[panel].rows().bounds());
+            DropMark { rect, choice, dest }
+        });
+        if self.dnd_mark != mark {
+            let text = match &mark {
+                Some(m) => trf(
+                    if m.choice == platform::DropChoice::Move {
+                        "dnd.willMove"
+                    } else {
+                        "dnd.willCopy"
+                    },
+                    &[&m.dest.display().to_string()],
+                ),
+                None => tr("dnd.cannot"),
+            };
+            let mut inv = Invalidations::default();
+            self.statusbar.set_left(&text, &mut inv);
+            self.dnd_mark = mark;
+            self.redraw();
+        }
+        choice
+    }
+
+    /// 드래그 표시 걷기(벗어남 · 놓음 · 취소) — 머묾 · 강조 · 상태줄 안내.
+    pub(crate) fn dnd_end(&mut self) {
+        let had = self.dnd_mark.take().is_some() || !self.dnd_hover.is_empty();
+        self.dnd_dwell = None;
+        self.dnd_hover.clear();
+        if had {
+            self.update_status();
+            self.redraw();
+        }
+    }
+
+    /// 놓일 자리와 효과(순수 판정에 가깝다 — 상태를 바꾸지 않는다): 놓을 수 없으면 `(None, None)`.
+    /// 금지 = 패널 밖 · 내 PC(가상 최상위) · 전송 중 · 자기 자신/하위 폴더 안 · **제자리**(모든 소스가 이미 그 폴더에 있다).
+    pub(crate) fn drop_plan(
+        &self,
+        sources: &[PathBuf],
+        at: Point,
+    ) -> (Option<(usize, PathBuf)>, platform::DropChoice) {
+        let none = (None, platform::DropChoice::None);
+        if sources.is_empty() || self.transfer.is_some() {
+            return none;
+        }
+        let Some((panel, dest)) = self.drop_dest_at(at) else {
+            return none;
+        };
+        if sources.iter().all(|s| s.parent() == Some(dest.as_path()))
+            || sources
+                .iter()
+                .any(|s| s == &dest || ndir_ops::is_same_or_sub(s, &dest))
+        {
+            return none;
+        }
+        let choice = platform::drop_choice(
+            self.primary,
+            self.shift,
+            ndir_ops::same_volume(&sources[0], &dest),
+        );
+        (Some((panel, dest)), choice)
+    }
+
+    /// 수신부에 넘겨 줄 패널 요약(다른 프로그램의 드래그에 즉시 효과를 답하는 데 쓰인다) — 내 PC는 뺀다.
+    pub(crate) fn drop_zones(&self) -> Vec<platform::DropZone> {
+        (0..2)
+            .filter(|&i| i == 0 || self.dual)
+            .filter_map(|i| {
+                let root = self.panels[i].root_path();
+                if ndir_vfs::is_virtual_root(&root) {
+                    return None;
+                }
+                let b = self.panels[i].bounds();
+                Some(platform::DropZone {
+                    rect: (b.x, b.y, b.w, b.h),
+                    root,
+                })
+            })
+            .collect()
+    }
+
+    /// 자체 수신부의 큐를 거둬 처리하고 패널 요약을 새로 넣는다(틱) — 처리한 사건이 있으면 `true`.
+    pub(crate) fn drop_pump(&mut self, now: Instant) -> bool {
+        let Some(shared) = self.drop_shared.clone() else {
+            return false;
+        };
+        let events = std::mem::take(&mut shared.borrow_mut().events);
+        let any = !events.is_empty();
+        for ev in events {
+            let _ = self.dnd_event(ev, now);
+        }
+        shared.borrow_mut().zones = self.drop_zones();
+        any
     }
 
     /// 다른 프로그램에서 끌어오는 중인가(창 위에 파일이 떠 있다 — 추적 틱이 돌아야 하는 동안).
@@ -189,8 +368,7 @@ impl App {
     }
 
     pub(crate) fn dnd_cancel(&mut self) {
-        self.dnd_dwell = None;
-        self.dnd_hover.clear();
+        self.dnd_end();
     }
 
     pub(crate) fn dnd_dropped(&mut self, path: PathBuf) {
