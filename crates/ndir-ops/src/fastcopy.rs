@@ -902,24 +902,16 @@ mod tests {
         let d = fixture("treestop");
         let src = d.join("src");
         make_tree(&src, 8, 40);
-        let hit = AtomicBool::new(false);
-        let stop = || hit.load(Ordering::Relaxed);
-        let mut seen = 0u32;
-        let e = copy_tree(
-            &src,
-            &d.join("dest"),
-            &mut |_| {
-                seen += 1;
-                if seen == 20 {
-                    hit.store(true, Ordering::Relaxed);
-                }
-            },
-            &stop,
-            None,
-            &t,
-        )
-        .unwrap_err();
+        // 중단 신호는 **판정 횟수**로 낸다(진행 통지 횟수로 내면 작업 스레드가 통지보다 먼저 다 끝낼 수 있다 — macOS CI에서
+        // 실제로 흔들렸다). 훑기가 항목당 1번(338번) 묻고, 그 뒤 작업 스레드가 파일마다 2번 이상 묻는다 → 400번째 = 복사 도중.
+        let polls = AtomicUsize::new(0);
+        let stop = || polls.fetch_add(1, Ordering::Relaxed) >= 400;
+        let e = copy_tree(&src, &d.join("dest"), &mut |_| {}, &stop, None, &t).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::Interrupted);
+        assert!(
+            d.join("dest").join("d0").is_dir(),
+            "훑기는 끝났다(폴더는 만들어졌다) = 복사 단계에서 멈춘 것"
+        );
         // 실패: 대상 자리에 같은 이름의 **폴더**가 있으면 그 파일은 쓸 수 없다.
         let dest = d.join("dest2");
         fs::create_dir_all(dest.join("d3").join("sub").join("f7.txt")).unwrap();
