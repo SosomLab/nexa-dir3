@@ -177,6 +177,10 @@ impl ApplicationHandler<Wake> for App {
             next = next.min(t);
         }
         next = next.min(self.watch_tick(now));
+        if self.panels.iter().any(panel::Panel::typeahead_active) {
+            // 타입어헤드 입력 중 = 유지 시간이 지나면 배지를 지워야 한다(사건이 없어도) → 짧게 깬다.
+            next = next.min(now + Duration::from_millis(100));
+        }
         if self.dnd_hovering() {
             // 끌어오는 동안은 사건이 오지 않는다 → 추적 간격으로 스스로 깬다(가장자리 자동 스크롤 · 놓는 자리 갱신).
             next = next.min(now + Duration::from_millis(app::dnd::DND_TRACK_MS));
@@ -351,6 +355,17 @@ impl ApplicationHandler<Wake> for App {
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
                 if self.dlg.is_open() {
                     self.dlg.focus(); // 모달(T-29) — 단축키도 대화상자로
+                    return;
+                }
+                // 한/영 키(Windows · 목록 입력 전용 — nexa-sql 탐색기와 같은 길): 메인 창은 IME를 붙이지 않아 OS 전환이 듣지
+                // 않으므로 앱이 모드를 뒤집는다. VK_HANGUL은 키보드 드라이버 수준이라 IME 없이도 온다(논리 HangulMode · 물리 Lang1).
+                if cfg!(windows)
+                    && (kev.logical_key
+                        == winit::keyboard::Key::Named(winit::keyboard::NamedKey::HangulMode)
+                        || kev.physical_key
+                            == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Lang1))
+                    && self.toggle_hangul_mode()
+                {
                     return;
                 }
                 // 단축키 = 키맵 표 조회(dir2 표 + macOS 대응안). 조합키 없는 글자는 타이핑(타입어헤드·경로바)이므로 가로채지 않는다.

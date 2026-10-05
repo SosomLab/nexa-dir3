@@ -327,6 +327,8 @@ mod tests {
                 ("ui.theme", "dark".to_string()),
                 ("launcher.seed", "2".to_string()),
                 ("list.view_scope", "panel".to_string()),
+                // 타입어헤드 초기화 시간: dir3 기본 = 2000(nexa-sql 기준 · 사용자 10-05) — dir2에서 쓰던 1000을 지킨다.
+                ("typeahead.reset_ms", "1000".to_string()),
                 ("term.wrap", "on".to_string())
             ],
             "{modified:?}"

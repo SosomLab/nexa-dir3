@@ -720,7 +720,16 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
-    // ── 파일 목록 › 타입어헤드(①~⑥)
+    // ── 파일 목록 › 타입어헤드 — nexa-sql `explorer.typeahead*` 기준(사용자 10-05): 켬/끔 · 초기화 2000 ms(200~60000) ·
+    //    공백 · 특수문자 · 배지 위치 + dir2 계승 2개(검색 범위 · Backspace). 나머지는 켬/끔에 종속.
+    e!(
+        "typeahead.enabled",
+        CAT_TYPEAHEAD,
+        "pref.taEnabled",
+        "pref.taEnabled.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "typeahead.scope",
         CAT_TYPEAHEAD,
@@ -736,9 +745,9 @@ pub const REGISTRY: &[Entry] = &[
         "pref.taReset.desc",
         Int {
             min: 200,
-            max: 10000
+            max: 60000
         },
-        "1000"
+        "2000"
     ),
     e!(
         "typeahead.special",
@@ -1543,6 +1552,12 @@ pub const OS_DEFAULTS: &[(&str, &str, &str)] = &[
 
 /// (자식, 부모, 조건) — 부모가 조건을 만족하지 않으면 자식은 설정 화면에서 잠긴다(값은 유지). dir2 PREFS-144~152 · KEY-515.
 pub const DEPENDS: &[(&str, &str, Dep)] = &[
+    ("typeahead.scope", "typeahead.enabled", Dep::On),
+    ("typeahead.reset_ms", "typeahead.enabled", Dep::On),
+    ("typeahead.special", "typeahead.enabled", Dep::On),
+    ("typeahead.space", "typeahead.enabled", Dep::On),
+    ("typeahead.backspace", "typeahead.enabled", Dep::On),
+    ("typeahead.hud_pos", "typeahead.enabled", Dep::On),
     ("scroll.fast_keys", "scroll.fast", Dep::On),
     ("scroll.fast_grid_extra", "scroll.fast", Dep::On),
     ("scroll.fast_step", "scroll.fast", Dep::On),

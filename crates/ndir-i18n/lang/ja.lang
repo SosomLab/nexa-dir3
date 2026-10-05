@@ -446,7 +446,7 @@ pref.taScope.global = 全体を先頭から
 pref.taScope.level = 現在の階層 (兄弟)
 pref.taScope.visible = 可視ストリーム (既定)
 pref.taReset = 先行入力のリセット (ms)
-pref.taReset.desc = 入力がないときにプレフィックスをリセットするまでの時間 (200~10000)。
+pref.taReset.desc = 最後の入力または矢印キーの移動からこの時間が経つと接頭辞を初期化します（200〜60000）。
 pref.taPos = 先行入力バッジの位置
 pref.taPos.desc = 検索バッジを一覧のどこに表示するかを決めます。
 pref.taPos.tl = 左上
@@ -486,6 +486,10 @@ pref.taBackspace = Backspace で最後の文字を削除
 pref.taBackspace.desc = オフ = 先行入力中の Backspace を無視します。
 pref.cat.listGeneral = 表示と並べ替え
 pref.cat.typeahead = 先行入力
+pref.taEnabled = タイプアヘッド
+pref.taEnabled.desc = リストで文字を入力すると、その文字で始まる項目へ移動します。ハングルはアプリ内で組み立て、入力が有効な間は ↑/↓ が一致する項目の間だけを移動します（移動のたびに保持時間を計り直します）。Esc = 初期化。
+status.hangulOn = リスト入力: 한글（한/영 キーで切り替え）
+status.hangulOff = リスト入力: English（한/영 キーで切り替え）
 pref.cat.scroll = 高速スクロール
 ops.close = 閉じる
 # X-17 virtual top-level

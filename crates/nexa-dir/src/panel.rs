@@ -86,6 +86,8 @@ pub(crate) struct Panel {
     pending_ctx: Option<bool>,
     /// 열 머리글 우클릭(메뉴 표시는 호스트 · 1회성 — dir2 win.rs:6262 `show_bar_popup(false)`).
     pending_header_menu: bool,
+    /// 타입어헤드 설정(`typeahead.*` — 호스트가 넣는다 · 탭이 생길 때마다 그 탭 그리드에도 적용).
+    ta_opts: TaOpts,
     /// 이름 바꾸기 편집 필드 우클릭(글자 편집 메뉴 · 표시는 호스트 · 1회성 — dir2 `EditMenuTarget::Rename`).
     pending_rename_menu: bool,
     /// 경로 바에 넣은 `shell:` 별칭(해석은 호스트의 플랫폼 포트 · 1회성 — dir2 panel.rs:1530).
@@ -194,6 +196,46 @@ fn nav_buttons() -> Toolbar {
     t
 }
 
+/// 타입어헤드 설정 묶음(`typeahead.*` · nexa-sql `explorer.typeahead*` 기준 + dir2 계승 Backspace).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TaOpts {
+    pub enabled: bool,
+    pub reset_ms: u64,
+    pub special: bool,
+    pub space: bool,
+    pub backspace: bool,
+    /// 배지 위치(0~8 = 행 × 3 + 열 · 6 = 왼쪽 아래).
+    pub hud_pos: u8,
+}
+
+impl Default for TaOpts {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reset_ms: 2000,
+            special: true,
+            space: true,
+            backspace: true,
+            hud_pos: 6,
+        }
+    }
+}
+
+/// 배지 위치 설정 문자열(`top_left` … `bottom_right`) → 0~8(행 × 3 + 열) · 모르는 값 = 왼쪽 아래(6).
+pub(crate) fn hud_pos_index(value: &str) -> u8 {
+    match value.trim() {
+        "top_left" => 0,
+        "top_center" => 1,
+        "top_right" => 2,
+        "mid_left" => 3,
+        "center" => 4,
+        "mid_right" => 5,
+        "bottom_center" => 7,
+        "bottom_right" => 8,
+        _ => 6,
+    }
+}
+
 /// 패널당 폴더 감시 상한(dir2 `WATCH_CAP` · 현재 폴더 포함).
 const WATCH_CAP: usize = 64;
 
@@ -252,6 +294,7 @@ impl Panel {
             pending_rename: None,
             pending_ctx: None,
             pending_header_menu: false,
+            ta_opts: TaOpts::default(),
             pending_rename_menu: false,
             pending_alias: None,
             pending_path_menu: false,
@@ -976,7 +1019,34 @@ impl Panel {
     }
 
     /// 탭 바·경로 바·네비 활성을 활성 탭 상태와 동기화(dir2 `sync_chrome` · PANEL-032).
+    /// 타입어헤드 설정 적용(`typeahead.*`) — 지금 있는 탭 전부에 넣고, 뒤에 생기는 탭은 [`Self::sync_chrome`]이 넣는다.
+    pub(crate) fn set_typeahead(&mut self, opts: TaOpts, inv: &mut Invalidations) {
+        self.ta_opts = opts;
+        self.apply_typeahead(inv);
+    }
+
+    fn apply_typeahead(&mut self, inv: &mut Invalidations) {
+        let o = self.ta_opts;
+        for tab in &mut self.tabs {
+            tab.rows.set_typeahead_opts(
+                o.reset_ms,
+                o.special,
+                o.space,
+                o.backspace,
+                o.hud_pos,
+                inv,
+            );
+            tab.rows.set_typeahead_enabled(o.enabled, inv);
+        }
+    }
+
+    /// 활성 탭이 타입어헤드 입력 중인가(호스트가 유지 시간 만료를 보려고 깨어 있어야 하는 동안).
+    pub(crate) fn typeahead_active(&self) -> bool {
+        self.rows().typeahead_active()
+    }
+
     fn sync_chrome(&mut self, inv: &mut Invalidations) {
+        self.apply_typeahead(inv); // 새로 생긴 탭에도 같은 설정
         let titles = self
             .tabs
             .iter()

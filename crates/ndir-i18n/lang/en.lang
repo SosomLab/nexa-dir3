@@ -446,7 +446,7 @@ pref.taScope.global = Global first
 pref.taScope.level = Current level
 pref.taScope.visible = Visible stream (default)
 pref.taReset = Type-ahead input reset (ms)
-pref.taReset.desc = Idle time before the typed prefix resets (200~10000).
+pref.taReset.desc = Clear the prefix this long after the last keystroke or arrow move (200-60000).
 pref.taPos = Type-ahead badge position
 pref.taPos.desc = Where the find badge appears in the list.
 pref.taPos.tl = Top left
@@ -486,6 +486,10 @@ pref.taBackspace = Backspace erases last character
 pref.taBackspace.desc = Off = Backspace is ignored during type-ahead.
 pref.cat.listGeneral = View & Sort
 pref.cat.typeahead = Type-ahead
+pref.taEnabled = Type-ahead
+pref.taEnabled.desc = Type letters in the list to jump to the item that starts with them. Korean is composed in-app, and while the prefix is alive Up/Down move only between matching items (each move restarts the reset time). Esc clears.
+status.hangulOn = List input: 한글 (Hangul key toggles)
+status.hangulOff = List input: English (Hangul key toggles)
 pref.cat.scroll = Fast Scroll
 ops.close = Close
 # X-17 virtual top-level

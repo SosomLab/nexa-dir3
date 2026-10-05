@@ -18,7 +18,59 @@ pub(crate) fn ime_caret(
     (x, rect.y, 1, rect.h.max(1))
 }
 
+/// 한글 모드면 자판 글자 → 두벌식 자모(순수): 자모가 없는 글자(숫자 · 기호)와 한글 모드가 아닐 때는 그대로.
+pub(crate) fn hangul_key(c: char, hangul: bool) -> char {
+    if hangul {
+        nexa_ctl::hangul::jamo_from_qwerty(c, c.is_ascii_uppercase()).unwrap_or(c)
+    } else {
+        c
+    }
+}
+
+/// 글자 키가 목록의 타입어헤드로 가는 상태인가(순수 · MC/DC): 글을 넣는 곳(대화상자 · 열린 메뉴 · 경로 편집 · 이름 바꾸기 ·
+/// 터미널)이 하나도 없을 때만.
+pub(crate) fn typeahead_target_of(
+    dialog: bool,
+    menu: bool,
+    path_edit: bool,
+    renaming: bool,
+    terminal: bool,
+) -> bool {
+    !(dialog || menu || path_edit || renaming || terminal)
+}
+
 impl App {
+    /// 지금 글자 키가 활성 패널 목록의 타입어헤드로 가는가([`typeahead_target_of`]).
+    pub(crate) fn typeahead_target(&self) -> bool {
+        let p = &self.panels[self.active];
+        typeahead_target_of(
+            self.dlg.is_open(),
+            self.tab_menu.is_open() || self.menubar.is_open(),
+            p.pathbar.is_editing(),
+            p.rows().is_renaming(),
+            self.term_focused().is_some(),
+        )
+    }
+
+    /// 한/영 키(Windows): 목록 입력의 한글 모드를 뒤집고 상태줄에 알린다 — 목록이 글자를 받는 상태일 때만. 처리했으면 `true`.
+    pub(crate) fn toggle_hangul_mode(&mut self) -> bool {
+        if !self.typeahead_target() || !self.settings.flag("typeahead.enabled") {
+            return false;
+        }
+        self.hangul_mode = !self.hangul_mode;
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(
+            &tr(if self.hangul_mode {
+                "status.hangulOn"
+            } else {
+                "status.hangulOff"
+            }),
+            &mut inv,
+        );
+        self.redraw();
+        true
+    }
+
     /// 지금 글자를 편집 중인 필드의 IME 조합 창 자리 — 경로 바 편집(dir2 A/win.rs:4792) 또는 목록의 인라인 이름 바꾸기 ·
     /// 편집 중이 아니면 `None`.
     pub(crate) fn ime_area(&self) -> Option<(i32, i32, i32, i32)> {
@@ -129,7 +181,8 @@ impl App {
                     Key::Named(NamedKey::Space) => key(CtlKey::Space),
                     Key::Named(NamedKey::Backspace) => InputEvent::Char {
                         c: '\u{8}',
-                        now_ms: 0,
+                        // 시각을 싣는다 — 0이면 타입어헤드의 유지 시간 기준이 0으로 되돌아가 다음 틱에 바로 지워진다.
+                        now_ms: self.started.elapsed().as_millis() as u64,
                     },
                     Key::Character(t) => {
                         if self.primary || self.alt {
@@ -139,6 +192,12 @@ impl App {
                         if c.is_control() {
                             return None;
                         }
+                        // Windows 목록 한글 모드: 메인 창은 IME가 없어 라틴 글자가 온다 → 두벌식 자모로(대문자 = Shift ·
+                        // 숫자 · 기호는 그대로). 조합은 그리드의 타입어헤드가 한다(nexa-sql 탐색기와 같은 길).
+                        let c = hangul_key(
+                            c,
+                            cfg!(windows) && self.hangul_mode && self.typeahead_target(),
+                        );
                         InputEvent::Char {
                             c,
                             now_ms: self.started.elapsed().as_millis() as u64,

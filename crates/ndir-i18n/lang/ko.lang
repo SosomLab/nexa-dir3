@@ -443,7 +443,7 @@ pref.taScope.global = 전체에서 처음부터
 pref.taScope.level = 현재 계층(형제)
 pref.taScope.visible = 가시 스트림(기본)
 pref.taReset = 타입어헤드 입력 리셋(ms)
-pref.taReset.desc = 입력이 없으면 접두사를 초기화하는 시간(200~10000).
+pref.taReset.desc = 마지막 입력이나 방향키 이동 뒤 이 시간이 지나면 접두사를 초기화합니다(200~60000).
 pref.taPos = 타입어헤드 배지 위치
 pref.taPos.desc = 찾기 배지가 목록의 어디에 표시될지 정합니다.
 pref.taPos.tl = 좌상
@@ -483,6 +483,10 @@ pref.taBackspace = Backspace로 마지막 글자 지우기
 pref.taBackspace.desc = 끄면 타입어헤드 중 Backspace를 무시합니다.
 pref.cat.listGeneral = 보기·정렬
 pref.cat.typeahead = 타입어헤드
+pref.taEnabled = 타입어헤드
+pref.taEnabled.desc = 목록에서 글자를 치면 그 글자로 시작하는 항목으로 갑니다. 한글은 앱 안에서 조합하고, 입력이 살아 있는 동안 ↑/↓는 일치하는 항목 사이로만 움직입니다(움직일 때마다 유지 시간을 다시 잽니다). Esc = 초기화.
+status.hangulOn = 목록 입력: 한글 (한/영 키로 전환)
+status.hangulOff = 목록 입력: English (한/영 키로 전환)
 pref.cat.scroll = 고속 스크롤
 ops.close = 닫기
 # X-17 virtual top-level

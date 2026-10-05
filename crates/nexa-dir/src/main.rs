@@ -177,6 +177,9 @@ struct App {
     shift: bool,
     primary: bool,
     alt: bool,
+    /// Windows 목록 입력의 한글 모드(한/영 키로 전환 · nexa-sql 탐색기와 같은 길): 메인 창은 IME를 붙이지 않아 한글 자판도
+    /// 라틴 글자로 온다 → 켜져 있으면 두벌식 자모로 바꿔 타입어헤드에 넣는다(조합은 그리드가 한다).
+    hangul_mode: bool,
     ctrl_mac: bool,
     menubar: MenuBar,
     /// 상단 툴바 = 그룹 도크(nexa-sql `ToolDock` · 그룹 손잡이를 끌어 순서·행 이동 · 배치 = 설정 `toolbar.dock_layout`).
@@ -530,6 +533,7 @@ impl App {
             shift: false,
             primary: false,
             alt: false,
+            hangul_mode: false,
             ctrl_mac: false,
             started: Instant::now(),
             main_active: true,
@@ -647,6 +651,7 @@ impl App {
             .set_wrap_around(app.settings.flag("menu.wrap_around"));
         app.tab_menu
             .set_char_jump(app.settings.flag("menu.char_jump"));
+        app.apply_typeahead(); // 타입어헤드 켬/끔 · 초기화 시간 · 공백 · 특수문자 · 배지 위치
         app.apply_window_sizes();
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)

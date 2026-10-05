@@ -6355,3 +6355,108 @@ fn incoming_drag_dwell_opens_folder_and_tab() {
     assert!(app.dnd_dwell.is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 타입어헤드 보완(사용자 10-05 · nexa-sql 기준 · nexa-ui 157): ① 한글 자모가 목록에서 조합된다 ② 설정이 그리드에 닿는다
+/// (켬/끔 · 초기화 시간 2000 ms 기본 · 종전에는 적용하는 곳이 없었다) ③ 입력 중 ↑/↓ = 일치 항목 사이 이동 + 유지 시간 리셋 ·
+/// Esc = 초기화 ④ Windows 한/영 키 = 자판 글자를 자모로.
+#[test]
+fn typeahead_hangul_settings_and_arrow_cycle() {
+    use crate::app::input::{hangul_key, typeahead_target_of};
+    // 순수: 한글 모드면 두벌식 자모 · 숫자/기호는 그대로 · 아니면 그대로.
+    assert_eq!(hangul_key('r', true), 'ㄱ');
+    assert_eq!(hangul_key('R', true), 'ㄲ');
+    assert_eq!(hangul_key('k', true), 'ㅏ');
+    assert_eq!(hangul_key('1', true), '1');
+    assert_eq!(hangul_key('r', false), 'r');
+    // MC/DC: 글 넣는 곳이 하나라도 있으면 목록 대상이 아니다.
+    assert!(typeahead_target_of(false, false, false, false, false));
+    assert!(!typeahead_target_of(true, false, false, false, false));
+    assert!(!typeahead_target_of(false, true, false, false, false));
+    assert!(!typeahead_target_of(false, false, true, false, false));
+    assert!(!typeahead_target_of(false, false, false, true, false));
+    assert!(!typeahead_target_of(false, false, false, false, true));
+    assert_eq!(crate::panel::hud_pos_index("top_right"), 2);
+    assert_eq!(crate::panel::hud_pos_index("bottom_left"), 6);
+    assert_eq!(crate::panel::hud_pos_index("?"), 6);
+
+    let (mut app, dir) = fixture("tahangul");
+    for name in ["가방.txt", "강아지.txt", "나무.txt", "zulu.txt", "zeta.txt"] {
+        std::fs::write(dir.join(name), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.apply_typeahead();
+    let opts = App::typeahead_opts(&app.settings);
+    assert!(
+        opts.enabled && opts.reset_ms == 2000 && opts.space && opts.special,
+        "{opts:?}"
+    );
+    let ch = |c: char, now_ms: u64| InputEvent::Char { c, now_ms };
+    let caret_name = |app: &App| {
+        let rows = app.panels[0].rows();
+        rows.caret()
+            .and_then(|c| rows.source().row_path(c))
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_default()
+    };
+    // ① 한글: ㄱ + ㅏ = "가" → 가방 · + ㅇ = "강" → 강아지.
+    app.route(ch('ㄱ', 100));
+    app.route(ch('ㅏ', 200));
+    assert_eq!(app.panels[0].rows().typeahead_composing(), "가");
+    assert_eq!(caret_name(&app), "가방.txt");
+    app.route(ch('ㅇ', 300));
+    assert_eq!(caret_name(&app), "강아지.txt");
+    assert!(app.panels[0].typeahead_active());
+    // Esc = 초기화.
+    app.startup_cmd("ui.press:escape");
+    assert!(!app.panels[0].typeahead_active(), "Esc = 초기화");
+    // ③ 'z' → zeta · ↓ = zulu(일치 항목 사이만) · ↓ = 다시 zeta · ↑ = zulu.
+    app.route(ch('z', 1000));
+    assert_eq!(caret_name(&app), "zeta.txt");
+    app.startup_cmd("ui.press:down");
+    assert_eq!(caret_name(&app), "zulu.txt", "↓ = 다음 일치");
+    app.startup_cmd("ui.press:down");
+    assert_eq!(caret_name(&app), "zeta.txt", "끝에서 처음으로");
+    app.startup_cmd("ui.press:up");
+    assert_eq!(caret_name(&app), "zulu.txt", "↑ = 이전 일치");
+    assert!(app.panels[0].typeahead_active(), "이동해도 입력은 유지");
+    // 유지 시간: 2500 ms에 ↓로 이동 → 4000 ms에도 살아 있고(리셋) 4600 ms에는 지워진다.
+    app.panels[0].tick(2500, &mut inv);
+    app.startup_cmd("ui.press:down");
+    app.panels[0].tick(4000, &mut inv);
+    assert!(
+        app.panels[0].typeahead_active(),
+        "이동이 유지 시간을 되돌린다"
+    );
+    app.panels[0].tick(4600, &mut inv);
+    assert!(!app.panels[0].typeahead_active(), "유지 시간 경과 = 소거");
+    // ② 설정: 초기화 시간 · 끔이 그리드에 닿는다 · 새 탭에도.
+    let _ = app.settings.set("typeahead.reset_ms", "500");
+    app.after_setting_changed("typeahead.reset_ms");
+    app.route(ch('z', 10_000));
+    app.panels[0].tick(10_600, &mut inv);
+    assert!(!app.panels[0].typeahead_active(), "설정한 500 ms");
+    let _ = app.settings.set("typeahead.enabled", "off");
+    app.after_setting_changed("typeahead.enabled");
+    app.route(ch('z', 11_000));
+    assert!(!app.panels[0].typeahead_active(), "끔 = 글자 키 무시");
+    app.command("file.new_tab");
+    app.route(ch('z', 11_100));
+    assert!(!app.panels[0].typeahead_active(), "새 탭에도 같은 설정");
+    let _ = app.settings.set("typeahead.enabled", "on");
+    app.after_setting_changed("typeahead.enabled");
+    assert_eq!(
+        ndir_settings::dependency("typeahead.reset_ms").map(|d| d.0),
+        Some("typeahead.enabled")
+    );
+    // ④ 한/영 키: 목록 대상일 때만 뒤집힌다(이름 바꾸는 중에는 아니다).
+    assert!(!app.hangul_mode);
+    assert!(app.toggle_hangul_mode() && app.hangul_mode);
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.command("edit.rename");
+    assert!(app.panels[0].rows().is_renaming());
+    assert!(!app.toggle_hangul_mode(), "이름 바꾸는 중 = 대상 아님");
+    assert!(app.hangul_mode, "그대로");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -158,6 +158,7 @@ impl App {
             "menu.char_jump" => self
                 .tab_menu
                 .set_char_jump(self.settings.flag("menu.char_jump")),
+            k if k.starts_with("typeahead.") => self.apply_typeahead(),
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             "list.col_layout" => {
                 let v = self
@@ -205,6 +206,28 @@ impl App {
 
     /// 스크롤 설정 적용(dir2 X-63 f986415 · 7d8b1e9 — 호스트 누락분): `scroll.fast*` → nexa-grid(목록·도크·그리드 창) +
     /// nexa-ctl(설정 창 등 `ScrollBars`) 전역 고속 스크롤 · 파일 그리드 한 단계 더 빠르게 · 시스템 "한 번에 스크롤할 줄 수".
+    /// 설정 `typeahead.*` → 두 패널(모든 탭)의 목록. 종전에는 키만 있고 적용하는 곳이 없어 늘 그리드 기본값이었다.
+    pub(crate) fn apply_typeahead(&mut self) {
+        let opts = Self::typeahead_opts(&self.settings);
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.set_typeahead(opts, &mut inv);
+        }
+        self.redraw();
+    }
+
+    /// 설정 → 타입어헤드 묶음(순수).
+    pub(crate) fn typeahead_opts(s: &Settings) -> panel::TaOpts {
+        panel::TaOpts {
+            enabled: s.flag("typeahead.enabled"),
+            reset_ms: s.int("typeahead.reset_ms").clamp(200, 60_000) as u64,
+            special: s.flag("typeahead.special"),
+            space: s.flag("typeahead.space"),
+            backspace: s.flag("typeahead.backspace"),
+            hud_pos: panel::hud_pos_index(s.get("typeahead.hud_pos").unwrap_or("bottom_left")),
+        }
+    }
+
     pub(crate) fn apply_scroll_settings(&self) {
         let (grid, grid_extra, ctl) = Self::scroll_configs(&self.settings);
         nexa_grid::fastscroll::set_fast_scroll(grid);
