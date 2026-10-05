@@ -51,7 +51,7 @@ pub(crate) struct ProgressWin {
 }
 
 /// 충돌 질문이 있을 때 창이 더 커지는 높이(논리 px · 질문 두 줄 + 버튼 행).
-const CONFLICT_EXTRA_H: f32 = 78.0;
+const CONFLICT_EXTRA_H: f32 = 98.0; // 질문 세 줄(이름 · 대상 폴더 · 안내) + 버튼 줄
 /// 창 안쪽 크기(논리 px · dir2 DLG-059: 폭 400).
 const WIN_W: f32 = 400.0;
 const WIN_H: f32 = 132.0;
@@ -485,10 +485,10 @@ impl ProgressWin {
                 .set_bounds(Rect::new(pad, y, wi - pad * 2, th_txt.max(10)), &mut inv);
             self.bar.paint(&mut dc, th);
             match &self.conflict {
-                // 질문(막대 아래 두 줄까지 — 줄 바꿈 문자로 나눈 앞 두 줄 · 길면 가운데 생략) + 4버튼.
+                // 질문(막대 아래 세 줄까지 — 이름 · 대상 폴더 · 안내 · 길면 가운데 생략) + 4버튼.
                 Some(q) => {
                     let mut qy = y + th_txt.max(10) + (10.0 * s).round() as i32;
-                    for line in q.split('\n').take(2) {
+                    for line in q.split('\n').take(3) {
                         let l = nexa_ctl::draw::ellipsize_middle(&mut dc, line, wi - pad * 2);
                         dc.text(pad, qy, clip, &l, th.text);
                         qy += th_txt + (2.0 * s).round() as i32;

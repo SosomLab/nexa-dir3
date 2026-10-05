@@ -29,6 +29,16 @@ pub(crate) enum DlgReply {
     LauncherItem(Option<usize>),
 }
 
+/// 덮어쓰기 질문 글 — 이름 + **대상 폴더**(사용자 10-05 "대상 폴더 식별이 되지 않아": 종전에는 이름만 있어 어느 폴더에
+/// 덮어쓰는지 알 수 없었다). `path` = 이미 있는 대상 파일의 경로.
+pub(crate) fn overwrite_question(path: &std::path::Path) -> String {
+    let folder = path
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    trf("ops.overwrite", &[&ndir_ops::leaf_name(path), &folder])
+}
+
 impl App {
     /// 대화상자 요청(이미 하나가 열려 있거나 대기 중이면 거절 — 동시 1건 · 상태줄 안내).
     pub(crate) fn ask(&mut self, spec: DlgSpec, reply: DlgReply) -> bool {
@@ -192,13 +202,13 @@ impl App {
         // 받아 두었다가 그 크기로 열린다. 메인 창이 없는 시험은 종전 대화상자 길 그대로.
         if self.progress_win.is_active() && self.window.is_some() {
             self.progress_win
-                .set_conflict(Some(trf("ops.overwrite", &[&ndir_ops::leaf_name(path)])));
+                .set_conflict(Some(overwrite_question(path)));
             self.conflict_inline = Some(tx);
             return;
         }
         let spec = DlgSpec {
             title: tr("ops.overwriteTitle"),
-            text: trf("ops.overwrite", &[&ndir_ops::leaf_name(path)]),
+            text: overwrite_question(path),
             buttons: vec![
                 (1, tr("ops.yes")),
                 (2, tr("ops.yesAll")),

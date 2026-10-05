@@ -6511,3 +6511,23 @@ fn path_bar_expands_variables_commands_and_relative_paths() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 덮어쓰기 질문에 대상 폴더가 보인다(사용자 10-05 "대상 폴더 식별이 되지 않아") — 이름 줄 · 대상 폴더 줄 · 안내 줄.
+#[test]
+fn overwrite_question_names_the_destination_folder() {
+    use crate::app::dialogs::overwrite_question;
+    ndir_i18n::activate(ndir_i18n::load("en", std::path::Path::new("nowhere")));
+    let dest = std::path::Path::new("backup")
+        .join("2026")
+        .join("MP_PEGGING.zip");
+    let q = overwrite_question(&dest);
+    let lines: Vec<&str> = q.split('\n').collect();
+    assert_eq!(lines.len(), 3, "{q}");
+    assert!(lines[0].contains("MP_PEGGING.zip"), "{q}");
+    let folder = std::path::Path::new("backup")
+        .join("2026")
+        .display()
+        .to_string();
+    assert!(lines[1].contains(&folder), "대상 폴더 줄: {q}");
+    assert!(!lines[1].contains("MP_PEGGING.zip"), "폴더 줄에는 폴더만");
+}
