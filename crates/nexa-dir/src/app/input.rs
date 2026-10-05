@@ -27,6 +27,32 @@ pub(crate) fn hangul_key(c: char, hangul: bool) -> char {
     }
 }
 
+/// 입력기가 준 글이 **어디로 가는가**(순수 · MC/DC): 글 편집 필드(경로 바 편집 · 이름 바꾸기) → 터미널 → 목록(타입어헤드) 순으로
+/// 먼저 맞는 곳. 대화상자 · 열린 메뉴가 있으면 메뉴/대화상자 몫이라 여기서는 `Other`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImeSink {
+    /// 경로 바 편집 · 이름 바꾸기 — 조합 중인 글을 필드에 임시로 넣었다가 바꿔 끼운다.
+    Edit,
+    /// 터미널 — 확정된 글만 셸로 보낸다.
+    Terminal,
+    /// 목록 — 타입어헤드 접두사(조합 중인 글도 실시간으로).
+    List,
+    /// 그 밖(메뉴 · 대화상자) — 확정된 글만 글자 사건으로.
+    Other,
+}
+
+pub(crate) fn ime_sink(modal: bool, path_edit: bool, renaming: bool, terminal: bool) -> ImeSink {
+    if modal {
+        ImeSink::Other
+    } else if path_edit || renaming {
+        ImeSink::Edit
+    } else if terminal {
+        ImeSink::Terminal
+    } else {
+        ImeSink::List
+    }
+}
+
 /// 글자 키가 목록의 타입어헤드로 가는 상태인가(순수 · MC/DC): 글을 넣는 곳(대화상자 · 열린 메뉴 · 경로 편집 · 이름 바꾸기 ·
 /// 터미널)이 하나도 없을 때만.
 pub(crate) fn typeahead_target_of(
@@ -52,9 +78,84 @@ impl App {
         )
     }
 
+    /// 메인 창에 OS 입력기를 붙일 것인가 — 시스템 입력기 모드면 **늘**(사용자 10-05: 종전에는 한 번도 붙이지 않아 경로 바 ·
+    /// 이름 바꾸기 · 터미널에 한글이 들어가지 않았고 작업 표시줄의 한/영 표시도 바뀌지 않았다). 앱 조합 모드에서만 뗀다.
+    pub(crate) fn wants_ime(&self) -> bool {
+        crate::input::system_ime()
+    }
+
+    /// 메인 창의 IME 허용을 맞춘다(값이 바뀔 때만 창에 쓴다 · 사건 처리 뒤마다 부른다).
+    pub(crate) fn ime_refresh(&mut self) {
+        let allow = self.wants_ime();
+        if self.ime_allowed == Some(allow) {
+            return;
+        }
+        if let Some(w) = &self.window {
+            w.set_ime_allowed(allow);
+            self.ime_last = None; // 조합 창(후보 창) 자리를 다시 알린다
+        }
+        self.ime_allowed = Some(allow);
+    }
+
+    /// 지금 입력기 글이 갈 곳([`ime_sink`]).
+    pub(crate) fn ime_sink_now(&self) -> ImeSink {
+        let p = &self.panels[self.active];
+        ime_sink(
+            self.dlg.is_open() || self.tab_menu.is_open() || self.menubar.is_open(),
+            p.pathbar.is_editing(),
+            p.rows().is_renaming(),
+            self.term_focused().is_some(),
+        )
+    }
+
+    /// **입력기 입력**: `committed` = 확정된 글 · `preedit` = 조합 중인 글(빈 글 = 조합 없음). winit은 입력기를 붙이면 조합 중인
+    /// 글을 OS가 그리지 않고 앱에 넘긴다 → 갈 곳에 맞게 직접 보여 준다.
+    /// - 편집 필드: 조합 중인 글을 **임시로 넣어 두고**(`ime_preedit` = 그 글자 수) 조합이 바뀌면 지우고 다시 넣는다 · 확정되면 그대로 남는다.
+    /// - 목록: 타입어헤드 접두사에 실시간 반영(한글 음절이 통째로 온다 — 작업 표시줄의 한/영 상태가 그대로 쓰인다).
+    /// - 터미널 · 그 밖: 확정된 글만 글자 사건으로.
+    pub(crate) fn ime_input(&mut self, committed: &str, preedit: &str) {
+        let now_ms = self.started.elapsed().as_millis() as u64;
+        let sink = self.ime_sink_now();
+        if sink != ImeSink::Edit {
+            self.ime_preedit = 0; // 편집이 끝났다 — 임시로 넣어 둔 글은 그 필드와 함께 사라졌다
+        }
+        match sink {
+            ImeSink::Edit => {
+                for _ in 0..std::mem::take(&mut self.ime_preedit) {
+                    self.route(InputEvent::Char { c: '\u{8}', now_ms });
+                }
+                for c in committed
+                    .chars()
+                    .chain(preedit.chars())
+                    .filter(|c| !c.is_control())
+                {
+                    self.route(InputEvent::Char { c, now_ms });
+                }
+                self.ime_preedit = preedit.chars().filter(|c| !c.is_control()).count();
+            }
+            ImeSink::List => {
+                let mut inv = Invalidations::default();
+                let a = self.active;
+                self.panels[a]
+                    .rows_mut()
+                    .typeahead_ime(committed, preedit, now_ms, &mut inv);
+                self.update_status();
+                self.redraw();
+            }
+            ImeSink::Terminal | ImeSink::Other => {
+                for c in committed.chars().filter(|c| !c.is_control()) {
+                    self.route(InputEvent::Char { c, now_ms });
+                }
+            }
+        }
+    }
+
     /// 한/영 키(Windows): 목록 입력의 한글 모드를 뒤집고 상태줄에 알린다 — 목록이 글자를 받는 상태일 때만. 처리했으면 `true`.
     pub(crate) fn toggle_hangul_mode(&mut self) -> bool {
-        if !self.typeahead_target() || !self.settings.flag("typeahead.enabled") {
+        // 시스템 입력기를 붙여 둔 동안에는 한/영 전환이 OS 몫이다(작업 표시줄 표시와 같은 상태) — 앱 모드는 쓰지 않는다.
+        // 입력기를 뗀 "앱 조합" 모드에서만 이 키로 목록 입력의 한글 모드를 뒤집는다.
+        if self.wants_ime() || !self.typeahead_target() || !self.settings.flag("typeahead.enabled")
+        {
             return false;
         }
         self.hangul_mode = !self.hangul_mode;

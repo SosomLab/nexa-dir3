@@ -6451,13 +6451,12 @@ fn typeahead_hangul_settings_and_arrow_cycle() {
         Some("typeahead.enabled")
     );
     // ④ 한/영 키: 목록 대상일 때만 뒤집힌다(이름 바꾸는 중에는 아니다).
-    assert!(!app.hangul_mode);
-    assert!(app.toggle_hangul_mode() && app.hangul_mode);
-    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
-    app.command("edit.rename");
-    assert!(app.panels[0].rows().is_renaming());
-    assert!(!app.toggle_hangul_mode(), "이름 바꾸는 중 = 대상 아님");
-    assert!(app.hangul_mode, "그대로");
+    // 시스템 입력기를 붙여 둔 동안(기본)에는 한/영 전환이 OS 몫이라 앱 모드를 뒤집지 않는다.
+    assert!(app.wants_ime() && !app.hangul_mode);
+    assert!(
+        !app.toggle_hangul_mode() && !app.hangul_mode,
+        "입력기 모드 = 앱 토글 없음"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -6939,5 +6938,100 @@ fn drop_onto_file_targets_its_parent_folder() {
     );
     assert_eq!(c, DropChoice::None, "이미 그 폴더에 있다");
     app.dnd_event(DropEvent::Leave, now);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 한글 입력(사용자 10-05 "주소 표시줄에 한글 입력이 안 됨 · 한/영 표시가 안 바뀜"): 메인 창에 OS 입력기를 늘 붙이고, 입력기가 주는
+/// 조합 중인 글 · 확정된 글을 갈 곳에 직접 넣는다 — 편집 필드(임시로 넣었다 바꿔 끼움) · 목록(타입어헤드 실시간) · 터미널/메뉴(확정분).
+#[test]
+fn ime_text_reaches_path_bar_rename_and_typeahead() {
+    use crate::app::input::{ime_sink, ImeSink};
+    // MC/DC: 모달 > 편집 필드 > 터미널 > 목록.
+    assert_eq!(ime_sink(false, false, false, false), ImeSink::List);
+    assert_eq!(ime_sink(false, true, false, false), ImeSink::Edit);
+    assert_eq!(ime_sink(false, false, true, false), ImeSink::Edit);
+    assert_eq!(ime_sink(false, false, false, true), ImeSink::Terminal);
+    assert_eq!(
+        ime_sink(false, true, false, true),
+        ImeSink::Edit,
+        "편집 필드가 터미널보다 먼저"
+    );
+    assert_eq!(
+        ime_sink(true, true, true, true),
+        ImeSink::Other,
+        "모달이 가장 먼저"
+    );
+    let (mut app, dir) = fixture("imeinput");
+    for name in ["가방.txt", "강아지.txt", "강원도.txt"] {
+        std::fs::write(dir.join(name), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.apply_typeahead();
+    assert!(app.wants_ime(), "시스템 입력기 모드 = 늘 붙인다");
+    app.ime_refresh();
+    assert_eq!(app.ime_allowed, Some(true));
+    let caret_name = |app: &App| {
+        let rows = app.panels[0].rows();
+        rows.caret()
+            .and_then(|c| rows.source().row_path(c))
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_default()
+    };
+    // 목록: 조합 중인 글이 타입어헤드에 실시간으로 반영된다.
+    assert_eq!(app.ime_sink_now(), ImeSink::List);
+    app.ime_input("", "ㄱ");
+    app.ime_input("", "가");
+    assert_eq!(caret_name(&app), "가방.txt");
+    app.ime_input("", "강");
+    assert_eq!(caret_name(&app), "강아지.txt");
+    app.ime_input("강", "원");
+    assert_eq!(caret_name(&app), "강원도.txt");
+    assert_eq!(app.panels[0].rows().typeahead_composing(), "강원");
+    app.startup_cmd("ui.press:escape");
+    assert!(!app.panels[0].typeahead_active());
+    // 경로 바 편집: 조합 중인 글이 필드에 보이고(임시) · 조합이 바뀌면 바꿔 끼우고 · 확정되면 남는다.
+    app.panels[0].pathbar.begin_edit(&mut inv);
+    app.panels[0]
+        .pathbar
+        .edit_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+    assert_eq!(app.ime_sink_now(), ImeSink::Edit);
+    let text = |app: &App| app.panels[0].pathbar.edit_text().unwrap_or_default();
+    app.ime_input("", "ㅎ");
+    assert_eq!(text(&app), "ㅎ", "조합 중인 글이 보인다");
+    app.ime_input("", "하");
+    assert_eq!(text(&app), "하", "바꿔 끼운다(쌓이지 않는다)");
+    app.ime_input("", "한");
+    app.ime_input("한", "");
+    assert_eq!(text(&app), "한", "확정");
+    assert_eq!(app.ime_preedit, 0);
+    app.ime_input("", "ㄱ");
+    app.ime_input("", "그");
+    app.ime_input("", "글");
+    assert_eq!(text(&app), "한글");
+    app.ime_input("글", "");
+    app.route(InputEvent::Char { c: 'A', now_ms: 1 });
+    assert_eq!(text(&app), "한글A", "확정 뒤 영문도 이어진다");
+    // 조합을 지움(빈 조합) = 임시 글이 사라진다.
+    app.ime_input("", "ㅁ");
+    app.ime_input("", "");
+    assert_eq!(text(&app), "한글A");
+    app.panels[0].pathbar.cancel_edit(&mut inv);
+    // 이름 바꾸기: 같은 방식.
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.command("edit.rename");
+    app.panels[0]
+        .rows_mut()
+        .rename_key(nexa_grid::EditKey::SelectAll, false, &mut inv);
+    assert_eq!(app.ime_sink_now(), ImeSink::Edit);
+    app.ime_input("", "ㄴ");
+    app.ime_input("", "나");
+    app.ime_input("나", "");
+    assert_eq!(
+        app.panels[0].rows().rename_state().map(|s| s.1),
+        Some("나".to_string())
+    );
+    app.startup_cmd("ui.press:escape");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -446,10 +446,20 @@ impl ApplicationHandler<Wake> for App {
             }
             _ => {}
         }
-        if let Some(ev) = self.ctl_event(&event) {
-            self.route(ev);
+        // 입력기(IME) 글 — 조합 중인 글(Preedit)과 확정된 글(Commit)을 갈 곳(편집 필드 · 목록 타입어헤드 · 터미널)에 넣는다.
+        // winit은 입력기를 붙이면 조합 중인 글을 OS가 그리지 않게 하고 앱에 넘긴다(`ime_input`이 직접 보여 준다).
+        match &event {
+            WindowEvent::Ime(winit::event::Ime::Preedit(text, _)) => self.ime_input("", text),
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) => self.ime_input(text, ""),
+            WindowEvent::Ime(_) => {}
+            _ => {
+                if let Some(ev) = self.ctl_event(&event) {
+                    self.route(ev);
+                }
+            }
         }
-        // 사건 처리 중에 쌓인 "창 열기" 요청을 한 번에.
+        self.ime_refresh(); // 포커스가 바뀌었으면(편집 시작/끝 · 터미널) 입력기를 붙이거나 뗀다
+                            // 사건 처리 중에 쌓인 "창 열기" 요청을 한 번에.
         self.open_requested_windows(el);
     }
 }

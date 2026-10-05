@@ -181,6 +181,10 @@ struct App {
     /// Windows 목록 입력의 한글 모드(한/영 키로 전환 · nexa-sql 탐색기와 같은 길): 메인 창은 IME를 붙이지 않아 한글 자판도
     /// 라틴 글자로 온다 → 켜져 있으면 두벌식 자모로 바꿔 타입어헤드에 넣는다(조합은 그리드가 한다).
     hangul_mode: bool,
+    /// 메인 창에 마지막으로 알린 IME 허용 값(`app/input.rs::ime_refresh` — 값이 바뀔 때만 창에 쓴다).
+    ime_allowed: Option<bool>,
+    /// 편집 필드에 임시로 넣어 둔 조합 중인 글의 글자 수(`ime_input` — 조합이 바뀌면 이만큼 지우고 다시 넣는다).
+    ime_preedit: usize,
     ctrl_mac: bool,
     menubar: MenuBar,
     /// 상단 툴바 = 그룹 도크(nexa-sql `ToolDock` · 그룹 손잡이를 끌어 순서·행 이동 · 배치 = 설정 `toolbar.dock_layout`).
@@ -538,6 +542,8 @@ impl App {
             primary: false,
             alt: false,
             hangul_mode: false,
+            ime_allowed: None,
+            ime_preedit: 0,
             ctrl_mac: false,
             started: Instant::now(),
             main_active: true,
