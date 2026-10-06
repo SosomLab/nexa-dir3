@@ -37,6 +37,11 @@ menu.view.theme.system = テーマ: システム
 menu.view.theme.light = テーマ: ライト
 menu.view.theme.dark = テーマ: ダーク
 menu.view.lang.system = 言語: システム
+menu.view.themeMenu = テーマ
+menu.view.langMenu = 言語
+menu.sub.system = システム
+menu.sub.light = ライト
+menu.sub.dark = ダーク
 menu.help = ヘルプ
 menu.help.about = Nexa Dir について
 

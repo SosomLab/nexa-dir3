@@ -99,6 +99,39 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "help.selfcheck",
 ];
 
+/// 하위 메뉴 안의 항목(짧은 라벨 키 · 아이콘은 명령 id 기준).
+fn sub_item(id: &str, label_key: &str) -> MenuEntry {
+    let mut it = ComboItem::new(id, tr(label_key));
+    it.image = app::menu_icons::bar_image(id);
+    MenuEntry::Item(it)
+}
+
+/// View 메뉴 조립(순수): 평면 항목 가운데 테마 3개 자리에 테마 하위 메뉴 · 언어 자리에 언어 하위 메뉴를 넣고, 그 때문에
+/// 잇달아 생긴 구분선은 하나로.
+pub(crate) fn view_with_submenus(
+    flat: Vec<MenuEntry>,
+    theme: MenuEntry,
+    lang: MenuEntry,
+) -> Vec<MenuEntry> {
+    let mut theme = Some(theme);
+    let mut lang = Some(lang);
+    let mut out: Vec<MenuEntry> = Vec::new();
+    for e in flat {
+        match &e {
+            MenuEntry::Item(it) if it.value == "view.theme_system" => out.extend(theme.take()),
+            MenuEntry::Item(it)
+                if it.value == "view.theme_light" || it.value == "view.theme_dark" => {}
+            MenuEntry::Item(it) if it.value == "view.lang_system" => out.extend(lang.take()),
+            MenuEntry::Separator if matches!(out.last(), Some(MenuEntry::Separator) | None) => {}
+            _ => out.push(e),
+        }
+    }
+    while matches!(out.last(), Some(MenuEntry::Separator)) {
+        out.pop();
+    }
+    out
+}
+
 /// 메뉴 구획(메뉴 라벨 키 · `MENU_IDS` 시작 · 끝) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다.
 pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
     ("menu.file", 0, 9),
@@ -148,14 +181,26 @@ impl App {
             let (_, s, e) = MENU_SECTIONS[i];
             &MENU_IDS[s..e.min(MENU_IDS.len())]
         };
-        let mut view = items(sec(2));
+        // 테마 · 언어는 **하위 메뉴**(사용자 10-06 — 1레벨에 "테마: 시스템 · 라이트 · 다크 · 언어: …"가 길게 늘어섰다).
+        // 명령 id · 체크(라디오) 동기화는 그대로(id 기반) · 라벨만 짧은 꼴(`menu.sub.*`).
+        let theme = MenuEntry::Sub(
+            ComboItem::new("view.theme", tr("menu.view.themeMenu")),
+            vec![
+                sub_item("view.theme_system", "menu.sub.system"),
+                sub_item("view.theme_light", "menu.sub.light"),
+                sub_item("view.theme_dark", "menu.sub.dark"),
+            ],
+        );
         // 언어 목록(동적 명령 `lang:<code>` — 단축키 재정의 대상 아님).
+        let mut langs = vec![sub_item("view.lang_system", "menu.sub.system")];
         for (code, name) in ndir_i18n::discover(&home) {
-            view.push(MenuEntry::Item(ComboItem::new(
+            langs.push(MenuEntry::Item(ComboItem::new(
                 format!("lang:{code}"),
                 name,
             )));
         }
+        let lang = MenuEntry::Sub(ComboItem::new("view.lang", tr("menu.view.langMenu")), langs);
+        let view = view_with_submenus(items(sec(2)), theme, lang);
         let _ = settings;
         vec![
             MenuDef::new(tr("menu.file"), items(sec(0))),
@@ -943,6 +988,61 @@ mod tests {
             assert_eq!(next.unwrap_or(usize::MAX), *e, "구획 {i} 경계");
             assert_ne!(MENU_IDS[*s], "-", "구획 {i} 시작은 구분선이 아니다");
         }
+    }
+
+    /// 테마 · 언어 하위 메뉴(사용자 10-06): View 1레벨에는 테마/언어 항목이 없고 하위 메뉴 2개에 들어 있다 · 구분선이 겹치지 않는다 ·
+    /// 하위 메뉴 항목 id = 명령 id 그대로(체크 동기화 · 팔레트 공유).
+    #[test]
+    fn view_theme_and_language_are_submenus() {
+        let s = Settings::from_text(std::env::temp_dir().join("ndir-menus-sub.conf"), "");
+        let view = &App::build_menus(&s)[2].entries;
+        let top_ids: Vec<&str> = view
+            .iter()
+            .filter_map(|e| match e {
+                MenuEntry::Item(it) => Some(it.value.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !top_ids.iter().any(|id| id.starts_with("view.theme_")
+                || *id == "view.lang_system"
+                || id.starts_with("lang:")),
+            "{top_ids:?}"
+        );
+        let subs: Vec<(&str, Vec<&str>)> = view
+            .iter()
+            .filter_map(|e| match e {
+                MenuEntry::Sub(it, v) => Some((
+                    it.value.as_str(),
+                    v.iter()
+                        .filter_map(|e| match e {
+                            MenuEntry::Item(it) => Some(it.value.as_str()),
+                            _ => None,
+                        })
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subs[0].0, "view.theme");
+        assert_eq!(
+            subs[0].1,
+            vec!["view.theme_system", "view.theme_light", "view.theme_dark"]
+        );
+        assert_eq!(subs[1].0, "view.lang");
+        assert_eq!(subs[1].1[0], "view.lang_system");
+        assert!(
+            subs[1].1.len() >= 2 && subs[1].1[1..].iter().all(|id| id.starts_with("lang:")),
+            "{:?}",
+            subs[1].1
+        );
+        for w in view.windows(2) {
+            assert!(
+                !matches!(w, [MenuEntry::Separator, MenuEntry::Separator]),
+                "구분선 겹침"
+            );
+        }
+        assert!(!matches!(view.last(), Some(MenuEntry::Separator)));
     }
 
     #[test]
