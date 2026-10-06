@@ -354,9 +354,11 @@ impl App {
             .filter(|s| matches!(*s, "global" | "panel" | "tab"))
             .unwrap_or("dir");
         let scoped = |it: ToolItem, label_key: &str| {
+            // "{라벨} — 범위: {폴더|탭|…}" — 종전 "{라벨} — 폴더"는 "파일 — 폴더"처럼 읽혔다(사용자 10-06).
             it.tip(format!(
-                "{} — {}",
+                "{} — {}: {}",
                 tr(label_key),
+                tr("pref.viewScope.tip"),
                 tr(&format!("pref.viewScope.{scope}"))
             ))
         };
