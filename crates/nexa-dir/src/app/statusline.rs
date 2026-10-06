@@ -15,6 +15,48 @@ pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
 
 /// 설정값(`tab:1|cpu:1|mem:1[app:1,system:1]|…`) → 표시할 칸과 그 안의 항목(순서대로 · 숨긴 것 제외 · 빈 값 = 전부 ·
 /// 항목이 있는 칸에서 항목을 전부 끄면 그 칸도 빠진다 · 순수).
+/// git 상태 조회 상한 — 넘으면 자식을 죽이고 실패로(멈춘 git이 `git_busy`에 영구히 남지 않게 · 협업 10-06 제안).
+const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// `git --no-optional-locks -C <repo> status --porcelain=v2 --branch --show-stash`의 표준 출력(작업 스레드) — 성공 = `Some(text)`.
+/// `--no-optional-locks` = 사용자 커밋/IDE와 index.lock 경합 방지 · `--show-stash` = `# stash N` 줄(git ≥ 2.19) ·
+/// 출력은 리더 스레드가 끝까지 읽고 호출 쪽이 `timeout` 안에만 기다린다(큰 저장소의 긴 출력에도 파이프가 막히지 않는다).
+fn git_status_text(repo: &std::path::Path, timeout: Duration) -> Option<String> {
+    let mut child = platform::quiet_command("git")
+        .arg("--no-optional-locks")
+        .arg("-C")
+        .arg(repo)
+        .args(["status", "--porcelain=v2", "--branch", "--show-stash"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut out = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        let _ = out.read_to_end(&mut buf);
+        let _ = tx.send(String::from_utf8_lossy(&buf).into_owned());
+    });
+    let text = match rx.recv_timeout(timeout) {
+        Ok(t) => t,
+        Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+    };
+    let status = child.wait().ok()?;
+    status.success().then_some(text)
+}
+
+/// git 요약이 묵었는가(순수): 갱신 주기 0 = 끔 · 나이 ≥ 주기.
+pub(crate) fn git_stale(age_s: u64, refresh_s: u64) -> bool {
+    refresh_s > 0 && age_s >= refresh_s
+}
+
 pub(crate) fn status_items_of(value: &str) -> Vec<StatusBlock> {
     let defs = crate::order::STATUSBAR_BLOCKS;
     let mut blocks = crate::order::parse_order_with(defs, value);
@@ -461,7 +503,7 @@ impl App {
             let extra = self
                 .git_detail
                 .get(&repo)
-                .map(dirinfo::GitDetail::short)
+                .map(|(_, d)| d.short())
                 .unwrap_or_default();
             self.panels[i].set_git_extra(extra);
             self.panels[i].sync_status(inv);
@@ -478,27 +520,21 @@ impl App {
         }
         let tx = self.git_tx.clone();
         std::thread::spawn(move || {
-            let out = platform::quiet_command("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(["status", "--porcelain=v2", "--branch"])
-                .stdin(std::process::Stdio::null())
-                .output();
-            let detail = out
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| dirinfo::parse_porcelain_v2(&String::from_utf8_lossy(&o.stdout)));
+            let detail =
+                git_status_text(&repo, GIT_TIMEOUT).map(|text| dirinfo::parse_porcelain_v2(&text));
             let _ = tx.send((repo, detail));
         });
     }
 
-    /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다.
+    /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다. **주기 갱신**(설정 `git.refresh_s` ·
+    /// 0 = 끔): 보이는 탭의 저장소 요약이 그 시간보다 오래됐으면 다시 조회(옛 값은 새 값이 올 때까지 그대로 보인다).
     pub(crate) fn git_tick(&mut self, now: Instant) -> Option<Instant> {
         let mut got = false;
         while let Ok((repo, detail)) = self.git_rx.try_recv() {
             self.git_busy.remove(&repo);
             // 실패(git 없음 · 저장소 아님)도 기억한다 — 같은 저장소를 되풀이해 조회하지 않게(빈 요약).
-            self.git_detail.insert(repo, detail.unwrap_or_default());
+            self.git_detail
+                .insert(repo, (now, detail.unwrap_or_default()));
             got = true;
         }
         if got {
@@ -506,7 +542,45 @@ impl App {
             self.git_sync(&mut inv);
             self.redraw();
         }
-        (!self.git_busy.is_empty()).then(|| now + Duration::from_millis(150))
+        let refresh = self.settings.int("git.refresh_s").clamp(0, 86_400) as u64;
+        let mut wake: Option<Instant> =
+            (!self.git_busy.is_empty()).then(|| now + Duration::from_millis(150));
+        if refresh > 0 && self.git_enabled {
+            let shown: Vec<PathBuf> = self
+                .panels
+                .iter()
+                .filter_map(|p| p.git_info().map(|(r, _)| r))
+                .collect();
+            for repo in shown {
+                let Some((at, _)) = self.git_detail.get(&repo) else {
+                    continue;
+                };
+                let age = now.duration_since(*at).as_secs();
+                if git_stale(age, refresh) {
+                    self.git_request(repo);
+                } else {
+                    let due = *at + Duration::from_secs(refresh);
+                    wake = Some(wake.map_or(due, |w| w.min(due)));
+                }
+            }
+        }
+        wake
+    }
+
+    /// 바뀐 경로에 닿는 저장소의 요약을 버린다(폴더 감시 · `.git` 안 변경 포함 — 다음 `git_sync`가 다시 조회).
+    pub(crate) fn git_invalidate(&mut self, changed: &[PathBuf]) {
+        self.git_detail
+            .retain(|repo, _| !changed.iter().any(|c| c.starts_with(repo)));
+    }
+
+    /// 창이 포커스를 되찾았다(다른 앱에서 커밋했을 수 있다) — 전부 버리고 보이는 것부터 다시.
+    pub(crate) fn git_refresh_on_focus(&mut self) {
+        if self.git_detail.is_empty() {
+            return;
+        }
+        self.git_detail.clear();
+        let mut inv = Invalidations::default();
+        self.git_sync(&mut inv);
     }
 
     /// 탭 상태바 칸 클릭 → 상세 메뉴(좌 · 우클릭 같은 메뉴 — 1차): 폴더 = 항목 수 상세 · Git = 브랜치 · 복사 · 새로 고침.
@@ -526,7 +600,7 @@ impl App {
                     "tabstatus.git.repo",
                     &[&repo.display().to_string()],
                 )));
-                if let Some(d) = self.git_detail.get(&repo) {
+                if let Some((_, d)) = self.git_detail.get(&repo) {
                     if let Some(up) = &d.upstream {
                         items.push(info(trf(
                             "tabstatus.git.upstream",
@@ -543,6 +617,9 @@ impl App {
                                 &d.changed.to_string(),
                                 &d.untracked.to_string(),
                                 &d.conflicts.to_string(),
+                                &d.deleted.to_string(),
+                                &d.renamed.to_string(),
+                                &d.stash.to_string(),
                             ],
                         )
                     }));
@@ -790,5 +867,19 @@ mod tests {
         );
         assert_eq!(fmt_rate(0), "0 B/s");
         assert_eq!(fmt_rate(1536), "1.5 KB/s");
+    }
+}
+
+#[cfg(test)]
+mod git_refresh_tests {
+    use super::*;
+
+    /// 주기 갱신 판정(MC/DC): 주기 0 = 끔 · 나이 < 주기 = 아직 · 나이 ≥ 주기 = 묵음.
+    #[test]
+    fn git_stale_rules() {
+        assert!(!git_stale(100, 0));
+        assert!(!git_stale(29, 30));
+        assert!(git_stale(30, 30));
+        assert!(git_stale(31, 30));
     }
 }

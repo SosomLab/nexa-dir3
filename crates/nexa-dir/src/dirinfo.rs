@@ -20,6 +20,22 @@ pub(crate) fn parse_gitdir_file(text: &str) -> Option<&str> {
     (!p.is_empty()).then_some(p)
 }
 
+/// 저장소 루트의 **git 디렉터리**(`.git` 폴더 · worktree식 `.git` 파일이면 그 안의 `gitdir:`) — 상태 갱신 감시용(10-06).
+pub(crate) fn git_dir(repo: &Path) -> Option<PathBuf> {
+    let dot = repo.join(".git");
+    let meta = std::fs::metadata(&dot).ok()?;
+    if meta.is_dir() {
+        return Some(dot);
+    }
+    let text = std::fs::read_to_string(&dot).ok()?;
+    let p = Path::new(parse_gitdir_file(&text)?);
+    Some(if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        repo.join(p)
+    })
+}
+
 /// `dir`에서 위로 올라가며 저장소를 찾아 `(저장소 루트, 브랜치)`를 돌려준다(없으면 `None`).
 pub(crate) fn git_branch(dir: &Path) -> Option<(PathBuf, String)> {
     let mut cur = Some(dir);
@@ -58,31 +74,50 @@ pub(crate) struct GitDetail {
     /// 업스트림보다 앞선 · 뒤진 커밋 수.
     pub ahead: u32,
     pub behind: u32,
-    /// 스테이지된 · 스테이지 안 된 변경 · 미추적 · 충돌 항목 수.
+    /// 스테이지된(X ∈ AMDRCT) · 작업 트리 수정(Y ∈ MT) · 미추적 · 충돌 항목 수.
     pub staged: u32,
     pub changed: u32,
     pub untracked: u32,
     pub conflicts: u32,
+    /// 삭제(X 또는 Y = D · Starship 규칙 = 스테이지 여부와 무관) · 이름 변경(스테이지된 R) · stash 수.
+    pub deleted: u32,
+    pub renamed: u32,
+    pub stash: u32,
 }
 
 impl GitDetail {
-    /// 작업 트리가 깨끗한가.
+    /// 작업 트리가 깨끗한가(stash는 작업 트리가 아니다).
     pub(crate) fn is_clean(&self) -> bool {
-        self.staged + self.changed + self.untracked + self.conflicts == 0
+        self.staged + self.changed + self.untracked + self.conflicts + self.deleted == 0
     }
 
-    /// 탭 상태바 칸에 덧붙이는 짧은 요약(없으면 빈 글): `↑1 ↓2 ●3`(앞섬 · 뒤짐 · 바뀐 항목 수 합).
+    /// 탭 상태바 칸에 덧붙이는 짧은 요약(없으면 빈 글) — **Starship 계열**(Starship · Spaceship · Powerlevel10k가 같이 쓰는 사실상
+    /// 표준 · 사용자 10-06): `⇡1⇣2 +1 !3 ?2 ✘1 »1 =1 $1` = 앞섬/뒤짐 · 스테이지 · 수정 · 미추적 · 삭제 · 이름 변경 · 충돌 · stash.
+    /// 0인 칸은 뺀다(종전 `↑1 ↓2 ●3` = 합계 한 칸 → 종류별로).
     pub(crate) fn short(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
+        let mut ab = String::new();
         if self.ahead > 0 {
-            parts.push(format!("↑{}", self.ahead));
+            ab.push_str(&format!("\u{21E1}{}", self.ahead));
         }
         if self.behind > 0 {
-            parts.push(format!("↓{}", self.behind));
+            ab.push_str(&format!("\u{21E3}{}", self.behind));
         }
-        let dirty = self.staged + self.changed + self.untracked + self.conflicts;
-        if dirty > 0 {
-            parts.push(format!("●{dirty}"));
+        if !ab.is_empty() {
+            parts.push(ab);
+        }
+        for (sym, n) in [
+            ("+", self.staged),
+            ("!", self.changed),
+            ("?", self.untracked),
+            ("\u{2718}", self.deleted),
+            ("\u{00BB}", self.renamed),
+            ("=", self.conflicts),
+            ("$", self.stash),
+        ] {
+            if n > 0 {
+                parts.push(format!("{sym}{n}"));
+            }
         }
         parts.join(" ")
     }
@@ -95,6 +130,9 @@ pub(crate) fn parse_porcelain_v2(text: &str) -> GitDetail {
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("# branch.upstream ") {
             d.upstream = Some(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("# stash ") {
+            // `--show-stash`(git ≥ 2.19) — stash가 0이면 줄 자체가 없다.
+            d.stash = rest.trim().parse().unwrap_or(0);
         } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
             for tok in rest.split_whitespace() {
                 if let Some(n) = tok.strip_prefix('+') {
@@ -106,11 +144,18 @@ pub(crate) fn parse_porcelain_v2(text: &str) -> GitDetail {
         } else if line.starts_with("1 ") || line.starts_with("2 ") {
             let mut xy = line[2..].chars();
             let (x, y) = (xy.next().unwrap_or('.'), xy.next().unwrap_or('.'));
+            // Starship 규칙: 스테이지 = X가 바뀜(A·M·D·R·C·T) · 수정 = Y ∈ {M, T} · 삭제 = X 또는 Y = D · 이름 변경 = X = R.
             if x != '.' {
                 d.staged += 1;
             }
-            if y != '.' {
+            if matches!(y, 'M' | 'T') {
                 d.changed += 1;
+            }
+            if x == 'D' || y == 'D' {
+                d.deleted += 1;
+            }
+            if x == 'R' {
+                d.renamed += 1;
             }
         } else if line.starts_with("u ") {
             d.conflicts += 1;
@@ -177,14 +222,32 @@ u UU N... 100644 100644 100644 100644 a b c conflict.rs\n? untracked.txt\n? othe
         assert_eq!(d.upstream.as_deref(), Some("origin/main"));
         assert_eq!((d.ahead, d.behind), (2, 1));
         assert_eq!(
-            (d.staged, d.changed, d.untracked, d.conflicts),
-            (3, 2, 2, 1)
+            (
+                d.staged,
+                d.changed,
+                d.untracked,
+                d.conflicts,
+                d.deleted,
+                d.renamed
+            ),
+            (3, 2, 2, 1, 0, 1)
         );
         assert!(!d.is_clean());
-        assert_eq!(d.short(), "↑2 ↓1 ●8");
+        assert_eq!(
+            d.short(),
+            "\u{21E1}2\u{21E3}1 +3 !2 ?2 \u{00BB}1 =1",
+            "Starship 계열"
+        );
         let clean = parse_porcelain_v2("# branch.oid x\n# branch.head main\n");
         assert!(clean.is_clean() && clean.upstream.is_none());
         assert_eq!(clean.short(), "");
+        // 삭제(스테이지 여부 무관) · stash · 뒤짐만.
+        let del = parse_porcelain_v2(
+            "# branch.ab +0 -3\n# stash 2\n1 D. N... 100644 000000 000000 aaa bbb gone.rs\n1 .D N... 100644 100644 000000 aaa bbb wt.rs\n",
+        );
+        assert_eq!((del.staged, del.changed, del.deleted), (1, 0, 2));
+        assert!(!del.is_clean());
+        assert_eq!(del.short(), "\u{21E3}3 +1 \u{2718}2 $2");
     }
 
     /// 실제 폴더: 하위 폴더에서 위로 올라가 저장소를 찾는다 · worktree식 `.git` 파일 · 저장소 밖 = None · 항목 수.
@@ -198,6 +261,8 @@ u UU N... 100644 100644 100644 100644 a b c conflict.rs\n? untracked.txt\n? othe
         std::fs::create_dir_all(repo.join(".git")).unwrap();
         std::fs::write(repo.join(".git").join("HEAD"), "ref: refs/heads/dev\n").unwrap();
         assert_eq!(git_branch(&deep), Some((repo.clone(), "dev".to_string())));
+        assert_eq!(git_dir(&repo), Some(repo.join(".git")));
+        assert_eq!(git_dir(&deep), None, "루트가 아닌 폴더 = 없음");
         // worktree: `.git` 파일이 실제 git 폴더를 가리킨다(상대 경로).
         let wt = base.join("wt");
         std::fs::create_dir_all(&wt).unwrap();

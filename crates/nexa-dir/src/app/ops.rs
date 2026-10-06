@@ -460,6 +460,7 @@ impl App {
         }
         let mut inv = Invalidations::default();
         self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+        self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }
@@ -545,6 +546,7 @@ impl App {
         };
         let mut inv = Invalidations::default();
         self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+        self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }
@@ -644,6 +646,7 @@ impl App {
         )));
         let mut inv = Invalidations::default();
         self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+        self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }
@@ -703,6 +706,7 @@ impl App {
                     self.statusbar.set_left(&desc, &mut inv);
                 }
                 self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+                self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
                 for p in &mut self.panels {
                     p.reopen(&mut inv);
                 }

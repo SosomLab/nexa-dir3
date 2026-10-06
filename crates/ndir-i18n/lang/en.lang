@@ -1048,6 +1048,8 @@ pref.statusInterval = Status bar load refresh (ms)
 pref.statusInterval.desc = How often CPU, memory, disk and network are read.
 pref.tabStatusbar = Tab status bar
 pref.tabStatusbar.desc = Shows a status bar at the bottom of each panel with the current folder's item count and Git branch.
+pref.gitRefresh = Git summary refresh interval (s)
+pref.gitRefresh.desc = Re-query the tab status bar's git summary (⇡⇣ + ! ? ✘ » = $) at this interval. Folder/.git watching, file operations and window focus already refresh it immediately, so this is a safety net for other cases (network drives etc.). 0 = no periodic refresh.
 pref.toolbarOnColor = Toolbar: toggled-on color
 pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Line color = light accent background, outline and icon drawn in the color below. Accent = outline and icon follow the accent settings.
 pref.toolbarOnColor.line = Line color
@@ -1150,7 +1152,7 @@ mem.sys.heapUsed = Heap in use
 mem.sys.heapHeld = Heap free (returned on trim)
 tabstatus.git.upstream = Upstream: {0} (ahead {1}, behind {2})
 tabstatus.git.clean = Working tree clean
-tabstatus.git.changes = Staged {0} · modified {1} · untracked {2} · conflicts {3}
+tabstatus.git.changes = Staged +{0} · modified !{1} · untracked ?{2} · conflicts ={3} · deleted ✘{4} · renamed »{5} · stash ${6}
 pref.perfBoost = Performance mode
 pref.perfBoost.desc = Turns off heavier extras to keep the app light. Currently: system status monitoring in the status bar (CPU, memory, disk, network, app memory), icons before file names, and icons before menu items. Your other settings are kept.
 pref.idleTrim = Idle memory trim (seconds)

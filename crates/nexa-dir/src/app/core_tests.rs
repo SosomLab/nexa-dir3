@@ -2943,7 +2943,7 @@ fn status_segments_and_tab_status_bar() {
     );
     assert_eq!(
         app.panels[0].status_summary()[1],
-        "git=git: feat/status ↑2 ●4"
+        "git=git: feat/status \u{21E1}2 +1 ?3", // Starship 계열(10-06)
     );
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
     app.paint_into(&mut rec, 1200, 800, 1.0);

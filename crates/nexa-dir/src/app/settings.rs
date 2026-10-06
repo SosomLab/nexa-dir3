@@ -115,6 +115,7 @@ impl App {
             "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
             "dock.folder_size" => {
                 self.dirsizes.clear();
+                self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
                 self.update_docks();
                 self.redraw();
             }

@@ -148,6 +148,7 @@ impl App {
                     self.progress_win.set_done(&text, ms, now);
                 }
                 self.dirsizes.clear();
+                self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
                 let mut inv = Invalidations::default();
                 for p in &mut self.panels {
                     p.reopen(&mut inv);

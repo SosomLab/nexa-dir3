@@ -324,6 +324,8 @@ impl ApplicationHandler<Wake> for App {
                 if *on {
                     // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
                     self.sync_cut_marks();
+                    // 다른 앱(터미널 · IDE)에서 커밋/체크아웃했을 수 있다 — git 요약 다시(10-06).
+                    self.git_refresh_on_focus();
                     // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
                     if let Some(n) = platform::wheel_lines() {
                         nexa_ctl::set_wheel_lines(n);

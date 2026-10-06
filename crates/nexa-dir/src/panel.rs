@@ -545,6 +545,14 @@ impl Panel {
         let src = self.rows().source();
         let mut dirs = vec![src.path().to_path_buf()];
         dirs.extend(src.expanded_dirs(WATCH_CAP - 1));
+        // 저장소의 `.git`(HEAD · index · refs 변경 = 커밋 · 체크아웃 · stash) — git 요약 갱신용(10-06 · 목록 재열람 대상은 아니다).
+        if let Some((_, Some((repo, _)))) = &self.git {
+            if let Some(g) = crate::dirinfo::git_dir(repo) {
+                if !dirs.contains(&g) {
+                    dirs.push(g);
+                }
+            }
+        }
         dirs
     }
 

@@ -113,5 +113,6 @@ impl App {
         let gone: Vec<PathBuf> = paths.into_iter().filter(|p| !p.exists()).collect();
         self.dupes_win.drop_paths(&gone);
         self.dirsizes.clear();
+        self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
     }
 }

@@ -370,6 +370,7 @@ impl App {
     pub(crate) fn dirsize_sync(&mut self, folder: Option<&Path>) {
         if !self.dirsize_enabled() {
             self.dirsizes.clear();
+            self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
             return;
         }
         match folder {

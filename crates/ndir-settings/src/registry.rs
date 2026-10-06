@@ -1179,6 +1179,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // git 요약 주기 갱신(초 · 0 = 끔 · 고급 · 10-06): 사건 갱신(폴더/.git 감시 · 작업 뒤 · 포커스 복귀)의 안전망.
+    e!(
+        "git.refresh_s",
+        CAT_TAB_STATUS,
+        "pref.gitRefresh",
+        "pref.gitRefresh.desc",
+        Int { min: 0, max: 3600 },
+        "30"
+    ),
     e!(
         "dock.visible",
         CAT_DOCK,
@@ -1983,6 +1992,7 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.row_gap",
     "input.scroll_natural",
     "ctxmenu.prebuild",
+    "git.refresh_s",
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",

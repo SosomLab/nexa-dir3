@@ -1,8 +1,14 @@
 //! App — 폴더 변경 감시 → 무간섭 재열람(dir2 PANEL-036·042 · `Watcher` 포트 · 간격 = 포트가 정한다(폴링 1 s · Windows 통지 250 ms) · 호스트 틱이 부른다).
 
 use crate::*;
+use std::path::Path;
 
 /// 감시 다시 읽기를 미룰 것인가(순수 · dir2 win.rs:9463-9467): 인라인 이름 편집 · 경로 바 편집 · 전송 중 하나라도면 미룬다.
+/// 경로가 `.git` 디렉터리(또는 그 안)인가(순수) — 폴더 감시가 git 내부 변경을 목록 재열람과 섞지 않게.
+pub(crate) fn is_git_internal(p: &Path) -> bool {
+    p.components().any(|c| c.as_os_str() == ".git")
+}
+
 pub(crate) fn reload_deferred(renaming: bool, path_editing: bool, transfer: bool) -> bool {
     renaming || path_editing || transfer
 }
@@ -83,6 +89,15 @@ impl App {
             }
         }
         if !changed.is_empty() {
+            // git 요약: 닿는 저장소를 버린다(`.git` 안 변경 포함 · 다음 상태 동기가 다시 조회). `.git` 안 변경은 목록 재열람 대상이 아니다.
+            self.git_invalidate(&changed);
+            changed.retain(|c| !is_git_internal(c));
+            if changed.is_empty() {
+                let mut inv = Invalidations::default();
+                self.git_sync(&mut inv);
+                self.redraw();
+                return self.watch_next;
+            }
             self.dirsizes.invalidate(&changed); // 폴더 크기 캐시(T-166) — 닿는 항목만.
             let mut inv = Invalidations::default();
             let transfer = self.transfer.is_some();
@@ -121,5 +136,19 @@ impl App {
             self.redraw();
         }
         self.watch_next
+    }
+}
+
+#[cfg(test)]
+mod git_watch_tests {
+    use super::*;
+
+    /// `.git` 안 변경 = git 요약 무효화만(목록 재열람 아님).
+    #[test]
+    fn git_internal_paths() {
+        assert!(is_git_internal(Path::new("D:/repo/.git")));
+        assert!(is_git_internal(Path::new("D:/repo/.git/refs/heads")));
+        assert!(!is_git_internal(Path::new("D:/repo/src/.gitignore")));
+        assert!(!is_git_internal(Path::new("D:/repo/src")));
     }
 }

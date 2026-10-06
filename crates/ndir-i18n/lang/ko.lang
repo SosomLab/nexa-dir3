@@ -1047,6 +1047,8 @@ pref.statusInterval = 상태줄 부하 갱신 주기(ms)
 pref.statusInterval.desc = CPU · 메모리 · 디스크 · 네트워크를 다시 읽는 간격입니다.
 pref.tabStatusbar = 탭 상태바
 pref.tabStatusbar.desc = 패널마다 아래에 상태바를 두어 현재 폴더의 항목 수와 Git 브랜치를 보여 줍니다.
+pref.gitRefresh = git 요약 갱신 주기(초)
+pref.gitRefresh.desc = 탭 상태바의 git 요약(⇡⇣ + ! ? ✘ » = $)을 이 주기로 다시 조회합니다. 폴더·.git 변경 감시, 파일 작업 뒤, 창 포커스 복귀 때는 즉시 갱신하므로 이 값은 그 밖의 경우(네트워크 드라이브 등)를 위한 안전망입니다. 0 = 주기 갱신 끔.
 pref.toolbarOnColor = 툴바: 켜짐 색
 pref.toolbarOnColor.desc = 켜진 툴바 버튼의 모양입니다. 선 색 = 배경은 강조색 옅은 채움 그대로 두고 테두리와 아이콘 선을 아래 색으로. 강조색 = 테두리 · 아이콘이 강조색 설정을 따릅니다.
 pref.toolbarOnColor.line = 선 색
@@ -1149,7 +1151,7 @@ mem.sys.heapUsed = 힙 사용 중
 mem.sys.heapHeld = 힙 여유(정리하면 반환)
 tabstatus.git.upstream = 업스트림: {0} (앞섬 {1} · 뒤짐 {2})
 tabstatus.git.clean = 작업 트리 깨끗함
-tabstatus.git.changes = 스테이지 {0} · 변경 {1} · 미추적 {2} · 충돌 {3}
+tabstatus.git.changes = 스테이지 +{0} · 수정 !{1} · 미추적 ?{2} · 충돌 ={3} · 삭제 ✘{4} · 이름 변경 »{5} · stash ${6}
 pref.perfBoost = 성능 향상 모드
 pref.perfBoost.desc = 무거운 부가 기능을 꺼서 앱을 가볍게 합니다. 지금 끄는 것: 상태바의 시스템 상태 모니터링(CPU · 메모리 · 디스크 · 네트워크 · 앱 메모리) · 파일 이름 앞 아이콘 · 메뉴 항목 앞 아이콘. 다른 설정값은 그대로 유지됩니다.
 pref.idleTrim = 유휴 메모리 정리(초)

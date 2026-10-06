@@ -412,7 +412,8 @@ struct App {
     /// 누르기 시작할 때 떠 있던 상세 팝업의 칸 id — 같은 칸을 다시 누르면 닫기만 한다(토글).
     status_popup_was: Option<String>,
     /// Git 상태(탭 상태바 · NEW-005 2차): 저장소 루트 → 요약 · 조회 중인 루트 · 워커 결과 통로.
-    git_detail: std::collections::HashMap<PathBuf, dirinfo::GitDetail>,
+    /// 저장소 → (조회 시각 · 요약) — 주기 갱신 · 포커스/감시/작업 뒤 무효화(10-06).
+    git_detail: std::collections::HashMap<PathBuf, (Instant, dirinfo::GitDetail)>,
     git_busy: std::collections::HashSet<PathBuf>,
     /// `git` 프로세스를 돌려 상태를 조회하는가(시험에서는 끈다 — 실제 프로세스를 띄우지 않는다).
     git_enabled: bool,
