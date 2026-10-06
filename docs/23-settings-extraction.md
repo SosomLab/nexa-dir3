@@ -133,7 +133,7 @@
 | 10,000(nexa-sql 창 상수) | ndir-log `LogBuffer` · `log_win.rs` | 메모리 링 최대 줄 수(100~1,000,000) | 10000 | 고급(영향 큼) | `log.max_lines`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | 80 % | `log_win.rs` | 푸터 스위치 크기 배율(50~150) | 80 | 고급 | `log.switch_scale`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | ndir-log 게이트 `DETAIL_MASK` | 개발자 모드(상세 로그 · 꺼지면 원자 1 + 분기 1) | off | 설정(창 스위치) | `log.dev_mode`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
-| — | ndir-log `parse_detail_layers` | 개발자 모드에서 켤 층(`shell,ops:timing+progress,*`) | "" | 고급 | `log.dev_layers`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | ndir-log `parse_detail_layers` | 개발자 모드에서 켤 층(`shell,ops:timing+progress,*`) | `*:timing`(전 층 timing만 · 5573b24 정정 · 종전 "" = 켜도 상세 줄 없음) | 고급 | `log.dev_layers`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d · 5573b24) |
 | — | `log_win.rs` | 보일 종류(우클릭 종류▸) | ""(전부) | 숨김(HIDDEN · 창에서 편집) | `log.kinds`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | `log_win.rs` | 보일 열(우클릭 열▸) | ""(기본) | 숨김(HIDDEN · 창에서 편집) | `log.columns`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | `app/windows.rs` · `wingeom::Memo` | 로그 창 위치/크기 기억 | "" | 숨김(HIDDEN · 자동 저장) | `window.log_pos` · `window.log_size`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
