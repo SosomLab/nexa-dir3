@@ -972,6 +972,11 @@ impl App {
     fn layout_core(&mut self) {
         // 상태 열 기본 폭 = 지금 언어의 머리글 폭(언어 · 목록 글꼴 · 머리 굵게가 바뀌면 달라진다).
         app::fonts::measure_status_col_w(&self.ui_font, &self.settings);
+        // 도크 터미널 옆 "폴더로 이동" 글리프 = 경로 바 앞으로 화살표 · 80 %(사용자 10-06) — 글꼴 크기가 바뀌면 증분도 다시.
+        let (goto, delta) = app::fonts::dock_goto_glyph(self.font_px("ui.font_size"));
+        for d in &mut self.docks {
+            d.set_goto_glyph(goto.to_string(), delta);
+        }
         let (w, h) = self.viewport;
         let s = self.scale;
         let mut inv = Invalidations::default();

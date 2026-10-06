@@ -65,6 +65,17 @@ pub(crate) fn nav_glyph_delta(ui_px: f32) -> Option<f32> {
     icon_font_available().then_some(NAV_GLYPH_EM - ui_px)
 }
 
+/// 도크 터미널 옆 "폴더로 이동" 글리프(사용자 10-06): 경로 바 **앞으로** 화살표와 같은 글리프 · 크기는 그 80 %.
+/// 돌려주는 값 = (글리프, 도크 본문 px 대비 증분). 아이콘 글꼴이 없으면 유니코드 → 를 본문 크기로(증분 0).
+pub(crate) const DOCK_GOTO_SCALE: f32 = 0.8;
+pub(crate) fn dock_goto_glyph(dock_px: f32) -> (char, f32) {
+    if icon_font_available() {
+        (MDL2_GLYPHS[2], NAV_GLYPH_EM * DOCK_GOTO_SCALE - dock_px)
+    } else {
+        (FALLBACK_GLYPHS[2], 0.0)
+    }
+}
+
 /// dir2가 쓰는 MDL2 글리프(네비 4 + 쉐브론 2).
 pub(crate) const MDL2_GLYPHS: [char; 6] = [
     '\u{EA8A}', '\u{E72B}', '\u{E72A}', '\u{E74A}', '\u{E76C}', '\u{E70D}',
@@ -350,5 +361,19 @@ mod chevron_tests {
         assert_eq!(nexa_grid::marker_vector(), !icon_font_covers(&ui.font));
         #[cfg(target_os = "linux")]
         assert!(nexa_grid::marker_vector(), "Linux에는 Segoe MDL2가 없다");
+    }
+
+    /// 도크 "폴더로 이동" 글리프(사용자 10-06): 아이콘 글꼴이 있으면 네비 앞으로 글리프(E72A) · 크기 = 13 × 0.8 − 본문 px ·
+    /// 없으면 → 본문 크기.
+    #[test]
+    fn dock_goto_glyph_matches_nav_forward_at_80_percent() {
+        let (g, d) = dock_goto_glyph(12.0);
+        if icon_font_available() {
+            assert_eq!(g, MDL2_GLYPHS[2]);
+            assert!((d - (NAV_GLYPH_EM * DOCK_GOTO_SCALE - 12.0)).abs() < 1e-6);
+        } else {
+            assert_eq!(g, FALLBACK_GLYPHS[2]);
+            assert_eq!(d, 0.0);
+        }
     }
 }
