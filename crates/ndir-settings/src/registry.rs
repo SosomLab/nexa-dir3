@@ -536,6 +536,16 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 유휴 메모리 트림(dir2 M2-8 계승 · T-179 A · 고급): 마지막 입력 뒤 이 초가 지나면 글리프 캐시 · 셸 메뉴 객체 · 힙 ·
+    // 작업 집합을 돌려준다. 0 = 끔.
+    e!(
+        "mem.idle_trim_s",
+        CAT_APPEARANCE,
+        "pref.idleTrim",
+        "pref.idleTrim.desc",
+        Int { min: 0, max: 3600 },
+        "60"
+    ),
     // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
     e!(
         "statusbar.layout",
@@ -925,6 +935,17 @@ pub const REGISTRY: &[Entry] = &[
         "pref.menuChar.desc",
         Bool,
         "on"
+    ),
+    // 셸 메뉴 선행 구축(dir2 X-61 계승 · T-179 J-a+J-d · 고급): 켜면 선택이 머물 때 미리 구축해 우클릭이 즉시 뜬다 · 기본 끔 =
+    // 우클릭 때 구축(자체 항목은 즉시 · 셸 항목은 "불러오는 중" 뒤 채워짐 · 확장이 많은 PC에서 1~3 s) — 실측 10-06: 선택 20회 뒤
+    // Private 58 MB ↔ 끄면 13 MB대(셸 확장 DLL 적재 = QueryContextMenu 자체 비용 · 서브메뉴 생략으로는 안 줄었다).
+    e!(
+        "ctxmenu.prebuild",
+        CAT_CTXMENU,
+        "pref.ctxPrebuild",
+        "pref.ctxPrebuild.desc",
+        Bool,
+        "off"
     ),
     // 체크섬 창의 알고리즘 묶음(dir3 신규 · T-167 · 고급) — 키 = crc32 · md5 · sha1 · sha256 · sha512(쉼표).
     e!(
@@ -1787,8 +1808,10 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.group_gap",
     "toolbar.row_gap",
     "input.scroll_natural",
+    "ctxmenu.prebuild",
     "hash.algos",
     "hash.auto_limit_mb",
+    "mem.idle_trim_s",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",

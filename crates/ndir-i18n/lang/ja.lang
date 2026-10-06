@@ -459,6 +459,8 @@ pref.hashAutoLimit = チェックサム自動計算の上限 (MB, 0 = 常に手�
 pref.hashAutoLimit.desc = 選択したファイルの合計がこのサイズ以下のときだけチェックサムウィンドウが自動で計算を始めます。超えると [計算] ボタンで開始し、0 なら常にボタンで開始します。計算は低優先度の別スレッドで一度に 1 つだけ実行します。
 pref.menuIcons = メニュー項目の前のアイコン
 pref.menuIcons.desc = コンテキストメニューとメニューバーの項目の前にアイコンを表示します（パフォーマンス向上モードでは常にオフ）。
+pref.ctxPrebuild = 右クリックメニューを事前に準備
+pref.ctxPrebuild.desc = 選択してしばらく止まると OS のシェルメニューを先に構築し、右クリックメニューが即座に開きます。オフにすると右クリック時に構築するため(拡張が多い PC では 1〜3 秒)最初のメニューが遅れますが、選択だけでシェル拡張が読み込まれるメモリ(数十 MB)を使いません。
 pref.ctxMenuOrder = コンテキストメニュー項目
 pref.ctxMenuOrder.desc = アプリ独自のコンテキストメニュー項目の表示/非表示と並べ替え (シェル動詞には影響しません)。
 pref.ctxm.grpRow = 項目メニュー
@@ -1061,6 +1063,7 @@ mem.cat.launcherIcons = クイック起動アイコン
 mem.cat.preview = ドックのプレビュー
 mem.cat.termBuffer = 画面バッファ（スクロールバック）
 mem.cat.termFont = ターミナルフォントファイル
+mem.mapped = マッピング {0} のうち常駐
 mem.cat.plugins = 読み込み済みプラグイン
 mem.cat.surfaceMain = メインウィンドウの表面
 mem.cat.surfaceAux = 補助ウィンドウの表面
@@ -1076,3 +1079,5 @@ tabstatus.git.clean = 作業ツリーはクリーン
 tabstatus.git.changes = ステージ {0} · 変更 {1} · 未追跡 {2} · 競合 {3}
 pref.perfBoost = パフォーマンスモード
 pref.perfBoost.desc = 重い付加機能をオフにしてアプリを軽くします。現在オフにするもの: ステータスバーのシステム状態モニタリング（CPU・メモリ・ディスク・ネットワーク・アプリメモリ）、ファイル名の前のアイコン、メニュー項目の前のアイコン。他の設定値はそのまま保持されます。
+pref.idleTrim = アイドル時のメモリ整理 (秒)
+pref.idleTrim.desc = 最後の入力からこの秒数が過ぎると、文字キャッシュ・シェルメニューオブジェクト・ヒープの空き・ワーキングセットを OS に返します。戻るときに短い再読み込みコストがあります。0 = オフ。

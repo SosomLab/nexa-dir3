@@ -383,7 +383,7 @@ impl MemWin {
             dc.fill_rect(bar, th.panel_bg_alt);
             if let Some(sm) = sample {
                 let mut x = bar.x;
-                for c in Cat::ALL {
+                for c in Cat::ALL.into_iter().filter(|c| !c.file_backed()) {
                     let b = sm.data.get(c);
                     let w = (((b as f64 / denom as f64) * f64::from(bar.w)).round() as i32)
                         .min(bar.right() - x)
@@ -489,13 +489,31 @@ impl MemWin {
                     );
                     y += row_h + px(1.0);
                     for c in Cat::ALL.into_iter().filter(|c| c.group() == g) {
+                        // 파일 매핑(글꼴) = Private 밖 → 비율은 상주 기준 · 라벨에 매핑 전체 크기.
+                        let (label, d) = if c.file_backed() {
+                            let mapped = if c == Cat::Fonts {
+                                sm.mapped.0
+                            } else {
+                                sm.mapped.1
+                            };
+                            (
+                                format!(
+                                    "{} \u{00B7} {}",
+                                    tr(c.label_key()),
+                                    trf("mem.mapped", &[&fmt(mapped)])
+                                ),
+                                sys.resident.max(1),
+                            )
+                        } else {
+                            (tr(c.label_key()), denom)
+                        };
                         row(
                             &mut dc,
                             y,
                             Some(c.color()),
-                            &tr(c.label_key()),
+                            &label,
                             sm.data.get(c),
-                            denom,
+                            d,
                             trend.shown(c.idx()),
                         );
                         y += row_h;
@@ -597,6 +615,7 @@ mod tests {
             sys: Default::default(),
             data: Acc::default(),
             machine: None,
+            mapped: (0, 0),
         }
     }
 

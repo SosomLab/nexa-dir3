@@ -92,6 +92,8 @@ enum Cmd {
         target: MenuTarget,
         owner: isize,
     },
+    /// 구축해 둔 메뉴 객체 해제(유휴 트림 · 통지 없음).
+    Release,
     Quit,
 }
 
@@ -524,6 +526,10 @@ fn run(rx: Receiver<Cmd>, tx: Sender<Evt>) {
                 for (i, c) in cmds.into_iter().enumerate() {
                     let evt = match c {
                         Cmd::Quit => return,
+                        Cmd::Release => {
+                            w.built = None;
+                            continue;
+                        }
                         Cmd::Prepare { target, owner } => {
                             // 밀린 선행 구축은 건너뛴다(확장 실행 비용 0.6~1.4 s) — 기다리는 쪽이 있을 수 있어 통지는 한다.
                             let result = if Some(i) == last_prepare {
@@ -779,6 +785,10 @@ impl ContextMenuProvider for NativeShellMenu {
 
     fn invalidate(&self) {
         *self.cache.borrow_mut() = None;
+    }
+
+    fn release(&self) {
+        let _ = self.tx.send(Cmd::Release);
     }
 
     fn busy(&self) -> bool {

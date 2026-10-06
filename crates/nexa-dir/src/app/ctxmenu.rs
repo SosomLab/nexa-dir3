@@ -677,7 +677,8 @@ impl App {
             }
         }
         let mut wake: Option<Instant> = None;
-        if !self.tab_menu.is_open() {
+        // 선행 구축은 설정 `ctxmenu.prebuild`로 끌 수 있다(T-179 J-d — 셸 확장 DLL 적재가 Private +30 MB대 · 끄면 우클릭 때 구축).
+        if !self.tab_menu.is_open() && self.settings.flag("ctxmenu.prebuild") {
             let a = self.active.min(self.panels.len().saturating_sub(1));
             let count = self.panels[a].rows().source().selection_count();
             let target = if count == 0 {

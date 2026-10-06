@@ -290,6 +290,9 @@ struct App {
     license_win: LicenseWin,
     /// 메모리 창(상태줄 앱 메모리 칸 → 모덜리스 · mem_win.rs) · 열기 요청.
     mem_win: mem_win::MemWin,
+    /// 마지막 사용자 입력 시각(기동 뒤 ms) · 유휴 트림을 이미 했는가(T-179 A).
+    last_input_ms: u64,
+    idle_trimmed: bool,
     /// 메모리 창의 다음 표본 시각(창이 열려 있을 때만 쓰인다 · `app/memory.rs`).
     mem_next: Instant,
     open_memory: bool,
@@ -638,6 +641,8 @@ impl App {
             licensing,
             license_win: LicenseWin::new(),
             mem_win: mem_win::MemWin::new(),
+            last_input_ms: 0,
+            idle_trimmed: false,
             mem_next: Instant::now(),
             open_memory: false,
             hash_win: hash_win::HashWin::new(),

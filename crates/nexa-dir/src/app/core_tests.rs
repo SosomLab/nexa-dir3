@@ -2838,7 +2838,11 @@ fn status_segments_and_tab_status_bar() {
             "보이는 탭 + 배경 탭(이력 없음)"
         );
         assert!(s.data.get(Cat::Fonts) > 0, "UI 글꼴 파일");
-        assert_eq!(s.other(), s.sys.footprint.saturating_sub(s.data.sum()));
+        // 글꼴 파일 매핑은 Private 밖 → "기타"는 Private에 드는 영역만 뺀다(10-06).
+        assert_eq!(
+            s.other(),
+            s.sys.footprint.saturating_sub(s.data.private_sum())
+        );
         // 늘고 주는 과정: 탭을 하나 더 열면 배경 탭 목록이 늘고(▲) · 닫으면 준다(▼).
         let mut win = crate::mem_win::MemWin::new();
         win.set_sample(s, 1000);
@@ -4465,6 +4469,7 @@ fn context_menu_opens_once_when_shell_items_are_ready() {
         }
     }
     let (mut app, dir) = fixture("ctxfast");
+    let _ = app.settings.set("ctxmenu.prebuild", "on"); // 선행 구축 경로를 본다(기본값은 끔 · T-179)
     app.layout_for(1200, 800, 1.0);
     let shared = Rc::new(RefCell::new(Shared::default()));
     app.platform.ctxmenu = Box::new(SlowMenu(shared.clone()));
@@ -7637,4 +7642,45 @@ fn dock_refresh_is_debounced_after_rapid_moves() {
     app.docks[0].select_all_text(&mut inv2);
     let text = app.docks[0].selected_text().unwrap_or_default();
     assert!(text.contains("c.txt"), "{text}");
+}
+
+/// 선행 구축 기본값 = 끔(T-179 J-a+J-d · 사용자 10-06 메모리 점검 — 셸 확장 DLL 적재 = Private +40 MB): 선택이 머물러도 셸
+/// 메뉴를 미리 짓지 않고 깨우지도 않는다 · 설정을 켜면 종전대로 300 ms 뒤 한 번 짓는다.
+#[test]
+fn context_menu_prebuild_is_off_by_default() {
+    use crate::platform::{ContextMenuProvider, MenuTarget, PlatformError, ShellMenuItem};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    struct Rec(Rc<RefCell<Vec<MenuTarget>>>);
+    impl ContextMenuProvider for Rec {
+        fn items(&self, _p: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError> {
+            Ok(Vec::new())
+        }
+        fn invoke(&self, _id: &str, _p: &[PathBuf]) -> Result<(), PlatformError> {
+            Ok(())
+        }
+        fn prepare(&self, t: &MenuTarget) {
+            self.0.borrow_mut().push(t.clone());
+        }
+    }
+    let (mut app, dir) = fixture("ctxprebuild");
+    app.layout_for(1200, 800, 1.0);
+    let rec = Rc::new(RefCell::new(Vec::new()));
+    app.platform.ctxmenu = Box::new(Rec(rec.clone()));
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    assert!(!app.settings.flag("ctxmenu.prebuild"), "기본 끔");
+    let t0 = Instant::now();
+    assert_eq!(app.ctx_shell_tick(t0), None, "머무름 기한에 깨우지 않는다");
+    assert_eq!(app.ctx_shell_tick(t0 + Duration::from_millis(500)), None);
+    assert!(rec.borrow().is_empty(), "선행 구축 없음");
+    let _ = app.settings.set("ctxmenu.prebuild", "on");
+    assert!(
+        app.ctx_shell_tick(t0 + Duration::from_millis(600))
+            .is_some(),
+        "켜면 기한에 깨운다"
+    );
+    assert_eq!(app.ctx_shell_tick(t0 + Duration::from_millis(1000)), None);
+    assert_eq!(rec.borrow().len(), 1, "켜면 300 ms 뒤 한 번");
+    let _ = std::fs::remove_dir_all(&dir);
 }

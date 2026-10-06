@@ -86,6 +86,12 @@ impl Cat {
         Self::ALL.iter().position(|c| *c == self).unwrap_or(0)
     }
 
+    /// 파일 매핑(글꼴) — 건드린 페이지만 상주하고 **Private(총량)에는 들지 않는다**(사용자 10-06). 총량 막대 · "기타" 계산에서
+    /// 빼고, 비율은 상주 기준으로 보인다.
+    pub(crate) fn file_backed(self) -> bool {
+        matches!(self, Cat::Fonts | Cat::TermFont)
+    }
+
     pub(crate) fn group(self) -> Group {
         match self {
             Cat::Fonts => Group::Program,
@@ -151,8 +157,16 @@ impl Acc {
     pub(crate) fn get(&self, cat: Cat) -> u64 {
         self.bytes[cat.idx()]
     }
+    #[cfg(test)]
     pub(crate) fn sum(&self) -> u64 {
         self.bytes.iter().fold(0u64, |a, b| a.saturating_add(*b))
+    }
+    /// Private에 드는 영역만의 합(파일 매핑 제외).
+    pub(crate) fn private_sum(&self) -> u64 {
+        Cat::ALL
+            .iter()
+            .filter(|c| !c.file_backed())
+            .fold(0u64, |a, c| a.saturating_add(self.get(*c)))
     }
     /// 묶음 소계.
     pub(crate) fn group_sum(&self, g: Group) -> u64 {
@@ -171,12 +185,15 @@ pub(crate) struct Sample {
     pub data: Acc,
     /// 시스템 전체 메모리 `(쓰는 양, 전체)`(모르면 `None`).
     pub machine: Option<(u64, u64)>,
+    /// 글꼴 파일 매핑 크기 `(UI, 터미널)` — 영역 값은 상주 몫이고 이것은 파일 전체(표시용).
+    pub mapped: (u64, u64),
 }
 
 impl Sample {
-    /// 총량(풋프린트) − 집계한 영역 합(포화) = 런타임 · 라이브러리 · 미집계.
+    /// 총량(풋프린트) − Private에 드는 영역 합(포화) = 런타임 · 라이브러리 · 미집계. 파일 매핑(글꼴)은 Private 밖이라 빼지 않는다
+    /// (종전 = 글꼴 파일 크기까지 빼 "기타 0 B" · 비율 110 %로 보였다 · 사용자 10-06).
     pub(crate) fn other(&self) -> u64 {
-        self.sys.footprint.saturating_sub(self.data.sum())
+        self.sys.footprint.saturating_sub(self.data.private_sum())
     }
 }
 
@@ -274,6 +291,7 @@ mod tests {
             },
             data,
             machine: None,
+            mapped: (0, 0),
         }
     }
 

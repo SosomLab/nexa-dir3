@@ -29,6 +29,12 @@ pub(crate) fn sys() -> SysMem {
     imp::sys()
 }
 
+/// 주어진 메모리 범위들 가운데 **지금 상주하는** 바이트(파일 매핑 — 글꼴 — 의 실제 점유 · 사용자 10-06 "글꼴 파일이 Private에
+/// 드는가"). 페이지 단위로 센다 · 잴 수 없는 OS = `None`(호출자는 매핑 크기로 대신).
+pub(crate) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
+    imp::resident_bytes(ranges)
+}
+
 /// 힙을 정리해 운영체제에 돌려준다. 돌려주는 값 = 걸린 시간(µs).
 pub(crate) fn trim() -> u128 {
     let t = std::time::Instant::now();
@@ -83,6 +89,46 @@ mod imp {
         ) -> i32;
         fn K32GetProcessMemoryInfo(process: *mut c_void, counters: *mut Pmc, cb: u32) -> i32;
         fn HeapSummary(heap: *mut c_void, flags: u32, summary: *mut HeapSummaryT) -> i32;
+        fn K32QueryWorkingSetEx(process: *mut c_void, info: *mut WsExInfo, cb: u32) -> i32;
+    }
+    /// `PSAPI_WORKING_SET_EX_INFORMATION` — 주소 · 속성(비트 0 = 상주).
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct WsExInfo {
+        va: *mut c_void,
+        attrs: usize,
+    }
+    const PAGE: usize = 4096;
+
+    pub(super) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
+        let mut pages: Vec<WsExInfo> = Vec::new();
+        for r in ranges {
+            let start = r.as_ptr() as usize & !(PAGE - 1);
+            let end = (r.as_ptr() as usize).saturating_add(r.len());
+            pages.extend((start..end).step_by(PAGE).map(|a| WsExInfo {
+                va: a as *mut c_void,
+                attrs: 0,
+            }));
+        }
+        if pages.is_empty() {
+            return Some(0);
+        }
+        let mut resident = 0u64;
+        for chunk in pages.chunks_mut(4096) {
+            // SAFETY: 배열과 바이트 길이를 함께 넘기는 문서화된 호출 — 출력은 호출 동안 살아 있는 우리 버퍼.
+            let ok = unsafe {
+                K32QueryWorkingSetEx(
+                    GetCurrentProcess(),
+                    chunk.as_mut_ptr(),
+                    std::mem::size_of_val(chunk) as u32,
+                )
+            } != 0;
+            if !ok {
+                return None;
+            }
+            resident += chunk.iter().filter(|p| p.attrs & 1 == 1).count() as u64 * PAGE as u64;
+        }
+        Some(resident)
     }
     /// `HeapOptimizeResources` 정보 클래스(Windows 8.1+ · 실패해도 무해).
     const HEAP_OPTIMIZE_RESOURCES: u32 = 3;
@@ -192,6 +238,10 @@ mod imp {
         }
     }
 
+    pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
+        None
+    }
+
     pub(super) fn trim() {
         // SAFETY: glibc의 정리 호출(인자 = 남길 여유 0).
         unsafe {
@@ -244,6 +294,10 @@ mod imp {
         }
     }
 
+    pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
+        None
+    }
+
     pub(super) fn trim() {
         // SAFETY: zone = NULL(모든 영역) · goal = 0(가능한 만큼).
         unsafe {
@@ -262,6 +316,10 @@ mod imp {
 
     pub(super) fn sys() -> SysMem {
         SysMem::default()
+    }
+
+    pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
+        None
     }
 
     pub(super) fn trim() {}

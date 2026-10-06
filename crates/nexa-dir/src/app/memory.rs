@@ -14,8 +14,13 @@ impl App {
     /// 전체 표본 — 운영체제 값 + 영역별 어림(창이 열려 있을 때만 불린다).
     pub(crate) fn mem_sample(&self) -> Sample {
         let mut acc = Acc::default();
-        // 프로그램: UI 글꼴 파일(폴백 체인 포함 · 프로세스 수명 동안 쥔다).
-        acc.add(Cat::Fonts, self.ui_font.data_bytes());
+        // 프로그램: UI 글꼴 파일(폴백 체인 포함 · 프로세스 수명 동안 쥔다) — 값 = **상주 페이지**(잴 수 없으면 매핑 크기).
+        let ui_slices = self.ui_font.data_slices();
+        let ui_mapped: u64 = ui_slices.iter().map(|d| d.len() as u64).sum();
+        acc.add(
+            Cat::Fonts,
+            platform::procmem::resident_bytes(&ui_slices).unwrap_or(ui_mapped),
+        );
         // 탭 · 파일 목록: 보이는 탭 / 배경 탭 / 실행 취소 이력.
         for p in &self.panels {
             let (active, background) = p.mem_estimate_split();
@@ -39,8 +44,14 @@ impl App {
             Cat::TermBuffer,
             self.terms.iter().map(TermView::mem_estimate).sum(),
         );
+        let mut term_mapped = 0u64;
         if let Some(m) = &self.mono_font {
-            acc.add(Cat::TermFont, m.data_bytes());
+            let slices = m.data_slices();
+            term_mapped = slices.iter().map(|d| d.len() as u64).sum();
+            acc.add(
+                Cat::TermFont,
+                platform::procmem::resident_bytes(&slices).unwrap_or(term_mapped),
+            );
         }
         // 플러그인: 올라와 있는 모듈.
         acc.add(Cat::Plugins, preview::loaded_plugin_bytes());
@@ -58,6 +69,7 @@ impl App {
             at: Instant::now(),
             sys: platform::procmem::sys(),
             data: acc,
+            mapped: (ui_mapped, term_mapped),
             machine: platform::sysload::sample().map(|s| (s.mem_used, s.mem_total)),
         }
     }
@@ -97,6 +109,34 @@ impl App {
         Some(self.mem_next)
     }
 
+    /// 유휴 트림 틱(T-179 A · dir2 M2-8 "유휴/최소화 시 작업집합 트림" 계승 · 사용자 10-06 "메모리 점유 개선"): 마지막 입력 뒤
+    /// 설정 `mem.idle_trim_s`가 지나고 작업(전송 · 해시 · 터미널 출력 · 애니메이션)이 없으면 한 번 — 글리프 캐시 비움 · 셸 메뉴
+    /// COM 객체 해제 · 힙 반납 · 작업 집합 반납. 다음 입력이 오면 다시 무장. 돌려주는 값 = 다음에 깨어날 시각.
+    pub(crate) fn idle_trim_tick(&mut self, now: Instant, busy: bool) -> Option<Instant> {
+        let now_ms = self.started.elapsed().as_millis() as u64;
+        match idle_trim_plan(
+            now_ms,
+            self.last_input_ms,
+            self.settings.int("mem.idle_trim_s"),
+            self.idle_trimmed,
+            busy,
+        ) {
+            IdleTrim::Off => None,
+            IdleTrim::Wait(ms) => Some(now + Duration::from_millis(ms.max(1))),
+            IdleTrim::Trim => {
+                self.ui_font.clear_glyph_cache();
+                if let Some(m) = &self.mono_font {
+                    m.clear_glyph_cache();
+                }
+                self.platform.ctxmenu.release();
+                platform::procmem::trim();
+                platform::trim_working_set();
+                self.idle_trimmed = true;
+                None
+            }
+        }
+    }
+
     /// [힙 정리] — 할당자가 들고 있는 빈 조각을 운영체제에 돌려주고 곧바로 새 표본(줄어든 값이 바로 보이게).
     pub(crate) fn mem_trim(&mut self) {
         let before = platform::procmem::sys().footprint;
@@ -104,5 +144,99 @@ impl App {
         let after = platform::procmem::sys().footprint;
         self.mem_win.set_trim_result(before, after, us);
         self.mem_next = Instant::now();
+    }
+}
+
+/// 유휴 트림의 다음 행동.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IdleTrim {
+    /// 꺼짐(설정 0) 또는 이미 트림함 — 다음 입력까지 할 일 없음.
+    Off,
+    /// 아직 — 이 ms 뒤에 다시 본다.
+    Wait(u64),
+    /// 지금 트림.
+    Trim,
+}
+
+/// 유휴 트림 판정(순수 · 조건 3개 = MC/DC 시험): 설정 ≤ 0 또는 이미 트림 = `Off` · 작업 중 = 한 주기 뒤 재확인 ·
+/// 마지막 입력 뒤 `idle_s`가 안 지났으면 남은 시간만큼 `Wait` · 지났으면 `Trim`.
+pub(crate) fn idle_trim_plan(
+    now_ms: u64,
+    last_input_ms: u64,
+    idle_s: i64,
+    trimmed: bool,
+    busy: bool,
+) -> IdleTrim {
+    if idle_s <= 0 || trimmed {
+        return IdleTrim::Off;
+    }
+    let idle_ms = (idle_s as u64).saturating_mul(1000);
+    if busy {
+        return IdleTrim::Wait(idle_ms);
+    }
+    let due = last_input_ms.saturating_add(idle_ms);
+    if now_ms < due {
+        IdleTrim::Wait(due - now_ms)
+    } else {
+        IdleTrim::Trim
+    }
+}
+
+/// 사용자 입력으로 치는 창 사건(유휴 시계를 되감는다) — 키 · 마우스 · 휠 · 터치 · IME · 포커스 얻음.
+pub(crate) fn is_user_input(ev: &winit::event::WindowEvent) -> bool {
+    use winit::event::WindowEvent as W;
+    matches!(
+        ev,
+        W::KeyboardInput { .. }
+            | W::MouseInput { .. }
+            | W::MouseWheel { .. }
+            | W::CursorMoved { .. }
+            | W::Touch(_)
+            | W::Ime(_)
+            | W::Focused(true)
+    )
+}
+
+#[cfg(test)]
+mod idle_tests {
+    use super::*;
+
+    /// MC/DC: 설정 0 · 이미 트림 · 작업 중 · 시간 미달 · 시간 충족 — 조건 하나씩만 바꿔 결과가 바뀜을 본다.
+    #[test]
+    fn idle_trim_plan_mcdc() {
+        // 기준: 60 s 지남 · 트림 안 함 · 작업 없음 → Trim.
+        assert_eq!(
+            idle_trim_plan(70_000, 10_000, 60, false, false),
+            IdleTrim::Trim
+        );
+        // 설정 0 → Off.
+        assert_eq!(
+            idle_trim_plan(70_000, 10_000, 0, false, false),
+            IdleTrim::Off
+        );
+        // 이미 트림 → Off.
+        assert_eq!(
+            idle_trim_plan(70_000, 10_000, 60, true, false),
+            IdleTrim::Off
+        );
+        // 작업 중 → 한 주기 뒤 재확인.
+        assert_eq!(
+            idle_trim_plan(70_000, 10_000, 60, false, true),
+            IdleTrim::Wait(60_000)
+        );
+        // 시간 미달 → 남은 시간.
+        assert_eq!(
+            idle_trim_plan(50_000, 10_000, 60, false, false),
+            IdleTrim::Wait(20_000)
+        );
+        // 경계: 정확히 지남 = Trim.
+        assert_eq!(
+            idle_trim_plan(70_000, 10_000, 60, false, false),
+            IdleTrim::Trim
+        );
+        assert_eq!(
+            idle_trim_plan(69_999, 10_000, 60, false, false),
+            IdleTrim::Wait(1)
+        );
     }
 }

@@ -204,6 +204,11 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.startup_timed.iter().map(|(at, _)| *at).min() {
             next = next.min(t);
         }
+        // 유휴 트림(T-179 A) — 애니메이션 · 작업 · 터미널 출력 · 셸 메뉴 구축 중에는 미룬다.
+        let busy = live || ops_live || term_live || self.platform.ctxmenu.busy();
+        if let Some(t) = self.idle_trim_tick(now, busy) {
+            next = next.min(t);
+        }
         next = next.min(self.watch_tick(now));
         if let Some(t) = self.docks_tick(now) {
             next = next.min(t);
@@ -290,6 +295,11 @@ impl ApplicationHandler<Wake> for App {
             if k.state == ElementState::Pressed {
                 return;
             }
+        }
+        // 사용자 입력 = 유휴 시계 되감기(어느 창이든 · T-179 A).
+        if app::memory::is_user_input(&event) {
+            self.last_input_ms = self.started.elapsed().as_millis() as u64;
+            self.idle_trimmed = false;
         }
         // 보조 창(설정 · 단축키) 사건 = 창마다 자기 처리기로(처리했으면 끝) — 보조 창이 낸 "창 열기" 요청도 같은 펌프를 지난다.
         if self.aux_window_event(id, &event) {

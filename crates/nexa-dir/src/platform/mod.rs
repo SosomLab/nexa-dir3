@@ -229,6 +229,9 @@ pub(crate) trait ContextMenuProvider {
 
     /// **선행 구축**: 선택이 머물면 호스트가 미리 시킨다(비차단 · 결과는 구현 쪽 캐시). 기본 = 아무것도 안 함.
     fn prepare(&self, _target: &MenuTarget) {}
+    /// **유휴 해제**(T-179 J-b): 들고 있는 네이티브 메뉴 객체(COM · HMENU)를 놓는다 — 항목 캐시는 남겨 다음 우클릭은 즉시 뜨고,
+    /// 실행 때만 다시 구축한다. 기본 = 아무것도 안 함.
+    fn release(&self) {}
     /// **비차단 조회**: `Some` = 지금 줄 수 있음 · `None` = 구축 중(끝나면 `poll`이 `Items`를 준다 — 호스트는 자체 항목만 먼저 띄운다).
     /// 기본 = 동기 `items`/`bg_items`.
     fn try_items(&self, target: &MenuTarget) -> Option<Vec<ShellMenuItem>> {
@@ -535,6 +538,28 @@ pub(crate) fn attach_parent_console() {
                 return;
             }
             AttachConsole(u32::MAX);
+        }
+    }
+}
+
+/// 작업 집합을 운영체제에 돌려준다(유휴 트림 · dir2 M2-8 `trim_resident` 계승 · T-179 A). Windows =
+/// `SetProcessWorkingSetSize(-1, -1)`(미사용 페이지를 대기 목록으로 — 작업 관리자의 "메모리"가 곧바로 준다 · 되돌아올 때
+/// 소프트 페이지 폴트 비용) · 다른 OS = 아무것도 안 함(힙 반납은 `procmem::trim`이 한다).
+pub(crate) fn trim_working_set() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn SetProcessWorkingSetSize(
+                process: *mut std::ffi::c_void,
+                min: usize,
+                max: usize,
+            ) -> i32;
+        }
+        // SAFETY: 의사 핸들에 문서화된 호출 — 실패는 반환값으로만 알려지고 부작용이 없다.
+        unsafe {
+            SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
         }
     }
 }
