@@ -168,7 +168,7 @@ impl FileWin {
             PickerMode::Folder => tr("fdlg.title.folder"),
         };
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {title}"))
+            .with_title(format!("{} — {title}", crate::APP_TITLE))
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh))

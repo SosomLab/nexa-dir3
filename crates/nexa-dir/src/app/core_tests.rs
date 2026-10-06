@@ -7852,3 +7852,10 @@ fn log_window_collects_entries_and_dev_mask_gates_details() {
     ndir_log::set_detail_mask(0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 창 제목(사용자 10-06): 디버그 빌드만 "(Debug)" 꼬리 · 릴리스는 "Nexa Dir".
+#[test]
+fn app_title_marks_debug_builds() {
+    assert_eq!(APP_TITLE.ends_with("(Debug)"), cfg!(debug_assertions));
+    assert!(APP_TITLE.starts_with("Nexa Dir"));
+}

@@ -896,7 +896,7 @@ impl BulkWin {
         let names = self.preset_names.clone();
         self.set_presets(names);
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("bulk.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("bulk.title")));
             w.request_redraw();
         }
     }
@@ -913,7 +913,7 @@ impl BulkWin {
             return;
         }
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("bulk.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("bulk.title")))
             .with_theme(theme)
             .with_resizable(false)
             .with_inner_size(winit::dpi::LogicalSize::new(W, H));

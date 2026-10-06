@@ -16,7 +16,7 @@ impl ApplicationHandler<Wake> for App {
         // 메인 창 규칙(dir2 계승): 마지막 위치·크기로(`window.main_size`/`main_pos`) · 숨긴 채 만들고 → 위치 → 보인다(맥 배율 함정 09-17).
         let attrs = icon::with_icon(
             Window::default_attributes()
-                .with_title("Nexa Dir")
+                .with_title(crate::APP_TITLE)
                 .with_visible(false)
                 .with_theme(theme::window_theme(self.settings.theme_mode()))
                 .with_inner_size({

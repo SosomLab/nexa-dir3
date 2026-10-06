@@ -283,7 +283,11 @@ impl ProgressWin {
                 },
         );
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("ops.progressTitle")))
+            .with_title(format!(
+                "{} — {}",
+                crate::APP_TITLE,
+                tr("ops.progressTitle")
+            ))
             .with_theme(theme)
             .with_resizable(false)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));

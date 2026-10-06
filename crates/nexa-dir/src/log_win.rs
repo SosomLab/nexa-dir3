@@ -709,7 +709,7 @@ impl LogWin {
         let Some(o) = crate::winhost::open_window(
             el,
             crate::winhost::OpenSpec {
-                title: format!("Nexa SQL — {}", t_("log.title")),
+                title: format!("{} — {}", crate::APP_TITLE, t_("log.title")),
                 theme,
                 near,
                 dy: 0,

@@ -537,7 +537,7 @@ impl HashWin {
             (WIN_W, PAD * 2.0 + 30.0 + rows * ROW_H + tail)
         };
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("hash.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("hash.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_min_inner_size(winit::dpi::LogicalSize::new(420.0, lh.min(360.0)))
@@ -599,7 +599,7 @@ impl HashWin {
             "license.btn.close"
         }));
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("hash.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("hash.title")));
         }
         self.redraw();
     }

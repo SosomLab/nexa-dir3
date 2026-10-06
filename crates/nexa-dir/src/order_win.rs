@@ -452,7 +452,7 @@ impl OrderWin {
             .unwrap_or_default();
         let (lw, lh) = self.logical_size();
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {title}"))
+            .with_title(format!("{} — {title}", crate::APP_TITLE))
             .with_theme(theme)
             .with_resizable(false)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));

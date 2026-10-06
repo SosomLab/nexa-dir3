@@ -21,6 +21,13 @@ macro_rules! dlog {
     };
 }
 
+/// 창 제목의 앱 이름 — 디버그 빌드는 "(Debug)"를 붙인다(사용자 10-06 · 설치본과 debug 앱을 제목으로 구분). 보조 창은 "{APP_TITLE} — 제목".
+pub(crate) const APP_TITLE: &str = if cfg!(debug_assertions) {
+    "Nexa Dir (Debug)"
+} else {
+    "Nexa Dir"
+};
+
 mod app;
 
 /// 상세 로그 한 줄(느린 경로 · 호출 자체가 드물다 · `#[cold]`로 뜨거운 경로 코드 배치에서 떨어뜨린다).

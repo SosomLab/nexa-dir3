@@ -123,7 +123,7 @@ impl MemWin {
         }
         let (lw, lh) = (620.0, 720.0);
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("mem.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("mem.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_min_inner_size(winit::dpi::LogicalSize::new(460.0, 320.0))
@@ -221,7 +221,7 @@ impl MemWin {
             "mem.trim"
         }));
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("mem.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("mem.title")));
         }
         self.redraw();
     }

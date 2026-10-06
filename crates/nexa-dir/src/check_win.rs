@@ -231,7 +231,7 @@ impl CheckWin {
         self.copy_btn.set_label(tr("check.btn.copy"));
         self.close_btn.set_label(tr("pref.btn.close"));
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("check.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("check.title")));
             w.request_redraw();
         }
     }
@@ -249,7 +249,7 @@ impl CheckWin {
         }
         let (lw, lh) = (760.0, 520.0);
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("check.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("check.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));

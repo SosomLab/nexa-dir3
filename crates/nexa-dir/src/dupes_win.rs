@@ -554,7 +554,7 @@ impl DupesWin {
             )
         });
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("dupes.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("dupes.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));
@@ -604,7 +604,7 @@ impl DupesWin {
         self.keep.select_value(&self.keep_value.clone());
         self.refresh_summary();
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("dupes.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("dupes.title")));
         }
         self.redraw();
     }

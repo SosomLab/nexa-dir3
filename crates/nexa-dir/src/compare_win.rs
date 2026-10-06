@@ -406,7 +406,7 @@ impl CompareWin {
             )
         });
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("cmp.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("cmp.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));
@@ -462,7 +462,7 @@ impl CompareWin {
             .select_value(if self.only_diff { "diff" } else { "all" });
         self.refresh_summary();
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("cmp.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("cmp.title")));
         }
         self.redraw();
     }

@@ -105,7 +105,7 @@ impl LicenseWin {
         self.btn_remove.set_label(tr("license.btn.remove"));
         self.btn_close.set_label(tr("license.btn.close"));
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("license.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("license.title")));
         }
         self.fit = true;
         self.redraw();
@@ -126,7 +126,7 @@ impl LicenseWin {
         // 높이 = 정식 상태의 표(14행) + 요청 코드 구역 + 버튼 행 — 첫 페인트가 내용에 맞춘다(`fit`).
         let (lw, lh) = (640.0, 540.0);
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("license.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("license.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_min_inner_size(winit::dpi::LogicalSize::new(520.0, 380.0))

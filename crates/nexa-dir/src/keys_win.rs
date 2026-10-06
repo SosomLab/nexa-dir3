@@ -106,7 +106,7 @@ impl KeysWin {
         self.reset_btn.set_label(tr("pref.btn.reset"));
         self.close_btn.set_label(tr("pref.btn.close"));
         if let Some(w) = &self.window {
-            w.set_title(&format!("Nexa Dir — {}", tr("keys.title")));
+            w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("keys.title")));
             w.request_redraw();
         }
     }
@@ -216,7 +216,7 @@ impl KeysWin {
         }
         let (lw, lh) = (560.0, 620.0);
         let mut attrs = Window::default_attributes()
-            .with_title(format!("Nexa Dir — {}", tr("keys.title")))
+            .with_title(format!("{} — {}", crate::APP_TITLE, tr("keys.title")))
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));
