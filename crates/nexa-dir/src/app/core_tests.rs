@@ -7316,21 +7316,23 @@ fn dock_shows_folder_size_after_worker_finishes() {
     assert!(!app.dirsizes.running());
     assert!(!dock_text(&mut app).contains("Contains:"));
     // 순수 서식.
-    let l = crate::app::dirsize::size_lines(Ok(crate::app::dirsize::DirSize {
+    use crate::app::dirsize::{size_lines, DirSize, SizeState};
+    let l = size_lines(SizeState::Done(DirSize {
         bytes: 2048,
         files: 2,
         dirs: 1,
         partial: true,
     }));
     assert_eq!(l.len(), 2);
-    assert!(crate::app::dirsize::size_lines(Err(None)).is_empty());
+    assert!(size_lines(SizeState::Unknown).is_empty());
+    assert_eq!(size_lines(SizeState::Queued), vec![tr("info.sizeQueued")]);
     assert_eq!(
-        crate::app::dirsize::size_lines(Err(Some(crate::app::dirsize::DirSize {
+        size_lines(SizeState::Running(DirSize {
             bytes: 10,
             files: 1,
             dirs: 0,
             partial: false
-        })))
+        }))
         .len(),
         1
     );

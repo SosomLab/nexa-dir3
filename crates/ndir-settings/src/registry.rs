@@ -1196,6 +1196,31 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 폴더 크기 작업 큐(사용자 10-06 · 고급): 동시 스레드 · 큐 상한 · 빠른 이동 판정.
+    e!(
+        "dock.folder_size_threads",
+        CAT_DOCK,
+        "pref.folderSizeThreads",
+        "pref.folderSizeThreads.desc",
+        Int { min: 1, max: 8 },
+        "2"
+    ),
+    e!(
+        "dock.folder_size_queue",
+        CAT_DOCK,
+        "pref.folderSizeQueue",
+        "pref.folderSizeQueue.desc",
+        Int { min: 1, max: 500 },
+        "50"
+    ),
+    e!(
+        "dock.folder_size_settle_ms",
+        CAT_DOCK,
+        "pref.folderSizeSettle",
+        "pref.folderSizeSettle.desc",
+        Int { min: 0, max: 5000 },
+        "250"
+    ),
     e!(
         "layout.dock_height_pct",
         CAT_DOCK,
@@ -1862,6 +1887,9 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     // 성능 향상 모드가 켜져 있으면 아이콘 두 설정은 쓰이지 않는다(늘 끔).
     ("list.row_icons", "perf.boost", Dep::Eq("off")),
     ("dock.folder_size", "perf.boost", Dep::Eq("off")),
+    ("dock.folder_size_threads", "dock.folder_size", Dep::On),
+    ("dock.folder_size_queue", "dock.folder_size", Dep::On),
+    ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
     ("menu.icons", "perf.boost", Dep::Eq("off")),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
@@ -1955,6 +1983,9 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.row_gap",
     "input.scroll_natural",
     "ctxmenu.prebuild",
+    "dock.folder_size_threads",
+    "dock.folder_size_queue",
+    "dock.folder_size_settle_ms",
     "log.template",
     "log.switch_scale",
     "log.dev_layers",

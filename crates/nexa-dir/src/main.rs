@@ -794,6 +794,7 @@ impl App {
         app.apply_icon_switches(); // 이름 앞 아이콘 · 메뉴 아이콘(성능 향상 모드면 끔)
         app.apply_window_sizes();
         app.apply_log_settings();
+        app.apply_dirsize_tuning();
         app.log_plugin_notes();
         if app.settings.flag("log.open_at_start") {
             app.open_log = true;

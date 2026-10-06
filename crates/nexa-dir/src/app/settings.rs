@@ -211,6 +211,11 @@ impl App {
             k if k.starts_with("log.") => {
                 self.apply_log_setting(k);
             }
+            "dock.folder_size_threads"
+            | "dock.folder_size_queue"
+            | "dock.folder_size_settle_ms" => {
+                self.apply_dirsize_tuning();
+            }
             _ => {}
         }
         self.update_status();
