@@ -261,7 +261,7 @@
 | SKEL-144 | 설정 즉시 반영 | `apply_setting(key) -> bool`(도메인 조각별 분배 · 모르는 키 = `false` = "재시작 필요") → `layout()+redraw()` | `S/app/settings.rs:230-260` | 치환 |
 | SKEL-145 | 설정 저장·외부 편집 감시 | `persist_settings()` · settings.json 내보내기 후 1초 폴링으로 바뀐 키만 반영 | `S/app/settings.rs:8-93` · `982-986` | 치환(설정 문서 참조) |
 | SKEL-146 | OS 연결 프로그램 열기 | `open_external(path)`: `cmd /C start` · `open` · `xdg-open` | `S/main.rs:1191-1204` | 그대로(+ `nexa_fs::shell::reveal_in_file_manager` `U/nexa-fs/src/shell.rs:856`) |
-| SKEL-147 | 상세 로그 매크로 | `dlog!(self, layer, level, make)` — 게이트가 꺼져 있으면 인자를 평가하지 않는다 | `S/main.rs:628-663` | 치환(로그 창이 있으면) |
+| SKEL-147 | 상세 로그 매크로 | `dlog!(self, layer, level, make)` — 게이트가 꺼져 있으면 인자를 평가하지 않는다 | `S/main.rs:641-677`(10-05 §75 정정 · 종전 628-663) | 치환 ✅ dir3 f2f2f1d(`dlog!` + `detail_push` · 10-05 §77) |
 | SKEL-148 | 라이선스 접착(참고) | `licensing: nsql_license::Licensing` 필드(단일 원천) · 상태줄 배지 클릭 → `open_license` 깃발 → 모달 창 · `Focused(true)`마다 `licensing.refresh()` · 기능 게이트 `lic_gate(Feature)`는 UI 진입점 1곳 | `S/main.rs:227-230` · `S/app/event_loop.rs:566-569` · `S/app/license.rs:8-23` · `209` · `S/main.rs:1183-1184` | 치환(정책은 dir2 계승 — 라이선스 문서 몫) |
 
 ### 1-13. 빌드 · 단일 실행 파일 리소스

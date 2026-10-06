@@ -4,6 +4,7 @@
 
 ## 2026-10-05
 
+- **로그 창**(T-92 · f2f2f1d · ndir-log 파일 I/O 0 · F10 · `log.*` 13 · 개발자 상세 게이트 · 계측 1차 4곳 · 시험 567/0) → [§77](journal/2026-10-05.md)
 - **명령 팔레트**(T-138 · 6379e5a · nexa-ui 161 `Palette` · Ctrl/Cmd+Shift+P · COMMANDS 자동 생성 · MRU · 한글 IME · 시험 557/0) → [§76](journal/2026-10-05.md)
 - **명령 팔레트 · 로그 창 사전 분석**(T-138 · T-92 착수 · nexa-sql palette.rs → nexa-ctl 승격 · nsql-log 의존 0 이식 · 결함 2) · 9994462/39e8378 CI ✓ → [§75](journal/2026-10-05.md)
 - **메모리 절감 묶음**(9994462 · nexa-ui 86bc94a · 셸 메뉴 선행 구축 기본 끔 · 유휴 60 s 트림 · 글꼴 상주 계측 · 전후: select Private 58.3 → 11.3 MB · 핸들 1,084 → 317 · 스레드 42 → 13 · idle 17.1 → 11.1 MB) → [§74](journal/2026-10-05.md)

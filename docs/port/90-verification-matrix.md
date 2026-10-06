@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 31 | 9 | 0 | 0 | 0 |
+| NEW | 43 | 43 | 32 | 9 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2517 | 926 | 761 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2518 | 926 | 761 | 0 | 0 |
 
 ## 행
 
@@ -296,7 +296,8 @@
 | CMD-112 · X-35 · WINB-029 · TRASH-RETRY | 휴지통 삭제 일부 실패 = 삭제 뒤에도 남은 항목으로 성패 판정(`Trash::remaining` · 기본 = 파일 시스템 조회) · 지워진 것만 실행 취소 기록 · 남은 것 선택(`Panel::select_paths`) + 안내(`del.failTitle/failMsg`) · [다시 시도] = 실패분만 `trash_checked`부터 / [닫기] | `platform/mod.rs::Trash::remaining` · `platform/fake.rs`(`trash_fail` 주입) · `app/menus.rs::trash_now` · `app/dialogs.rs`(`DlgReply::DeleteFailed` · `fail_message`) · `panel.rs::select_paths` | T3 + 실기 | `trash_failure_selects_leftovers_and_offers_retry` | ✅ | 10-05 §17(1233db2 · T-149 10 · dir2 win.rs:3926-3976) · 실기 필요 = 실제 Windows 휴지통 일부 실패(잠긴 파일) 재현 |
 | GAP-013 · PATH-SUGGEST | 경로 자동완성(dir2 `pathinput.rs` 이식 · 입력마다 폴더 제안 최대 20 · 제안 클릭 = 이동 · Esc = 팝업만 닫기 · 제출 시 `%VAR%`/`$env:VAR` 확장) | `pathinput.rs` · `panel.rs::update_path_suggest` · `app/ops.rs::path_edit` | T1·T3 | `nav_buttons_and_path_edit`(확장) · pathinput 이식 시험 4 | ✅ | §85 · dir2 win.rs:7199-7206 · 8000-8007 · 한계: UI 스레드 `read_dir` |
 | NEW-010 | 툴바 그룹 도크(이동 · 배치 저장) + 툴바/런처 크기·간격 설정 7(즉시 반영) | `app/settings.rs` · `app/input.rs` · `app/paint.rs` · `app/launcher_icons.rs` · nexa-ui 117차 | T2·T3 | `toolbar_groups_move_by_drag_and_size_gap_settings_apply_live` · `launcher_bar_size_and_gap_settings_apply_live` · `gaps_and_padding_are_configurable` | ✅ | §74 · §76 icon_pad · §78 상태 표시 = 부드러운 채움·테두리·알약(`toolbar.hover_fill_pct/on_fill_pct/on_line_pct/state_step_pct/state_radius`) · §101 "항상 위" = 새로 고침 그룹(`[refresh, ontop]` · dir2 기본 순서와 의도된 차이 · 옛 저장값 normalize 이행 `roundtrip_and_merge` · T4 `order-editor.scn` c1dc5a3) · 플로팅 창 · 배치 초기화 명령 = 잔여 · 실기(크기·간격·상태 모양 · 항상 위 위치) 사용자 |
-| NEW-001 · 006 · 007 | dir3 신규 기능(dir2에 없음) — 로그 창 · 진행 UI 개편 · 대량 전송 엔진(NEW-002~005 · 008은 아래 행) | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · 006 일부(충돌 인라인 · 질문 중 결과 반영 · 취소 = 건너뜀 · 전체 대상 수 10-04 §21·§22·§26~§28)는 DLG-059 행 · NEW-009 = PANEL-064 행 |
+| NEW-006 · 007 | dir3 신규 기능(dir2에 없음) — 진행 UI 개편 · 대량 전송 엔진(로그 창 NEW-001은 아래 행)(NEW-002~005 · 008은 아래 행) | 예정 위치 = [22](../22-dir3-features.md) | — | — | ☐ | 미착수(사용자 10-03 요청 · DR-15~18 · T-92~T-99) — 착수하면 기능별 행으로 나눈다 · 006 일부(충돌 인라인 · 질문 중 결과 반영 · 취소 = 건너뜀 · 전체 대상 수 10-04 §21·§22·§26~§28)는 DLG-059 행 · NEW-009 = PANEL-064 행 |
+| NEW-001 · T-92 · LOG | 로그 창 — `ndir-log`(nsql-log 이식 · 의존 0 · 파일 I/O 0 · 종류 10/층 10 · 원자 마스크 게이트) · `dlog!` · `log_win`(종류/열/개발자 필터 · 스위치 5 · 우클릭 · 선택/복사 · 파일로 저장) · `view.log` F10(macOS ⇧⌘L) · 설정 `log.*` 13 · 계측 1차 4곳 · 메모리 창 `Logs` · `log.dump` | `crates/ndir-log` · `log_win.rs` · `app/windows.rs` · `main.rs`(dlog!) · `memstat.rs` | T1 · T2 · T3 + 실기 | ndir-log 8(`detail_mask_parse_and_gate` · `stamp_is_fixed_width` · `raw_markdown_grid_lines` · `factory_and_names` · `ring_buffer_caps` · `ring_buffer_set_cap_trims_front` · `now_local_is_sane` · `new_formats_and_template`) · log_win `max_lines_trims_buffer_meta_and_visible` · T3 `log_window_collects_entries_and_dev_mask_gates_details` | ✅ | 10-05 §77(f2f2f1d) · 실기 = F10 토글(macOS ⇧⌘L) · 파일 선택 → 우클릭 → "셸 메뉴 항목 N개 도착" 줄 · 복사/삭제 뒤 ops 줄 · 폴더 바깥 변경 뒤 watch 줄 · 설정 ▸ 로그 ▸ 개발자 모드 + 층 `shell` → ⟨shell⟩ trace 줄 · 우클릭 ▸ 파일로 저장 · nexa-sql 결함 2(개발자 필터가 새 줄에도 적용 · dev 스위치 호버/툴팁) 수정 확인 |
 | NEW-008 | 성능 향상 모드 1차(`perf.boost` · 켜면 시스템 상태 모니터링 칸 제거 · 조회/깨우기 없음 · 저장값 불변 · 갱신 주기 DEPENDS) | `app/statusline.rs::{is_monitor_item, status_wants_load}` · ndir-settings registry | T3 + 실기 | `status_segments_and_tab_status_bar`(켜기/끄기) | 🚧 | 10-04 §23 · 2차 = BOOST 표(effective 강제) · 아이콘/애니메이션/폴링/스크롤백 · ⚡ 표시(T-99 · T-130) · 10-05 §38: 2차 = 행 아이콘(`list.row_icons`) · 메뉴 아이콘(`menu.icons`)을 `perf.boost` on이면 끔(NEW-033/034 행 · d4aca0d) · BOOST 표 일반화(nexa-sql perf.rs식)는 T-99 3차 |
 | MENU-RADIO · 10-04 | 보기 메뉴 택일 묶음 선택 표시(보기 모드 · 패널 · 정보 · 테마 · 언어 — set_radio + set_checked) | `app/menus.rs::sync_menu_checks` | T3 | `view_menu_radio_groups_show_selection` | ✅ | 10-04 §23 결함 수정(종전 = 다섯 묶음 전부 표시 없음) |
 | NEW-002 | 메모리 창(모덜리스 · 누적 정보 = 전용 · 상주 · 힙 여유 · 60 표본 그래프 · 영역 색 총량 막대 · 기능별 묶음 6 + 소계 · 영역 13 + 기타 · ▲/▼ 변화량 6 표본 · 운영체제 값(전용 · 상주 · 파일 매핑 · 힙) + 시스템 · [힙 정리] · 1초 갱신 · 창 닫힘 = 비용 0 · 언어 전환 relabel) | `memstat.rs` · `mem_win.rs` · `app/memory.rs` · `platform/procmem.rs` · `app/statusline.rs`(appmem 칸 클릭) · `ndir-ops::OperationHistory::depth` · nexa-gfx `Font::{data_bytes, glyph_cache_bytes}`(146) | T1 · T3 + 실기 | `memstat::{fmt_units_and_precision, ledger_is_consistent, other_never_underflows_and_trend_tracks_grow_and_shrink}` · `procmem::sys_reads_and_trim_runs` · `status_segments_and_tab_status_bar`(메모리 창 요청 · 배경 탭 ▲/▼) | 🚧 | 10-04 §11 1차 · §14 2차 일부 · §25 3차(42ccb5a) · 10-05 §1 [힙 정리] "정리 중…" 잠금 + 결과 줄(`trim_locks_the_button_until_samples_arrive_and_reports_the_result` · 6c42c90) · 남은 것 = 셸 자식 프로세스 · 다른 보조 창 표면 · 도크 이미지 · 창을 여는 기동 명령/덤프(T4) · 실기(화면) 사용자 |

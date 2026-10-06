@@ -122,6 +122,21 @@
 | 유휴 메모리 정리 없음 | `app/memory.rs` · `platform/procmem.rs` | 이 초 동안 입력이 없으면 글리프 캐시 · 셸 메뉴 COM 해제 · 힙 압축 · 작업 집합 트림(0 = 끔) | — | 고급(드문 조절 · 기본 60 s) | `mem.idle_trim_s`(T-179 A) | ✅ 10-05 §74(9994462) |
 | 즐겨찾기 없음(dir2 · dir3 종전) | `app/favorites.rs` | 즐겨찾기 폴더 목록(Ctrl+D로 편집 · 최대 64) | — | 숨김(HIDDEN · 명령으로만 편집 · `;;` 구분) | `nav.favorites`(NEW-039) | ✅ 10-05 §57(704c399) |
 | 명령 팔레트 없음(dir2 · dir3 종전) | `app/palette.rs` · nexa-ctl `Palette` | 명령 팔레트 열기 단축키 | Ctrl+Shift+P(macOS Cmd+Shift+P) | 단축키 설정(취향) | `key.view.palette`(T-138) | ✅ 10-05 §76(6379e5a) |
+| 로그 창 없음(dir2 · dir3 종전) | `log_win.rs` · `app/windows.rs` | 로그 창 열기 단축키 | F10(macOS ⇧⌘L · F10) | 단축키 설정(취향) | `key.view.log`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `app/windows.rs` | 기동할 때 로그 창도 함께 열기 | off | 설정(취향) | `log.open_at_start`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` · ndir-log `LogFormat` | 복사 · 저장 형식(raw · markdown · grid · compact · jsonl · csv · tsv · template) | raw | 설정(취향) | `log.format`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | ndir-log `Template` | template 형식의 줄 틀 | `{time} {kind:<8} {msg}` | 고급 | `log.template`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 긴 줄 줄바꿈 | off | 설정(취향 · 창 스위치) | `log.wrap`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 최신 줄 먼저 | off | 설정(취향 · 창 스위치) | `log.newest_first`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 새 줄 따라가기 | on | 설정(취향 · 창 스위치) | `log.autoscroll`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 로그 창 항상 위 | off | 설정(취향 · 창 스위치) | `log.always_on_top`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| 10,000(nexa-sql 창 상수) | ndir-log `LogBuffer` · `log_win.rs` | 메모리 링 최대 줄 수(100~1,000,000) | 10000 | 고급(영향 큼) | `log.max_lines`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| 80 % | `log_win.rs` | 푸터 스위치 크기 배율(50~150) | 80 | 고급 | `log.switch_scale`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | ndir-log 게이트 `DETAIL_MASK` | 개발자 모드(상세 로그 · 꺼지면 원자 1 + 분기 1) | off | 설정(창 스위치) | `log.dev_mode`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | ndir-log `parse_detail_layers` | 개발자 모드에서 켤 층(`shell,ops:timing+progress,*`) | "" | 고급 | `log.dev_layers`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 보일 종류(우클릭 종류▸) | ""(전부) | 숨김(HIDDEN · 창에서 편집) | `log.kinds`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `log_win.rs` | 보일 열(우클릭 열▸) | ""(기본) | 숨김(HIDDEN · 창에서 편집) | `log.columns`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
+| — | `app/windows.rs` · `wingeom::Memo` | 로그 창 위치/크기 기억 | "" | 숨김(HIDDEN · 자동 저장) | `window.log_pos` · `window.log_size`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(취향 · 기본 on · 끄면 dir2 순서) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |
