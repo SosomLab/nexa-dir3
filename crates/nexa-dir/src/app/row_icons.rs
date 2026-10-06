@@ -140,6 +140,16 @@ thread_local! {
     static FALLBACK: RefCell<[Option<Rc<nexa_gfx::IconImage>>; 2]> = const { RefCell::new([None, None]) };
 }
 
+/// 경로별 아이콘에 링크 화살표를 붙이는가: **실제 링크**(.lnk · 심볼릭 링크 · 정션)만. 드라이브 루트 · exe · ico 같은 경로별
+/// 아이콘에는 붙이지 않는다(사용자 10-06 "내 PC의 드라이브에 바로가기 화살표" — `SHGFI_LINKOVERLAY`는 링크 여부를 보지 않고
+/// 늘 붙인다).
+pub(crate) fn link_overlay_for(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("lnk"))
+        || ndir_ops::is_link(path)
+}
+
 /// 키 → 서비스 조회 키(순수). `(IconKey, 큰 아이콘인가, 폴더인가)`.
 pub(crate) fn service_key(key: &str, hint: &str) -> (IconKey, bool, bool) {
     let (large, key) = match key.strip_prefix("L|") {
@@ -165,7 +175,13 @@ pub(crate) fn service_key(key: &str, hint: &str) -> (IconKey, bool, bool) {
             false,
         ),
         k if k.contains(['\\', '/', ':']) => {
-            (IconKey::Path(PathBuf::from(hint)), large, is_dir_hint())
+            let path = PathBuf::from(hint);
+            let key = if link_overlay_for(&path) {
+                IconKey::Path(path)
+            } else {
+                IconKey::PathPlain(path)
+            };
+            (key, large, is_dir_hint())
         }
         ext => (
             IconKey::Kind {
@@ -428,8 +444,20 @@ mod tests {
             )
         );
         let (k, large, _) = service_key("c:/x/app.exe", "C:/x/App.exe");
-        assert_eq!(k, IconKey::Path(PathBuf::from("C:/x/App.exe")));
+        assert_eq!(
+            k,
+            IconKey::PathPlain(PathBuf::from("C:/x/App.exe")),
+            "exe = 화살표 없이"
+        );
         assert!(!large);
+        // 링크 화살표는 실제 링크에만(.lnk · 정션) — 드라이브 루트는 아니다(사용자 10-06).
+        let (k, _, _) = service_key("c:/x/go.lnk", "C:/x/Go.lnk");
+        assert_eq!(k, IconKey::Path(PathBuf::from("C:/x/Go.lnk")));
+        assert!(link_overlay_for(std::path::Path::new("C:/x/Go.LNK")));
+        assert!(!link_overlay_for(std::path::Path::new("C:/")));
+        assert!(!link_overlay_for(std::path::Path::new("C:/x/App.exe")));
+        let (k, _, _) = service_key("c:/", "C:/");
+        assert_eq!(k, IconKey::PathPlain(PathBuf::from("C:/")));
     }
 
     /// 계층 1 규칙: 문법 · 우선순위(path > name > dir/ext) · 상대 경로 기준 · 잘못된 항목 무시.
