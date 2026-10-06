@@ -539,6 +539,24 @@ pub(crate) fn attach_parent_console() {
     }
 }
 
+/// 지금 스레드의 우선순위를 낮춘다(긴 계산 워커 — 체크섬 · 사용자 10-06 "해시가 프로세스를 잡아먹는다"). Windows =
+/// `THREAD_PRIORITY_BELOW_NORMAL` · 다른 OS = 아무것도 안 함(nice는 프로세스 단위라 건드리지 않는다).
+pub(crate) fn lower_thread_priority() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetCurrentThread() -> *mut std::ffi::c_void;
+            fn SetThreadPriority(thread: *mut std::ffi::c_void, priority: i32) -> i32;
+        }
+        const THREAD_PRIORITY_BELOW_NORMAL: i32 = -1;
+        // SAFETY: 의사 핸들에 단순 호출 — 실패는 무시한다.
+        unsafe {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+        }
+    }
+}
+
 /// 지금의 포인터 자리(화면 좌표)와 수식키 — **다른 프로그램에서 끌어오는 동안**의 상태를 묻는다(T-147 수신 보강).
 /// winit은 OS 드래그 중에는 포인터 이동 · 수식키 사건을 주지 않고 `HoveredFile`/`DroppedFile`에도 자리가 없다 →
 /// 놓는 자리 · 복사/이동 판정을 위해 직접 읽는다. 읽을 수 없는 OS = `None`(호출부는 마지막으로 본 값으로 간다).

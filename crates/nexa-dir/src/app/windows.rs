@@ -344,6 +344,7 @@ impl App {
                 crate::hash_win::HashAction::CopyText(t) => {
                     let _ = clipboard::write_text(&t);
                 }
+                crate::hash_win::HashAction::Start => self.checksum_start(),
                 crate::hash_win::HashAction::Close => self.close_checksum(),
                 crate::hash_win::HashAction::None => {}
             }

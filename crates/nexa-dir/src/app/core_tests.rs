@@ -7319,32 +7319,28 @@ fn dock_shows_folder_size_after_worker_finishes() {
     );
 }
 
-/// 체크섬(T-167): 파일 1개 → 창이 열리고 작업 스레드가 계산 → 값 = 엔진 결과 · 진행 중 두 번째 요청은 거부(슬롯 1개) ·
-/// 닫기 = 취소 · 설정 `hash.algos` 해석.
+/// 체크섬(T-167 · 10-06 개편): 파일 여러 개 → 작업 스레드가 차례로 · 값 = 엔진 결과 · 같은 내용 = 같은 묶음 글자 · 진행 중 두 번째 요청
+/// 거부(슬롯 1개) · 상한 초과 = [계산] 대기 뒤 시작 · 닫기 = 취소.
 #[test]
-fn checksum_window_computes_in_worker_and_refuses_second_job() {
-    use crate::app::checksum::parse_algos;
+fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     use ndir_ops::hash::Algo;
-    assert_eq!(
-        parse_algos(""),
-        vec![Algo::Crc32, Algo::Md5, Algo::Sha1, Algo::Sha256]
-    );
-    assert_eq!(
-        parse_algos("sha512, crc32,bogus,SHA256"),
-        vec![Algo::Crc32, Algo::Sha256, Algo::Sha512]
-    );
     let (mut app, dir) = fixture("checksum");
-    let big = dir.join("big.bin");
-    let data: Vec<u8> = (0..24u32 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
-    std::fs::write(&big, &data).expect("write");
+    let data: Vec<u8> = (0..8u32 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+    std::fs::write(dir.join("big1.bin"), &data).expect("write");
+    std::fs::write(dir.join("big2.bin"), &data).expect("write");
     std::fs::write(dir.join("small.txt"), b"abc").expect("write");
-    app.open_checksum(&big);
+    let paths = vec![
+        dir.join("big1.bin"),
+        dir.join("big2.bin"),
+        dir.join("small.txt"),
+    ];
+    app.open_checksum(&paths);
     assert!(app.hash_job.is_some() && app.open_hash && app.hash_win.is_running());
-    // 진행 중 두 번째 요청 = 거부(창의 대상은 그대로).
-    app.open_checksum(&dir.join("small.txt"));
+    app.open_checksum(&[dir.join("small.txt")]);
     assert_eq!(
-        app.hash_job.as_ref().map(|j| j.path.clone()),
-        Some(big.clone())
+        app.hash_job.as_ref().map(|j| j.paths.len()),
+        Some(3),
+        "두 번째 요청 거부"
     );
     let at = std::time::Instant::now();
     while app.hash_tick() {
@@ -7353,15 +7349,22 @@ fn checksum_window_computes_in_worker_and_refuses_second_job() {
     }
     assert!(!app.hash_win.is_running());
     let got = app.hash_win.results();
-    assert_eq!(got.len(), 4);
+    assert_eq!(got.len(), 3);
     assert_eq!(
-        got[3].1.as_deref(),
+        got[0].values[3].as_deref(),
         Some(ndir_ops::hash::digest(Algo::Sha256, &data).as_str())
     );
-    assert!(app.hash_win.results_text().contains("big.bin"));
-    // 끝난 뒤에는 새 요청이 받아들여진다 · 닫기 = 취소 + 작업 없음.
-    app.open_checksum(&dir.join("small.txt"));
-    assert!(app.hash_job.is_some());
+    assert_eq!(got[2].values[0].as_deref(), Some("352441c2"));
+    assert_eq!(app.hash_win.group_of(0), Some('A'));
+    assert_eq!(app.hash_win.group_of(1), Some('A'));
+    assert_eq!(app.hash_win.group_of(2), None);
+    assert!(app.hash_win.results_text().contains("big1.bin"));
+    // 상한 초과(1 MB) → 대기 · [계산] → 시작 · 닫기 = 취소.
+    let _ = app.settings.set("hash.auto_limit_mb", "1");
+    app.open_checksum(&paths);
+    assert!(app.hash_job.is_none() && app.hash_win.is_waiting());
+    app.checksum_start();
+    assert!(app.hash_job.is_some() && app.hash_win.is_running());
     app.close_checksum();
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }

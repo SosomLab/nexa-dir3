@@ -935,6 +935,18 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         "crc32,md5,sha1,sha256"
     ),
+    // 자동 계산 상한(MB · 0 = 늘 [계산] 버튼) — 사용자 10-06 "대용량/다수 파일은 프로세스를 잡아먹는다".
+    e!(
+        "hash.auto_limit_mb",
+        CAT_CTXMENU,
+        "pref.hashAutoLimit",
+        "pref.hashAutoLimit.desc",
+        Int {
+            min: 0,
+            max: 1_048_576
+        },
+        "512"
+    ),
     // ── 파일 목록 › 파일 전송
     e!(
         "transfer.close_ms",
@@ -1776,6 +1788,7 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.row_gap",
     "input.scroll_natural",
     "hash.algos",
+    "hash.auto_limit_mb",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",

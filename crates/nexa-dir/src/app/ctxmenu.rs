@@ -478,7 +478,7 @@ impl App {
             }
         }
         // 체크섬(T-167 · dir3 신규): 파일 1개일 때 · 경로/이름 복사 묶음 뒤(이름 복사는 경로 복사 바로 아래여야 한다 — dir2 규칙).
-        if matches!(sel, [one] if one.is_file()) {
+        if !sel.is_empty() && sel.iter().all(|p| p.is_file()) {
             items.push(CtxItem::item("ctx.checksum", tr("ctx.checksum")));
         }
         // 중복 파일 찾기(T-170 · dir3 신규): 선택에 폴더가 있으면 그 폴더들 안에서.
@@ -792,9 +792,8 @@ impl App {
                 let _ = clipboard::write_text(&text);
             }
             "ctx.checksum" => {
-                if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
-                    self.open_checksum(&p);
-                }
+                let paths = self.panels[panel].selected_paths_in_view_order();
+                self.open_checksum(&paths);
             }
             "ctx.compare_panels" => self.compare_panels(),
             "ctx.find_dupes" => {
