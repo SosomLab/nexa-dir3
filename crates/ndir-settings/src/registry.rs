@@ -574,7 +574,7 @@ pub const REGISTRY: &[Entry] = &[
         "pref.logDevLayers",
         "pref.logDevLayers.desc",
         Text,
-        ""
+        "*:timing"
     ),
     // 창 메뉴로만 바뀌는 값(HIDDEN): 보이는 종류 · 컬럼.
     e!("log.kinds", CAT_LOG, "pref.logKinds", "", Text, ""),
