@@ -59,13 +59,15 @@ pub(crate) enum Cat {
     TermBuffer,
     TermFont,
     Plugins,
+    /// 로그 창 버퍼(링 · 배치 · 필터 목록 어림 · T-92).
+    Logs,
     SurfaceMain,
     SurfaceAux,
     Glyphs,
 }
 
 impl Cat {
-    pub(crate) const ALL: [Cat; 13] = [
+    pub(crate) const ALL: [Cat; 14] = [
         Cat::Fonts,
         Cat::ListsActive,
         Cat::ListsBackground,
@@ -76,6 +78,7 @@ impl Cat {
         Cat::TermBuffer,
         Cat::TermFont,
         Cat::Plugins,
+        Cat::Logs,
         Cat::SurfaceMain,
         Cat::SurfaceAux,
         Cat::Glyphs,
@@ -99,6 +102,7 @@ impl Cat {
             Cat::RowIcons | Cat::LauncherIcons | Cat::Preview => Group::Resources,
             Cat::TermBuffer | Cat::TermFont => Group::Terminal,
             Cat::Plugins => Group::Plugins,
+            Cat::Logs => Group::Program,
             Cat::SurfaceMain | Cat::SurfaceAux | Cat::Glyphs => Group::Render,
         }
     }
@@ -115,6 +119,7 @@ impl Cat {
             Cat::TermBuffer => "mem.cat.termBuffer",
             Cat::TermFont => "mem.cat.termFont",
             Cat::Plugins => "mem.cat.plugins",
+            Cat::Logs => "mem.cat.logs",
             Cat::SurfaceMain => "mem.cat.surfaceMain",
             Cat::SurfaceAux => "mem.cat.surfaceAux",
             Cat::Glyphs => "mem.cat.glyphs",
@@ -134,6 +139,7 @@ impl Cat {
             Cat::TermBuffer => (0x2E, 0xA0, 0x6E),
             Cat::TermFont => (0x7C, 0xC4, 0x9A),
             Cat::Plugins => (0x9B, 0x6F, 0xC9),
+            Cat::Logs => (0x8A, 0x8A, 0x5C),
             Cat::SurfaceMain => (0xD9, 0x53, 0x53),
             Cat::SurfaceAux => (0xE8, 0x9A, 0x9A),
             Cat::Glyphs => (0xF2, 0xC2, 0xC2),

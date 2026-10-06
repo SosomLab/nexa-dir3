@@ -21,6 +21,8 @@ pub(crate) enum FilePurpose {
     Setting(String),
     /// 플러그인 설치(`*.wasm` → 사용자 플러그인 폴더 · T-63).
     Plugin,
+    /// 로그를 파일로 저장(로그 창 메뉴 · T-92 · 전 기능 무료라 게이트 없음 · DR-4).
+    LogExport,
 }
 
 impl App {
@@ -261,6 +263,7 @@ impl App {
                 Some(self.term_cwd(0)),
                 file_win::plugin_filters(),
             ),
+            Some(FilePurpose::LogExport) => (PickerMode::Save, Some(self.term_cwd(0)), Vec::new()),
             _ => (
                 PickerMode::Open,
                 Some(self.term_cwd(0)),
@@ -274,6 +277,17 @@ impl App {
         match self.file_purpose.take() {
             Some(FilePurpose::License) => self.license_install(&path),
             Some(FilePurpose::Plugin) => self.plugin_install(&path),
+            Some(FilePurpose::LogExport) => {
+                let text = self.log_win.export_text();
+                let shown = path.display().to_string();
+                match std::fs::write(&path, text) {
+                    Ok(()) => self.log(ndir_log::LogKind::Info, trf("log.msg.saved", &[&shown])),
+                    Err(e) => self.log(
+                        ndir_log::LogKind::Error,
+                        trf("log.msg.saveFailed", &[&shown, &e.to_string()]),
+                    ),
+                }
+            }
             Some(FilePurpose::Setting(key)) => {
                 let v = path.display().to_string();
                 if self.settings.set(&key, &v).is_ok() {

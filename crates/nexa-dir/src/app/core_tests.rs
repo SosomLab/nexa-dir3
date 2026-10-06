@@ -7771,3 +7771,80 @@ fn command_palette_filters_and_runs_commands() {
     assert!(!app.palette.is_open(), "토글");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 로그 창(T-92 · NEW-001 · DR-15): `view.log`(F10) = 열기 요청 깃발 · 기본 로그(`log`/`log_with`)가 창 버퍼에 쌓이고 덤프에 보인다 ·
+/// 개발자 모드가 꺼져 있으면 상세 로그(`dlog!`)는 만들어지지 않고 · 켜면(`log.dev_mode` + `log.dev_layers`) 마스크가 서고 상세 줄이
+/// 보인다 · 상한(`log.max_lines`)을 줄이면 앞부터 버린다 · `view.log`는 열림 깃발만 세운다(창 없음 = 시험).
+#[test]
+fn log_window_collects_entries_and_dev_mask_gates_details() {
+    use ndir_log::{LogKind, LogLayer, LogLevel};
+    let (mut app, dir) = fixture("logwin");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app::menus::MENU_IDS.contains(&"view.log"));
+    assert_eq!(app::menus::menu_of("view.log"), Some("menu.view"));
+    assert!(!app.open_log);
+    app.command("view.log");
+    assert!(app.open_log, "F10 = 열기 요청");
+    // 기본 로그.
+    app.log(LogKind::Info, "hello");
+    app.log_with(
+        LogKind::List,
+        "D:/x",
+        Some(12),
+        Some(Duration::from_millis(7)),
+    );
+    let dump = app.log_win.export_text(); // 보이는 줄 · 지금 포맷(raw) — `log_dump`는 메시지만(하네스용)
+    assert!(
+        dump.contains("hello") && dump.contains("D:/x") && dump.contains("12 items"),
+        "{dump}"
+    );
+    assert_eq!(app.log_dump().lines().count(), 2);
+    // 상세 로그: 꺼짐 = 안 만듦.
+    assert!(!ndir_log::wants(LogLayer::Shell, LogLevel::Trace));
+    dlog!(
+        app,
+        LogLayer::Shell,
+        LogLevel::Trace,
+        ndir_log::LogEntry::new(LogKind::Shell, "hidden-detail")
+    );
+    assert!(!app.log_dump().contains("hidden-detail"));
+    let _ = app.settings.set("log.dev_mode", "on");
+    let _ = app.settings.set("log.dev_layers", "shell:trace");
+    app.after_setting_changed("log.dev_layers");
+    app.after_setting_changed("log.dev_mode");
+    assert!(ndir_log::wants(LogLayer::Shell, LogLevel::Trace));
+    assert!(!ndir_log::wants(LogLayer::Ops, LogLevel::Trace));
+    dlog!(
+        app,
+        LogLayer::Shell,
+        LogLevel::Trace,
+        ndir_log::LogEntry::new(LogKind::Shell, "shown-detail")
+    );
+    assert!(
+        app.log_win.export_text().contains("⟨shell⟩ shown-detail"),
+        "{}",
+        app.log_win.export_text()
+    );
+    let _ = app.settings.set("log.dev_mode", "off");
+    app.after_setting_changed("log.dev_mode");
+    assert!(!ndir_log::wants(LogLayer::Shell, LogLevel::Trace));
+    assert!(
+        !app.log_win.export_text().contains("shown-detail"),
+        "개발자 모드 끄면 상세 줄은 숨는다(버퍼에는 남는다)"
+    );
+    assert!(app.log_dump().contains("shown-detail"));
+    // 상한.
+    let _ = app.settings.set("log.max_lines", "100");
+    app.after_setting_changed("log.max_lines");
+    assert_eq!(app.log_win.max_lines(), 100);
+    for i in 0..150 {
+        app.log(LogKind::Info, format!("line{i}"));
+    }
+    let dump = app.log_dump();
+    assert!(
+        !dump.contains("line0\n") && dump.contains("line149"),
+        "앞부터 버림"
+    );
+    ndir_log::set_detail_mask(0);
+    let _ = std::fs::remove_dir_all(&dir);
+}

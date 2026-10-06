@@ -10,7 +10,30 @@
 // (`--version` · `--selfcheck`)은 `platform::attach_parent_console`이 부모 콘솔에 붙어 살린다.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+/// ★ 상세 로그(T-92 · DR-15 · nexa-sql SKEL-147): 게이트가 꺼져 있으면 `$make`는 **평가되지 않는다**(문자열 · 시각 0) —
+/// 인라인 원자 load + 분기 1. `dlog!(self, LogLayer::Shell, LogLevel::Timing, LogEntry::new(LogKind::Shell, …))`.
+macro_rules! dlog {
+    ($self:ident, $layer:expr, $level:expr, $make:expr) => {
+        if ndir_log::wants($layer, $level) {
+            let __e = $make;
+            detail_push(&mut $self.log_win, $layer, $level, __e);
+        }
+    };
+}
+
 mod app;
+
+/// 상세 로그 한 줄(느린 경로 · 호출 자체가 드물다 · `#[cold]`로 뜨거운 경로 코드 배치에서 떨어뜨린다).
+#[cold]
+#[inline(never)]
+fn detail_push(
+    log_win: &mut log_win::LogWin,
+    layer: ndir_log::LogLayer,
+    level: ndir_log::LogLevel,
+    e: ndir_log::LogEntry,
+) {
+    log_win.push(e.at(layer, level));
+}
 mod archive_win;
 mod bulk_win;
 mod check_win;
@@ -37,6 +60,7 @@ mod input;
 mod keys_win;
 mod launcher;
 mod license_win;
+mod log_win;
 mod mem_win;
 mod memstat;
 mod nav;
@@ -290,6 +314,9 @@ struct App {
     license_win: LicenseWin,
     /// 메모리 창(상태줄 앱 메모리 칸 → 모덜리스 · mem_win.rs) · 열기 요청.
     mem_win: mem_win::MemWin,
+    /// 로그 창(T-92) + "열기" 요청 깃발.
+    log_win: log_win::LogWin,
+    open_log: bool,
     /// 마지막 사용자 입력 시각(기동 뒤 ms) · 유휴 트림을 이미 했는가(T-179 A).
     last_input_ms: u64,
     idle_trimmed: bool,
@@ -644,6 +671,8 @@ impl App {
             licensing,
             license_win: LicenseWin::new(),
             mem_win: mem_win::MemWin::new(),
+            log_win: log_win::LogWin::new("raw"), // 형식은 `apply_log_settings`가 설정에서
+            open_log: false,
             last_input_ms: 0,
             idle_trimmed: false,
             mem_next: Instant::now(),
@@ -757,6 +786,11 @@ impl App {
         });
         app.apply_icon_switches(); // 이름 앞 아이콘 · 메뉴 아이콘(성능 향상 모드면 끔)
         app.apply_window_sizes();
+        app.apply_log_settings();
+        app.log_plugin_notes();
+        if app.settings.flag("log.open_at_start") {
+            app.open_log = true;
+        }
         app.apply_scroll_settings(); // 고속 스크롤 · 시스템 휠 줄 수(dir2 X-63)
         app.apply_icon_overrides(); // 행 아이콘 계층 1(사용자 지정)
         app.apply_tab_style(); // 탭 여러 줄(기본) · 한 줄일 때 ◀ ▶ 자리

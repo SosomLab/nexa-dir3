@@ -15,6 +15,7 @@ pub(crate) mod input;
 pub(crate) mod keywinit;
 pub(crate) mod launcher_icons;
 pub(crate) mod license;
+pub(crate) mod log;
 pub(crate) mod memory;
 pub(crate) mod menu_icons;
 pub(crate) mod menus;

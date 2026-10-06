@@ -76,6 +76,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "view.refresh",
     "view.preview_window",
     "view.palette",
+    "view.log",
     "-",
     "view.theme_system",
     "view.theme_light",
@@ -102,9 +103,9 @@ pub(crate) const MENU_IDS: &[&str] = &[
 pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
     ("menu.file", 0, 9),
     ("menu.edit", 9, 20),
-    ("menu.view", 20, 45),
-    ("menu.go", 45, 56),
-    ("menu.help", 56, usize::MAX),
+    ("menu.view", 20, 46),
+    ("menu.go", 46, 57),
+    ("menu.help", 57, usize::MAX),
 ];
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
@@ -874,6 +875,7 @@ impl App {
             }
             "view.preview_window" => self.open_preview_window(a),
             "view.palette" => self.toggle_palette(),
+            "view.log" => self.toggle_log_window(),
             // `list.context_menu` = 키맵 id(Shift+F10 · 메뉴 키 · macOS ⌃Return) · `cmd.contextMenu` = 기동 명령/시험이 부르던 이름 — 같은 일.
             // 종전에는 뒤 이름만 받아 **키로는 메뉴가 열리지 않았다**(키맵이 가로챈 뒤 분기가 없었다 · 10-05 매트릭스 대조에서 적발).
             "list.context_menu" | "cmd.contextMenu" => self.open_row_menu_at_caret(a),
@@ -926,14 +928,15 @@ mod tests {
         assert_eq!(MENU_IDS[0], "file.new_tab");
         assert_eq!(MENU_IDS[9], "edit.undo");
         assert_eq!(MENU_IDS[20], "view.mode_tree");
-        assert_eq!(MENU_IDS[44], "view.lang_system");
-        assert!(MENU_IDS[20..45].contains(&"view.preview_window"));
-        assert!(MENU_IDS[20..45].contains(&"view.palette"));
-        assert_eq!(MENU_IDS[45], "nav.back");
-        assert_eq!(MENU_IDS[56], "help.about");
-        assert_eq!(MENU_IDS[57], "help.license");
-        assert_eq!(MENU_IDS[58], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 59);
+        assert_eq!(MENU_IDS[45], "view.lang_system");
+        assert!(MENU_IDS[20..46].contains(&"view.preview_window"));
+        assert!(MENU_IDS[20..46].contains(&"view.palette"));
+        assert!(MENU_IDS[20..46].contains(&"view.log"));
+        assert_eq!(MENU_IDS[46], "nav.back");
+        assert_eq!(MENU_IDS[57], "help.about");
+        assert_eq!(MENU_IDS[58], "help.license");
+        assert_eq!(MENU_IDS[59], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 60);
         // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
         for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
             let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);

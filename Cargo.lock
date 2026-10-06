@@ -815,6 +815,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndir-log"
+version = "0.23.0"
+
+[[package]]
 name = "ndir-ops"
 version = "0.23.0"
 dependencies = [
@@ -896,6 +900,7 @@ dependencies = [
  "ndir-core",
  "ndir-i18n",
  "ndir-license",
+ "ndir-log",
  "ndir-ops",
  "ndir-settings",
  "ndir-term",

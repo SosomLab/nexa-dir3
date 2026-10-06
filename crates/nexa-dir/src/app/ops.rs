@@ -490,6 +490,16 @@ impl App {
         }
         self.sync_cut_marks();
         let parts = result_parts(job.count, &out);
+        self.log_with(
+            if out.errors.is_empty() {
+                ndir_log::LogKind::Ops
+            } else {
+                ndir_log::LogKind::Error
+            },
+            parts.join(" \u{00B7} "),
+            Some(out.transferred.len() as u64),
+            None,
+        );
         let kind = if out.errors.is_empty() {
             toast::ToastKind::Info
         } else {

@@ -187,6 +187,8 @@ pub const COMMANDS: &[Command] = &[
         "cmd+shift+p",
         "ctrl+shift+p"
     ),
+    // 로그 창(dir3 신규 · T-92 · nexa-sql `view.log` F10 계승 · macOS는 ⇧⌘L 보조).
+    c!("view.log", "cmd.log", "f10", "cmd+shift+l|f10", "f10"),
     // ── 탐색(CMD-326~329 Alt 조합 · macOS는 ⌘[ ⌘] ⌘↑ ⌘↓ — ⌥←→는 편집 필드 단어 이동)
     c!(
         "nav.back",

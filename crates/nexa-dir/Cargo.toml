@@ -26,6 +26,7 @@ wasmi = { workspace = true }
 ndir-i18n = { workspace = true }
 ndir-settings = { workspace = true }
 ndir-license = { workspace = true }
+ndir-log = { workspace = true }
 nexa-gfx = { workspace = true }
 nexa-ctl = { workspace = true }
 nexa-fs = { workspace = true }

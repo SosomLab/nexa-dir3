@@ -91,6 +91,16 @@ impl App {
             self.mem_win.open(el, theme, over, owner.as_deref());
             self.mem_next = Instant::now(); // 첫 표본은 다음 유휴 틱에
         }
+        if std::mem::take(&mut self.open_log) && self.window.is_some() {
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let near = self.window.as_ref().and_then(|w| {
+                w.outer_position()
+                    .ok()
+                    .map(|p| (p.x, p.y, w.outer_size().width))
+            });
+            let owner = self.window.clone();
+            self.log_win.open(el, theme, near, owner.as_deref());
+        }
         if std::mem::take(&mut self.open_hash) && self.window.is_some() {
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
@@ -316,6 +326,45 @@ impl App {
             }
             return true;
         }
+        if self.log_win.is(id) {
+            match self.log_win.handle(event) {
+                crate::log_win::LogWinAction::Paint => {
+                    // 본문 = UI 글꼴 크기 · 푸터 = 상태줄 글꼴 크기.
+                    let body_px = self.font_px("ui.font_size");
+                    let footer_px = self.font_px("statusbar.font_size");
+                    let font = Rc::clone(&self.ui_font);
+                    self.log_win.paint(&font, &self.theme, body_px, footer_px);
+                }
+                crate::log_win::LogWinAction::Toggled(key, on) => {
+                    // 스위치 = 설정과 같은 값(자동 기억 · 설정 창에도 반영).
+                    if self
+                        .settings
+                        .set(key, if on { "on" } else { "off" })
+                        .is_ok()
+                    {
+                        let _ = self.settings.save();
+                        self.after_setting_changed(key);
+                    }
+                }
+                crate::log_win::LogWinAction::Setting(key, value) => {
+                    if self.settings.set(key, &value).is_ok() {
+                        let _ = self.settings.save();
+                        self.after_setting_changed(key);
+                    }
+                }
+                crate::log_win::LogWinAction::SaveAs => {
+                    self.open_file_window(app::license::FilePurpose::LogExport);
+                }
+                crate::log_win::LogWinAction::CopyText(text) => {
+                    let _ = clipboard::write_text(&text);
+                }
+                crate::log_win::LogWinAction::None => {}
+            }
+            if !self.log_win.is_open() {
+                self.persist_window_sizes(); // X로 닫힘 — 기하 기억
+            }
+            return true;
+        }
         if self.mem_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.mem_win.handle(event) {
@@ -483,6 +532,9 @@ impl App {
         if self.mem_win.is_open() {
             self.mem_win.redraw();
         }
+        if self.log_win.is_open() {
+            self.log_win.redraw();
+        }
         if self.hash_win.is_open() {
             self.hash_win.redraw();
         }
@@ -538,6 +590,9 @@ impl App {
         if self.mem_win.tick(now_ms) {
             self.mem_win.redraw();
         }
+        if self.log_win.tick(now_ms) {
+            self.log_win.redraw();
+        }
         if self.hash_win.tick(now_ms) {
             self.hash_win.redraw();
         }
@@ -572,6 +627,9 @@ impl App {
             || self.dlg.animating()
             || self.license_win.animating()
             || self.mem_win.animating()
+            || self.log_win.tooltip_pending()
+            || self.log_win.drag_active()
+            || self.log_win.bars_visible()
             || self.hash_win.animating()
             || self.dupes_win.animating()
             || self.compare_win.animating()
@@ -585,17 +643,23 @@ impl App {
 
     /// 닫힌 보조 창의 마지막 (위치, 크기)를 설정에(`window.prefs_pos`/`_size` · dir2 계승).
     pub(crate) fn persist_window_sizes(&mut self) {
-        let Some(((x, y), (w, h))) = self.prefs_win.take_last() else {
-            return;
-        };
         let mut changed = false;
-        for (key, v) in [
-            ("window.prefs_pos", wingeom::format_pos(x, y)),
-            ("window.prefs_size", wingeom::format_size(w, h)),
-        ] {
-            if self.settings.get(key) != Some(v.as_str()) {
-                let _ = self.settings.set(key, &v);
-                changed = true;
+        let lasts = [
+            ("prefs", self.prefs_win.take_last()),
+            ("log", self.log_win.take_last()),
+        ];
+        for (name, last) in lasts {
+            let Some(((x, y), (w, h))) = last else {
+                continue;
+            };
+            for (key, v) in [
+                (format!("window.{name}_pos"), wingeom::format_pos(x, y)),
+                (format!("window.{name}_size"), wingeom::format_size(w, h)),
+            ] {
+                if self.settings.get(&key) != Some(v.as_str()) {
+                    let _ = self.settings.set(&key, &v);
+                    changed = true;
+                }
             }
         }
         if changed {
@@ -604,18 +668,17 @@ impl App {
         }
     }
 
-    /// 설정의 기억된 기하를 보조 창의 메모로(열 때 같은 모니터면 그대로).
+    /// 설정의 기억된 기하를 보조 창(설정 · 로그)의 메모로(열 때 같은 모니터면 그대로).
     pub(crate) fn apply_window_sizes(&mut self) {
-        let memo = wingeom::Memo {
-            pos: self
-                .settings
-                .get("window.prefs_pos")
+        let memo = |s: &ndir_settings::Settings, name: &str| wingeom::Memo {
+            pos: s
+                .get(&format!("window.{name}_pos"))
                 .and_then(wingeom::parse_pos),
-            size: self
-                .settings
-                .get("window.prefs_size")
+            size: s
+                .get(&format!("window.{name}_size"))
                 .and_then(wingeom::parse_size),
         };
-        self.prefs_win.set_memo(memo);
+        self.prefs_win.set_memo(memo(&self.settings, "prefs"));
+        self.log_win.set_memo(memo(&self.settings, "log"));
     }
 }

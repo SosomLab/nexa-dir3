@@ -316,6 +316,7 @@ impl App {
         }
         Some(match target {
             "layout" => self.layout_dump(),
+            "log" => self.log_dump(),
             "mem" => self.mem_dump(),
             "panel" => self.panel_dump(self.active),
             "panel0" => self.panel_dump(0),
@@ -525,6 +526,14 @@ impl App {
             return;
         }
         self.ready_fired = true;
+        // 기동 단계 로그(T-92 · NEW-001 — 종전 `status.firstRender`는 lang 키만 남고 코드가 없었다).
+        let up = self.started.elapsed();
+        self.log_with(
+            ndir_log::LogKind::Startup,
+            tr("log.msg.ready"),
+            None,
+            Some(up),
+        );
         let cmds = std::mem::take(&mut self.startup_ready);
         self.run_ready(cmds);
     }

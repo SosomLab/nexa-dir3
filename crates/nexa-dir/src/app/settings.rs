@@ -208,6 +208,9 @@ impl App {
             k if NEEDS_RESTART.contains(&k) => return false,
             // 값은 저장됐고 쓰는 쪽이 읽을 때 반영되는 키(창 기하 · 타입어헤드 · 고속 스크롤 · 전송 · 탭 · 도크 비율 · 터미널 · 플러그인 · 미리보기 ·
             // 런처 · 클라우드 · 라이선스 · 컨텍스트 메뉴 · 고급 스위치 상태 · 더블클릭 간격 · 열 자동 맞춤).
+            k if k.starts_with("log.") => {
+                self.apply_log_setting(k);
+            }
             _ => {}
         }
         self.update_status();

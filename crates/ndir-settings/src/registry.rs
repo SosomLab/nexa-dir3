@@ -83,6 +83,19 @@ const CAT_TERMINAL: &str = "pref.cat.terminal";
 const CAT_PLUGINS: &str = "pref.cat.plugins";
 const CAT_CLOUD: &str = "pref.cat.cloud";
 const CAT_KEYS: &str = "pref.cat.keys";
+const CAT_LOG: &str = "pref.cat.log";
+
+/// 로그 출력 형식(ndir-log `FORMAT_NAMES`).
+const LOG_FORMAT_OPTS: &[(&str, &str)] = &[
+    ("raw", "pref.logFormat.raw"),
+    ("markdown", "pref.logFormat.markdown"),
+    ("grid", "pref.logFormat.grid"),
+    ("compact", "pref.logFormat.compact"),
+    ("jsonl", "pref.logFormat.jsonl"),
+    ("csv", "pref.logFormat.csv"),
+    ("tsv", "pref.logFormat.tsv"),
+    ("template", "pref.logFormat.template"),
+];
 const KEY_PRESET_OPTS: &[(&str, &str)] = &[
     ("auto", "pref.keyPreset.auto"),
     ("windows", "pref.keyPreset.windows"),
@@ -110,6 +123,8 @@ pub const CATEGORY_TREE: &[(&str, &[&str])] = &[
     ("pref.cat.tabs", &[CAT_TABS, CAT_TAB_STATUS]),
     ("pref.grp.panel", &[CAT_DOCK, CAT_TERMINAL]),
     (CAT_PLUGINS, &[CAT_PLUGINS]),
+    // 로그(dir3 신규 · T-92 · NEW-001).
+    (CAT_LOG, &[CAT_LOG]),
     // dir2에는 페이지가 없던 항목(파일 직접 편집) — Advanced를 켜야 보인다.
     ("pref.grp.cloud", &[CAT_CLOUD]),
 ];
@@ -453,6 +468,117 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    e!(
+        "window.log_size",
+        CAT_APPEARANCE,
+        "pref.windowLogSize",
+        "",
+        Text,
+        ""
+    ),
+    e!(
+        "window.log_pos",
+        CAT_APPEARANCE,
+        "pref.windowLogPos",
+        "",
+        Text,
+        ""
+    ),
+    // ── 로그(T-92 · NEW-001 · DR-15 — nexa-sql `log.*` 차용 · 파일 싱크 키는 없다)
+    e!(
+        "log.open_at_start",
+        CAT_LOG,
+        "pref.logOpenAtStart",
+        "pref.logOpenAtStart.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "log.format",
+        CAT_LOG,
+        "pref.logFormat",
+        "pref.logFormat.desc",
+        Choice(LOG_FORMAT_OPTS),
+        "raw"
+    ),
+    e!(
+        "log.template",
+        CAT_LOG,
+        "pref.logTemplate",
+        "pref.logTemplate.desc",
+        Text,
+        "{time} {kind:<8} {msg}"
+    ),
+    e!(
+        "log.wrap",
+        CAT_LOG,
+        "pref.logWrap",
+        "pref.logWrap.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "log.newest_first",
+        CAT_LOG,
+        "pref.logNewestFirst",
+        "pref.logNewestFirst.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "log.autoscroll",
+        CAT_LOG,
+        "pref.logAutoscroll",
+        "pref.logAutoscroll.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "log.always_on_top",
+        CAT_LOG,
+        "pref.logAlwaysOnTop",
+        "pref.logAlwaysOnTop.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "log.max_lines",
+        CAT_LOG,
+        "pref.logMaxLines",
+        "pref.logMaxLines.desc",
+        Int {
+            min: 100,
+            max: 1_000_000
+        },
+        "10000"
+    ),
+    e!(
+        "log.switch_scale",
+        CAT_LOG,
+        "pref.logSwitchScale",
+        "pref.logSwitchScale.desc",
+        Int { min: 50, max: 150 },
+        "80"
+    ),
+    e!(
+        "log.dev_mode",
+        CAT_LOG,
+        "pref.logDevMode",
+        "pref.logDevMode.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "log.dev_layers",
+        CAT_LOG,
+        "pref.logDevLayers",
+        "pref.logDevLayers.desc",
+        Text,
+        ""
+    ),
+    // 창 메뉴로만 바뀌는 값(HIDDEN): 보이는 종류 · 컬럼.
+    e!("log.kinds", CAT_LOG, "pref.logKinds", "", Text, ""),
+    e!("log.columns", CAT_LOG, "pref.logColumns", "", Text, ""),
     e!(
         "license.gates",
         CAT_APPEARANCE,
@@ -1548,6 +1674,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.view.log",
+        CAT_KEYS,
+        "cmd.log",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.nav.back",
         CAT_KEYS,
         "cmd.navBack",
@@ -1792,6 +1926,10 @@ pub const HIDDEN: &[&str] = &[
     "window.main_pos",
     "window.prefs_size",
     "window.prefs_pos",
+    "window.log_size",
+    "window.log_pos",
+    "log.kinds",
+    "log.columns",
     "license.gates",
     "list.view_mode",
     "list.col_width_sync",
@@ -1817,6 +1955,10 @@ pub const ADVANCED: &[&str] = &[
     "toolbar.row_gap",
     "input.scroll_natural",
     "ctxmenu.prebuild",
+    "log.template",
+    "log.switch_scale",
+    "log.dev_layers",
+    "log.max_lines",
     "hash.algos",
     "hash.auto_limit_mb",
     "mem.idle_trim_s",

@@ -1,0 +1,19 @@
+[package]
+name = "ndir-log"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Nexa Dir 앱 로그 — 시각(밀리초) 첫 컬럼 · 탐색기 단계 구분 · 개발자 상세 로그 게이트 · 출력 어댑터(LogFormat) · 링 버퍼 · 의존 0 · 파일 I/O 0(nsql-log 이식 · DR-15)"
+
+[features]
+# `devlog` 끄면 상세 로그 게이트가 상수 false → 상세 경로 코드가 릴리스 특수 빌드에서 사라진다.
+default = ["devlog"]
+devlog = []
+
+[lints]
+workspace = true
+
+[dependencies]

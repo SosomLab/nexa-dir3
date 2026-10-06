@@ -626,6 +626,18 @@ impl App {
         while let Some(ev) = self.platform.ctxmenu.poll() {
             match ev {
                 MenuEvent::Items { target, items } => {
+                    self.log_with(
+                        ndir_log::LogKind::Shell,
+                        trf("log.msg.shellMenu", &[&items.len().to_string()]),
+                        Some(items.len() as u64),
+                        None,
+                    );
+                    dlog!(
+                        self,
+                        ndir_log::LogLayer::Shell,
+                        ndir_log::LogLevel::Trace,
+                        ndir_log::LogEntry::new(ndir_log::LogKind::Shell, format!("{target:?}"))
+                    );
                     // 기다리던 메뉴의 셸 항목 도착 → 완성된 메뉴를 한 번 연다.
                     if self.ctx_wait.as_ref().is_some_and(|w| w.1 == target) {
                         if let Some((kind, t, _)) = self.ctx_wait.take() {

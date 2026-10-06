@@ -53,6 +53,8 @@ impl App {
                 platform::procmem::resident_bytes(&slices).unwrap_or(term_mapped),
             );
         }
+        // 로그 창 버퍼(T-92).
+        acc.add(Cat::Logs, self.log_win.approx_bytes());
         // 플러그인: 올라와 있는 모듈.
         acc.add(Cat::Plugins, preview::loaded_plugin_bytes());
         // 화면 그리기: 창 표면(가로 × 세로 × 4) · 글리프 캐시.
