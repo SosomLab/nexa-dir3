@@ -123,7 +123,7 @@
 | 즐겨찾기 없음(dir2 · dir3 종전) | `app/favorites.rs` | 즐겨찾기 폴더 목록(Ctrl+D로 편집 · 최대 64) | — | 숨김(HIDDEN · 명령으로만 편집 · `;;` 구분) | `nav.favorites`(NEW-039) | ✅ 10-05 §57(704c399) |
 | 명령 팔레트 없음(dir2 · dir3 종전) | `app/palette.rs` · nexa-ctl `Palette` | 명령 팔레트 열기 단축키 | Ctrl+Shift+P(macOS Cmd+Shift+P) | 단축키 설정(취향) | `key.view.palette`(T-138) | ✅ 10-05 §76(6379e5a) |
 | 로그 창 없음(dir2 · dir3 종전) | `log_win.rs` · `app/windows.rs` | 로그 창 열기 단축키 | F10(macOS ⇧⌘L · F10) | 단축키 설정(취향) | `key.view.log`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
-| 도구 모음 블록 배치(dir2 고정) | `order.rs` · `app/order.rs` · `app/menus.rs` | 도구 모음 블록 순서/표시(순서 편집기 · 툴바 우클릭) — 기본 배치 끝에 **로그 창 블록 `log`** 추가(e9aaff6) | ""(= 기본 배치) | 숨김(HIDDEN · 편집기에서 편집) | `toolbar.layout` | ✅ 10-05 §80(e9aaff6 · log 블록) |
+| 도구 모음 블록 배치(dir2 고정) | `order.rs` · `app/order.rs` · `app/menus.rs` | 도구 모음 블록 순서/표시(순서 편집기 · 툴바 우클릭) — 기본 배치 끝에 **"보기" 그룹 `info[log]`**(우측 정렬 · 로그 창 토글 · 기본 문자열 끝 `…|settings:1|info:1[log:1]`)(e9aaff6 → 92ad81f · 5a615e4) | ""(= 기본 배치) | 숨김(HIDDEN · 편집기에서 편집) | `toolbar.layout` | ✅ 10-05 §80(92ad81f · info[log]) |
 | — | `app/windows.rs` | 기동할 때 로그 창도 함께 열기 | off | 설정(취향) | `log.open_at_start`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | `log_win.rs` · ndir-log `LogFormat` | 복사 · 저장 형식(raw · markdown · grid · compact · jsonl · csv · tsv · template) | raw | 설정(취향) | `log.format`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | ndir-log `Template` | template 형식의 줄 틀 | `{time} {kind:<8} {msg}` | 고급 | `log.template`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
