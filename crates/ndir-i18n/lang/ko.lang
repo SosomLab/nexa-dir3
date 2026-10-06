@@ -408,7 +408,6 @@ pref.toolbarOrder.desc = 도구 모음 버튼 순서를 바꿉니다. 그룹/항
 pref.tbo.grpPanel = 패널 제어
 pref.tbo.grpView = 보기 모드
 pref.tbo.grpShow = 표시 항목
-pref.tbo.grpInfo = 정보
 pref.tbo.panelToggle = 파일 패널 토글
 pref.tbo.infoToggle = 정보 패널 토글
 pref.editBtn = 편집...

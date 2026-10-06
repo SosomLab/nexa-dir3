@@ -1,9 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- 로그 창(T-92): 줄 세 개 + 왼쪽 시각 눈금 — nexa-sql 도구 모음 ≡ 계승 · dir2 규격(32 viewBox · 콘텐츠 1..31 · stroke 2) -->
-  <line x1="11" y1="8" x2="29" y2="8"/>
-  <line x1="11" y1="16" x2="29" y2="16"/>
-  <line x1="11" y1="24" x2="23" y2="24"/>
-  <line x1="4" y1="8" x2="6" y2="8"/>
-  <line x1="4" y1="16" x2="6" y2="16"/>
-  <line x1="4" y1="24" x2="6" y2="24"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round">
+  <!-- 로그 창(T-92): nexa-sql toolicons::shape_log 차용 — 256 좌표계의 가로 줄 3개(y 72·128·184 · x 52..204 · 두께 22)를 32 viewBox로 ×0.125 -->
+  <line x1="6.5" y1="9" x2="25.5" y2="9"/>
+  <line x1="6.5" y1="16" x2="25.5" y2="16"/>
+  <line x1="6.5" y1="23" x2="25.5" y2="23"/>
 </svg>

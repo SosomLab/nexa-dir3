@@ -411,7 +411,6 @@ pref.toolbarOrder.desc = ツールバーボタンを並べ替えます。グル�
 pref.tbo.grpPanel = パネル操作
 pref.tbo.grpView = 表示モード
 pref.tbo.grpShow = 表示/非表示
-pref.tbo.grpInfo = 情報
 pref.tbo.panelToggle = ファイルパネル切替
 pref.tbo.infoToggle = 情報ペイン切替
 pref.editBtn = 編集...

@@ -33,7 +33,7 @@ fn tbo_label(block: &str, item: Option<&str>) -> String {
         ("view", Some("tree")) => tr("menu.view.modeTree"),
         ("view", Some("flat")) => tr("menu.view.modeFlat"),
         ("view", Some("tiles")) => tr("menu.view.modeTiles"),
-        ("info", None) => tr("pref.tbo.grpInfo"),
+        ("info", None) => tr("menu.view"), // 그룹명 "보기"(사용자 10-06 · nexa-sql 도구 모음 View 그룹)
         ("info", Some("log")) => tr("cmd.log"),
         ("refresh", None | Some("refresh")) => tr("menu.view.refresh"),
         ("refresh", Some("ontop")) => tr("menu.view.alwaysOnTop"),
