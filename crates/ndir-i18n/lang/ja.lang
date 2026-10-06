@@ -481,7 +481,6 @@ pref.viewScope.global = 全体
 pref.viewScope.panel = 左右パネル
 pref.viewScope.tab = タブ
 pref.viewScope.dir = フォルダー
-pref.viewScope.tip = 範囲
 pref.termWrap = ターミナルの折り返し
 pref.termWrap.desc = 表示幅で行を折り返します。オフ = 固定列 + 水平スクロール。
 pref.termCols = ターミナルの列数 (80~1000)

@@ -478,7 +478,6 @@ pref.viewScope.global = 전체 통일
 pref.viewScope.panel = 좌/우 패널
 pref.viewScope.tab = 탭
 pref.viewScope.dir = 폴더
-pref.viewScope.tip = 범위
 pref.termWrap = 터미널 줄 바꿈
 pref.termWrap.desc = 뷰 폭에 맞춰 줄을 바꿉니다. 끄면 고정 열+가로 스크롤.
 pref.termCols = 터미널 열 수(80~1000)

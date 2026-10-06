@@ -481,7 +481,6 @@ pref.viewScope.global = All
 pref.viewScope.panel = Left/right panel
 pref.viewScope.tab = Tab
 pref.viewScope.dir = Folder
-pref.viewScope.tip = Scope
 pref.termWrap = Terminal word wrap
 pref.termWrap.desc = Wrap lines to the view width. Off = fixed columns with horizontal scroll.
 pref.termCols = Terminal columns (80~1000)

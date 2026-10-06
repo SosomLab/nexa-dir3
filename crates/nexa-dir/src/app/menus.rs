@@ -349,19 +349,8 @@ impl App {
             let toggle = !matches!(id, "view.refresh" | "file.prefs");
             ToolItem::new(id, icon).tip(tr(tip_key)).toggle(toggle)
         };
-        let scope = settings
-            .get("list.view_scope")
-            .filter(|s| matches!(*s, "global" | "panel" | "tab"))
-            .unwrap_or("dir");
-        let scoped = |it: ToolItem, label_key: &str| {
-            // "{라벨} — 범위: {폴더|탭|…}" — 종전 "{라벨} — 폴더"는 "파일 — 폴더"처럼 읽혔다(사용자 10-06).
-            it.tip(format!(
-                "{} — {}: {}",
-                tr(label_key),
-                tr("pref.viewScope.tip"),
-                tr(&format!("pref.viewScope.{scope}"))
-            ))
-        };
+        // 범위 토글(숨김 · 점 · 폴더 우선 · 대소문자)의 툴팁 = 라벨만(사용자 10-06 "— 범위: 폴더" 꼬리 제외 · 적용 범위는 설정 창에).
+        let scoped = |it: ToolItem, label_key: &str| it.tip(tr(label_key));
         let item = |block: &str, key: &str| -> Option<ToolItem> {
             Some(match (block, key) {
                 ("panel", "toggle") => g("view.panel_toggle", "▌▐", "cmd.panelToggle"),
