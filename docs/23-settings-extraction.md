@@ -121,6 +121,7 @@
 | 파일 선택 즉시 셸 컨텍스트 메뉴 선행 구축(300 ms 머무름 · 확장 DLL 적재) | `app/ctxmenu.rs` · `platform/winshell.rs` | 선택만으로 셸 메뉴를 미리 만들지(on = 첫 우클릭 빠름 · 확장 DLL 상주로 Private +40 MB · off = 우클릭 때 구축 · "불러오는 중" 뒤 채움) | on | 고급(영향 큼 · 기본 off) | `ctxmenu.prebuild`(T-179 J) | ✅ 10-05 §74(9994462) |
 | 유휴 메모리 정리 없음 | `app/memory.rs` · `platform/procmem.rs` | 이 초 동안 입력이 없으면 글리프 캐시 · 셸 메뉴 COM 해제 · 힙 압축 · 작업 집합 트림(0 = 끔) | — | 고급(드문 조절 · 기본 60 s) | `mem.idle_trim_s`(T-179 A) | ✅ 10-05 §74(9994462) |
 | 즐겨찾기 없음(dir2 · dir3 종전) | `app/favorites.rs` | 즐겨찾기 폴더 목록(Ctrl+D로 편집 · 최대 64) | — | 숨김(HIDDEN · 명령으로만 편집 · `;;` 구분) | `nav.favorites`(NEW-039) | ✅ 10-05 §57(704c399) |
+| 명령 팔레트 없음(dir2 · dir3 종전) | `app/palette.rs` · nexa-ctl `Palette` | 명령 팔레트 열기 단축키 | Ctrl+Shift+P(macOS Cmd+Shift+P) | 단축키 설정(취향) | `key.view.palette`(T-138) | ✅ 10-05 §76(6379e5a) |
 | 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(취향 · 기본 on · 끄면 dir2 순서) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |

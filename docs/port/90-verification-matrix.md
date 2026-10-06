@@ -36,12 +36,12 @@
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 90 | 0 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 5 | 0 | 230 | 0 | 0 |
-| UIK | 67 | 67 | 13 | 8 | 46 | 0 | 0 |
+| UIK | 67 | 67 | 14 | 8 | 45 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2516 | 926 | 762 | 0 | 0 |
+| **합계** | 4332 | 4332 | 2517 | 926 | 761 | 0 | 0 |
 
 ## 행
 
@@ -231,6 +231,7 @@
 | SKEL-301~350 | 함정·교훈 | 코드 주석 · `docs/10` | — | — | ⚠ | 교훈은 주석/문서로 계승 |
 | UIC-001~323 | nexa-ctl/gfx/sys/conf 코어 어휘(geom · event · draw · raster · theme · tokens · shape · typeahead · 컨트롤 공용부) | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 — dir3는 소비자 · 갭(UIC-310~323)은 T-31 행 |
 | UIK-001~116 | nexa-ctl 컨트롤 표 · nexa-sql 앱 내 범용 UI | nexa-ui(DR-2) | T2 | nexa-ui 시험 | ⚠ | nexa-ui 소유 |
+| UIK-104 · T-138 · PALETTE | 명령 팔레트 — nexa-ctl `Palette`(nexa-sql 승격 · 퍼지 필터 · 최대 12행 · ↑↓ · 휠 · Enter · Esc · 바깥 클릭 · 프롬프트 모드 · MRU · enabled · i18n/클립보드 분리) · dir3 `view.palette` Ctrl/Cmd+Shift+P · 목록 = COMMANDS 자동 생성("메뉴: 항목" + 단축키) · 맨 앞 모달 · 한글 IME | nexa-ui `nexa-ctl/controls/palette.rs`(161 cbfc3c5) · `app/palette.rs` · `app/input.rs` · `app/menus.rs`(MENU_SECTIONS) | T1 · T2 · T3 + 실기 | nexa-ctl `hangul_chars_reach_the_query_and_filter` · `subsequence_and_ranking` · `recent_first_and_disabled_not_pickable` · `goto_prefix_is_optional` · `prompt_is_anchored_compact_and_outside_clicks_cancel` · `mouse_hover_wheel_click_and_scrolling` · dir3 `command_palette_filters_and_runs_commands` · `palette_chord_plan_mcdc` · `menu_ids_are_commands` | ✅ | 10-05 §76(6379e5a) · 실기 = 한글 입력 · Enter/Esc/바깥 클릭 · MRU |
 | UIK-107 · 213 | 토스트 `Toasts`(범용 승격) | nexa-ui 114차 `nexa_ctl::controls::toast` · dir3 `main.rs` `use` | T2 · T3 | nexa-ctl toast 시험 3 · `bulk_*`(`toasts.animating`) | ✅ | journal §69 · 앱 사본 삭제(DR-2) |
 | UIK-210 · 214 | FolderTree(지연 로딩) · FilterBox | — | — | — | ⚠ | dir2에 실체 없음(widgets = chrome/dock/menubar/overlaybar/pathbar/rows/tabbar · 검색 상자는 설정 창뿐) → 추가하지 않음(journal §69) |
 | UIK-201~222 | 파일 탐색기에 필요한데 없던 컨트롤(추가 후보) | `order_win.rs` · nexa-ctl `SegProgress`/`Checkbox` · `Toolbar` | T2·T3 | T-70/T-71/T-63 시험 | 🚧 | 210/213/214는 위 행 · 나머지 후보는 각 T-에서 · 10-05 §30: UIK-221 메뉴 글자 키 ✅(NEW-031 행) |
