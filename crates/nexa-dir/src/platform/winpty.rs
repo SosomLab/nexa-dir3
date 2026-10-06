@@ -55,6 +55,25 @@ struct ProcessInformation {
 }
 
 const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x0008_0000;
+const CREATE_UNICODE_ENVIRONMENT: u32 = 0x0000_0400;
+
+/// 셸에 넘길 환경 블록(`NAME=VALUE\0…\0\0` · UTF-16) — 차단 변수 제외(`platform::pty_env` · T-107).
+fn env_block() -> Vec<u16> {
+    let mut out: Vec<u16> = Vec::new();
+    for (k, v) in super::pty_env() {
+        out.extend(wide_os_no_nul(&k));
+        out.push(u16::from(b'='));
+        out.extend(wide_os_no_nul(&v));
+        out.push(0);
+    }
+    out.push(0);
+    out
+}
+
+fn wide_os_no_nul(s: &std::ffi::OsStr) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    s.encode_wide().filter(|c| *c != 0).collect()
+}
 /// PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE(winbase.h).
 const ATTR_PSEUDOCONSOLE: usize = 0x0002_0016;
 const WAIT_TIMEOUT: u32 = 0x102;
@@ -259,6 +278,7 @@ impl ConPtySession {
             .chain(std::iter::once(0))
             .collect();
         let cwd_w = wide_os(cwd.as_os_str());
+        let mut env_w = env_block();
         let mut pi = ProcessInformation {
             process: 0,
             thread: 0,
@@ -271,8 +291,8 @@ impl ConPtySession {
             std::ptr::null(),
             std::ptr::null(),
             0,
-            EXTENDED_STARTUPINFO_PRESENT,
-            std::ptr::null(),
+            EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+            env_w.as_mut_ptr().cast(),
             cwd_w.as_ptr(),
             &si,
             &mut pi,

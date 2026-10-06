@@ -28,6 +28,7 @@ extern "C" {
     fn execvp(file: *const c_char, argv: *const *const c_char) -> c_int;
     fn chdir(path: *const c_char) -> c_int;
     fn setenv(name: *const c_char, value: *const c_char, overwrite: c_int) -> c_int;
+    fn unsetenv(name: *const c_char) -> c_int;
     fn _exit(code: c_int) -> !;
     fn read(fd: c_int, buf: *mut c_void, n: usize) -> isize;
     fn write(fd: c_int, buf: *const c_void, n: usize) -> isize;
@@ -82,6 +83,11 @@ impl Pty for ForkPty {
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
+        // 자식에서 지울 변수(T-107 · 에이전트 env) — fork 전에 만들어 둔다(자식은 할당하지 않는다).
+        let blocked: Vec<std::ffi::CString> = std::env::vars_os()
+            .filter(|(k, _)| k.to_str().is_some_and(super::pty_env_blocked))
+            .filter_map(|(k, _)| std::ffi::CString::new(k.into_encoded_bytes()).ok())
+            .collect();
         let mut master: c_int = -1;
         // SAFETY: 모든 포인터는 이 스택 프레임의 유효한 NUL 종단 버퍼. 자식은 fork 뒤 exec/_exit만 한다.
         let pid = unsafe { forkpty(&mut master, std::ptr::null_mut(), std::ptr::null(), &ws) };
@@ -92,9 +98,12 @@ impl Pty for ForkPty {
             )));
         }
         if pid == 0 {
-            // SAFETY: 자식 — async-signal-safe 범위의 호출만(chdir·setenv·execvp·_exit).
+            // SAFETY: 자식 — async-signal-safe 범위의 호출만(chdir·setenv·unsetenv·execvp·_exit).
             unsafe {
                 chdir(cwd_c.as_ptr());
+                for b in &blocked {
+                    unsetenv(b.as_ptr());
+                }
                 setenv(c"TERM".as_ptr(), c"xterm-256color".as_ptr(), 1);
                 execvp(argv_ptrs[0], argv_ptrs.as_ptr());
                 _exit(127);

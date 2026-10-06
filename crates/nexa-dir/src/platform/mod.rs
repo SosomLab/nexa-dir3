@@ -542,6 +542,20 @@ pub(crate) fn attach_parent_console() {
     }
 }
 
+/// 터미널 셸에 **물려주지 않을** 환경 변수(순수 · T-107 · 사용자 10-06 "터미널 색이 사라졌다"): 앱을 띄운 쪽(AI 에이전트 ·
+/// CI)의 `NO_COLOR` · `CLAUDECODE` · `CLAUDE_*`가 PTY 셸(PowerShell · PSReadLine · ls)까지 내려가 색을 끈다. 사용자 셸은 사용자
+/// 환경 그대로여야 한다.
+pub(crate) fn pty_env_blocked(name: &str) -> bool {
+    name == "NO_COLOR" || name == "CLAUDECODE" || name.starts_with("CLAUDE_")
+}
+
+/// 지금 프로세스 환경에서 차단 변수를 뺀 목록(이름 · 값) — PTY 생성 때 환경 블록/unsetenv의 원천.
+pub(crate) fn pty_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    std::env::vars_os()
+        .filter(|(k, _)| !k.to_str().is_some_and(pty_env_blocked))
+        .collect()
+}
+
 /// 작업 집합을 운영체제에 돌려준다(유휴 트림 · dir2 M2-8 `trim_resident` 계승 · T-179 A). Windows =
 /// `SetProcessWorkingSetSize(-1, -1)`(미사용 페이지를 대기 목록으로 — 작업 관리자의 "메모리"가 곧바로 준다 · 되돌아올 때
 /// 소프트 페이지 폴트 비용) · 다른 OS = 아무것도 안 함(힙 반납은 `procmem::trim`이 한다).
@@ -1558,5 +1572,30 @@ mod tests {
         assert_eq!(trash_outcome(Err(()), false), TrashOutcome::Trashed(None));
         assert_eq!(trash_outcome(Ok(None), true), TrashOutcome::Fallback);
         assert_eq!(trash_outcome(Err(()), true), TrashOutcome::Fallback);
+    }
+}
+
+/// PTY 환경 차단(T-107 · MC/DC): NO_COLOR · CLAUDECODE · CLAUDE_* 는 막고 · PATH · CLAUDE(접두 아님) · NO_COLORS(다른 이름)는 둔다 ·
+/// `pty_env`는 지금 환경에서 그것들만 뺀다.
+#[cfg(test)]
+mod pty_env_tests {
+    use super::*;
+
+    #[test]
+    fn blocklist_rules_and_env_filter() {
+        assert!(pty_env_blocked("NO_COLOR"));
+        assert!(pty_env_blocked("CLAUDECODE"));
+        assert!(pty_env_blocked("CLAUDE_CODE_SESSION_ID"));
+        assert!(!pty_env_blocked("PATH"));
+        assert!(!pty_env_blocked("CLAUDE"));
+        assert!(!pty_env_blocked("NO_COLORS"));
+        assert!(!pty_env_blocked("no_color"));
+        std::env::set_var("NDIR_PTY_ENV_PROBE", "1");
+        let env = pty_env();
+        assert!(env.iter().any(|(k, _)| k == "NDIR_PTY_ENV_PROBE"));
+        assert!(!env
+            .iter()
+            .any(|(k, _)| k.to_str().is_some_and(pty_env_blocked)));
+        std::env::remove_var("NDIR_PTY_ENV_PROBE");
     }
 }
