@@ -121,6 +121,7 @@
 | — | `app/dirsize.rs` | 빠르게 지나갈 때 이 시간 안에 떠난 폴더는 건너뜀(마지막 것만 보류 · 0~5000 ms) | 250 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_settle_ms`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | 체크섬 없음(dir2 · dir3 종전) | `app/checksum.rs` · `hash_win.rs` · ndir-ops `hash.rs` | 체크섬 창이 기본으로 계산할 알고리즘 목록 | — | 고급(드문 조절 · 기본 `crc32,md5,sha1,sha256` · SHA-512 추가 가능) | `hash.algos`(NEW-038) | ✅ 10-05 §55(0953f27) |
 | 체크섬 자동 계산(크기 무관) | `app/checksum.rs` · `hash_win.rs` | 이 크기를 넘는 파일은 자동 계산하지 않고 [계산] 버튼 | 512 MB | 고급(드문 조절 · 0 = 항상 수동) | `hash.auto_limit_mb`(NEW-038 2차) | ✅ 10-05 §73(55038ef) |
+| git 상세 = 저장소마다 한 번 조회 · 자동 갱신 없음(dir3 종전) | `app/statusline.rs` · `app/watch.rs` · `dirinfo.rs` | 탭 상태바 git 요약 안전망 재조회 주기(사건 기반 갱신 외 · 보이는 탭의 저장소만 · 0~3600 s) | 30 | 고급(탭 상태바 · 0 = 끔) | `git.refresh_s`(NEW-005 2차) | ✅ 10-05 §86(348da08) |
 | 파일 선택 즉시 셸 컨텍스트 메뉴 선행 구축(300 ms 머무름 · 확장 DLL 적재) | `app/ctxmenu.rs` · `platform/winshell.rs` | 선택만으로 셸 메뉴를 미리 만들지(on = 첫 우클릭 빠름 · 확장 DLL 상주로 Private +40 MB · off = 우클릭 때 구축 · "불러오는 중" 뒤 채움) | on | 고급(영향 큼 · 기본 off) | `ctxmenu.prebuild`(T-179 J) | ✅ 10-05 §74(9994462) |
 | 유휴 메모리 정리 없음 | `app/memory.rs` · `platform/procmem.rs` | 이 초 동안 입력이 없으면 글리프 캐시 · 셸 메뉴 COM 해제 · 힙 압축 · 작업 집합 트림(0 = 끔) | — | 고급(드문 조절 · 기본 60 s) | `mem.idle_trim_s`(T-179 A) | ✅ 10-05 §74(9994462) |
 | 즐겨찾기 없음(dir2 · dir3 종전) | `app/favorites.rs` | 즐겨찾기 폴더 목록(Ctrl+D로 편집 · 최대 64) | — | 숨김(HIDDEN · 명령으로만 편집 · `;;` 구분) | `nav.favorites`(NEW-039) | ✅ 10-05 §57(704c399) |
