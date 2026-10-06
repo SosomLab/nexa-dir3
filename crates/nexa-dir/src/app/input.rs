@@ -48,10 +48,20 @@ pub(crate) enum ImeSink {
     List,
     /// 그 밖(메뉴 · 대화상자) — 확정된 글만 글자 사건으로.
     Other,
+    /// 명령 팔레트 — 조합 중인 글은 팔레트 입력란이 직접 보이고 확정된 글만 글자 사건으로(T-138).
+    Palette,
 }
 
-pub(crate) fn ime_sink(modal: bool, path_edit: bool, renaming: bool, terminal: bool) -> ImeSink {
-    if modal {
+pub(crate) fn ime_sink(
+    palette: bool,
+    modal: bool,
+    path_edit: bool,
+    renaming: bool,
+    terminal: bool,
+) -> ImeSink {
+    if palette {
+        ImeSink::Palette
+    } else if modal {
         ImeSink::Other
     } else if path_edit || renaming {
         ImeSink::Edit
@@ -161,6 +171,7 @@ impl App {
     pub(crate) fn ime_sink_now(&self) -> ImeSink {
         let p = &self.panels[self.active];
         ime_sink(
+            self.palette.is_open(),
             self.dlg.is_open() || self.tab_menu.is_open() || self.menubar.is_open(),
             p.pathbar.is_editing(),
             p.rows().is_renaming(),
@@ -206,6 +217,14 @@ impl App {
                 for c in committed.chars().filter(|c| !c.is_control()) {
                     self.route(InputEvent::Char { c, now_ms });
                 }
+            }
+            ImeSink::Palette => {
+                let mut inv = Invalidations::default();
+                self.palette.set_preedit(preedit, &mut inv);
+                for c in committed.chars().filter(|c| !c.is_control()) {
+                    self.route(InputEvent::Char { c, now_ms });
+                }
+                self.redraw();
             }
         }
     }
@@ -552,6 +571,10 @@ impl App {
             if matches!(ev, InputEvent::MouseDown { .. }) {
                 self.dlg.focus();
             }
+            return;
+        }
+        // 명령 팔레트가 열려 있으면 모든 입력은 팔레트가 먼저(T-138 · nexa-sql `route_palette`와 같은 자리).
+        if self.route_palette(&ev, inv) {
             return;
         }
         // 열린 탭 메뉴 = 모달(안 = 고르기 · Esc/바깥 클릭 = 닫기 · 바깥 클릭은 아래로 흘린다 — 팝업 UX 규칙).

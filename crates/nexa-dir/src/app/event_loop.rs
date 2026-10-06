@@ -119,6 +119,9 @@ impl ApplicationHandler<Wake> for App {
         if self.toasts.tick(now) {
             redraw = true;
         }
+        if self.palette.tick(now_ms) {
+            redraw = true;
+        }
         let aux_live = self.aux_tick(now_ms);
         let term_live = self.term_tick(now_ms);
         let ops_live = self.ops_tick()
@@ -191,6 +194,7 @@ impl ApplicationHandler<Wake> for App {
         let live = inv.tick_requested()
             || aux_live
             || self.toasts.animating()
+            || self.palette.is_animating()
             // 스플리터: 페이드가 움직이는 동안과 드래그 중에만 프레임 간격으로 깬다(종전 = hover 내내 16 ms 폴링 ·
             // 벗어난 뒤 페이드아웃은 깨우지 않았다).
             || [SplitKind::Panel, SplitKind::DockHeight, SplitKind::DockSplit]
@@ -514,6 +518,10 @@ impl App {
         let Some(id) = self.keymap.lookup(&ch) else {
             return false;
         };
+        // 명령 팔레트가 열려 있으면: 조합키 명령은 팔레트가 처리/삼킴 · 조합키 없는 키는 사건으로 팔레트에(T-138).
+        if let Some(taken) = self.palette_chord(&ch, id) {
+            return taken;
+        }
         // 열린 메뉴(우클릭 메뉴 · 메뉴 바)의 Enter = 그 메뉴의 "고르기" — 목록 활성화 명령으로 가로채지 않는다.
         if id == "nav.activate" && (self.tab_menu.is_open() || self.menubar.is_open()) {
             return false;

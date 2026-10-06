@@ -99,5 +99,6 @@ impl App {
         }
         self.menubar.paint(dc, &th);
         self.tab_menu.paint(dc, &th);
+        self.palette.paint(dc, &th); // 명령 팔레트 = 맨 위 층(T-138)
     }
 }

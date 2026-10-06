@@ -322,6 +322,9 @@ struct App {
     open_keys: bool,
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
     tab_menu: ContextMenu,
+    /// 명령 팔레트(T-138) + 최근 실행 id(앞 = 최근).
+    palette: nexa_ctl::Palette,
+    palette_recent: Vec<String>,
     tab_menu_at: Option<(usize, usize)>,
     /// 행/배경 컨텍스트 메뉴 주인(탭 메뉴와 같은 `ContextMenu` 공유).
     ctx_kind: Option<app::ctxmenu::CtxKind>,
@@ -666,6 +669,8 @@ impl App {
             open_prefs: false,
             open_keys: false,
             tab_menu: ContextMenu::new(),
+            palette: nexa_ctl::Palette::new(app::palette::palette_strings()),
+            palette_recent: Vec::new(),
             tab_menu_at: None,
             ctx_kind: None,
             ctx_new_dir: None,
@@ -951,6 +956,9 @@ impl App {
         self.launcherbar
             .set_bounds(Rect::new(0, menu_h + tool_h, w, launch_h), &mut inv);
         let top = menu_h + tool_h + launch_h;
+        // 명령 팔레트 = 도구 모음 바로 아래 가운데.
+        self.palette.set_bounds(w, menu_h + tool_h, s);
+        self.palette.set_window(w, h);
         let status_h = px(22.0, s);
         let bottom = (h - status_h).max(top);
         self.statusbar

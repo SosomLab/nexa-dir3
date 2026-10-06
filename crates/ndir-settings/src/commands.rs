@@ -179,6 +179,14 @@ pub const COMMANDS: &[Command] = &[
         "cmd+shift+y|f3",
         "f3"
     ),
+    // 명령 팔레트(dir3 신규 · T-138 · 사용자 10-04 · Sublime/VS Code 관례 Ctrl+⇧P · macOS ⌘⇧P).
+    c!(
+        "view.palette",
+        "cmd.palette",
+        "ctrl+shift+p",
+        "cmd+shift+p",
+        "ctrl+shift+p"
+    ),
     // ── 탐색(CMD-326~329 Alt 조합 · macOS는 ⌘[ ⌘] ⌘↑ ⌘↓ — ⌥←→는 편집 필드 단어 이동)
     c!(
         "nav.back",

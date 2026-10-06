@@ -6966,19 +6966,27 @@ fn drop_onto_file_targets_its_parent_folder() {
 fn ime_text_reaches_path_bar_rename_and_typeahead() {
     use crate::app::input::{ime_sink, ImeSink};
     // MC/DC: 모달 > 편집 필드 > 터미널 > 목록.
-    assert_eq!(ime_sink(false, false, false, false), ImeSink::List);
-    assert_eq!(ime_sink(false, true, false, false), ImeSink::Edit);
-    assert_eq!(ime_sink(false, false, true, false), ImeSink::Edit);
-    assert_eq!(ime_sink(false, false, false, true), ImeSink::Terminal);
+    assert_eq!(ime_sink(false, false, false, false, false), ImeSink::List);
+    assert_eq!(ime_sink(false, false, true, false, false), ImeSink::Edit);
+    assert_eq!(ime_sink(false, false, false, true, false), ImeSink::Edit);
     assert_eq!(
-        ime_sink(false, true, false, true),
+        ime_sink(false, false, false, false, true),
+        ImeSink::Terminal
+    );
+    assert_eq!(
+        ime_sink(false, false, true, false, true),
         ImeSink::Edit,
         "편집 필드가 터미널보다 먼저"
     );
     assert_eq!(
-        ime_sink(true, true, true, true),
+        ime_sink(false, true, true, true, true),
         ImeSink::Other,
         "모달이 가장 먼저"
+    );
+    assert_eq!(
+        ime_sink(true, true, true, true, true),
+        ImeSink::Palette,
+        "팔레트가 모달보다 먼저(T-138)"
     );
     let (mut app, dir) = fixture("imeinput");
     for name in ["가방.txt", "강아지.txt", "강원도.txt"] {
@@ -7682,5 +7690,84 @@ fn context_menu_prebuild_is_off_by_default() {
     );
     assert_eq!(app.ctx_shell_tick(t0 + Duration::from_millis(1000)), None);
     assert_eq!(rec.borrow().len(), 1, "켜면 300 ms 뒤 한 번");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 명령 팔레트(T-138 · UIK-104): `view.palette`(Ctrl/Cmd+Shift+P) 토글 · 항목 = 명령 표 전체("메뉴: 항목" + 단축키 · 자기 자신 제외) ·
+/// 글자로 거른 뒤 Enter = 명령 실행(새 탭) · 최근 실행이 맨 앞 · Esc = 닫기 · 열린 동안 조합키 명령은 삼킨다 · 조합키 없는 키는 팔레트로.
+#[test]
+fn command_palette_filters_and_runs_commands() {
+    let (mut app, dir) = fixture("palette");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app::menus::MENU_IDS.contains(&"view.palette"));
+    assert_eq!(app::menus::menu_of("view.palette"), Some("menu.view"));
+    assert_eq!(app::menus::menu_of("nav.back"), Some("menu.go"));
+    assert_eq!(app::menus::menu_of("help.about"), Some("menu.help"));
+    assert_eq!(app::menus::menu_of("list.context_menu"), None);
+    app.command("view.palette");
+    assert!(app.palette.is_open());
+    let items = app.palette_items();
+    let new_tab = items
+        .iter()
+        .find(|i| i.id == "file.new_tab")
+        .expect("file.new_tab");
+    assert!(
+        new_tab.label.contains(&tr("menu.file.newTab"))
+            && new_tab.label.starts_with(&tr("menu.file")),
+        "{}",
+        new_tab.label
+    );
+    assert!(!new_tab.detail.is_empty(), "단축키 표시");
+    assert!(
+        !items.iter().any(|i| i.id == "view.palette"),
+        "자기 자신은 뺀다"
+    );
+    let tabs = app.panels[0].tab_count();
+    for c in tr("menu.file.newTab").chars() {
+        app.route(InputEvent::Char { c, now_ms: 0 });
+    }
+    assert!(!app.palette.matches().is_empty());
+    assert_eq!(
+        items[app.palette.matches()[0]].id,
+        "file.new_tab",
+        "거른 첫 항목"
+    );
+    // 열린 동안 조합키 명령(Ctrl+T)은 삼킨다 · Enter(조합키 없음)는 팔레트로.
+    let ctrl_t = ndir_settings::Chord::parse("ctrl+t").expect("chord");
+    assert!(app.key_chord(ctrl_t, false), "삼킴");
+    assert_eq!(app.panels[0].tab_count(), tabs, "탭이 늘지 않았다");
+    let enter = ndir_settings::Chord::parse("enter").expect("chord");
+    assert_eq!(
+        app.palette_chord(&enter, "nav.activate"),
+        Some(false),
+        "사건으로 흘린다"
+    );
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Enter,
+        shift: false,
+        primary: false,
+    });
+    assert!(!app.palette.is_open());
+    assert_eq!(app.panels[0].tab_count(), tabs + 1, "새 탭 실행");
+    assert_eq!(
+        app.palette_recent.first().map(String::as_str),
+        Some("file.new_tab")
+    );
+    app.command("view.palette");
+    let items = app.palette_items();
+    assert_eq!(
+        items[app.palette.matches()[0]].id,
+        "file.new_tab",
+        "최근 실행이 맨 앞"
+    );
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(!app.palette.is_open(), "Esc = 닫기");
+    app.command("view.palette");
+    app.command("view.palette");
+    assert!(!app.palette.is_open(), "토글");
     let _ = std::fs::remove_dir_all(&dir);
 }

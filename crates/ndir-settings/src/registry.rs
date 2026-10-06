@@ -1540,6 +1540,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.view.palette",
+        CAT_KEYS,
+        "cmd.palette",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.nav.back",
         CAT_KEYS,
         "cmd.navBack",

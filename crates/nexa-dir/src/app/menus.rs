@@ -75,6 +75,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "-",
     "view.refresh",
     "view.preview_window",
+    "view.palette",
     "-",
     "view.theme_system",
     "view.theme_light",
@@ -96,6 +97,24 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "help.license",
     "help.selfcheck",
 ];
+
+/// 메뉴 구획(메뉴 라벨 키 · `MENU_IDS` 시작 · 끝) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다.
+pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
+    ("menu.file", 0, 9),
+    ("menu.edit", 9, 20),
+    ("menu.view", 20, 45),
+    ("menu.go", 45, 56),
+    ("menu.help", 56, usize::MAX),
+];
+
+/// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
+pub(crate) fn menu_of(id: &str) -> Option<&'static str> {
+    let idx = MENU_IDS.iter().position(|m| *m == id)?;
+    MENU_SECTIONS
+        .iter()
+        .find(|(_, s, e)| (*s..*e).contains(&idx))
+        .map(|(m, _, _)| *m)
+}
 
 /// 잠긴 항목 안내 글(순수 · dir2 `del.lockedMsg`): 개수 + 이름 목록(최대 10줄 · 넘으면 "…외 n개").
 pub(crate) fn locked_message(locked: &[PathBuf]) -> String {
@@ -124,7 +143,11 @@ impl App {
     /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
         let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
-        let mut view = items(&MENU_IDS[20..44]);
+        let sec = |i: usize| {
+            let (_, s, e) = MENU_SECTIONS[i];
+            &MENU_IDS[s..e.min(MENU_IDS.len())]
+        };
+        let mut view = items(sec(2));
         // 언어 목록(동적 명령 `lang:<code>` — 단축키 재정의 대상 아님).
         for (code, name) in ndir_i18n::discover(&home) {
             view.push(MenuEntry::Item(ComboItem::new(
@@ -134,11 +157,11 @@ impl App {
         }
         let _ = settings;
         vec![
-            MenuDef::new(tr("menu.file"), items(&MENU_IDS[..9])),
-            MenuDef::new(tr("menu.edit"), items(&MENU_IDS[9..20])),
+            MenuDef::new(tr("menu.file"), items(sec(0))),
+            MenuDef::new(tr("menu.edit"), items(sec(1))),
             MenuDef::new(tr("menu.view"), view),
-            MenuDef::new(tr("menu.go"), items(&MENU_IDS[44..55])),
-            MenuDef::new(tr("menu.help"), items(&MENU_IDS[55..])),
+            MenuDef::new(tr("menu.go"), items(sec(3))),
+            MenuDef::new(tr("menu.help"), items(sec(4))),
         ]
     }
 
@@ -850,6 +873,7 @@ impl App {
                 }
             }
             "view.preview_window" => self.open_preview_window(a),
+            "view.palette" => self.toggle_palette(),
             // `list.context_menu` = 키맵 id(Shift+F10 · 메뉴 키 · macOS ⌃Return) · `cmd.contextMenu` = 기동 명령/시험이 부르던 이름 — 같은 일.
             // 종전에는 뒤 이름만 받아 **키로는 메뉴가 열리지 않았다**(키맵이 가로챈 뒤 분기가 없었다 · 10-05 매트릭스 대조에서 적발).
             "list.context_menu" | "cmd.contextMenu" => self.open_row_menu_at_caret(a),
@@ -902,13 +926,20 @@ mod tests {
         assert_eq!(MENU_IDS[0], "file.new_tab");
         assert_eq!(MENU_IDS[9], "edit.undo");
         assert_eq!(MENU_IDS[20], "view.mode_tree");
-        assert_eq!(MENU_IDS[43], "view.lang_system");
-        assert!(MENU_IDS[20..44].contains(&"view.preview_window"));
-        assert_eq!(MENU_IDS[44], "nav.back");
-        assert_eq!(MENU_IDS[55], "help.about");
-        assert_eq!(MENU_IDS[56], "help.license");
-        assert_eq!(MENU_IDS[57], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 58);
+        assert_eq!(MENU_IDS[44], "view.lang_system");
+        assert!(MENU_IDS[20..45].contains(&"view.preview_window"));
+        assert!(MENU_IDS[20..45].contains(&"view.palette"));
+        assert_eq!(MENU_IDS[45], "nav.back");
+        assert_eq!(MENU_IDS[56], "help.about");
+        assert_eq!(MENU_IDS[57], "help.license");
+        assert_eq!(MENU_IDS[58], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 59);
+        // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
+        for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
+            let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);
+            assert_eq!(next.unwrap_or(usize::MAX), *e, "구획 {i} 경계");
+            assert_ne!(MENU_IDS[*s], "-", "구획 {i} 시작은 구분선이 아니다");
+        }
     }
 
     #[test]
