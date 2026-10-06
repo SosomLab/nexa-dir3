@@ -116,6 +116,9 @@
 | 타입어헤드 켜기/끄기(종전 = 늘 켜짐) · 유지 시간 1000 → 2000 ms | nexa-grid VirtualRows(nexa-ui 157) · `app/settings.rs::apply_typeahead` | 목록 글자 입력 이동 여부 · 입력 유지 시간(nexa-sql 기준 2000 · 상한 60000) | `typeahead.reset_ms`(기존 · 기본값 변경 · dir2 가져온 1000은 변경분으로 유지) | 설정(취향) | `typeahead.enabled`(신규 · 기본 on · NEW-032) | ✅ 10-05 §35(adea995) |
 | 행 아이콘 늘 켜짐 · 메뉴 아이콘 없음 | `App::icon_switches` · `app/menu_icons.rs` | 행 아이콘 · 메뉴 아이콘 켜기/끄기(성능 향상 모드가 강제 끔 · 저장값 유지) | — | 설정(취향 · DEPENDS `perf.boost` Eq off) | `list.row_icons` · `menu.icons`(기본 on · NEW-033/034) | ✅ 10-05 §38(d4aca0d) |
 | 폴더 크기 표시 없음(dir2 · dir3 종전) | `app/dirsize.rs` · `dockinfo.rs` | 정보 도크에서 폴더 크기를 자동으로 잴지 | — | 설정(취향 · 기본 on · DEPENDS `perf.boost` Eq off) | `dock.folder_size`(NEW-037) | ✅ 10-05 §54(85e405d) |
+| — | `app/dirsize.rs` | 폴더 크기 동시 계산 개수(1~8) | 2 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_threads`(T-166 2차) | ✅ 10-05 §82(5359834) |
+| — | `app/dirsize.rs` | 대기 큐 상한(넘치면 오래된 요청 버림 · 1~500) | 50 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_queue`(T-166 2차) | ✅ 10-05 §82(5359834) |
+| — | `app/dirsize.rs` | 빠르게 지나갈 때 이 시간 안에 떠난 폴더는 건너뜀(마지막 것만 보류 · 0~5000 ms) | 250 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_settle_ms`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | 체크섬 없음(dir2 · dir3 종전) | `app/checksum.rs` · `hash_win.rs` · ndir-ops `hash.rs` | 체크섬 창이 기본으로 계산할 알고리즘 목록 | — | 고급(드문 조절 · 기본 `crc32,md5,sha1,sha256` · SHA-512 추가 가능) | `hash.algos`(NEW-038) | ✅ 10-05 §55(0953f27) |
 | 체크섬 자동 계산(크기 무관) | `app/checksum.rs` · `hash_win.rs` | 이 크기를 넘는 파일은 자동 계산하지 않고 [계산] 버튼 | 512 MB | 고급(드문 조절 · 0 = 항상 수동) | `hash.auto_limit_mb`(NEW-038 2차) | ✅ 10-05 §73(55038ef) |
 | 파일 선택 즉시 셸 컨텍스트 메뉴 선행 구축(300 ms 머무름 · 확장 DLL 적재) | `app/ctxmenu.rs` · `platform/winshell.rs` | 선택만으로 셸 메뉴를 미리 만들지(on = 첫 우클릭 빠름 · 확장 DLL 상주로 Private +40 MB · off = 우클릭 때 구축 · "불러오는 중" 뒤 채움) | on | 고급(영향 큼 · 기본 off) | `ctxmenu.prebuild`(T-179 J) | ✅ 10-05 §74(9994462) |
