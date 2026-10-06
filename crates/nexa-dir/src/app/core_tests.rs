@@ -2043,9 +2043,10 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
         .map(|it| it.id.clone())
         .collect();
     assert_eq!(plain, ["view.refresh", "file.prefs"]);
-    // 15개 명령 = SVG 마스크(칸 20px · 그림은 90 % = 18px — `toolbar.icon_scale_pct`) · 점 파일 토글이 없는 OS(Linux · macOS)는 view.dot이 빠져 14개.
+    // 16개 명령 = SVG 마스크(칸 20px · 그림은 90 % = 18px — `toolbar.icon_scale_pct` · 로그 토글 ≡ 포함 · T-92) · 점 파일 토글이
+    // 없는 OS(Linux · macOS)는 view.dot이 빠져 15개.
     let dot = usize::from(platform::has_dotfile_toggle());
-    assert_eq!(masks, 14 + dot);
+    assert_eq!(masks, 15 + dot);
     // 대소문자 구분 정렬 토글 = 폴더 우선 바로 다음 · 누르면 전역 설정과 체크가 함께 바뀐다.
     let ids: Vec<String> = app
         .toolbar
@@ -3893,9 +3894,9 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
         if platform::has_dotfile_toggle() {
-            "show:1[dot:1,foldersfirst:1,casesensitive:1,natural:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[dot:1,foldersfirst:1,casesensitive:1,natural:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|log:1"
         } else {
-            "show:1[hidden:1,foldersfirst:1,casesensitive:1,natural:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1"
+            "show:1[hidden:1,foldersfirst:1,casesensitive:1,natural:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|log:1"
         },
         "정규화 저장"
     );
@@ -4740,7 +4741,10 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
             .map(|(id, _, _)| id)
             .collect()
     };
-    assert_eq!(ids(&app), ["refresh", "panel", "view", "show", "settings"]);
+    assert_eq!(
+        ids(&app),
+        ["refresh", "panel", "view", "show", "settings", "log"]
+    );
     // 그룹 안 아이콘 = 붙임(기본 toolbar.item_gap 0).
     let (a, b) = (
         app.toolbar.item_rect("view.mode_tree").unwrap(),

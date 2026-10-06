@@ -33,6 +33,7 @@ fn tbo_label(block: &str, item: Option<&str>) -> String {
         ("view", Some("tree")) => tr("menu.view.modeTree"),
         ("view", Some("flat")) => tr("menu.view.modeFlat"),
         ("view", Some("tiles")) => tr("menu.view.modeTiles"),
+        ("log", None) => tr("cmd.log"),
         ("refresh", None | Some("refresh")) => tr("menu.view.refresh"),
         ("refresh", Some("ontop")) => tr("menu.view.alwaysOnTop"),
         ("settings", None) => tr("menu.file.prefs")

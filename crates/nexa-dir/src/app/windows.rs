@@ -100,6 +100,7 @@ impl App {
             });
             let owner = self.window.clone();
             self.log_win.open(el, theme, near, owner.as_deref());
+            self.sync_log_toggle();
         }
         if std::mem::take(&mut self.open_hash) && self.window.is_some() {
             let over = self.main_rect();
@@ -362,6 +363,7 @@ impl App {
             }
             if !self.log_win.is_open() {
                 self.persist_window_sizes(); // X로 닫힘 — 기하 기억
+                self.sync_log_toggle();
             }
             return true;
         }

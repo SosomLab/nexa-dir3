@@ -327,6 +327,7 @@ impl App {
             ("view.mode_tree", mode == "tree"),
             ("view.mode_flat", mode == "flat"),
             ("view.mode_tiles", mode == "tiles"),
+            ("view.log", self.log_win.is_open()),
         ];
         for (id, on) in tool {
             self.toolbar.set_item_checked(id, on, &mut inv);
@@ -364,6 +365,7 @@ impl App {
                 ("refresh", "refresh") => g("view.refresh", "⟳", "menu.view.refresh"),
                 ("refresh", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
                 ("settings", _) => g("file.prefs", "⚙", "menu.file.prefs"),
+                ("log", _) => g("view.log", "≡", "cmd.log"),
                 // 보기 옵션 3종 = 툴팁에 적용 범위를 덧붙인다(dir2 08-02 `scope_tip` "라벨 — 범위").
                 ("show", "hidden") => scoped(
                     g("view.hidden", "👁", "menu.view.hidden"),

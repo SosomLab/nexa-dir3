@@ -79,6 +79,8 @@ pub(crate) const EMBEDDED_SVG: &[(&str, &str)] = &[
     ),
     // 도크 미리보기 ↗ "크게"(dir2 07-26) — InfoDock 버튼은 nexa-explorer가 글리프로 그린다 · 등록만.
     ("popout", include_str!("../assets/toolbar/popout.svg")),
+    // 로그 창 토글(T-92 · dir3 신규 · 사용자 10-06 "nexa-sql처럼 오른쪽 끝에").
+    ("log", include_str!("../assets/toolbar/log.svg")),
 ];
 
 /// 툴바 명령 id → 자산 이름(dir2 README 매핑표).
@@ -99,6 +101,7 @@ pub(crate) fn asset_of(cmd_id: &str) -> Option<&'static str> {
         "view.folders_first" => "folders-first",
         "view.case_sensitive" => "case-sensitive",
         "view.natural_sort" => "natural-sort",
+        "view.log" => "log",
         _ => return None,
     })
 }

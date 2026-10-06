@@ -30,6 +30,15 @@ impl App {
         } else {
             self.open_log = true;
         }
+        self.sync_log_toggle();
+    }
+
+    /// 도구 모음 ≡ 토글 = 로그 창 열림 상태(열기 · 닫기 · X로 닫힘 뒤에 맞춘다).
+    pub(crate) fn sync_log_toggle(&mut self) {
+        let mut inv = Invalidations::default();
+        let on = self.log_win.is_open() || self.open_log;
+        self.toolbar.set_item_checked("view.log", on, &mut inv);
+        self.redraw();
     }
 
     /// 기본 로그 한 줄(늘 보인다 · 층 = App).
