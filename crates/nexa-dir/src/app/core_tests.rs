@@ -3894,9 +3894,9 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
     assert_eq!(
         app.settings.get("toolbar.layout").unwrap(),
         if platform::has_dotfile_toggle() {
-            "show:1[dot:1,foldersfirst:1,casesensitive:1,natural:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|log:1"
+            "show:1[dot:1,foldersfirst:1,casesensitive:1,natural:1,hidden:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|info:1[log:1]"
         } else {
-            "show:1[hidden:1,foldersfirst:1,casesensitive:1,natural:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|log:1"
+            "show:1[hidden:1,foldersfirst:1,casesensitive:1,natural:1]|view:0[tree:1,flat:1,tiles:1]|refresh:1[refresh:1,ontop:1]|panel:1[toggle:0,dock:1,info:1,colsync:1]|settings:1|info:1[log:1]"
         },
         "정규화 저장"
     );
@@ -4743,7 +4743,7 @@ fn toolbar_groups_move_by_drag_and_size_gap_settings_apply_live() {
     };
     assert_eq!(
         ids(&app),
-        ["refresh", "panel", "view", "show", "settings", "log"]
+        ["refresh", "panel", "view", "show", "settings", "info"]
     );
     // 그룹 안 아이콘 = 붙임(기본 toolbar.item_gap 0).
     let (a, b) = (

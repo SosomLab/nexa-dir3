@@ -365,7 +365,7 @@ impl App {
                 ("refresh", "refresh") => g("view.refresh", "⟳", "menu.view.refresh"),
                 ("refresh", "ontop") => g("view.always_on_top", "📌", "menu.view.alwaysOnTop"),
                 ("settings", _) => g("file.prefs", "⚙", "menu.file.prefs"),
-                ("log", _) => g("view.log", "≡", "cmd.log"),
+                ("info", "log") => g("view.log", "≡", "cmd.log"),
                 // 보기 옵션 3종 = 툴팁에 적용 범위를 덧붙인다(dir2 08-02 `scope_tip` "라벨 — 범위").
                 ("show", "hidden") => scoped(
                     g("view.hidden", "👁", "menu.view.hidden"),
@@ -407,7 +407,13 @@ impl App {
                 continue; // 전부 숨긴 블록 = 그룹도 없음
             }
             let title = app::order::toolbar_group_title(&block);
-            out.push(ToolGroup::new(block, title, tools));
+            // 정보 그룹(로그 창 토글)은 오른쪽 끝에 붙인다(사용자 10-06 · nexa-sql 도구 모음 ≡ 자리).
+            let group = ToolGroup::new(block.clone(), title, tools);
+            out.push(if block == "info" {
+                group.align_right()
+            } else {
+                group
+            });
         }
         out
     }

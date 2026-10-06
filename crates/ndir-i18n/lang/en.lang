@@ -411,6 +411,7 @@ pref.toolbarOrder.desc = Reorder toolbar buttons. Select a group or an item, the
 pref.tbo.grpPanel = Panel Controls
 pref.tbo.grpView = View Mode
 pref.tbo.grpShow = Visibility
+pref.tbo.grpInfo = Info
 pref.tbo.panelToggle = File Panel Toggle
 pref.tbo.infoToggle = Info Panes Toggle
 pref.editBtn = Edit...

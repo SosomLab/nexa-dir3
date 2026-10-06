@@ -18,8 +18,8 @@ pub(crate) const TOOLBAR_BLOCKS: OrderDefs = &[
         &["hidden", "dot", "foldersfirst", "casesensitive", "natural"],
     ),
     ("settings", &[]),
-    // 로그 창 토글(오른쪽 끝 · nexa-sql 도구 모음 ≡ 계승 · 사용자 10-06 · T-92).
-    ("log", &[]),
+    // 정보 그룹(오른쪽 끝 · 우측 정렬 · 사용자 10-06): 로그 창 토글 ≡(nexa-sql 도구 모음 계승 · T-92).
+    ("info", &["log"]),
 ];
 
 /// 점 파일 토글이 없는 OS(Linux · macOS)의 도구 모음 블록 — `show`에서 `dot`만 뺀 것([`TOOLBAR_BLOCKS`]와 나머지는 같아야 한다).
@@ -32,8 +32,8 @@ pub(crate) const TOOLBAR_BLOCKS_NO_DOT: OrderDefs = &[
         &["hidden", "foldersfirst", "casesensitive", "natural"],
     ),
     ("settings", &[]),
-    // 로그 창 토글(오른쪽 끝 · nexa-sql 도구 모음 ≡ 계승 · 사용자 10-06 · T-92).
-    ("log", &[]),
+    // 정보 그룹(오른쪽 끝 · 우측 정렬 · 사용자 10-06): 로그 창 토글 ≡(nexa-sql 도구 모음 계승 · T-92).
+    ("info", &["log"]),
 ];
 
 /// 도구 모음 블록 정의(순수): 점 파일 토글이 있는 OS면 전체 · 없으면 `dot`을 뺀 것.
@@ -340,7 +340,7 @@ mod tests {
         let d = default_order(TOOLBAR_BLOCKS);
         assert_eq!(normalize(TOOLBAR_BLOCKS, &d), d, "기본 왕복");
         assert_eq!(normalize(TOOLBAR_BLOCKS, ""), d, "빈 값 = 기본");
-        let s = "view:0[tiles:1,tree:0,flat:1]|refresh:1[ontop:1,refresh:0]|panel:1[colsync:1,toggle:1,dock:1,info:1]|show:1[dot:1,hidden:1,casesensitive:0,natural:1,foldersfirst:1]|settings:1|log:1";
+        let s = "view:0[tiles:1,tree:0,flat:1]|refresh:1[ontop:1,refresh:0]|panel:1[colsync:1,toggle:1,dock:1,info:1]|show:1[dot:1,hidden:1,casesensitive:0,natural:1,foldersfirst:1]|settings:1|info:1[log:1]";
         assert_eq!(normalize(TOOLBAR_BLOCKS, s), s, "재배열/표시 보존");
         // 구형(vis 없음 · 누락 자식 · 미지 토큰 · 중복) → 보충 · 정의상 앞 형제 뒤에 삽입.
         let old = "panel[dock,toggle]|bogus|panel|view[flat]";
