@@ -11,7 +11,7 @@
 - OS 기본 컨트롤은 쓰지 않는다 — **전부 직접 그린다**(OS 간 차이 최소화 기조 · nexa-ui 계열 공통).
 - 원천(SSOT): 기능 = nexa-dir2 코드·문서(로컬 `../nexa-dir2`) · UI/기술 골격 = nexa-sql(`../nexa-sql`) · 컨트롤 = nexa-ui · 라이선스 = nexa-license. 조사 결과는 **[docs/port/](docs/port/00-index.md)** 이식 원장(접두 ID = 교차 검증 체크리스트).
 - 조직: **SosomLab** · 개발자: Sangyong Bae · kiros33@gmail.com · 라이선스: **PolyForm Noncommercial 1.0.0**(개인·비상업 무료 · 상업 유료).
-- 현 단계: **M0 골격**(2026-10-03 착수 — 규칙 문서·워크스페이스·CI·스모크/자가 점검 뼈대). 최신 현황은 항상 [docs/STATUS.md](docs/STATUS.md).
+- 현 단계: **M7 배포 · M8 교차 검증 진행**(2026-10-03 M0 착수 → 10-05 v0.23.0 공개 → 10-07 **v0.23.1** 전 채널 게시 · 188차). 최신 현황은 항상 [docs/STATUS.md](docs/STATUS.md).
 
 ## 2. 확정 결정 (요약 — 전문은 [docs/10](docs/10-decision-record.md))
 
