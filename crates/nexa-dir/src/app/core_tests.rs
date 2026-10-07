@@ -6073,17 +6073,27 @@ fn cut_marks_follow_the_clipboard() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// T-150 ⑮ OS 테마 변경(dir2 WINC-163): System 모드만 창이 알려 준 OS 테마를 따른다 · 명시 모드는 무시한다.
+/// T-150 ⑮ OS 테마 변경(dir2 WINC-163): System 모드만 OS 테마를 따른다 · 명시 모드는 무시한다. OS 판정 = 창이 알려 준 값 ·
+/// 단 Windows는 레지스트리가 읽히면 그것(winit 창 판정은 생성 때 고정 · 사용자 10-07 · `theme::system_dark`).
 #[test]
 fn system_theme_mode_follows_os_theme_only() {
-    use crate::theme::resolve;
+    use crate::theme::{resolve, system_prefers_dark};
     use ndir_settings::ThemeMode;
     use winit::window::Theme as Wt;
     let dark = Theme::dark().panel_bg;
     let light = Theme::light().panel_bg;
     assert_ne!(dark, light);
-    assert_eq!(resolve(ThemeMode::System, Some(Wt::Dark)).panel_bg, dark);
-    assert_eq!(resolve(ThemeMode::System, Some(Wt::Light)).panel_bg, light);
+    match (cfg!(windows), system_prefers_dark()) {
+        (true, Some(os_dark)) => {
+            let want = if os_dark { dark } else { light };
+            assert_eq!(resolve(ThemeMode::System, Some(Wt::Dark)).panel_bg, want);
+            assert_eq!(resolve(ThemeMode::System, Some(Wt::Light)).panel_bg, want);
+        }
+        _ => {
+            assert_eq!(resolve(ThemeMode::System, Some(Wt::Dark)).panel_bg, dark);
+            assert_eq!(resolve(ThemeMode::System, Some(Wt::Light)).panel_bg, light);
+        }
+    }
     for wt in [Some(Wt::Dark), Some(Wt::Light), None] {
         assert_eq!(resolve(ThemeMode::Dark, wt).panel_bg, dark, "명시 dark");
         assert_eq!(resolve(ThemeMode::Light, wt).panel_bg, light, "명시 light");
