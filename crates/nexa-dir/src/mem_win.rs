@@ -537,8 +537,10 @@ impl MemWin {
             section(&mut dc, y, &tr("mem.grp.system"), None);
             y += row_h + px(1.0);
             let scale_max = foot.max(sys.resident).max(1);
+            // 전용 워킹 셋 = 작업 관리자 "메모리"와 같은 축(전용 = 커밋과 다름 · 사용자 10-07) · 못 세는 OS(mac)는 0 = 행 숨김.
             for (key, v, always) in [
                 ("mem.sys.footprint", sys.footprint, true),
+                ("mem.sys.privateWs", sys.private_ws, false),
                 ("mem.sys.resident", sys.resident, true),
                 ("mem.sys.file", sys.file_backed, true),
                 ("mem.sys.compressed", sys.compressed, false),

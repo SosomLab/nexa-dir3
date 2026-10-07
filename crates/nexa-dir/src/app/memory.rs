@@ -67,9 +67,12 @@ impl App {
             self.ui_font.glyph_cache_bytes()
                 + self.mono_font.as_ref().map_or(0, |m| m.glyph_cache_bytes()),
         );
+        // 전용 워킹 셋(작업 관리자 "메모리" 축)은 페이지 수 비례 비용이라 전체 표본에서만 센다(사용자 10-07).
+        let mut sys = platform::procmem::sys();
+        sys.private_ws = platform::procmem::private_ws(&sys);
         Sample {
             at: Instant::now(),
-            sys: platform::procmem::sys(),
+            sys,
             data: acc,
             mapped: (ui_mapped, term_mapped),
             machine: platform::sysload::sample().map(|s| (s.mem_used, s.mem_total)),
@@ -82,14 +85,15 @@ impl App {
         let s = self.mem_sample();
         let mut out = String::new();
         out.push_str(&format!(
-            "sys footprint {} resident {} anon {} file_backed {} compressed {} heap_used {} heap_held {}\n",
+            "sys footprint {} resident {} anon {} file_backed {} compressed {} heap_used {} heap_held {} private_ws {}\n",
             s.sys.footprint,
             s.sys.resident,
             s.sys.anon,
             s.sys.file_backed,
             s.sys.compressed,
             s.sys.heap_used,
-            s.sys.heap_held
+            s.sys.heap_held,
+            s.sys.private_ws
         ));
         for c in Cat::ALL {
             out.push_str(&format!("{:?} {}\n", c, s.data.get(c)));

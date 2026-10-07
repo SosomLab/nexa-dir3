@@ -22,11 +22,23 @@ pub(crate) struct SysMem {
     pub heap_used: u64,
     /// 할당자가 **들고 있지만 안 쓰는** 바이트([`trim`]이 돌려줄 수 있는 몫의 상한).
     pub heap_held: u64,
+    /// ★ **전용 워킹 셋**(사용자 10-07 "작업 관리자 메모리와 전용 메모리가 다르다" · nexa-sql 10-07 bin63 계승) = 지금 RAM에 있는
+    /// 페이지 중 공유 아닌 것 — Windows 작업 관리자 "메모리(개인 작업 집합)"의 정의. [`footprint`](커밋 · Private Bytes)와 **축이
+    /// 달라** 두 숫자가 다른 것이 정상(유휴 트림 뒤에는 상주만 내려가 차이가 더 벌어진다). [`sys`]는 0으로 두고 [`private_ws`]로
+    /// 따로 센다(페이지 수 비례 비용 · 창이 열려 있을 때의 전체 표본에서만). macOS = 활성 상태 보기 "메모리"가 풋프린트라 0(행 숨김).
+    pub private_ws: u64,
 }
 
-/// 지금 값(≈ µs · 시스템 호출 한두 번).
+/// 지금 값(≈ µs · 시스템 호출 한두 번). `private_ws`는 0 — [`private_ws`]로 따로.
 pub(crate) fn sys() -> SysMem {
     imp::sys()
+}
+
+/// 전용 워킹 셋(작업 관리자 "메모리" 축 · [`SysMem::private_ws`]) — Windows `K32QueryWorkingSet`(Shared 비트 없는 페이지 ×
+/// 페이지 크기) · Linux `/proc/self/smaps_rollup`(Private_Clean + Private_Dirty) · 그 밖 = 0. 비용 = 상주 페이지 수 비례(300 MB ≈
+/// 77k 항목 · 수백 µs)라 전체 표본에서만 부른다.
+pub(crate) fn private_ws(s: &SysMem) -> u64 {
+    imp::private_ws(s)
 }
 
 /// 주어진 메모리 범위들 가운데 **지금 상주하는** 바이트(파일 매핑 — 글꼴 — 의 실제 점유 · 사용자 10-06 "글꼴 파일이 Private에
@@ -90,6 +102,31 @@ mod imp {
         fn K32GetProcessMemoryInfo(process: *mut c_void, counters: *mut Pmc, cb: u32) -> i32;
         fn HeapSummary(heap: *mut c_void, flags: u32, summary: *mut HeapSummaryT) -> i32;
         fn K32QueryWorkingSetEx(process: *mut c_void, info: *mut WsExInfo, cb: u32) -> i32;
+        fn K32QueryWorkingSet(process: *mut c_void, pv: *mut c_void, cb: u32) -> i32;
+    }
+
+    /// 작업 관리자 "메모리(개인 작업 집합)" = 워킹 셋 페이지 중 **Shared 비트(8) 없는** 것 × 페이지 크기(`PSAPI_WORKING_SET_BLOCK`).
+    pub(super) fn private_ws(s: &SysMem) -> u64 {
+        // 첫 칸 = 항목 수 · 이어서 항목들(ULONG_PTR) — 상주 페이지 수 + 여유로 잡고, 모자라면 첫 칸이 알려 주는 수로 한 번 더.
+        let mut cap = (s.resident / PAGE as u64) as usize + 4096;
+        for _ in 0..2 {
+            let mut buf = vec![0usize; cap + 1];
+            let cb = (buf.len() * std::mem::size_of::<usize>()) as u32;
+            // SAFETY: 버퍼 길이를 바이트로 알리고 커널은 그만큼만 채운다 · 자기 프로세스 핸들은 늘 유효.
+            let ok =
+                unsafe { K32QueryWorkingSet(GetCurrentProcess(), buf.as_mut_ptr().cast(), cb) }
+                    != 0;
+            let n = buf[0];
+            if ok && n <= cap {
+                let private = buf[1..=n].iter().filter(|e| (*e >> 8) & 1 == 0).count() as u64;
+                return private * PAGE as u64;
+            }
+            if n == 0 || n > (1usize << 26) {
+                break;
+            }
+            cap = n + 1024;
+        }
+        0
     }
     /// `PSAPI_WORKING_SET_EX_INFORMATION` — 주소 · 속성(비트 0 = 상주).
     #[repr(C)]
@@ -160,6 +197,7 @@ mod imp {
             } else {
                 0
             },
+            private_ws: 0,
         }
     }
 
@@ -235,11 +273,26 @@ mod imp {
             compressed: 0,
             heap_used: (mi.uordblks + mi.hblkhd) as u64,
             heap_held: mi.fordblks as u64,
+            private_ws: 0,
         }
     }
 
     pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
         None
+    }
+
+    /// `/proc/self/smaps_rollup`의 Private_Clean + Private_Dirty(kB) — 없으면 0.
+    pub(super) fn private_ws(_s: &SysMem) -> u64 {
+        std::fs::read_to_string("/proc/self/smaps_rollup")
+            .ok()
+            .map(|s| {
+                s.lines()
+                    .filter(|l| l.starts_with("Private_Clean:") || l.starts_with("Private_Dirty:"))
+                    .filter_map(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+                    .sum::<u64>()
+                    * 1024
+            })
+            .unwrap_or(0)
     }
 
     pub(super) fn trim() {
@@ -291,11 +344,17 @@ mod imp {
             compressed: if ok { info[15] } else { 0 },
             heap_used: ms.bytes_used as u64,
             heap_held: ms.bytes_free as u64,
+            private_ws: 0,
         }
     }
 
     pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
         None
+    }
+
+    /// 활성 상태 보기의 "메모리" = 풋프린트 그대로 — 따로 세지 않는다(행 숨김).
+    pub(super) fn private_ws(_s: &SysMem) -> u64 {
+        0
     }
 
     pub(super) fn trim() {
@@ -322,6 +381,10 @@ mod imp {
         None
     }
 
+    pub(super) fn private_ws(_s: &SysMem) -> u64 {
+        0
+    }
+
     pub(super) fn trim() {}
 }
 
@@ -345,6 +408,14 @@ mod tests {
             assert!(s.heap_used > 0, "{s:?}");
         } else {
             assert_eq!(s, super::SysMem::default());
+        }
+        // `sys()`는 전용 워킹 셋을 세지 않는다(비용 분리) — 따로 세면 Windows·Linux glibc에서 0 < 값 ≤ 상주.
+        assert_eq!(s.private_ws, 0);
+        let pws = super::private_ws(&s);
+        if cfg!(any(windows, all(target_os = "linux", target_env = "gnu"))) {
+            assert!(pws > 0 && pws <= s.resident, "pws {pws} · {s:?}");
+        } else {
+            assert_eq!(pws, 0);
         }
     }
 }
