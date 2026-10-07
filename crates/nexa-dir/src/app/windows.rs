@@ -89,7 +89,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.mem_win.open(el, theme, over, owner.as_deref());
-            self.mem_next = Instant::now(); // 첫 표본은 다음 유휴 틱에
+            // 첫 표본은 지금 바로 — 첫 그리기부터 표가 다 있고 창 높이가 내용에 맞는다(빈 표로 한 번 그렸다 늘리지 않게).
+            let s = self.mem_sample();
+            self.mem_win
+                .set_sample(s, crate::app::memory::MEM_REFRESH_MS);
+            self.mem_next = Instant::now()
+                + std::time::Duration::from_millis(crate::app::memory::MEM_REFRESH_MS);
         }
         if std::mem::take(&mut self.open_log) && self.window.is_some() {
             let theme = theme::window_theme(self.settings.theme_mode());

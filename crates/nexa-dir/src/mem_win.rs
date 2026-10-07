@@ -25,6 +25,10 @@ use winit::window::{Window, WindowId};
 
 /// 총량 이력 표본 수(맨 위 막대 그래프).
 const HIST: usize = 60;
+/// 창 기본 크기(논리 px · 사용자 10-08 "700×800") · 최소 폭 — 높이는 내용에 맞춘다.
+const WIN_W: f32 = 700.0;
+const WIN_H: f32 = 800.0;
+const MIN_W: f32 = 460.0;
 
 /// 창이 호스트에 요청하는 것.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +61,9 @@ pub(crate) struct MemWin {
     /// ★ 다시 그리기 생략(nexa-sql T-310 개념 · 사용자 10-08): 마지막으로 **그린** 표본의 표시 서명 · 그때의 현지 시각(바닥 "갱신 hh:mm:ss").
     last_sig: Option<u64>,
     updated_at: String,
+    /// ★ 내용에 맞춘 창 높이(물리 px · 사용자 10-08 "내용을 꽉 채우고 바닥 공간 없이 바로 [닫기]"): 그린 뒤 표 끝 + 바닥 줄 + 여백을
+    /// 재서 창에 요청한 값. 행 수(OS별 선택 행 · 시스템 줄) · 배율 · 글꼴이 바뀌어 값이 달라질 때만 다시 요청한다.
+    fit_h: Option<u32>,
 }
 
 /// [힙 정리] 뒤 버튼을 잠가 두는 표본 수(즉시 표본 1 + 다음 주기 1) · 결과 안내가 남는 표본 수.
@@ -80,6 +87,7 @@ impl MemWin {
             trim_note: None,
             last_sig: None,
             updated_at: String::new(),
+            fit_h: None,
         }
     }
 
@@ -138,12 +146,13 @@ impl MemWin {
             self.redraw();
             return;
         }
-        let (lw, lh) = (620.0, 720.0);
+        // 700×800(사용자 10-08 · nexa-sql 메모리 창 크기) — 높이는 첫 그리기 뒤 내용에 맞춰 다시 요청한다(`paint` · `fit_h`).
+        let (lw, lh) = (WIN_W, WIN_H);
         let mut attrs = Window::default_attributes()
             .with_title(format!("{} — {}", crate::APP_TITLE, tr("mem.title")))
             .with_theme(theme)
             .with_resizable(true)
-            .with_min_inner_size(winit::dpi::LogicalSize::new(460.0, 320.0))
+            .with_min_inner_size(winit::dpi::LogicalSize::new(MIN_W, 320.0))
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));
         if let Some((x, y, w, h)) = over {
             let cx = x + (w as i32 - lw as i32) / 2;
@@ -174,6 +183,7 @@ impl MemWin {
         self.trim_note = None;
         self.last_sig = None;
         self.updated_at.clear();
+        self.fit_h = None;
         self.btn_trim.set_enabled(true);
         self.btn_trim.set_label(tr("mem.trim"));
     }
@@ -598,15 +608,19 @@ impl MemWin {
                 );
                 let ty = dc.text_center_y(y, row_h);
                 dc.text(label_x, ty, clip, &line, th.text_dim);
+                y += row_h;
             }
 
-            // ── 바닥: 갱신 안내 · [닫기] ───────────────────────────────────────────────
+            // ── 바닥: 갱신 안내 · [닫기] — 표 **바로 아래**(바닥 고정이 아님 · 사용자 10-08) ─────────
             let btn_h = th_txt + px(12.0);
-            let by = hi - pad - btn_h;
-            dc.fill_rect(
-                Rect::new(0, by - px(8.0), wi, hi - by + px(8.0)),
-                th.window_bg,
-            );
+            let by = y + px(8.0);
+            // 창 높이를 내용에 맞춘다: 표본이 있어 행이 다 그려진 뒤에만(첫 빈 그림으로 줄였다 다시 늘리지 않게) · 값이 바뀔 때만.
+            let need = (by + btn_h + pad).max(1) as u32;
+            if sample.is_some() && self.fit_h != Some(need) {
+                self.fit_h = Some(need);
+                win.set_min_inner_size(Some(winit::dpi::PhysicalSize::new(px(MIN_W) as u32, need)));
+                let _ = win.request_inner_size(winit::dpi::PhysicalSize::new(size.width, need));
+            }
             let note = match sample {
                 // 방금 정리했으면 그 결과를 먼저 보여 준다(몇 초 뒤 평소 안내로 돌아간다).
                 Some(_) if self.trim_note.is_some() => self
