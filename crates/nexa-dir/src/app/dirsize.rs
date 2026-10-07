@@ -95,6 +95,27 @@ pub(crate) struct DirSizes {
     /// 마지막 요청 시각(빠른 이동 판정).
     last_request: Option<Instant>,
     tuning: Tuning,
+    /// 표시 조절(10-08 프레임 계측 적발): 상태 전이(끝남 · 시작 · 큐 변화)가 있었다 → 다음 표시는 즉시.
+    changed: bool,
+    /// 마지막으로 도크에 반영한 시각 — 재는 중의 진행값("지금까지 …")은 [`DISPLAY_EVERY_MS`]마다만. 종전에는 유휴 틱(사건마다 =
+    /// 그리기 뒤에도)마다 다시 그려 **그리기 → 틱 → 그리기** 고리로 재는 내내 120~170 fps가 됐다(docs/25 §8-1).
+    last_shown: Option<Instant>,
+}
+
+/// 재는 중 진행값 표시 간격(ms).
+pub(crate) const DISPLAY_EVERY_MS: u64 = 250;
+
+/// 도크에 반영할 때인가(순수 · MC/DC): 상태 전이가 있으면 즉시 · 재는 중이면 마지막 표시에서 `every_ms` 이상 지났을 때 ·
+/// 둘 다 아니면(유휴 · 방금 보여 줌) 아니다.
+pub(crate) fn display_due(
+    changed: bool,
+    busy: bool,
+    last_shown: Option<Instant>,
+    now: Instant,
+    every_ms: u64,
+) -> bool {
+    changed
+        || (busy && last_shown.is_none_or(|t| now.duration_since(t).as_millis() as u64 >= every_ms))
 }
 
 /// 캐시 항목 `key`가 `changed` 폴더의 변경에 영향을 받는가(순수): 바뀐 폴더가 항목 자신이거나 그 안(조상 항목의 합계가 변함) ·
@@ -221,6 +242,7 @@ impl DirSizes {
     /// 폴링: 끝난 작업을 캐시로 옮기고 · 보류가 멈춤 기준을 넘었으면 큐에 넣고 · 빈 자리를 채운다.
     /// 돌려주는 값 = 아직 할 일이 있다(깨움이 필요하다).
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
+        let before = (self.running.len(), self.queue.len(), self.cache.len());
         let (done, still): (Vec<DirSizeJob>, Vec<DirSizeJob>) = self
             .running
             .drain(..)
@@ -241,10 +263,31 @@ impl DirSizes {
             }
         }
         self.fill();
+        if before != (self.running.len(), self.queue.len(), self.cache.len()) {
+            self.changed = true;
+        }
         self.busy()
     }
 
-    /// 할 일이 있는가(재는 중 · 큐 · 보류).
+    /// 지금 도크에 반영해야 하는가([`display_due`]) — 참을 돌려주면 "보여 줬다"로 기록한다(호스트는 그때만 `update_docks` + 다시 그리기).
+    pub(crate) fn take_display_due(&mut self, now: Instant) -> bool {
+        if display_due(
+            self.changed,
+            self.busy(),
+            self.last_shown,
+            now,
+            DISPLAY_EVERY_MS,
+        ) {
+            self.changed = false;
+            self.last_shown = Some(now);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 할 일이 있는가(재는 중 · 큐 · 보류) — 시험 판정용(호스트는 `tick`의 반환값과 `take_display_due`만 쓴다).
+    #[cfg(test)]
     pub(crate) fn running(&self) -> bool {
         self.busy()
     }
@@ -381,9 +424,10 @@ impl App {
 
     /// 폴링(`OPS_POLL_MS`) — 할 일이 있으면 도크의 상태(대기 · 진행값 · 결과)를 갱신하고 `true`.
     pub(crate) fn dirsize_tick(&mut self) -> bool {
-        let was = self.dirsizes.running();
-        let live = self.dirsizes.tick(Instant::now());
-        if was {
+        let now = Instant::now();
+        let live = self.dirsizes.tick(now);
+        // 상태 전이는 즉시 · 진행값은 250 ms마다(종전 "재는 중이면 틱마다" = 그리기 → 틱 → 그리기 고리 · 10-08 프레임 계측).
+        if self.dirsizes.take_display_due(now) {
             self.update_docks();
             self.redraw();
         }
@@ -401,6 +445,26 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// 표시 조절(MC/DC · 10-08 프레임 계측): 전이 = 즉시 · 재는 중 + 첫 표시 = 즉시 · 재는 중 + 250 ms 안 = 아니다 · 재는 중 + 250 ms
+    /// 지남 = 예 · 유휴 + 전이 없음 = 아니다. `take_display_due`는 참 뒤 바로 다시 부르면 거짓(보여 줬다로 기록).
+    #[test]
+    fn display_is_throttled_while_measuring_and_immediate_on_transition() {
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        assert!(display_due(true, false, Some(ms(0)), ms(1), 250));
+        assert!(display_due(false, true, None, ms(1), 250));
+        assert!(!display_due(false, true, Some(ms(0)), ms(249), 250));
+        assert!(display_due(false, true, Some(ms(0)), ms(250), 250));
+        assert!(!display_due(false, false, Some(ms(0)), ms(10_000), 250));
+        let mut s = DirSizes {
+            changed: true,
+            ..Default::default()
+        };
+        assert!(s.take_display_due(ms(5)));
+        assert!(!s.take_display_due(ms(6)));
+        assert!(!s.take_display_due(ms(1000))); // 유휴 = 시간이 지나도 다시 그리지 않는다
     }
 
     /// 캐시 무효화 판정(MC/DC): 자신 · 안쪽 변경 · 바깥 조상 변경 · 무관.
