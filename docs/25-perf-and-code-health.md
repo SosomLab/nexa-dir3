@@ -180,4 +180,22 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 - gate full(d2c5120): fmt + 3-OS clippy ✓ · 시험 583/0 ✓ · **smoke 단계 실패** = T-178로 bin이 둘(nexa-dir · ndir)이 되어 `cargo run -p nexa-dir`가 `--bin`을 요구 → `default-run = "nexa-dir"`(Cargo.toml)로 처방 · 재실행.
 - 기준선 수치 = 아래 표(커밋 뒤 release 재빌드 · `--save-baseline`).
 
-(수치 표는 실행 뒤 이 자리에 붙인다.)
+**첫 기준선(release 46aa5ff · 이 PC · 격리 홈 · 다른 부하 없음 · `target/perf/baseline.json` 저장)** — 📌 T6 2026-10-08 46aa5ff · 기동 1,737 ms · fs 132 ms · exe 6,785,536 B · 누수 기울기 −0.04 MB/주기 · code-health unused_pub 47
+
+| 항목 | 값 | 비고 |
+| --- | --- | --- |
+| 기동 `--smoke` 중앙값(5회) | 1,737 ms | 실측 1737 1726 1723 1858 1858 · 예열 1회 제외(10-05 §65 2,749 ms는 파이썬 기동 2회 포함 + 다른 부하) |
+| `--selfcheck --ci --only fs` | 132 ms | 프로세스 벽시계 |
+| selfcheck `ctxmenu` / `license` / `fs` | 1,614 / 65 / 34 ms | 그룹 합(나머지 그룹 ≤ 3 ms) |
+| exe 크기(release) | 6,785,536 B | ≤ 10 MB |
+| 창 기동(win-startup-probe 5회 중앙값) | 창 64 ms · CPU(3 s) 219 ms · Private 11.25 MB · WS 33.6 MB · 핸들 330 · 스레드 14 | 1회차 134 ms(캐시) |
+| 누수 주기 ① `nav` System32 ↔ Windows 10 × 4 s | 기울기 **−0.040 MB/주기** · Private 12.85 MB · 핸들 339 → 310 · GDI 55 · USER 19 → 18 · 스레드 14 | OK |
+| 누수 주기 ② `view.memory` 열기/닫기 10 × 2 s | 기울기 **0.000** · Private 12.09 MB · 핸들 335 불변 · GDI 55 · USER 19 | OK(창 닫힘 = 상주 0 · NEW-002) |
+| 회수 4점(`nav` System32 → Windows · 트림 5 s) | private_ws 8.79 → 7.71 → 6.91 → 6.91 MB · footprint 11.89 → 13.50 → 12.23 → 12.20 · heap_used 2.31 → 3.69 → 2.28 → 2.28 | OK(trimmed − base −1.88 MB · trimmed = released → 유휴 트림이 5 s 안에 돈 흔적 없음 = 확인 후보) |
+| 프레임(System32 ↓×10 · 1200×800 softbuffer) | 입력→화면 합 중앙값 2.1 ms · p95 4.3 ms · 최대 5.9 ms · paint 중앙값 1.6 ms | 예산(8/16 ms) 초과 0 |
+| 코드 건강(기준선 저장) | unused_pub 47 · 미사용 번역 키 78 · 번역 누락 0 · 미사용 설정 키 3 · 미사용 의존 1 · 3000줄 파일 4 · 150줄 함수 49 · 중복 24 | 후보(사람 확인) |
+
+**프레임 계측이 적발한 것(988f7fe → 46aa5ff)**:
+- ✅ **그리기 → 틱 → 그리기 고리**(폴더 크기 재는 동안 120~170 fps · 8 초 넘게) — `about_to_wait`가 사건마다 돌고 `dirsize_tick`이 재는 중이면 매번 `redraw()` → 46aa5ff: 상태 전이 즉시 · 진행값 250 ms마다(순수 `display_due` · MC/DC). 처방 뒤 같은 시나리오 초별 [53, 149, 73, 12, 12, 11, …].
+- ⏳ **유휴 8~10 fps** = 상태줄 D/N 삼각형 깜빡임(`rate_level`: 송수신 ≥ 1 B/s = 단계 1 · 반주기 500 ms … OS 배경 입출력으로 늘 단계 2~4 ≈ 반주기 330~440 ms × 표식 4개 위상) — 비용 ≈ 1.6 ms × 9 ≈ 1.5 % 코어. 사용자 10-04 요청 동작이라 **하한 설정(`statusbar.blink_min_kbps` 류 · 고급) 추가 여부 = 사용자 결정 대기**.
+- ⏳ 키 1회당 ≈ 15~20 프레임(목록 스크롤 애니메이션 · 60 ms 지연 도크) — 예산 안 · 보류.
