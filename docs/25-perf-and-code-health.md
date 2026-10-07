@@ -21,12 +21,12 @@
 | # | 차원 | 재는 것 | 도구(§2) |
 | --- | --- | --- | --- |
 | D1 | 용량 | release exe 바이트(예산 ≤ 10 MB · CI budget) | perf-baseline ④ |
-| D2 | 기동 | `--smoke`(창 없는 기동 경로) 벽시계 중앙값 · 창 기동(실기) | perf-baseline ① · (창 기동 프로브 = T-176 ④ 후속) |
+| D2 | 기동 | `--smoke`(창 없는 기동 경로) 벽시계 중앙값 · **창이 보일 때까지** + 안정 뒤 CPU/Private | perf-baseline ① · `win-startup-probe.ps1`(§5-2) |
 | D3 | 자가 점검 그룹별 ms | `--selfcheck --ci --json` 그룹 합(ctxmenu · license · fs …) | perf-baseline ③ |
 | D4 | 파일 작업 | `--selfcheck --ci --only fs` 벽시계(생성·복사·이름·삭제 + 감시 통지) · 대량 전송 = [24](24-fast-copy.md) T6 | perf-baseline ② · `membench.ps1` |
 | D5 | 상주 메모리 | 유휴 Private · 워킹셋 · 전용 워킹셋(작업 관리자 기준) · 핸들 · GDI · USER · 스레드 | 메모리 창 · `mem.dump:<파일>` · win-leak-cycle `base` 행 |
 | D6 | 누수 | 같은 동작 N주기 뒤 절반 기울기(MB/주기) · 핸들 증가 | win-leak-cycle |
-| D7 | 회수 | 큰 작업 뒤 힙 반납(`mem_after_job` · [힙 정리]) — 피크 → 놓음 → 트림 뒤 | 메모리 창 · `mem.dump`(4점 자동화 = T-176 ④ 후속) |
+| D7 | 회수 | 큰 작업 뒤 힙 반납(`mem_after_job` · [힙 정리] · 유휴 트림) — 기준 → 올림 → 놓음 → 트림 뒤 **4점** | `win-mem-reclaim.ps1`(§5-3 · `mem.dump` 4회) · 메모리 창(실기) |
 | D8 | 벤치 | 해시 5종 병렬(T-175) · 압축 풀기 스트리밍(T-179 D) | `cargo test --release -- --ignored bench_` |
 | D9 | 코드 건강 | 참조 0 pub · 미사용 번역 키/설정 키/의존 · 큰 파일/함수 · 중복 · 커버리지 | code-health(§6) |
 
@@ -38,8 +38,9 @@
 | --- | --- | --- | --- |
 | A 인벤토리 | exe 크기 · crate 수 · 설정 키 수 · 번역 키 수 | perf-baseline ④ · code-health 요약(`lines` · `unused_*`) | 수치 기록 |
 | B 기동 · 자가 점검 | `--smoke` 중앙값 · fs · 그룹별 ms | `bash scripts/perf-baseline.sh --baseline target/perf/baseline.json` | 회귀 0건(§3) |
-| C 상주 | 메모리 창을 열어 유휴 60 s 뒤 값(또는 `mem.dump`) | `NDIR_STARTUP_CMD="@after:60000:mem.dump:C:\tmp\mem.txt,@after:61000:quit"` | 전용 워킹셋 · 핸들 · 스레드가 기준선 ±5 % |
-| D 피크 · 회수 | 큰 작업(압축 풀기 · 체크섬 · 중복 찾기) 뒤 [힙 정리] 전/후 | 메모리 창(실기) · 10-05 §72~§74 표 | 피크 뒤 Private가 기준선 +1 MB 안으로 |
+| B-2 창 기동 | 창이 보일 때까지 ms · 안정(3 s) 뒤 CPU · Private · 핸들 · 스레드 중앙값 | `pwsh -NoProfile -File scripts/win-startup-probe.ps1 -HomeDir C:\tmp\ndir-probe -Runs 5` | 기준선 +20 % 안 · 상주 +5 %/+1 MB 안 |
+| C 상주 | 메모리 창을 열어 유휴 60 s 뒤 값(또는 `mem.dump`) | `NDIR_STARTUP_CMD="@after:60000:mem.dump:C:\tmp\mem.txt,@after:61000:quit"` · win-startup-probe `priv` 열 | 전용 워킹셋 · 핸들 · 스레드가 기준선 ±5 % |
+| D 피크 · 회수 | 올림(큰 폴더 · 미리보기 · 큰 작업) → 놓음 → 유휴 트림 뒤 4점 · 큰 작업(압축 풀기 · 체크섬 · 중복 찾기)은 실기 [힙 정리] 전/후 | `pwsh -NoProfile -File scripts/win-mem-reclaim.ps1 -HomeDir C:\tmp\ndir-reclaim -Raise "nav:C:\Windows\System32" -Release "nav:C:\Windows"` · 메모리 창(실기) · 10-05 §72~§74 표 | 트림 뒤 − 기준 ≤ +1 MB · +5 %(WARN) |
 | E 누수 주기 | 같은 동작 10주기(큰 폴더 ↔ 작은 폴더 · 보조 창 열고 닫기 · 미리보기 교체) | `pwsh -NoProfile -File scripts/win-leak-cycle.ps1 …`(§5) | 뒤 절반 기울기 ≤ 0.5 MB/주기 · 핸들 증가 0 |
 | F 벤치 | 해시 · inflate | `cargo test --release -p ndir-ops -- --ignored bench_hash --nocapture` | 기준선 −20 % 안 |
 | G 병목(회귀 때만) | `NDIR_TRACE_FRAMES=1` · 로그 창 계측 · 메모리 창 영역별 ▲ | — | 원인 지목 + 조치 또는 "설명 가능" 기록 |
@@ -95,6 +96,26 @@ pwsh -NoProfile -File scripts/win-leak-cycle.ps1 -HomeDir C:\tmp\ndir-leak -Firs
 - 판정 = `slope(last half)`(MB/주기) · 핸들 증감 · `OK`/`WARN`(§3). 첫 1~2주기 상승은 캐시 · 글리프 적재(정상).
 - Linux · macOS 실행기는 T-176 ⑤(후속) — 같은 기동 명령으로 `ps -o rss,nlwp` 표본.
 
+### 5-2. 창 기동 프로브(`scripts/win-startup-probe.ps1`)
+
+```powershell
+pwsh -NoProfile -File scripts/win-startup-probe.ps1 -HomeDir C:\tmp\ndir-probe -Runs 5 [-SettleSecs 3] [-Cmd "nav:C:\Windows\System32"]
+pwsh -NoProfile -File scripts/win-startup-probe.ps1 -HomeDir C:\tmp\ndir-probe -Exe "C:\Program Files\Nexa Dir\nexa-dir.exe" -Tag installed
+```
+
+- `window` = `MainWindowHandle`이 생길 때까지(창 생성 · 첫 present 직전) · `cpu(Ns)` = 안정 시각까지 쓴 CPU ms · `priv` · `ws` · `handles` · `threads` = 그때 값 · 마지막 줄 = 중앙값. `NDIR_NO_ACTIVATE=1`(포커스 탈취 0) · 스스로 `quit`.
+- 두 빌드 비교는 번갈아(`-Exe` · `-Tag`) · 첫 실행(캐시 · 백신)은 버린다.
+
+### 5-3. 회수 4점(`scripts/win-mem-reclaim.ps1`)
+
+```powershell
+pwsh -NoProfile -File scripts/win-mem-reclaim.ps1 -HomeDir C:\tmp\ndir-reclaim -Raise "nav:C:\Windows\System32" -Release "nav:C:\Windows" [-SettleMs 3000] [-TrimSecs 5]
+pwsh -NoProfile -File scripts/win-mem-reclaim.ps1 -HomeDir C:\tmp\ndir-reclaim -Raise "nav:C:\tmp\pics;list.select:0;list.select:1" -Release "nav:C:\Windows"
+```
+
+- 격리 홈 `settings.conf`에 `mem.idle_trim_s=<TrimSecs>`를 써 유휴 트림을 당긴다 · `mem.dump:<파일>` 4회(base · raised · released · trimmed) → 표(footprint · private_ws · resident · heap_used · heap_held) + 판정 `trimmed − base`(> +1 MB 또는 +5 % = WARN).
+- 올림 명령은 기동 명령 어휘(18 §5)면 무엇이든 — 큰 작업(압축 풀기 · 체크섬 · 중복 찾기)은 기동 명령이 없어 실기 [힙 정리] 전/후로 본다.
+
 ---
 
 ## 6. 코드 건강 — `scripts/code-health.py`(nexa-sql docs/93 §3 차용 · 외부 패키지 0)
@@ -142,6 +163,8 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 - 도구 검증: perf-baseline `--runs 2` → 표 · JSON · 자기 자신을 기준선으로 `--strict` = 회귀 0건 exit 0 ✓ · win-leak-cycle 3주기(`nav` System32 ↔ Windows · 2.5 s) = base 11.87 MB → 12.55 · 12.61 · 12.20 · 기울기 −0.41 MB/주기 · 핸들 345 불변 · GDI 55 · USER 19 · 스레드 15 → OK ✓ · code-health 3저장소 ≈ 3분 ✓.
 - 코드 건강 1차(허용 표 반영 전): 참조 0 pub 47 · 미사용 번역 키 120(그중 `cloud.*` 42 = 이식 대기 → 허용 · 나머지 = `bulk.*` 2차 대기(T-162) · `pref.taPos.*` · `mem.cat.*` 옛 키 등 후보) · 미사용 설정 키 10(`cloud.*` 6 = 대기 → 허용 · `license.gates` · `list.hide_empty_glyph` · `typeahead.scope` = ndir-settings 안에서만 → 확인 후보) · 미사용 의존 1 · 3000줄 넘는 파일 4 · 150줄 넘는 함수 49 · 중복 24.
 - 코드 건강 2차(허용 표 반영 · `--save-baseline`): 참조 0 pub 47 · 미사용 번역 키 **78** · 번역 누락 0(ko · ja) · 미사용 설정 키 **3**(`license.gates` · `list.hide_empty_glyph` · `typeahead.scope` — ndir-settings 안에서만 · 확인 후보) · 미사용 의존 1(`nexa-dir/windows-core` — `windows` crate 짝 · 링크 전용 여부 확인 후보) · 3000줄 파일 4 · 150줄 함수 49 · 중복 24.
+- ④ 도구 검증(release ad8764b · gate full과 동시 실행 = 잡음 있음): win-startup-probe 2회 = window 2442 → **77 ms**(1회차 = 캐시 + 동시 부하) · cpu(3 s) 266 ms · priv 11.07 MB · ws 33.4 MB · handles 330 · threads 14 ✓ · win-mem-reclaim(`nav` System32 → Windows · trim 5 s) = base private_ws 8.70 → raised 7.02 → released 6.98 → trimmed 6.98 MB · footprint 11.79 → 13.47 → 12.22 → 12.22 · 판정 OK ✓(trimmed = released — 5 s 트림이 안 돈 것인지 확인 후보 · `NDIR_NO_ACTIVATE` 창은 resident가 33.8 → 10.9 MB로 줄어 상주 비교는 `private_ws`/`footprint`로).
+- gate full(d2c5120): fmt + 3-OS clippy ✓ · 시험 583/0 ✓ · **smoke 단계 실패** = T-178로 bin이 둘(nexa-dir · ndir)이 되어 `cargo run -p nexa-dir`가 `--bin`을 요구 → `default-run = "nexa-dir"`(Cargo.toml)로 처방 · 재실행.
 - 기준선 수치 = 아래 표(커밋 뒤 release 재빌드 · `--save-baseline`).
 
 (수치 표는 실행 뒤 이 자리에 붙인다.)
