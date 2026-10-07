@@ -36,6 +36,12 @@ pub(crate) fn system_dark(os: Option<bool>, window: Option<bool>, os_first: bool
     }
 }
 
+/// System 모드에서 OS 테마를 **주기적으로 다시 봐야** 하는 OS인가(GAP-021): Windows = winit 창 판정이 생성 때 고정돼 `ThemeChanged`가
+/// 안 올 수 있다(레지스트리 조회 ≈ µs라 폴링 비용 0) · 다른 OS = winit 사건이 오고 우리 폴백은 외부 명령이라 폴링하지 않는다.
+pub(crate) const fn needs_poll() -> bool {
+    cfg!(windows)
+}
+
 /// 모드 + (winit 창 판정 ↔ OS 조회 · 순서는 [`system_dark`]) → 팔레트.
 pub(crate) fn resolve(mode: ThemeMode, window_theme: Option<winit::window::Theme>) -> Theme {
     let window = match window_theme {

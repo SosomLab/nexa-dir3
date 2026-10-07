@@ -246,6 +246,10 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.mem_tick(now) {
             next = next.min(t);
         }
+        // System 모드 OS 테마 추종(GAP-021 · Windows만 · 2 s 레지스트리 폴링).
+        if let Some(t) = self.theme_tick(now) {
+            next = next.min(t);
+        }
         if let Some(t) = self.slow_click_tick(now) {
             next = next.min(t);
         }
@@ -326,6 +330,8 @@ impl ApplicationHandler<Wake> for App {
                     self.sync_cut_marks();
                     // 다른 앱(터미널 · IDE)에서 커밋/체크아웃했을 수 있다 — git 요약 다시(10-06).
                     self.git_refresh_on_focus();
+                    // OS 테마가 그 사이 바뀌었을 수 있다(GAP-021 · System 모드만 반응).
+                    self.refresh_system_theme();
                     // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
                     if let Some(n) = platform::wheel_lines() {
                         nexa_ctl::set_wheel_lines(n);

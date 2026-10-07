@@ -100,6 +100,9 @@ pub(crate) const MENU_IDS: &[&str] = &[
 ];
 
 /// 하위 메뉴 안의 항목(짧은 라벨 키 · 아이콘은 명령 id 기준).
+/// System 모드 OS 테마 폴링 주기(ms · Windows만 · GAP-021).
+pub(crate) const THEME_POLL_MS: u64 = 2000;
+
 fn sub_item(id: &str, label_key: &str) -> MenuEntry {
     let mut it = ComboItem::new(id, tr(label_key));
     it.image = app::menu_icons::bar_image(id);
@@ -787,6 +790,33 @@ impl App {
         self.redraw();
     }
 
+    /// OS 테마만 재판정(라벨은 건드리지 않음 · 비용 = Windows 레지스트리 1회 / 다른 OS = winit 창 판정) — System 모드면 팔레트를
+    /// 맞추고 다시 그린다. 돌려주는 값 = OS가 다크인가. GAP-021 처방의 공통 조각(메뉴 열림 · 포커스 복귀 · Windows 주기 폴링).
+    pub(crate) fn refresh_system_theme(&mut self) -> bool {
+        let wt = self.window.as_ref().and_then(|w| w.theme());
+        let os_dark = theme::resolve(ThemeMode::System, wt).is_dark;
+        if self.settings.theme_mode() == ThemeMode::System && os_dark != self.theme.is_dark {
+            self.theme = theme::resolve(ThemeMode::System, wt);
+            self.apply_icon_switches();
+            self.redraw();
+        }
+        os_dark
+    }
+
+    /// ★ GAP-021 근본 처방(Windows · 사용자 10-08 "C 전체 개발"): winit 0.30 Windows는 창을 만들 때의 테마 선호가 고정돼 Dark로 기동한
+    /// 창은 OS 테마가 바뀌어도 `ThemeChanged`를 받지 못한다 → System 모드일 때 [`THEME_POLL_MS`]마다 레지스트리를 다시 본다
+    /// (비용 ≈ µs · 다른 OS는 winit 사건이 오므로 폴링하지 않는다 — `theme::needs_poll`). 돌려주는 값 = 다음에 깨어날 시각.
+    pub(crate) fn theme_tick(&mut self, now: Instant) -> Option<Instant> {
+        if !theme::needs_poll() || self.settings.theme_mode() != ThemeMode::System {
+            return None;
+        }
+        if now >= self.theme_poll_next {
+            self.refresh_system_theme();
+            self.theme_poll_next = now + Duration::from_millis(THEME_POLL_MS);
+        }
+        Some(self.theme_poll_next)
+    }
+
     /// ★ 메뉴가 닫힘 → 열림으로 바뀐 첫 그리기에서 OS 상태를 다시 읽는다(사용자 10-07 "메뉴가 새로 그려질 때마다 현재 상태를 읽어
     /// 최신으로 · 모든 OS"): System 모드면 팔레트를 다시 판정(GAP-021 완화 — winit `ThemeChanged`가 안 와도 메뉴를 열면 따라간다) ·
     /// 테마/언어 "시스템" 항목 라벨에 OS 현재 값. 비용 = 메뉴를 열 때 1회(Windows 레지스트리 1회 · 다른 OS = winit 창 판정).
@@ -800,13 +830,7 @@ impl App {
 
     /// OS 테마·언어 재판정 + "시스템" 항목 라벨 갱신(`sync_menu_checks`와 메뉴 열림에서 부른다).
     pub(crate) fn refresh_system_state(&mut self) {
-        let wt = self.window.as_ref().and_then(|w| w.theme());
-        let os_dark = theme::resolve(ThemeMode::System, wt).is_dark;
-        if self.settings.theme_mode() == ThemeMode::System && os_dark != self.theme.is_dark {
-            self.theme = theme::resolve(ThemeMode::System, wt);
-            self.apply_icon_switches();
-            self.redraw();
-        }
+        let os_dark = self.refresh_system_theme();
         let (theme_label, lang_label) = system_state_labels(os_dark);
         let mut inv = Invalidations::default();
         self.menubar

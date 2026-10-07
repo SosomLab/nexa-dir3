@@ -333,6 +333,8 @@ struct App {
     idle_trimmed: bool,
     /// 메모리 창의 다음 표본 시각(창이 열려 있을 때만 쓰인다 · `app/memory.rs`).
     mem_next: Instant,
+    /// System 모드 OS 테마 폴링(Windows · GAP-021)의 다음 시각.
+    theme_poll_next: Instant,
     open_memory: bool,
     /// 체크섬 창(T-167 · hash_win.rs) · 열기 요청 · 진행 중인 계산(슬롯 1개).
     hash_win: hash_win::HashWin,
@@ -692,6 +694,7 @@ impl App {
             last_input_ms: 0,
             idle_trimmed: false,
             mem_next: Instant::now(),
+            theme_poll_next: Instant::now(),
             open_memory: false,
             hash_win: hash_win::HashWin::new(),
             open_hash: false,

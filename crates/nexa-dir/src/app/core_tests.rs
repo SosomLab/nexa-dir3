@@ -7926,6 +7926,33 @@ fn system_menu_items_show_os_state_and_refresh_on_open() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-021 근본 처방: System 모드 + 폴링 OS(Windows)면 `theme_tick`이 OS 테마를 다시 읽어 팔레트를 맞추고 2 s 뒤를 돌려준다 ·
+/// 명시 모드 또는 폴링 안 하는 OS = None(깨우지 않음).
+#[test]
+fn theme_tick_polls_os_only_in_system_mode_on_windows() {
+    let (mut app, dir) = fixture("theme-poll");
+    let now = Instant::now();
+    let _ = app.settings.set("ui.theme", "dark");
+    assert_eq!(app.theme_tick(now), None, "명시 모드 = 폴링 없음");
+    let _ = app.settings.set("ui.theme", "system");
+    app.theme = Theme::light();
+    app.theme_poll_next = now;
+    let next = app.theme_tick(now);
+    if crate::theme::needs_poll() {
+        let os_dark = crate::theme::resolve(ThemeMode::System, None).is_dark;
+        assert_eq!(app.theme.is_dark, os_dark, "OS 판정으로 맞춘다");
+        assert_eq!(
+            next,
+            Some(now + Duration::from_millis(app::menus::THEME_POLL_MS))
+        );
+        // 주기 전에는 다시 읽지 않고 같은 시각만 돌려준다.
+        assert_eq!(app.theme_tick(now + Duration::from_millis(500)), next);
+    } else {
+        assert_eq!(next, None);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 창 제목(사용자 10-06): 디버그 빌드만 "(Debug)" 꼬리 · 릴리스는 "Nexa Dir".
 #[test]
 fn app_title_marks_debug_builds() {
