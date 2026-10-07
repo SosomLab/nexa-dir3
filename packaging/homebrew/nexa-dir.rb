@@ -10,7 +10,7 @@ cask "nexa-dir" do
   url "https://github.com/SosomLab/nexa-dir3/releases/download/v#{version}/nexa-dir-#{version}-macos-universal.pkg",
       verified: "github.com/SosomLab/nexa-dir3/"
   name "Nexa Dir"
-  desc "Lightweight dual-panel file explorer that looks identical on Windows, macOS and Linux"
+  desc "Lightweight dual-panel file explorer with the same look everywhere"
   homepage "https://github.com/SosomLab/nexa-dir3"
 
   livecheck do
@@ -28,11 +28,17 @@ cask "nexa-dir" do
                    sudo: true, must_succeed: false
   end
 
+  # brew style(T-181 · 10-08): 해시 들여쓰기 2칸 · stanza 순서 = uninstall → zap → caveats.
   uninstall script:  {
-                       executable: "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh",
-                       sudo:       true,
-                     },
+              executable: "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh",
+              sudo:       true,
+            },
             pkgutil: "com.sosomlab.nexa-dir"
+
+  zap trash: [
+    "~/Library/Application Support/nexa-dir",
+    "~/Library/Saved Application State/com.sosomlab.nexa-dir.savedState",
+  ]
 
   caveats <<~EOS
     This app is not code-signed or notarized (no certificate yet).
@@ -43,9 +49,4 @@ cask "nexa-dir" do
     이 앱은 코드 서명·공증이 되어 있지 않습니다. 설치 과정에서 macOS 격리 표식을 제거해 바로 실행되도록 했습니다.
     License: PolyForm Noncommercial 1.0.0 - free for noncommercial use only.
   EOS
-
-  zap trash: [
-    "~/Library/Application Support/nexa-dir",
-    "~/Library/Saved Application State/com.sosomlab.nexa-dir.savedState",
-  ]
 end
