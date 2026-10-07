@@ -161,6 +161,29 @@ impl App {
         }
     }
 
+    /// ★ 플래시 메시지 글꼴(nexa-sql `apply_flash_font` · 사용자 10-07): `ui.flash_font_face` 비면 UI 글꼴 = `None` · 이름이면 그 얼굴
+    /// (+ 시스템 UI 폴백 · 못 찾으면 `None` = UI 글꼴).
+    pub(crate) fn load_flash_font(settings: &Settings) -> Option<Rc<Font>> {
+        let face = settings.get("ui.flash_font_face").unwrap_or("").trim();
+        if face.is_empty() {
+            return None;
+        }
+        nexa_font::ui_font(Some(face)).map(|l| Rc::new(l.font))
+    }
+
+    /// 설정이 바뀌면 다시 읽는다(`apply_setting("ui.flash_font_face")`).
+    pub(crate) fn apply_flash_font(&mut self) {
+        self.flash_font = App::load_flash_font(&self.settings);
+    }
+
+    /// 플래시 메시지 시간 `(유지, 페이드)` ms — `ui.flash_hold_ms`(0~30000) · `ui.flash_ms`(200~30000).
+    pub(crate) fn flash_timing(&self) -> (u64, u64) {
+        (
+            self.settings.int("ui.flash_hold_ms").clamp(0, 30_000) as u64,
+            self.settings.int("ui.flash_ms").clamp(200, 30_000) as u64,
+        )
+    }
+
     /// 고정폭 글꼴 로드(`term.font_face` → 없으면 OS 기본) — 실패 = None(Mono 슬롯은 기본 얼굴로).
     pub(crate) fn load_mono_font(
         settings: &Settings,

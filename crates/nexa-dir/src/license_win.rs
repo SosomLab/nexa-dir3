@@ -45,9 +45,15 @@ pub(crate) enum LicAction {
     CopyText(String),
 }
 
-/// 순간 메시지 유지/페이드(ms) — dir3에는 `ui.flash_*` 설정이 없다(nexa-sql LIC-100 수치 그대로).
-const FLASH_HOLD_MS: u64 = 1200;
-const FLASH_FADE_MS: u64 = 700;
+/// 순간 메시지 모양·글꼴(설정 `ui.flash_*` · nexa-sql 10-07 차용) — 호스트가 그리기 전에 넘긴다.
+#[derive(Clone, Default)]
+pub(crate) struct FlashStyle {
+    /// `rect` · `rounded` · `none`(배경 없음 · 글만).
+    pub shape: String,
+    /// 전용 글꼴(`ui.flash_font_face` · None = 창의 UI 글꼴) · 글자 크기(논리 px · 0 = UI 크기).
+    pub font: Option<Rc<Font>>,
+    pub px: f32,
+}
 
 pub(crate) struct LicenseWin {
     window: Option<Rc<Window>>,
@@ -72,6 +78,7 @@ pub(crate) struct LicenseWin {
     link_rect: Rect,
     link_hover: bool,
     flash: Flash,
+    flash_style: FlashStyle,
 }
 
 impl LicenseWin {
@@ -95,6 +102,21 @@ impl LicenseWin {
             link_rect: Rect::default(),
             link_hover: false,
             flash: Flash::new(),
+            flash_style: FlashStyle::default(),
+        }
+    }
+
+    /// 순간 메시지 모양·글꼴(설정 `ui.flash_shape` · `ui.flash_font_*`) — 호스트가 그리기 전에 넘긴다(비용 = 문자열 비교 1).
+    pub(crate) fn set_flash_style(&mut self, style: FlashStyle) {
+        self.flash_style = style;
+    }
+
+    /// 모양 → nexa-ctl `Flash` 상태(배경 · 반지름(물리 px)). 순수 — `(배경 켬, 반지름)`.
+    pub(crate) fn flash_shape(shape: &str, scale: f32) -> (bool, i32) {
+        match shape {
+            "none" => (false, 0),
+            "rect" => (true, 0),
+            _ => (true, (5.0 * scale).round() as i32),
         }
     }
 
@@ -150,13 +172,14 @@ impl LicenseWin {
         self.redraw();
     }
 
-    /// 순간 메시지(링크 옆 · 서서히 사라짐 · 링크를 가리지 않는다).
-    pub(crate) fn set_flash(&mut self, text: String, warn: bool) {
+    /// 순간 메시지(링크 옆 · `hold_ms` 그대로 보인 뒤 `fade_ms` 동안 서서히 사라짐 · 링크를 가리지 않는다) — 시간은 설정
+    /// `ui.flash_hold_ms` · `ui.flash_ms`(호스트가 읽어 넘긴다).
+    pub(crate) fn set_flash(&mut self, text: String, warn: bool, hold_ms: u64, fade_ms: u64) {
         self.flash.show(
             text,
             if warn { FlashTone::Warn } else { FlashTone::Ok },
-            FLASH_HOLD_MS,
-            FLASH_FADE_MS,
+            hold_ms,
+            fade_ms,
         );
         self.redraw();
     }
@@ -562,11 +585,21 @@ impl LicenseWin {
                 tb.paint_popup(&mut dc, th);
             }
         }
-        // 플래시 메시지 = 창의 맨 마지막(다른 컨트롤·팝업이 덮지 않음) · 진행 중이면 다시 그린다.
+        // 플래시 메시지 = 창의 맨 마지막(다른 컨트롤·팝업이 덮지 않음) · 진행 중이면 다시 그린다. 글꼴·크기·모양은 설정
+        // (`ui.flash_font_*` · `ui.flash_shape` — 호스트가 `set_flash_style`로 넘긴 것 · 비면 창의 UI 글꼴·크기).
         {
+            let (bg, radius) = Self::flash_shape(&self.flash_style.shape, s);
+            self.flash.set_background(bg);
+            self.flash.set_radius(radius);
+            let flash_font: &Font = self.flash_style.font.as_deref().unwrap_or(font);
+            let flash_px = if self.flash_style.px > 0.0 {
+                self.flash_style.px
+            } else {
+                ui_px
+            };
             let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
-            let prefs = FontPrefs::with_base(ui_px);
-            let mut dc = RasterCtx::new(&mut gfx, font, s).with_fonts(prefs);
+            let prefs = FontPrefs::with_base(flash_px);
+            let mut dc = RasterCtx::new(&mut gfx, flash_font, s).with_fonts(prefs);
             dc.select_font(FontSlot::Base, false);
             if self
                 .flash

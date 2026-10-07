@@ -12,6 +12,12 @@ const THEME_OPTS: &[(&str, &str)] = &[
     ("light", "pref.theme.light"),
     ("dark", "pref.theme.dark"),
 ];
+/// 플래시 메시지 배경 상자(nexa-sql `FLASH_SHAPE_OPTS` · 10-07).
+const FLASH_SHAPE_OPTS: &[(&str, &str)] = &[
+    ("rect", "pref.flashShape.rect"),
+    ("rounded", "pref.flashShape.rounded"),
+    ("none", "pref.flashShape.none"),
+];
 const TOOLBAR_SIZE_OPTS: &[(&str, &str)] = &[
     ("16", "pref.toolbarSize.16"),
     ("20", "pref.toolbarSize.20"),
@@ -387,6 +393,38 @@ pub const REGISTRY: &[Entry] = &[
         },
         "400"
     ),
+    // ★ 플래시 메시지(클릭 복사 "복사됨" 등 · nexa-ctl `Flash` · nexa-sql `ui.flash_*` 차용 · 사용자 10-07): 유지 시간 뒤 페이드아웃
+    //   (기본 유지 2초 · 페이드 3초) · 배경 상자 모양. 글꼴 2종은 글꼴 카테고리에.
+    e!(
+        "ui.flash_hold_ms",
+        CAT_APPEARANCE,
+        "pref.flashHoldMs",
+        "pref.flashHoldMs.desc",
+        Int {
+            min: 0,
+            max: 30_000
+        },
+        "2000"
+    ),
+    e!(
+        "ui.flash_ms",
+        CAT_APPEARANCE,
+        "pref.flashFadeMs",
+        "pref.flashFadeMs.desc",
+        Int {
+            min: 200,
+            max: 30_000
+        },
+        "3000"
+    ),
+    e!(
+        "ui.flash_shape",
+        CAT_APPEARANCE,
+        "pref.flashShape",
+        "pref.flashShape.desc",
+        Choice(FLASH_SHAPE_OPTS),
+        "rounded"
+    ),
     e!(
         "input.scroll_natural",
         CAT_APPEARANCE,
@@ -635,6 +673,23 @@ pub const REGISTRY: &[Entry] = &[
         "pref.ctxFontSize.desc",
         Size { min: 8, max: 32 },
         "12"
+    ),
+    // ★ 플래시 메시지 글꼴(nexa-sql 10-07 차용): 얼굴 비면 UI 글꼴 · 크기 기본 10(nexa-sql 12 → 9 → 10 실기 조정값 계승).
+    e!(
+        "ui.flash_font_face",
+        CAT_FONTS,
+        "pref.flashFont",
+        "pref.flashFont.desc",
+        Text,
+        ""
+    ),
+    e!(
+        "ui.flash_font_size",
+        CAT_FONTS,
+        "pref.flashFontSize",
+        "pref.flashFontSize.desc",
+        Size { min: 6, max: 40 },
+        "10"
     ),
     e!(
         "statusbar.font_face",

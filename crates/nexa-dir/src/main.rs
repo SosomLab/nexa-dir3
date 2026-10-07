@@ -230,6 +230,8 @@ struct App {
     ui_font: Rc<Font>,
     /// 고정폭 글꼴(터미널 · 코드 줄 — `FontSet.mono` · 없으면 Mono 슬롯은 UI 글꼴).
     mono_font: Option<Rc<Font>>,
+    /// ★ 플래시 메시지 글꼴(설정 `ui.flash_font_face` · None = UI 글꼴 · nexa-sql 10-07 차용).
+    flash_font: Option<Rc<Font>>,
     /// Windows Terminal 기본 프로필(설정 `term.follow_windows_terminal` · Windows만 · 없으면 None) — 터미널 글꼴·크기를 따라간다.
     wt_profile: Option<platform::WtProfile>,
     theme: Theme,
@@ -619,6 +621,7 @@ impl App {
             dual,
             statusbar: StatusBar::new(),
             toasts,
+            flash_font: App::load_flash_font(&settings),
             settings,
             keymap,
             mono_font,

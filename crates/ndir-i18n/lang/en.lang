@@ -774,6 +774,19 @@ pref.licenseGates = License gates
 pref.licenseGates.desc = Enable feature gating by license (off = all features; Nexa Dir has no gated features).
 pref.dblclickMs = Double-click interval (ms)
 pref.dblclickMs.desc = Two clicks within this time count as a double-click.
+pref.flashHoldMs = Flash message hold (ms)
+pref.flashHoldMs.desc = How long a flash message stays fully visible before it starts to fade out
+pref.flashFadeMs = Flash message fade-out (ms)
+pref.flashFadeMs.desc = How long a flash message (for example "copied") takes to fade out after its hold time
+pref.flashShape = Flash message shape
+pref.flashShape.desc = Background box of flash messages: rectangle, rounded corners, or none (text only)
+pref.flashShape.rect = Rectangle
+pref.flashShape.rounded = Rounded corners
+pref.flashShape.none = None
+pref.flashFont = Flash message font
+pref.flashFont.desc = Font family for flash messages (copy notices); empty = default UI font
+pref.flashFontSize = Flash message font size
+pref.flashFontSize.desc = Size of flash message text (pt or px)
 pref.scrollNatural = Natural scrolling
 pref.scrollNatural.desc = Invert wheel direction (trackpad style).
 pref.textGdi = Native text rasterizer

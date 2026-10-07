@@ -39,6 +39,8 @@ impl App {
                 init_i18n(&self.settings);
                 self.relabel();
             }
+            // 플래시 메시지 글꼴 얼굴은 즉시 다시 읽는다(nexa-sql `apply_flash_font` · 10-07) · 크기·시간·모양은 보일 때 읽는다.
+            "ui.flash_font_face" => self.apply_flash_font(),
             "ui.font_size"
             | "ui.menu_font_size"
             | "list.font_size"
