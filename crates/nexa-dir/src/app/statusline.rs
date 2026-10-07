@@ -18,15 +18,22 @@ pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
 /// git 상태 조회 상한 — 넘으면 자식을 죽이고 실패로(멈춘 git이 `git_busy`에 영구히 남지 않게 · 협업 10-06 제안).
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// `git --no-optional-locks -C <repo> status --porcelain=v2 --branch --show-stash`의 표준 출력(작업 스레드) — 성공 = `Some(text)`.
-/// `--no-optional-locks` = 사용자 커밋/IDE와 index.lock 경합 방지 · `--show-stash` = `# stash N` 줄(git ≥ 2.19) ·
-/// 출력은 리더 스레드가 끝까지 읽고 호출 쪽이 `timeout` 안에만 기다린다(큰 저장소의 긴 출력에도 파이프가 막히지 않는다).
-fn git_status_text(repo: &std::path::Path, timeout: Duration) -> Option<String> {
-    let mut child = platform::quiet_command("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo)
-        .args(["status", "--porcelain=v2", "--branch", "--show-stash"])
+/// `git --no-optional-locks -C <repo> status --porcelain=v2 --branch --show-stash [-uno]`의 표준 출력(작업 스레드) — 성공 = `Some(text)`.
+/// `--no-optional-locks` = 사용자 커밋/IDE와 index.lock 경합 방지 · `--show-stash` = `# stash N` 줄(git ≥ 2.19) · `-uno` = 미추적
+/// 탐색 생략(설정 `git.untracked` 끔 · 큰 저장소 · T-180) · 출력은 리더 스레드가 끝까지 읽고 호출 쪽이 `timeout` 안에만 기다린다
+/// (큰 저장소의 긴 출력에도 파이프가 막히지 않는다).
+fn git_status_text(repo: &std::path::Path, timeout: Duration, untracked: bool) -> Option<String> {
+    let mut cmd = platform::quiet_command("git");
+    cmd.arg("--no-optional-locks").arg("-C").arg(repo).args([
+        "status",
+        "--porcelain=v2",
+        "--branch",
+        "--show-stash",
+    ]);
+    if !untracked {
+        cmd.arg("-uno");
+    }
+    let mut child = cmd
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -500,10 +507,11 @@ impl App {
                 self.panels[i].set_git_extra(String::new());
                 continue;
             };
+            let diverged = self.settings.flag("git.diverged_glyph");
             let extra = self
                 .git_detail
                 .get(&repo)
-                .map(|(_, d)| d.short())
+                .map(|(_, d)| d.short_with(diverged))
                 .unwrap_or_default();
             self.panels[i].set_git_extra(extra);
             self.panels[i].sync_status(inv);
@@ -519,11 +527,28 @@ impl App {
             return;
         }
         let tx = self.git_tx.clone();
+        let untracked = self.settings.flag("git.untracked");
         std::thread::spawn(move || {
-            let detail =
-                git_status_text(&repo, GIT_TIMEOUT).map(|text| dirinfo::parse_porcelain_v2(&text));
+            let detail = git_status_text(&repo, GIT_TIMEOUT, untracked)
+                .map(|text| dirinfo::parse_porcelain_v2(&text));
             let _ = tx.send((repo, detail));
         });
+    }
+
+    /// 설정 `git.*` 변경 적용(T-180): 켜기/끄기 = 조회 자체를 막거나 풀고 · 미추적/표식 = 요약을 버리고 다시 조회(미추적) 또는
+    /// 다시 그리기(표식). 시험 빌드에서는 git을 실행하지 않는다(`git_enabled` = 늘 false).
+    pub(crate) fn apply_git_setting(&mut self, key: &str) {
+        let mut inv = Invalidations::default();
+        match key {
+            "git.enabled" => {
+                self.git_enabled = !cfg!(test) && self.settings.flag("git.enabled");
+                self.git_detail.clear();
+                self.git_busy.clear();
+            }
+            "git.untracked" => self.git_detail.clear(),
+            _ => {}
+        }
+        self.git_sync(&mut inv);
     }
 
     /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다. **주기 갱신**(설정 `git.refresh_s` ·

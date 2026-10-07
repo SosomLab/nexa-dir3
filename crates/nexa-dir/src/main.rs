@@ -609,6 +609,8 @@ impl App {
         let wt_profile = App::load_wt_profile(&settings);
         let mono_font = App::load_mono_font(&settings, wt_profile.as_ref());
         let (git_tx, git_rx) = std::sync::mpsc::channel();
+        // git 요약(T-180 `git.enabled`) — 시험 빌드에서는 늘 끔(git을 실행하지 않는다).
+        let git_enabled = !cfg!(test) && settings.flag("git.enabled");
         let mut app = App {
             window: None,
             surface: None,
@@ -758,7 +760,7 @@ impl App {
             status_popup_was: None,
             git_detail: std::collections::HashMap::new(),
             git_busy: std::collections::HashSet::new(),
-            git_enabled: !cfg!(test),
+            git_enabled,
             git_tx,
             git_rx,
             docks: [

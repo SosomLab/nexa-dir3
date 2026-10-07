@@ -93,10 +93,20 @@ impl GitDetail {
 
     /// 탭 상태바 칸에 덧붙이는 짧은 요약(없으면 빈 글) — **Starship 계열**(Starship · Spaceship · Powerlevel10k가 같이 쓰는 사실상
     /// 표준 · 사용자 10-06): `⇡1⇣2 +1 !3 ?2 ✘1 »1 =1 $1` = 앞섬/뒤짐 · 스테이지 · 수정 · 미추적 · 삭제 · 이름 변경 · 충돌 · stash.
-    /// 0인 칸은 뺀다(종전 `↑1 ↓2 ●3` = 합계 한 칸 → 종류별로).
+    /// 0인 칸은 뺀다(종전 `↑1 ↓2 ●3` = 합계 한 칸 → 종류별로). 호출부는 설정을 받는 [`Self::short_with`]를 쓴다(시험 대조용).
+    #[cfg(test)]
     pub(crate) fn short(&self) -> String {
+        self.short_with(false)
+    }
+
+    /// [`Self::short`] + `diverged`면 앞섬·뒤짐이 **동시**일 때 `⇕`를 앞에 붙인다(Starship `diverged` 표식 · 설정
+    /// `git.diverged_glyph` · T-180): `⇕⇡1⇣2`.
+    pub(crate) fn short_with(&self, diverged: bool) -> String {
         let mut parts: Vec<String> = Vec::new();
         let mut ab = String::new();
+        if diverged && self.ahead > 0 && self.behind > 0 {
+            ab.push('\u{21D5}');
+        }
         if self.ahead > 0 {
             ab.push_str(&format!("\u{21E1}{}", self.ahead));
         }
@@ -238,6 +248,11 @@ u UU N... 100644 100644 100644 100644 a b c conflict.rs\n? untracked.txt\n? othe
             "\u{21E1}2\u{21E3}1 +3 !2 ?2 \u{00BB}1 =1",
             "Starship 계열"
         );
+        // 앞섬·뒤짐 동시 + 설정 켬 = ⇕ 표식(T-180) · 한쪽만이면 안 붙는다.
+        assert_eq!(
+            d.short_with(true),
+            "\u{21D5}\u{21E1}2\u{21E3}1 +3 !2 ?2 \u{00BB}1 =1"
+        );
         let clean = parse_porcelain_v2("# branch.oid x\n# branch.head main\n");
         assert!(clean.is_clean() && clean.upstream.is_none());
         assert_eq!(clean.short(), "");
@@ -248,6 +263,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.rs\n? untracked.txt\n? othe
         assert_eq!((del.staged, del.changed, del.deleted), (1, 0, 2));
         assert!(!del.is_clean());
         assert_eq!(del.short(), "\u{21E3}3 +1 \u{2718}2 $2");
+        assert_eq!(del.short_with(true), del.short(), "뒤짐만 = ⇕ 없음");
     }
 
     /// 실제 폴더: 하위 폴더에서 위로 올라가 저장소를 찾는다 · worktree식 `.git` 파일 · 저장소 밖 = None · 항목 수.

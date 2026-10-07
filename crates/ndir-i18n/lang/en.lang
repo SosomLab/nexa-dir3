@@ -1064,6 +1064,12 @@ pref.tabStatusbar = Tab status bar
 pref.tabStatusbar.desc = Shows a status bar at the bottom of each panel with the current folder's item count and Git branch.
 pref.gitRefresh = Git summary refresh interval (s)
 pref.gitRefresh.desc = Re-query the tab status bar's git summary (⇡⇣ + ! ? ✘ » = $) at this interval. Folder/.git watching, file operations and window focus already refresh it immediately, so this is a safety net for other cases (network drives etc.). 0 = no periodic refresh.
+pref.gitEnabled = Show git summary
+pref.gitEnabled.desc = Show the branch and status summary in the tab status bar. Off = git is never run.
+pref.gitUntracked = Count untracked files in git summary
+pref.gitUntracked.desc = Include the untracked file count (?) in the summary. Turn off if a very large repository feels slow (git status -uno).
+pref.gitDiverged = Diverged marker (⇕) when both ahead and behind
+pref.gitDiverged.desc = Prefix ⇡⇣ with ⇕ when the branch is both ahead of and behind its upstream.
 pref.toolbarOnColor = Toolbar: toggled-on color
 pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Line color = light accent background, outline and icon drawn in the color below. Accent = outline and icon follow the accent settings.
 pref.toolbarOnColor.line = Line color

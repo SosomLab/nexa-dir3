@@ -214,6 +214,7 @@ impl App {
             k if k.starts_with("log.") => {
                 self.apply_log_setting(k);
             }
+            "git.enabled" | "git.untracked" | "git.diverged_glyph" => self.apply_git_setting(key),
             "dock.folder_size_threads"
             | "dock.folder_size_queue"
             | "dock.folder_size_settle_ms" => {

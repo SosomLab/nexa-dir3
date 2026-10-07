@@ -1064,6 +1064,12 @@ pref.tabStatusbar = タブのステータスバー
 pref.tabStatusbar.desc = 各パネルの下部にステータスバーを表示し、現在のフォルダーの項目数と Git ブランチを示します。
 pref.gitRefresh = git 要約の更新間隔 (秒)
 pref.gitRefresh.desc = タブステータスバーの git 要約(⇡⇣ + ! ? ✘ » = $)をこの間隔で再取得します。フォルダー/.git の監視、ファイル操作後、ウィンドウのフォーカス復帰時は即時更新するため、この値はそれ以外(ネットワークドライブなど)の安全網です。0 = 定期更新なし。
+pref.gitEnabled = git 要約を表示
+pref.gitEnabled.desc = タブステータスバーにブランチと状態の要約を表示します。オフにすると git を実行しません。
+pref.gitUntracked = git 未追跡ファイルを数える
+pref.gitUntracked.desc = 要約に未追跡ファイル数(?)を含めます。非常に大きなリポジトリで遅い場合はオフに(git status -uno)。
+pref.gitDiverged = git 先行・遅れ同時の表示(⇕)
+pref.gitDiverged.desc = アップストリームより先行し、同時に遅れているとき ⇡⇣ の前に ⇕ を付けて分岐状態を示します。
 pref.toolbarOnColor = ツールバー: オン時の色
 pref.toolbarOnColor.desc = オンのツールバーボタンの見た目です。線の色 = 背景はアクセント色の薄い塗りのまま、枠線とアイコンの線を下の色で描きます。アクセント = 枠線とアイコンはアクセント設定に従います。
 pref.toolbarOnColor.line = 線の色

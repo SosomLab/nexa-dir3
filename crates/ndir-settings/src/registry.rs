@@ -1243,6 +1243,32 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 3600 },
         "30"
     ),
+    // git 요약 후속(T-180 · 사용자 10-08 "C 항목 전체 개발"): 켜기/끄기 · 미추적 탐색(큰 저장소 = 끄면 `-uno` · 고급) · 앞섬·뒤짐
+    // 동시 ⇕ 표식(고급).
+    e!(
+        "git.enabled",
+        CAT_TAB_STATUS,
+        "pref.gitEnabled",
+        "pref.gitEnabled.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "git.untracked",
+        CAT_TAB_STATUS,
+        "pref.gitUntracked",
+        "pref.gitUntracked.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "git.diverged_glyph",
+        CAT_TAB_STATUS,
+        "pref.gitDiverged",
+        "pref.gitDiverged.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "dock.visible",
         CAT_DOCK,
@@ -2048,6 +2074,8 @@ pub const ADVANCED: &[&str] = &[
     "input.scroll_natural",
     "ctxmenu.prebuild",
     "git.refresh_s",
+    "git.untracked",
+    "git.diverged_glyph",
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
