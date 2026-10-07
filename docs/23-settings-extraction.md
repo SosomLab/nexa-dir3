@@ -62,7 +62,7 @@
 | 3.0 · 0.7 | `main.rs` `SPLIT_HALF` · `SPLIT_HOVER_ALPHA`(§103) | 스플리터 잡는 띠가 틈 양쪽으로 넓어지는 폭(배율 적용 — dir2는 일부 비배율) · hover 강조 알파 상한(서서히 · NEW-017) | — | 상수 | — | — |
 | off(dir2 on) | `ndir-settings/src/registry.rs` `term.wrap`(§107) | 터미널 줄 바꿈 기본값 — 끄면 고정 열 `term.cols`(240) + 가로 스크롤(사용자 10-03 "줄바꿈은 기본으로 꺼지도록" · **의도된 차이** · dir2 설정 가져오기는 on 유지) | `term.wrap` | 설정 | (기존) | ✅ |
 | off · 새 탭 기본값 | `app/menus.rs`(§105 · 523857f) | 대소문자 구분 정렬 — 탭 보기 옵션 4번째(툴바 토글 · 보기 관리 방법만큼 적용) · 설정은 **새 탭의 기본값**(§104의 전역 → 정정) | `list.sort_case_sensitive` | 설정 | (기존) | ✅ |
-| system(dir2 dark) | `ndir-settings/src/registry.rs` `ui.theme`(§104) | 테마 기본값 — 시스템 따름(사용자 10-03 "테마는 시스템을 기본값으로" · **의도된 차이** · dir2 설정 가져오기는 dark 유지) | `ui.theme` | 설정 | (기존) | ✅ |
+| system(dir2 dark) | `ndir-settings/src/registry.rs` `ui.theme`(§104) | 테마 기본값 — 시스템 따름(사용자 10-03 "테마는 시스템을 기본값으로" · **의도된 차이** · dir2 설정 가져오기는 dark 유지) | `ui.theme` | 설정 | (기존) | ✅ · 10-07 §4(d933046): System 판정 = Windows 레지스트리 우선(winit `theme()` 생성 때 고정 결함 회피) · 한계 = GAP-021 |
 | dir(§104 · §102 tab · dir2 panel) | `ndir-settings/src/registry.rs` · `migrate.rs` · `app/menus.rs::toggle_view_option`(§102 · §104) | 보기 토글(숨김 · Dot · 폴더 우선) 전파 폭 — dir = 그 폴더를 보는 탭 전부 + 폴더별 기억(NEW-018) · tab = 활성 탭 · panel = 활성 패널 전 탭 · global = 두 패널 전 탭 | `list.view_scope` | 설정(**기본 dir = 의도된 차이** · 사용자 10-03 "기본은 디렉토리 단위" · 사용자 10-03 "이후는 탭별" · dir2 `settings.cfg` 가져오기는 panel 유지) | (기존) | ✅ |
 | off | `app/settings.rs`(§80) | 켜진 툴바 아이콘을 강조색으로 칠할지(기본 = 본문색 · dir2 규약) | `toolbar.on_icon_accent` | 고급 | (기존) | ✅ |
 | em 13 · em 9 | `app/fonts.rs` `NAV_GLYPH_EM` · `CHEVRON_EM`(§78 · dir2 dw.rs:331-350) | 네비 글리프 · 쉐브론 크기(dir2 DIP 그대로) | — | 상수(dir2 규약) | — | — |
@@ -121,6 +121,11 @@
 | — | `app/dirsize.rs` | 빠르게 지나갈 때 이 시간 안에 떠난 폴더는 건너뜀(마지막 것만 보류 · 0~5000 ms) | 250 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_settle_ms`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | 체크섬 없음(dir2 · dir3 종전) | `app/checksum.rs` · `hash_win.rs` · ndir-ops `hash.rs` | 체크섬 창이 기본으로 계산할 알고리즘 목록 | — | 고급(드문 조절 · 기본 `crc32,md5,sha1,sha256` · SHA-512 추가 가능) | `hash.algos`(NEW-038) | ✅ 10-05 §55(0953f27) |
 | 체크섬 자동 계산(크기 무관) | `app/checksum.rs` · `hash_win.rs` | 이 크기를 넘는 파일은 자동 계산하지 않고 [계산] 버튼 | 512 MB | 고급(드문 조절 · 0 = 항상 수동) | `hash.auto_limit_mb`(NEW-038 2차) | ✅ 10-05 §73(55038ef) |
+| 1200 ms(라이선스 창 상수) | `license_win.rs` · nexa-ctl `Flash` | 플래시 메시지 유지 시간(0~30000 ms) | 2000 | 설정(일반 › 모양) | `ui.flash_hold_ms`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
+| 700 ms(라이선스 창 상수) | `license_win.rs` · nexa-ctl `Flash` | 플래시 메시지 페이드아웃 시간(200~30000 ms) | 3000 | 설정(일반 › 모양) | `ui.flash_ms`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
+| 둥근 모서리(고정) | `license_win.rs` · `FlashStyle` | 플래시 모양(rect · rounded · none) | rounded | 설정(일반 › 모양) | `ui.flash_shape`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
+| UI 글꼴(고정) | `app/fonts.rs::apply_flash_font` | 플래시 글꼴(비면 UI 글꼴 · 즉시 적용) | "" | 설정(일반 › 글꼴) | `ui.flash_font_face`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
+| UI 글꼴 크기(고정) | `app/fonts.rs` | 플래시 글꼴 크기(6~40) | 10 | 설정(일반 › 글꼴) | `ui.flash_font_size`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
 | git 상세 = 저장소마다 한 번 조회 · 자동 갱신 없음(dir3 종전) | `app/statusline.rs` · `app/watch.rs` · `dirinfo.rs` | 탭 상태바 git 요약 안전망 재조회 주기(사건 기반 갱신 외 · 보이는 탭의 저장소만 · 0~3600 s) | 30 | 고급(탭 상태바 · 0 = 끔) | `git.refresh_s`(NEW-005 2차) | ✅ 10-05 §86(348da08) |
 | 파일 선택 즉시 셸 컨텍스트 메뉴 선행 구축(300 ms 머무름 · 확장 DLL 적재) | `app/ctxmenu.rs` · `platform/winshell.rs` | 선택만으로 셸 메뉴를 미리 만들지(on = 첫 우클릭 빠름 · 확장 DLL 상주로 Private +40 MB · off = 우클릭 때 구축 · "불러오는 중" 뒤 채움) | on | 고급(영향 큼 · 기본 off) | `ctxmenu.prebuild`(T-179 J) | ✅ 10-05 §74(9994462) |
 | 유휴 메모리 정리 없음 | `app/memory.rs` · `platform/procmem.rs` | 이 초 동안 입력이 없으면 글리프 캐시 · 셸 메뉴 COM 해제 · 힙 압축 · 작업 집합 트림(0 = 끔) | — | 고급(드문 조절 · 기본 60 s) | `mem.idle_trim_s`(T-179 A) | ✅ 10-05 §74(9994462) |
