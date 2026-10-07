@@ -232,6 +232,8 @@ struct App {
     mono_font: Option<Rc<Font>>,
     /// ★ 플래시 메시지 글꼴(설정 `ui.flash_font_face` · None = UI 글꼴 · nexa-sql 10-07 차용).
     flash_font: Option<Rc<Font>>,
+    /// 직전 그리기에서 메뉴바가 열려 있었는가 — 닫힘 → 열림 전이에서 OS 테마·언어를 다시 읽어 메뉴 라벨을 갱신한다(사용자 10-07).
+    menu_was_open: bool,
     /// Windows Terminal 기본 프로필(설정 `term.follow_windows_terminal` · Windows만 · 없으면 None) — 터미널 글꼴·크기를 따라간다.
     wt_profile: Option<platform::WtProfile>,
     theme: Theme,
@@ -622,6 +624,7 @@ impl App {
             statusbar: StatusBar::new(),
             toasts,
             flash_font: App::load_flash_font(&settings),
+            menu_was_open: false,
             settings,
             keymap,
             mono_font,

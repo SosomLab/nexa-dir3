@@ -7885,6 +7885,47 @@ fn launcher_folder_item_navigates_active_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 테마 · 언어 하위 메뉴의 "시스템" 항목 = `시스템 (현재 OS 값)`(사용자 10-07): 라벨이 라이트/다크 · 언어 이름을 담고 · 메뉴를 열면
+/// 다시 읽어 System 모드 팔레트가 OS 판정과 같아진다(GAP-021 완화).
+#[test]
+fn system_menu_items_show_os_state_and_refresh_on_open() {
+    let (mut app, dir) = fixture("menu-sysstate");
+    let (theme_label, lang_label) = app::menus::system_state_labels(true);
+    assert_eq!(
+        theme_label,
+        trf("menu.sub.systemState", &[&tr("menu.sub.dark")])
+    );
+    assert_eq!(
+        app::menus::system_state_labels(false).0,
+        trf("menu.sub.systemState", &[&tr("menu.sub.light")])
+    );
+    // 언어 = OS 언어가 풀리는 언어 이름(빈 값 아님 · 테마 라벨과 다름).
+    assert!(
+        !lang_label.is_empty() && lang_label != theme_label,
+        "{lang_label}"
+    );
+    // 메뉴에 반영돼 있다(sync_menu_checks가 썼다).
+    let shown = app
+        .menubar
+        .label_of("view.theme_system")
+        .unwrap()
+        .to_string();
+    assert!(
+        shown.contains(&tr("menu.sub.light")) || shown.contains(&tr("menu.sub.dark")),
+        "{shown}"
+    );
+    // 메뉴 열림 전이에서 다시 읽는다 — System 모드 팔레트 = OS 판정(창 없음 = OS 조회 · 모르면 다크).
+    let _ = app.settings.set("ui.theme", "system");
+    app.theme = Theme::light();
+    let mut inv = Invalidations::default();
+    app.menubar.open_menu_index(0, &mut inv);
+    app.refresh_menu_state();
+    let os_dark = crate::theme::resolve(ThemeMode::System, None).is_dark;
+    assert_eq!(app.theme.is_dark, os_dark);
+    assert!(app.menu_was_open);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 창 제목(사용자 10-06): 디버그 빌드만 "(Debug)" 꼬리 · 릴리스는 "Nexa Dir".
 #[test]
 fn app_title_marks_debug_builds() {

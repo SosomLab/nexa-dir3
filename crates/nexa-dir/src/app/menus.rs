@@ -106,6 +106,28 @@ fn sub_item(id: &str, label_key: &str) -> MenuEntry {
     MenuEntry::Item(it)
 }
 
+/// 테마 · 언어 하위 메뉴의 "시스템" 항목 라벨 = `시스템 (현재 OS 값)`(사용자 10-07 "언어처럼 현재 상태값을 표시") — 테마 = OS가
+/// 라이트/다크 · 언어 = OS 언어가 풀리는 언어 이름(없으면 코드). OS 판정 결과만 받는다.
+pub(crate) fn system_state_labels(os_dark: bool) -> (String, String) {
+    let theme_now = tr(if os_dark {
+        "menu.sub.dark"
+    } else {
+        "menu.sub.light"
+    });
+    let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
+    let avail = ndir_i18n::discover(&home);
+    let system = ndir_i18n::syslang::system_lang_code();
+    let code = ndir_i18n::resolve_code("system", &system, &avail);
+    let lang_now = avail
+        .iter()
+        .find(|(c, _)| *c == code)
+        .map_or(code.clone(), |(_, n)| n.clone());
+    (
+        trf("menu.sub.systemState", &[&theme_now]),
+        trf("menu.sub.systemState", &[&lang_now]),
+    )
+}
+
 /// View 메뉴 조립(순수): 평면 항목 가운데 테마 3개 자리에 테마 하위 메뉴 · 언어 자리에 언어 하위 메뉴를 넣고, 그 때문에
 /// 잇달아 생긴 구분선은 하나로.
 pub(crate) fn view_with_submenus(
@@ -264,6 +286,8 @@ impl App {
 
     /// 체크·라디오 = 설정값(dir2 `build_menus` 인자 14개와 같은 출처).
     pub(crate) fn sync_menu_checks(&mut self) {
+        // "시스템" 항목 라벨 = OS 현재 값(메뉴를 열 때도 `refresh_menu_state`가 다시 쓴다).
+        self.refresh_system_state();
         let s = &self.settings;
         let checks = [
             ("view.dock", s.flag("dock.visible")),
@@ -761,6 +785,34 @@ impl App {
         }
         self.sync_menu_checks();
         self.redraw();
+    }
+
+    /// ★ 메뉴가 닫힘 → 열림으로 바뀐 첫 그리기에서 OS 상태를 다시 읽는다(사용자 10-07 "메뉴가 새로 그려질 때마다 현재 상태를 읽어
+    /// 최신으로 · 모든 OS"): System 모드면 팔레트를 다시 판정(GAP-021 완화 — winit `ThemeChanged`가 안 와도 메뉴를 열면 따라간다) ·
+    /// 테마/언어 "시스템" 항목 라벨에 OS 현재 값. 비용 = 메뉴를 열 때 1회(Windows 레지스트리 1회 · 다른 OS = winit 창 판정).
+    pub(crate) fn refresh_menu_state(&mut self) {
+        let open = self.menubar.is_open();
+        if open && !self.menu_was_open {
+            self.refresh_system_state();
+        }
+        self.menu_was_open = open;
+    }
+
+    /// OS 테마·언어 재판정 + "시스템" 항목 라벨 갱신(`sync_menu_checks`와 메뉴 열림에서 부른다).
+    pub(crate) fn refresh_system_state(&mut self) {
+        let wt = self.window.as_ref().and_then(|w| w.theme());
+        let os_dark = theme::resolve(ThemeMode::System, wt).is_dark;
+        if self.settings.theme_mode() == ThemeMode::System && os_dark != self.theme.is_dark {
+            self.theme = theme::resolve(ThemeMode::System, wt);
+            self.apply_icon_switches();
+            self.redraw();
+        }
+        let (theme_label, lang_label) = system_state_labels(os_dark);
+        let mut inv = Invalidations::default();
+        self.menubar
+            .set_label("view.theme_system", &theme_label, &mut inv);
+        self.menubar
+            .set_label("view.lang_system", &lang_label, &mut inv);
     }
 
     /// 명령 한 길 — 메뉴 · 툴바 · 단축키 · 기동 명령이 전부 여기로(SKEL-421). 모르는 id = 상태줄 안내(구현 단계 표시).

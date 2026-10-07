@@ -7,6 +7,8 @@ use crate::*;
 
 impl App {
     pub(crate) fn paint(&mut self) {
+        // 메뉴가 **새로 열려 그려질 때** OS 테마·언어를 다시 읽어 팔레트·라벨을 최신으로(사용자 10-07 · 모든 OS).
+        self.refresh_menu_state();
         // 표면을 잠시 꺼내 둔다 — 버퍼가 표면을 빌리는 동안 `paint_into(&mut self)`를 부르기 위해(그리기 중 `self.surface`는 안 쓴다).
         let (Some(win), Some(mut surface)) = (self.window.clone(), self.surface.take()) else {
             return;

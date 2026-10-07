@@ -42,6 +42,7 @@ menu.view.langMenu = 言語
 menu.sub.system = システム
 menu.sub.light = ライト
 menu.sub.dark = ダーク
+menu.sub.systemState = システム（{0}）
 menu.help = ヘルプ
 menu.help.about = Nexa Dir について
 
