@@ -7865,6 +7865,26 @@ fn log_window_collects_entries_and_dev_mask_gates_details() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T-174(NEW-028 · NEW-039): 런처 항목의 실행 파일 자리가 **폴더**면 활성 패널이 그 폴더로 간다(종전 = `Command::new(폴더)` 실행 실패).
+#[test]
+fn launcher_folder_item_navigates_active_panel() {
+    let (mut app, dir) = fixture("launcher-folder");
+    let sub = dir.join("sub");
+    app.launcher_items = vec![launcher::LauncherItem {
+        label: "폴더".into(),
+        exe: sub.to_string_lossy().into_owned(),
+        args: String::new(),
+    }];
+    app.launch_item(0);
+    assert_eq!(app.panels[app.active].root_path(), sub);
+    assert!(
+        app.launcher_last.contains("폴더") && !app.launcher_last.contains(" — "),
+        "{}",
+        app.launcher_last
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 창 제목(사용자 10-06): 디버그 빌드만 "(Debug)" 꼬리 · 릴리스는 "Nexa Dir".
 #[test]
 fn app_title_marks_debug_builds() {

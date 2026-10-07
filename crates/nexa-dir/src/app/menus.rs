@@ -218,9 +218,20 @@ impl App {
         };
         let folder = self.term_cwd(0);
         let mut inv = Invalidations::default();
-        let text = match launcher::launch(&item, &folder) {
-            Ok(()) => trf("launcher.ran", &[&item.label]),
-            Err(e) => format!("{} — {e}", trf("launcher.failed", &[&item.label])),
+        // ★ 폴더 항목(T-174 · NEW-028/039): 실행 파일 자리가 폴더면 **활성 패널을 그 폴더로**(종전 `Command::new(폴더)` = 실행 실패 ·
+        //   dir2는 ShellExecute로 탐색기가 바깥에 열렸다 — dir3는 자기 패널로).
+        let target = std::path::Path::new(&item.exe);
+        let text = if !item.exe.trim().is_empty() && target.is_dir() {
+            let a = self.active;
+            match self.panels[a].navigate_to(target.to_path_buf(), &mut inv) {
+                None => trf("launcher.ran", &[&item.label]),
+                Some(e) => format!("{} — {e}", trf("launcher.failed", &[&item.label])),
+            }
+        } else {
+            match launcher::launch(&item, &folder) {
+                Ok(()) => trf("launcher.ran", &[&item.label]),
+                Err(e) => format!("{} — {e}", trf("launcher.failed", &[&item.label])),
+            }
         };
         self.statusbar.set_left(&text, &mut inv);
         self.toasts.push(
