@@ -5,7 +5,6 @@
 //! 창이 닫혀 있으면 이 모듈은 불리지 않는다(비용 0).
 
 use crate::platform::procmem::SysMem;
-use std::time::Instant;
 
 /// 기능별 묶음(사용자 10-04 분류) — 표의 구획 머리.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -186,7 +185,6 @@ impl Acc {
 /// 한 번의 표본.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Sample {
-    pub at: Instant,
     pub sys: SysMem,
     pub data: Acc,
     /// 시스템 전체 메모리 `(쓰는 양, 전체)`(모르면 `None`).
@@ -200,6 +198,51 @@ impl Sample {
     /// (종전 = 글꼴 파일 크기까지 빼 "기타 0 B" · 비율 110 %로 보였다 · 사용자 10-06).
     pub(crate) fn other(&self) -> u64 {
         self.sys.footprint.saturating_sub(self.data.private_sum())
+    }
+
+    /// ★ **화면에 보이는 값의 서명**(nexa-sql T-310 개념 · 사용자 10-08): 메모리 바이트는 매초 수 KB씩 흔들려 원값 비교로는 "안 바뀜"이
+    /// 거의 없다 → 표에 실제로 찍히는 글(`fmt` 유효숫자 3 · 비율 소수 1 · 묶음 소계 · 시스템 행 7 · PC 전체 줄)로 해시를 만들어 같으면
+    /// 창을 다시 그리지 않는다(바닥 "갱신 시각"도 그대로).
+    pub(crate) fn display_sig(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let pct = |b: u64, denom: u64| format!("{:.1}", b as f64 * 100.0 / denom.max(1) as f64);
+        for c in Cat::ALL {
+            let b = self.data.get(c);
+            let denom = if c.file_backed() {
+                self.sys.resident
+            } else {
+                self.sys.footprint
+            };
+            fmt(b).hash(&mut h);
+            pct(b, denom).hash(&mut h);
+        }
+        let other = self.other();
+        fmt(other).hash(&mut h);
+        pct(other, self.sys.footprint).hash(&mut h);
+        for g in Group::ALL {
+            let extra = if g == Group::Program { other } else { 0 };
+            fmt(self.data.group_sum(g) + extra).hash(&mut h);
+        }
+        for v in [
+            self.sys.footprint,
+            self.sys.private_ws,
+            self.sys.resident,
+            self.sys.file_backed,
+            self.sys.compressed,
+            self.sys.heap_used,
+            self.sys.heap_held,
+        ] {
+            fmt(v).hash(&mut h);
+        }
+        fmt(self.mapped.0).hash(&mut h);
+        fmt(self.mapped.1).hash(&mut h);
+        if let Some((used, all)) = self.machine {
+            crate::filelist::format_size(used).hash(&mut h);
+            crate::filelist::format_size(all).hash(&mut h);
+            format!("{:.0}", used as f64 * 100.0 / all.max(1) as f64).hash(&mut h);
+        }
+        h.finish()
     }
 }
 
@@ -252,6 +295,11 @@ impl Trend {
     pub(crate) fn shown(&self, i: usize) -> Option<i64> {
         (self.ttl.get(i).copied().unwrap_or(0) > 0).then(|| self.delta[i])
     }
+
+    /// ▲/▼가 하나라도 보이는 중인가(표시 시간이 줄어드는 동안은 서명이 같아도 다시 그려야 사라진다).
+    pub(crate) fn any_shown(&self) -> bool {
+        self.ttl.iter().any(|t| *t > 0)
+    }
 }
 
 /// 바이트 표기 — 1024 단위 · 유효숫자 3(`312 MB` · `1.24 GB` · `640 KB`).
@@ -290,7 +338,6 @@ mod tests {
             data.add(*c, *n);
         }
         Sample {
-            at: Instant::now(),
             sys: SysMem {
                 footprint,
                 ..SysMem::default()
@@ -359,5 +406,23 @@ mod tests {
         assert_eq!(t.shown(Trend::OTHER), None);
         t.update(&sample(101 * mb + 1024, &[(Cat::ListsActive, mb)]));
         assert_eq!(t.shown(Trend::OTHER), Some(mb as i64));
+        assert!(t.any_shown());
+    }
+
+    /// 표시 서명(T-310 개념): 글로 찍히지 않는 흔들림(수 바이트~수 KB)은 같은 서명 · 글이 바뀌는 변화(MB 단위 · 힙 여유 20 → 2 MB)는
+    /// 다른 서명.
+    #[test]
+    fn display_sig_ignores_sub_display_jitter() {
+        let mb = 1024 * 1024;
+        let a = sample(100 * mb, &[(Cat::ListsActive, 10 * mb)]);
+        let b = sample(100 * mb + 3_000, &[(Cat::ListsActive, 10 * mb + 700)]);
+        assert_eq!(a.display_sig(), b.display_sig(), "수 KB 흔들림 = 같은 글");
+        let c = sample(100 * mb, &[(Cat::ListsActive, 15 * mb)]);
+        assert_ne!(a.display_sig(), c.display_sig(), "5 MB 변화 = 다른 글");
+        let mut d = a;
+        d.sys.heap_held = 20 * mb;
+        let mut e = a;
+        e.sys.heap_held = 2 * mb;
+        assert_ne!(d.display_sig(), e.display_sig(), "힙 여유 20 → 2 MB");
     }
 }

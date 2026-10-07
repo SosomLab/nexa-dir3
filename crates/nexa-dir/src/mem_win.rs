@@ -54,6 +54,9 @@ pub(crate) struct MemWin {
     trim_hold: u8,
     /// 마지막 정리 결과 안내(바닥 줄 · 남은 표시 표본 수).
     trim_note: Option<(String, u8)>,
+    /// ★ 다시 그리기 생략(nexa-sql T-310 개념 · 사용자 10-08): 마지막으로 **그린** 표본의 표시 서명 · 그때의 현지 시각(바닥 "갱신 hh:mm:ss").
+    last_sig: Option<u64>,
+    updated_at: String,
 }
 
 /// [힙 정리] 뒤 버튼을 잠가 두는 표본 수(즉시 표본 1 + 다음 주기 1) · 결과 안내가 남는 표본 수.
@@ -75,7 +78,21 @@ impl MemWin {
             every_ms: 1000,
             trim_hold: 0,
             trim_note: None,
+            last_sig: None,
+            updated_at: String::new(),
         }
+    }
+
+    /// 마지막으로 그린 표본의 갱신 시각(hh:mm:ss · 시험).
+    #[cfg(test)]
+    pub(crate) fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    /// 마지막으로 그린 표본의 표시 서명(시험).
+    #[cfg(test)]
+    pub(crate) fn last_sig(&self) -> Option<u64> {
+        self.last_sig
     }
 
     /// [힙 정리]를 누른 직후 — 버튼을 잠그고 글을 "정리 중…"으로(호스트가 정리를 마치고 [`Self::set_trim_result`]를 부른다).
@@ -155,6 +172,8 @@ impl MemWin {
         self.trend = Trend::default();
         self.trim_hold = 0;
         self.trim_note = None;
+        self.last_sig = None;
+        self.updated_at.clear();
         self.btn_trim.set_enabled(true);
         self.btn_trim.set_label(tr("mem.trim"));
     }
@@ -194,9 +213,20 @@ impl MemWin {
                 self.trim_note = None;
             }
         }
+        // ★ 다시 그리기 생략(nexa-sql T-310 개념 · 사용자 10-08): 화면에 찍히는 글의 서명이 같으면 그리지 않는다(바닥 "갱신 hh:mm:ss"도
+        //   그대로 — 값이 안 바뀌면 시각이 매초 바뀌지 않는다). 예외 = ▲/▼ 표시 중 · 정리 잠금 · 결과 안내 표시 중(사라지는 과정을 그려야 함).
+        let sig = s.display_sig();
+        let changed = self.last_sig != Some(sig);
+        if changed {
+            self.last_sig = Some(sig);
+            self.updated_at = ndir_log::now_local().time_only();
+            self.updated_at.truncate(8);
+        }
         self.sample = Some(s);
         self.every_ms = every_ms;
-        self.redraw();
+        if changed || self.trend.any_shown() || self.trim_hold > 0 || self.trim_note.is_some() {
+            self.redraw();
+        }
     }
 
     /// 이 창의 표면(프레임 버퍼) 바이트 — 호스트가 [`Cat::SurfaceAux`]에 더한다.
@@ -584,10 +614,11 @@ impl MemWin {
                     .as_ref()
                     .map(|n| n.0.clone())
                     .unwrap_or_default(),
-                Some(sm) => trf(
+                // 마지막으로 **그린**(값이 바뀐) 시각 — 경과 초 대신(매초 다시 그릴 이유가 사라진다).
+                Some(_) => trf(
                     "mem.updated",
                     &[
-                        &format!("{:.1}", sm.at.elapsed().as_secs_f32()),
+                        &self.updated_at,
                         &format!("{:.1}", self.every_ms as f32 / 1000.0),
                     ],
                 ),
@@ -613,12 +644,41 @@ mod tests {
 
     fn sample() -> Sample {
         Sample {
-            at: std::time::Instant::now(),
             sys: Default::default(),
             data: Acc::default(),
             machine: None,
             mapped: (0, 0),
         }
+    }
+
+    /// 다시 그리기 생략(T-310 개념): 표시 글이 같은 표본(수 KB 흔들림)은 서명·갱신 시각이 그대로 · 글이 바뀌는 표본(+5 MB)은 서명이 바뀐다 ·
+    /// 닫으면 초기화.
+    #[test]
+    fn same_display_text_keeps_signature_and_updated_time() {
+        let mut w = MemWin::new();
+        let mb = 1024 * 1024;
+        let mut a = sample();
+        a.sys.footprint = 100 * mb;
+        a.data.add(crate::memstat::Cat::ListsActive, 10 * mb);
+        w.set_sample(a, 1000);
+        let s1 = w.last_sig().expect("첫 표본 = 그림");
+        assert_eq!(w.updated_at().len(), 8, "hh:mm:ss");
+        let t1 = w.updated_at().to_string();
+        let mut jitter = sample();
+        jitter.sys.footprint = 100 * mb + 3_000;
+        jitter
+            .data
+            .add(crate::memstat::Cat::ListsActive, 10 * mb + 700);
+        w.set_sample(jitter, 1000);
+        assert_eq!(w.last_sig(), Some(s1), "같은 글 = 같은 서명");
+        assert_eq!(w.updated_at(), t1, "갱신 시각 그대로");
+        let mut grown = sample();
+        grown.sys.footprint = 100 * mb;
+        grown.data.add(crate::memstat::Cat::ListsActive, 15 * mb);
+        w.set_sample(grown, 1000);
+        assert_ne!(w.last_sig(), Some(s1), "+5 MB = 다른 서명");
+        w.close();
+        assert!(w.last_sig().is_none() && w.updated_at().is_empty());
     }
 
     /// [힙 정리] 진행 표시: 누르면 잠기고("정리 중…") · 결과가 바닥 안내에 뜨고 · 표본이 두 번 온 뒤 버튼이 풀리며 ·

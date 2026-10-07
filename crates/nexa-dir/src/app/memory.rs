@@ -71,7 +71,6 @@ impl App {
         let mut sys = platform::procmem::sys();
         sys.private_ws = platform::procmem::private_ws(&sys);
         Sample {
-            at: Instant::now(),
             sys,
             data: acc,
             mapped: (ui_mapped, term_mapped),
