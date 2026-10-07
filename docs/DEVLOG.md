@@ -5,7 +5,7 @@
 ## 2026-10-07
 
 - **10-07 회차 정리(188차)** — 코드 7 · 기록 7 · nexa-ui 176/177 · gate full 3회 · 설치본 v0.23.1(PID 19676) · 남은 = winget/homebrew 재실행 · choco 검수 · 실기 4건 → [10-07 §10](journal/2026-10-07.md)
-- **릴리스 v0.23.1**(태그 3c306ee · run 37641251716) — Release 공개(자산 9) · linux-repo ✓ · choco 2건 Submitted · **winget/homebrew = GitHub 일시 장애**(`wingetcreate` "Failed to connect" · 탭 push 500 · rerun API 500 → 자동 재시도) · T-181 brew style 7건 → [10-07 §9](journal/2026-10-07.md)
+- **릴리스 v0.23.1**(태그 3c306ee · run 37641251716) — Release 공개(자산 9) · linux-repo ✓ · choco 2건 Submitted · winget **#448255/#448256** · brew 탭 **d806a48**(1회차 winget/homebrew는 GitHub 쓰기 장애 15:07~15:18Z → 2분 재시도 루프 → attempt 3 전 잡 ✓) · T-181 brew style 7건 → [10-07 §9](journal/2026-10-07.md)
 - **테마/언어 "시스템 (OS 현재 값)" + 메뉴 열 때 OS 테마 재판정**(3c306ee · nexa-ui 176 `MenuBar::set_label` · GAP-021 완화) · nexa-ui 177 셸 아이콘 시험 5회 재시도(CI windows 흔들림) · 버전 0.23.1(6914810) → [10-07 §9](journal/2026-10-07.md)
 - **설치본 4e558e0 교체(PID 23128)** · 메모리 창 전용 워킹 셋 after = 작업 관리자와 20~32 KB 차 ✓(PID 기준 조회 · 인스턴스 이름 조회 함정 기록) → [10-07 §8](journal/2026-10-07.md)
 - **런처 폴더 항목 → 활성 패널 이동**(T-174 · 5cec87c) · 묶음 push 7705785 · gate full 576/0 → [10-07 §6~§7](journal/2026-10-07.md)
