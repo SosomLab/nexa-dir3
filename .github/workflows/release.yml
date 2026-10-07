@@ -214,6 +214,9 @@ jobs:
           if ($p.ExitCode -ne 0 -or $v -ne "nexa-dir $env:NDIR_VERSION") { throw "버전 불일치: '$v' (exit $($p.ExitCode))" }
           $p = Start-Process -FilePath $exe -ArgumentList "--smoke" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoke.txt -RedirectStandardError smoke.err
           Get-Content smoke.txt; if ($p.ExitCode -ne 0) { Get-Content smoke.err; throw "--smoke 실패 $($p.ExitCode)" }
+          # ★ 콘솔 보조 ndir.exe(T-178)는 콘솔 프로그램이라 **직접 캡처**가 돼야 한다(이 결함의 회귀 시험 · 10-05 §70 2차 실패).
+          $v2 = (& (Join-Path $dir "ndir.exe") --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $v2 -ne "nexa-dir $env:NDIR_VERSION") { throw "ndir --version 캡처 불일치: '$v2' (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir "plugins\markdown.wasm"))) { throw "동봉 플러그인 누락" }
           (Get-ItemProperty 'HKLM:\SOFTWARE\SosomLab\Nexa Dir').InstallDir
           $p = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
@@ -288,7 +291,7 @@ jobs:
           | macOS (drag-to-Applications) | \`nexa-dir-$VERSION-macos-universal.dmg\` | 끌어 놓기 · CLI 링크는 dmg 안 안내문 |
           | Linux x86_64 (deb) | \`nexa-dir_${VERSION}_amd64.deb\` | \`sudo dpkg -i\` 또는 \`sudo apt install ./…deb\` |
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
-          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | 압축 해제 후 \`nexa-dir.exe\` 실행(실행 파일 옆에 \`data\` 폴더를 두면 거기에, 아니면 %APPDATA%\\\\nexa-dir에 설정) |
+          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | 압축 해제 후 \`nexa-dir.exe\` 실행(실행 파일 옆에 \`data\` 폴더를 두면 거기에, 아니면 %APPDATA%\\\\nexa-dir에 설정) · 콘솔(PowerShell)에서는 \`ndir --selfcheck\`처럼 \`ndir.exe\`로 |
 
           받은 파일은 \`sha256sums.txt\`로 확인하세요. 제거: Windows 프로그램 추가/제거 · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\`/\`dnf remove nexa-dir\`.
           사용자 데이터(설정 · 세션 · 즐겨찾기 · 이름 변경 프리셋)는 설정 폴더에 있으며 제거해도 보존됩니다. 0.22.0 이하(nexa-dir2)의 설정은 첫 실행 때 한 번 가져옵니다.

@@ -10,7 +10,7 @@
 
   설계 의도(docs/33 §2)
   - 기계 단위(Program Files\Nexa Dir · HKLM) — 기업 배포·GPO·`msiexec /qn` 조용한 설치. 사용자 데이터는 %APPDATA%\nexa-dir(설치기는 손대지 않는다).
-  - exe 1개: nexa-dir.exe(GUI · selfcheck 등 명령줄 겸용) · plugins\ = 동봉 WASM 플러그인.
+  - exe 2개: nexa-dir.exe(GUI · selfcheck 등 명령줄 겸용) · ndir.exe(콘솔 보조 · T-178 · 인자를 본체에 전달 — PowerShell에서 출력 순서/캡처 정상) · plugins\ = 동봉 WASM 플러그인.
   - 기능(Feature): Main(필수) · PathEnv(PATH 추가 · 기본 켬 · `ADDLOCAL`/`REMOVE`로 조정).
   - UpgradeCode 고정 → 같은 코드의 새 버전은 MajorUpgrade로 교체 설치(다운그레이드 차단).
   - 서명은 ps1의 자리(signtool · 시크릿 있을 때만 · DR-20).
@@ -78,6 +78,8 @@
           <Shortcut Id="StartMenuGui" Directory="AppMenuFolder" Name="Nexa Dir" WorkingDirectory="INSTALLFOLDER"
                     Icon="AppIcon.ico" Advertise="yes" Description="Nexa Dir" />
         </File>
+        <!-- 콘솔 보조(T-178): `ndir --selfcheck` — 셸이 끝까지 기다리는 CLI 경로(본체에 인자 전달). -->
+        <File Id="NdirExe" Source="$(var.Staging)\ndir.exe" />
       </Component>
       <Component Id="Docs" Guid="3EA7048D-1375-4387-8636-F9BED6F72FF9">
         <File Source="$(var.Staging)\LICENSE.md" KeyPath="yes" />
@@ -116,7 +118,7 @@
     <Feature Id="Main" Title="Nexa Dir" Description="Nexa Dir (nexa-dir.exe) and bundled plugins" Level="1" AllowAbsent="no" AllowAdvertise="no" Display="expand">
       <ComponentGroupRef Id="MainFiles" />
       <ComponentGroupRef Id="PluginsFiles" />
-      <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'nexa-dir --selfcheck' works in any console." Level="1" AllowAdvertise="no">
+      <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'ndir --selfcheck' (console helper) and 'nexa-dir' work in any console." Level="1" AllowAdvertise="no">
         <ComponentGroupRef Id="PathEnvFiles" />
       </Feature>
     </Feature>

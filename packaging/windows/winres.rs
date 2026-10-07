@@ -57,7 +57,8 @@ fn embed_windows_resources(rc_name: &str, stem: &str) {
         compile_gnu(&out_dir, cwd, &wrapper, stem)
     };
     if let Some(obj) = linked {
-        println!("cargo:rustc-link-arg-bins={}", obj.display());
+        // 지정한 bin에만(T-178: 같은 크레이트의 콘솔 보조 `ndir`에는 GUI 아이콘·버전 리소스를 붙이지 않는다).
+        println!("cargo:rustc-link-arg-bin={stem}={}", obj.display());
     }
 }
 

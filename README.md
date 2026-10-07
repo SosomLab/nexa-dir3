@@ -22,7 +22,7 @@
 ```bash
 cargo build --workspace
 cargo run -p nexa-dir -- --smoke        # 창 없이 기동 점검
-cargo run -p nexa-dir -- --selfcheck    # 자가 점검(doctor)
+cargo run -p nexa-dir -- --selfcheck    # 자가 점검(doctor) — 설치본 Windows 콘솔에서는 `ndir --selfcheck`(콘솔 보조 exe · 출력 순서/캡처 정상)
 scripts/check-3os.sh                    # push 전 3-OS 교차 검사
 ```
 
