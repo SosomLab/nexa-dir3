@@ -127,6 +127,9 @@
 | UI 글꼴(고정) | `app/fonts.rs::apply_flash_font` | 플래시 글꼴(비면 UI 글꼴 · 즉시 적용) | "" | 설정(일반 › 글꼴) | `ui.flash_font_face`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
 | UI 글꼴 크기(고정) | `app/fonts.rs` | 플래시 글꼴 크기(6~40) | 10 | 설정(일반 › 글꼴) | `ui.flash_font_size`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
 | git 상세 = 저장소마다 한 번 조회 · 자동 갱신 없음(dir3 종전) | `app/statusline.rs` · `app/watch.rs` · `dirinfo.rs` | 탭 상태바 git 요약 안전망 재조회 주기(사건 기반 갱신 외 · 보이는 탭의 저장소만 · 0~3600 s) | 30 | 고급(탭 상태바 · 0 = 끔) | `git.refresh_s`(NEW-005 2차) | ✅ 10-05 §86(348da08) |
+| git 요약 항상 켜짐(dir3 종전) | `app/statusline.rs` · `app/dirinfo.rs` | 탭 상태바 git 요약 표시(끄면 브랜치·상세 조회 모두 안 함) | on | 설정(탭 상태바) | `git.enabled`(T-180) | ✅ 10-08 §2(f7a1fb3) |
+| 미추적 파일 항상 탐색(dir3 종전) | `app/statusline.rs` | 미추적 파일 셈(끄면 `git status -uno` · 큰 저장소 빠름 · `?n` 사라짐) | on | 고급(탭 상태바) | `git.untracked`(T-180) | ✅ 10-08 §2(f7a1fb3) |
+| 앞섬/뒤짐 = `⇡1⇣2` 고정(dir3 종전) | `app/statusline.rs` | 앞섬·뒤짐이 함께 있으면 `⇕` 기호를 앞에 붙임(`⇕⇡1⇣2`) | off | 고급(탭 상태바) | `git.diverged_glyph`(T-180) | ✅ 10-08 §2(f7a1fb3) |
 | 파일 선택 즉시 셸 컨텍스트 메뉴 선행 구축(300 ms 머무름 · 확장 DLL 적재) | `app/ctxmenu.rs` · `platform/winshell.rs` | 선택만으로 셸 메뉴를 미리 만들지(on = 첫 우클릭 빠름 · 확장 DLL 상주로 Private +40 MB · off = 우클릭 때 구축 · "불러오는 중" 뒤 채움) | on | 고급(영향 큼 · 기본 off) | `ctxmenu.prebuild`(T-179 J) | ✅ 10-05 §74(9994462) |
 | 유휴 메모리 정리 없음 | `app/memory.rs` · `platform/procmem.rs` | 이 초 동안 입력이 없으면 글리프 캐시 · 셸 메뉴 COM 해제 · 힙 압축 · 작업 집합 트림(0 = 끔) | — | 고급(드문 조절 · 기본 60 s) | `mem.idle_trim_s`(T-179 A) | ✅ 10-05 §74(9994462) |
 | 즐겨찾기 없음(dir2 · dir3 종전) | `app/favorites.rs` | 즐겨찾기 폴더 목록(Ctrl+D로 편집 · 최대 64) | — | 숨김(HIDDEN · 명령으로만 편집 · `;;` 구분) | `nav.favorites`(NEW-039) | ✅ 10-05 §57(704c399) |
