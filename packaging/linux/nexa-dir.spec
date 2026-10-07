@@ -58,5 +58,8 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Tue Oct 07 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.1-1
+- Memory window: private working set row (Task Manager axis) · flash message settings (ui.flash_*) ·
+  system theme follows OS after dark start (Windows) · launcher folder items navigate the active panel.
 * Sat Oct 03 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.0-1
 - 첫 RPM 명세(nexa-dir3 T-82 · nexa-sql T-72 차용) — deb와 같은 FHS 스테이징을 포장.
