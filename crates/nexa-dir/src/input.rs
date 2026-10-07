@@ -113,6 +113,13 @@ pub(crate) fn trace_ime() -> bool {
     *ON.get_or_init(|| std::env::var_os("NDIR_TRACE_IME").is_some())
 }
 
+/// `NDIR_TRACE_FRAMES=1`(기동 때 한 번 읽음 · 메인 창 프레임마다 stderr `[frame] n= wait= paint= present=` µs · T-176 ④ ·
+/// 집계 = `scripts/frame-stats.py`).
+pub(crate) fn trace_frames() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("NDIR_TRACE_FRAMES").is_some())
+}
+
 pub(crate) fn system_ime() -> bool {
     SYSTEM_IME.load(std::sync::atomic::Ordering::Relaxed)
 }

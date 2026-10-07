@@ -297,6 +297,10 @@ struct App {
     startup_blocked: Vec<String>,
     startup_blocked_since: Instant,
     ready_fired: bool,
+    /// 프레임 추적(`NDIR_TRACE_FRAMES=1` · T-176 ④ 입력 지연 계측 · docs/25 §5-4): 다시 그리기를 **요청한** 시각(첫 요청만 · 그린 뒤 비움)
+    /// 과 프레임 번호 — `[frame]` 줄의 `wait`(요청 → 그리기 시작) · `paint` · `present` µs.
+    frame_req_at: std::cell::Cell<Option<Instant>>,
+    frame_no: u64,
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
     keys_win: KeysWin,
@@ -671,6 +675,8 @@ impl App {
             startup_blocked: Vec::new(),
             startup_blocked_since: Instant::now(),
             ready_fired: false,
+            frame_req_at: std::cell::Cell::new(None),
+            frame_no: 0,
             prefs_win: PrefsWin::new(),
             keys_win: KeysWin::new(),
             check_win: CheckWin::new(),
@@ -824,6 +830,9 @@ impl App {
 
     fn redraw(&self) {
         if let Some(w) = &self.window {
+            if input::trace_frames() && self.frame_req_at.get().is_none() {
+                self.frame_req_at.set(Some(Instant::now()));
+            }
             w.request_redraw();
         }
     }

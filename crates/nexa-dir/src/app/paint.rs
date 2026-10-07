@@ -16,6 +16,16 @@ impl App {
         let size = win.inner_size();
         let s = self.scale;
         let (wi, hi) = (size.width as i32, size.height as i32);
+        // 프레임 추적(`NDIR_TRACE_FRAMES=1` · T-176 ④): 요청 → 시작 대기 · 그리기 · present µs를 stderr `[frame]` 줄로(집계 =
+        // scripts/frame-stats.py). 꺼져 있으면 비용 = 분기 1.
+        let tracing = crate::input::trace_frames();
+        let t0 = tracing.then(Instant::now);
+        let wait_us = t0
+            .zip(self.frame_req_at.take())
+            .map(|(t, r)| t.saturating_duration_since(r).as_micros())
+            .unwrap_or(0);
+        let backend = surface.backend();
+        let mut painted = None;
         if let Some(mut buf) = surface.frame(size) {
             {
                 let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
@@ -27,9 +37,26 @@ impl App {
                         .with_fonts(prefs);
                 self.paint_into(&mut dc, wi, hi, s);
             }
+            let t1 = tracing.then(Instant::now);
             let _ = buf.present();
+            painted = t1;
         }
         self.surface = Some(surface);
+        if let (Some(t0), Some(t1)) = (t0, painted) {
+            self.frame_no += 1;
+            let t2 = Instant::now();
+            eprintln!(
+                "[frame] n={} t={}ms wait={}us paint={}us present={}us size={}x{} backend={}",
+                self.frame_no,
+                self.started.elapsed().as_millis(),
+                wait_us,
+                (t1 - t0).as_micros(),
+                (t2 - t1).as_micros(),
+                wi,
+                hi,
+                backend
+            );
+        }
     }
 
     /// 한 프레임을 `dc`에(창 무관). `wi`×`hi` = 표면 크기(장치 px) · `s` = 배율.

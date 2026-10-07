@@ -116,6 +116,19 @@ pwsh -NoProfile -File scripts/win-mem-reclaim.ps1 -HomeDir C:\tmp\ndir-reclaim -
 - 격리 홈 `settings.conf`에 `mem.idle_trim_s=<TrimSecs>`를 써 유휴 트림을 당긴다 · `mem.dump:<파일>` 4회(base · raised · released · trimmed) → 표(footprint · private_ws · resident · heap_used · heap_held) + 판정 `trimmed − base`(> +1 MB 또는 +5 % = WARN).
 - 올림 명령은 기동 명령 어휘(18 §5)면 무엇이든 — 큰 작업(압축 풀기 · 체크섬 · 중복 찾기)은 기동 명령이 없어 실기 [힙 정리] 전/후로 본다.
 
+### 5-4. 입력 지연 · 프레임 계측(`NDIR_TRACE_FRAMES=1` + `scripts/frame-stats.py` · 3-OS)
+
+```bash
+NDIR_HOME=/tmp/ndir-frames NDIR_TRACE_FRAMES=1 \
+NDIR_STARTUP_CMD="@ready:nav:C:\Windows\System32,@after:1500:ui.press:down,@after:1600:ui.press:down,@after:1700:ui.press:down,@after:3000:quit" \
+  target/release/nexa-dir.exe 2> /tmp/frames.log
+python scripts/frame-stats.py /tmp/frames.log [--warm 2] [--json]
+```
+
+- 메인 창 프레임마다 stderr `[frame] n= wait= paint= present= size= backend=`(µs) — `wait` = 다시 그리기 **요청**(입력 처리 끝) → 그리기 시작 · `paint` = CPU 래스터 · `present` = 표면 → 창. 꺼져 있으면 비용 = 분기 1(기동 때 한 번 읽음).
+- 집계 = 프레임 수 · 중앙값 / p95 / 최대 · 예산 초과 수(paint ≤ 8 ms · 합 ≤ 16 ms) · 예열 2프레임 제외 · 0프레임 = 측정 실패.
+- 키 이동 개선(10-05 §68 · 60 ms 지연 후 정보/미리보기) 전후 비교처럼 **같은 기동 명령열**로 전/후를 잰다.
+
 ---
 
 ## 6. 코드 건강 — `scripts/code-health.py`(nexa-sql docs/93 §3 차용 · 외부 패키지 0)

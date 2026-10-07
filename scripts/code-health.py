@@ -32,6 +32,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# Windows 파이썬의 stdout 기본(cp949)으로 한글이 깨지지 않게.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 REPOS = {
