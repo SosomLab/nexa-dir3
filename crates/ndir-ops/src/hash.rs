@@ -68,8 +68,8 @@ impl Algo {
     }
 }
 
-/// 조각을 받아 상태를 갱신하고 끝에 16진 소문자 다이제스트를 낸다.
-pub trait Digest {
+/// 조각을 받아 상태를 갱신하고 끝에 16진 소문자 다이제스트를 낸다(알고리즘별 스레드로 보내므로 `Send`).
+pub trait Digest: Send {
     fn update(&mut self, data: &[u8]);
     fn finish(self: Box<Self>) -> String;
 }
@@ -124,7 +124,14 @@ pub fn normalize_hex(text: &str) -> Option<String> {
     (!out.is_empty()).then_some(out)
 }
 
+/// 읽기 조각 크기(1 MiB — 디스크 읽기 단위 · 알고리즘 스레드로 넘기는 단위).
+const CHUNK: usize = 1024 * 1024;
+
 /// 파일을 한 번 읽으며 여러 알고리즘을 함께 계산한다 — `on_bytes` = 읽은 증분 · `cancel` = `Interrupted`.
+///
+/// ★ 알고리즘이 둘 이상이고 코어가 둘 이상이면 **알고리즘별 스레드**(T-175 · 10-05 §65 T6: 5종을 한 스레드에서 차례로 돌리면 32 MB/s =
+/// 합산 · 병렬이면 가장 느린 것(SHA-256 ≈ 128 MB/s) 속도). 읽기 스레드(호출 스레드)가 조각을 `Arc`로 묶어 각 스레드에 보낸다 ·
+/// 역압 = 스레드마다 조각 4개(`sync_channel`) · 취소 = 조각 공급을 끊고 스레드를 모아 `Interrupted`.
 pub fn hash_file(
     path: &Path,
     algos: &[Algo],
@@ -132,22 +139,101 @@ pub fn hash_file(
     cancel: &AtomicBool,
 ) -> io::Result<Vec<(Algo, String)>> {
     let mut f = std::fs::File::open(path)?;
+    let mut buf = vec![0u8; CHUNK];
+    let mut next = move || -> io::Result<Option<Vec<u8>>> {
+        let n = f.read(&mut buf)?;
+        Ok((n > 0).then(|| buf[..n].to_vec()))
+    };
+    if parallel_ok(algos.len()) {
+        hash_chunks_parallel(algos, &mut next, on_bytes, cancel)
+    } else {
+        hash_chunks_serial(algos, &mut next, on_bytes, cancel)
+    }
+}
+
+/// 병렬로 돌릴 가치가 있는가(순수): 알고리즘 둘 이상 + 코어 둘 이상.
+fn parallel_ok(n_algos: usize) -> bool {
+    n_algos >= 2 && std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get) >= 2
+}
+
+/// 한 스레드에서 차례로(알고리즘 1개 · 단일 코어 · 시험 대조용).
+fn hash_chunks_serial(
+    algos: &[Algo],
+    next: &mut dyn FnMut() -> io::Result<Option<Vec<u8>>>,
+    on_bytes: &mut dyn FnMut(u64),
+    cancel: &AtomicBool,
+) -> io::Result<Vec<(Algo, String)>> {
     let mut ds: Vec<(Algo, Box<dyn Digest>)> = algos.iter().map(|&a| (a, new_digest(a))).collect();
-    let mut buf = vec![0u8; 1024 * 1024];
     loop {
         if cancel.load(Ordering::Relaxed) {
-            return Err(io::Error::new(io::ErrorKind::Interrupted, "canceled"));
+            return Err(canceled());
         }
-        let n = f.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
+        let Some(chunk) = next()? else { break };
         for (_, d) in &mut ds {
-            d.update(&buf[..n]);
+            d.update(&chunk);
         }
-        on_bytes(n as u64);
+        on_bytes(chunk.len() as u64);
     }
     Ok(ds.into_iter().map(|(a, d)| (a, d.finish())).collect())
+}
+
+/// 알고리즘별 스레드 — 조각은 `Arc<Vec<u8>>` 하나를 모두가 읽는다(복사 0) · 공급 끝 = `None`.
+fn hash_chunks_parallel(
+    algos: &[Algo],
+    next: &mut dyn FnMut() -> io::Result<Option<Vec<u8>>>,
+    on_bytes: &mut dyn FnMut(u64),
+    cancel: &AtomicBool,
+) -> io::Result<Vec<(Algo, String)>> {
+    use std::sync::mpsc::{sync_channel, SyncSender};
+    use std::sync::Arc;
+    type Chunk = Option<Arc<Vec<u8>>>;
+    let mut senders: Vec<SyncSender<Chunk>> = Vec::with_capacity(algos.len());
+    let mut workers = Vec::with_capacity(algos.len());
+    for &a in algos {
+        let (tx, rx) = sync_channel::<Chunk>(4);
+        senders.push(tx);
+        workers.push(std::thread::spawn(move || {
+            let mut d = new_digest(a);
+            while let Ok(Some(chunk)) = rx.recv() {
+                d.update(&chunk);
+            }
+            (a, d.finish())
+        }));
+    }
+    let feed = |senders: &[SyncSender<Chunk>], chunk: Chunk| {
+        for tx in senders {
+            let _ = tx.send(chunk.clone());
+        }
+    };
+    let outcome = loop {
+        if cancel.load(Ordering::Relaxed) {
+            break Err(canceled());
+        }
+        match next() {
+            Ok(Some(chunk)) => {
+                let n = chunk.len() as u64;
+                feed(&senders, Some(Arc::new(chunk)));
+                on_bytes(n);
+            }
+            Ok(None) => break Ok(()),
+            Err(e) => break Err(e),
+        }
+    };
+    // 공급 끝(정상 · 취소 · 오류 모두) → 스레드를 모은다(누수 없음).
+    feed(&senders, None);
+    drop(senders);
+    let mut out = Vec::with_capacity(workers.len());
+    for w in workers {
+        match w.join() {
+            Ok(r) => out.push(r),
+            Err(_) => return Err(io::Error::other("hash worker panicked")),
+        }
+    }
+    outcome.map(|()| out)
+}
+
+fn canceled() -> io::Error {
+    io::Error::new(io::ErrorKind::Interrupted, "canceled")
 }
 
 // ── CRC32(IEEE 802.3 · 반사형 · 다항식 0xEDB88320) ────────────────────────────────
@@ -915,8 +1001,53 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::Interrupted);
+        // 병렬 경로(알고리즘 여럿)의 취소 — 스레드를 모두 모으고 Interrupted(T-175).
+        let hit2 = AtomicBool::new(false);
+        let e2 = hash_file(
+            &p,
+            &Algo::ALL,
+            &mut |_| hit2.store(true, Ordering::Relaxed),
+            &hit2,
+        )
+        .unwrap_err();
+        assert_eq!(e2.kind(), io::ErrorKind::Interrupted);
         assert!(hash_file(&d.join("nope"), &[Algo::Md5], &mut |_| {}, &cancel).is_err());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// T-175: 병렬(알고리즘별 스레드)과 직렬이 같은 결과 — 5종 · 조각 경계가 블록(64/128바이트)과 어긋나는 길이 · 빈 입력.
+    #[test]
+    fn parallel_and_serial_agree() {
+        for len in [0usize, 1, 63, 64, 65, 1_000_003, 2 * CHUNK + 777] {
+            let data: Vec<u8> = (0..len as u32)
+                .map(|i| (i.wrapping_mul(2654435761) >> 7) as u8)
+                .collect();
+            let chunks = |data: &[u8]| {
+                let mut off = 0usize;
+                let data = data.to_vec();
+                move || -> io::Result<Option<Vec<u8>>> {
+                    if off >= data.len() {
+                        return Ok(None);
+                    }
+                    let end = (off + CHUNK).min(data.len());
+                    let c = data[off..end].to_vec();
+                    off = end;
+                    Ok(Some(c))
+                }
+            };
+            let cancel = AtomicBool::new(false);
+            let (mut a, mut b) = (0u64, 0u64);
+            let mut n1 = chunks(&data);
+            let mut n2 = chunks(&data);
+            let serial = hash_chunks_serial(&Algo::ALL, &mut n1, &mut |n| a += n, &cancel).unwrap();
+            let par = hash_chunks_parallel(&Algo::ALL, &mut n2, &mut |n| b += n, &cancel).unwrap();
+            assert_eq!(serial, par, "len {len}");
+            assert_eq!(a, len as u64);
+            assert_eq!(b, len as u64);
+            for (algo, hex) in &par {
+                assert_eq!(*hex, digest(*algo, &data), "{algo:?} len {len}");
+            }
+        }
     }
 
     /// 성능 측정(수동 · `cargo test -p ndir-ops --release bench_hash -- --ignored --nocapture`): 256 MiB 메모리 입력을 알고리즘별로 ·
@@ -945,6 +1076,24 @@ mod tests {
         println!(
             "{:<8} {:>7.0} MB/s",
             "5종 함께",
+            mb / at.elapsed().as_secs_f64()
+        );
+        // 병렬(T-175 · 알고리즘별 스레드) — 기대 ≈ 가장 느린 알고리즘 속도.
+        let at = std::time::Instant::now();
+        let mut off = 0usize;
+        let mut next = || -> io::Result<Option<Vec<u8>>> {
+            if off >= data.len() {
+                return Ok(None);
+            }
+            let end = (off + CHUNK).min(data.len());
+            let c = data[off..end].to_vec();
+            off = end;
+            Ok(Some(c))
+        };
+        let _ = hash_chunks_parallel(&Algo::ALL, &mut next, &mut |_| {}, &AtomicBool::new(false));
+        println!(
+            "{:<8} {:>7.0} MB/s",
+            "5종 병렬",
             mb / at.elapsed().as_secs_f64()
         );
     }
