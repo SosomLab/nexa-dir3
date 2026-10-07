@@ -91,6 +91,7 @@ impl App {
             );
             if job.shared.finished.load(Ordering::Relaxed) {
                 let job = self.cmp_job.take().expect("checked above");
+                self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
                 match result {
                     Some(Ok(entries)) => self.compare_win.set_result(entries),
@@ -121,6 +122,7 @@ impl App {
             }
             if job.shared.finished.load(Ordering::Relaxed) {
                 let job = self.sync_job.take().expect("checked above");
+                self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
                 let (text, warn) = match result {
                     Some(Ok(failed)) if failed.is_empty() => {

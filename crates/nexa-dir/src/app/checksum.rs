@@ -159,6 +159,7 @@ impl App {
             return true;
         }
         let job = self.hash_job.take().expect("checked above");
+        self.mem_after_job();
         let canceled = job.shared.cancel.load(Ordering::Relaxed);
         self.hash_win.finish(canceled.then(|| tr("ops.canceled")));
         false

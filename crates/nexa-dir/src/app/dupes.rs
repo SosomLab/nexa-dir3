@@ -79,6 +79,7 @@ impl App {
             return true;
         }
         let job = self.dup_job.take().expect("checked above");
+        self.mem_after_job();
         let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
         match result {
             Some(Ok((groups, mtimes))) => self.dupes_win.set_result(groups, mtimes),

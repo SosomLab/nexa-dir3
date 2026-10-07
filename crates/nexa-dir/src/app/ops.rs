@@ -405,6 +405,7 @@ impl App {
             Some(out) => {
                 let job = self.transfer.take().expect("checked above");
                 self.finish_transfer(job, out);
+                self.mem_after_job();
                 false
             }
             None => {

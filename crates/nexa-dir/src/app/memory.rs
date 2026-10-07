@@ -143,6 +143,14 @@ impl App {
         }
     }
 
+    /// ★ 큰 작업(전송 · 압축 풀기 · 체크섬 · 중복 찾기 · 비교/동기화)이 **끝난 직후 1회** 힙 반납(T-179 H · 10-05 §72 ⓒ "일시 피크 뒤 힙
+    /// 미반환" — Peak 94 MB 뒤 Private 57 MB 잔존): 작업 버퍼 · 목록이 놓인 뒤 할당자가 들고 있는 빈 조각을 OS에 돌려준다(≈ ms ·
+    /// 워킹 셋 트림은 하지 않는다 — 유휴 트림이 따로 한다). 호출 = 각 `*_tick`의 마감 자리.
+    pub(crate) fn mem_after_job(&mut self) {
+        platform::procmem::trim();
+        self.mem_next = Instant::now();
+    }
+
     /// [힙 정리] — 할당자가 들고 있는 빈 조각을 운영체제에 돌려주고 곧바로 새 표본(줄어든 값이 바로 보이게).
     pub(crate) fn mem_trim(&mut self) {
         let before = platform::procmem::sys().footprint;

@@ -337,9 +337,9 @@ fn write_item(
                     if *packed > MAX_ENTRY {
                         return Err(ArchiveError::NeedsCodec("ZIP".into(), "크기".into()));
                     }
+                    // ★ 스트리밍(T-179 D): 압축 입력만 메모리에 · 출력은 32 KiB 창을 넘는 대로 파일로(취소 · 진행은 `put`이 본다).
                     let comp = src.read(data_off, *packed)?;
-                    let plain = inflate(&comp)?;
-                    put(&mut out, &plain)?;
+                    inflate_to(&comp, &mut |chunk| put(&mut out, chunk))?;
                 }
                 _ => {
                     return Err(ArchiveError::NeedsCodec(
@@ -657,9 +657,97 @@ impl Huff {
     }
 }
 
-/// RFC 1951 원시 DEFLATE 스트림을 푼다.
+/// DEFLATE 최대 뒤참조 거리(RFC 1951 §3.2.5) — 스트리밍 출력이 남겨 둬야 하는 창.
+const WINDOW: usize = 32 * 1024;
+/// 스트리밍 출력이 창을 넘어 쌓이면 흘려보내는 문턱(1 MiB · 쓰기 호출 수와 메모리의 절충).
+const FLUSH_AT: usize = 1 << 20;
+
+/// inflate 출력(★ T-179 D 스트리밍): `sink`가 있으면 **마지막 [`WINDOW`]만 남기고** 넘치는 앞부분을 바로 흘려보낸다(압축 해제 결과를
+/// 통째로 메모리에 쌓지 않는다 — 종전 = 항목 하나당 최대 1 GiB `Vec`) · 없으면 전부 모은다([`inflate`] · 짧은 입력 · 시험).
+struct Out<'s> {
+    hist: Vec<u8>,
+    sink: Option<Sink<'s>>,
+    /// 지금까지 낸 바이트(상한 판정 · 진행).
+    total: u64,
+}
+
+/// 스트리밍 출력 받는 쪽(조각을 쓰고 · 취소/쓰기 오류는 `Err`).
+pub type Sink<'s> = &'s mut dyn FnMut(&[u8]) -> Result<(), ArchiveError>;
+
+impl<'s> Out<'s> {
+    fn new(sink: Option<Sink<'s>>) -> Self {
+        Out {
+            hist: Vec::with_capacity(if sink.is_some() { FLUSH_AT + WINDOW } else { 0 }),
+            sink,
+            total: 0,
+        }
+    }
+
+    fn push(&mut self, b: u8) -> Result<(), ArchiveError> {
+        self.hist.push(b);
+        self.total += 1;
+        self.maybe_flush()
+    }
+
+    fn extend(&mut self, data: &[u8]) -> Result<(), ArchiveError> {
+        self.hist.extend_from_slice(data);
+        self.total += data.len() as u64;
+        self.maybe_flush()
+    }
+
+    /// 뒤참조 복사(`d` 바이트 앞에서 `len`개 · 겹침 허용) — 거리가 지금까지 낸 출력보다 멀면 손상.
+    fn copy_back(&mut self, d: usize, len: usize) -> Result<(), ArchiveError> {
+        if d == 0 || d > self.hist.len() {
+            return Err(corrupt("거리가 출력보다 멀다"));
+        }
+        let start = self.hist.len() - d;
+        for k in 0..len {
+            let c = self.hist[start + k];
+            self.hist.push(c);
+        }
+        self.total += len as u64;
+        self.maybe_flush()
+    }
+
+    fn maybe_flush(&mut self) -> Result<(), ArchiveError> {
+        if let Some(sink) = self.sink.as_mut() {
+            if self.hist.len() > FLUSH_AT {
+                let keep = self.hist.len() - WINDOW;
+                sink(&self.hist[..keep])?;
+                self.hist.drain(..keep);
+            }
+        }
+        Ok(())
+    }
+
+    /// 끝 — 스트리밍이면 남은 창을 흘려보내고 빈 벡터 · 아니면 모은 전부.
+    fn finish(mut self) -> Result<Vec<u8>, ArchiveError> {
+        if let Some(sink) = self.sink.as_mut() {
+            sink(&self.hist)?;
+            return Ok(Vec::new());
+        }
+        Ok(std::mem::take(&mut self.hist))
+    }
+}
+
+/// RFC 1951 원시 DEFLATE 스트림을 푼다(전부 메모리에 — 짧은 입력 · gzip 머리 판별 · 시험).
 pub fn inflate(data: &[u8]) -> Result<Vec<u8>, ArchiveError> {
-    let mut out: Vec<u8> = Vec::with_capacity(data.len().saturating_mul(3));
+    let mut out = Out::new(None);
+    inflate_into(data, &mut out)?;
+    out.finish()
+}
+
+/// RFC 1951 원시 DEFLATE 스트림을 풀어 `sink`로 흘려보낸다(★ T-179 D — 메모리 = 압축 입력 + 32 KiB 창 + 1 MiB 버퍼) · 돌려주는 값 =
+/// 낸 바이트. 취소·쓰기 오류는 `sink`가 `Err`로 돌려 전파한다.
+pub fn inflate_to(data: &[u8], sink: Sink<'_>) -> Result<u64, ArchiveError> {
+    let mut out = Out::new(Some(sink));
+    inflate_into(data, &mut out)?;
+    let total = out.total;
+    out.finish()?;
+    Ok(total)
+}
+
+fn inflate_into(data: &[u8], out: &mut Out<'_>) -> Result<(), ArchiveError> {
     let mut b = Bits {
         d: data,
         pos: 0,
@@ -682,7 +770,7 @@ pub fn inflate(data: &[u8]) -> Result<Vec<u8>, ArchiveError> {
                 let chunk = data
                     .get(b.pos..b.pos + len)
                     .ok_or_else(|| corrupt("입력 끝"))?;
-                out.extend_from_slice(chunk);
+                out.extend(chunk)?;
                 b.pos += len;
             }
             1 => {
@@ -693,7 +781,7 @@ pub fn inflate(data: &[u8]) -> Result<Vec<u8>, ArchiveError> {
                 lengths[280..].fill(8);
                 let lit = Huff::new(&lengths)?;
                 let dist = Huff::new(&[5u8; 30])?;
-                codes(&mut b, &mut out, &lit, &dist)?;
+                codes(&mut b, out, &lit, &dist)?;
             }
             2 => {
                 let nlen = b.bits(5)? as usize + 257;
@@ -747,24 +835,24 @@ pub fn inflate(data: &[u8]) -> Result<Vec<u8>, ArchiveError> {
                 }
                 let lit = Huff::new(&lengths[..nlen])?;
                 let dist = Huff::new(&lengths[nlen..])?;
-                codes(&mut b, &mut out, &lit, &dist)?;
+                codes(&mut b, out, &lit, &dist)?;
             }
             _ => return Err(corrupt("블록 종류 3")),
         }
-        if out.len() as u64 > MAX_ENTRY {
+        if out.total > MAX_ENTRY {
             return Err(corrupt("결과가 너무 큼"));
         }
         if last {
-            return Ok(out);
+            return Ok(());
         }
     }
 }
 
-fn codes(b: &mut Bits<'_>, out: &mut Vec<u8>, lit: &Huff, dist: &Huff) -> Result<(), ArchiveError> {
+fn codes(b: &mut Bits<'_>, out: &mut Out<'_>, lit: &Huff, dist: &Huff) -> Result<(), ArchiveError> {
     loop {
         let sym = lit.decode(b)? as usize;
         if sym < 256 {
-            out.push(sym as u8);
+            out.push(sym as u8)?;
         } else if sym == 256 {
             return Ok(());
         } else {
@@ -778,14 +866,7 @@ fn codes(b: &mut Bits<'_>, out: &mut Vec<u8>, lit: &Huff, dist: &Huff) -> Result
                 return Err(corrupt("거리 기호"));
             }
             let d = DIST_BASE[ds] as usize + b.bits(u32::from(DIST_EXTRA[ds]))? as usize;
-            if d > out.len() {
-                return Err(corrupt("거리가 출력보다 멀다"));
-            }
-            let start = out.len() - d;
-            for k in 0..len {
-                let c = out[start + k];
-                out.push(c);
-            }
+            out.copy_back(d, len)?;
         }
     }
 }

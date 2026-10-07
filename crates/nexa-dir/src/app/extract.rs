@@ -146,6 +146,7 @@ impl App {
             return true;
         }
         let job = self.extract_job.take().expect("checked above");
+        self.mem_after_job();
         let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
         let (text, warn) = match result {
             Some(Ok(rep)) => {
