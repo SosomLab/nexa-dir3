@@ -1,5 +1,7 @@
 [package]
 name = "nexa-dir"
+# bin이 둘(nexa-dir · 콘솔 보조 ndir · T-178) — `cargo run -p nexa-dir`(게이트 · CI · 문서)이 본체를 고르게(10-08 gate full smoke 실패).
+default-run = "nexa-dir"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
