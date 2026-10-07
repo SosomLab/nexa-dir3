@@ -34,7 +34,7 @@
 
 - 크레이트: `ndir-core` · `ndir-vfs` · `ndir-tree` · `ndir-ops` · `ndir-term`(dir2 rlib 이식 · 플랫폼 중립) · `ndir-i18n`(dir2 `.lang` 자원 + nexa-sql 카탈로그 방식) · `ndir-settings`(nexa-sql 엔진 복사 + dir2 키 표) · `ndir-license`(nsql-license 복제) · `nexa-dir`(bin · winit 호스트 · `app/` 조각 · `platform/` · `preview/` 플러그인 런타임) · 형제 = `nexa-ui/{gfx,ctl,conf,font,fs,dlg,sys}` · `nexa-license`.
 - 렌더링: 창 1개 + `RedrawRequested`에서만 그림 · 유휴 = `WaitUntil` · 하위 기능은 `tick(now) -> bool` + `next_wake()` 두 모양만(자체 타이머·스레드 금지).
-- 스레딩: UI 스레드 1 + 워커 · 통지 = `mpsc` + `EventLoopProxy` 깨움 · 세대 번호 가드(dir2 A-1 계승) · 종결 통지만 재시도.
+- 스레딩: UI 스레드 1 + 워커 · 통지 = 공유 상태(원자값 · `Mutex`) 또는 `mpsc` 큐를 `event_loop.rs` 유휴 틱(`WaitUntil` · `*_tick`)이 폴링(`EventLoopProxy` 깨움은 쓰지 않음 · docs/01 §3 · T-173) · 세대 번호 가드(dir2 A-1 계승) · 종결 통지만 재시도.
 
 ## 4. 개발 환경 ([docs/18](docs/18-build-and-test.md))
 
