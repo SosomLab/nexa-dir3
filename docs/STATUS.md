@@ -48,7 +48,7 @@
 
 - **한 일**: 두 세션 협업(개발 nexa-dir3-07 = 코드 · 협업 nexa-dir3-ba = 격리 실측 · 기록 · CI) · 원인 2건 확정 — ① 미리보기 4K 사진 1장 = 힙 +35 MB 누적(nexa-ctl `image_cache` 원본 RGBA 보관) ② 우클릭 1회 = 셸 확장 DLL 54 → 152(.NET CLR 포함) · Private +40 MB 잔존(= 사용자 화면 "미집계 49.8 MB") → **nexa-ui 178 81a588a**(표시 상자 축소본 · 예산 16 MB LRU) · **d1090cf**(그림 캐시 계측·트림 · `CoFreeUnusedLibrariesEx` · 설정 `ctxmenu.shell` · 메모리 창 미집계 분해 4행 + 모듈/스레드) · **d25e24e**(기동 명령이 유휴 시계 되감기 · `scripts/win-addrspace.ps1`) · **ebcbd92**(분해 행 라벨) · 설치본 교체 main ebcbd92(PID 31776 · 백업 .bak-20261008d).
 - **실측**(before → after): 사진 2장 뒤 유휴 Private 82.0 → 12.0 MB(빈 설정) · 16탭 세션 전체 흐름 유휴 뒤 Private 125.5 → 52.7 · WS 91 → 22 · 모듈 161 → 137 · 사용자 앱(PID 31776) 유휴 뒤 Private 14.6 · 전용 워킹 셋 5.3 MB. 남는 ≈ 38 MB = 해제 거부 셸 확장(.NET CLR · Google Drive) → `ctxmenu.shell=shift`만이 피하는 길(사용자 결정 ⑦).
-- **지금 상태**: 원격 main = 이 기록 커밋(코드 **530c05b** = 자가 점검 메뉴 릴리스 숨김 §17 · 그 전 ebcbd92) · 전수 530c05b 591/0 · CI 5건 ✓ + e64be8d ✓ · bbf7e43 ✓ · 530c05b 진행 중 · nexa-ui 35fa7da · 설치본 ebcbd92 PID 31776(530c05b 미반영 — 재교체는 사용자 결정).
+- **지금 상태**: 원격 main = 이 기록 커밋(코드 **530c05b** = 자가 점검 메뉴 릴리스 숨김 §17 · 그 전 ebcbd92) · 전수 530c05b 591/0 · CI 5건 ✓ + e64be8d ✓ · bbf7e43 ✓ · 530c05b + 730d4fe(같은 push · run 37782806886) ✓ · nexa-ui 35fa7da · 설치본 ebcbd92 PID 31776(530c05b 미반영 — 재교체는 사용자 결정).
 - **걸린 것**: 사용자 결정 2건(⑦ `ctxmenu.shell` 기본값 · ① D/N 깜빡임 하한) · 실기 확인(메모리 창 분해 행 · 사진 미리보기 뒤 힙 · 우클릭 뒤 유휴 모듈 감소 + §12 항목) · winget #448738/#448740 · choco 0.23.1 승인 뒤 수동 제출 · T-176 ⑤.
 
 → [journal/2026-10-08 §16](journal/2026-10-08.md)
