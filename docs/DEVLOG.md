@@ -4,6 +4,8 @@
 
 ## 2026-10-09
 
+- **Linux xdg 셸 항목 순서/표시 편집**(140743c · T-131 잔여 ②) — `ctxmenu.layout` 블록 `xdg` · `xdgbg` · 순서 편집기 그룹 2 · 시험 586/0 · T4 33/0(ctx-layout) · T-131 남은 = P2 2건 · 앱 PID 128182 → [10-09 §5](journal/2026-10-09.md)
+
 - **Linux 우클릭 항목 아이콘**(90d9406 · T-131 잔여 · nexa-ui 184 `icontheme::named_icon_file`) — 앱 = `.desktop` `Icon=` · 자체 항목 = freedesktop 이름 표 · 캐시 128 · 이 PC 배경 5 · 행 10 · 시험 585/0 · 앱 PID 121202 → [10-09 §4](journal/2026-10-09.md)
 
 - **194차 Linux PC 회차 마감 갱신** — STATUS 시작점 Linux 기준 재작성(코드 50f2011 · nexa-ui a332468 · 전수 585/0 · T4 32/0 · CI 전부 ✓ · 실기 ⓐ~ⓔ · 다음 = T-131 잔여 → T-147 Linux → T-130) · MILESTONES M8 · TODO 순서 · 교훈 = nexa-ui 착수 전 fetch → [10-09 §3](journal/2026-10-09.md)
