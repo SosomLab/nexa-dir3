@@ -36,9 +36,83 @@ pub(super) fn opener() -> CommandOpener {
     }
 }
 
-/// freedesktop Trash 규격 — `files/<이름>` + `info/<이름>.trashinfo`(원래 경로 · 삭제 시각). 다른 장치(rename 실패)는 `Failed`(복사 삭제는 M6 ops).
+/// freedesktop Trash 규격 — `files/<이름>` + `info/<이름>.trashinfo`(원래 경로 · 삭제 시각).
+///
+/// 휴지통 자리(규격 §"Trash directories" · 10-08 Linux GAP): 홈 휴지통(`$XDG_DATA_HOME/Trash`)과 **같은 파일 시스템**이면 거기로 ·
+/// 다른 파일 시스템(tmpfs `/tmp` · 다른 디스크 · USB)이면 그 마운트 최상위의 `$topdir/.Trash/$uid`(관리자가 만든 sticky 공용) 또는
+/// `$topdir/.Trash-$uid`(없으면 만든다). rename은 같은 장치 안에서만 되므로(EXDEV) 이 분기가 없으면 `Invalid cross-device link`로 실패했다
+/// (10-08 이 PC의 자가 점검 trash 2건 FAIL · CI 러너는 /tmp가 같은 fs라 못 잡았다). 그래도 못 옮기면 `Failed`(복사 삭제는 ops 몫).
 pub(super) struct FreedesktopTrash {
     base: PathBuf,
+    /// 시험용 — `Some`이면 마운트 최상위 탐색 대신 이 폴더를 topdir로 본다(홈과 다른 장치처럼 다룬다).
+    #[cfg(test)]
+    fake_topdir: Option<PathBuf>,
+}
+
+/// 홈 휴지통인가 · topdir 휴지통인가 — 순수 판정(MC/DC 시험): 같은 장치면 홈 · 아니면 공용 `.Trash/$uid`가 쓸 수 있을 때 그것 ·
+/// 아니면 `.Trash-$uid`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TrashSite {
+    Home,
+    Shared,
+    PerUser,
+}
+
+pub(super) fn trash_site(same_dev_as_home: bool, shared_dot_trash_ok: bool) -> TrashSite {
+    if same_dev_as_home {
+        TrashSite::Home
+    } else if shared_dot_trash_ok {
+        TrashSite::Shared
+    } else {
+        TrashSite::PerUser
+    }
+}
+
+extern "C" {
+    fn getuid() -> u32;
+}
+
+fn dev_of(p: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(p).ok().map(|m| m.dev())
+}
+
+/// `path` 또는 가장 가까운 있는 조상의 장치.
+fn dev_nearest(path: &Path) -> Option<u64> {
+    let mut p = path;
+    loop {
+        if let Some(d) = dev_of(p) {
+            return Some(d);
+        }
+        p = p.parent()?;
+    }
+}
+
+/// `path`가 놓인 파일 시스템의 마운트 최상위 — 부모로 올라가며 st_dev가 같은 마지막 폴더(규격의 `$topdir`).
+pub(super) fn topdir_of(path: &Path) -> PathBuf {
+    let mut start = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        path.parent()
+            .map_or_else(|| PathBuf::from("/"), Path::to_path_buf)
+    };
+    while !start.exists() {
+        match start.parent() {
+            Some(p) => start = p.to_path_buf(),
+            None => return start,
+        }
+    }
+    let Some(dev) = dev_of(&start) else {
+        return start;
+    };
+    let mut cur = start;
+    while let Some(parent) = cur.parent() {
+        if dev_of(parent) != Some(dev) {
+            break;
+        }
+        cur = parent.to_path_buf();
+    }
+    cur
 }
 
 impl FreedesktopTrash {
@@ -49,13 +123,124 @@ impl FreedesktopTrash {
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
             .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("Trash");
-        FreedesktopTrash { base }
+        FreedesktopTrash {
+            base,
+            #[cfg(test)]
+            fake_topdir: None,
+        }
     }
 
     /// 시험용 — 임시 폴더를 휴지통으로.
     #[cfg(test)]
     fn at(base: PathBuf) -> Self {
-        FreedesktopTrash { base }
+        FreedesktopTrash {
+            base,
+            fake_topdir: None,
+        }
+    }
+
+    /// 홈 휴지통이 놓인 장치(폴더가 아직 없으면 가장 가까운 있는 부모).
+    fn home_dev(&self) -> Option<u64> {
+        let mut p = self.base.as_path();
+        loop {
+            if let Some(d) = dev_of(p) {
+                return Some(d);
+            }
+            p = p.parent()?;
+        }
+    }
+
+    /// `path`를 버릴 휴지통 폴더(`files/` · `info/`의 부모)와, topdir 휴지통이면 그 topdir(trashinfo의 `Path=`를 상대로 쓴다).
+    fn site_for(&self, path: &Path) -> (PathBuf, Option<PathBuf>) {
+        #[cfg(test)]
+        if let Some(top) = &self.fake_topdir {
+            return (
+                top.join(format!(".Trash-{}", unsafe { getuid() })),
+                Some(top.clone()),
+            );
+        }
+        // 되돌릴 때는 원래 경로가 이미 없다 — 가장 가까운 있는 조상의 장치로 판정한다.
+        let same = match (self.home_dev(), dev_nearest(path)) {
+            (Some(h), Some(d)) => h == d,
+            _ => true,
+        };
+        if same {
+            return (self.base.clone(), None);
+        }
+        let top = topdir_of(path);
+        let uid = unsafe { getuid() };
+        // 공용 `.Trash`는 규격대로 심볼릭 링크가 아니고 sticky 비트가 있는 폴더일 때만 쓴다.
+        let shared = top.join(".Trash");
+        let shared_ok = std::fs::symlink_metadata(&shared).is_ok_and(|m| {
+            use std::os::unix::fs::PermissionsExt;
+            m.is_dir() && !m.file_type().is_symlink() && m.permissions().mode() & 0o1000 != 0
+        });
+        match trash_site(false, shared_ok) {
+            TrashSite::Home => (self.base.clone(), None),
+            TrashSite::Shared => (shared.join(uid.to_string()), Some(top)),
+            TrashSite::PerUser => (top.join(format!(".Trash-{uid}")), Some(top)),
+        }
+    }
+
+    /// 되돌릴 때 뒤질 휴지통들 — 홈 + 원래 경로들의 topdir 휴지통(중복 제거).
+    fn restore_sites(&self, original: &[PathBuf]) -> Vec<(PathBuf, Option<PathBuf>)> {
+        let mut out = vec![(self.base.clone(), None)];
+        for p in original {
+            let site = self.site_for(p);
+            if !out.iter().any(|s| s.0 == site.0) {
+                out.push(site);
+            }
+        }
+        out
+    }
+
+    /// 한 휴지통에서 `wanted`를 되돌린다(찾은 것은 `wanted`에서 뺀다) — 되돌린 수.
+    fn restore_in(base: &Path, topdir: Option<&Path>, wanted: &mut Vec<PathBuf>) -> usize {
+        let files = base.join("files");
+        let info = base.join("info");
+        let Ok(rd) = std::fs::read_dir(&info) else {
+            return 0;
+        };
+        let mut n = 0;
+        for e in rd.flatten() {
+            if wanted.is_empty() {
+                break;
+            }
+            let ip = e.path();
+            let Some(stem) = ip
+                .file_name()
+                .and_then(|f| f.to_str())
+                .and_then(|f| f.strip_suffix(".trashinfo"))
+            else {
+                continue;
+            };
+            let Ok(body) = std::fs::read_to_string(&ip) else {
+                continue;
+            };
+            let Some(orig) = body.lines().find_map(|l| l.strip_prefix("Path=")) else {
+                continue;
+            };
+            let orig = PathBuf::from(percent_decode(orig.trim()));
+            // topdir 휴지통의 `Path=`는 topdir 기준 상대 경로(규격) — 절대 경로로 적힌 것도 받아 준다.
+            let orig = match topdir {
+                Some(top) if orig.is_relative() => top.join(orig),
+                _ => orig,
+            };
+            let Some(idx) = wanted.iter().position(|w| *w == orig) else {
+                continue;
+            };
+            if orig.exists() {
+                wanted.remove(idx);
+                continue;
+            }
+            let src = files.join(stem);
+            if std::fs::rename(&src, &orig).is_ok() {
+                let _ = std::fs::remove_file(&ip);
+                wanted.remove(idx);
+                n += 1;
+            }
+        }
+        n
     }
 }
 
@@ -93,57 +278,32 @@ pub(super) fn percent_encode(s: &str) -> String {
 
 impl Trash for FreedesktopTrash {
     /// `info/*.trashinfo`의 `Path=`가 원래 경로와 같은 항목을 `files/`에서 되돌린다(원위치에 이미 있으면 건너뜀) · info 삭제.
+    /// 홈 휴지통과 원래 경로가 놓인 장치의 topdir 휴지통을 차례로 뒤진다.
     fn restore(&self, original: &[PathBuf]) -> Result<usize, PlatformError> {
-        let files = self.base.join("files");
-        let info = self.base.join("info");
-        let Ok(rd) = std::fs::read_dir(&info) else {
-            return Ok(0);
-        };
         let mut wanted: Vec<PathBuf> = original.to_vec();
         let mut n = 0;
-        for e in rd.flatten() {
+        for (base, top) in self.restore_sites(original) {
             if wanted.is_empty() {
                 break;
             }
-            let ip = e.path();
-            let Some(stem) = ip
-                .file_name()
-                .and_then(|f| f.to_str())
-                .and_then(|f| f.strip_suffix(".trashinfo"))
-            else {
-                continue;
-            };
-            let Ok(body) = std::fs::read_to_string(&ip) else {
-                continue;
-            };
-            let Some(orig) = body.lines().find_map(|l| l.strip_prefix("Path=")) else {
-                continue;
-            };
-            let orig = PathBuf::from(percent_decode(orig.trim()));
-            let Some(idx) = wanted.iter().position(|w| *w == orig) else {
-                continue;
-            };
-            if orig.exists() {
-                wanted.remove(idx);
-                continue;
-            }
-            let src = files.join(stem);
-            if std::fs::rename(&src, &orig).is_ok() {
-                let _ = std::fs::remove_file(&ip);
-                wanted.remove(idx);
-                n += 1;
-            }
+            n += Self::restore_in(&base, top.as_deref(), &mut wanted);
         }
         Ok(n)
     }
 
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
-        let files = self.base.join("files");
-        let info = self.base.join("info");
-        std::fs::create_dir_all(&files).map_err(|e| PlatformError::Failed(e.to_string()))?;
-        std::fs::create_dir_all(&info).map_err(|e| PlatformError::Failed(e.to_string()))?;
         let mut n = 0;
         for p in paths {
+            let abs = if p.is_absolute() {
+                p.clone()
+            } else {
+                std::env::current_dir().unwrap_or_default().join(p)
+            };
+            let (base, top) = self.site_for(&abs);
+            let files = base.join("files");
+            let info = base.join("info");
+            std::fs::create_dir_all(&files).map_err(|e| PlatformError::Failed(e.to_string()))?;
+            std::fs::create_dir_all(&info).map_err(|e| PlatformError::Failed(e.to_string()))?;
             let name = p
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -156,19 +316,19 @@ impl Trash for FreedesktopTrash {
                 k += 1;
                 target = format!("{name}.{k}");
             }
-            let abs = if p.is_absolute() {
-                p.clone()
-            } else {
-                std::env::current_dir().unwrap_or_default().join(p)
-            };
             let when = crate::filelist::format_iso_utc(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as i64),
             );
+            // topdir 휴지통의 `Path=`는 topdir 기준 상대 경로(규격 · 다른 파일 관리자와 호환).
+            let recorded = match &top {
+                Some(t) => abs.strip_prefix(t).map_or(abs.clone(), Path::to_path_buf),
+                None => abs.clone(),
+            };
             let body = format!(
                 "[Trash Info]\nPath={}\nDeletionDate={when}\n",
-                percent_encode(&abs.to_string_lossy())
+                percent_encode(&recorded.to_string_lossy())
             );
             std::fs::write(info.join(format!("{target}.trashinfo")), body)
                 .map_err(|e| PlatformError::Failed(e.to_string()))?;
@@ -574,6 +734,44 @@ mod tests {
         assert!(NativeDisk
             .space(Path::new("/"))
             .is_some_and(|(t, f)| t >= f && t > 0));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 휴지통 자리 판정 MC/DC: 같은 장치 → 홈 · 다른 장치 + 공용 OK → `.Trash/$uid` · 다른 장치 + 공용 없음 → `.Trash-$uid`.
+    #[test]
+    fn trash_site_decision() {
+        assert_eq!(trash_site(true, true), TrashSite::Home);
+        assert_eq!(trash_site(true, false), TrashSite::Home);
+        assert_eq!(trash_site(false, true), TrashSite::Shared);
+        assert_eq!(trash_site(false, false), TrashSite::PerUser);
+        // topdir 탐색: `/`의 topdir은 `/` · 실제 폴더의 topdir은 그 조상이다.
+        assert_eq!(topdir_of(Path::new("/")), PathBuf::from("/"));
+        let tmp = std::env::temp_dir();
+        assert!(tmp.starts_with(topdir_of(&tmp)));
+    }
+
+    /// 다른 장치(가짜 topdir): `$topdir/.Trash-$uid/files` 로 옮기고 trashinfo `Path=`는 topdir 기준 상대 경로 · restore가 topdir 휴지통도 뒤져
+    /// 원위치로 되돌린다(10-08 tmpfs `/tmp` EXDEV 결함 회귀).
+    #[test]
+    fn trash_topdir_round_trip() {
+        let base = std::env::temp_dir().join(format!("ndir-trash-top-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let top = base.join("mnt");
+        let src = top.join("docs");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.txt"), b"1").unwrap();
+        let mut t = FreedesktopTrash::at(base.join("HomeTrash"));
+        t.fake_topdir = Some(top.clone());
+        assert_eq!(t.trash(&[src.join("a.txt")]), Ok(1));
+        let uid = unsafe { getuid() };
+        let tdir = top.join(format!(".Trash-{uid}"));
+        assert!(tdir.join("files/a.txt").is_file());
+        assert!(!base.join("HomeTrash").exists());
+        let info = std::fs::read_to_string(tdir.join("info/a.txt.trashinfo")).unwrap();
+        assert!(info.contains("\nPath=docs/a.txt\n"), "{info}");
+        assert_eq!(t.restore(&[src.join("a.txt")]), Ok(1));
+        assert_eq!(std::fs::read(src.join("a.txt")).unwrap(), b"1");
+        assert!(!tdir.join("info/a.txt.trashinfo").exists());
         let _ = std::fs::remove_dir_all(&base);
     }
 }
