@@ -14,6 +14,21 @@ use crate::*;
 /// 단언 실패 종료 코드.
 pub(crate) const EXIT_ASSERT: u8 = 3;
 
+/// 결정적 대기 명령인가(`<대상>.wait` — 뒤 `@ready` 명령을 보류한다 · [`App::startup_wait_busy`]가 해제 조건).
+pub(crate) fn is_wait_cmd(id: &str) -> bool {
+    matches!(
+        id,
+        "ctx.wait"
+            | "ops.wait"
+            | "dupes.wait"
+            | "compare.wait"
+            | "hash.wait"
+            | "jobs.wait"
+            | "dirsize.wait"
+            | "git.wait"
+    )
+}
+
 impl App {
     pub(crate) fn startup_cmd(&mut self, id: &str) {
         crash::note_command(id);
@@ -403,6 +418,103 @@ impl App {
                 out.push_str(&self.list_dump(self.active));
                 out
             }
+            // ── 10-08 Linux 실기 자동화(T4 · docs/18 §4): 10-05~10-08 신규 기능 창의 상태 덤프 — 화면 판정 대신 시나리오가 본다.
+            // 명령 팔레트: 열림 · 입력 · 결과(items 순서 id) · 선택 행.
+            "palette" => {
+                let items = self.palette_items();
+                let ids: Vec<&str> = self
+                    .palette
+                    .matches()
+                    .iter()
+                    .filter_map(|&k| items.get(k).map(|it| it.id.as_str()))
+                    .collect();
+                format!(
+                    "open {}\nquery {}\nmatches {}\nselected {}\nids {}\n",
+                    self.palette.is_open(),
+                    self.palette.query(),
+                    ids.len(),
+                    self.palette.selected(),
+                    ids.join(" ")
+                )
+            }
+            // 즐겨찾기: 목록 + 현재 폴더 포함 여부.
+            "favs" => {
+                let list = self.favorites();
+                let mut out = format!(
+                    "count {}\ncurrent {:?}\n",
+                    list.len(),
+                    self.fav_has_current()
+                );
+                for p in &list {
+                    out.push_str(&format!("fav {}\n", p.display()));
+                }
+                out
+            }
+            // 중복 파일 찾기 창: 열림 · 진행 중 · 행 수 · 상태 줄 · 표시된 경로.
+            "dupes" => {
+                let mut out = format!(
+                    "open {}\nrunning {}\nrows {}\nstatus {}\n",
+                    self.dupes_win.is_open(),
+                    self.dupes_win.is_running(),
+                    self.dupes_win.rows_len(),
+                    self.dupes_win.status()
+                );
+                for p in self.dupes_win.marked_paths() {
+                    out.push_str(&format!("marked {}\n", p.display()));
+                }
+                out
+            }
+            // 폴더 비교 창: 열림 · 진행 중 · 행 수 · 상태 줄 · 항목(`rel verdict`).
+            "compare" => {
+                let mut out = format!(
+                    "open {}\nrunning {}\nrows {}\nstatus {}\n",
+                    self.compare_win.is_open(),
+                    self.compare_win.is_running(),
+                    self.compare_win.rows_len(),
+                    self.compare_win.status()
+                );
+                for e in self.compare_win.entries().unwrap_or_default() {
+                    out.push_str(&format!("entry {} {:?}\n", e.rel, e.verdict));
+                }
+                out
+            }
+            // 체크섬 창: 열림 · 진행/대기 · 파일 수 · 결과 글.
+            "hash" => format!(
+                "open {}\nrunning {}\nwaiting {}\nfiles {}\n{}\n",
+                self.hash_win.is_open(),
+                self.hash_win.is_running(),
+                self.hash_win.is_waiting(),
+                self.hash_win.files().len(),
+                self.hash_win.results_text().replace("\r\n", "\n")
+            ),
+            // 압축 풀기 · 동기화 작업: 진행 중 여부.
+            "jobs" => format!(
+                "extract {}\nsync {}\ntransfer {}\n",
+                self.extract_job.is_some(),
+                self.sync_job.is_some(),
+                self.transfer.is_some()
+            ),
+            // 탭 상태바의 Git 칸: 저장소 · 브랜치 · 요약 덧글(`git.wait` 뒤에 읽는다).
+            "tabstatus" => {
+                let p = &self.panels[self.active];
+                match p.git_info() {
+                    Some((repo, branch)) => format!(
+                        "repo {}\nbranch {}\nextra {}\n",
+                        repo.display(),
+                        branch,
+                        p.git_extra()
+                    ),
+                    None => "repo none\n".to_string(),
+                }
+            }
+            // 정보 도크 글(폴더 크기 · 파일 정보 — 시험이 쓰는 `select_all_text` 경로와 같다).
+            "docktext" => {
+                // 예약 여부와 무관하게 도크를 지금 상태로 맞춘다(폴더 크기 결과가 표시 주기(250 ms)를 기다리는 중일 수 있다).
+                self.update_docks();
+                let mut inv = Invalidations::default();
+                self.docks[0].select_all_text(&mut inv);
+                self.docks[0].selected_text().unwrap_or_default()
+            }
             _ => return None,
         })
     }
@@ -520,6 +632,12 @@ impl App {
                 d.active_kind()
             ));
         }
+        // 보조 창 열림(10-08 Linux 실기 자동화 — 로그 창 · 메모리 창 토글 판정).
+        out.push_str(&format!(
+            "log {} mem {}\n",
+            self.log_win.is_open() || self.open_log,
+            self.mem_win.is_open()
+        ));
         out.push_str(&format!("splitter {}\n", r(self.splitter.rect())));
         out.push_str(&format!("dsplit_h {}\n", r(self.dock_split_h.rect())));
         out.push_str(&format!("dsplit_v {}\n", r(self.dock_split_v.rect())));
@@ -556,7 +674,11 @@ impl App {
         let mut it = cmds.into_iter();
         while let Some(id) = it.next() {
             // 결정적 대기: `ctx.wait` = 우클릭 메뉴의 셸 항목 도착까지 · `ops.wait` = 진행 중인 전송이 끝날 때까지(끝나면 목록도 갱신돼 있다).
-            if id == "ctx.wait" || id == "ops.wait" {
+            if is_wait_cmd(&id) {
+                // 예약된 도크 갱신(T-177 디바운스)을 먼저 — 폴더 크기 요청이 도크 갱신에서 나오므로 `dirsize.wait`가 요청 전에 지나치지 않게.
+                if self.docks_due.is_some() {
+                    self.update_docks();
+                }
                 if self.startup_wait_busy(&id) {
                     self.startup_blocked = std::iter::once(id).chain(it).collect();
                     self.startup_blocked_since = Instant::now();
@@ -599,6 +721,19 @@ impl App {
         match id {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
             "ops.wait" => self.transfer.is_some(),
+            // 10-08 Linux 실기 자동화: 신규 기능의 워커가 끝날 때까지(중복 찾기 · 폴더 비교 · 체크섬 · 압축 풀기/동기화 · 폴더 크기).
+            "dupes.wait" => self.dup_job.is_some() || self.dupes_win.is_running(),
+            "compare.wait" => {
+                self.cmp_job.is_some() || self.compare_win.is_running() || self.sync_job.is_some()
+            }
+            "hash.wait" => {
+                self.hash_job.is_some() || self.hash_win.is_running() || self.hash_win.is_waiting()
+            }
+            "jobs.wait" => {
+                self.extract_job.is_some() || self.sync_job.is_some() || self.transfer.is_some()
+            }
+            "dirsize.wait" => self.dirsizes.running() || self.dirsizes.display_pending(),
+            "git.wait" => !self.git_busy.is_empty(),
             _ => false,
         }
     }

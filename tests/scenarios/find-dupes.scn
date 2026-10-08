@@ -1,0 +1,21 @@
+# T4 · NEW-041 중복 파일 찾기(10-05 §61 · c84ff2d): 같은 내용 2 + 다른 1 → 배경 메뉴 ▸ 중복 파일 찾기 → 창 열림 · 워커 끝 → 묶음 1(머리 행 + 2 · 보존 규칙 = 첫 파일 유지 → b.txt 표시).
+id: find-dupes
+title: 중복 파일 찾기 — 묶음 결과
+tree: file a.txt 7
+tree: file b.txt 7
+tree: file c.txt 3
+settings: ui.lang=en
+cmd: @ready:ui.rclick:@panel0.list
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/menu.txt
+cmd: @ready:ctx.pick:ctx.find_dupes
+cmd: @ready:dupes.wait
+cmd: @ready:dupes.dump:<out>/dupes.txt
+cmd: @ready:quit
+check: menu.txt: ctx.find_dupes
+check: dupes.txt: open true
+check: dupes.txt: running false
+check: dupes.txt: rows 3
+check: dupes.txt: status 1 groups · 1 duplicates · 7 B reclaimable
+check: dupes.txt: marked 
+check: dupes.txt: b.txt

@@ -286,10 +286,14 @@ impl DirSizes {
         }
     }
 
-    /// 할 일이 있는가(재는 중 · 큐 · 보류) — 시험 판정용(호스트는 `tick`의 반환값과 `take_display_due`만 쓴다).
-    #[cfg(test)]
+    /// 할 일이 있는가(재는 중 · 큐 · 보류) — 시험 판정 · 기동 명령 `dirsize.wait`(호스트는 `tick`의 반환값과 `take_display_due`만 쓴다).
     pub(crate) fn running(&self) -> bool {
         self.busy()
+    }
+
+    /// 결과가 바뀌었는데 아직 도크에 보여 주지 않았는가(`dirsize.wait`가 측정 끝 뒤 표시까지 기다리게).
+    pub(crate) fn display_pending(&self) -> bool {
+        self.changed
     }
 
     fn busy(&self) -> bool {

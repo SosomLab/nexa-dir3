@@ -16,6 +16,7 @@ panel1.list 602,99 598x440 rows 3 caret None
 panel1.status 602,539 598x22 folder=3 items
 dock0 0,564 599x214 kind 0
 dock1 602,564 598x214 kind 0
+log false mem false
 splitter 596,53 9x508
 dsplit_h 0,558 1200x9
 dsplit_v 596,564 9x214

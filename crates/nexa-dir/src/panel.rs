@@ -1031,6 +1031,11 @@ impl Panel {
     }
 
     /// Git 칸 요약(앞섬 · 뒤짐 · 변경 수)을 넣는다 — 다음 [`Self::sync_status`]가 칸에 반영한다.
+    /// Git 요약 덧글(`↑n ↓n ●n` …) — 기동 명령 `tabstatus` 덤프.
+    pub(crate) fn git_extra(&self) -> &str {
+        &self.git_extra
+    }
+
     pub(crate) fn set_git_extra(&mut self, extra: String) {
         self.git_extra = extra;
     }

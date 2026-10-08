@@ -485,12 +485,10 @@ impl DupesWin {
         self.redraw();
     }
 
-    #[cfg(test)]
     pub(crate) fn is_running(&self) -> bool {
         self.running
     }
 
-    #[cfg(test)]
     pub(crate) fn rows_len(&self) -> usize {
         self.rows.as_ref().map_or(0, |r| r.source().len())
     }
@@ -501,7 +499,6 @@ impl DupesWin {
             .map_or_else(Vec::new, |r| r.source().marked_paths())
     }
 
-    #[cfg(test)]
     pub(crate) fn status(&self) -> &str {
         &self.status
     }

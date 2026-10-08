@@ -1,0 +1,12 @@
+# T4 · 폴더 크기(10-05 §54 · §82 작업 큐): 폴더 선택 → 정보 도크 "계산 중" → 측정 끝 → 합계 + "Contains: 2 files, 1 folders".
+id: dirsize
+title: 정보 도크 폴더 크기 — 포함 파일/폴더 수
+tree: file big/a.txt 1024
+tree: file big/sub/b.txt 1024
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:dirsize.wait
+cmd: @ready:docktext.dump:<out>/dock.txt
+cmd: @ready:quit
+check: dock.txt: Contains: 2 files, 1 folders
+check: dock.txt: 2,048

@@ -1,0 +1,25 @@
+# T4 · T-138 명령 팔레트(10-05 §76): view.palette = 열림 → 글자 입력 = 결과 좁힘 → Enter = 명령 실행(선택 반전 → 전부 선택) → 닫힘 · Esc 닫힘.
+id: palette
+title: 명령 팔레트 열기 · 검색 · Enter 실행 · Esc
+tree: file a.txt 3
+tree: file b.txt 4
+settings: ui.lang=en
+cmd: @ready:view.palette
+cmd: @ready:palette.dump:<out>/open.txt
+cmd: @ready:ui.type:invert sel
+cmd: @ready:palette.dump:<out>/typed.txt
+cmd: @ready:ui.press:enter
+cmd: @ready:palette.dump:<out>/after.txt
+cmd: @ready:panel.dump:<out>/panel.txt
+cmd: @ready:view.palette
+cmd: @ready:ui.press:escape
+cmd: @ready:palette.dump:<out>/esc.txt
+cmd: @ready:quit
+check: open.txt: open true
+check: open.txt: query 
+check: open.txt: view.refresh
+check: typed.txt: query invert sel
+check: typed.txt: edit.select_invert
+check: after.txt: open false
+check: panel.txt: rows 2 selected 2
+check: esc.txt: open false

@@ -1,0 +1,16 @@
+# T4 · 체크섬 창(10-05 §55 · §73 개편): 파일 선택 → 행 메뉴 ▸ 체크섬… → 자동 계산 끝 → 결과에 알고리즘별 값(내용 "xxxxx" · SHA-256 고정값).
+id: checksum
+title: 체크섬 창 — 자동 계산 결과
+tree: file a.txt 5
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:cmd.contextMenu
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.pick:ctx.checksum
+cmd: @ready:hash.wait
+cmd: @ready:hash.dump:<out>/hash.txt
+cmd: @ready:quit
+check: hash.txt: open true
+check: hash.txt: running false
+check: hash.txt: files 1
+check: hash.txt: a.txt

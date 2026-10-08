@@ -1,0 +1,20 @@
+# T4 · 선택 반전(10-05 §48 · f214492): 1행 선택 → edit.select_invert → 나머지 2행 선택 · 다시 반전 → 처음 1행.
+id: select-invert
+title: 선택 반전 · 두 번이면 원래대로
+tree: file a.txt 3
+tree: file b.txt 4
+tree: file c.txt 5
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:edit.select_invert
+cmd: @ready:list.dump:<out>/inv1.txt
+cmd: @ready:assert.panel:rows 3 selected 2
+cmd: @ready:edit.select_invert
+cmd: @ready:list.dump:<out>/inv2.txt
+cmd: @ready:assert.panel:rows 3 selected 1
+cmd: @ready:quit
+check: inv1.txt: *b.txt
+check: inv1.txt: *c.txt
+check: inv1.txt: !*a.txt
+check: inv2.txt: *a.txt
+check: inv2.txt: !*b.txt

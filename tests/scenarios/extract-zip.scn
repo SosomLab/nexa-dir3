@@ -1,0 +1,24 @@
+# T4 · NEW-040 압축 풀기(10-05 §59 · 89ae2e7): Store zip 선택 → 행 메뉴 ▸ 압축 풀기 ▸ "<이름>" 폴더에 → 작업 끝 → 폴더 a 안에 x.txt · sub/y.txt.
+id: extract-zip
+title: zip 압축 풀기 — 이름 폴더에
+tree: zip a.zip x.txt=hello;sub/y.txt=world
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd: @ready:cmd.contextMenu
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/menu.txt
+cmd: @ready:ctx.pick:ctx.extract_to
+cmd: @ready:jobs.wait
+cmd: @ready:jobs.dump:<out>/jobs.txt
+cmd: @ready:list.dump:<out>/root.txt
+cmd: @ready:nav:<root>/a
+cmd: @ready:list.dump:<out>/a.txt
+cmd: @ready:nav:<root>/a/sub
+cmd: @ready:list.dump:<out>/sub.txt
+cmd: @ready:quit
+check: menu.txt: ctx.extract[ctx.extract_here ctx.extract_to]
+check: jobs.txt: extract false
+check: root.txt: a.zip
+check: a.txt: x.txt
+check: a.txt: sub
+check: sub.txt: y.txt

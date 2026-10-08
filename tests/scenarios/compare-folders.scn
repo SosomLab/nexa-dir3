@@ -1,0 +1,26 @@
+# T4 · NEW-042 폴더 비교(10-05 §63 · a39d3a1): 좌 left · 우 right → 배경 메뉴 ▸ 반대 패널과 폴더 비교 → 창 열림 · 결과 = 왼쪽만 a · 오른쪽만 b · same 같음.
+id: compare-folders
+title: 두 패널 폴더 비교 — 판정 표
+tree: file left/a.txt 3
+tree: file left/same.txt 2
+tree: file right/b.txt 4
+tree: file right/same.txt 2
+settings: ui.lang=en
+cmd: @ready:panel:1
+cmd: @ready:nav:<root>/right
+cmd: @ready:panel:0
+cmd: @ready:nav:<root>/left
+cmd: @ready:ui.rclick:@panel0.list
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/menu.txt
+cmd: @ready:ctx.pick:ctx.compare_panels
+cmd: @ready:compare.wait
+cmd: @ready:compare.dump:<out>/cmp.txt
+cmd: @ready:quit
+check: menu.txt: ctx.compare_panels
+check: cmp.txt: open true
+check: cmp.txt: running false
+check: cmp.txt: entry a.txt OnlyLeft
+check: cmp.txt: entry b.txt OnlyRight
+check: cmp.txt: entry same.txt Same
+check: cmp.txt: status 3 items · 2 differ (left only 1 · right only 1

@@ -1,0 +1,12 @@
+# T4 · 자연 정렬 끔(`list.sort_natural=off` = 새 탭 기본값): 글자 순 = file1 · file10 · file2.
+id: natural-sort-off
+title: 자연 정렬 끔 — 글자 순
+tree: file file1.txt 1
+tree: file file2.txt 1
+tree: file file10.txt 1
+settings: ui.lang=en
+settings: list.sort_natural=off
+cmd: @ready:list.dump:<out>/off.txt
+cmd: @ready:quit
+check: off.txt: 1 d0 None file10.txt
+check: off.txt: 2 d0 None file2.txt

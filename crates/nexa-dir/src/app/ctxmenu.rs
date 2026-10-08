@@ -945,6 +945,7 @@ impl App {
             (Some(CtxKind::RenameEdit(_)), _) => "renameedit",
             (Some(CtxKind::DockText(_)), _) => "docktext",
             (Some(CtxKind::TermEdit(_)), _) => "termedit",
+            (Some(CtxKind::Aux(_)), _) => "aux",
             (None, Some(_)) => "tab",
             _ => "?",
         };

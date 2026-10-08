@@ -1,0 +1,24 @@
+# T4 · NEW-039 폴더 즐겨찾기(10-05 §57 · Linux 실기 자동화 10-08): sub로 이동 → nav.fav_toggle = 넣기 → 팝업(nav.favorites)에 항목 + "제거" → 팝업에서 제거 → 비어 있음.
+id: favorites
+title: 즐겨찾기 넣기 · 팝업 항목 · 빼기
+tree: dir sub
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:nav:<root>/sub
+cmd: @ready:favs.dump:<out>/favs0.txt
+cmd: @ready:nav.fav_toggle
+cmd: @ready:favs.dump:<out>/favs1.txt
+cmd: @ready:assert.favs:count 1
+cmd: @ready:nav.favorites
+cmd: @ready:ctx.dump:<out>/popup.txt
+cmd: @ready:ctx.pick:aux.fav.toggle
+cmd: @ready:favs.dump:<out>/favs2.txt
+cmd: @ready:quit
+check: favs0.txt: count 0
+check: favs0.txt: current Some(false)
+check: favs1.txt: count 1
+check: favs1.txt: current Some(true)
+check: favs1.txt: fav 
+check: popup.txt: aux.fav:0
+check: popup.txt: aux.fav.toggle
+check: favs2.txt: count 0

@@ -32,6 +32,10 @@ enum TreeItem {
     File(String, usize),
     /// 내용이 있는 텍스트 파일(`\n` = 줄바꿈 · 미리보기/플러그인 시나리오).
     Text(String, String),
+    /// Store 방식 zip(`zip <경로> <항목=내용>;…` · 압축 풀기 시나리오 — 10-08 Linux 실기 자동화).
+    Zip(String, Vec<(String, String)>),
+    /// git 저장소(`git <경로>` — `git init` + 첫 커밋 `base.txt` · 그 뒤 수정 1 · 미추적 1 → 요약 `●`/`?` 시나리오). git이 없으면 폴더만.
+    Git(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +126,20 @@ fn parse_for(text: &str, os: &str) -> Result<Scenario, String> {
                             .replace("\\n", "\n");
                         s.tree.push(TreeItem::Text(p.to_string(), body));
                     }
+                    (Some("zip"), Some(p), _) => {
+                        // `zip <경로> <이름=내용>;<이름=내용>…` — 내용의 두 글자 `\n` = 줄바꿈.
+                        let spec = v.trim_start()["zip".len()..].trim_start()[p.len()..].trim();
+                        let entries = spec
+                            .split(';')
+                            .filter(|e| !e.is_empty())
+                            .map(|e| {
+                                let (name, body) = e.split_once('=').unwrap_or((e, ""));
+                                (name.to_string(), body.replace("\\n", "\n"))
+                            })
+                            .collect();
+                        s.tree.push(TreeItem::Zip(p.to_string(), entries));
+                    }
+                    (Some("git"), Some(p), _) => s.tree.push(TreeItem::Git(p.to_string())),
                     (Some("dir"), Some(p), _) => s.tree.push(TreeItem::Dir(p.to_string())),
                     (Some("file"), Some(p), size) => s.tree.push(TreeItem::File(
                         p.to_string(),
@@ -129,7 +147,7 @@ fn parse_for(text: &str, os: &str) -> Result<Scenario, String> {
                     )),
                     _ => {
                         return Err(format!(
-                        "line {}: tree = dir <path> | file <path> [bytes] | text <path> <content>",
+                        "line {}: tree = dir <path> | file <path> [bytes] | text <path> <content> | zip <path> <name=body>;… | git <path>",
                         n + 1
                     ))
                     }
@@ -219,9 +237,101 @@ fn build_tree(root: &Path, items: &[TreeItem]) -> std::io::Result<()> {
                 }
                 std::fs::write(path, body)?;
             }
+            TreeItem::Zip(p, entries) => {
+                let path = root.join(p);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(path, zip_store(entries))?;
+            }
+            TreeItem::Git(p) => {
+                let dir = root.join(p);
+                std::fs::create_dir_all(&dir)?;
+                std::fs::write(dir.join("base.txt"), "base\n")?;
+                let git = |args: &[&str]| {
+                    Command::new("git")
+                        .args(args)
+                        .current_dir(&dir)
+                        .env("GIT_AUTHOR_NAME", "t")
+                        .env("GIT_AUTHOR_EMAIL", "t@t")
+                        .env("GIT_COMMITTER_NAME", "t")
+                        .env("GIT_COMMITTER_EMAIL", "t@t")
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .is_ok_and(|st| st.success())
+                };
+                if git(&["init", "-q", "-b", "main"])
+                    && git(&["add", "base.txt"])
+                    && git(&["-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"])
+                {
+                    // 수정 1(`●1`) + 미추적 1(`?1`).
+                    std::fs::write(dir.join("base.txt"), "base\nchanged\n")?;
+                    std::fs::write(dir.join("new.txt"), "new\n")?;
+                }
+            }
         }
     }
     Ok(())
+}
+
+/// CRC-32(IEEE · zip 로컬 헤더용 · 의존 0).
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// Store(무압축) zip 바이트 — 로컬 헤더 + 데이터 · 중앙 디렉터리 · 끝 레코드(zip 규격 4.3 · 항목 수 ≤ 65535).
+fn zip_store(entries: &[(String, String)]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut central = Vec::new();
+    let le16 = |v: usize| (v as u16).to_le_bytes();
+    let le32 = |v: usize| (v as u32).to_le_bytes();
+    for (name, body) in entries {
+        let data = body.as_bytes();
+        let crc = crc32(data);
+        let offset = out.len();
+        // 로컬 파일 헤더(0x04034b50) · 버전 20 · 플래그 0x0800(UTF-8) · 방식 0 · 시각/날짜 0 · crc · 크기 ×2 · 이름 길이 · 확장 0.
+        out.extend_from_slice(&[0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0x08, 0, 0, 0, 0, 0, 0]);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out.extend_from_slice(&le32(data.len()));
+        out.extend_from_slice(&le32(data.len()));
+        out.extend_from_slice(&le16(name.len()));
+        out.extend_from_slice(&[0, 0]);
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(data);
+        // 중앙 디렉터리 항목(0x02014b50).
+        central.extend_from_slice(&[
+            0x50, 0x4b, 0x01, 0x02, 20, 0, 20, 0, 0, 0x08, 0, 0, 0, 0, 0, 0,
+        ]);
+        central.extend_from_slice(&crc.to_le_bytes());
+        central.extend_from_slice(&le32(data.len()));
+        central.extend_from_slice(&le32(data.len()));
+        central.extend_from_slice(&le16(name.len()));
+        central.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        central.extend_from_slice(&le32(offset));
+        central.extend_from_slice(name.as_bytes());
+    }
+    let cd_offset = out.len();
+    out.extend_from_slice(&central);
+    // 끝 레코드(0x06054b50).
+    out.extend_from_slice(&[0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0]);
+    out.extend_from_slice(&le16(entries.len()));
+    out.extend_from_slice(&le16(entries.len()));
+    out.extend_from_slice(&le32(central.len()));
+    out.extend_from_slice(&le32(cd_offset));
+    out.extend_from_slice(&[0, 0]);
+    out
 }
 
 struct Outcome {
@@ -488,6 +598,20 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn zip_store_is_readable() {
+        assert_eq!(super::crc32(b"123456789"), 0xCBF4_3926);
+        let z = super::zip_store(&[
+            ("x.txt".into(), "hi".into()),
+            ("sub/y.txt".into(), "ab".into()),
+        ]);
+        assert_eq!(&z[..4], b"PK\x03\x04");
+        assert_eq!(&z[z.len() - 22..z.len() - 18], b"PK\x05\x06");
+        // 중앙 디렉터리 항목 2 · 데이터 `hi` `ab`가 순서대로.
+        assert_eq!(z.windows(4).filter(|w| w == b"PK\x01\x02").count(), 2);
+        assert!(z.windows(2).position(|w| w == b"hi") < z.windows(2).position(|w| w == b"ab"));
+    }
+
     use super::*;
 
     const SCN: &str = "# 주석\nid: demo\ntitle: 제목 # 값 안 샵\ntree: dir sub/deep\ntree: file a.txt 5\ntree: file b.md\nsettings: ui.lang=en\ncmd: @ready:nav:<root>/sub\ncmd: @ready:quit:2\nexit: 2\ntimeout: 7\ncheck: <out>/p.txt: path <root>\ncheck: stderr: !panicked\n";
@@ -518,6 +642,20 @@ mod tests {
             }
         );
         assert!(parse("title: x\n").unwrap_err().contains("id"));
+        let z = parse("id: z\ntree: zip a.zip x.txt=hi;sub/y.txt=a\\nb\ntree: git repo\n").unwrap();
+        assert_eq!(
+            z.tree,
+            vec![
+                TreeItem::Zip(
+                    "a.zip".into(),
+                    vec![
+                        ("x.txt".into(), "hi".into()),
+                        ("sub/y.txt".into(), "a\nb".into())
+                    ]
+                ),
+                TreeItem::Git("repo".into())
+            ]
+        );
         assert!(parse("id: a\nbogus: 1\n").unwrap_err().contains("bogus"));
         // OS 꼬리표(T-117): 맞는 OS의 줄만 읽는다 · unix = linux + macos · 모르는 꼬리표 = 오류.
         assert_eq!(os_matches("windows", "windows"), Some(true));

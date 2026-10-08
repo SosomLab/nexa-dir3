@@ -405,12 +405,10 @@ impl HashWin {
         &self.files
     }
 
-    #[cfg(test)]
     pub(crate) fn is_running(&self) -> bool {
         self.running
     }
 
-    #[cfg(test)]
     pub(crate) fn is_waiting(&self) -> bool {
         self.waiting
     }

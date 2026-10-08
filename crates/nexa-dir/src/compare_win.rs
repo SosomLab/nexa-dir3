@@ -360,17 +360,14 @@ impl CompareWin {
         self.redraw();
     }
 
-    #[cfg(test)]
     pub(crate) fn is_running(&self) -> bool {
         self.running
     }
 
-    #[cfg(test)]
     pub(crate) fn rows_len(&self) -> usize {
         self.rows.as_ref().map_or(0, |r| r.source().len())
     }
 
-    #[cfg(test)]
     pub(crate) fn status(&self) -> &str {
         &self.status
     }

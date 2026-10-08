@@ -1,0 +1,12 @@
+# T4 · NEW-005 Git 상태 요약(10-05 §86 · 10-08 §10 T-182): 수정 1 · 미추적 1인 저장소로 이동 → 워커 끝 → 탭 상태바 Git 칸 = main · `!1` `?1`.
+id: git-summary
+title: 탭 상태바 Git 요약 — 브랜치 · 수정 · 미추적
+tree: git repo
+settings: ui.lang=en
+settings: git.untracked=on
+cmd: @ready:nav:<root>/repo
+cmd: @ready:git.wait
+cmd: @ready:tabstatus.dump:<out>/git.txt
+cmd: @ready:quit
+check: git.txt: branch main
+check: git.txt: extra !1 ?1
