@@ -21,6 +21,18 @@ impl App {
         if self.docks_due.is_some() {
             self.update_docks();
         }
+        // ★ 기동 명령 = 사용자 동작의 대역 → **유휴 시계를 되감는다**(10-08 메모리 2차: 종전엔 창 사건만 되감아 유휴 트림이 기동
+        // 뒤 1회 돌고 잠겨 시나리오의 "동작 → 트림 뒤" 지점이 트림 없는 값으로 찍혔다 — 협업 세션 memscen 3회차 미재현). 덤프 ·
+        // 단언 · 종료는 관찰이라 제외(덤프 직전에 트림이 미뤄지면 안 된다).
+        let observe = id.contains(".dump:")
+            || id.starts_with("dump:")
+            || id.starts_with("assert.")
+            || id == "quit"
+            || id == "app.exit";
+        if !observe {
+            self.last_input_ms = self.started.elapsed().as_millis() as u64;
+            self.idle_trimmed = false;
+        }
         if let Some((target, path)) = id.split_once(".dump:") {
             if let Some(text) = self.dump_of(target) {
                 let _ = std::fs::write(path, text);

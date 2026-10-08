@@ -7880,6 +7880,29 @@ fn dock_refresh_is_debounced_after_rapid_moves() {
     assert!(text.contains("c.txt"), "{text}");
 }
 
+/// 기동 명령은 사용자 동작의 대역이라 **유휴 트림 시계를 되감는다**(10-08 메모리 2차 — 종전엔 창 사건만 되감아 시나리오의 "동작 →
+/// 트림 뒤" 지점이 트림 없는 값으로 찍혔다) · 관찰 명령(덤프 · 단언 · 종료)은 되감지 않는다.
+#[test]
+fn startup_commands_rearm_idle_trim_except_observations() {
+    let (mut app, dir) = fixture("idlerearm");
+    app.layout_for(1200, 800, 1.0);
+    app.idle_trimmed = true;
+    let dump = dir.join("layout.txt");
+    app.startup_cmd(&format!("layout.dump:{}", dump.display()));
+    assert!(app.idle_trimmed, "덤프 = 관찰 · 되감지 않는다");
+    app.startup_cmd("assert.list:gone");
+    assert!(app.idle_trimmed, "단언 = 관찰");
+    app.startup_cmd("panel:0");
+    assert!(
+        !app.idle_trimmed,
+        "동작 명령 = 유휴 시계 되감기(다음 유휴에 다시 트림)"
+    );
+    app.idle_trimmed = true;
+    app.startup_cmd(&format!("nav:{}", dir.join("sub").display()));
+    assert!(!app.idle_trimmed);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 선행 구축 기본값 = 끔(T-179 J-a+J-d · 사용자 10-06 메모리 점검 — 셸 확장 DLL 적재 = Private +40 MB): 선택이 머물러도 셸
 /// 메뉴를 미리 짓지 않고 깨우지도 않는다 · 설정을 켜면 종전대로 300 ms 뒤 한 번 짓는다.
 #[test]
