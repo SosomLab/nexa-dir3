@@ -56,13 +56,14 @@ impl App {
                 self.sync_menu_checks();
                 self.layout();
             }
-            // 보호 항목 = 전역(전 탭 즉시) · 숨김 · Dot · 폴더 우선 · 대소문자 구분 = **새 탭의 기본값**(열린 탭은 자기 값 유지 ·
-            // 사용자 10-03) — 나누는 일은 `Panel::set_opts`가 한다.
+            // 보호 항목 = 전역(전 탭 즉시) · 숨김 · Dot · 폴더 우선 · 대소문자 구분 · 자연 정렬(10-08) = **새 탭의 기본값**(열린 탭은
+            // 자기 값 유지 · 사용자 10-03) — 나누는 일은 `Panel::set_opts`가 한다.
             "list.show_hidden"
             | "list.show_dotfiles"
             | "list.show_protected"
             | "list.folders_first"
-            | "list.sort_case_sensitive" => {
+            | "list.sort_case_sensitive"
+            | "list.sort_natural" => {
                 let opts = list_opts(&self.settings);
                 for p in &mut self.panels {
                     p.set_opts(opts, &mut inv);
@@ -172,15 +173,6 @@ impl App {
                 .tab_menu
                 .set_char_jump(self.settings.flag("menu.char_jump")),
             k if k.starts_with("typeahead.") => self.apply_typeahead(),
-            "list.sort_natural" => {
-                self.apply_natural_sort();
-                // 열린 목록을 새 순서로 다시 읽는다.
-                let mut inv = Invalidations::default();
-                for p in &mut self.panels {
-                    p.reopen(&mut inv);
-                }
-                self.redraw();
-            }
             "transfer.native" | "transfer.threads" | "transfer.unbuffered_mb" => {
                 self.apply_transfer_tuning();
             }
@@ -268,11 +260,6 @@ impl App {
     /// 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` → 전송 엔진의 복사 전략(다음 파일부터 적용).
     pub(crate) fn apply_transfer_tuning(&self) {
         ndir_ops::fastcopy::set_tuning(Self::transfer_tuning(&self.settings));
-    }
-
-    /// 설정 `list.sort_natural` → 정렬 엔진(다음 정렬부터).
-    pub(crate) fn apply_natural_sort(&self) {
-        ndir_tree::set_natural_sort(self.settings.flag("list.sort_natural"));
     }
 
     /// 설정 → 복사 전략(순수).

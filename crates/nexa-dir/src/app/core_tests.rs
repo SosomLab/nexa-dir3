@@ -2072,13 +2072,13 @@ fn toolbar_uses_svg_masks_and_rebuilds_on_scale() {
     assert!(app.toolbar.item_checked("view.case_sensitive"));
     assert_eq!(
         app.panels[app.active].active_view(),
-        (true, true, true, true)
+        (true, true, true, true, true)
     );
     assert_eq!(app.session_snapshot().panels[app.active].views, vec![15]);
     let root = app.panels[app.active].root_path();
     assert_eq!(
         app.dir_view_of(&root),
-        (true, true, true, true),
+        (true, true, true, true, true),
         "폴더에 기억"
     );
     app.command("view.case_sensitive");
@@ -2247,7 +2247,7 @@ fn view_options_follow_folders_by_default() {
     app.command("view.folders_first");
     assert_eq!(view(&app, 0), (true, true, false));
     assert_eq!(view(&app, 1), (true, true, false), "같은 폴더 = 공통");
-    assert_eq!(app.dir_view_of(&dir), (true, true, false, false));
+    assert_eq!(app.dir_view_of(&dir), (true, true, false, false, true));
     assert!(
         app.settings.flag("list.folders_first"),
         "설정 기본값은 불변"
@@ -7397,11 +7397,24 @@ fn invert_selection_flips_visible_rows() {
     assert_eq!(app.panels[0].selected_paths().len(), total);
 }
 
-/// 자연 정렬 토글 명령(`view.natural_sort` · 도구 모음 "보기 옵션" 묶음): 설정 `list.sort_natural`을 뒤집고 도구 모음 체크가 따라간다.
-/// (정렬 엔진의 전역 값은 시험끼리 공유하므로 여기서는 설정 · 체크만 본다 — 순서는 ndir-tree 시험.)
+/// 자연 정렬 = 다섯 번째 탭 보기 옵션(사용자 10-08 "자연 정렬도 `list.view_scope`에 영향 받게" · 기본 켬): 토글(`view.natural_sort` ·
+/// 도구 모음 "보기 옵션" 묶음)은 **활성 탭의 값**을 뒤집어 범위만큼 적용하고 설정 `list.sort_natural`(새 탭 기본값)은 그대로 ·
+/// 순서가 실제로 바뀐다(`file2` ↔ `file10`) · 범위 탭 = 다른 탭·패널 그대로 · 범위 폴더 = 같은 폴더를 보는 반대 패널도 함께 + 기억 ·
+/// 설정을 끄면 새 탭만 끔 · 세션 플래그 bit4 = **끔**(반전 — 종전 세션(bit4 = 0)이 켬으로 읽힌다).
 #[test]
-fn natural_sort_command_toggles_setting_and_toolbar_check() {
-    let (mut app, _dir) = fixture("nattoggle");
+fn natural_sort_is_a_tab_view_option_following_scope() {
+    let (mut app, dir) = fixture("nattoggle");
+    for n in ["file10.txt", "file2.txt"] {
+        std::fs::write(dir.join(n), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let _ = app.panels[1].navigate_to(dir.clone(), &mut inv);
+    // 픽스처가 이미 연 폴더면 이동이 무위 — 새로 만든 파일이 보이게 다시 읽는다.
+    app.panels[0].reopen(&mut inv);
+    app.panels[1].reopen(&mut inv);
+    app.update_status();
     assert_eq!(
         crate::icons::asset_of("view.natural_sort"),
         Some("natural-sort")
@@ -7409,14 +7422,74 @@ fn natural_sort_command_toggles_setting_and_toolbar_check() {
     assert!(crate::order::TOOLBAR_BLOCKS
         .iter()
         .any(|(b, items)| *b == "show" && items.contains(&"natural")));
-    let before = ndir_tree::natural_sort();
-    app.command("view.natural_sort");
-    assert!(!app.settings.flag("list.sort_natural"));
-    assert!(!app.toolbar.item_checked("view.natural_sort"));
-    app.command("view.natural_sort");
-    assert!(app.settings.flag("list.sort_natural"));
+    let names = |app: &App, p: usize| -> Vec<String> {
+        let src = app.panels[p].rows().source();
+        (0..src.len())
+            .map(|i| src.row(i).text)
+            .filter(|n| n.starts_with("file"))
+            .collect()
+    };
+    let natural = |app: &App, p: usize| app.panels[p].active_view().4;
+    // 기본 = 켬(설정 · 탭 · 체크) · 순서 = 값 순.
+    assert!(app.settings.flag("list.sort_natural") && natural(&app, 0) && natural(&app, 1));
     assert!(app.toolbar.item_checked("view.natural_sort"));
-    ndir_tree::set_natural_sort(before);
+    assert_eq!(names(&app, 0), ["file2.txt", "file10.txt"]);
+    // 범위 탭: 활성 탭만 끔 · 설정 불변 · 반대 패널 그대로 · 세션 bit4.
+    let _ = app.settings.set("list.view_scope", "tab");
+    app.command("view.natural_sort");
+    assert!(!natural(&app, 0) && natural(&app, 1));
+    assert!(
+        app.settings.flag("list.sort_natural"),
+        "설정 = 새 탭 기본값은 불변"
+    );
+    assert!(!app.toolbar.item_checked("view.natural_sort"));
+    assert_eq!(names(&app, 0), ["file10.txt", "file2.txt"], "코드포인트 순");
+    assert_eq!(
+        names(&app, 1),
+        ["file2.txt", "file10.txt"],
+        "반대 패널 = 그대로"
+    );
+    assert_eq!(app.session_snapshot().panels[0].views, vec![7 | 16]);
+    assert_eq!(
+        crate::filelist::ListOpts::view_of_flags(7),
+        (true, true, true, false, true),
+        "종전 세션(bit4 없음) = 켬"
+    );
+    app.command("file.new_tab");
+    assert!(natural(&app, 0), "새 탭 = 설정 기본값(켬)");
+    app.command("tab.prev");
+    assert!(
+        !natural(&app, 0) && !app.toolbar.item_checked("view.natural_sort"),
+        "체크 = 활성 탭"
+    );
+    app.command("view.natural_sort");
+    assert!(natural(&app, 0));
+    // 범위 폴더(기본): 같은 폴더를 보는 반대 패널도 함께 · 폴더에 기억 · 다른 폴더는 기본값.
+    let _ = app.settings.reset("list.view_scope");
+    app.command("view.natural_sort");
+    assert!(!natural(&app, 0) && !natural(&app, 1), "같은 폴더 = 공통");
+    assert_eq!(app.dir_view_of(&dir), (true, true, true, false, false));
+    assert_eq!(names(&app, 1), ["file10.txt", "file2.txt"]);
+    let _ = app.panels[0].navigate_to(dir.join("sub"), &mut inv);
+    app.update_status();
+    assert!(natural(&app, 0), "기억 없는 폴더 = 기본값");
+    app.panels[0].nav_back(&mut inv);
+    app.update_status();
+    assert!(!natural(&app, 0), "돌아오면 그 폴더의 값");
+    app.command("view.natural_sort");
+    assert!(
+        app.session_snapshot().dir_views.is_empty(),
+        "기본값 = 기억에서 빠짐"
+    );
+    // 설정을 끄면 새 탭의 기본값만(열린 탭은 그대로).
+    let _ = app.settings.set("list.view_scope", "tab");
+    let _ = app.settings.set("list.sort_natural", "off");
+    app.after_setting_changed("list.sort_natural");
+    assert!(natural(&app, 0), "열린 탭 = 자기 값");
+    app.command("file.new_tab");
+    assert!(!natural(&app, 0), "새 탭 = 설정 기본값(끔)");
+    assert_eq!(names(&app, 0), ["file10.txt", "file2.txt"]);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 폴더 크기(T-166): 폴더 1개를 선택하면 정보 도크가 "계산 중" → 합계 · "포함: 파일 N개, 폴더 M개" · 캐시 → 폴더 변경 통지면 다시 ·

@@ -445,6 +445,8 @@ struct PvRow {
 struct PvSource {
     rows: Vec<PvRow>,
     selected: Option<usize>,
+    /// 자연 정렬(여는 탭의 보기 옵션 — 10-08 탭 소유 · 파일 목록과 같은 순서로 이전/이후 열을 정렬).
+    natural: bool,
 }
 
 const COL_NO: u32 = 0;
@@ -502,13 +504,14 @@ impl RowSource for PvSource {
             _ => String::new(),
         }
     }
-    /// 정렬(DLG-081): 이전/이후 기준 대소문자 무시 · 안정 · 다중 키 · 빈 사양 = 선택 순서. 자연 정렬이 켜져 있으면 파일 목록과
-    /// 같은 순서(숫자를 값으로).
+    /// 정렬(DLG-081): 이전/이후 기준 대소문자 무시 · 안정 · 다중 키 · 빈 사양 = 선택 순서. 여는 탭의 자연 정렬이 켜져 있으면
+    /// 파일 목록과 같은 순서(숫자를 값으로).
     fn set_sort(&mut self, keys: &[(u32, bool)]) -> bool {
         if keys.is_empty() {
             self.rows.sort_by_key(|r| r.idx);
             return true;
         }
+        let natural = self.natural;
         self.rows.sort_by(|a, b| {
             for &(k, desc) in keys {
                 let (x, y) = match k {
@@ -518,7 +521,7 @@ impl RowSource for PvSource {
                 };
                 let o = if k == COL_NO {
                     a.idx.cmp(&b.idx)
-                } else if ndir_tree::natural_sort() {
+                } else if natural {
                     ndir_tree::cmp_natural(&x, &y, true).then_with(|| x.cmp(&y))
                 } else {
                     x.cmp(&y)
@@ -580,6 +583,8 @@ pub(crate) struct BulkWin {
     can_rename: bool,
     sig: String,
     tz_min: i32,
+    /// 자연 정렬(여는 탭의 보기 옵션 — [`Self::set_natural`] · 다음 대상부터 행 공급자에 실린다).
+    natural: bool,
 }
 
 impl BulkWin {
@@ -619,12 +624,18 @@ impl BulkWin {
             can_rename: false,
             sig: String::new(),
             tz_min: 0,
+            natural: true,
         };
         w.set_presets(Vec::new());
         w
     }
 
     /// 대상 교체(열 때) — 카드는 기본 1장 · 선택 순서 보존.
+    /// 여는 탭의 자연 정렬 값(탭 보기 옵션)을 넣는다 — 다음 정렬부터 이전/이후 열이 파일 목록과 같은 순서가 된다.
+    pub(crate) fn set_natural(&mut self, on: bool) {
+        self.natural = on;
+    }
+
     pub(crate) fn set_items(&mut self, items: Vec<BulkItem>, tz_min: i32) {
         self.items = items;
         self.tz_min = tz_min;
@@ -637,6 +648,7 @@ impl BulkWin {
             PvSource {
                 rows: Vec::new(),
                 selected: None,
+                natural: self.natural,
             },
             &mut inv,
         );
@@ -787,6 +799,7 @@ impl BulkWin {
         let mut src = PvSource {
             rows,
             selected: None,
+            natural: self.natural,
         };
         src.set_sort(&sort);
         self.rows.replace_source(src, &mut inv);

@@ -113,6 +113,9 @@ pub struct SortSpec {
     pub folders_first: bool,
     /// 대소문자 구분 이름/확장자 비교(07-15 — 기본 false. 코드포인트 순 = 대문자 그룹 상단).
     pub case_sensitive: bool,
+    /// 자연 정렬(dir3 신규 — 탐색기 · Finder 기본 동작): 이름 · 확장자의 숫자 구간을 **값으로** 비교(`file2` < `file10`). 엔진 기본
+    /// false = dir2 원형의 코드포인트 순 · 앱은 탭 보기 옵션(설정 `list.sort_natural` = 새 탭 기본값 · 10-08 `list.view_scope` 적용)으로 켠다.
+    pub natural: bool,
 }
 
 impl SortSpec {
@@ -122,6 +125,7 @@ impl SortSpec {
             keys: vec![(SortKey::Name, false)],
             folders_first: true,
             case_sensitive: false,
+            natural: false,
         }
     }
 }
@@ -337,7 +341,7 @@ impl Tree {
                 return a.cmp(&b); // 열거 순서(방향 무시)
             }
             // 대소문자 구분 옵션(07-15) — 알파벳 순서는 유지하되 같은 이름은 대문자 우선
-            let natural = natural_sort();
+            let natural = self.sort.natural;
             let cmp_name = |x: &str, y: &str| {
                 let plain = || {
                     if self.sort.case_sensitive {
@@ -826,20 +830,6 @@ fn cmp_ci(a: &str, b: &str) -> std::cmp::Ordering {
     a.chars()
         .flat_map(char::to_lowercase)
         .cmp(b.chars().flat_map(char::to_lowercase))
-}
-
-/// 자연 정렬 켬/끔(프로세스 전역 · 기본 끔 = dir2 원형의 코드포인트 순 — 앱이 설정 `list.sort_natural`로 켠다).
-static NATURAL_SORT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// 이름 · 확장자 정렬에서 숫자 구간을 **값으로** 비교할지 정한다(dir3 신규 — 탐색기 · Finder 기본 동작). 다음 정렬부터 적용.
-pub fn set_natural_sort(on: bool) {
-    NATURAL_SORT.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// 지금 자연 정렬인가.
-#[must_use]
-pub fn natural_sort() -> bool {
-    NATURAL_SORT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// 자연 정렬 비교(순수 · 힙 할당 없음): ASCII 숫자가 이어진 구간은 수의 크기로(앞의 0은 무시 — `007` = `7`), 그 밖의 글자는
@@ -1417,6 +1407,7 @@ mod tests {
             keys: vec![(key, desc)],
             folders_first,
             case_sensitive: false,
+            natural: false,
         }
     }
 
@@ -1741,6 +1732,50 @@ mod tests {
                 "img10.png",
                 "img12.png"
             ]
+        );
+    }
+
+    /// 자연 정렬은 `SortSpec.natural`(사양 단위 — 10-08 탭 보기 옵션): 같은 트리를 사양만 바꿔 다시 정렬하면 순서가 바뀐다 ·
+    /// 엔진 기본(`name_asc`)은 끔 = 코드포인트 순(`file10` < `file2`).
+    #[test]
+    fn natural_sort_is_per_spec() {
+        let base = std::env::temp_dir().join(format!("ndir-tree-natspec-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        for n in ["file10.txt", "file2.txt", "file1.txt"] {
+            fs::write(base.join(n), b"x").unwrap();
+        }
+        let mut t = Tree::open(&base).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+        assert_eq!(
+            names(&t),
+            vec!["file1.txt", "file10.txt", "file2.txt"],
+            "기본 = 코드포인트 순"
+        );
+        t.set_sort(SortSpec {
+            natural: true,
+            ..SortSpec::name_asc()
+        });
+        assert_eq!(
+            names(&t),
+            vec!["file1.txt", "file2.txt", "file10.txt"],
+            "자연 정렬 = 값 순"
+        );
+        t.set_sort(SortSpec {
+            keys: vec![(SortKey::Name, true)],
+            natural: true,
+            ..SortSpec::name_asc()
+        });
+        assert_eq!(
+            names(&t),
+            vec!["file10.txt", "file2.txt", "file1.txt"],
+            "내림도 값 순"
+        );
+        t.set_sort(SortSpec::name_asc());
+        assert_eq!(
+            names(&t),
+            vec!["file1.txt", "file10.txt", "file2.txt"],
+            "사양을 되돌리면 종전 순서"
         );
     }
 }

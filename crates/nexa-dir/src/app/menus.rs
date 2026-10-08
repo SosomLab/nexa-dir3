@@ -419,8 +419,11 @@ impl App {
                     g("view.case_sensitive", "Aa", "pref.sortCaseSensitive"),
                     "pref.sortCaseSensitive",
                 ),
-                // 자연 정렬(dir3 신규 · 사용자 10-05) — 탭 값이 아니라 전체 설정(`list.sort_natural`)이라 범위 안내를 붙이지 않는다.
-                ("show", "natural") => g("view.natural_sort", "12", "pref.sortNatural"),
+                // 자연 정렬(dir3 신규 · 사용자 10-05) — 10-08부터 다섯 번째 탭 보기 옵션(범위 적용 · 설정 = 새 탭 기본값).
+                ("show", "natural") => scoped(
+                    g("view.natural_sort", "12", "pref.sortNatural"),
+                    "pref.sortNatural",
+                ),
                 _ => return None,
             })
         };
@@ -664,7 +667,7 @@ impl App {
     /// 숨김 · Dot · 폴더 우선 · 대소문자 구분 체크(메뉴 · 툴바) = **활성 패널의 활성 탭 값**(dir2 08-02 미러 — 탭·패널을 바꾸면 따라간다).
     /// `update_status` 길목이 부른다.
     pub(crate) fn sync_view_checks(&mut self) {
-        let (hidden, dot, folders, case) = self.panels[self.active].active_view();
+        let (hidden, dot, folders, case, natural) = self.panels[self.active].active_view();
         let mut inv = Invalidations::default();
         self.menubar.set_checked("view.hidden", hidden, &mut inv);
         self.menubar.set_checked("view.dot", dot, &mut inv);
@@ -673,14 +676,10 @@ impl App {
             ("view.dot", dot),
             ("view.folders_first", folders),
             ("view.case_sensitive", case),
+            ("view.natural_sort", natural),
         ] {
             self.toolbar.set_item_checked(id, on, &mut inv);
         }
-        self.toolbar.set_item_checked(
-            "view.natural_sort",
-            self.settings.flag("list.sort_natural"),
-            &mut inv,
-        );
         if !inv.is_empty() {
             self.redraw();
         }
@@ -740,18 +739,20 @@ impl App {
         }
     }
 
-    /// 보기 옵션 토글 3종(dir2 08-02 `CMD_TOGGLE_HIDDEN/DOTFILES/FOLDERS_FIRST` · 값의 주인 = 탭): 활성 탭의 값을 뒤집어
-    /// 범위(`list.view_scope`)만큼 적용한다. 설정값(`list.show_*` = 새 탭의 기본값)은 건드리지 않는다(사용자 10-03).
+    /// 보기 옵션 토글 5종(dir2 08-02 `CMD_TOGGLE_HIDDEN/DOTFILES/FOLDERS_FIRST` + 대소문자(10-03) + 자연 정렬(10-08) · 값의 주인 = 탭):
+    /// 활성 탭의 값을 뒤집어 범위(`list.view_scope`)만큼 적용한다. 설정값(`list.show_*` = 새 탭의 기본값)은 건드리지 않는다(사용자 10-03).
     fn toggle_view_option(&mut self, id: &str) {
-        let (mut hidden, mut dot, mut folders, mut case) = self.panels[self.active].active_view();
+        let (mut hidden, mut dot, mut folders, mut case, mut natural) =
+            self.panels[self.active].active_view();
         match id {
             "view.hidden" => hidden = !hidden,
             "view.dot" => dot = !dot,
             "view.case_sensitive" => case = !case,
+            "view.natural_sort" => natural = !natural,
             _ => folders = !folders,
         }
         let scope = self.view_scope().to_string();
-        let view = (hidden, dot, folders, case);
+        let view = (hidden, dot, folders, case, natural);
         let mut inv = Invalidations::default();
         if scope == "dir" {
             // 폴더별: 그 폴더를 보는 탭 전부(좌우 모두) + 폴더에 기억.
@@ -910,17 +911,12 @@ impl App {
             }
             // 점 파일 토글이 없는 OS(Linux · macOS)에서는 단축키로 불려도 아무 일도 하지 않는다(점 파일 = 숨김 파일 → view.hidden).
             "view.dot" if !platform::has_dotfile_toggle() => {}
-            "view.hidden" | "view.dot" | "view.folders_first" | "view.case_sensitive" => {
+            "view.hidden"
+            | "view.dot"
+            | "view.folders_first"
+            | "view.case_sensitive"
+            | "view.natural_sort" => {
                 self.toggle_view_option(id);
-            }
-            // 자연 정렬 켬/끔 = 전체 설정 → 정렬 엔진에 알리고 열린 목록을 새 순서로 다시 읽는다.
-            "view.natural_sort" => {
-                self.toggle_flag("list.sort_natural");
-                self.apply_natural_sort();
-                for p in &mut self.panels {
-                    p.reopen(&mut inv);
-                }
-                self.update_status();
             }
             "view.dock" | "view.launcher" | "view.col_width_sync" => {
                 let key = match id {

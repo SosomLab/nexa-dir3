@@ -2,7 +2,7 @@
 //! 그대로 읽는다. dir3 저장 이름 = 설정 폴더의 `session.conf`(없으면 `session.cfg`도 읽는다 — PREFS-045 대응).
 //!
 //! 키: `active_panel` · `panel{i}.tabs`(`|` 연결 — Windows 경로 불가 문자) · `.active` · `.exp{j}`(탭별 펼침 · 탭당 ≤200) · `.locked`/`.pinned`
-//! (`0|1` · 하나라도 참일 때만) · `.modes`(`tree|flat|tiles` · 전부 tree면 생략) · `.views`(bit0 숨김·bit1 Dot·bit2 폴더 우선) · `.cols`(레이아웃 문자열) ·
+//! (`0|1` · 하나라도 참일 때만) · `.modes`(`tree|flat|tiles` · 전부 tree면 생략) · `.views`(bit0 숨김·bit1 Dot·bit2 폴더 우선·bit3 대소문자 구분·bit4 자연 정렬 **끔**) · `.cols`(레이아웃 문자열) ·
 //! `.colw`(표시 열 폭 `,` 연결). dir3가 아직 안 쓰는 키(exp·locked·pinned·views·cols)는 **파싱해 보존**하고 다시 쓴다(dir2로 돌아가도 잃지 않게).
 //! 영속하지 않는 것(dir2 그대로): 정렬 · 선택 · 캐럿 · 스크롤 · 히스토리.
 
@@ -127,7 +127,7 @@ impl Session {
                     if let Some((f, path)) = v.split_once('|') {
                         if let (Ok(f), false) = (f.trim().parse::<u8>(), path.is_empty()) {
                             if s.dir_views.len() < DIR_VIEWS_MAX {
-                                s.dir_views.push((PathBuf::from(path), f & 0xF));
+                                s.dir_views.push((PathBuf::from(path), f & 0x1F));
                             }
                         }
                     }
@@ -149,7 +149,7 @@ impl Session {
                 "views" => {
                     p.views = v
                         .split('|')
-                        .map(|f| f.trim().parse::<u8>().unwrap_or(0) & 0xF)
+                        .map(|f| f.trim().parse::<u8>().unwrap_or(0) & 0x1F)
                         .collect();
                 }
                 "cols" => p.col_layout = v.to_string(),

@@ -481,6 +481,7 @@ fn list_opts(s: &Settings) -> ListOpts {
         show_protected: s.flag("list.show_protected"),
         folders_first: s.flag("list.folders_first"),
         case_sensitive: s.flag("list.sort_case_sensitive"),
+        natural: s.flag("list.sort_natural"),
     }
 }
 
@@ -1367,7 +1368,6 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     install_ctl_labels();
     input::set_natural_scroll(settings.flag("input.scroll_natural"));
     // 자연 정렬(숫자를 값으로) — 첫 목록을 읽기 전에 정렬 엔진에 알린다.
-    ndir_tree::set_natural_sort(settings.flag("list.sort_natural"));
     // UI 글꼴 = 설정 `ui.font_face`(비면 OS 사슬 · 못 찾으면 사슬로 fail-over).
     let ui_pref = settings.get("ui.font_face").map(str::to_string);
     let Some(ui) = nexa_font::ui_font(ui_pref.as_deref()).or_else(|| nexa_font::ui_font(None))

@@ -1657,11 +1657,11 @@ impl Panel {
     /// 활성 탭의 `(숨김, Dot, 폴더 우선)` — 툴바 · 메뉴 체크가 따라간다(dir2 `active_view_values`).
     #[cfg(test)]
     pub(crate) fn active_view_values(&self) -> (bool, bool, bool) {
-        let (hidden, dot, folders, _) = self.tab_opts().view();
+        let (hidden, dot, folders, _, _) = self.tab_opts().view();
         (hidden, dot, folders)
     }
 
-    /// 활성 탭의 보기 옵션 4종(숨김 · Dot · 폴더 우선 · 대소문자 구분 정렬).
+    /// 활성 탭의 보기 옵션 5종(숨김 · Dot · 폴더 우선 · 대소문자 구분 정렬 · 자연 정렬).
     pub(crate) fn active_view(&self) -> crate::filelist::ViewOpts {
         self.tab_opts().view()
     }
@@ -2157,6 +2157,7 @@ mod tests {
             show_protected: true,
             folders_first: true,
             case_sensitive: false,
+            natural: true,
         }
     }
 

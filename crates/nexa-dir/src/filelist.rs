@@ -136,45 +136,53 @@ pub(crate) struct ListOpts {
     pub show_protected: bool,
     pub folders_first: bool,
     pub case_sensitive: bool,
+    /// 자연 정렬(숫자를 값으로 · 설정 `list.sort_natural` = 새 탭 기본값 · 탭 보기 옵션 5번째 — 10-08 `list.view_scope` 적용).
+    pub natural: bool,
 }
 
-/// 탭 보기 옵션 4종 `(숨김, Dot, 폴더 우선, 대소문자 구분 정렬)` — 탭이 소유하고 보기 범위(`list.view_scope`)만큼 함께 바뀐다.
-pub(crate) type ViewOpts = (bool, bool, bool, bool);
+/// 탭 보기 옵션 5종 `(숨김, Dot, 폴더 우선, 대소문자 구분 정렬, 자연 정렬)` — 탭이 소유하고 보기 범위(`list.view_scope`)만큼 함께 바뀐다.
+pub(crate) type ViewOpts = (bool, bool, bool, bool, bool);
 
 impl ListOpts {
-    /// 탭 보기 옵션 4종만 바꾼 사본 — 나머지(보호 항목 표시 = 전역)는 그대로.
-    pub(crate) fn with_view(self, (hidden, dot, folders_first, case): ViewOpts) -> ListOpts {
+    /// 탭 보기 옵션 5종만 바꾼 사본 — 나머지(보호 항목 표시 = 전역)는 그대로.
+    pub(crate) fn with_view(
+        self,
+        (hidden, dot, folders_first, case, natural): ViewOpts,
+    ) -> ListOpts {
         ListOpts {
             show_hidden: hidden,
             show_dotfiles: dot,
             folders_first,
             case_sensitive: case,
+            natural,
             ..self
         }
     }
 
-    /// 탭 보기 옵션 4종.
+    /// 탭 보기 옵션 5종.
     pub(crate) fn view(self) -> ViewOpts {
         (
             self.show_hidden,
             self.show_dotfiles,
             self.folders_first,
             self.case_sensitive,
+            self.natural,
         )
     }
 
     /// 세션 플래그(dir2 `panel{i}.views` — bit0 숨김 · bit1 Dot · bit2 폴더 우선 · **bit3 대소문자 구분**(dir3 추가 —
-    /// dir2는 하위 3비트만 읽는다)).
+    /// dir2는 하위 3비트만 읽는다) · **bit4 자연 정렬 끔**(10-08 · 반전 저장 — 기본값이 켬이라 종전 세션(bit4 = 0)이 그대로 켬으로 읽힌다)).
     pub(crate) fn view_flags(self) -> u8 {
         u8::from(self.show_hidden)
             | u8::from(self.show_dotfiles) << 1
             | u8::from(self.folders_first) << 2
             | u8::from(self.case_sensitive) << 3
+            | u8::from(!self.natural) << 4
     }
 
-    /// 세션 플래그 → 보기 옵션 4종.
+    /// 세션 플래그 → 보기 옵션 5종(bit4 = 자연 정렬 **끔**).
     pub(crate) fn view_of_flags(f: u8) -> ViewOpts {
-        (f & 1 != 0, f & 2 != 0, f & 4 != 0, f & 8 != 0)
+        (f & 1 != 0, f & 2 != 0, f & 4 != 0, f & 8 != 0, f & 16 == 0)
     }
 }
 
@@ -261,6 +269,7 @@ impl TreeSource {
                     keys,
                     folders_first: self.opts.folders_first,
                     case_sensitive: self.opts.case_sensitive,
+                    natural: self.opts.natural,
                 });
                 // 펼침은 가시 순서(부모 먼저)로 모았으므로 그대로 다시 펼치면 된다 · 없어진 폴더는 건너뛴다.
                 for dir in &expanded {
@@ -727,6 +736,7 @@ impl RowSource for TreeSource {
             },
             folders_first: self.opts.folders_first,
             case_sensitive: self.opts.case_sensitive,
+            natural: self.opts.natural,
         });
         true
     }
@@ -801,6 +811,7 @@ mod tests {
             show_protected: true,
             folders_first: true,
             case_sensitive: false,
+            natural: false,
         }
     }
 

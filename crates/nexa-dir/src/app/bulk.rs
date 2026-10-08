@@ -46,6 +46,9 @@ impl App {
             self.redraw();
             return;
         }
+        // 이전/이후 열의 정렬 순서 = 여는 탭의 자연 정렬 값(탭 보기 옵션 · 10-08).
+        self.bulk_win
+            .set_natural(self.panels[self.active].active_view().4);
         self.bulk_win.set_items(items, local_tz_min());
         self.bulk_win
             .set_presets(Self::preset_names(&Self::presets_dir()));
