@@ -31,6 +31,7 @@ cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
 | `auto`(기본) | **full을 고르는 때**(하나라도): ① 이 PC에 전수 기록 없음 ② 마지막 전수가 `NDIR_GATE_FULL_HOURS`(기본 24)시간 경과 ③ 형제 저장소(nexa-ui · nexa-license) HEAD 변경 ④ 마지막 전수 뒤 **핵심 경로** 변경 — `crates/{ndir-core,ndir-vfs,ndir-tree,ndir-ops,ndir-term,ndir-license}/` · `crates/ndir-settings/src/lib.rs` · `crates/nexa-dir/src/platform/` · `crates/nexa-dir/Cargo.toml` · `crates/ndir-check/` · `Cargo.toml`/`Cargo.lock` · `.github/` · `scripts/` · `tests/scenarios/`. 그 밖 = quick |
 
 - **중요 시점 = `gate.sh full` 한 번 더**: 배포(패키징) · 버전 태그 · 마일스톤 마감 · 브랜치 병합 전.
+- **패키징 자원을 바꾼 커밋은 태그 전 로컬 패키징 1회**(10-08 v0.23.2 1차 실패 교훈): `packaging/windows/*.wxs` · `build-msi.ps1` · `packaging/lib.sh` 등은 `gate.sh`가 돌리지 않는다(WiX · deb/rpm/pkg 빌드는 release.yml에서만). Windows = `packaging/windows/build-msi.ps1` 로컬 1회(WiX 5 · XML 주석에 `--` 금지 = WIX0104) · 다른 OS 자원은 해당 OS 세션에서. 태그 뒤 실패하면 publish 전이라 외부 영향은 없지만 태그를 지우고 다시 찍어야 한다.
 - **quick으로 push했으면 CI(3-OS 전수)가 전수 역할** — push 뒤 CI 결과 확인이 필수다(협업 세션이 감시 · 빨강이면 즉시 보고).
 - `scripts/check-all.sh`는 **형제 저장소까지 도는 최대 전수**로 남긴다(nexa-ui → nexa-license → dir3 · 필요할 때 수동).
 - 아래는 각 단계를 손으로 돌릴 때의 명령(gate.sh가 내부에서 쓰는 것과 같다).
