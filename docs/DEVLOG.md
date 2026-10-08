@@ -2,6 +2,10 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-10-09
+
+- **클릭 동작 = 뗄 때**(DR-27 · 사용자 10-09) — nexa-ui 180차 5a04e13(nexa-sql 세션 · Checkbox · Switch · MenuBar) + 181차 71cde23(Radio · Combo · IconDrop · PosGrid · ColorPicker · Palette · Carousel · PathBar 세그먼트 · 메뉴 라벨 끌어 놓기) · dir3 9921d80(설정 창 밖 Up 전달) · 시험 584/0 · CI 14e57da ✓ = 3-OS 회복(xdg 시험 처방) → [10-09 §1](journal/2026-10-09.md)
+
 ## 2026-10-08
 
 - **Linux PC 세션(192차)** — 실기 판정 자동화 T4 12개(ab2a724 · 즐겨찾기 · 팔레트 · 선택 반전 · 자연 정렬 · 압축 풀기 · 중복 · 폴더 비교 · 체크섬 · 폴더 크기 · 로그 창 · git 요약 · 대기/덤프 어휘) · T-113 개발 빌드 .desktop 설치 스크립트(d7c2205) · **GAP-022 Linux 휴지통 EXDEV**(319b12a · 다른 fs = `$topdir/.Trash-$uid`) · **T-131 Linux 우클릭 2차**(f0088b7 · 배경 메뉴 터미널/파일 관리자/속성 · 행 전자메일/파일 관리자에서 보기 · 터미널 탐지 13종) · 시험 584/0 · CI 37796267449 ✗(Windows T4 2개)로 **GAP-023 Windows 배경 메뉴 중복 찾기 · 폴더 비교 누락** 적발 → 5fec0ea 조립 한 길 → [10-08 §18](journal/2026-10-08.md)
