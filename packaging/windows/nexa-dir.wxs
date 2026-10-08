@@ -78,7 +78,7 @@
           <Shortcut Id="StartMenuGui" Directory="AppMenuFolder" Name="Nexa Dir" WorkingDirectory="INSTALLFOLDER"
                     Icon="AppIcon.ico" Advertise="yes" Description="Nexa Dir" />
         </File>
-        <!-- 콘솔 보조(T-178): `ndir --selfcheck` — 셸이 끝까지 기다리는 CLI 경로(본체에 인자 전달). -->
+        <!-- 콘솔 보조 ndir.exe(T-178): 셸이 끝까지 기다리는 CLI 경로(본체에 인자 전달). XML 주석에는 겹친 하이픈을 쓰지 않는다(WIX0104 · 10-08 v0.23.2 1차 실패). -->
         <File Id="NdirExe" Source="$(var.Staging)\ndir.exe" />
       </Component>
       <Component Id="Docs" Guid="3EA7048D-1375-4387-8636-F9BED6F72FF9">
