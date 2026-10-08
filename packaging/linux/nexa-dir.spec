@@ -58,6 +58,11 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Thu Oct 08 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.3-1
+- Tab status bar git summary: load control as advanced folder-watch settings (settle delay after
+  changes, failure backoff, query time limit, no periodic polling while the window is inactive) and
+  branch name re-read after an external checkout · natural sort is now a per-tab view option that
+  follows the view-scope setting (setting value = default for new tabs).
 * Thu Oct 08 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.2-1
 - Console helper ndir.exe (PowerShell CLI output/capture) · memory window 700x800 fit-to-content and
   redraw skip · system theme follows OS while running (Windows) · parallel multi-algorithm checksum ·
