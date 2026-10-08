@@ -569,13 +569,7 @@ impl App {
                 None => return self.ctx_begin_wait(CtxKind::Bg(panel), target),
             }
         };
-        let mut items = self.bg_menu_items(Some(&shell));
-        // 중복 파일 찾기(T-170 · dir3 신규) — 현재 폴더 안에서 · 폴더 비교(T-171) — 두 패널일 때 반대 패널과.
-        items.push(CtxItem::Separator);
-        items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
-        if self.dual {
-            items.push(CtxItem::item("ctx.compare_panels", tr("ctx.comparePanels")));
-        }
+        let items = self.bg_menu_items(Some(&shell));
         self.open_ctx(CtxKind::Bg(panel), items);
     }
 
@@ -640,6 +634,14 @@ impl App {
             CtxItem::Separator,
             CtxItem::item("view.refresh", tr("menu.view.refresh")),
         ]);
+        // 중복 파일 찾기(T-170 · dir3 신규) — 현재 폴더 안에서 · 폴더 비교(T-171) — 두 패널일 때 반대 패널과.
+        // ★ 여기(조립 한 길)에 둔다 — 종전엔 `open_bg_menu`에만 덧붙여 셸 항목이 비동기로 도착하는 Windows(`ctx_open_waited` ·
+        // `ctx_shell_tick`의 Items 채우기)에서 두 항목이 빠졌다(10-09 CI 319b12a find-dupes · compare-folders 적발).
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
+        if self.dual {
+            items.push(CtxItem::item("ctx.compare_panels", tr("ctx.comparePanels")));
+        }
         items
     }
 
