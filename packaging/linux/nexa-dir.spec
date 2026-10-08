@@ -58,6 +58,10 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Thu Oct 08 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.2-1
+- Console helper ndir.exe (PowerShell CLI output/capture) · memory window 700x800 fit-to-content and
+  redraw skip · system theme follows OS while running (Windows) · parallel multi-algorithm checksum ·
+  streaming ZIP inflate · git status options · folder-size redraw loop fix · performance baseline tooling.
 * Tue Oct 07 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.1-1
 - Memory window: private working set row (Task Manager axis) · flash message settings (ui.flash_*) ·
   system theme follows OS after dark start (Windows) · launcher folder items navigate the active panel.

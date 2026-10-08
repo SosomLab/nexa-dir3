@@ -794,19 +794,19 @@ dependencies = [
 
 [[package]]
 name = "ndir-check"
-version = "0.23.1"
+version = "0.23.2"
 
 [[package]]
 name = "ndir-core"
-version = "0.23.1"
+version = "0.23.2"
 
 [[package]]
 name = "ndir-i18n"
-version = "0.23.1"
+version = "0.23.2"
 
 [[package]]
 name = "ndir-license"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "ed25519-dalek",
  "ndir-settings",
@@ -816,18 +816,18 @@ dependencies = [
 
 [[package]]
 name = "ndir-log"
-version = "0.23.1"
+version = "0.23.2"
 
 [[package]]
 name = "ndir-ops"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "regex-lite",
 ]
 
 [[package]]
 name = "ndir-settings"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "ndir-i18n",
  "nexa-conf",
@@ -835,11 +835,11 @@ dependencies = [
 
 [[package]]
 name = "ndir-term"
-version = "0.23.1"
+version = "0.23.2"
 
 [[package]]
 name = "ndir-tree"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "ndir-core",
  "ndir-vfs",
@@ -847,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "ndir-vfs"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "ndir-core",
 ]
@@ -895,7 +895,7 @@ dependencies = [
 
 [[package]]
 name = "nexa-dir"
-version = "0.23.1"
+version = "0.23.2"
 dependencies = [
  "ndir-core",
  "ndir-i18n",
