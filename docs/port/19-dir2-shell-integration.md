@@ -417,6 +417,8 @@ trait ShellMenuProvider {            // nexa-dir3 앱 계층(또는 nexa-fs::she
 
 **1차 범위 제안**: 3-OS 공통 = winit `DroppedFile` 기반 **단순 수신**(대상 = 드롭 시점 커서 아래 폴더 — winit가 드롭 직후 `CursorMoved`를 주는지 OS별 실측 필요) → 2차 = Windows OLE 완전 이식(SHELL-060~067 전부, 코드 대부분 재사용) → 3차 = macOS NSDragging → 4차 = Linux XDND 자체 구현. 단계별 패리티 표를 문서화한다.
 
+**dir3 진행(10-09 · Linux PC · b16b2b4 · journal 10-09 §6)**: winit 0.30.13 기준 X11 = XDND **수신만**(`DroppedFile`) · **Wayland = 수신·발신 모두 없음**(wayland-client 필요 → 외부 crate 0 기조 · DR-8로 불가). 그래서 Linux/macOS 1차 = **창 안 드래그**(OS 드래그 없이 포인터만으로 같은 창 안 패널 ↔ 패널 · 폴더 행 · 탭 머묾 · 자동 스크롤 · Ctrl 복사/Shift 이동 — Windows 자체 수신부 로직 재사용 · `DragSource::supports_os_drag()` false인 OS) · 후속 후보 = X11 XDND 발신(x11rb · 허용 목록) · macOS NSDragging 발신 · Wayland 앱 밖 주고받기는 보류(사유 위).
+
 ### 4-4. 휴지통(SHELL-070~074·049)
 
 | 항목 | 🟦 Windows | 🍎 macOS | 🐧 Linux |
