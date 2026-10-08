@@ -1070,6 +1070,14 @@ pref.gitUntracked = Count untracked files in git summary
 pref.gitUntracked.desc = Include the untracked file count (?) in the summary. Turn off if a very large repository feels slow (git status -uno).
 pref.gitDiverged = Diverged marker (⇕) when both ahead and behind
 pref.gitDiverged.desc = Prefix ⇡⇣ with ⇕ when the branch is both ahead of and behind its upstream.
+pref.watchGitSettle = git re-query settle delay (ms)
+pref.watchGitSettle.desc = After a folder or .git change, wait until things have been quiet this long before querying the git summary again. Keeps git from being launched back to back while changes keep coming (fetch, checkout, builds). 0 = immediately.
+pref.watchGitTimeout = git query time limit (s)
+pref.watchGitTimeout.desc = If git status runs longer than this, it is stopped and treated as a failure (a failed repository then follows the retry interval).
+pref.watchGitRetry = git query failure retry interval (s)
+pref.watchGitRetry.desc = A repository whose git query failed or was stopped after exceeding the time limit is not queried again until this interval has passed (even on file changes or focus return). A safeguard so very large repositories do not keep using CPU and disk. 0 = no retry until a manual refresh or toggling the git summary off and on.
+pref.watchGitBackground = Keep refreshing git while the window is inactive
+pref.watchGitBackground.desc = When off, the periodic git summary refresh (Status bar setting) pauses while the window is inactive or minimized. It is queried again as soon as you return to the window, so leaving this off is usually lighter.
 pref.toolbarOnColor = Toolbar: toggled-on color
 pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Line color = light accent background, outline and icon drawn in the color below. Accent = outline and icon follow the accent settings.
 pref.toolbarOnColor.line = Line color
@@ -1080,6 +1088,7 @@ pref.toolbarIconScale = Toolbar: icon image scale (%)
 pref.toolbarIconScale.desc = Size of the icon image inside each toolbar button. The button size stays the same.
 pref.cat.tabsGeneral = General
 pref.cat.tabStatus = Status bar
+pref.cat.watch = Folder watch
 pref.cat.statusbar = Status bar
 pref.sbo.tab = Tab n/m
 pref.sbo.cpu = CPU

@@ -2971,6 +2971,145 @@ fn status_segments_and_tab_status_bar() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 탭 상태바 git 재조회 부하 제어(사용자 10-08 "성능 영향 없도록" · 폴더 감시 고급 설정 `watch.git_*`): ① `.git` 안 변경 =
+/// 요약 버림 + **정착 대기**(`watch.git_settle_ms` · 대기 중엔 자동 조회 안 걸림) + **브랜치 이름 캐시 버림**(다른 앱의 checkout →
+/// 다음 상태 동기가 `.git/HEAD`를 다시 읽는다 — 종전 갭) · 저장소 안 일반 변경 = 요약·정착만(브랜치 캐시 유지) ② 워커 실패 =
+/// 요약 없음 + 실패 기억 → `watch.git_retry_s` 전엔 안 걸림 · 지나면 걸림 · 0 = 수동 전까지 안 걸림 · 수동 새로 고침이 푼다
+/// ③ 포커스 복귀 = 요약·브랜치 캐시 버림(새 브랜치가 보인다) ④ 비활성 중엔 주기 갱신이 깨우지 않는다(`watch.git_background` 끔).
+#[test]
+fn git_requery_settle_retry_and_branch_reread() {
+    let (mut app, dir) = fixture("gitload");
+    std::fs::create_dir_all(dir.join(".git")).unwrap();
+    let head = |b: &str| {
+        std::fs::write(
+            dir.join(".git").join("HEAD"),
+            format!("ref: refs/heads/{b}\n"),
+        )
+        .unwrap()
+    };
+    head("main");
+    let mut inv = Invalidations::default();
+    app.panels[0].invalidate_dir_info();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let branch = |app: &App| app.panels[0].git_info().map(|g| g.1);
+    assert_eq!(branch(&app).as_deref(), Some("main"));
+    let repo = dir.clone();
+    let now = Instant::now();
+    // 판정만 본다 — `git_enabled`를 켜되 `git_sync`·`git_tick`은 부르지 않는다(실제 git 프로세스를 띄우지 않게).
+    app.git_enabled = true;
+    app.git_detail
+        .insert(repo.clone(), (now, dirinfo::GitDetail::default()));
+    // ① 다른 앱의 checkout = `.git` 감시 경로 변경.
+    head("topic");
+    app.git_invalidate(std::slice::from_ref(&dir.join(".git")));
+    assert!(!app.git_detail.contains_key(&repo), "요약 버림");
+    assert!(app.git_settle.contains_key(&repo), "정착 대기(기본 500 ms)");
+    assert!(
+        !app.git_may_request(&repo, now),
+        "정착 대기 중 = 자동 조회 안 함"
+    );
+    assert!(
+        app.git_may_request(&repo, now + Duration::from_secs(1)),
+        "정착 뒤 = 조회"
+    );
+    app.panels[0].sync_status(&mut inv);
+    assert_eq!(
+        branch(&app).as_deref(),
+        Some("topic"),
+        "브랜치 이름 다시 읽음"
+    );
+    // 저장소 안 일반 변경(현재 폴더) = 브랜치 캐시는 그대로(HEAD를 다시 읽지 않는다) · 정착만.
+    head("ignored");
+    app.git_invalidate(std::slice::from_ref(&dir));
+    app.panels[0].sync_status(&mut inv);
+    assert_eq!(
+        branch(&app).as_deref(),
+        Some("topic"),
+        "일반 변경 = 브랜치 재독 없음"
+    );
+    // 정착 0 = 대기 없이 바로.
+    let _ = app.settings.set("watch.git_settle_ms", "0");
+    app.git_settle.clear();
+    app.git_invalidate(std::slice::from_ref(&dir));
+    assert!(app.git_settle.is_empty() && app.git_may_request(&repo, now));
+    // ② 워커 실패(시간 상한 초과 · git 없음) → 요약 없음 + 실패 기억. 시험 빌드의 `git_tick`은 결과만 거둔다.
+    app.git_enabled = false;
+    app.git_busy.insert(repo.clone());
+    app.git_tx.send((repo.clone(), None)).unwrap();
+    let _ = app.git_tick(now);
+    assert!(
+        !app.git_detail.contains_key(&repo)
+            && app.git_fail.contains_key(&repo)
+            && app.git_busy.is_empty()
+    );
+    assert_eq!(
+        app.panels[0].git_info().map(|g| g.1).as_deref(),
+        Some("topic"),
+        "실패 = 브랜치 이름만 남는다"
+    );
+    app.git_enabled = true;
+    assert!(
+        !app.git_may_request(&repo, now + Duration::from_secs(299)),
+        "재시도 간격(기본 300 s) 전 = 안 함"
+    );
+    assert!(
+        app.git_may_request(&repo, now + Duration::from_secs(300)),
+        "간격 뒤 = 재시도"
+    );
+    let _ = app.settings.set("watch.git_retry_s", "0");
+    assert!(
+        !app.git_may_request(&repo, now + Duration::from_secs(86_400)),
+        "0 = 수동 전까지 안 함"
+    );
+    // 성공 결과는 실패 기억을 지운다.
+    app.git_enabled = false;
+    app.git_tx
+        .send((repo.clone(), Some(dirinfo::GitDetail::default())))
+        .unwrap();
+    let _ = app.git_tick(now);
+    assert!(app.git_detail.contains_key(&repo) && !app.git_fail.contains_key(&repo));
+    // 수동 새로 고침(탭 상태바 메뉴)은 실패 기억·정착 대기를 푼다.
+    app.git_fail.insert(repo.clone(), now);
+    app.git_settle
+        .insert(repo.clone(), now + Duration::from_secs(60));
+    app.aux_menu_action(0, "aux.refresh");
+    assert!(!app.git_fail.contains_key(&repo) && !app.git_settle.contains_key(&repo));
+    // ③ 포커스 복귀 = 요약·브랜치 캐시 버림 → 새 브랜치.
+    head("dev");
+    app.git_detail
+        .insert(repo.clone(), (now, dirinfo::GitDetail::default()));
+    app.git_refresh_on_focus();
+    assert!(app.git_detail.is_empty());
+    assert_eq!(
+        branch(&app).as_deref(),
+        Some("dev"),
+        "포커스 복귀 = HEAD 다시 읽음"
+    );
+    // ④ 비활성 + `watch.git_background` 끔 = 주기 갱신이 깨우지 않는다 · 켜면 `git.refresh_s` 뒤에 깨운다.
+    app.git_enabled = true;
+    app.git_detail
+        .insert(repo, (now, dirinfo::GitDetail::default()));
+    app.main_active = false;
+    assert_eq!(app.git_tick(now), None, "비활성 = 깨우지 않음");
+    let _ = app.settings.set("watch.git_background", "on");
+    assert_eq!(
+        app.git_tick(now),
+        Some(now + Duration::from_secs(30)),
+        "켜면 주기 갱신 예약"
+    );
+    app.main_active = true;
+    let _ = app.settings.set("watch.git_background", "off");
+    assert_eq!(
+        app.git_tick(now),
+        Some(now + Duration::from_secs(30)),
+        "활성 = 주기 갱신 예약"
+    );
+    app.git_enabled = false;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 툴바 켜짐 표시(사용자 10-04 최종 "처음처럼 색은 두고 배경색만"): 기본 = 강조색 옅은 배경만(선 색 없음 · 아이콘 색 그대로) ·
 /// `toolbar.on_color=line`이면 테두리 · 아이콘 선 = `toolbar.on_line_color`(기본 #0000FF) · 설정 잠금이 모드를 따른다.
 #[test]

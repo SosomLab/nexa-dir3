@@ -84,6 +84,8 @@ const CAT_TRANSFER: &str = "pref.cat.transfer";
 const CAT_TABS: &str = "pref.cat.tabsGeneral";
 /// 탭 › 상태바(사용자 10-04 "탭 상태바 관련 설정은 탭 > 상태바로") — 패널마다 목록 아래에 두는 탭 상태바.
 const CAT_TAB_STATUS: &str = "pref.cat.tabStatus";
+/// 폴더 감시(dir3 신규 · 사용자 10-08): 감시가 유발하는 재조회(git 요약)의 부하 제어 — 전부 고급.
+const CAT_WATCH: &str = "pref.cat.watch";
 const CAT_DOCK: &str = "pref.cat.dock";
 const CAT_TERMINAL: &str = "pref.cat.terminal";
 const CAT_PLUGINS: &str = "pref.cat.plugins";
@@ -124,6 +126,7 @@ pub const CATEGORY_TREE: &[(&str, &[&str])] = &[
             CAT_SCROLL,
             CAT_CTXMENU,
             CAT_TRANSFER,
+            CAT_WATCH,
         ],
     ),
     ("pref.cat.tabs", &[CAT_TABS, CAT_TAB_STATUS]),
@@ -1269,6 +1272,49 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 폴더 감시 › git 재조회 부하 제어(사용자 10-08 "성능 영향 없도록 · 폴더 감시 그룹 고급 설정" · 전부 고급): 정착 대기 =
+    // 변경이 이어질 때(fetch · checkout · 빌드) git을 연달아 띄우지 않게 · 실패 재시도 간격 = 시간 상한을 넘긴 큰 저장소가
+    // 파일 변경·포커스 복귀마다 다시 5 s를 태우지 않게(0 = 수동 새로 고침·`git.enabled` 껐다 켜기 전까지 안 함) · 시간 상한 = 종전 상수
+    // `GIT_TIMEOUT` 5 s → 설정 · 비활성 중 주기 갱신 = 끄면 창이 비활성/최소화인 동안 `git.refresh_s` 주기 조회를 멈춘다
+    // (포커스 복귀가 즉시 다시 조회하므로 기본 끔).
+    e!(
+        "watch.git_settle_ms",
+        CAT_WATCH,
+        "pref.watchGitSettle",
+        "pref.watchGitSettle.desc",
+        Int {
+            min: 0,
+            max: 10_000
+        },
+        "500"
+    ),
+    e!(
+        "watch.git_retry_s",
+        CAT_WATCH,
+        "pref.watchGitRetry",
+        "pref.watchGitRetry.desc",
+        Int {
+            min: 0,
+            max: 86_400
+        },
+        "300"
+    ),
+    e!(
+        "watch.git_timeout_s",
+        CAT_WATCH,
+        "pref.watchGitTimeout",
+        "pref.watchGitTimeout.desc",
+        Int { min: 1, max: 60 },
+        "5"
+    ),
+    e!(
+        "watch.git_background",
+        CAT_WATCH,
+        "pref.watchGitBackground",
+        "pref.watchGitBackground.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "dock.visible",
         CAT_DOCK,
@@ -2076,6 +2122,10 @@ pub const ADVANCED: &[&str] = &[
     "git.refresh_s",
     "git.untracked",
     "git.diverged_glyph",
+    "watch.git_settle_ms",
+    "watch.git_retry_s",
+    "watch.git_timeout_s",
+    "watch.git_background",
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",

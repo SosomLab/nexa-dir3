@@ -425,6 +425,11 @@ struct App {
     /// 저장소 → (조회 시각 · 요약) — 주기 갱신 · 포커스/감시/작업 뒤 무효화(10-06).
     git_detail: std::collections::HashMap<PathBuf, (Instant, dirinfo::GitDetail)>,
     git_busy: std::collections::HashSet<PathBuf>,
+    /// 저장소 → 마지막 **실패**(git 없음 · 저장소 아님 · 시간 상한 초과) 시각 — `watch.git_retry_s`가 지나기 전엔 파일 변경 ·
+    /// 포커스 복귀에도 다시 조회하지 않는다(큰 저장소가 CPU·디스크를 계속 쓰지 않게 · 사용자 10-08 부하 검토).
+    git_fail: std::collections::HashMap<PathBuf, Instant>,
+    /// 저장소 → 변경 뒤 재조회 **정착 시각**(`watch.git_settle_ms`) — 변경이 이어지는 동안은 미뤄지고 조용해지면 한 번만 조회.
+    git_settle: std::collections::HashMap<PathBuf, Instant>,
     /// `git` 프로세스를 돌려 상태를 조회하는가(시험에서는 끈다 — 실제 프로세스를 띄우지 않는다).
     git_enabled: bool,
     git_tx: std::sync::mpsc::Sender<(PathBuf, Option<dirinfo::GitDetail>)>,
@@ -769,6 +774,8 @@ impl App {
             status_popup_was: None,
             git_detail: std::collections::HashMap::new(),
             git_busy: std::collections::HashSet::new(),
+            git_fail: std::collections::HashMap::new(),
+            git_settle: std::collections::HashMap::new(),
             git_enabled,
             git_tx,
             git_rx,

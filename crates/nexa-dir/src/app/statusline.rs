@@ -15,8 +15,11 @@ pub(crate) type StatusBlock = (&'static str, Vec<&'static str>);
 
 /// 설정값(`tab:1|cpu:1|mem:1[app:1,system:1]|…`) → 표시할 칸과 그 안의 항목(순서대로 · 숨긴 것 제외 · 빈 값 = 전부 ·
 /// 항목이 있는 칸에서 항목을 전부 끄면 그 칸도 빠진다 · 순수).
-/// git 상태 조회 상한 — 넘으면 자식을 죽이고 실패로(멈춘 git이 `git_busy`에 영구히 남지 않게 · 협업 10-06 제안).
-const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+/// git 상태 조회 상한 — 넘으면 자식을 죽이고 실패로(멈춘 git이 `git_busy`에 영구히 남지 않게 · 협업 10-06 제안). 값은 설정
+/// `watch.git_timeout_s`(기본 5 s · 사용자 10-08 "관련 값은 폴더 감시 고급 설정으로").
+fn git_timeout(settings: &Settings) -> Duration {
+    Duration::from_secs(settings.int("watch.git_timeout_s").clamp(1, 60) as u64)
+}
 
 /// `git --no-optional-locks -C <repo> status --porcelain=v2 --branch --show-stash [-uno]`의 표준 출력(작업 스레드) — 성공 = `Some(text)`.
 /// `--no-optional-locks` = 사용자 커밋/IDE와 index.lock 경합 방지 · `--show-stash` = `# stash N` 줄(git ≥ 2.19) · `-uno` = 미추적
@@ -57,6 +60,17 @@ fn git_status_text(repo: &std::path::Path, timeout: Duration, untracked: bool) -
     };
     let status = child.wait().ok()?;
     status.success().then_some(text)
+}
+
+/// 실패한 저장소를 다시 조회해도 되는가(순수): 재시도 간격 0 = 수동 새로 고침·git 표시 껐다 켜기 전까지 안 함 · 나이 ≥ 간격.
+pub(crate) fn git_retry_due(age_s: u64, retry_s: u64) -> bool {
+    retry_s > 0 && age_s >= retry_s
+}
+
+/// 주기 갱신(`git.refresh_s`)을 지금 돌려도 되는가(순수): 창이 활성이거나 · 비활성 중 갱신을 켰을 때(`watch.git_background`).
+/// 비활성 중엔 포커스 복귀가 즉시 다시 조회하므로 기본은 멈춤(사용자 10-08 부하 검토 ②).
+pub(crate) fn git_periodic_allowed(active: bool, background: bool) -> bool {
+    active || background
 }
 
 /// git 요약이 묵었는가(순수): 갱신 주기 0 = 끔 · 나이 ≥ 주기.
@@ -503,7 +517,8 @@ impl App {
     /// 워커를 돌린다(`git status --porcelain=v2 --branch` — UI는 기다리지 않는다 · git이 없으면 브랜치 이름만 남는다).
     pub(crate) fn git_sync(&mut self, inv: &mut Invalidations) {
         for i in 0..self.panels.len() {
-            let Some((repo, _)) = self.panels[i].git_info() else {
+            // 브랜치 캐시를 버린 직후(감시 `.git` 변경 · 포커스 복귀)면 여기서 `.git/HEAD`를 다시 읽는다.
+            let Some((repo, _)) = self.panels[i].git_info_fresh() else {
                 self.panels[i].set_git_extra(String::new());
                 continue;
             };
@@ -515,21 +530,41 @@ impl App {
                 .unwrap_or_default();
             self.panels[i].set_git_extra(extra);
             self.panels[i].sync_status(inv);
-            if !self.git_detail.contains_key(&repo) && self.git_enabled {
+            if !self.git_detail.contains_key(&repo) && self.git_may_request(&repo, Instant::now()) {
                 self.git_request(repo);
             }
         }
     }
 
-    /// 저장소 상태 조회를 워커에 맡긴다(같은 저장소가 조회 중이면 건너뜀).
+    /// 자동 조회(상태 동기 · 감시 · 포커스 복귀)를 지금 걸어도 되는가: 켜져 있고 · 정착 대기 중이 아니고 · 최근 실패의 재시도
+    /// 간격(`watch.git_retry_s`)이 지났을 때. 수동 새로 고침은 [`Self::git_request`]로 바로 건다.
+    pub(crate) fn git_may_request(&self, repo: &std::path::Path, now: Instant) -> bool {
+        if !self.git_enabled {
+            return false;
+        }
+        if self.git_settle.get(repo).is_some_and(|due| *due > now) {
+            return false;
+        }
+        match self.git_fail.get(repo) {
+            Some(at) => {
+                let retry = self.settings.int("watch.git_retry_s").clamp(0, 86_400) as u64;
+                git_retry_due(now.duration_since(*at).as_secs(), retry)
+            }
+            None => true,
+        }
+    }
+
+    /// 저장소 상태 조회를 워커에 맡긴다(같은 저장소가 조회 중이면 건너뜀 · 정착 대기는 푼다).
     pub(crate) fn git_request(&mut self, repo: PathBuf) {
+        self.git_settle.remove(&repo);
         if !self.git_busy.insert(repo.clone()) {
             return;
         }
         let tx = self.git_tx.clone();
         let untracked = self.settings.flag("git.untracked");
+        let timeout = git_timeout(&self.settings);
         std::thread::spawn(move || {
-            let detail = git_status_text(&repo, GIT_TIMEOUT, untracked)
+            let detail = git_status_text(&repo, timeout, untracked)
                 .map(|text| dirinfo::parse_porcelain_v2(&text));
             let _ = tx.send((repo, detail));
         });
@@ -544,6 +579,8 @@ impl App {
                 self.git_enabled = !cfg!(test) && self.settings.flag("git.enabled");
                 self.git_detail.clear();
                 self.git_busy.clear();
+                self.git_fail.clear();
+                self.git_settle.clear();
             }
             "git.untracked" => self.git_detail.clear(),
             _ => {}
@@ -551,15 +588,40 @@ impl App {
         self.git_sync(&mut inv);
     }
 
-    /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다. **주기 갱신**(설정 `git.refresh_s` ·
-    /// 0 = 끔): 보이는 탭의 저장소 요약이 그 시간보다 오래됐으면 다시 조회(옛 값은 새 값이 올 때까지 그대로 보인다).
+    /// 지금 보이는 탭의 저장소 루트(중복 제거).
+    fn git_shown_repos(&self) -> Vec<PathBuf> {
+        let mut shown: Vec<PathBuf> = Vec::new();
+        for r in self
+            .panels
+            .iter()
+            .filter_map(|p| p.git_info().map(|(r, _)| r))
+        {
+            if !shown.contains(&r) {
+                shown.push(r);
+            }
+        }
+        shown
+    }
+
+    /// 유휴 틱 — 조회 결과를 받아 칸 · 떠 있는 팝업을 갱신한다. 조회 중이면 곧 다시 깨운다. 세 가지 예약을 본다(부하 검토 10-08):
+    /// ① **정착 대기**(`watch.git_settle_ms`) — 변경 뒤 조용해진 시각이 되면 한 번 조회. ② **주기 갱신**(`git.refresh_s` · 0 = 끔 ·
+    /// 창이 비활성이면 `watch.git_background`가 켜졌을 때만) — 보이는 탭의 저장소 요약이 그 시간보다 오래됐으면 다시 조회(옛 값은
+    /// 새 값이 올 때까지 그대로 보인다). ③ **실패 재시도**(`watch.git_retry_s`) — 실패한 저장소는 그 간격이 지나야 다시.
     pub(crate) fn git_tick(&mut self, now: Instant) -> Option<Instant> {
         let mut got = false;
         while let Ok((repo, detail)) = self.git_rx.try_recv() {
             self.git_busy.remove(&repo);
-            // 실패(git 없음 · 저장소 아님)도 기억한다 — 같은 저장소를 되풀이해 조회하지 않게(빈 요약).
-            self.git_detail
-                .insert(repo, (now, detail.unwrap_or_default()));
+            match detail {
+                Some(d) => {
+                    self.git_fail.remove(&repo);
+                    self.git_detail.insert(repo, (now, d));
+                }
+                // 실패(git 없음 · 저장소 아님 · 시간 상한 초과) = 요약 없음 + 실패 시각 — 재시도 간격 전엔 다시 걸지 않는다.
+                None => {
+                    self.git_detail.remove(&repo);
+                    self.git_fail.insert(repo, now);
+                }
+            }
             got = true;
         }
         if got {
@@ -567,43 +629,98 @@ impl App {
             self.git_sync(&mut inv);
             self.redraw();
         }
-        let refresh = self.settings.int("git.refresh_s").clamp(0, 86_400) as u64;
         let mut wake: Option<Instant> =
             (!self.git_busy.is_empty()).then(|| now + Duration::from_millis(150));
-        if refresh > 0 && self.git_enabled {
-            let shown: Vec<PathBuf> = self
-                .panels
-                .iter()
-                .filter_map(|p| p.git_info().map(|(r, _)| r))
-                .collect();
-            for repo in shown {
-                let Some((at, _)) = self.git_detail.get(&repo) else {
+        let push = |w: &mut Option<Instant>, due: Instant| {
+            *w = Some(w.map_or(due, |x| x.min(due)));
+        };
+        if !self.git_enabled {
+            return wake;
+        }
+        // ① 정착 대기가 끝난 저장소(보이는 것만) — 조회. 아직이면 그때 깨운다. 안 보이는 것은 지운다(다시 보이면 상태 동기가 건다).
+        let shown = self.git_shown_repos();
+        let settled: Vec<PathBuf> = self
+            .git_settle
+            .iter()
+            .filter(|(_, due)| **due <= now)
+            .map(|(r, _)| r.clone())
+            .collect();
+        for repo in settled {
+            self.git_settle.remove(&repo);
+            if shown.contains(&repo) && self.git_may_request(&repo, now) {
+                self.git_request(repo);
+            }
+        }
+        self.git_settle.retain(|r, _| shown.contains(r));
+        for due in self.git_settle.values() {
+            push(&mut wake, *due);
+        }
+        // ② 주기 갱신 · ③ 실패 재시도 — 창이 비활성이면 설정이 허락할 때만(포커스 복귀가 어차피 다시 조회한다).
+        let background = self.settings.flag("watch.git_background");
+        if !git_periodic_allowed(self.main_active, background) {
+            return wake;
+        }
+        let refresh = self.settings.int("git.refresh_s").clamp(0, 86_400) as u64;
+        let retry = self.settings.int("watch.git_retry_s").clamp(0, 86_400) as u64;
+        for repo in shown {
+            if let Some((at, _)) = self.git_detail.get(&repo) {
+                if refresh == 0 {
                     continue;
-                };
-                let age = now.duration_since(*at).as_secs();
-                if git_stale(age, refresh) {
+                }
+                if git_stale(now.duration_since(*at).as_secs(), refresh) {
                     self.git_request(repo);
                 } else {
-                    let due = *at + Duration::from_secs(refresh);
-                    wake = Some(wake.map_or(due, |w| w.min(due)));
+                    push(&mut wake, *at + Duration::from_secs(refresh));
+                }
+            } else if let Some(at) = self.git_fail.get(&repo) {
+                if retry == 0 {
+                    continue;
+                }
+                if git_retry_due(now.duration_since(*at).as_secs(), retry) {
+                    self.git_request(repo);
+                } else {
+                    push(&mut wake, *at + Duration::from_secs(retry));
                 }
             }
         }
         wake
     }
 
-    /// 바뀐 경로에 닿는 저장소의 요약을 버린다(폴더 감시 · `.git` 안 변경 포함 — 다음 `git_sync`가 다시 조회).
+    /// 바뀐 경로에 닿는 저장소의 요약을 버리고 **정착 대기**를 건다(폴더 감시 · `watch.git_settle_ms` · 변경이 이어지면 대기가
+    /// 밀린다 · 0 = 다음 `git_sync`가 바로 조회). `.git` 안 변경이면 브랜치 이름 캐시도 버린다(다른 앱의 checkout — 다음
+    /// `sync_status`가 `.git/HEAD`를 다시 읽는다 · 10-08 갭).
     pub(crate) fn git_invalidate(&mut self, changed: &[PathBuf]) {
-        self.git_detail
-            .retain(|repo, _| !changed.iter().any(|c| c.starts_with(repo)));
+        let settle = self.settings.int("watch.git_settle_ms").clamp(0, 10_000) as u64;
+        let now = Instant::now();
+        for i in 0..self.panels.len() {
+            let Some((repo, _)) = self.panels[i].git_info() else {
+                continue;
+            };
+            let hit: Vec<&PathBuf> = changed.iter().filter(|c| c.starts_with(&repo)).collect();
+            if hit.is_empty() {
+                continue;
+            }
+            self.git_detail.remove(&repo);
+            if settle > 0 {
+                self.git_settle
+                    .insert(repo.clone(), now + Duration::from_millis(settle));
+            }
+            if hit.iter().any(|c| crate::app::watch::is_git_internal(c)) {
+                self.panels[i].invalidate_dir_info();
+            }
+        }
     }
 
-    /// 창이 포커스를 되찾았다(다른 앱에서 커밋했을 수 있다) — 전부 버리고 보이는 것부터 다시.
+    /// 창이 포커스를 되찾았다(다른 앱에서 커밋·checkout했을 수 있다) — 요약과 브랜치 이름 캐시를 버리고 보이는 것부터 다시
+    /// (실패한 저장소는 재시도 간격을 따른다 · 정착 대기 중이면 그때).
     pub(crate) fn git_refresh_on_focus(&mut self) {
-        if self.git_detail.is_empty() {
+        if self.git_detail.is_empty() && self.git_fail.is_empty() {
             return;
         }
         self.git_detail.clear();
+        for p in &mut self.panels {
+            p.invalidate_dir_info();
+        }
         let mut inv = Invalidations::default();
         self.git_sync(&mut inv);
     }
@@ -825,9 +942,11 @@ impl App {
             }
             "aux.sb.edit" => self.open_order_editor("statusbar.layout"),
             "aux.refresh" => {
-                // 저장소 상태도 다시 조회한다.
+                // 저장소 상태도 다시 조회한다(수동 = 실패 기억 · 정착 대기도 푼다).
                 if let Some((repo, _)) = self.panels[panel].git_info() {
                     self.git_detail.remove(&repo);
+                    self.git_fail.remove(&repo);
+                    self.git_settle.remove(&repo);
                 }
                 self.panels[panel].invalidate_dir_info();
                 if panel != self.active {
@@ -906,5 +1025,23 @@ mod git_refresh_tests {
         assert!(!git_stale(29, 30));
         assert!(git_stale(30, 30));
         assert!(git_stale(31, 30));
+    }
+
+    /// 실패 재시도 판정(MC/DC · 10-08 부하 검토 ①): 간격 0 = 수동 전까지 안 함 · 나이 < 간격 = 아직 · 나이 ≥ 간격 = 재시도.
+    #[test]
+    fn git_retry_rules() {
+        assert!(!git_retry_due(10_000, 0));
+        assert!(!git_retry_due(299, 300));
+        assert!(git_retry_due(300, 300));
+        assert!(git_retry_due(301, 300));
+    }
+
+    /// 비활성 중 주기 갱신 판정(MC/DC · 10-08 부하 검토 ②): 활성이면 늘 · 비활성이면 `watch.git_background`가 켜졌을 때만.
+    #[test]
+    fn git_periodic_rules() {
+        assert!(git_periodic_allowed(true, false));
+        assert!(git_periodic_allowed(true, true));
+        assert!(!git_periodic_allowed(false, false));
+        assert!(git_periodic_allowed(false, true));
     }
 }

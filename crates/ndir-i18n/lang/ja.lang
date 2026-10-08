@@ -1070,6 +1070,14 @@ pref.gitUntracked = git 未追跡ファイルを数える
 pref.gitUntracked.desc = 要約に未追跡ファイル数(?)を含めます。非常に大きなリポジトリで遅い場合はオフに(git status -uno)。
 pref.gitDiverged = git 先行・遅れ同時の表示(⇕)
 pref.gitDiverged.desc = アップストリームより先行し、同時に遅れているとき ⇡⇣ の前に ⇕ を付けて分岐状態を示します。
+pref.watchGitSettle = git 再取得の静止待ち(ms)
+pref.watchGitSettle.desc = フォルダーや .git の変更後、この時間だけ変化が止まってから git の要約を再取得します。fetch・checkout・ビルドのように変更が続くときに git を立て続けに起動しないようにします。0 = すぐに。
+pref.watchGitTimeout = git 取得の時間上限(秒)
+pref.watchGitTimeout.desc = git status がこの時間を超えると中断し、失敗とみなします(失敗したリポジトリは再試行間隔に従います)。
+pref.watchGitRetry = git 取得失敗時の再試行間隔(秒)
+pref.watchGitRetry.desc = git の取得に失敗した、または 時間上限を超えて中断されたリポジトリは、この間隔が過ぎるまで再取得しません(ファイル変更やフォーカス復帰でも)。非常に大きなリポジトリが CPU・ディスクを使い続けないための安全装置です。0 = 手動更新、または git 要約表示をオフにして再びオンにするまで再試行しません。
+pref.watchGitBackground = ウィンドウが非アクティブでも git を定期更新
+pref.watchGitBackground.desc = オフにすると、ウィンドウが非アクティブまたは最小化されている間、git 要約の定期更新(ステータスバーの設定)を止めます。ウィンドウに戻るとすぐに再取得するため、通常はオフのほうが軽くなります。
 pref.toolbarOnColor = ツールバー: オン時の色
 pref.toolbarOnColor.desc = オンのツールバーボタンの見た目です。線の色 = 背景はアクセント色の薄い塗りのまま、枠線とアイコンの線を下の色で描きます。アクセント = 枠線とアイコンはアクセント設定に従います。
 pref.toolbarOnColor.line = 線の色
@@ -1080,6 +1088,7 @@ pref.toolbarIconScale = ツールバー: アイコン画像の大きさ(%)
 pref.toolbarIconScale.desc = ツールバーボタン内のアイコン画像の大きさです。ボタンの大きさは変わりません。
 pref.cat.tabsGeneral = 一般
 pref.cat.tabStatus = ステータスバー
+pref.cat.watch = フォルダー監視
 pref.cat.statusbar = ステータスバー
 pref.sbo.tab = タブ n/m
 pref.sbo.cpu = CPU

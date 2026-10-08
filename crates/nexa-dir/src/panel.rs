@@ -978,15 +978,7 @@ impl Panel {
         if !self.status_on {
             return;
         }
-        let root = self.root_path();
-        if self.git.as_ref().is_none_or(|(p, _)| *p != root) {
-            let found = if ndir_vfs::is_virtual_root(&root) || ndir_vfs::is_network_path(&root) {
-                None
-            } else {
-                crate::dirinfo::git_branch(&root)
-            };
-            self.git = Some((root, found));
-        }
+        self.ensure_git_info();
         let src = self.rows().source();
         let mut segs = vec![nexa_ctl::StatusSeg::new(
             SEG_FOLDER,
@@ -1010,9 +1002,32 @@ impl Panel {
         self.status.set_left(&left, inv);
     }
 
-    /// 탭 상태바의 Git 정보 `(저장소 루트, 브랜치)`(활성 탭 · 저장소 밖 = `None`).
+    /// Git 브랜치 캐시를 활성 탭의 폴더에 맞춘다 — 폴더가 바뀌었거나 캐시를 버렸을 때만 `.git/HEAD`를 읽는다(가상 최상위 · 네트워크
+    /// 경로 = 없음). [`Self::sync_status`]와 호스트 `git_sync`(캐시를 버린 뒤 `.git/HEAD` 재독 — 10-08) 공용.
+    fn ensure_git_info(&mut self) {
+        let root = self.root_path();
+        if self.git.as_ref().is_none_or(|(p, _)| *p != root) {
+            let found = if ndir_vfs::is_virtual_root(&root) || ndir_vfs::is_network_path(&root) {
+                None
+            } else {
+                crate::dirinfo::git_branch(&root)
+            };
+            self.git = Some((root, found));
+        }
+    }
+
+    /// 탭 상태바의 Git 정보 `(저장소 루트, 브랜치)`(활성 탭 · 저장소 밖 = `None`) — 캐시 그대로(읽지 않는다).
     pub(crate) fn git_info(&self) -> Option<(PathBuf, String)> {
         self.git.as_ref().and_then(|(_, g)| g.clone())
+    }
+
+    /// [`Self::git_info`]와 같되 캐시가 비었으면(폴더 이동 · [`Self::invalidate_dir_info`] 뒤) 먼저 `.git/HEAD`를 읽는다 —
+    /// 호스트 `git_sync`가 쓴다(캐시를 버린 직후에도 저장소를 놓치지 않게). 탭 상태바가 꺼져 있으면 읽지 않는다(칸이 없다).
+    pub(crate) fn git_info_fresh(&mut self) -> Option<(PathBuf, String)> {
+        if self.status_on {
+            self.ensure_git_info();
+        }
+        self.git_info()
     }
 
     /// Git 칸 요약(앞섬 · 뒤짐 · 변경 수)을 넣는다 — 다음 [`Self::sync_status`]가 칸에 반영한다.
