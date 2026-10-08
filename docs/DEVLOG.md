@@ -4,7 +4,7 @@
 
 ## 2026-10-08
 
-- **메모리 점검 2차**(d1090cf · nexa-ui 81a588a · T-179) — 미리보기 4K 사진 1장 = 힙 +35 MB 누적 → 축소본 캐시(유휴 뒤 Private 125.5 → 55.8 MB) · 우클릭 셸 확장 DLL 해제 · `ctxmenu.shell` · 미집계 분해 행 · 결정 대기 = `ctxmenu.shell` 기본값 · d25e24e 기동 명령 유휴 시계 되감기(재측정 유휴 뒤 WS 91 → 22 MB · 모듈 −24) → [10-08 §16](journal/2026-10-08.md)
+- **메모리 점검 2차**(d1090cf · nexa-ui 81a588a · T-179) — 미리보기 4K 사진 1장 = 힙 +35 MB 누적 → 축소본 캐시(유휴 뒤 Private 125.5 → 55.8 MB) · 우클릭 셸 확장 DLL 해제 · `ctxmenu.shell` · 미집계 분해 행 · 결정 대기 = `ctxmenu.shell` 기본값 · d25e24e 기동 명령 유휴 시계 되감기(재측정 유휴 뒤 WS 91 → 22 MB · 모듈 −24) · ebcbd92 분해 행 라벨 축약 · 설치본 교체 PID 31776 → [10-08 §16](journal/2026-10-08.md)
 
 - **릴리스 v0.23.3**(태그 224139b · run 37755301042 전 잡 ✓ · 자산 9 · brew 탭 246d2e7 · winget PR #448738 · #448740) — 게시 상태 판정: choco 0.23.1 Submitted/Ready → `CHOCO_PUSH` false 유지 · winget 0.23.1 MERGED → `WINGET_PUBLISH` true 복귀 → [10-08 §14](journal/2026-10-08.md)
 
