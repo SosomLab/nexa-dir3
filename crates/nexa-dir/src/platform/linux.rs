@@ -854,13 +854,21 @@ mod tests {
         );
         assert_eq!(items.last().map(|i| i.id.as_str()), Some("xdg.props"));
         assert!(items.iter().all(|i| i.separator || !i.label.is_empty()));
+        // 첫 항목 = 기본 앱(있으면) · 없으면 T-131 2차 항목(전자메일 · 파일 관리자에서 보기) 또는 압축(CI 러너 = 기본 앱 연결 없음).
         if let Some(first) = items.first().filter(|i| i.id != "xdg.props") {
             assert!(
-                first.id.starts_with("xdg.app:") || first.id == "xdg.compress",
+                first.id.starts_with("xdg.app:")
+                    || matches!(
+                        first.id.as_str(),
+                        "xdg.email" | "xdg.showin" | "xdg.compress"
+                    ),
                 "{}",
                 first.id
             );
         }
+        // 파일 메뉴: 파일 관리자에서 보기는 늘 · 터미널은 폴더에만.
+        assert!(items.iter().any(|i| i.id == "xdg.showin"));
+        assert!(items.iter().all(|i| i.id != "xdg.terminal"));
         let ditems = m.items(std::slice::from_ref(&dir)).unwrap();
         eprintln!(
             "dir menu: {:?}",
