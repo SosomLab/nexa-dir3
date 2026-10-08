@@ -4,6 +4,8 @@
 
 ## 2026-10-09
 
+- **Linux 우클릭 항목 아이콘**(90d9406 · T-131 잔여 · nexa-ui 184 `icontheme::named_icon_file`) — 앱 = `.desktop` `Icon=` · 자체 항목 = freedesktop 이름 표 · 캐시 128 · 이 PC 배경 5 · 행 10 · 시험 585/0 · 앱 PID 121202 → [10-09 §4](journal/2026-10-09.md)
+
 - **194차 Linux PC 회차 마감 갱신** — STATUS 시작점 Linux 기준 재작성(코드 50f2011 · nexa-ui a332468 · 전수 585/0 · T4 32/0 · CI 전부 ✓ · 실기 ⓐ~ⓔ · 다음 = T-131 잔여 → T-147 Linux → T-130) · MILESTONES M8 · TODO 순서 · 교훈 = nexa-ui 착수 전 fetch → [10-09 §3](journal/2026-10-09.md)
 
 - **탭 최소 폭 · 닫기 뒤 여백 설정**(50f2011 · NEW-044 · 사용자 10-09) — `tabs.min_width` 80 · `tabs.close_pad` 2(40 %) · nexa-ui 182차 330710a(nexa-sql 세션) + 183차 3a2d923 · 시험 585/0 · 앱 PID 109290 → [10-09 §2](journal/2026-10-09.md)
