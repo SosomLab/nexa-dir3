@@ -1321,7 +1321,9 @@ impl PrefsWin {
             .cards
             .iter()
             .any(|c| matches!(&c.ctl, CardCtl::Text(tb) if tb.is_focused()));
-        if self.list.contains(p) || !is_mouse || drag_follow {
+        // ★ 뗌은 늘 전달(nexa-ui 179차 — 스위치·콤보·위치 선택의 동작이 **뗄 때**라 목록 밖에서 떼도 "누름 취소"를 알아야 한다).
+        let release = matches!(ie, InputEvent::MouseUp { .. });
+        if self.list.contains(p) || !is_mouse || drag_follow || release {
             for c in &mut self.cards {
                 if c.rect.h == 0 {
                     continue;
