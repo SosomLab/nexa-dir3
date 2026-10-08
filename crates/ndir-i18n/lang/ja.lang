@@ -532,6 +532,10 @@ pref.tabDblclick = タブのダブルクリック動作
 pref.tabDblclick.desc = タブをダブルクリックしたときの動作です。オプションは今後追加されます。
 pref.tabMultiline = タブを複数行に
 pref.tabMultiline.desc = タブがパネル幅を超えたら次の行に折り返してすべて表示します。オフ = 1 行のままで ◀ ▶ ボタンでスクロールします。
+pref.tabMinWidth = タブの最小幅
+pref.tabMinWidth.desc = タイトルが短いタブもこの幅以上で描きます（px・倍率前）。0 = 制限なし・240 = タブの最大幅。
+pref.tabClosePad = 閉じるボタン後の余白
+pref.tabClosePad.desc = タブの閉じるボックスと右端の間の余白（px・倍率前）です。
 pref.tabScrollButtons = タブスクロールボタンの位置
 pref.tabScrollButtons.desc = タブを 1 行で使うときの ◀ ▶ ボタンの位置です（複数行をオフにした場合のみ）。
 pref.tabScrollButtons.end = 右端

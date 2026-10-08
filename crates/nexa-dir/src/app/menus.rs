@@ -645,9 +645,13 @@ impl App {
             .get("tabs.dblclick")
             .unwrap_or("close")
             .to_string();
+        // 탭 최소 폭 · 닫기 상자 뒤 여백(사용자 10-09 · nexa-ui 183) — 논리 px · 배율은 TabBar가 적용.
+        let min_w = self.settings.int("tabs.min_width") as i32;
+        let close_pad = self.settings.int("tabs.close_pad") as i32;
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.set_tab_style(multiline, buttons, &mut inv);
+            p.set_tab_metrics(min_w, close_pad, &mut inv);
             p.set_tab_dblclick(&dbl);
         }
         self.layout();

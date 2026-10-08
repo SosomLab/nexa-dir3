@@ -532,6 +532,10 @@ pref.tabDblclick = Tab double-click action
 pref.tabDblclick.desc = What double-clicking a tab does. More options later.
 pref.tabMultiline = Multi-line tabs
 pref.tabMultiline.desc = Wrap tabs onto more lines when they exceed the panel width, so all are visible. Off = keep one line and scroll with the ◀ ▶ buttons.
+pref.tabMinWidth = Minimum tab width
+pref.tabMinWidth.desc = Tabs with short titles are still at least this wide (px, before scaling). 0 = no minimum, 240 = the maximum tab width.
+pref.tabClosePad = Space after the close button
+pref.tabClosePad.desc = Gap between the tab close box and its right edge (px, before scaling).
 pref.tabScrollButtons = Tab scroll button position
 pref.tabScrollButtons.desc = Where the ◀ ▶ buttons go when tabs use a single line (only when multi-line tabs are off).
 pref.tabScrollButtons.end = Right end

@@ -1244,6 +1244,25 @@ pub const REGISTRY: &[Entry] = &[
         Choice(TAB_SCROLL_BTN_OPTS),
         "end"
     ),
+    // 탭 최소 폭(사용자 10-09 "탭 최소 크기를 설정에 · 기본 = kiros33 탭 제목 너비 정도"): 짧은 이름 탭도 이 폭(논리 px). 기본 80 =
+    // 6 + "kiros33"(≈44) + 4 + 닫기 상자 16 + 6 ≈ 76을 올림 · 0 = 제한 없음 · 240 = 탭 최대 폭.
+    e!(
+        "tabs.min_width",
+        CAT_TABS,
+        "pref.tabMinWidth",
+        "pref.tabMinWidth.desc",
+        Int { min: 0, max: 240 },
+        "80"
+    ),
+    // 닫기 상자 뒤 여백(사용자 10-09 "뒤 공백을 지금의 40 %로"): 왼쪽 여백 6의 40 % ≈ 2(논리 px · 상자 안쪽 여백은 따로 있다).
+    e!(
+        "tabs.close_pad",
+        CAT_TABS,
+        "pref.tabClosePad",
+        "pref.tabClosePad.desc",
+        Int { min: 0, max: 16 },
+        "2"
+    ),
     // ── 하단 도크 › 하단 도크
     e!(
         "layout.tab_statusbar",

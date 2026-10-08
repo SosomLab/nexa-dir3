@@ -1758,6 +1758,13 @@ impl Panel {
         inv.push(self.bounds);
     }
 
+    /// 탭 최소 폭 · 닫기 상자 뒤 여백(설정 `tabs.min_width` · `tabs.close_pad` · 논리 px).
+    pub(crate) fn set_tab_metrics(&mut self, min_w: i32, close_pad: i32, inv: &mut Invalidations) {
+        self.tabbar.set_min_width(min_w, inv);
+        self.tabbar.set_close_pad(Some(close_pad), inv);
+        inv.push(self.bounds);
+    }
+
     /// 탭 본체 더블클릭 동작(설정 `tabs.dblclick` 값 — close/pin/lock · 모르는 값 = 닫기).
     pub(crate) fn set_tab_dblclick(&mut self, value: &str) {
         self.tab_dbl = TabDbl::parse(value);

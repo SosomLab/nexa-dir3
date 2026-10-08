@@ -2417,6 +2417,58 @@ fn col_width_sync_matches_by_column_key() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 탭 최소 폭 · 닫기 × 뒤 여백(사용자 10-09 · nexa-ui 183): 기본 `tabs.min_width` 80 = 짧은 이름 탭도 80 px · 설정을 바꾸면 즉시 ·
+/// `tabs.close_pad` 기본 2 = × 상자가 오른쪽 끝 2 px 안쪽.
+#[test]
+fn tab_min_width_and_close_pad_follow_settings() {
+    let (mut app, dir) = fixture("tabminw");
+    app.layout_for(1200, 800, 1.0);
+    app.apply_tab_style();
+    assert_eq!(
+        app.settings.int("tabs.min_width"),
+        80,
+        "기본 80(≈ kiros33 탭 폭)"
+    );
+    assert_eq!(
+        app.settings.int("tabs.close_pad"),
+        2,
+        "기본 2(왼쪽 여백 6의 40 %)"
+    );
+    let paint = |app: &mut App| {
+        let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+        app.paint_into(&mut rec, 1200, 800, 1.0);
+    };
+    // 탭 제목을 아주 짧게(폴더 "a") — 최소 폭이 없으면 80보다 좁다.
+    let short = dir.join("a");
+    std::fs::create_dir_all(&short).unwrap();
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(short, &mut inv);
+    paint(&mut app);
+    let r = app.panels[0].tabbar.tab_rect(0).expect("tab 0");
+    assert_eq!(r.w, 80, "짧은 제목 = 최소 폭 80");
+    let _ = app.settings.set("tabs.min_width", "120");
+    app.after_setting_changed("tabs.min_width");
+    paint(&mut app);
+    assert_eq!(
+        app.panels[0].tabbar.tab_rect(0).unwrap().w,
+        120,
+        "설정 변경 즉시"
+    );
+    let _ = app.settings.set("tabs.min_width", "0");
+    app.after_setting_changed("tabs.min_width");
+    paint(&mut app);
+    let w0 = app.panels[0].tabbar.tab_rect(0).unwrap().w;
+    assert!(w0 < 80, "0 = 제한 없음: {w0}");
+    let _ = app.settings.set("tabs.close_pad", "6");
+    app.after_setting_changed("tabs.close_pad");
+    paint(&mut app);
+    assert_eq!(
+        app.panels[0].tabbar.tab_rect(0).unwrap().w,
+        w0 + 4,
+        "여백 2 → 6 = 폭 +4"
+    );
+}
+
 /// 탭 여러 줄(T-121 · 사용자 10-03 "Multi-line 기본 · Single-line은 옵션 · 한 줄일 때 ◀ ▶ 자리 3가지"): 기본 = 폭을 넘으면
 /// 다음 줄(그리기가 줄 수를 재고 다시 배치 → 목록이 내려간다) · 끄면 한 줄 · 배율 2에서도 줄 높이 = 22 × 2(논리 px 전달).
 #[test]

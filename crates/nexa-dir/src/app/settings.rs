@@ -71,7 +71,11 @@ impl App {
                 self.sync_menu_checks();
             }
             "list.view_scope" => self.rebuild_toolbar(),
-            "tabs.multiline" | "tabs.scroll_buttons" | "tabs.dblclick" => self.apply_tab_style(),
+            "tabs.multiline"
+            | "tabs.scroll_buttons"
+            | "tabs.dblclick"
+            | "tabs.min_width"
+            | "tabs.close_pad" => self.apply_tab_style(),
             "list.view_mode" => {
                 let mode = view_mode_of(self.settings.get("list.view_mode").unwrap_or("tree"));
                 for p in &mut self.panels {
