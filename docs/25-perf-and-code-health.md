@@ -131,6 +131,10 @@ python scripts/frame-stats.py /tmp/frames.log [--warm 2] [--json]
 
 ---
 
+### 5-5. 주소 공간 분류(`scripts/win-addrspace.ps1` · Windows · 읽기 전용 · d25e24e)
+
+- 실행 중 프로세스의 주소 공간을 VirtualQuery로 훑어 종류별(이미지 전용 페이지 · 힙 · 스레드 스택 · 그 밖 private 등)로 합산한다 — 메모리 창 "런타임·라이브러리·미집계" 분해(`rt` 줄)를 바깥에서 대조할 때. 대상 프로세스를 바꾸지 않는다(측정 전용).
+
 ## 6. 코드 건강 — `scripts/code-health.py`(nexa-sql docs/93 §3 차용 · 외부 패키지 0)
 
 ```bash
@@ -175,7 +179,7 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 
 - 도구: 협업 세션 memscen.ps1(설치본/빌드 exe · 사용자 session/settings 사본 16탭 · 격리 `NDIR_HOME` · 지점마다 `mem.dump` + PID 기준 Private/WS-Private/WS/핸들/스레드/모듈) · 개발 세션 vqmap(주소 공간 분류). 상세 = [journal 10-08 §16](journal/2026-10-08.md).
 - 결과(Private MB · 유휴 트림 뒤): **before(v0.23.3) 125.5 → after(d1090cf) 55.8** — 미리보기 4K 사진 2장 = heap +70 MB 미반납(nexa-ctl `image_cache` 원본 RGBA) 해소 · 남는 ≈ 40 MB = 우클릭 1회의 셸 확장 DLL(.NET CLR · drivefsext 등 · 해제 거부) → 설정 `ctxmenu.shell=shift` 외 프로세스 안 처방 없음.
-- 미결: 격리 측정(`NDIR_NO_ACTIVATE` · 기동 명령 직후)에서는 유휴 트림 뒤 모듈 수 · WS 감소가 재현되지 않음(개발 세션 측정 = 모듈 152 → 121 · WS 87 → 21) — 원인 = 기동 명령이 유휴 시계를 되감지 않아(창 입력 사건만) 기동 뒤 1회 트림 후 잠김 · 시나리오 우클릭은 그 뒤 → 처방(관찰 명령 외 기동 명령도 되감기) 뒤 재측정.
+- 미결: 격리 측정(`NDIR_NO_ACTIVATE` · 기동 명령 직후)에서는 유휴 트림 뒤 모듈 수 · WS 감소가 재현되지 않음(개발 세션 측정 = 모듈 152 → 121 · WS 87 → 21) — 원인 = 기동 명령이 유휴 시계를 되감지 않아(창 입력 사건만) 기동 뒤 1회 트림 후 잠김 → **d25e24e 처방 뒤 재측정 ✓**: trimmed 지점 모듈 161 → 137 · WS 91 → 22 MB · WS-Private 29.8 → 15.2 MB · Private 56.3 → 52.7 MB(남는 ≈ 38 MB = 해제 거부 셸 확장).
 
 ### 8-1. 2026-10-08 · 189차 · Windows(첫 기준선 · T-176 ①②③ 도구 자체 검증)
 
