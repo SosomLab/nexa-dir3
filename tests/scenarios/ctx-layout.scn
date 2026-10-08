@@ -1,0 +1,23 @@
+# T4 · T-131 잔여: Linux xdg 셸 항목의 순서/표시 편집(`ctxmenu.layout` xdg·xdgbg 블록) — 배경 = 속성 먼저 · 터미널 숨김 · 행 = 속성 → 앱 · 파일 관리자에서 보기 숨김.
+# 지정하지 않은 키는 정의 순의 제자리에 끼어들므로(order 엔진 규칙) 앞에 둘 키는 명시한다.
+id: ctx-layout
+title: xdg 셸 항목 순서/표시 편집(ctxmenu.layout)
+tree: file a.txt 3
+settings: ui.lang=en
+settings: ctxmenu.layout=row|bg|xdg[props,openwith,showin:0]|xdgbg[props,terminal:0]
+cmd: @ready:ui.rclick:@panel0.list
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/bg.txt
+cmd: @ready:ui.press:escape
+cmd: @ready:list.select:0
+cmd: @ready:cmd.contextMenu
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/row.txt
+cmd: @ready:quit
+check: bg.txt: edit.paste
+check: row.txt: edit.cut
+check@linux: bg.txt: bg xdg.props
+check@linux: bg.txt: !xdg.terminal
+check@linux: row.txt: row xdg.props
+check@linux: row.txt: !xdg.showin
+check@linux: row.txt: !xdg.terminal

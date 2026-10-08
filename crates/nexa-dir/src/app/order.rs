@@ -10,7 +10,7 @@ pub(crate) fn order_defs_of(key: &str) -> Option<OrderDefs> {
     Some(match key {
         "toolbar.layout" => order::toolbar_blocks(),
         "list.col_layout" => order::COLUMN_BLOCKS,
-        "ctxmenu.layout" => order::CTXMENU_BLOCKS,
+        "ctxmenu.layout" => order::ctxmenu_blocks(),
         "statusbar.layout" => order::STATUSBAR_BLOCKS,
         _ => return None,
     })
@@ -83,6 +83,15 @@ fn ctxm_label(block: &str, item: Option<&str>) -> String {
     match (block, item) {
         ("row", None) => tr("pref.ctxm.grpRow"),
         ("bg", None) => tr("pref.ctxm.grpBg"),
+        ("xdg", None) => tr("pref.ctxm.grpXdg"),
+        ("xdgbg", None) => tr("pref.ctxm.grpXdgBg"),
+        ("xdg" | "xdgbg", Some("openwith")) => tr("ctx.openWith"),
+        ("xdg" | "xdgbg", Some("terminal")) => tr("ctx.openTerminal"),
+        ("xdg" | "xdgbg", Some("showin")) => tr("ctx.showInFileManager"),
+        ("xdg" | "xdgbg", Some("filemanager")) => tr("ctx.openFileManager"),
+        ("xdg" | "xdgbg", Some("email")) => tr("ctx.sendEmail"),
+        ("xdg" | "xdgbg", Some("compress")) => tr("ctx.compress"),
+        ("xdg" | "xdgbg", Some("props")) => tr("ctx.properties"),
         (_, Some("new")) => tr("ctx.new"),
         (_, Some("deletePermanent")) => tr("ctx.deletePermanent"),
         (_, Some("copyName")) => tr("ctx.copyName"),

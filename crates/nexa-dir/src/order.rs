@@ -117,6 +117,91 @@ pub(crate) const CTXMENU_BLOCKS: OrderDefs = &[
     ("bg", &["paste", "undo", "redo"]),
 ];
 
+/// Linux(xdg) — 셸 항목도 고정 집합이라 편집 대상(T-131 잔여 · 사용자 "윈도우처럼 메뉴 추가/변경/순서"): 행 메뉴 `xdg` · 배경 `xdgbg`.
+/// 키 ↔ 항목 id = [`xdg_layout_key`].
+pub(crate) const CTXMENU_BLOCKS_XDG: OrderDefs = &[
+    ("row", &["new", "deletePermanent", "copyName", "pasteInto"]),
+    ("bg", &["paste", "undo", "redo"]),
+    (
+        "xdg",
+        &[
+            "openwith", "terminal", "showin", "email", "compress", "props",
+        ],
+    ),
+    ("xdgbg", &["terminal", "filemanager", "props"]),
+];
+
+/// 컨텍스트 메뉴 블록 정의(순수): xdg 셸 메뉴가 있는 OS면 셸 블록 포함.
+pub(crate) fn ctxmenu_blocks_for(xdg: bool) -> OrderDefs {
+    if xdg {
+        CTXMENU_BLOCKS_XDG
+    } else {
+        CTXMENU_BLOCKS
+    }
+}
+
+/// 이 OS의 컨텍스트 메뉴 블록 정의.
+pub(crate) fn ctxmenu_blocks() -> OrderDefs {
+    ctxmenu_blocks_for(crate::platform::has_xdg_menu())
+}
+
+/// xdg 셸 항목 id → 순서 편집 키(순수): 앱 항목(`xdg.app:*`)과 "다른 앱으로 열기"는 `openwith` 한 묶음 · 그 밖은 `xdg.` 뒤 이름 ·
+/// xdg 항목이 아니면 `None`.
+pub(crate) fn xdg_layout_key(id: &str) -> Option<&str> {
+    if id.starts_with("xdg.app:") || id == "xdg.openwith" {
+        return Some("openwith");
+    }
+    id.strip_prefix("xdg.")
+}
+
+/// 셸 항목 목록에 순서/표시를 적용(순수): `layout`(키 · 표시)의 순서대로 · 숨긴 키는 뺀다 · xdg가 아닌 항목(Windows 셸)은 그대로 ·
+/// 구분선은 버리고 `openwith` 묶음 뒤에 하나만 다시 넣는다. `layout`이 비면 그대로.
+pub(crate) fn apply_xdg_layout<T, F>(
+    items: Vec<T>,
+    layout: &[(String, bool)],
+    id_of: F,
+    sep: T,
+) -> Vec<T>
+where
+    T: Clone,
+    F: Fn(&T) -> Option<String>,
+{
+    if layout.is_empty() {
+        return items;
+    }
+    let is_xdg = |it: &T| {
+        id_of(it)
+            .as_deref()
+            .is_some_and(|id| id.starts_with("xdg."))
+    };
+    if !items.iter().any(is_xdg) {
+        return items;
+    }
+    let mut out: Vec<T> = Vec::new();
+    for (key, vis) in layout {
+        if !vis {
+            continue;
+        }
+        let group: Vec<T> = items
+            .iter()
+            .filter(|it| id_of(it).as_deref().and_then(xdg_layout_key) == Some(key.as_str()))
+            .cloned()
+            .collect();
+        if group.is_empty() {
+            continue;
+        }
+        out.extend(group);
+        if key == "openwith" {
+            out.push(sep.clone());
+        }
+    }
+    // 끝이 구분선이면 뗀다(openwith만 남은 경우).
+    if out.last().is_some_and(|it| id_of(it).is_none()) {
+        out.pop();
+    }
+    out
+}
+
 /// 기본 순서 문자열(정의 순 · 전부 표시 · vis 포함).
 pub(crate) fn default_order(defs: OrderDefs) -> String {
     serialize_order_with(
@@ -280,6 +365,68 @@ pub(crate) fn col_id_key(id: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// T-131 잔여: xdg 항목 키 매핑 · 순서/표시 적용(순서 = layout · 숨김 제외 · openwith 뒤 구분선 하나 · 비xdg 목록은 그대로 ·
+    /// 빈 layout = 그대로) · 블록 정의는 xdg OS만 셸 블록 포함.
+    #[test]
+    fn xdg_layout_apply_and_blocks() {
+        assert_eq!(xdg_layout_key("xdg.app:foo.desktop"), Some("openwith"));
+        assert_eq!(xdg_layout_key("xdg.openwith"), Some("openwith"));
+        assert_eq!(xdg_layout_key("xdg.terminal"), Some("terminal"));
+        assert_eq!(xdg_layout_key("edit.copy"), None);
+        let id = |s: &Option<String>| s.clone();
+        let items: Vec<Option<String>> = [
+            Some("xdg.app:a"),
+            Some("xdg.openwith"),
+            None,
+            Some("xdg.terminal"),
+            Some("xdg.showin"),
+            Some("xdg.props"),
+        ]
+        .iter()
+        .map(|s| s.map(str::to_string))
+        .collect();
+        let layout = |spec: &str| -> Vec<(String, bool)> {
+            parse_order_with(CTXMENU_BLOCKS_XDG, spec)
+                .into_iter()
+                .find(|(b, _, _)| b == "xdg")
+                .map(|(_, _, it)| it)
+                .unwrap()
+        };
+        // 속성 먼저 · 터미널 숨김 · 나머지 기본 순(지정 안 한 키는 정의 순의 제자리에 끼어든다 — 그래서 openwith를 명시).
+        let got = apply_xdg_layout(
+            items.clone(),
+            &layout("xdg[props,openwith,terminal:0]"),
+            id,
+            None,
+        );
+        let ids: Vec<&str> = got.iter().map(|o| o.as_deref().unwrap_or("-")).collect();
+        assert_eq!(
+            ids,
+            ["xdg.props", "xdg.app:a", "xdg.openwith", "-", "xdg.showin"]
+        );
+        // 전부 기본 = 원래 묶음 순서 · 구분선은 openwith 뒤 하나.
+        let got = apply_xdg_layout(items.clone(), &layout("xdg"), id, None);
+        let ids: Vec<&str> = got.iter().map(|o| o.as_deref().unwrap_or("-")).collect();
+        assert_eq!(
+            ids,
+            [
+                "xdg.app:a",
+                "xdg.openwith",
+                "-",
+                "xdg.terminal",
+                "xdg.showin",
+                "xdg.props"
+            ]
+        );
+        // 빈 layout(Windows · 블록 없음) = 그대로 · xdg 아닌 목록 = 그대로.
+        assert_eq!(apply_xdg_layout(items.clone(), &[], id, None), items);
+        let win: Vec<Option<String>> = vec![Some("shell:1".into()), None];
+        assert_eq!(apply_xdg_layout(win.clone(), &layout("xdg"), id, None), win);
+        assert_eq!(ctxmenu_blocks_for(false).len(), 2);
+        assert_eq!(ctxmenu_blocks_for(true).len(), 4);
+        assert_eq!(ctxmenu_blocks_for(true)[3].0, "xdgbg");
+    }
 
     /// 열 정의: 상태 열 추가 · 확장자/종류 기본 숨김 · 옛 저장값 이행(없던 상태 = 표시로 · 적혀 있던 열은 그대로) ·
     /// 세션 열 폭의 주인(저장 당시의 표시 열).

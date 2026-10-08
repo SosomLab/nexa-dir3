@@ -65,6 +65,14 @@ fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
     }
 }
 
+/// 항목 id(구분선 = `None`) — 순서 편집 적용의 열쇠.
+fn ctx_item_id(it: &CtxItem) -> Option<String> {
+    match it {
+        CtxItem::Item { id, .. } => Some(id.clone()),
+        _ => None,
+    }
+}
+
 /// 선행 구축 머무름(dir2 `CTX_PREBUILD_MS`).
 const CTX_PREBUILD_MS: u64 = 300;
 /// 선행 구축 대상 선택 수 상한(그보다 많으면 우클릭 때 구축 — 매 틱 경로 목록을 만들지 않는다).
@@ -422,6 +430,13 @@ impl App {
         let has_clip = self.clip_sources().is_some();
         let single_dir = matches!(sel, [one] if one.is_dir());
         let mut shell: Vec<CtxItem> = shell.unwrap_or_default().iter().map(shell_to_ctx).collect();
+        // Linux xdg 항목 = 순서/표시 편집 적용(`ctxmenu.layout` `xdg` 블록 · T-131 잔여 · Windows 셸 항목은 그대로).
+        shell = crate::order::apply_xdg_layout(
+            shell,
+            &self.ctx_layout("xdg"),
+            ctx_item_id,
+            CtxItem::Separator,
+        );
         // 앱 고유 항목(dir2 CTXMENU_BLOCKS `row`) — 순서/표시 = 설정 `ctxmenu.layout`(T-71 DLG-069 · 그룹 숨김 = 전부 제외 · `new`는 하단 고정 섹션).
         let own = self.ctx_layout("row");
         let vis = |k: &str| own.iter().any(|(x, v)| x == k && *v);
@@ -580,6 +595,12 @@ impl App {
         let undo = self.history.undo_description().map(str::to_string);
         let redo = self.history.redo_description().map(str::to_string);
         let shell: Vec<CtxItem> = shell.unwrap_or_default().iter().map(shell_to_ctx).collect();
+        let shell = crate::order::apply_xdg_layout(
+            shell,
+            &self.ctx_layout("xdgbg"),
+            ctx_item_id,
+            CtxItem::Separator,
+        );
         let have = |id: &str| has_id(&shell, id);
         let mut items: Vec<CtxItem> = Vec::new();
         if !shell.is_empty() {
@@ -793,7 +814,7 @@ impl App {
     /// 설정 `ctxmenu.layout`의 블록 자식(key, 표시) — 블록 숨김이면 빈 목록(dir2 07-19 "그룹 숨김 = 고유 항목 전부 제외").
     fn ctx_layout(&self, block: &str) -> Vec<(String, bool)> {
         let layout = self.settings.get("ctxmenu.layout").unwrap_or("");
-        crate::order::parse_order_with(crate::order::CTXMENU_BLOCKS, layout)
+        crate::order::parse_order_with(crate::order::ctxmenu_blocks(), layout)
             .into_iter()
             .find(|(b, _, _)| b == block)
             .filter(|(_, bv, _)| *bv)
