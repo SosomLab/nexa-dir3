@@ -136,7 +136,12 @@ impl ApplicationHandler<Wake> for App {
         if self.drop_pump(now) {
             redraw = true;
         }
-        let dnd_active = self.dnd_hovering() || !self.dnd_drop.is_empty();
+        // 창 안 드래그(T-147 Linux/macOS)는 포인터 사건이 직접 오므로 OS 폴링 없이 틱만(머물면 열기 · 자동 스크롤).
+        if self.dnd_internal_tick(now) {
+            redraw = true;
+        }
+        let dnd_active =
+            self.dnd_internal.is_none() && (self.dnd_hovering() || !self.dnd_drop.is_empty());
         let mods = (self.shift, self.primary);
         if dnd_active {
             let inner = self
@@ -325,6 +330,9 @@ impl ApplicationHandler<Wake> for App {
             }
             WindowEvent::Focused(on) => {
                 self.main_active = *on;
+                if !*on {
+                    self.dnd_internal_cancel(); // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다)
+                }
                 if *on {
                     // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
                     self.sync_cut_marks();
@@ -397,12 +405,14 @@ impl ApplicationHandler<Wake> for App {
                         y: self.cursor.1,
                     };
                     let over_edge = self.panels.iter().any(|g| g.rows().resize_hot(p.x, p.y));
-                    w.set_cursor(match self.split_at(p) {
+                    w.set_cursor(match (&self.dnd_internal, self.split_at(p)) {
+                        // 창 안 드래그(T-147) = 효과 커서(복사 · 이동 · 금지).
+                        (Some(d), _) => app::dnd::drag_cursor(d.choice),
                         // 가로 경계(패널 ↔ 도크) = 위아래 화살표(dir2 IDC_SIZENS) · 세로 경계 = 좌우.
-                        Some(SplitKind::DockHeight) => winit::window::CursorIcon::RowResize,
-                        Some(_) => winit::window::CursorIcon::ColResize,
-                        None if over_edge => winit::window::CursorIcon::ColResize,
-                        None => winit::window::CursorIcon::Default,
+                        (None, Some(SplitKind::DockHeight)) => winit::window::CursorIcon::RowResize,
+                        (None, Some(_)) => winit::window::CursorIcon::ColResize,
+                        (None, None) if over_edge => winit::window::CursorIcon::ColResize,
+                        (None, None) => winit::window::CursorIcon::Default,
                     });
                 }
             }

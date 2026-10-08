@@ -556,6 +556,12 @@ impl App {
 
     pub(crate) fn route(&mut self, ev: InputEvent) {
         let mut inv = Invalidations::default();
+        // 창 안 드래그 중(T-147 Linux/macOS)이면 포인터 · Esc는 드롭 수신부가 먹는다.
+        if self.dnd_internal_event(&ev) {
+            self.after_event(&mut inv);
+            self.redraw();
+            return;
+        }
         self.slow_click_before(&ev); // 느린 재클릭 = 이름 바꾸기 예약/폐기(선택이 바뀌기 전 상태로 판정)
         self.route_inner(ev, &mut inv);
         self.drag_out_after(&ev, &mut inv); // 선택된 행을 끌면 OS 드래그 발신(T-147)

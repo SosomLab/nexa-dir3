@@ -403,6 +403,8 @@ struct App {
     /// 자체 드롭 수신부와 나눠 쓰는 상태(Windows · 없으면 winit 기본 수신 경로) · 지금 놓일 자리의 표시(강조 사각형 · 효과).
     drop_shared: Option<Rc<std::cell::RefCell<platform::DropShared>>>,
     dnd_mark: Option<app::dnd::DropMark>,
+    /// 창 안 드래그(OS 드래그가 없는 Linux · macOS · T-147): 끌고 있는 경로 · 원래 패널 — 포인터 사건이 드롭 수신부로 간다.
+    dnd_internal: Option<app::dnd::InternalDrag>,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -751,6 +753,7 @@ impl App {
             dnd_dwell: None,
             drop_shared: None,
             dnd_mark: None,
+            dnd_internal: None,
             platform,
             watch_next: Instant::now(),
             watch_deferred: Vec::new(),

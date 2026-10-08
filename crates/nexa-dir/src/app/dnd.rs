@@ -33,6 +33,23 @@ pub(crate) fn edge_scroll(y: i32, top: i32, bottom: i32, band: i32) -> i32 {
     }
 }
 
+/// 창 안 드래그 상태(T-147 Linux/macOS 1차 — OS 드래그 없이 포인터만으로): 끌고 있는 경로 · 원래 패널 · 마지막 효과(= 커서).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InternalDrag {
+    pub panel: usize,
+    pub paths: Vec<PathBuf>,
+    pub choice: platform::DropChoice,
+}
+
+/// 창 안 드래그의 커서(순수): 효과 → winit 커서 모양.
+pub(crate) fn drag_cursor(choice: platform::DropChoice) -> winit::window::CursorIcon {
+    match choice {
+        platform::DropChoice::Copy => winit::window::CursorIcon::Copy,
+        platform::DropChoice::Move => winit::window::CursorIcon::Move,
+        platform::DropChoice::None => winit::window::CursorIcon::NoDrop,
+    }
+}
+
 /// 지금 놓일 자리의 표시: 강조 사각형(폴더 행 또는 목록 전체) · 효과 · 대상 폴더.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DropMark {
@@ -116,6 +133,11 @@ impl App {
                 }
                 self.rename_on_up = None;
                 self.rename_due = None;
+                // OS 드래그가 없는 OS(Linux · macOS) = 창 안 드래그로(포인터 사건이 드롭 수신부로 · T-147 1차).
+                if !self.platform.drag.supports_os_drag() {
+                    self.dnd_internal_begin(i, paths, (x, y));
+                    return;
+                }
                 // 드래그가 도는 동안(OS 모달) 앱은 여기 멈춰 있다 → 우리 창 위에서의 추적 · 그리기 · 효과 판정은 드롭 수신부가
                 // **실시간 수신기**로 바로 불러 준다(사용자 10-05 실기: 머물러도 안 열리고 커서도 안 바뀌던 원인).
                 // SAFETY(아래 `&mut *app`): 수신기는 `begin_drag`가 도는 동안에만, 같은 UI 스레드에서, OLE 콜백으로 불린다.
@@ -154,6 +176,103 @@ impl App {
             }
             InputEvent::MouseUp { .. } => self.drag_press = None,
             _ => {}
+        }
+    }
+
+    /// 창 안 드래그 시작(T-147 Linux/macOS 1차): 누름 상태를 정리하고(뗌은 드롭이 된다) 드롭 수신부에 "들어옴"을 넣는다.
+    pub(crate) fn dnd_internal_begin(&mut self, panel: usize, paths: Vec<PathBuf>, at: (i32, i32)) {
+        self.panels[panel].abort_press();
+        self.pressed = None;
+        self.last_click = None;
+        let choice = self.dnd_event(
+            platform::DropEvent::Enter {
+                paths: paths.clone(),
+                at,
+                ctrl: self.primary,
+                shift: self.shift,
+            },
+            Instant::now(),
+        );
+        self.dnd_internal = Some(InternalDrag {
+            panel,
+            paths,
+            choice,
+        });
+        self.set_drag_cursor(Some(choice));
+    }
+
+    /// 창 안 드래그 중의 입력(T-147): 이동 = 놓일 자리 · 커서 갱신 · 뗌 = 놓기 · Esc = 취소. 돌려주는 값 = 사건을 삼켰는가
+    /// (드래그 중이면 다른 컨트롤로 흘리지 않는다).
+    pub(crate) fn dnd_internal_event(&mut self, ev: &InputEvent) -> bool {
+        let Some(drag) = self.dnd_internal.clone() else {
+            return false;
+        };
+        match *ev {
+            InputEvent::MouseMove { x, y } => {
+                let choice = self.dnd_event(
+                    platform::DropEvent::Over {
+                        at: (x, y),
+                        ctrl: self.primary,
+                        shift: self.shift,
+                    },
+                    Instant::now(),
+                );
+                if choice != drag.choice {
+                    if let Some(d) = &mut self.dnd_internal {
+                        d.choice = choice;
+                    }
+                    self.set_drag_cursor(Some(choice));
+                }
+            }
+            InputEvent::MouseUp { x, y } => {
+                self.dnd_internal = None;
+                let _ = self.dnd_event(
+                    platform::DropEvent::Drop {
+                        paths: drag.paths,
+                        at: (x, y),
+                        ctrl: self.primary,
+                        shift: self.shift,
+                    },
+                    Instant::now(),
+                );
+                self.set_drag_cursor(None);
+            }
+            InputEvent::Key {
+                key: nexa_ctl::Key::Escape,
+                ..
+            } => self.dnd_internal_cancel(),
+            _ => {}
+        }
+        true
+    }
+
+    /// 창 안 드래그 취소(Esc · 포커스 잃음) — 표시를 걷고 커서를 되돌린다.
+    pub(crate) fn dnd_internal_cancel(&mut self) {
+        if self.dnd_internal.take().is_some() {
+            let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
+            self.set_drag_cursor(None);
+        }
+    }
+
+    /// 창 안 드래그 틱(머물면 열기 · 가장자리 자동 스크롤은 사건이 없어도 돌아야 한다) — 화면이 바뀌었으면 `true`.
+    pub(crate) fn dnd_internal_tick(&mut self, now: Instant) -> bool {
+        if self.dnd_internal.is_none() {
+            return false;
+        }
+        let _ = self.dnd_event(
+            platform::DropEvent::Over {
+                at: self.cursor,
+                ctrl: self.primary,
+                shift: self.shift,
+            },
+            now,
+        );
+        true
+    }
+
+    fn set_drag_cursor(&self, choice: Option<platform::DropChoice>) {
+        if let Some(w) = &self.window {
+            w.set_cursor(choice.map_or(winit::window::CursorIcon::Default, drag_cursor));
         }
     }
 

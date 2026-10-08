@@ -291,6 +291,11 @@ pub(crate) trait FileClipboard {
 pub(crate) trait DragSource {
     /// OS 드래그 시작(끝날 때까지 막힘) — 결과 = 옮김/복사/취소.
     fn begin_drag(&self, paths: &[PathBuf]) -> Result<DragOutcome, PlatformError>;
+    /// 이 OS에 **외부로 내보내는** 드래그가 있는가 — 없으면(Linux · macOS · T-147) 호스트가 **창 안 드래그**(패널 ↔ 패널 · 폴더 행 ·
+    /// 탭 머묾)를 포인터만으로 흉내 낸다(`App::dnd_internal_*`). 기본 = 있음.
+    fn supports_os_drag(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -789,7 +794,7 @@ impl std::fmt::Debug for Platform {
 }
 
 /// 아직 구현이 없는 포트(T-51~53까지의 자리) — 전부 `Unsupported`.
-struct Unsupported;
+pub(crate) struct Unsupported;
 
 impl Pty for Unsupported {
     fn spawn(
@@ -830,6 +835,9 @@ impl FileClipboard for Unsupported {
 impl DragSource for Unsupported {
     fn begin_drag(&self, _paths: &[PathBuf]) -> Result<DragOutcome, PlatformError> {
         Err(PlatformError::Unsupported("drag source"))
+    }
+    fn supports_os_drag(&self) -> bool {
+        false
     }
 }
 

@@ -4443,6 +4443,78 @@ fn cut_marks_ghost_rows_until_clipboard_changes() {
 }
 
 /// DnD 1차(SHELL-060~062 · 068): 폴더 행 위에 놓기 = 그 폴더로 **이동**(같은 볼륨 기본) · Ctrl = 복사 · 빈 본문 = 패널 폴더 ·
+/// 창 안 드래그(T-147 Linux/macOS 1차 · OS 드래그가 없는 플랫폼 = `supports_os_drag` false): 선택된 행을 임계 넘게 끌면
+/// 드롭 수신부가 "들어옴"을 받고(커서 = 효과) · 폴더 행 위로 가면 표시(이동) · Esc = 취소(표시 걷힘 · 파일 그대로) ·
+/// 다시 끌어 폴더 위에서 떼면 전송(같은 볼륨 = 이동) · 드래그 중 다른 입력은 삼킨다.
+#[test]
+fn internal_drag_moves_into_folder_and_escape_cancels() {
+    let (mut app, dir) = fixture("dragin");
+    app.platform.drag = Rc::new(crate::platform::Unsupported);
+    assert!(!app.platform.drag.supports_os_drag());
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let row_xy = |app: &App, name: &str| {
+        let rows = app.panels[0].rows();
+        let src = rows.source();
+        let r = (0..src.len())
+            .find(|&i| src.row_path(i).is_some_and(|p| p.ends_with(name)))
+            .expect(name);
+        let a = rows.row_anchor(r).expect("anchor");
+        (a.x + 40, a.y)
+    };
+    let mut inv = Invalidations::default();
+    app.panels[0].select_paths(&[dir.join("a.txt")], &mut inv);
+    let (ax, ay) = row_xy(&app, "a.txt");
+    let (sx, sy) = row_xy(&app, "sub");
+    app.route(down(ax, ay));
+    app.route(InputEvent::MouseMove { x: ax + 12, y: ay });
+    let d = app.dnd_internal.clone().expect("창 안 드래그 시작");
+    assert_eq!(d.paths, vec![dir.join("a.txt")]);
+    assert!(app.dnd_hovering() && app.drag_press.is_none());
+    // 폴더 행 위 = 이동 표시(같은 볼륨) · 대상 = sub.
+    app.route(InputEvent::MouseMove { x: sx, y: sy });
+    let mark = app.dnd_mark.clone().expect("놓일 자리 표시");
+    assert_eq!(mark.dest, dir.join("sub"));
+    assert_eq!(mark.choice, crate::platform::DropChoice::Move);
+    assert_eq!(
+        app.dnd_internal.as_ref().map(|d| d.choice),
+        Some(crate::platform::DropChoice::Move)
+    );
+    // 드래그 중 클릭은 삼킨다(선택 안 바뀜).
+    app.route(down(sx, sy));
+    assert_eq!(app.panels[0].selected_paths(), vec![dir.join("a.txt")]);
+    // Esc = 취소.
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(app.dnd_internal.is_none() && app.dnd_mark.is_none() && !app.dnd_hovering());
+    assert!(dir.join("a.txt").is_file(), "취소 = 그대로");
+    // 다시 끌어 sub 위에서 뗌 = 이동.
+    app.route(InputEvent::MouseUp { x: sx, y: sy });
+    app.route(down(ax, ay));
+    app.route(InputEvent::MouseMove { x: ax + 12, y: ay });
+    app.route(InputEvent::MouseMove { x: sx, y: sy });
+    assert!(app.dnd_internal.is_some());
+    app.route(InputEvent::MouseUp { x: sx, y: sy });
+    assert!(app.dnd_internal.is_none() && app.dnd_mark.is_none());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app.ops_tick() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "transfer did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        dir.join("sub/a.txt").is_file() && !dir.join("a.txt").exists(),
+        "sub로 이동"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 자기/하위 거부 · 전송 중 거부 · winit 파일별 DroppedFile 모아서 틱 처리.
 #[test]
 fn external_drop_moves_or_copies_into_folder_under_cursor() {
