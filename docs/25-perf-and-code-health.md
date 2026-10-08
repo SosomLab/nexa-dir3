@@ -24,9 +24,9 @@
 | D2 | 기동 | `--smoke`(창 없는 기동 경로) 벽시계 중앙값 · **창이 보일 때까지** + 안정 뒤 CPU/Private | perf-baseline ① · `win-startup-probe.ps1`(§5-2) |
 | D3 | 자가 점검 그룹별 ms | `--selfcheck --ci --json` 그룹 합(ctxmenu · license · fs …) | perf-baseline ③ |
 | D4 | 파일 작업 | `--selfcheck --ci --only fs` 벽시계(생성·복사·이름·삭제 + 감시 통지) · 대량 전송 = [24](24-fast-copy.md) T6 | perf-baseline ② · `membench.ps1` |
-| D5 | 상주 메모리 | 유휴 Private · 워킹셋 · 전용 워킹셋(작업 관리자 기준) · 핸들 · GDI · USER · 스레드 | 메모리 창 · `mem.dump:<파일>` · win-leak-cycle `base` 행 |
+| D5 | 상주 메모리 | 유휴 Private · 워킹셋 · 전용 워킹셋(작업 관리자 기준) · 핸들 · GDI · USER · 스레드 | 메모리 창 · `mem.dump:<파일>` · win-leak-cycle `base` 행 · 10-08 d1090cf: `mem.dump` 둘째 줄 `rt image_private · heaps_other · stacks · modules · threads`(Windows VirtualQuery + GetProcessHeaps · 다른 OS 0) = 메모리 창 "런타임·라이브러리·미집계" 분해 4행(DLL 전용 페이지 · 라이브러리 힙 · 스레드 스택 · 그 밖) + "모듈 N · 스레드 M" |
 | D6 | 누수 | 같은 동작 N주기 뒤 절반 기울기(MB/주기) · 핸들 증가 | win-leak-cycle |
-| D7 | 회수 | 큰 작업 뒤 힙 반납(`mem_after_job` · [힙 정리] · 유휴 트림) — 기준 → 올림 → 놓음 → 트림 뒤 **4점** | `win-mem-reclaim.ps1`(§5-3 · `mem.dump` 4회) · 메모리 창(실기) |
+| D7 | 회수 | 큰 작업 뒤 힙 반납(`mem_after_job` · [힙 정리] · 유휴 트림) — 기준 → 올림 → 놓음 → 트림 뒤 **4점** | `win-mem-reclaim.ps1`(§5-3 · `mem.dump` 4회) · 메모리 창(실기) · 10-08 d1090cf: [힙 정리](`Cmd::Release`) 뒤 `CoFreeUnusedLibrariesEx`(셸 확장 DLL 해제) · 유휴 트림 `image_cache.evict_to(4 MB)` · 단계 측정 = 협업 세션 memscen(base → 16탭 → nav30 → select30 → rclick → preview → terminal → back → trimmed · §8-2) |
 | D8 | 벤치 | 해시 5종 병렬(T-175) · 압축 풀기 스트리밍(T-179 D) | `cargo test --release -- --ignored bench_` |
 | D9 | 코드 건강 | 참조 0 pub · 미사용 번역 키/설정 키/의존 · 큰 파일/함수 · 중복 · 커버리지 | code-health(§6) |
 
@@ -170,6 +170,12 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 ---
 
 ## 8. 실행 기록
+
+### 8-2. 2026-10-08 · 메모리 점검 2차(T-179 · d1090cf · 격리 단계 측정 · 입력 주입 0)
+
+- 도구: 협업 세션 memscen.ps1(설치본/빌드 exe · 사용자 session/settings 사본 16탭 · 격리 `NDIR_HOME` · 지점마다 `mem.dump` + PID 기준 Private/WS-Private/WS/핸들/스레드/모듈) · 개발 세션 vqmap(주소 공간 분류). 상세 = [journal 10-08 §16](journal/2026-10-08.md).
+- 결과(Private MB · 유휴 트림 뒤): **before(v0.23.3) 125.5 → after(d1090cf) 55.8** — 미리보기 4K 사진 2장 = heap +70 MB 미반납(nexa-ctl `image_cache` 원본 RGBA) 해소 · 남는 ≈ 40 MB = 우클릭 1회의 셸 확장 DLL(.NET CLR · drivefsext 등 · 해제 거부) → 설정 `ctxmenu.shell=shift` 외 프로세스 안 처방 없음.
+- 미결: 격리 측정(`NDIR_NO_ACTIVATE` · 기동 명령 직후)에서는 유휴 트림 뒤 모듈 수 · WS 감소가 재현되지 않음(개발 세션 측정 = 모듈 152 → 121 · WS 87 → 21) — 원인 = 기동 명령이 유휴 시계를 되감지 않아(창 입력 사건만) 기동 뒤 1회 트림 후 잠김 · 시나리오 우클릭은 그 뒤 → 처방(관찰 명령 외 기동 명령도 되감기) 뒤 재측정.
 
 ### 8-1. 2026-10-08 · 189차 · Windows(첫 기준선 · T-176 ①②③ 도구 자체 검증)
 
