@@ -347,10 +347,14 @@ pub fn dependency(child: &str) -> Option<(&'static str, Dep)> {
         .map(|(_, p, d)| (*p, *d))
 }
 
-/// 비노출 설정인가 — 레지스트리에는 있어 `set/get/reset`은 되지만 설정 화면엔 기본 숨김.
+/// 비노출 설정인가 — 레지스트리에는 있어 `set/get/reset`은 되지만 설정 화면엔 기본 숨김. 개발 전용 명령(자가 점검)의 단축키
+/// 카드 `key.<id>`는 릴리스 빌드에서 숨긴다([`commands::visible`] · 사용자 10-08).
 #[must_use]
 pub fn is_hidden(key: &str) -> bool {
     HIDDEN.contains(&key)
+        || key
+            .strip_prefix("key.")
+            .is_some_and(|id| !commands::visible(id))
 }
 
 /// 내부 전용 설정인가 — 설정 창(고급 포함) · 검색 · JSON 어디에도 나오지 않는다([`INTERNAL`]).

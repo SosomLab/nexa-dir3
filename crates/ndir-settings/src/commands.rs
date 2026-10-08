@@ -261,6 +261,28 @@ pub const COMMANDS: &[Command] = &[
     c!("help.selfcheck", "menu.help.selfcheck", "", "", ""),
 ];
 
+/// ★ **개발 빌드에서만 보이는 명령**(사용자 10-08 "자가 점검 메뉴는 릴리즈 버전에서는 보이지 않도록"): 릴리스 빌드에서는 메뉴 ·
+/// 명령 팔레트 · 단축키 창 · 설정 키 카드에 나오지 않는다. 명령 자체(`--selfcheck` CLI · 기동 명령 · 시험)는 살아 있다.
+pub const DEV_ONLY: &[&str] = &["help.selfcheck"];
+
+/// 개발 전용 명령인가(순수).
+#[must_use]
+pub fn is_dev_only(id: &str) -> bool {
+    DEV_ONLY.contains(&id)
+}
+
+/// 이 빌드의 화면(메뉴 · 팔레트 · 단축키 창 · 설정)에 그 명령을 보이는가 — 개발 전용 명령은 디버그 빌드에서만.
+#[must_use]
+pub fn visible(id: &str) -> bool {
+    visible_in(id, cfg!(debug_assertions))
+}
+
+/// [`visible`]의 순수 꼴(`dev` = 디버그 빌드인가).
+#[must_use]
+pub fn visible_in(id: &str, dev: bool) -> bool {
+    dev || !is_dev_only(id)
+}
+
 /// id로 찾기.
 #[must_use]
 pub fn command(id: &str) -> Option<&'static Command> {

@@ -30,9 +30,15 @@ fn items(ids: &[&str]) -> Vec<MenuEntry> {
     out
 }
 
-/// 이 OS의 메뉴에 그 명령이 있는가(순수): "점 파일 표시"는 점 파일 토글이 있는 OS(Windows)에만.
+/// 이 OS · 이 빌드의 메뉴에 그 명령이 있는가: "점 파일 표시"는 점 파일 토글이 있는 OS(Windows)에만 · 개발 전용 명령(자가 점검)은
+/// 디버그 빌드에만(사용자 10-08). 메뉴바 · 명령 팔레트 · 단축키 창이 같은 판정을 쓴다.
 pub(crate) fn menu_has(id: &str, dotfile_toggle: bool) -> bool {
-    id != "view.dot" || dotfile_toggle
+    menu_has_in(id, dotfile_toggle, cfg!(debug_assertions))
+}
+
+/// [`menu_has`]의 순수 꼴(`dev` = 디버그 빌드인가).
+pub(crate) fn menu_has_in(id: &str, dotfile_toggle: bool, dev: bool) -> bool {
+    (id != "view.dot" || dotfile_toggle) && ndir_settings::commands::visible_in(id, dev)
 }
 
 /// 메뉴 항목 전체(단축키·체크 동기화 대상).

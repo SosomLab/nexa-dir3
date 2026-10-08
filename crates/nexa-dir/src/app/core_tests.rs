@@ -2145,6 +2145,30 @@ fn hidden_toggle_covers_dot_files_on_unix() {
     );
     assert!(app::menus::menu_has("view.hidden", false) && !app::menus::menu_has("view.dot", false));
     assert!(app::menus::menu_has("view.dot", true));
+    // 개발 전용 명령(자가 점검 · 사용자 10-08): 디버그 빌드에만 · 릴리스에서는 메뉴 · 팔레트 · 단축키 창 · 설정 카드에 없다(MC/DC).
+    use ndir_settings::commands::visible_in;
+    assert!(app::menus::menu_has_in("help.selfcheck", true, true));
+    assert!(!app::menus::menu_has_in("help.selfcheck", true, false));
+    assert!(
+        app::menus::menu_has_in("help.about", true, false),
+        "일반 명령은 릴리스에도"
+    );
+    assert!(visible_in("help.selfcheck", true) && !visible_in("help.selfcheck", false));
+    assert_eq!(
+        app::menus::menu_has("help.selfcheck", true),
+        cfg!(debug_assertions)
+    );
+    assert_eq!(
+        menus.contains("help.selfcheck"),
+        cfg!(debug_assertions),
+        "도움말 메뉴의 자가 점검 = 디버그 빌드에만"
+    );
+    assert_eq!(
+        ndir_settings::is_hidden("key.help.selfcheck"),
+        !cfg!(debug_assertions),
+        "설정 키 카드도 같은 규칙"
+    );
+    assert!(!ndir_settings::is_hidden("key.help.about"));
     // 점 파일 토글 명령: Windows = 점 파일을 끈다 · Unix = 설정도 목록도 그대로.
     app.command("view.dot");
     assert_eq!(app.panels[0].active_view_values().1, !dot_toggle);

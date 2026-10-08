@@ -112,8 +112,10 @@ impl KeysWin {
     }
 
     pub(crate) fn refresh(&mut self, km: &Keymap) {
+        // 개발 전용 명령(자가 점검)은 릴리스 빌드의 표에 없다(사용자 10-08).
         self.rows = COMMANDS
             .iter()
+            .filter(|c| ndir_settings::commands::visible(c.id))
             .map(|c| {
                 let code = km.code_of(c.id);
                 let conflict = code
@@ -606,7 +608,16 @@ mod tests {
         let km = Keymap::from_settings(&s);
         let mut w = KeysWin::new();
         w.refresh(&km);
-        assert_eq!(w.rows_len(), COMMANDS.len());
+        let visible = COMMANDS
+            .iter()
+            .filter(|c| ndir_settings::commands::visible(c.id))
+            .count();
+        assert_eq!(w.rows_len(), visible);
+        assert_eq!(
+            visible,
+            COMMANDS.len() - usize::from(!cfg!(debug_assertions)),
+            "릴리스 = 개발 전용 1건(help.selfcheck) 제외"
+        );
         assert_eq!(
             w.conflicts(),
             0,
