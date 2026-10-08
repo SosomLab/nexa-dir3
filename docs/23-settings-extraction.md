@@ -154,7 +154,7 @@
 | — | `log_win.rs` | 보일 종류(우클릭 종류▸) | ""(전부) | 숨김(HIDDEN · 창에서 편집) | `log.kinds`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | `log_win.rs` | 보일 열(우클릭 열▸) | ""(기본) | 숨김(HIDDEN · 창에서 편집) | `log.columns`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | — | `app/windows.rs` · `wingeom::Memo` | 로그 창 위치/크기 기억 | "" | 숨김(HIDDEN · 자동 저장) | `window.log_pos` · `window.log_size`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
-| 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(취향 · 기본 on · 끄면 dir2 순서) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) |
+| 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(새 탭 기본값 · 탭 소유 · 기본 on · 끄면 dir2 순서 · 토글 `view.natural_sort`는 `list.view_scope` 범위만큼 · 10-08) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) · 10-08 §11(7dba73d) 탭 보기 옵션 |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | **보조 창·위젯** | | | | | | |
 | 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |
