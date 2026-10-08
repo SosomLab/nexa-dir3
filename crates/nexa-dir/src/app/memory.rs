@@ -9,6 +9,8 @@ use crate::*;
 pub(crate) const MEM_REFRESH_MS: u64 = 1000;
 /// 실행 취소 이력 한 건의 어림 바이트(경로 목록 · 상자).
 const HISTORY_OP_BYTES: u64 = 1024;
+/// 유휴 트림 뒤 남기는 그림 캐시 바이트(도크 축소본 1~2장 몫).
+const IDLE_IMAGE_KEEP: usize = 4 * 1024 * 1024;
 
 impl App {
     /// 전체 표본 — 운영체제 값 + 영역별 어림(창이 열려 있을 때만 불린다).
@@ -31,13 +33,16 @@ impl App {
         // 탭 · 리소스: 행 아이콘 · 빠른 실행 아이콘 · 도크 미리보기 글.
         acc.add(Cat::RowIcons, app::row_icons::cache_bytes());
         acc.add(Cat::LauncherIcons, app::launcher_icons::cache_bytes());
-        let preview: usize = self
-            .dock_preview
-            .iter()
-            .map(|(provider, lines)| {
-                provider.len() + lines.iter().map(|l| l.len() + 24).sum::<usize>()
-            })
-            .sum();
+        // 도크 미리보기 글 + **그림 캐시**(nexa-ctl `image_cache` · 10-08 "메모리 점검": 종전엔 집계 밖이라 4K 사진 1장 = 33 MB가
+        // "미집계"로만 보였다 · 178차부터 상자 맞춤 축소본만 보관).
+        let preview: usize = nexa_ctl::raster::image_cache::bytes()
+            + self
+                .dock_preview
+                .iter()
+                .map(|(provider, lines)| {
+                    provider.len() + lines.iter().map(|l| l.len() + 24).sum::<usize>()
+                })
+                .sum::<usize>();
         acc.add(Cat::Preview, preview as u64);
         // 터미널: 화면 버퍼(스크롤백 포함) · 고정폭 글꼴 파일.
         acc.add(
@@ -73,6 +78,8 @@ impl App {
         Sample {
             sys,
             data: acc,
+            // "미집계"의 분해(라이브러리 DLL 전용 페이지 · 다른 힙 · 스레드 스택 · 모듈/스레드 수) — 주소 공간 훑기(≈ ms)라 전체 표본에서만.
+            rt: platform::procmem::runtime_breakdown(),
             mapped: (ui_mapped, term_mapped),
             machine: platform::sysload::sample().map(|s| (s.mem_used, s.mem_total)),
         }
@@ -98,6 +105,10 @@ impl App {
             out.push_str(&format!("{:?} {}\n", c, s.data.get(c)));
         }
         out.push_str(&format!("other {}\n", s.other()));
+        out.push_str(&format!(
+            "rt image_private {} heaps_other {} stacks {} modules {} threads {}\n",
+            s.rt.image_private, s.rt.heaps_other, s.rt.stacks, s.rt.modules, s.rt.threads
+        ));
         out
     }
 
@@ -133,6 +144,8 @@ impl App {
                 if let Some(m) = &self.mono_font {
                     m.clear_glyph_cache();
                 }
+                // 그림 캐시는 보이는 1~2장 몫만 남긴다(축소본 ≈ 1 MB/장 · 돌아왔을 때 재디코드 없이 그린다).
+                nexa_ctl::raster::image_cache::evict_to(IDLE_IMAGE_KEEP);
                 self.platform.ctxmenu.release();
                 platform::procmem::trim();
                 platform::trim_working_set();
@@ -153,6 +166,9 @@ impl App {
     /// [힙 정리] — 할당자가 들고 있는 빈 조각을 운영체제에 돌려주고 곧바로 새 표본(줄어든 값이 바로 보이게).
     pub(crate) fn mem_trim(&mut self) {
         let before = platform::procmem::sys().footprint;
+        // 그림 캐시 전부 + 셸 메뉴 COM 객체(와 쓸모없어진 확장 DLL)도 함께 — 사용자가 누른 "정리"는 최대로.
+        nexa_ctl::raster::image_cache::clear();
+        self.platform.ctxmenu.release();
         let us = platform::procmem::trim();
         let after = platform::procmem::sys().footprint;
         self.mem_win.set_trim_result(before, after, us);

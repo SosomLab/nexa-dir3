@@ -27,7 +27,9 @@ use ::windows::Win32::Graphics::Gdi::{
     GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
     DIB_RGB_COLORS, HBITMAP,
 };
-use ::windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED};
+use ::windows::Win32::System::Com::{
+    CoFreeUnusedLibrariesEx, CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED,
+};
 use ::windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use ::windows::Win32::UI::Shell::{
     IContextMenu, IContextMenu2, IShellFolder, SHBindToParent, SHGetDesktopFolder,
@@ -528,6 +530,13 @@ fn run(rx: Receiver<Cmd>, tx: Sender<Evt>) {
                         Cmd::Quit => return,
                         Cmd::Release => {
                             w.built = None;
+                            // 객체를 놓은 뒤 **쓸모없어진 확장 DLL을 내린다**(10-08 "메모리 점검": 우클릭 1회 = 셸 확장 DLL 54 → 152개 ·
+                            // Private +40 MB가 유휴 트림 뒤에도 남았다). 이 STA에서 올린 인프로세스 서버만 대상 · `DllCanUnloadNow`가
+                            // 거부하는 DLL(.NET 확장 등)은 남는다 · 지연 0 = 지금 바로.
+                            // SAFETY: 이 스레드가 초기화한 STA 안의 문서화된 호출 — 사용 중인 객체는 내리지 않는다.
+                            unsafe {
+                                CoFreeUnusedLibrariesEx(0, None);
+                            }
                             continue;
                         }
                         Cmd::Prepare { target, owner } => {

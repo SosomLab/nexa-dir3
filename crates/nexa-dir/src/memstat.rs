@@ -4,7 +4,7 @@
 //! 영역 값은 각 부품의 **어림**이고, 운영체제가 보는 총량과의 차이는 [`Sample::other`](런타임 · 라이브러리 · 미집계)로 드러낸다.
 //! 창이 닫혀 있으면 이 모듈은 불리지 않는다(비용 0).
 
-use crate::platform::procmem::SysMem;
+use crate::platform::procmem::{RtBreak, SysMem};
 
 /// 기능별 묶음(사용자 10-04 분류) — 표의 구획 머리.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,13 +191,39 @@ pub(crate) struct Sample {
     pub machine: Option<(u64, u64)>,
     /// 글꼴 파일 매핑 크기 `(UI, 터미널)` — 영역 값은 상주 몫이고 이것은 파일 전체(표시용).
     pub mapped: (u64, u64),
+    /// "기타"의 분해(라이브러리 DLL 전용 페이지 · 다른 힙 · 스레드 스택 · 모듈/스레드 수 — 사용자 10-08 "미집계가 무엇인지").
+    pub rt: RtBreak,
 }
+
+/// "기타" 분해 행의 i18n 키(표시 순서).
+pub(crate) const RT_KEYS: [&str; 4] = [
+    "mem.cat.rtImage",
+    "mem.cat.rtHeaps",
+    "mem.cat.rtStacks",
+    "mem.cat.rtOther",
+];
 
 impl Sample {
     /// 총량(풋프린트) − Private에 드는 영역 합(포화) = 런타임 · 라이브러리 · 미집계. 파일 매핑(글꼴)은 Private 밖이라 빼지 않는다
     /// (종전 = 글꼴 파일 크기까지 빼 "기타 0 B" · 비율 110 %로 보였다 · 사용자 10-06).
     pub(crate) fn other(&self) -> u64 {
         self.sys.footprint.saturating_sub(self.data.private_sum())
+    }
+
+    /// "기타"의 분해 — [`RT_KEYS`] 순서의 값 4개(DLL 전용 페이지 · 다른 힙 · 스레드 스택 · 나머지 = 기타 − 셋 · 포화). 분해를 모르는
+    /// OS면 `None`(행 숨김). 나머지에는 기본 힙의 사용/여유(힙 사용 중 · 힙 여유 행이 따로 보인다)와 VirtualAlloc 직접 할당(.NET
+    /// 런타임 등)이 든다.
+    pub(crate) fn other_breakdown(&self) -> Option<[u64; 4]> {
+        if !self.rt.known() {
+            return None;
+        }
+        let other = self.other();
+        Some([
+            self.rt.image_private,
+            self.rt.heaps_other,
+            self.rt.stacks,
+            other.saturating_sub(self.rt.sum()),
+        ])
     }
 
     /// ★ **화면에 보이는 값의 서명**(nexa-sql T-310 개념 · 사용자 10-08): 메모리 바이트는 매초 수 KB씩 흔들려 원값 비교로는 "안 바뀜"이
@@ -220,6 +246,13 @@ impl Sample {
         let other = self.other();
         fmt(other).hash(&mut h);
         pct(other, self.sys.footprint).hash(&mut h);
+        if let Some(parts) = self.other_breakdown() {
+            for v in parts {
+                fmt(v).hash(&mut h);
+            }
+            self.rt.modules.hash(&mut h);
+            self.rt.threads.hash(&mut h);
+        }
         for g in Group::ALL {
             let extra = if g == Group::Program { other } else { 0 };
             fmt(self.data.group_sum(g) + extra).hash(&mut h);
@@ -345,7 +378,31 @@ mod tests {
             data,
             machine: None,
             mapped: (0, 0),
+            rt: RtBreak::default(),
         }
+    }
+
+    /// 기타 분해: 모르는 OS(모듈 0) = None · 알면 [DLL 전용, 다른 힙, 스택, 나머지 = 기타 − 셋(포화)] · 서명에 반영.
+    #[test]
+    fn other_breakdown_splits_runtime_and_saturates() {
+        let mb = 1024 * 1024;
+        let mut s = sample(100 * mb, &[(Cat::ListsActive, 10 * mb)]);
+        assert_eq!(s.other_breakdown(), None, "모듈 0 = 모름");
+        let sig0 = s.display_sig();
+        s.rt = RtBreak {
+            image_private: 9 * mb,
+            heaps_other: 20 * mb,
+            stacks: 6 * mb,
+            modules: 152,
+            threads: 29,
+        };
+        assert_eq!(
+            s.other_breakdown(),
+            Some([9 * mb, 20 * mb, 6 * mb, 90 * mb - 35 * mb])
+        );
+        assert_ne!(s.display_sig(), sig0, "분해가 생기면 다른 글");
+        s.rt.heaps_other = 200 * mb;
+        assert_eq!(s.other_breakdown().unwrap()[3], 0, "나머지는 음수 없음");
     }
 
     #[test]

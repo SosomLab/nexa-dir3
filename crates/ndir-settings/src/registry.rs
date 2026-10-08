@@ -69,6 +69,12 @@ const PANEL_MODE_OPTS: &[(&str, &str)] = &[
     ("single", "pref.panelMode.single"),
     ("dual", "pref.panelMode.dual"),
 ];
+/// 우클릭 메뉴의 셸 확장 항목(10-08 메모리 점검): 늘 · Shift+우클릭만 · 안 넣음.
+const CTX_SHELL_OPTS: &[(&str, &str)] = &[
+    ("always", "pref.ctxShell.always"),
+    ("shift", "pref.ctxShell.shift"),
+    ("never", "pref.ctxShell.never"),
+];
 
 // ── 카테고리 i18n 키(dir2 PREFS-307 사이드바)
 const CAT_APPEARANCE: &str = "pref.cat.appearance";
@@ -1130,6 +1136,16 @@ pub const REGISTRY: &[Entry] = &[
         "pref.ctxPrebuild.desc",
         Bool,
         "off"
+    ),
+    // 셸 확장 항목을 언제 넣을지(10-08 "메모리 점검" · 실측: 우클릭 1회 = 셸 확장 DLL 98개 적재(.NET 런타임 포함) · Private +40 MB ·
+    // 스레드 +15 · 핸들 +700 · 유휴 트림 뒤에도 잔존). always = 늘(종전) · shift = Shift+우클릭일 때만 · never = 자체 항목만.
+    e!(
+        "ctxmenu.shell",
+        CAT_CTXMENU,
+        "pref.ctxShell",
+        "pref.ctxShell.desc",
+        Choice(CTX_SHELL_OPTS),
+        "always"
     ),
     // 체크섬 창의 알고리즘 묶음(dir3 신규 · T-167 · 고급) — 키 = crc32 · md5 · sha1 · sha256 · sha512(쉼표).
     e!(

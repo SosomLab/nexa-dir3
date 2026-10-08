@@ -47,6 +47,41 @@ pub(crate) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
     imp::resident_bytes(ranges)
 }
 
+/// "런타임 · 라이브러리 · 미집계"의 **분해**(사용자 10-08 "메모리 사용량이 너무 많다 — 전체 점검": 메모리 창의 미집계 49.8 MB가 무엇인지
+/// 보이도록) — 전용(커밋) 가운데 우리 영역 밖의 큰 덩어리 셋 + 모듈/스레드 수. 모르는 OS = 전부 0(행 숨김).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RtBreak {
+    /// 라이브러리(DLL) 이미지의 **쓰기 가능 페이지**(.data · 재배치 · 복사-쓰기) — 모듈이 많이 올라오면(셸 확장) 커진다.
+    pub image_private: u64,
+    /// 기본 프로세스 힙 **밖의** 힙들(라이브러리가 만든 힙 · CRT 힙)의 커밋 합 — "힙 사용 중"에는 안 잡힌다.
+    pub heaps_other: u64,
+    /// 스레드 스택 커밋 합(가드 페이지가 있는 전용 영역).
+    pub stacks: u64,
+    /// 올라와 있는 모듈(exe + DLL) 수.
+    pub modules: u32,
+    /// 스레드 수(스택 영역 수).
+    pub threads: u32,
+}
+
+impl RtBreak {
+    /// 분해가 가능한 OS였는가(모듈 수 0 = 모름 · 행 숨김).
+    pub(crate) fn known(&self) -> bool {
+        self.modules > 0
+    }
+    /// 세 덩어리 합.
+    pub(crate) fn sum(&self) -> u64 {
+        self.image_private
+            .saturating_add(self.heaps_other)
+            .saturating_add(self.stacks)
+    }
+}
+
+/// 미집계 분해([`RtBreak`]) — Windows = `VirtualQuery` 주소 공간 훑기(≈ 수천 영역 · ms 미만) + `GetProcessHeaps`/`HeapSummary` ·
+/// 그 밖 OS = 0. 비용이 있으므로 메모리 창이 열려 있을 때의 전체 표본에서만 부른다.
+pub(crate) fn runtime_breakdown() -> RtBreak {
+    imp::runtime_breakdown()
+}
+
 /// 힙을 정리해 운영체제에 돌려준다. 돌려주는 값 = 걸린 시간(µs).
 pub(crate) fn trim() -> u128 {
     let t = std::time::Instant::now();
@@ -56,8 +91,108 @@ pub(crate) fn trim() -> u128 {
 
 #[cfg(windows)]
 mod imp {
-    use super::SysMem;
+    use super::{RtBreak, SysMem};
     use std::ffi::c_void;
+
+    /// `MEMORY_BASIC_INFORMATION`.
+    #[repr(C)]
+    #[derive(Default, Clone, Copy)]
+    struct Mbi {
+        base: usize,
+        alloc_base: usize,
+        alloc_protect: u32,
+        partition_id: u16,
+        region_size: usize,
+        state: u32,
+        protect: u32,
+        kind: u32,
+    }
+    const MEM_COMMIT: u32 = 0x1000;
+    const MEM_PRIVATE: u32 = 0x20000;
+    const MEM_IMAGE: u32 = 0x100_0000;
+    const PAGE_GUARD: u32 = 0x100;
+    /// 쓰기 가능 보호(READWRITE · WRITECOPY · EXECUTE_READWRITE · EXECUTE_WRITECOPY) = 커밋 과금 대상.
+    const PAGE_WRITABLE_MASK: u32 = 0x04 | 0x08 | 0x40 | 0x80;
+    /// 사용자 주소 공간 상한(x64 · 128 TB).
+    const USER_SPACE_END: usize = 0x7FFF_FFFF_FFFF;
+
+    extern "system" {
+        fn VirtualQuery(addr: *const c_void, mbi: *mut Mbi, len: usize) -> usize;
+    }
+
+    pub(super) fn runtime_breakdown() -> RtBreak {
+        let mut rt = RtBreak::default();
+        let mut addr = 0usize;
+        let mut mbi = Mbi::default();
+        // 전용 영역을 할당 기준(AllocationBase)으로 묶어 가드 페이지가 있는 묶음 = 스레드 스택.
+        let mut privs: Vec<(usize, u64, bool)> = Vec::new();
+        let mut guard = 0u32;
+        while addr < USER_SPACE_END {
+            // SAFETY: 출력 구조체와 그 크기를 넘기는 문서화된 호출 — 자기 프로세스 주소 공간 조회.
+            let n = unsafe {
+                VirtualQuery(addr as *const c_void, &mut mbi, std::mem::size_of::<Mbi>())
+            };
+            if n == 0 || mbi.region_size == 0 {
+                break;
+            }
+            if mbi.state == MEM_COMMIT {
+                match mbi.kind {
+                    MEM_IMAGE => {
+                        if mbi.base == mbi.alloc_base {
+                            rt.modules += 1;
+                        }
+                        if mbi.protect & PAGE_WRITABLE_MASK != 0 {
+                            rt.image_private += mbi.region_size as u64;
+                        }
+                    }
+                    MEM_PRIVATE => {
+                        let is_guard = mbi.protect & PAGE_GUARD != 0;
+                        match privs.last_mut() {
+                            Some((b, sz, g)) if *b == mbi.alloc_base => {
+                                *sz += mbi.region_size as u64;
+                                *g |= is_guard;
+                            }
+                            _ => privs.push((mbi.alloc_base, mbi.region_size as u64, is_guard)),
+                        }
+                        if is_guard {
+                            guard += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            addr = match mbi.base.checked_add(mbi.region_size) {
+                Some(a) => a,
+                None => break,
+            };
+        }
+        for (_, sz, g) in &privs {
+            if *g {
+                rt.stacks += *sz;
+            }
+        }
+        rt.threads = guard;
+        // 기본 힙 밖의 힙들.
+        // SAFETY: 자기 프로세스의 힙 핸들 목록 · 요약 구조체는 호출 동안 살아 있다.
+        unsafe {
+            let mut heaps: [*mut c_void; 64] = [std::ptr::null_mut(); 64];
+            let n = GetProcessHeaps(64, heaps.as_mut_ptr()) as usize;
+            let main = GetProcessHeap();
+            for h in heaps.iter().take(n.min(heaps.len())) {
+                if *h == main {
+                    continue;
+                }
+                let mut hs = HeapSummaryT {
+                    cb: std::mem::size_of::<HeapSummaryT>() as u32,
+                    ..Default::default()
+                };
+                if HeapSummary(*h, 0, &mut hs) != 0 {
+                    rt.heaps_other += hs.cb_committed as u64;
+                }
+            }
+        }
+        rt
+    }
 
     #[repr(C)]
     #[derive(Default)]
@@ -281,6 +416,10 @@ mod imp {
         None
     }
 
+    pub(super) fn runtime_breakdown() -> super::RtBreak {
+        super::RtBreak::default()
+    }
+
     /// `/proc/self/smaps_rollup`의 Private_Clean + Private_Dirty(kB) — 없으면 0.
     pub(super) fn private_ws(_s: &SysMem) -> u64 {
         std::fs::read_to_string("/proc/self/smaps_rollup")
@@ -357,6 +496,10 @@ mod imp {
         0
     }
 
+    pub(super) fn runtime_breakdown() -> super::RtBreak {
+        super::RtBreak::default()
+    }
+
     pub(super) fn trim() {
         // SAFETY: zone = NULL(모든 영역) · goal = 0(가능한 만큼).
         unsafe {
@@ -383,6 +526,10 @@ mod imp {
 
     pub(super) fn private_ws(_s: &SysMem) -> u64 {
         0
+    }
+
+    pub(super) fn runtime_breakdown() -> super::RtBreak {
+        super::RtBreak::default()
     }
 
     pub(super) fn trim() {}
@@ -416,6 +563,22 @@ mod tests {
             assert!(pws > 0 && pws <= s.resident, "pws {pws} · {s:?}");
         } else {
             assert_eq!(pws, 0);
+        }
+    }
+
+    /// 미집계 분해: Windows = 모듈(exe + 시스템 DLL) 여럿 · 스레드(이 시험 스레드 포함) ≥ 1 · 스택 커밋 > 0 · 세 덩어리 합 ≤ 전용 ·
+    /// 다른 OS = 전부 0(모름).
+    #[test]
+    fn runtime_breakdown_is_sane() {
+        let rt = super::runtime_breakdown();
+        if cfg!(windows) {
+            assert!(rt.known() && rt.modules >= 3, "{rt:?}");
+            assert!(rt.threads >= 1 && rt.stacks > 0, "{rt:?}");
+            assert!(rt.image_private > 0, "{rt:?}");
+            let s = super::sys();
+            assert!(rt.sum() <= s.footprint, "{rt:?} · {s:?}");
+        } else {
+            assert_eq!(rt, super::RtBreak::default());
         }
     }
 }

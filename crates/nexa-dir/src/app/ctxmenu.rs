@@ -121,6 +121,16 @@ fn has_id(items: &[CtxItem], id: &str) -> bool {
     })
 }
 
+/// 셸 확장 항목을 넣는가(순수 · 설정 `ctxmenu.shell` × Shift · 10-08 메모리 점검): `always` = 늘 · `shift` = Shift를 누른 채 열 때만 ·
+/// `never` = 안 넣음(모르는 값 = always).
+pub(crate) fn shell_items_wanted(mode: &str, shift: bool) -> bool {
+    match mode {
+        "shift" => shift,
+        "never" => false,
+        _ => true,
+    }
+}
+
 /// 우클릭 메뉴 대상(순수 · dir2 `context_targets`): 선택을 **캐럿 항목의 부모 폴더** 것으로 줄인다 — 셸 메뉴(`GetUIObjectOf`)는
 /// 한 부모의 항목만 표현할 수 있다. 캐럿이 없거나 부모가 없으면(최상위) · 줄인 결과가 비면 그대로 둔다.
 pub(crate) fn context_targets(sel: Vec<PathBuf>, caret: Option<&Path>) -> Vec<PathBuf> {
@@ -186,6 +196,11 @@ impl App {
         self.ctx_set_owner();
         // Shift를 누른 채 열면 확장 동사까지(dir2 SHELL-004) — 선행 구축분(평소 메뉴)과 대상이 달라 새로 구축한다.
         self.ctx_extended = self.shift;
+        // 설정 `ctxmenu.shell`(10-08 메모리 점검): 셸 확장을 부르지 않는 모드면 자체 항목만(DLL 적재 0).
+        if !self.shell_items_wanted() {
+            let items = self.row_menu_items(&sel, Some(&[]));
+            return self.open_ctx(CtxKind::Row(panel), items);
+        }
         let target = self.rows_target(sel.clone());
         match self.platform.ctxmenu.try_items(&target) {
             Some(shell) => {
@@ -194,6 +209,14 @@ impl App {
             }
             None => self.ctx_begin_wait(CtxKind::Row(panel), target),
         }
+    }
+
+    /// 이번 우클릭에 셸 확장 항목을 넣는가 — 설정 `ctxmenu.shell` × Shift([`shell_items_wanted`]).
+    fn shell_items_wanted(&self) -> bool {
+        shell_items_wanted(
+            self.settings.get("ctxmenu.shell").unwrap_or("always"),
+            self.shift,
+        )
     }
 
     /// 셸 항목이 아직 없다 → 메뉴를 열지 않고 기다린다(사용자 10-03 "우클릭하면 메뉴가 두 번 뜬다" — 종전은 자체 항목으로 먼저
@@ -534,7 +557,7 @@ impl App {
     pub(crate) fn open_bg_menu(&mut self, panel: usize) {
         // 셸 배경 메뉴(실경로 폴더만 · 가상 최상위는 자체 항목만).
         let dir = self.panels[panel].root_path();
-        let shell = if ndir_vfs::is_virtual_root(&dir) {
+        let shell = if ndir_vfs::is_virtual_root(&dir) || !self.shell_items_wanted() {
             Vec::new()
         } else {
             self.ctx_set_owner();
@@ -690,7 +713,13 @@ impl App {
         }
         let mut wake: Option<Instant> = None;
         // 선행 구축은 설정 `ctxmenu.prebuild`로 끌 수 있다(T-179 J-d — 셸 확장 DLL 적재가 Private +30 MB대 · 끄면 우클릭 때 구축).
-        if !self.tab_menu.is_open() && self.settings.flag("ctxmenu.prebuild") {
+        if !self.tab_menu.is_open()
+            && self.settings.flag("ctxmenu.prebuild")
+            && shell_items_wanted(
+                self.settings.get("ctxmenu.shell").unwrap_or("always"),
+                false,
+            )
+        {
             let a = self.active.min(self.panels.len().saturating_sub(1));
             let count = self.panels[a].rows().source().selection_count();
             let target = if count == 0 {
@@ -974,6 +1003,14 @@ mod tidy_tests {
             "s",
             vec![CtxItem::Separator, it("x"), CtxItem::Separator],
         );
+        // 셸 확장 항목 정책(MC/DC: 모드 3 × Shift 2).
+        assert!(shell_items_wanted("always", false));
+        assert!(shell_items_wanted("always", true));
+        assert!(!shell_items_wanted("shift", false));
+        assert!(shell_items_wanted("shift", true));
+        assert!(!shell_items_wanted("never", false));
+        assert!(!shell_items_wanted("never", true));
+        assert!(shell_items_wanted("??", false), "모르는 값 = always");
         let out = tidy_separators(vec![
             CtxItem::Separator,
             it("a"),

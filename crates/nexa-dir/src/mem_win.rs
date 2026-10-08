@@ -559,16 +559,37 @@ impl MemWin {
                         y += row_h;
                     }
                     if g == Group::Program {
+                        // 분해를 알면 라벨에 모듈 · 스레드 수(우클릭 뒤 DLL 54 → 152개 같은 변화가 바로 보이게).
+                        let label = if sm.rt.known() {
+                            format!(
+                                "{} \u{00B7} {}",
+                                tr("mem.cat.runtime"),
+                                trf(
+                                    "mem.modules",
+                                    &[&sm.rt.modules.to_string(), &sm.rt.threads.to_string()]
+                                )
+                            )
+                        } else {
+                            tr("mem.cat.runtime")
+                        };
                         row(
                             &mut dc,
                             y,
                             Some(Cat::OTHER_COLOR),
-                            &tr("mem.cat.runtime"),
+                            &label,
                             other,
                             denom,
                             trend.shown(Trend::OTHER),
                         );
                         y += row_h;
+                        // "기타"의 분해 행(들여쓰기 · 사용자 10-08 "미집계 49.8 MB가 무엇인지").
+                        if let Some(parts) = sm.other_breakdown() {
+                            for (key, v) in crate::memstat::RT_KEYS.iter().zip(parts) {
+                                let label = format!("    \u{2514} {}", tr(key));
+                                row(&mut dc, y, None, &label, v, denom, None);
+                                y += row_h;
+                            }
+                        }
                     }
                     y += px(4.0);
                 }
@@ -660,6 +681,7 @@ mod tests {
         Sample {
             sys: Default::default(),
             data: Acc::default(),
+            rt: Default::default(),
             machine: None,
             mapped: (0, 0),
         }
