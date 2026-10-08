@@ -72,6 +72,7 @@
 | 20 / 글꼴+6 / ≥14 | `main.rs:308` | 목록 행 높이 | — | 설정 | `list.row_h`(0 = 글꼴 기준 자동) | ☐ |
 | 6 · 16 | `main.rs:309-310` | 행 좌우 여백 · 트리 들여쓰기 | — | 고급 · 설정 | `list.pad_x` · `list.indent_w` | ☐ |
 | 22 · 24 | `main.rs:311-312` | 탭 바 높이 · 경로/네비 바 높이 | — | 고급 | `tabs.height` · `list.bar_h` | ☐ |
+| 80 px · 2 px(nexa-ui 182 = 왼쪽 여백 40 %) | nexa-ui `TabBar` 최소 폭(종전 = 글자 폭) · 닫기 상자 뒤 여백 | 탭 최소 폭 · 닫기 상자 뒤 여백(사용자 10-09 · NEW-044) | — | 설정 | `tabs.min_width`(0~240 · 0 = 제한 없음) · `tabs.close_pad`(0~16) | ✅ 50f2011 |
 | 340/64/96/140/110 · 120/8 | `main.rs:321-325` · `panel.rs:473-489` | 기본 열 폭(+ 내 PC 열) · 이름 열 최소/여유 | (`list.col_layout`이 사용자 폭 기억) | 고급 | `list.col_default_w` · `list.col_name_min` | ☐ |
 | 글꼴+11 · 24 · 22 | `main.rs:630,640,648` | 메뉴 바 · 퀵 런처 바 · 상태 바 높이 | — | 고급 | `ui.menubar_pad` · `launcher.bar_h` · `statusbar.height` | ☐(런처는 개발 세션 진행 중) |
 | row_h × 3 | `main.rs:660` | 도크 최소 높이 | — | 고급 | `dock.min_rows` | ☐ |

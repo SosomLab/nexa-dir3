@@ -4,6 +4,8 @@
 
 ## 2026-10-09
 
+- **탭 최소 폭 · 닫기 뒤 여백 설정**(50f2011 · NEW-044 · 사용자 10-09) — `tabs.min_width` 80 · `tabs.close_pad` 2(40 %) · nexa-ui 182차 330710a(nexa-sql 세션) + 183차 3a2d923 · 시험 585/0 · 앱 PID 109290 → [10-09 §2](journal/2026-10-09.md)
+
 - **클릭 동작 = 뗄 때**(DR-27 · 사용자 10-09) — nexa-ui 180차 5a04e13(nexa-sql 세션 · Checkbox · Switch · MenuBar) + 181차 71cde23(Radio · Combo · IconDrop · PosGrid · ColorPicker · Palette · Carousel · PathBar 세그먼트 · 메뉴 라벨 끌어 놓기) · dir3 9921d80(설정 창 밖 Up 전달) · 시험 584/0 · CI 14e57da ✓ = 3-OS 회복(xdg 시험 처방) → [10-09 §1](journal/2026-10-09.md)
 
 ## 2026-10-08

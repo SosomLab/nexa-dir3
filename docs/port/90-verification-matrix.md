@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 43 | 43 | 34 | 7 | 0 | 0 | 0 |
+| NEW | 44 | 44 | 35 | 7 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4332 | 4332 | 2520 | 924 | 761 | 0 | 0 |
+| **합계** | 4333 | 4333 | 2521 | 924 | 761 | 0 | 0 |
 
 ## 행
 
@@ -250,6 +250,7 @@
 | NEW-018 | 보기 옵션 폴더 단위(`list.view_scope = dir` 기본 · 같은 폴더 = 좌우 공통 · 폴더별 기억 · 세션 `dirview`) · `ui.theme` 기본 system | `panel.rs::{set_view_for_dir, take_navigated}` · `app/menus.rs::{remember_dir_view, sync_dir_views}` · `session.rs` | T3 + 실기 | `view_options_follow_folders_by_default` · `session_roundtrip_with_pipe_separator` | ✅ | §104 · 실기 필요(좌우 같은 폴더 동시 반영 · 폴더 왕복 뒤 유지 · 시스템 테마 — 사용자 판정 대기) |
 | NEW-019 | 대소문자 구분 정렬 툴바 토글(탭 보기 옵션 4번째 · 보기 관리 방법만큼 · 설정 = 새 탭 기본값 · 세션 bit3) | `app/menus.rs` · `order.rs` · `panel.rs` · `session.rs` · `assets/toolbar/case-sensitive.svg` | T3 · T4 | `toolbar_uses_svg_masks_and_rebuilds_on_scale` · `roundtrip_and_merge` · `order-editor.scn` | ✅ | §105 · 실기(툴바 위치 · 토글 · 툴팁 범위) 사용자 |
 | NEW-020 | 탭 여러 줄 기본(`tabs.multiline` · dir2와 같음) · 한 줄 옵션의 ◀ ▶ 자리 3택(`tabs.scroll_buttons` · DEPENDS) · 줄 수 변경 재배치 · 탭 바 배율(논리 px) | nexa-ui 129 · `app/settings.rs::apply_tab_style` · `panel.rs::{set_tab_style, take_tab_lines_changed}` · `app/paint.rs::paint_into` | T2 · T3 + 실기 | `scroll_buttons_placement_start_and_split` · `tabs_wrap_into_lines_by_default` | ✅ | §111 · 실기 필요(여러 줄 감김 · 한 줄 버튼 자리 · HiDPI 탭 여백 — Windows 배율 ≠ 1 포함) |
+| NEW-044 · TAB-METRICS | 탭 최소 폭(`tabs.min_width` 80 · 0 = 제한 없음) · 닫기 상자 뒤 여백(`tabs.close_pad` 2 = 왼쪽 여백 40 %) · 설정 변경 즉시 두 패널 | nexa-ui 182 330710a(nexa-sql 세션 · 40 % 기본) · 183 3a2d923 `TabBar::{set_min_width, set_close_pad}` · `app/settings.rs::apply_tab_style` · `panel.rs::set_tab_metrics` | T2 · T3 + 실기 | nexa-ui `min_width_and_close_pad` · T3 `tab_min_width_and_close_pad_follow_settings` | ✅ | 10-09 §2(50f2011) · 실기 = 짧은 이름 탭 80 px 이상 · 설정 즉시 · × 뒤 여백 종전 40 % |
 | NEW-021 | 정렬 표시 = 칸 오른쪽 끝 · 순번은 다중 정렬일 때만(PANEL-077 `▲ 이름 ①`과 의도된 차이) | nexa-ui 130 `set_sort_mark_trailing` · `panel.rs` | T2 · T3 + 실기 | `trailing_sort_mark_and_shift_cycle` · `header_sort_marks_trail_and_shift_cycles` | ✅ | §112 · 실기(머리 모양 · Shift 다중 정렬) 사용자 · 도형 화살표 · gap = T-128 |
 | NEW-022 | 컬럼 이동 표식(끄는 동안 놓일 열 자리 강조 · 좌우 1 px 선 · dir2는 고스트만) | nexa-ui 131 `set_col_drag_marker` · `panel.rs` | T2 · T3 + 실기 | `col_drag_marker_follows_live_slot_and_cancel_restores` · `column_reorder_shows_marker_propagates_and_cancels` | ✅ | §114 · 실기(표식 모양) 사용자 |
 | NEW-023 | 설정 상하/종속 UX — 전이 잠금 · AND · Ne/OneOf · 이유 덧줄 · 잠긴 카드 초기화 막기 · 강제 값 표시(사용자 값 보관) | ndir-settings `locked_by` · `dependencies` · `DEPENDS` · `prefs_win.rs::set_forced` · `App::prefs_forced` | T1 · T2 · T3 + 실기 | `locks_follow_parents_transitively_and_all_conditions` · `dependent_cards_lock_and_unlock_with_parent` · `forced_settings_show_effective_value_and_keep_user_value` | 🚧 | §115 1단계 · 2단계 T-130(범위 결합 · FORCES · 성능 향상 모드) · 실기(잠금 흐림 · 이유 덧줄 · 터미널 글꼴 강제) 사용자 |
