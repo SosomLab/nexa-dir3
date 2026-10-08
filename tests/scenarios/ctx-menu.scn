@@ -21,6 +21,10 @@ cmd: @ready:quit
 # 셸 배경 항목(`shell:` 묶음)은 Windows 셸 확장이 채운다 — 다른 OS는 자체 항목만(T-117).
 check@windows: bg.txt: bg shell:
 check@unix: bg.txt: bg
+# Linux 배경 셸 항목(T-131 2차 · xdg): 속성은 늘 · 행 메뉴 = 파일 관리자에서 보기 + 속성.
+check@linux: bg.txt: xdg.props
+check@linux: row.txt: xdg.showin
+check@linux: row.txt: xdg.props
 check: bg.txt: edit.paste
 check: bg.txt: file.new_folder
 check: list.txt: New Folder

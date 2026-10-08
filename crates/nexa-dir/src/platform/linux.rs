@@ -380,6 +380,46 @@ struct XdgState {
     app_dirs: Vec<PathBuf>,
     /// 압축 도구 `(프로그램, 앞 인자)` — 설치된 첫 번째.
     archiver: Option<(PathBuf, &'static [&'static str])>,
+    /// 터미널 에뮬레이터(T-131 2차 · `$TERMINAL` → `x-terminal-emulator` → 알려진 것 순) — "터미널에서 열기".
+    terminal: Option<PathBuf>,
+    /// `xdg-email`(전자메일로 보내기) · `xdg-open`(파일 관리자에서 열기) 유무.
+    has_email: bool,
+    has_open: bool,
+}
+
+/// 터미널 에뮬레이터를 `dir`에서 여는 인자(순수 · T-131): 프로그램 이름별 작업 폴더 옵션 — 모르는 것은 옵션 없이(호출자가
+/// `current_dir`로 대신한다 · xterm 등).
+pub(super) fn terminal_argv(prog: &Path, dir: &Path) -> Vec<String> {
+    let name = prog
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let d = dir.to_string_lossy().into_owned();
+    let mut v = vec![prog.to_string_lossy().into_owned()];
+    match name.as_str() {
+        "gnome-terminal" | "xfce4-terminal" | "mate-terminal" | "tilix" | "terminator"
+        | "alacritty" | "foot" => {
+            v.push(format!("--working-directory={d}"));
+        }
+        "konsole" | "qterminal" => {
+            v.push("--workdir".into());
+            v.push(d);
+        }
+        "kitty" | "ghostty" => {
+            v.push(format!("--directory={d}"));
+        }
+        "wezterm" => {
+            v.push("start".into());
+            v.push("--cwd".into());
+            v.push(d);
+        }
+        "ptyxis" => {
+            v.push("--working-directory".into());
+            v.push(d);
+        }
+        _ => {}
+    }
+    v
 }
 
 /// "다른 앱으로 열기" 하위 메뉴에 넣는 앱 수 상한.
@@ -454,11 +494,43 @@ impl XdgMenu {
             ]
             .into_iter()
             .find_map(|(name, args)| which(name).map(|p| (p, args)));
+            let terminal = std::env::var_os("TERMINAL")
+                .filter(|t| !t.is_empty())
+                .and_then(|t| {
+                    let p = PathBuf::from(&t);
+                    if p.is_absolute() {
+                        p.is_file().then_some(p)
+                    } else {
+                        which(&t.to_string_lossy())
+                    }
+                })
+                .or_else(|| {
+                    [
+                        "x-terminal-emulator",
+                        "gnome-terminal",
+                        "ptyxis",
+                        "konsole",
+                        "xfce4-terminal",
+                        "kitty",
+                        "alacritty",
+                        "foot",
+                        "wezterm",
+                        "tilix",
+                        "mate-terminal",
+                        "qterminal",
+                        "xterm",
+                    ]
+                    .into_iter()
+                    .find_map(which)
+                });
             XdgState {
                 mime,
                 apps: super::xdgapps::MimeApps::build(&lists, &caches),
                 app_dirs,
                 archiver,
+                terminal,
+                has_email: which("xdg-email").is_some(),
+                has_open: which("xdg-open").is_some(),
             }
         })
     }
@@ -563,11 +635,65 @@ impl ContextMenuProvider for XdgMenu {
                 ..Default::default()
             });
         }
-        if self.state().archiver.is_some() {
+        // T-131 2차: 폴더 1개 = 터미널에서 열기 · 파일만 = 전자메일로 보내기(xdg-email) · 항상 = 파일 관리자에서 보기(FileManager1.ShowItems).
+        let st = self.state();
+        if is_dir && paths.len() == 1 && st.terminal.is_some() {
+            out.push(item(
+                "xdg.terminal".into(),
+                ndir_i18n::tr("ctx.openTerminal"),
+            ));
+        }
+        if st.has_email && paths.iter().all(|p| p.is_file()) {
+            out.push(item("xdg.email".into(), ndir_i18n::tr("ctx.sendEmail")));
+        }
+        out.push(item(
+            "xdg.showin".into(),
+            ndir_i18n::tr("ctx.showInFileManager"),
+        ));
+        if st.archiver.is_some() {
             out.push(item("xdg.compress".into(), ndir_i18n::tr("ctx.compress")));
         }
         out.push(item("xdg.props".into(), ndir_i18n::tr("ctx.properties")));
         Ok(out)
+    }
+
+    /// 폴더 배경 메뉴(T-131 2차): 터미널에서 열기 · 파일 관리자에서 열기(xdg-open) · 속성.
+    fn bg_items(&self, _dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
+        let item = |id: &str, label: String| ShellMenuItem {
+            id: id.into(),
+            label,
+            enabled: true,
+            ..Default::default()
+        };
+        let st = self.state();
+        let mut out = Vec::new();
+        if st.terminal.is_some() {
+            out.push(item("xdg.terminal", ndir_i18n::tr("ctx.openTerminal")));
+        }
+        if st.has_open {
+            out.push(item(
+                "xdg.filemanager",
+                ndir_i18n::tr("ctx.openFileManager"),
+            ));
+        }
+        out.push(item("xdg.props", ndir_i18n::tr("ctx.properties")));
+        Ok(out)
+    }
+
+    fn invoke_bg(&self, id: &str, dir: &Path) -> Result<Option<PathBuf>, PlatformError> {
+        match id {
+            "xdg.terminal" => self.open_terminal(dir).map(|()| None),
+            "xdg.filemanager" => {
+                spawn_detached(&["xdg-open".into(), dir.to_string_lossy().into_owned()])
+                    .map(|()| None)
+            }
+            "xdg.props" => self
+                .show_properties(std::slice::from_ref(&dir.to_path_buf()))
+                .map(|()| None),
+            other => Err(PlatformError::Failed(format!(
+                "not a background item: {other}"
+            ))),
+        }
     }
 
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
@@ -590,27 +716,68 @@ impl ContextMenuProvider for XdgMenu {
                 spawn_detached(&argv)
             }
             // 파일 관리자의 속성 창(freedesktop FileManager1 D-Bus — 노틸러스 · 돌핀 · 네모 등이 구현).
-            "xdg.props" => {
-                let uris: Vec<String> = paths
-                    .iter()
-                    .map(|p| format!("'file://{}'", percent_encode(&p.to_string_lossy())))
-                    .collect();
-                spawn_detached(&[
-                    "gdbus".into(),
-                    "call".into(),
-                    "--session".into(),
-                    "--dest".into(),
-                    "org.freedesktop.FileManager1".into(),
-                    "--object-path".into(),
-                    "/org/freedesktop/FileManager1".into(),
-                    "--method".into(),
-                    "org.freedesktop.FileManager1.ShowItemProperties".into(),
-                    format!("[{}]", uris.join(",")),
-                    String::new(),
-                ])
+            "xdg.props" => self.show_properties(paths),
+            "xdg.showin" => self.file_manager1("ShowItems", paths),
+            "xdg.terminal" => match paths {
+                [one] => self.open_terminal(one),
+                _ => Err(PlatformError::Failed("terminal needs one folder".into())),
+            },
+            "xdg.email" => {
+                let mut argv = vec!["xdg-email".to_string()];
+                for p in paths {
+                    argv.push("--attach".into());
+                    argv.push(p.to_string_lossy().into_owned());
+                }
+                spawn_detached(&argv)
             }
             other => Err(PlatformError::Failed(format!("unknown menu item: {other}"))),
         }
+    }
+}
+
+impl XdgMenu {
+    /// `org.freedesktop.FileManager1.<method>(uris, startup_id)` — gdbus로(의존 0).
+    fn file_manager1(&self, method: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        let uris: Vec<String> = paths
+            .iter()
+            .map(|p| format!("'file://{}'", percent_encode(&p.to_string_lossy())))
+            .collect();
+        spawn_detached(&[
+            "gdbus".into(),
+            "call".into(),
+            "--session".into(),
+            "--dest".into(),
+            "org.freedesktop.FileManager1".into(),
+            "--object-path".into(),
+            "/org/freedesktop/FileManager1".into(),
+            "--method".into(),
+            format!("org.freedesktop.FileManager1.{method}"),
+            format!("[{}]", uris.join(",")),
+            String::new(),
+        ])
+    }
+
+    fn show_properties(&self, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        self.file_manager1("ShowItemProperties", paths)
+    }
+
+    /// 터미널 에뮬레이터를 `dir`에서 연다(작업 폴더 옵션은 [`terminal_argv`] · 그 밖은 `current_dir`).
+    fn open_terminal(&self, dir: &Path) -> Result<(), PlatformError> {
+        let prog = self
+            .state()
+            .terminal
+            .clone()
+            .ok_or(PlatformError::Unsupported("terminal"))?;
+        let argv = terminal_argv(&prog, dir);
+        std::process::Command::new(&argv[0])
+            .args(&argv[1..])
+            .current_dir(dir)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(drop)
+            .map_err(|e| PlatformError::Failed(format!("{}: {e}", argv[0])))
     }
 }
 
@@ -735,6 +902,44 @@ mod tests {
             .space(Path::new("/"))
             .is_some_and(|(t, f)| t >= f && t > 0));
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 터미널 작업 폴더 인자(T-131): 알려진 에뮬레이터별 옵션 · 모르는 것은 프로그램만.
+    #[test]
+    fn terminal_argv_by_program() {
+        let d = Path::new("/tmp/x y");
+        assert_eq!(
+            terminal_argv(Path::new("/usr/bin/gnome-terminal"), d),
+            vec!["/usr/bin/gnome-terminal", "--working-directory=/tmp/x y"]
+        );
+        assert_eq!(
+            terminal_argv(Path::new("konsole"), d),
+            vec!["konsole", "--workdir", "/tmp/x y"]
+        );
+        assert_eq!(
+            terminal_argv(Path::new("/opt/wezterm"), d),
+            vec!["/opt/wezterm", "start", "--cwd", "/tmp/x y"]
+        );
+        assert_eq!(terminal_argv(Path::new("xterm"), d), vec!["xterm"]);
+    }
+
+    /// 배경 메뉴(T-131): 속성은 늘 · 터미널/파일 관리자는 설치됐을 때 — 항목 id가 `invoke_bg`가 아는 것뿐.
+    #[test]
+    fn xdg_bg_menu_items_are_invokable_ids() {
+        let m = XdgMenu::default();
+        let items = m.bg_items(Path::new("/")).unwrap();
+        assert!(items.iter().any(|i| i.id == "xdg.props"));
+        for i in &items {
+            assert!(
+                matches!(
+                    i.id.as_str(),
+                    "xdg.terminal" | "xdg.filemanager" | "xdg.props"
+                ),
+                "{}",
+                i.id
+            );
+        }
+        assert!(m.invoke_bg("nope", Path::new("/")).is_err());
     }
 
     /// 휴지통 자리 판정 MC/DC: 같은 장치 → 홈 · 다른 장치 + 공용 OK → `.Trash/$uid` · 다른 장치 + 공용 없음 → `.Trash-$uid`.
