@@ -371,6 +371,25 @@ extern "C" {
 #[derive(Default)]
 pub(super) struct XdgMenu {
     state: std::cell::OnceCell<XdgState>,
+    /// 항목 아이콘 캐시(아이콘 이름 → 디코드한 RGBA · 실패도 기억 — T-131 잔여 · nexa-fs 184 `named_icon_file`). 메뉴마다 같은
+    /// 이름을 다시 읽지 않는다(상한 128 · 넘치면 비움).
+    icons: std::cell::RefCell<std::collections::HashMap<String, Option<ShellIcon>>>,
+}
+
+/// 메뉴 항목 아이콘 한 변(px · 테마에서 가장 가까운 크기 · 메뉴가 행 높이에 맞춰 그린다).
+const MENU_ICON_PX: u32 = 16;
+
+/// 자체 항목의 freedesktop 아이콘 이름(순수 · 테마에 없으면 메뉴가 아이콘 없이 그린다).
+pub(super) fn own_item_icon(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "xdg.terminal" => "utilities-terminal",
+        "xdg.filemanager" | "xdg.showin" => "system-file-manager",
+        "xdg.props" => "document-properties",
+        "xdg.email" => "mail-send",
+        "xdg.compress" => "package-x-generic",
+        "xdg.openwith" => "document-open",
+        _ => return None,
+    })
 }
 
 struct XdgState {
@@ -535,6 +554,30 @@ impl XdgMenu {
         })
     }
 
+    /// 아이콘 이름 → 메뉴 아이콘(캐시 · 테마 PNG 디코드 · 없으면 `None`).
+    fn icon_named(&self, name: &str) -> Option<ShellIcon> {
+        if name.is_empty() {
+            return None;
+        }
+        let mut cache = self.icons.borrow_mut();
+        if let Some(hit) = cache.get(name) {
+            return hit.clone();
+        }
+        let got = nexa_fs::icontheme::named_icon_file(name, MENU_ICON_PX)
+            .and_then(|f| std::fs::read(f).ok())
+            .and_then(|b| nexa_gfx::image::decode(&b, 256 * 256).ok())
+            .map(|img| ShellIcon {
+                w: img.w,
+                h: img.h,
+                rgba: img.rgba,
+            });
+        if cache.len() >= 128 {
+            cache.clear();
+        }
+        cache.insert(name.to_string(), got.clone());
+        got
+    }
+
     /// `.desktop` id → 앱(이름 · 실행 줄) — 숨김 항목은 `None`.
     fn app(&self, id: &str) -> Option<super::xdgapps::DesktopApp> {
         let st = self.state();
@@ -588,7 +631,16 @@ impl ContextMenuProvider for XdgMenu {
         let Some(first) = paths.first() else {
             return Ok(Vec::new());
         };
+        // 자체 항목 = 테마 아이콘 이름으로 · 앱 항목 = `.desktop` `Icon=`(T-131 잔여 · 10-09).
         let item = |id: String, label: String| ShellMenuItem {
+            icon: own_item_icon(&id).and_then(|n| self.icon_named(n)),
+            id,
+            label,
+            enabled: true,
+            ..Default::default()
+        };
+        let app_item = |id: String, label: String, icon: &str| ShellMenuItem {
+            icon: self.icon_named(icon),
             id,
             label,
             enabled: true,
@@ -596,22 +648,23 @@ impl ContextMenuProvider for XdgMenu {
         };
         let mime = self.mime_of(first);
         let is_dir = mime == "inode/directory";
-        let apps: Vec<(String, String)> = self
+        let apps: Vec<(String, String, String)> = self
             .state()
             .apps
             .apps_for(&mime)
             .iter()
-            .filter_map(|id| self.app(id).map(|a| (id.clone(), a.name)))
+            .filter_map(|id| self.app(id).map(|a| (id.clone(), a.name, a.icon)))
             .take(OPEN_WITH_MAX + 1)
             .collect();
         let mut out = Vec::new();
         // 파일: 기본 앱 = 첫 항목("‹앱›(으)로 열기") · 나머지 = "다른 앱으로 열기 ▸". 폴더: 전부 하위 메뉴(열기 = 앱 안 이동).
         let mut rest = apps.as_slice();
         if !is_dir {
-            if let Some(((id, name), others)) = apps.split_first() {
-                out.push(item(
+            if let Some(((id, name, icon), others)) = apps.split_first() {
+                out.push(app_item(
                     format!("xdg.app:{id}"),
                     ndir_i18n::trf("ctx.openWithApp", &[name]),
+                    icon,
                 ));
                 rest = others;
             }
@@ -624,8 +677,9 @@ impl ContextMenuProvider for XdgMenu {
                 children: rest
                     .iter()
                     .take(OPEN_WITH_MAX)
-                    .map(|(id, name)| item(format!("xdg.app:{id}"), name.clone()))
+                    .map(|(id, name, icon)| app_item(format!("xdg.app:{id}"), name.clone(), icon))
                     .collect(),
+                icon: own_item_icon("xdg.openwith").and_then(|n| self.icon_named(n)),
                 ..Default::default()
             });
         }
@@ -660,6 +714,7 @@ impl ContextMenuProvider for XdgMenu {
     /// 폴더 배경 메뉴(T-131 2차): 터미널에서 열기 · 파일 관리자에서 열기(xdg-open) · 속성.
     fn bg_items(&self, _dir: &Path) -> Result<Vec<ShellMenuItem>, PlatformError> {
         let item = |id: &str, label: String| ShellMenuItem {
+            icon: own_item_icon(id).and_then(|n| self.icon_named(n)),
             id: id.into(),
             label,
             enabled: true,
@@ -948,6 +1003,23 @@ mod tests {
             );
         }
         assert!(m.invoke_bg("nope", Path::new("/")).is_err());
+        // T-131 잔여: 자체 항목 아이콘 이름은 고정 표 · 테마가 있으면 배경 항목에 RGBA 아이콘이 붙고(w·h·len 정합) · 캐시는 같은 답.
+        assert_eq!(own_item_icon("xdg.terminal"), Some("utilities-terminal"));
+        assert_eq!(own_item_icon("xdg.app:foo.desktop"), None);
+        assert!(m.icon_named("").is_none());
+        if nexa_fs::icontheme::theme_name().is_some() {
+            for i in &items {
+                if let Some(ic) = &i.icon {
+                    assert_eq!(ic.rgba.len(), (ic.w * ic.h * 4) as usize, "{}", i.id);
+                }
+            }
+            let a = m.icon_named("folder");
+            assert_eq!(
+                m.icon_named("folder").is_some(),
+                a.is_some(),
+                "캐시 = 같은 답"
+            );
+        }
     }
 
     /// 휴지통 자리 판정 MC/DC: 같은 장치 → 홈 · 다른 장치 + 공용 OK → `.Trash/$uid` · 다른 장치 + 공용 없음 → `.Trash-$uid`.

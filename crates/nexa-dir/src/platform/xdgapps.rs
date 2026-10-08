@@ -21,12 +21,15 @@ pub(crate) struct DesktopApp {
     pub exec: String,
     /// 메뉴에 내지 않는 항목(`NoDisplay` · `Hidden`).
     pub hidden: bool,
+    /// `Icon=` 값(테마 이름 또는 절대 경로 · 없으면 빈 문자열 — T-131 항목 아이콘).
+    pub icon: String,
 }
 
 /// `.desktop` 본문 → 앱(`[Desktop Entry]` 절만 · `Exec` 없으면 `None`). `lang` = 현지화 이름을 찾을 언어 코드(`ko` · `ko_KR`).
 pub(crate) fn parse_desktop_app(text: &str, lang: &str) -> Option<DesktopApp> {
     let short = lang.split(['_', '-', '.', '@']).next().unwrap_or("");
     let (mut name, mut loc_full, mut loc_short, mut exec) = (None, None, None, None);
+    let mut icon = None;
     let mut hidden = false;
     let mut in_entry = false;
     for line in text.lines() {
@@ -45,6 +48,7 @@ pub(crate) fn parse_desktop_app(text: &str, lang: &str) -> Option<DesktopApp> {
         match k {
             "Name" => name = name.or_else(|| Some(v.to_string())),
             "Exec" => exec = exec.or_else(|| Some(v.to_string())),
+            "Icon" => icon = icon.or_else(|| Some(v.to_string())),
             "NoDisplay" | "Hidden" => hidden |= v.eq_ignore_ascii_case("true"),
             _ => {
                 if let Some(l) = k.strip_prefix("Name[").and_then(|r| r.strip_suffix(']')) {
@@ -61,6 +65,7 @@ pub(crate) fn parse_desktop_app(text: &str, lang: &str) -> Option<DesktopApp> {
         name: loc_full.or(loc_short).or(name)?,
         exec: exec.filter(|e| !e.is_empty())?,
         hidden,
+        icon: icon.unwrap_or_default(),
     })
 }
 
@@ -192,11 +197,15 @@ mod tests {
     #[test]
     fn desktop_app_name_exec_and_hidden() {
         let text = "[Desktop Entry]\nName=Text Editor\nName[ko]=텍스트 편집기\nName[ja]=テキストエディター\n\
-                    Exec=gnome-text-editor %U\nNoDisplay=false\n\n[Desktop Action new]\nName=New Window\nExec=other\n";
+                    Exec=gnome-text-editor %U\nIcon=org.gnome.TextEditor\nNoDisplay=false\n\n[Desktop Action new]\nName=New Window\nExec=other\nIcon=other\n";
         let app = parse_desktop_app(text, "ko_KR").expect("app");
         assert_eq!(
             (app.name.as_str(), app.exec.as_str(), app.hidden),
             ("텍스트 편집기", "gnome-text-editor %U", false)
+        );
+        assert_eq!(
+            app.icon, "org.gnome.TextEditor",
+            "Icon= (다른 절의 Icon은 무시)"
         );
         assert_eq!(parse_desktop_app(text, "fr").unwrap().name, "Text Editor");
         assert_eq!(parse_desktop_app(text, "").unwrap().name, "Text Editor");

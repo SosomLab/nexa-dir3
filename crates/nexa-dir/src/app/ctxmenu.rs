@@ -974,7 +974,13 @@ impl App {
                 _ => None,
             })
             .collect();
-        format!("{kind} {}\n", ids.join(" "))
+        // 아이콘 붙은 항목 수(T-131 잔여 · Linux xdg 항목 아이콘 판정 — 테마가 있는 PC에서만 0보다 크다).
+        let icons = self
+            .ctx_items
+            .iter()
+            .filter(|it| matches!(it, CtxItem::Item { icon: Some(_), .. }))
+            .count();
+        format!("{kind} {}\nicons {icons}\n", ids.join(" "))
     }
 
     /// 기동 명령 `ctx.pick:<id>` — 열린 메뉴를 닫고 그 항목을 실행.

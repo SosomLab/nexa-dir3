@@ -5267,8 +5267,9 @@ fn path_edit_right_click_opens_text_menu() {
     app.route(InputEvent::RightDown { x, y });
     assert!(app.tab_menu.is_open());
     let d = app.dump_of("ctx").unwrap();
+    // 첫 줄 = 종류 + id 목록(둘째 줄 `icons N`은 T-131 아이콘 수 — 여기서는 보지 않는다).
     assert_eq!(
-        d.trim(),
+        d.lines().next().unwrap_or_default(),
         "pathedit edit.undo edit.cut edit.copy edit.paste edit.delete edit.select_all"
     );
     assert!(app.panels[0].pathbar.is_editing(), "메뉴가 떠도 편집 유지");
@@ -5920,7 +5921,11 @@ fn text_edit_menus_for_rename_terminal_and_dock() {
     let entries = std::fs::read_dir(&dir).unwrap().count();
     app.route(InputEvent::RightDown { x, y });
     assert_eq!(
-        app.dump_of("ctx").unwrap().trim(),
+        app.dump_of("ctx")
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap_or_default(),
         "renameedit edit.undo edit.cut edit.copy edit.paste edit.delete edit.select_all"
     );
     assert!(app.panels[0].rows().is_renaming(), "메뉴가 떠도 편집 유지");
@@ -5941,13 +5946,21 @@ fn text_edit_menus_for_rename_terminal_and_dock() {
     // 터미널 · 도크 글 메뉴 구성.
     app.open_term_edit_menu(0);
     assert_eq!(
-        app.dump_of("ctx").unwrap().trim(),
+        app.dump_of("ctx")
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap_or_default(),
         "termedit edit.copy edit.paste edit.select_all"
     );
     app.ctx_pick("edit.select_all");
     app.open_dock_text_menu(0);
     assert_eq!(
-        app.dump_of("ctx").unwrap().trim(),
+        app.dump_of("ctx")
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap_or_default(),
         "docktext edit.copy edit.select_all"
     );
     app.ctx_pick("edit.select_all");
