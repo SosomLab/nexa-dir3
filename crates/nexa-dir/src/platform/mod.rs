@@ -46,6 +46,8 @@ mod winshell;
 mod wintemplates;
 #[cfg(windows)]
 mod winwatch;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod xdnd;
 // 순수 해석이라 어느 OS에서나 컴파일·시험한다 — 쓰는 곳은 Linux 메뉴 공급자뿐.
 #[cfg_attr(not(all(unix, not(target_os = "macos"))), allow(dead_code))]
 pub(crate) mod xdgapps;
@@ -454,19 +456,26 @@ pub(crate) fn with_live_drop_sink<R>(sink: DropSink, f: impl FnOnce() -> R) -> R
     out
 }
 
+/// 실시간 수신기가 걸려 있으면 사건을 그리로 넣고 판정을 돌려준다(없으면 `None`). 수신기를 잠시 꺼내 부른다(부르는 동안
+/// thread_local을 빌려 두지 않는다 — 수신기 안에서 다시 들어와도 안전). Windows OLE 수신부(`windrop`)와 X11 발신부가 자기 창
+/// 위를 지날 때(`xdnd`) 쓴다.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(crate) fn live_drop(ev: &DropEvent) -> Option<DropChoice> {
+    let mut sink = LIVE_SINK.with(|s| s.borrow_mut().take())?;
+    let choice = sink(ev);
+    LIVE_SINK.with(|s| {
+        let mut slot = s.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(sink);
+        }
+    });
+    Some(choice)
+}
+
 /// 수신부가 만든 사건의 갈 곳: 실시간 수신기가 걸려 있으면 그리로(앱이 바로 처리) · 아니면 큐에 쌓고 요약으로 효과를 정한다.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn drop_dispatch(shared: &Rc<RefCell<DropShared>>, ev: DropEvent) -> DropChoice {
-    // 수신기를 잠시 꺼내 부른다(부르는 동안 thread_local을 빌려 두지 않는다 — 수신기 안에서 다시 들어와도 안전).
-    let sink = LIVE_SINK.with(|s| s.borrow_mut().take());
-    if let Some(mut sink) = sink {
-        let choice = sink(&ev);
-        LIVE_SINK.with(|s| {
-            let mut slot = s.borrow_mut();
-            if slot.is_none() {
-                *slot = Some(sink);
-            }
-        });
+    if let Some(choice) = live_drop(&ev) {
         return choice;
     }
     let mut sh = shared.borrow_mut();
@@ -1068,10 +1077,13 @@ impl Platform {
             ctxmenu,
             trash,
             clipboard,
-            // 드래그 발신: Windows = OLE(`windrag`) · macOS(NSDraggingSource) · Linux(XDND 발신)는 후속 — 그때까지 미지원.
+            // 드래그 발신: Windows = OLE(`windrag`) · Linux = X11 XDND(`xdnd` · Wayland 창이면 `supports_os_drag` = false →
+            // 창 안 드래그) · macOS(NSDraggingSource)는 후속 — 그때까지 미지원.
             #[cfg(windows)]
             drag: Rc::new(windrag::NativeDrag),
-            #[cfg(not(windows))]
+            #[cfg(all(unix, not(target_os = "macos")))]
+            drag: Rc::new(xdnd::X11Drag),
+            #[cfg(target_os = "macos")]
             drag: Rc::new(Unsupported),
             watcher,
             opener,
