@@ -388,11 +388,72 @@ pub(super) fn own_item_icon(id: &str) -> Option<&'static str> {
         "xdg.email" => "mail-send",
         "xdg.compress" => "package-x-generic",
         "xdg.openwith" => "document-open",
+        "xdg.scripts" => "text-x-script",
         _ => return None,
     })
 }
 
+/// 노틸러스 스크립트 폴더(`$XDG_DATA_HOME/nautilus/scripts` · T-131 P2) 훑기(순수 · 파일 시스템만): 실행 비트가 있는 파일 =
+/// (상대 경로 라벨 `하위/이름`, 절대 경로) · 하위 폴더는 재귀 · 라벨 순. 폴더가 없으면 빈 목록.
+pub(crate) fn scan_scripts(dir: &Path) -> Vec<(String, PathBuf)> {
+    use std::os::unix::fs::PermissionsExt as _;
+    fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, PathBuf)>, depth: u8) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = e.path();
+            let label = if prefix.is_empty() {
+                name
+            } else {
+                format!("{prefix}/{name}")
+            };
+            if path.is_dir() {
+                if depth < 4 {
+                    walk(&path, &label, out, depth + 1);
+                }
+            } else if path
+                .metadata()
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            {
+                out.push((label, path));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, "", &mut out, 0);
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// 노틸러스 스크립트 환경(순수 · 노틸러스 규약): 선택 경로 · URI(줄로) · 현재 폴더 URI · 창 기하(없음).
+pub(crate) fn script_env(cwd: &Path, paths: &[PathBuf]) -> Vec<(String, String)> {
+    let uri = |p: &Path| format!("file://{}", percent_encode(&p.to_string_lossy()));
+    vec![
+        (
+            "NAUTILUS_SCRIPT_SELECTED_FILE_PATHS".into(),
+            paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        (
+            "NAUTILUS_SCRIPT_SELECTED_URIS".into(),
+            paths.iter().map(|p| uri(p)).collect::<Vec<_>>().join("\n"),
+        ),
+        ("NAUTILUS_SCRIPT_CURRENT_URI".into(), uri(cwd)),
+        ("NAUTILUS_SCRIPT_WINDOW_GEOMETRY".into(), String::new()),
+    ]
+}
+
 struct XdgState {
+    /// 노틸러스 스크립트(라벨, 경로) — `$XDG_DATA_HOME/nautilus/scripts`(T-131 P2).
+    scripts: Vec<(String, PathBuf)>,
     mime: nexa_fs::icontheme::MimeDb,
     apps: super::xdgapps::MimeApps,
     /// `.desktop`을 찾을 폴더들(`applications/` — 앞이 우선).
@@ -543,6 +604,10 @@ impl XdgMenu {
                     .find_map(which)
                 });
             XdgState {
+                scripts: data
+                    .first()
+                    .map(|d| scan_scripts(&d.join("nautilus/scripts")))
+                    .unwrap_or_default(),
                 mime,
                 apps: super::xdgapps::MimeApps::build(&lists, &caches),
                 app_dirs,
@@ -613,11 +678,24 @@ fn which(name: &str) -> Option<PathBuf> {
 }
 
 fn spawn_detached(argv: &[String]) -> Result<(), PlatformError> {
+    spawn_detached_in(argv, None, &[])
+}
+
+/// 작업 폴더 · 환경 변수를 주고 떼어 실행(노틸러스 스크립트).
+fn spawn_detached_in(
+    argv: &[String],
+    cwd: Option<&Path>,
+    envs: &[(String, String)],
+) -> Result<(), PlatformError> {
     let Some((prog, rest)) = argv.split_first() else {
         return Err(PlatformError::Failed("empty command".into()));
     };
-    std::process::Command::new(prog)
-        .args(rest)
+    let mut cmd = std::process::Command::new(prog);
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    cmd.args(rest)
+        .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -707,6 +785,9 @@ impl ContextMenuProvider for XdgMenu {
         if st.archiver.is_some() {
             out.push(item("xdg.compress".into(), ndir_i18n::tr("ctx.compress")));
         }
+        if let Some(sub) = self.scripts_item() {
+            out.push(sub);
+        }
         out.push(item("xdg.props".into(), ndir_i18n::tr("ctx.properties")));
         Ok(out)
     }
@@ -731,11 +812,20 @@ impl ContextMenuProvider for XdgMenu {
                 ndir_i18n::tr("ctx.openFileManager"),
             ));
         }
+        if let Some(sub) = self.scripts_item() {
+            out.push(sub);
+        }
         out.push(item("xdg.props", ndir_i18n::tr("ctx.properties")));
         Ok(out)
     }
 
     fn invoke_bg(&self, id: &str, dir: &Path) -> Result<Option<PathBuf>, PlatformError> {
+        if let Some(label) = id.strip_prefix("xdg.script:") {
+            // 배경 = 선택 없음 → 노틸러스처럼 현재 폴더를 선택으로.
+            return self
+                .run_script(label, dir, std::slice::from_ref(&dir.to_path_buf()))
+                .map(|()| None);
+        }
         match id {
             "xdg.terminal" => self.open_terminal(dir).map(|()| None),
             "xdg.filemanager" => {
@@ -752,6 +842,13 @@ impl ContextMenuProvider for XdgMenu {
     }
 
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        if let Some(label) = id.strip_prefix("xdg.script:") {
+            let cwd = paths
+                .first()
+                .and_then(|p| p.parent())
+                .ok_or_else(|| PlatformError::Failed("script needs a selection".into()))?;
+            return self.run_script(label, cwd, paths);
+        }
         if let Some(app_id) = id.strip_prefix("xdg.app:") {
             let app = self
                 .app(app_id)
@@ -791,6 +888,51 @@ impl ContextMenuProvider for XdgMenu {
 }
 
 impl XdgMenu {
+    /// "스크립트 ▸" 하위 메뉴(T-131 P2 · 노틸러스 `~/.local/share/nautilus/scripts`) — 스크립트가 없으면 `None`.
+    fn scripts_item(&self) -> Option<ShellMenuItem> {
+        let st = self.state();
+        if st.scripts.is_empty() {
+            return None;
+        }
+        Some(ShellMenuItem {
+            id: "xdg.scripts".into(),
+            label: ndir_i18n::tr("ctx.scripts"),
+            enabled: true,
+            children: st
+                .scripts
+                .iter()
+                .map(|(label, _)| ShellMenuItem {
+                    id: format!("xdg.script:{label}"),
+                    label: label.clone(),
+                    enabled: true,
+                    icon: self.icon_named("text-x-script"),
+                    ..Default::default()
+                })
+                .collect(),
+            icon: own_item_icon("xdg.scripts").and_then(|n| self.icon_named(n)),
+            ..Default::default()
+        })
+    }
+
+    /// 노틸러스 스크립트 실행(규약: 작업 폴더 = 현재 폴더 · 인자 = 선택 이름 · 환경 = [`script_env`]).
+    fn run_script(&self, label: &str, cwd: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        let script = self
+            .state()
+            .scripts
+            .iter()
+            .find(|(l, _)| l == label)
+            .map(|(_, p)| p.clone())
+            .ok_or_else(|| PlatformError::Failed(format!("no such script: {label}")))?;
+        let mut argv = vec![script.to_string_lossy().into_owned()];
+        argv.extend(paths.iter().map(|p| {
+            p.file_name().map_or_else(
+                || p.to_string_lossy().into_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            )
+        }));
+        spawn_detached_in(&argv, Some(cwd), &script_env(cwd, paths))
+    }
+
     /// `org.freedesktop.FileManager1.<method>(uris, startup_id)` — gdbus로(의존 0).
     fn file_manager1(&self, method: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
         let uris: Vec<String> = paths
@@ -935,6 +1077,47 @@ mod tests {
         );
         assert_eq!(m.mime_of(&dir), "inode/directory");
         assert!(m.invoke("xdg.nope", &[file]).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T-131 P2 노틸러스 스크립트: 실행 비트 있는 파일만 · 하위 폴더 = `하위/이름` 라벨 · 점 파일 제외 · 라벨 순 · 없는 폴더 = 빈 목록 ·
+    /// 환경 변수 = 노틸러스 규약 4종(경로 줄 · URI 줄 · 현재 폴더 URI · 창 기하 빈 값) · 모르는 스크립트 id = 오류.
+    #[test]
+    fn nautilus_scripts_scan_and_env() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("ndir-nscripts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        let exec = |p: &Path| {
+            std::fs::write(p, b"#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        exec(&dir.join("zip it"));
+        exec(&dir.join("sub/open here"));
+        exec(&dir.join(".hidden"));
+        std::fs::write(dir.join("notes.txt"), b"x").unwrap();
+        let got = scan_scripts(&dir);
+        let labels: Vec<&str> = got.iter().map(|(l, _)| l.as_str()).collect();
+        assert_eq!(labels, vec!["sub/open here", "zip it"]);
+        assert_eq!(got[1].1, dir.join("zip it"));
+        assert!(scan_scripts(&dir.join("nope")).is_empty());
+        let env = script_env(
+            Path::new("/tmp/w d"),
+            &[PathBuf::from("/tmp/w d/a b"), PathBuf::from("/tmp/w d/c")],
+        );
+        assert_eq!(
+            env[0],
+            (
+                "NAUTILUS_SCRIPT_SELECTED_FILE_PATHS".into(),
+                "/tmp/w d/a b\n/tmp/w d/c".into()
+            )
+        );
+        assert_eq!(env[1].1, "file:///tmp/w%20d/a%20b\nfile:///tmp/w%20d/c");
+        assert_eq!(env[2].1, "file:///tmp/w%20d");
+        assert_eq!(env[3].0, "NAUTILUS_SCRIPT_WINDOW_GEOMETRY");
+        let m = XdgMenu::default();
+        assert!(m.invoke("xdg.script:nope", &[dir.join("zip it")]).is_err());
+        assert!(m.invoke_bg("xdg.script:nope", &dir).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

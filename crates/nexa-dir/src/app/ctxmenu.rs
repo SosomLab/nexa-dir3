@@ -512,6 +512,13 @@ impl App {
                     tr("ctx.pasteInto"),
                     single_dir && has_clip,
                 )),
+                // 다른 위치로 복사/이동(T-131 P2 · 탐색기 "폴더로 복사/이동" · 폴더 선택 창 → 전송 엔진).
+                "copyTo" if !sel.is_empty() => {
+                    items.push(CtxItem::item("ctx.copy_to", tr("ctx.copyTo")));
+                }
+                "moveTo" if !sel.is_empty() => {
+                    items.push(CtxItem::item("ctx.move_to", tr("ctx.moveTo")));
+                }
                 _ => {}
             }
         }
@@ -873,6 +880,17 @@ impl App {
                     dirs
                 };
                 self.start_dupes(roots);
+            }
+            // 다른 위치로 복사/이동(T-131 P2): 폴더 선택 창을 열고(`FilePurpose`) 확정하면 전송 엔진으로.
+            "ctx.copy_to" | "ctx.move_to" => {
+                let paths = self.panels[panel].selected_paths_in_view_order();
+                if !paths.is_empty() {
+                    self.open_file_window(if id == "ctx.copy_to" {
+                        crate::app::license::FilePurpose::CopyTo(paths)
+                    } else {
+                        crate::app::license::FilePurpose::MoveTo(paths)
+                    });
+                }
             }
             "ctx.extract_here" | "ctx.extract_to" => {
                 if let Some(p) = self.panels[panel].selected_paths().first().cloned() {

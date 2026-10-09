@@ -1740,9 +1740,11 @@ fn copy_path_and_name_follow_dir2_menu_rules() {
     assert_eq!(at, 1, "셸 항목 자리 그대로: {got:?}");
     assert_eq!(got[at + 1], "ctx.copy_name", "바로 아래: {got:?}");
     assert_eq!(
-        got.iter().filter(|i| i.starts_with("ctx.copy_")).count(),
+        got.iter()
+            .filter(|i| *i == "ctx.copy_path" || *i == "ctx.copy_name")
+            .count(),
         2,
-        "중복 없음: {got:?}"
+        "중복 없음(복사 대상 폴더… 는 별개 · NEW-046): {got:?}"
     );
     assert!(
         matches!(&items[at], CtxItem::Item { label, .. } if *label == tr("ctx.copyPath")),
@@ -8454,5 +8456,83 @@ fn sort_inherits_to_new_tabs_and_persists_in_session() {
         vec![(filelist::COL_SIZE, true)]
     );
     assert_eq!(crate::panel::sort_to_str(&[]), "");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-131 P2 "복사 대상 폴더…" · "이동 대상 폴더…"(NEW-046 · 모든 OS): 우클릭 항목 → 폴더 선택 창(반대 패널 폴더에서 시작) → 확정하면
+/// 전송 엔진(복사는 원본 유지 · 이동은 원본 제거) · 선택 없음 = 항목 없음 · 순서 편집기 키 `copyTo`/`moveTo`로 숨길 수 있다.
+#[test]
+fn copy_to_and_move_to_pick_folder_then_transfer() {
+    use crate::app::license::FilePurpose;
+    let (mut app, dir) = fixture("copyto");
+    app.layout_for(1200, 800, 1.0);
+    let a = dir.join("a.txt");
+    std::fs::write(&a, b"copy me").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    app.panels[0].reopen(&mut Invalidations::default());
+    let ids = |items: &[CtxItem]| -> Vec<String> {
+        items
+            .iter()
+            .filter_map(|c| match c {
+                CtxItem::Item { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let got = ids(&app.row_menu_items(std::slice::from_ref(&a), None));
+    assert!(
+        got.contains(&"ctx.copy_to".to_string()) && got.contains(&"ctx.move_to".to_string()),
+        "{got:?}"
+    );
+    // 복사: 폴더 선택 창 용도 = CopyTo · 반대 패널 폴더에서 시작 · 확정 → 전송.
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&a, &mut inv);
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("ctx.copy_to");
+    assert!(
+        matches!(app.file_purpose, Some(FilePurpose::CopyTo(ref p)) if p.as_slice() == std::slice::from_ref(&a))
+    );
+    assert!(app.open_file);
+    let (mode, start, _) = app.file_window_spec();
+    assert_eq!(mode, nexa_dlg::PickerMode::Folder);
+    assert_eq!(start, Some(app.panels[1].root_path()));
+    app.open_file = false;
+    app.file_confirmed(dir.join("sub"));
+    while app.ops_tick() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        dir.join("sub/a.txt").is_file() && a.is_file(),
+        "복사 = 원본 유지"
+    );
+    // 이동.
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("ctx.move_to");
+    assert!(matches!(app.file_purpose, Some(FilePurpose::MoveTo(_))));
+    app.open_file = false;
+    std::fs::create_dir_all(dir.join("sub2")).unwrap();
+    app.file_confirmed(dir.join("sub2"));
+    while app.ops_tick() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        dir.join("sub2/a.txt").is_file() && !a.exists(),
+        "이동 = 원본 제거"
+    );
+    // 선택이 없으면 항목도 없다 · 순서 편집기로 숨기기.
+    let none = ids(&app.row_menu_items(&[], None));
+    assert!(!none.contains(&"ctx.copy_to".to_string()));
+    app.settings
+        .set(
+            "ctxmenu.layout",
+            "row:1[new:1,deletePermanent:0,copyName:1,pasteInto:1,copyTo:0,moveTo:1]",
+        )
+        .expect("layout");
+    let b = dir.join("sub2/a.txt");
+    let got = ids(&app.row_menu_items(std::slice::from_ref(&b), None));
+    assert!(
+        !got.contains(&"ctx.copy_to".to_string()) && got.contains(&"ctx.move_to".to_string()),
+        "{got:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

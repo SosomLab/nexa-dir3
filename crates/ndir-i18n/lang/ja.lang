@@ -179,6 +179,8 @@ new.menuTextFile = テキスト ドキュメント
 new.named = 新しい {0}
 ctx.deletePermanent = 完全に削除
 ctx.pasteInto = フォルダーへ貼り付け
+ctx.copyTo = フォルダーへコピー…
+ctx.moveTo = フォルダーへ移動…
 ctx.paste = 貼り付け
 
 # ── Bottom dock (M4-1·M4-2) ──
@@ -335,6 +337,7 @@ ctx.openTerminal = 端末で開く
 ctx.sendEmail = メールで送信…
 ctx.showInFileManager = ファイルマネージャーで表示
 ctx.openFileManager = ファイルマネージャーで開く
+ctx.scripts = スクリプト
 pref.cat.appearance = 外観
 pref.cat.fonts = フォント
 pref.cat.terminal = ターミナル

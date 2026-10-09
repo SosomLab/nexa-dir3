@@ -179,6 +179,8 @@ new.menuTextFile = Text Document
 new.named = New {0}
 ctx.deletePermanent = Delete Permanently
 ctx.pasteInto = Paste into Folder
+ctx.copyTo = Copy to Folder…
+ctx.moveTo = Move to Folder…
 ctx.paste = Paste
 
 # ── Bottom dock (M4-1·M4-2) ──
@@ -335,6 +337,7 @@ ctx.openTerminal = Open in Terminal
 ctx.sendEmail = Send by email…
 ctx.showInFileManager = Show in file manager
 ctx.openFileManager = Open in file manager
+ctx.scripts = Scripts
 pref.cat.appearance = Appearance
 pref.cat.fonts = Fonts
 pref.cat.terminal = Terminal

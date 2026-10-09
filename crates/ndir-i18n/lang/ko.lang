@@ -178,6 +178,8 @@ new.menuTextFile = 텍스트 문서
 new.named = 새 {0}
 ctx.deletePermanent = 완전 삭제
 ctx.pasteInto = 폴더에 붙여넣기
+ctx.copyTo = 복사 대상 폴더…
+ctx.moveTo = 이동 대상 폴더…
 ctx.paste = 붙여넣기
 
 # ── 하단 도크(M4-1·M4-2) ──
@@ -334,6 +336,7 @@ ctx.openTerminal = 터미널에서 열기
 ctx.sendEmail = 전자메일로 보내기…
 ctx.showInFileManager = 파일 관리자에서 보기
 ctx.openFileManager = 파일 관리자에서 열기
+ctx.scripts = 스크립트
 pref.cat.appearance = 모양
 pref.cat.fonts = 글꼴
 pref.cat.terminal = 터미널

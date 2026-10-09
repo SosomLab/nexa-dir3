@@ -113,22 +113,42 @@ pub(crate) fn default_visible(block: &str, item: &str) -> bool {
 
 /// 앱 고유 컨텍스트 메뉴 항목(셸 제공 동사는 대상 아님 · `new` = 하단 고정 섹션 표시 여부만).
 pub(crate) const CTXMENU_BLOCKS: OrderDefs = &[
-    ("row", &["new", "deletePermanent", "copyName", "pasteInto"]),
+    (
+        "row",
+        &[
+            "new",
+            "deletePermanent",
+            "copyName",
+            "pasteInto",
+            "copyTo",
+            "moveTo",
+        ],
+    ),
     ("bg", &["paste", "undo", "redo"]),
 ];
 
 /// Linux(xdg) — 셸 항목도 고정 집합이라 편집 대상(T-131 잔여 · 사용자 "윈도우처럼 메뉴 추가/변경/순서"): 행 메뉴 `xdg` · 배경 `xdgbg`.
 /// 키 ↔ 항목 id = [`xdg_layout_key`].
 pub(crate) const CTXMENU_BLOCKS_XDG: OrderDefs = &[
-    ("row", &["new", "deletePermanent", "copyName", "pasteInto"]),
+    (
+        "row",
+        &[
+            "new",
+            "deletePermanent",
+            "copyName",
+            "pasteInto",
+            "copyTo",
+            "moveTo",
+        ],
+    ),
     ("bg", &["paste", "undo", "redo"]),
     (
         "xdg",
         &[
-            "openwith", "terminal", "showin", "email", "compress", "props",
+            "openwith", "terminal", "showin", "email", "compress", "scripts", "props",
         ],
     ),
-    ("xdgbg", &["terminal", "filemanager", "props"]),
+    ("xdgbg", &["terminal", "filemanager", "scripts", "props"]),
 ];
 
 /// 컨텍스트 메뉴 블록 정의(순수): xdg 셸 메뉴가 있는 OS면 셸 블록 포함.

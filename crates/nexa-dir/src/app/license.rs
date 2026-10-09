@@ -23,6 +23,10 @@ pub(crate) enum FilePurpose {
     Plugin,
     /// 로그를 파일로 저장(로그 창 메뉴 · T-92 · 전 기능 무료라 게이트 없음 · DR-4).
     LogExport,
+    /// 우클릭 "복사 대상 폴더…"(T-131 P2) — 고른 폴더로 이 경로들을 복사.
+    CopyTo(Vec<PathBuf>),
+    /// 우클릭 "이동 대상 폴더…"(T-131 P2).
+    MoveTo(Vec<PathBuf>),
 }
 
 impl App {
@@ -264,6 +268,12 @@ impl App {
                 file_win::plugin_filters(),
             ),
             Some(FilePurpose::LogExport) => (PickerMode::Save, Some(self.term_cwd(0)), Vec::new()),
+            // 대상 폴더 고르기 = 반대 패널 폴더에서 시작(듀얼 패널 관례 · 같은 패널이면 현재 폴더).
+            Some(FilePurpose::CopyTo(_) | FilePurpose::MoveTo(_)) => (
+                PickerMode::Folder,
+                Some(self.panels[1 - self.active].root_path()),
+                Vec::new(),
+            ),
             _ => (
                 PickerMode::Open,
                 Some(self.term_cwd(0)),
@@ -294,6 +304,12 @@ impl App {
                     let _ = self.settings.save();
                     self.after_setting_changed(&key);
                 }
+            }
+            Some(FilePurpose::CopyTo(paths)) => {
+                self.start_transfer(paths, path, ndir_ops::Op::Copy, false);
+            }
+            Some(FilePurpose::MoveTo(paths)) => {
+                self.start_transfer(paths, path, ndir_ops::Op::Move, false);
             }
             None => {}
         }
