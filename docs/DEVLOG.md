@@ -4,6 +4,8 @@
 
 ## 2026-10-10
 
+- **T-147 Linux 2차 = X11 XDND v5 발신**(a121c87 · x11rb · `platform/xdnd.rs`) — 모달 · XdndSelection 주인 창 · uri-list/text 제공 · 자기 창 = `live_drop` 실시간 수신 · X11 세션(XWayland 포함)만 · Wayland 창 = 창 안 드래그 그대로 · 시험 591/0 · 앱 PID 61744 → [10-10 §3](journal/2026-10-10.md)
+
 - **T-128 정렬 후속**(888e126 · nexa-ui 191 227de04 · NEW-045) — 새 탭·복제 탭 정렬 상속 · 세션 `panel{i}.sort` 영속 · 내 PC 전체/여유 열 정렬 불가 · 순번 여백 · 시험 589/0 · 사용자 결정 2건(▲/▼ 도형 · Shift 없는 클릭 리셋) · 앱 PID 56919 → [10-10 §2](journal/2026-10-10.md)
 
 - **T-130 설정 종속 2단계**(24d36c5) — `FORCES`(성능 향상 → 아이콘 · 폴더 크기 off · 단일 패널 → 정보 단일) · `CONSTRAINTS`(폴더 크기 대기열 ≥ 스레드) · `Dep::Gt`(S3) · `Settings::effective` · 설정 창 강제 카드 + 범위 덧줄 · 시험 588/0 · Linux 설치본 아이콘 = 개발 `.desktop`이 가림 → `--remove` → [10-10 §1](journal/2026-10-10.md)
