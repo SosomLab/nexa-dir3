@@ -4,6 +4,8 @@
 
 ## 2026-10-10
 
+- **T-147 Linux 3차 = XDND 발신 비모달 세션**(75e5f54) — 사용자 실기 "pointer grab failed: ALREADY_GRABBED"(winit 연결의 암시적 잡기) → 창 안 드래그 사건 위에 XDND 메시지만 얹고 응답은 10 ms 폴링 · 노틸러스 → 앱 폴더 행 ✓(사용자) · 시험 594/0 · 앱 PID 87926 → [10-10 §7](journal/2026-10-10.md)
+
 - **T-147 Linux DnD 결함 2건 수정 + 자동화**(c888bf1) — 외부 드롭 자리 = X11 `QueryPointer` · 발신 판정 = 창 id(XWayland 오판 수정 · "XWayland 별도 기동" 안내 정정) · `xdnd.drop`/`xdnd.wait` · T4 `xdnd-drop`(34/0) · 옵트인 왕복 시험 · 시험 594/0 · 형제 저장소 규칙(4ba537d · 착수 전 ff-pull · 기능 단위 즉시 push) · 앱 PID 80179 → [10-10 §6](journal/2026-10-10.md)
 
 - **사용자 결정 — "정렬 없음" = 이름 오름차순 수용**(DR-28 · PANEL-065 의도된 차이 · readdir 순서 임의) · 회차 CI 전부 ✓(1d47baf · 0f8c66c) → [10-10 §5](journal/2026-10-10.md)
