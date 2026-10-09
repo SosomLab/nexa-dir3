@@ -398,9 +398,11 @@ impl App {
         };
         #[cfg(all(unix, not(target_os = "macos")))]
         {
+            // 합성 모드(시나리오)는 창 기준 좌표로 등록한다(`App::root_point`와 같은 기준 · WM이 창을 옮겨도 안 어긋남).
             let inner = self
                 .window
                 .as_ref()
+                .filter(|_| !platform::synthetic_pointer())
                 .and_then(|w| w.inner_position().ok())
                 .map_or((0, 0), |p| (p.x, p.y));
             let rect = (

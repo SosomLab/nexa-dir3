@@ -266,6 +266,13 @@ impl App {
 
     /// 창 좌표(물리 px) → 화면(루트) 좌표(순수 · XDND 메시지용).
     fn root_point(window: Option<&winit::window::Window>, at: (i32, i32)) -> (i16, i16) {
+        if platform::synthetic_pointer() {
+            // 시나리오: 가짜 대상도 창 기준 사각형으로 등록된다(`xdnd.target`) — WM 배치와 무관하게 맞물린다.
+            return (
+                i16::try_from(at.0).unwrap_or(i16::MAX),
+                i16::try_from(at.1).unwrap_or(i16::MAX),
+            );
+        }
         let inner = window
             .and_then(|w| w.inner_position().ok())
             .map_or((0, 0), |p| (p.x, p.y));
@@ -381,6 +388,11 @@ impl App {
         }
         if self.dnd_internal.is_none() {
             return changed;
+        }
+        // 포인터가 멈춘 채 수식키만 바뀐 경우 — 외부 대상에 제안 동작을 다시 알린다(Shift = 이동 · Ctrl = 복사).
+        let (ctrl, shift) = (self.primary, self.shift);
+        if let Some(s) = self.xdnd.as_mut() {
+            s.modifiers(ctrl, shift);
         }
         // 뗌 사건이 X 쪽에 안 온 경우(mutter가 Wayland 표면 위에서 뗌을 삼킴 · 10-10 3회차): 버튼이 이미 떨어져 있으면 지금 자리에서 뗀 것으로.
         if self.xdnd.is_some() && platform::pointer_button1_down() == Some(false) {

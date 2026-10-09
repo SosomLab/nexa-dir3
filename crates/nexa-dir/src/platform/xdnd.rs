@@ -57,7 +57,7 @@ macro_rules! xlog {
 
 /// **합성 포인터 모드**(시나리오 러너 = `NDIR_NO_ACTIVATE` · T4): 포인터 사건이 합성이라 실제 X 창을 대상으로 삼으면 안 된다(개발 PC의
 /// 다른 창에 Enter/Drop을 보낼 위험) → [`fake_target`]로 등록한 가짜 대상 창만 사각형으로 찾는다.
-fn synthetic() -> bool {
+pub(crate) fn synthetic() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("NDIR_NO_ACTIVATE").is_some_and(|v| !v.is_empty()))
 }
@@ -453,6 +453,26 @@ impl Source {
         let _ = self.send(t.win, self.at.leave, [self.win, 0, 0, 0, 0]);
     }
 
+    /// 소스 창의 `XdndActionList` = 수식키에 따른 허용 동작(Ctrl = 복사만 · Shift = 이동만 · 없음 = 복사·이동 — 대상이 고른다).
+    fn set_action_list(&self, choice: DropChoice, ctrl: bool, shift: bool) {
+        let list: Vec<Atom> = if ctrl {
+            vec![self.at.action_copy]
+        } else if shift {
+            vec![self.at.action_move]
+        } else {
+            let _ = choice;
+            vec![self.at.action_copy, self.at.action_move]
+        };
+        let _ = self.conn.change_property32(
+            PropMode::REPLACE,
+            self.win,
+            self.at.action_list,
+            AtomEnum::ATOM,
+            &list,
+        );
+        let _ = self.conn.flush();
+    }
+
     /// 대상이 데이터를 달라고 한다(`XdndSelection`): TARGETS · 세 종류 · 그 밖은 거절.
     fn serve(&self, r: &SelectionRequestEvent) -> Result<(), Box<dyn std::error::Error>> {
         let at = &self.at;
@@ -695,6 +715,9 @@ pub(crate) struct Session {
     my_pid: u32,
     started: Instant,
     icon: Option<Icon>,
+    /// 마지막으로 알린 제안 동작(수식키) · 마지막 포인터 자리 — 수식키만 바뀌어도 재통지한다.
+    last_choice: Option<DropChoice>,
+    last_pos: (i16, i16),
     target: Option<Target>,
     dropped: bool,
     finished: Option<(bool, Atom)>,
@@ -734,6 +757,8 @@ impl Session {
             my_pid: std::process::id(),
             started: Instant::now(),
             icon,
+            last_choice: None,
+            last_pos: (0, 0),
             target: None,
             dropped: false,
             finished: None,
@@ -749,6 +774,19 @@ impl Session {
         }
         if let Some(icon) = &self.icon {
             self.src.move_icon(icon, (x, y));
+        }
+        self.last_pos = (x, y);
+        let choice = proposed(ctrl, shift);
+        // 수식키가 바뀌면(Ctrl = 복사만 · Shift = 이동만 · 없음 = 복사·이동) 소스 창의 `XdndActionList`를 다시 쓰고, 지금 대상에는
+        // Leave → Enter로 다시 알린다 — GTK/mutter 다리는 목록을 Enter 때 읽는다(10-10 사용자 "Shift·Ctrl 구별 안 됨").
+        let choice_changed = self.last_choice != Some(choice);
+        if choice_changed {
+            self.last_choice = Some(choice);
+            self.src.set_action_list(choice, ctrl, shift);
+            xlog!("modifiers ctrl={ctrl} shift={shift} → {choice:?}");
+            if let Some(t) = self.target.take() {
+                self.src.leave(&t);
+            }
         }
         let t0 = Instant::now();
         let found = self.src.target_at(x, y, self.own, self.my_pid);
@@ -787,13 +825,21 @@ impl Session {
             }
         }
         if let Some(t) = self.target.as_mut() {
-            let choice = proposed(ctrl, shift);
             if t.awaiting_status {
                 t.pending = Some((x, y, CURRENT_TIME, choice));
             } else {
                 let _ = self.src.position(t, x, y, CURRENT_TIME, choice);
             }
         }
+    }
+
+    /// 포인터는 그대로인데 수식키만 바뀌었을 때(호스트 틱) — 바뀐 경우에만 재통지.
+    pub(crate) fn modifiers(&mut self, ctrl: bool, shift: bool) {
+        if self.dropped || self.done.is_some() || self.last_choice == Some(proposed(ctrl, shift)) {
+            return;
+        }
+        let (x, y) = self.last_pos;
+        self.motion(x, y, ctrl, shift);
     }
 
     /// 외부 대상이 지금 받겠다고 했는가(창 안 드래그가 자기 드롭을 양보할지 판정).
@@ -992,6 +1038,9 @@ pub(super) fn pointer_state() -> Option<super::PointerState> {
 /// 왼쪽 버튼이 지금 눌려 있는가(X11 `QueryPointer` 마스크 · 끌기 중 뗌 사건이 X 쪽에 안 온 경우의 복구용 — mutter가 Wayland 표면 위에서
 /// 뗌을 삼키면 창 안 드래그가 열린 채 남는다 · 10-10 3회차). X 연결이 없으면 `None`.
 pub(super) fn button1_down() -> Option<bool> {
+    if synthetic() {
+        return None; // 시나리오의 끌기는 합성 입력 — 실제 버튼 상태로 뗀 것으로 보면 안 된다(10-10 xdnd-send 흔들림)
+    }
     PTR_CONN.with(|c| {
         let mut slot = c.borrow_mut();
         if slot.is_none() {
