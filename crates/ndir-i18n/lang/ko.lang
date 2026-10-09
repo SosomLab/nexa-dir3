@@ -170,6 +170,9 @@ new.fileOp = 새 파일
 ctx.new = 새로 만들기
 dnd.rejected = 자기 자신이나 그 하위 폴더에는 놓을 수 없습니다.
 dnd.dragMore = {0} 외 {1}개
+dnd.opCopy = 복사 · {0}
+dnd.opMove = 이동 · {0}
+dnd.opNone = {0}
 dnd.dropped = {0}개 항목을 {1}에 놓았습니다
 dnd.willMove = 이동 → {0}   (Ctrl = 복사)
 dnd.willCopy = 복사 → {0}   (Shift = 이동)

@@ -171,6 +171,9 @@ new.fileOp = 新しいファイル
 ctx.new = 新規作成
 dnd.rejected = 自分自身やそのサブフォルダーには置けません。
 dnd.dragMore = {0} 他 {1} 件
+dnd.opCopy = コピー · {0}
+dnd.opMove = 移動 · {0}
+dnd.opNone = {0}
 dnd.dropped = {0} 個の項目を {1} に置きました
 dnd.willMove = 移動 → {0}   (Ctrl = コピー)
 dnd.willCopy = コピー → {0}   (Shift = 移動)

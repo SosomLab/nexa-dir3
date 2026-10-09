@@ -407,6 +407,8 @@ struct App {
     dnd_internal: Option<app::dnd::InternalDrag>,
     /// Linux X11 비모달 XDND 발신 세션(창 안 드래그 위에 · 앱 밖 대상 · 10-10) — 놓은 뒤 Finished까지 틱이 거둔다.
     xdnd: Option<platform::XdndSession>,
+    /// 드래그 이름 상자에 그려 둔 동작(복사/이동/불가) — 바뀔 때만 다시 그린다.
+    dnd_icon_choice: Option<platform::DropChoice>,
     /// 시험 자동화 `xdnd.drop`(Linux X11): 프로토콜 소스 스레드 · 시작 시각(`xdnd.wait`의 유예).
     xdnd_job: Option<std::thread::JoinHandle<Result<(), String>>>,
     xdnd_started: Instant,
@@ -760,6 +762,7 @@ impl App {
             dnd_mark: None,
             dnd_internal: None,
             xdnd: None,
+            dnd_icon_choice: None,
             xdnd_job: None,
             xdnd_started: Instant::now(),
             platform,

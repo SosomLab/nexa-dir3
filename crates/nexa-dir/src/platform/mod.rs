@@ -704,6 +704,7 @@ pub(crate) struct XdndSession;
 impl XdndSession {
     pub(crate) fn motion(&mut self, _x: i16, _y: i16, _ctrl: bool, _shift: bool) {}
     pub(crate) fn modifiers(&mut self, _ctrl: bool, _shift: bool) {}
+    pub(crate) fn set_image(&mut self, _image: DragImage) {}
     pub(crate) fn external_accepts(&self) -> bool {
         false
     }

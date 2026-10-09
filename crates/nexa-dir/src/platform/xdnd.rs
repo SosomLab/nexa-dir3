@@ -913,6 +913,31 @@ impl Session {
         }
     }
 
+    /// 드래그 이미지를 바꾼다(동작이 바뀜: 복사 ↔ 이동 ↔ 불가 · Windows "Copy to/Move to" 표시 대응) — 같은 크기면 픽셀만 다시 올리고,
+    /// 크기가 다르면 창을 다시 만든다(마지막 포인터 자리).
+    pub(crate) fn set_image(&mut self, image: DragImage) {
+        if self.dropped || self.done.is_some() {
+            return;
+        }
+        let n = usize::from(image.w) * usize::from(image.h);
+        if let Some(icon) = self
+            .icon
+            .as_mut()
+            .filter(|i| i.w == image.w && i.h == image.h)
+        {
+            icon.bytes = image
+                .pixels
+                .iter()
+                .take(n)
+                .flat_map(|p| p.to_le_bytes())
+                .collect();
+            self.src.paint_icon(icon);
+            return;
+        }
+        self.hide_icon();
+        self.icon = self.src.make_icon(&image, self.last_pos);
+    }
+
     /// 아이콘을 치운다(놓은 뒤 Finished 대기 중 · 끝) — 대상이 받았으니 끌고 다닐 것이 없다.
     fn hide_icon(&mut self) {
         if let Some(icon) = self.icon.take() {

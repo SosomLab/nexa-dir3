@@ -201,11 +201,12 @@ impl App {
             .and_then(|w| winfocus::x11_window_id(w));
         // 가짜 플랫폼(시험)은 열지 않는다 — 시험 PC의 실제 X 창에 Enter/Drop을 보내면 안 된다.
         self.xdnd = if self.platform.log.is_none() {
-            let image = self.drag_image(&paths);
+            let image = self.drag_image(&paths, choice);
             platform::xdnd_start(&paths, own, Some(image))
         } else {
             None
         };
+        self.dnd_icon_choice = Some(choice);
         if let Some(s) = self.xdnd.as_mut() {
             let (rx, ry) = Self::root_point(self.window.as_deref(), at);
             s.motion(rx, ry, self.primary, self.shift);
@@ -220,15 +221,25 @@ impl App {
 
     /// 드래그 이미지(10-10 사용자 "끄는 과정이 눈에 안 보임"): 첫 항목 이름(여럿이면 "… 외 N개")을 테마 색으로 한 줄 — 발신 세션이
     /// 포인터 옆에 띄워 따라다닌다(X11 override-redirect 창 · Wayland 창 위에도 보인다).
-    pub(crate) fn drag_image(&self, paths: &[PathBuf]) -> platform::DragImage {
+    pub(crate) fn drag_image(
+        &self,
+        paths: &[PathBuf],
+        choice: platform::DropChoice,
+    ) -> platform::DragImage {
         let first = paths
             .first()
             .map(|p| ndir_ops::leaf_name(p))
             .unwrap_or_default();
-        let label = if paths.len() > 1 {
+        let names = if paths.len() > 1 {
             trf("dnd.dragMore", &[&first, &(paths.len() - 1).to_string()])
         } else {
             first
+        };
+        // 동작을 앞에(Windows "Copy to …"/"Move to …" 대응 · 사용자 10-10): 복사 · 이동 · 불가(놓을 수 없는 자리).
+        let label = match choice {
+            platform::DropChoice::Copy => trf("dnd.opCopy", &[&names]),
+            platform::DropChoice::Move => trf("dnd.opMove", &[&names]),
+            platform::DropChoice::None => trf("dnd.opNone", &[&names]),
         };
         let s = self.scale;
         let pad = (8.0 * s).round() as i32;
@@ -246,7 +257,13 @@ impl App {
         {
             let mut g = nexa_gfx::Surface::new(&mut buf, w as usize, h as usize);
             let mut dc = RasterCtx::new(&mut g, &self.ui_font, s);
-            dc.fill_rect(Rect::new(0, 0, w, h), self.theme.accent);
+            // 테두리 색 = 동작(복사 = 강조색 · 이동 = 글자색 · 불가 = 흐린 색) — 한눈에 구별.
+            let edge = match choice {
+                platform::DropChoice::Copy => self.theme.accent,
+                platform::DropChoice::Move => self.theme.text,
+                platform::DropChoice::None => self.theme.text_dim,
+            };
+            dc.fill_rect(Rect::new(0, 0, w, h), edge);
             dc.fill_rect(Rect::new(1, 1, w - 2, h - 2), self.theme.sel_bg);
             let ty = (h - (h * 4) / 5) / 2;
             dc.text(
@@ -261,6 +278,20 @@ impl App {
             w: u16::try_from(w).unwrap_or(u16::MAX),
             h: u16::try_from(h).unwrap_or(u16::MAX),
             pixels: buf,
+        }
+    }
+
+    /// 드래그 이름 상자의 동작 표시를 지금 판정으로 맞춘다(바뀐 경우에만 다시 그린다).
+    fn refresh_drag_icon(&mut self, paths: &[PathBuf], choice: platform::DropChoice) {
+        if self.dnd_icon_choice == Some(choice) {
+            return;
+        }
+        self.dnd_icon_choice = Some(choice);
+        if self.xdnd.is_some() {
+            let image = self.drag_image(paths, choice);
+            if let Some(s) = self.xdnd.as_mut() {
+                s.set_image(image);
+            }
         }
     }
 
@@ -327,6 +358,7 @@ impl App {
                     }
                     self.set_drag_cursor(Some(choice));
                 }
+                self.refresh_drag_icon(&drag.paths, choice);
             }
             InputEvent::MouseUp { x, y } => {
                 self.dnd_internal = None;
@@ -393,6 +425,16 @@ impl App {
         let (ctrl, shift) = (self.primary, self.shift);
         if let Some(s) = self.xdnd.as_mut() {
             s.modifiers(ctrl, shift);
+        }
+        if self.xdnd.as_ref().is_some_and(|s| s.external_accepts()) {
+            let choice = if shift && !ctrl {
+                platform::DropChoice::Move
+            } else {
+                platform::DropChoice::Copy
+            };
+            if let Some(d) = self.dnd_internal.clone() {
+                self.refresh_drag_icon(&d.paths, choice);
+            }
         }
         // 뗌 사건이 X 쪽에 안 온 경우(mutter가 Wayland 표면 위에서 뗌을 삼킴 · 10-10 3회차): 버튼이 이미 떨어져 있으면 지금 자리에서 뗀 것으로.
         if self.xdnd.is_some() && platform::pointer_button1_down() == Some(false) {
