@@ -47,6 +47,35 @@ pub(crate) struct Tab {
     pub stale: bool,
 }
 
+/// 정렬 키 목록 → `name+,size-`(T-128 세션 표기 · 빈 목록 = `""`).
+pub(crate) fn sort_to_str(keys: &[(u32, bool)]) -> String {
+    keys.iter()
+        .map(|(k, desc)| {
+            format!(
+                "{}{}",
+                crate::order::col_id_key(*k),
+                if *desc { '-' } else { '+' }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// `name+,size-` → 정렬 키 목록(모르는 이름 · 방향 없는 항목은 버린다 · 손상 = 빈 목록).
+pub(crate) fn sort_from_str(spec: &str) -> Vec<(u32, bool)> {
+    spec.split(',')
+        .filter_map(|item| {
+            let item = item.trim();
+            let (name, desc) = match item.chars().last()? {
+                '+' => (&item[..item.len() - 1], false),
+                '-' => (&item[..item.len() - 1], true),
+                _ => return None,
+            };
+            crate::order::col_key_id(name).map(|id| (id, desc))
+        })
+        .collect()
+}
+
 /// 포인터 캡처 대상(눌린 곳이 뗄 때까지 받는다).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Part {
@@ -380,6 +409,11 @@ impl Panel {
         for (slot, (orig, _)) in valid.iter().enumerate() {
             panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
             panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
+            // 탭별 정렬(T-128 · 없는 자리는 기본 그대로).
+            if let Some(spec) = ps.sort.get(*orig) {
+                let keys = sort_from_str(spec);
+                panel.tabs[slot].rows.set_sort(&keys, &mut inv);
+            }
         }
         // 열 순서/표시(`cols` · T-71) → 그 위에 열 폭(표시 순으로 저장돼 있다).
         if !ps.col_layout.is_empty() {
@@ -876,18 +910,21 @@ impl Panel {
                 ndir_i18n::tr("col.kind"),
                 w_of(crate::filelist::COL_KIND, 110.0),
             ),
+            // 전체/여유 공간은 정렬 키가 없다(PANEL-065 `TOTAL`/`FREE` 무시) → 머리 클릭도 받지 않는다(T-128 · 종전엔 ▲만 떴다).
             Column::new(
                 crate::filelist::COL_TOTAL,
                 ndir_i18n::tr("col.total"),
                 (110.0 * s).round() as i32,
             )
-            .right_aligned(),
+            .right_aligned()
+            .not_sortable(),
             Column::new(
                 crate::filelist::COL_FREE,
                 ndir_i18n::tr("col.free"),
                 (130.0 * s).round() as i32,
             )
-            .right_aligned(),
+            .right_aligned()
+            .not_sortable(),
         ]
     }
 
@@ -1187,6 +1224,7 @@ impl Panel {
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.rows().view_mode(), inv);
+        rows.set_sort(self.rows().sort(), inv); // 정렬 상태 상속(T-128 · nexa-ui 191)
         self.tabs.push(Tab {
             rows,
             nav: History::new(path),
@@ -1323,6 +1361,7 @@ impl Panel {
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
+        rows.set_sort(self.tabs[i].rows.sort(), inv); // 원본 탭 정렬 상속(T-128)
         self.tabs.insert(
             i + 1,
             Tab {
@@ -1814,6 +1853,21 @@ impl Panel {
         }
     }
 
+    /// 세션 저장 — 탭별 정렬(`panel{i}.sort` · dir3 신규 T-128): 탭마다 `name+,size-`(키 이름 + 방향 · 우선순위 순) ·
+    /// 빈 문자열 = 소스 기본(이름 오름차순). 전부 기본이면 빈 목록(직렬화 생략 왕복).
+    pub(crate) fn session_sort(&self) -> Vec<String> {
+        let out: Vec<String> = self
+            .tabs
+            .iter()
+            .map(|t| sort_to_str(t.rows.sort()))
+            .collect();
+        if out.iter().all(String::is_empty) {
+            Vec::new() // 전부 소스 기본(이름 오름차순 · 새 그리드의 빈 정렬 목록)
+        } else {
+            out
+        }
+    }
+
     /// 세션 저장 — 탭별 보기 옵션 플래그(dir2 `panel{i}.views`).
     pub(crate) fn session_view_flags(&self) -> Vec<u8> {
         self.tabs
@@ -2143,6 +2197,10 @@ impl Panel {
             self.user_cols = true;
             self.session_dirty = true;
             self.col_order_changed = true;
+        }
+        // 머리를 눌러 정렬을 바꿨다 → 세션에 남긴다(T-128 영속 · `panel{i}.sort`).
+        if self.tabs[self.active].rows.take_sort_changed() {
+            self.session_dirty = true;
         }
     }
 }

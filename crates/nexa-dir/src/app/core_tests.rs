@@ -819,6 +819,12 @@ fn my_pc_drive_columns_from_disk_port() {
     assert!(p.rows().source().is_virtual_root());
     let keys: Vec<u32> = p.rows().columns().iter().map(|c| c.key).collect();
     assert_eq!(keys, vec![0, 4, 5, 6]);
+    let sortable: Vec<bool> = p.rows().columns().iter().map(|c| c.sortable).collect();
+    assert_eq!(
+        sortable,
+        vec![true, true, false, false],
+        "전체/여유 공간 열은 정렬 키가 없다 → 머리 클릭 제외(T-128)"
+    );
     if p.rows().source().len() > 0 {
         assert_eq!(p.rows().source().cell(0, filelist::COL_TOTAL), "4.0 KB");
         assert_eq!(p.rows().source().cell(0, filelist::COL_FREE), "1.0 KB");
@@ -2556,10 +2562,10 @@ fn header_sort_marks_trail_and_shift_cycles() {
     click(&mut app, mid(2), true);
     assert_eq!(
         (mark(&app, 0).as_deref(), mark(&app, 2).as_deref()),
-        (Some("▲1"), Some("▲2"))
+        (Some("▲ 1"), Some("▲ 2"))
     );
     click(&mut app, mid(2), true);
-    assert_eq!(mark(&app, 2).as_deref(), Some("▼2"));
+    assert_eq!(mark(&app, 2).as_deref(), Some("▼ 2"));
     click(&mut app, mid(2), true);
     assert_eq!((mark(&app, 0).as_deref(), mark(&app, 2)), (Some("▲"), None));
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
@@ -2569,8 +2575,13 @@ fn header_sort_marks_trail_and_shift_cycles() {
         "표시와 제목을 따로 그린다"
     );
     app.command("file.new_tab");
+    assert_eq!(
+        mark(&app, 0).as_deref(),
+        Some("▲"),
+        "새 탭 = 정렬 상속(T-128) · 끝 정렬 모양"
+    );
     click(&mut app, mid(0), false);
-    assert_eq!(mark(&app, 0).as_deref(), Some("▲"), "새 탭도 끝 정렬 모양");
+    assert_eq!(mark(&app, 0).as_deref(), Some("▼"), "상속한 ▲에서 한 단계");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -3435,7 +3446,7 @@ fn autofit_counts_sort_mark_and_order_in_header() {
     click(&mut app, mid(0), true);
     assert_eq!(
         app.panels[0].rows().sort_mark(cols[2].0).as_deref(),
-        Some("▲1")
+        Some("▲ 1")
     );
     let multi = fit(&mut app);
     assert!(multi > sorted, "순번만큼 더 넓다: {multi} vs {sorted}");
@@ -8357,4 +8368,91 @@ fn theme_tick_polls_os_only_in_system_mode_on_windows() {
 fn app_title_marks_debug_builds() {
     assert_eq!(APP_TITLE.ends_with("(Debug)"), cfg!(debug_assertions));
     assert!(APP_TITLE.starts_with("Nexa Dir"));
+}
+
+/// 정렬 후속(T-128 · nexa-ui 191): 새 탭 · 복제 탭은 현재 탭의 정렬을 물려받고 · 머리 클릭 정렬은 세션 `panel{i}.sort`에 남아
+/// 복원된다(전부 기본 = 기록 없음 · 손상 표기 = 기본) · "정렬 없음"(세 번째 상태)은 dir3에서 이름 오름차순(dir2 = OS 열거 순서 —
+/// Linux/macOS에서는 readdir 순서가 임의라 의도된 차이 · PANEL-065).
+#[test]
+fn sort_inherits_to_new_tabs_and_persists_in_session() {
+    let (mut app, dir) = fixture("sortsess");
+    app.layout_for(1200, 800, 1.0);
+    assert!(
+        app.session_snapshot().panels[0].sort.is_empty(),
+        "기본 정렬 = 기록 없음"
+    );
+    let b = app.panels[0].rows().bounds();
+    let cols: Vec<(u32, i32)> = app.panels[0].col_widths_by_key();
+    let mid = |i: usize| b.x + cols[..i].iter().map(|c| c.1).sum::<i32>() + cols[i].1 / 2;
+    let y = b.y + 5;
+    let click = |app: &mut App, x: i32, shift: bool| {
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    assert!(!app.session_save.dirty(), "기동 직후 = 깨끗");
+    click(&mut app, mid(2), false); // 크기 ▲
+    click(&mut app, mid(2), false); // 크기 ▼
+    click(&mut app, mid(0), true); // Shift+이름 = 다중
+    let size_key = cols[2].0;
+    assert_eq!(
+        app.panels[0].rows().sort(),
+        &[(size_key, true), (filelist::COL_NAME, false)]
+    );
+    assert!(
+        app.session_save.dirty(),
+        "머리 클릭 정렬 = 세션 더러움(`take_sort_changed` → 패널 → 저장 예약)"
+    );
+    // 새 탭 · 복제 탭 = 상속.
+    app.command("file.new_tab");
+    assert_eq!(
+        app.panels[0].rows().sort(),
+        &[(size_key, true), (filelist::COL_NAME, false)],
+        "새 탭 상속"
+    );
+    let active = app.panels[0].active_index();
+    app.panels[0].duplicate_tab(active, &mut Invalidations::default());
+    assert_eq!(app.panels[0].tab_count(), 3);
+    assert_eq!(
+        app.panels[0].rows().sort(),
+        &[(size_key, true), (filelist::COL_NAME, false)],
+        "복제 탭 상속"
+    );
+    // 세션 표기 · 왕복 · 복원.
+    let s = app.session_snapshot();
+    assert_eq!(s.panels[0].sort, vec!["size-,name+"; 3]);
+    assert!(s.panels[1].sort.is_empty());
+    let text = s.serialize();
+    assert!(text.contains("panel0.sort=size-,name+|size-,name+|size-,name+\n"));
+    let mut parsed = Session::parse(&text);
+    assert_eq!(parsed.panels[0].sort, s.panels[0].sort);
+    parsed.panels[0].sort[1] = "junk".into(); // 손상 = 정렬 없음(소스 기본 = 이름순)
+    parsed.panels[0].sort[2] = String::new();
+    let settings = Settings::from_text(dir.join("settings-sort.conf"), "");
+    let font = nexa_font::ui_font(None).expect("font");
+    let mut app2 = App::new(settings, font.font, None, Some(parsed), Platform::fake());
+    app2.layout_for(1200, 800, 1.0);
+    assert_eq!(app2.panels[0].tab_count(), 3);
+    app2.panels[0].switch_tab(0, &mut Invalidations::default());
+    assert_eq!(
+        app2.panels[0].rows().sort(),
+        &[(size_key, true), (filelist::COL_NAME, false)],
+        "복원"
+    );
+    app2.panels[0].switch_tab(1, &mut Invalidations::default());
+    assert!(app2.panels[0].rows().sort().is_empty());
+    assert!(
+        !app2.session_save.dirty(),
+        "복원 직후는 깨끗(시드는 변경이 아니다)"
+    );
+    assert_eq!(
+        crate::panel::sort_from_str("size-,bogus+,name"),
+        vec![(filelist::COL_SIZE, true)]
+    );
+    assert_eq!(crate::panel::sort_to_str(&[]), "");
+    let _ = std::fs::remove_dir_all(&dir);
 }

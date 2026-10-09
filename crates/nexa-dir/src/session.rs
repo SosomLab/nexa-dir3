@@ -26,6 +26,8 @@ pub(crate) struct PanelSession {
     pub views: Vec<u8>,
     pub col_layout: String,
     pub col_widths: Vec<i32>,
+    /// 탭별 정렬(`panel{i}.sort` · dir3 신규 T-128 · dir2는 모르는 키 = 무시): `name+,size-` · 전부 기본이면 빈 목록.
+    pub sort: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -101,6 +103,9 @@ impl Session {
             if !p.col_layout.is_empty() {
                 out.push_str(&format!("panel{i}.cols={}\n", p.col_layout));
             }
+            if !p.sort.is_empty() {
+                out.push_str(&format!("panel{i}.sort={}\n", p.sort.join("|")));
+            }
             if !p.col_widths.is_empty() {
                 let ws: Vec<String> = p.col_widths.iter().map(|w| w.to_string()).collect();
                 out.push_str(&format!("panel{i}.colw={}\n", ws.join(",")));
@@ -153,6 +158,7 @@ impl Session {
                         .collect();
                 }
                 "cols" => p.col_layout = v.to_string(),
+                "sort" => p.sort = v.split('|').map(str::to_string).collect(),
                 "colw" => {
                     p.col_widths = v
                         .split(',')
@@ -246,6 +252,7 @@ mod tests {
                     views: vec![5, 2],
                     col_widths: vec![320, 64, 96],
                     col_layout: "cols:1[ext:1,name:1,size:0,modified:1,kind:1]".into(),
+                    sort: vec!["size-,name+".into(), String::new()],
                 },
                 PanelSession {
                     tabs: vec![PathBuf::from("C:\\")],
@@ -262,6 +269,7 @@ mod tests {
         };
         let text = s.serialize();
         assert!(text.contains("dirview=3|/home/u/src\n") && text.contains("dirview=0|/tmp/a|b\n"));
+        assert!(text.contains("panel0.sort=size-,name+|\n") && !text.contains("panel1.sort"));
         assert!(text.starts_with("# nexa-dir session v1\nactive_panel=1\n"));
         let parsed = Session::parse(&text);
         assert_eq!(parsed, s);
