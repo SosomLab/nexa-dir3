@@ -230,6 +230,10 @@ impl ApplicationHandler<Wake> for App {
             // 끌어오는 동안은 사건이 오지 않는다 → 추적 간격으로 스스로 깬다(가장자리 자동 스크롤 · 놓는 자리 갱신).
             next = next.min(now + Duration::from_millis(app::dnd::DND_TRACK_MS));
         }
+        if self.xdnd.is_some() {
+            // 앱 밖으로 끌어 내는 동안 · 놓은 뒤 Finished까지: 대상의 응답과 데이터 요청을 틱이 거둔다(사건이 없어도).
+            next = next.min(now + Duration::from_millis(platform::XDND_TICK_MS));
+        }
         if let Some(t) = self.session_tick(now) {
             next = next.min(t);
         }

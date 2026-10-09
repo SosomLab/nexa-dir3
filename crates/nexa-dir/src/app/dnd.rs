@@ -133,12 +133,8 @@ impl App {
                 }
                 self.rename_on_up = None;
                 self.rename_due = None;
-                // 발신부에 우리 창(X11 id — XWayland 포함)을 알린다: Linux XDND는 이것이 있을 때만 OS 드래그(10-10 · 종전 환경 변수
-                // 판정은 XWayland 위 X11 창을 Wayland로 오판해 발신이 꺼졌다).
-                if let Some(w) = &self.window {
-                    self.platform.drag.set_window(winfocus::x11_window_id(w));
-                }
-                // OS 드래그가 없는 OS(Wayland 네이티브 · macOS) = 창 안 드래그로(포인터 사건이 드롭 수신부로 · T-147 1차).
+                // 모달 OS 드래그가 없는 OS(Linux · macOS) = 창 안 드래그(포인터 사건이 드롭 수신부로 · T-147 1차) + Linux X11은 그 위에
+                // 비모달 XDND 세션(앱 밖 대상 · 10-10 — 포인터는 winit의 암시적 잡기가 들고 있어 따로 잡을 수 없다).
                 if !self.platform.drag.supports_os_drag() {
                     self.dnd_internal_begin(i, paths, (x, y));
                     return;
@@ -198,12 +194,38 @@ impl App {
             },
             Instant::now(),
         );
+        // Linux X11: 앱 밖 대상(노틸러스 · 터미널 · 다른 창)을 위한 XDND 세션 — 다른 OS는 None.
+        let own = self
+            .window
+            .as_ref()
+            .and_then(|w| winfocus::x11_window_id(w));
+        // 가짜 플랫폼(시험)은 열지 않는다 — 시험 PC의 실제 X 창에 Enter/Drop을 보내면 안 된다.
+        self.xdnd = if self.platform.log.is_none() {
+            platform::xdnd_start(&paths, own)
+        } else {
+            None
+        };
+        if let Some(s) = self.xdnd.as_mut() {
+            let (rx, ry) = Self::root_point(self.window.as_deref(), at);
+            s.motion(rx, ry, self.primary, self.shift);
+        }
         self.dnd_internal = Some(InternalDrag {
             panel,
             paths,
             choice,
         });
         self.set_drag_cursor(Some(choice));
+    }
+
+    /// 창 좌표(물리 px) → 화면(루트) 좌표(순수 · XDND 메시지용).
+    fn root_point(window: Option<&winit::window::Window>, at: (i32, i32)) -> (i16, i16) {
+        let inner = window
+            .and_then(|w| w.inner_position().ok())
+            .map_or((0, 0), |p| (p.x, p.y));
+        (
+            i16::try_from(inner.0 + at.0).unwrap_or(i16::MAX),
+            i16::try_from(inner.1 + at.1).unwrap_or(i16::MAX),
+        )
     }
 
     /// 창 안 드래그 중의 입력(T-147): 이동 = 놓일 자리 · 커서 갱신 · 뗌 = 놓기 · Esc = 취소. 돌려주는 값 = 사건을 삼켰는가
@@ -214,14 +236,30 @@ impl App {
         };
         match *ev {
             InputEvent::MouseMove { x, y } => {
-                let choice = self.dnd_event(
-                    platform::DropEvent::Over {
-                        at: (x, y),
-                        ctrl: self.primary,
-                        shift: self.shift,
-                    },
-                    Instant::now(),
-                );
+                // 앱 밖 대상(XDND 세션)에 자리를 알리고, 그쪽이 받겠다고 하면 커서는 제안 동작으로.
+                let (rx, ry) = Self::root_point(self.window.as_deref(), (x, y));
+                let (ctrl, shift) = (self.primary, self.shift);
+                let external = self.xdnd.as_mut().is_some_and(|s| {
+                    s.motion(rx, ry, ctrl, shift);
+                    s.external_accepts()
+                });
+                let choice = if external {
+                    let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
+                    if shift && !ctrl {
+                        platform::DropChoice::Move
+                    } else {
+                        platform::DropChoice::Copy
+                    }
+                } else {
+                    self.dnd_event(
+                        platform::DropEvent::Over {
+                            at: (x, y),
+                            ctrl: self.primary,
+                            shift: self.shift,
+                        },
+                        Instant::now(),
+                    )
+                };
                 if choice != drag.choice {
                     if let Some(d) = &mut self.dnd_internal {
                         d.choice = choice;
@@ -231,6 +269,15 @@ impl App {
             }
             InputEvent::MouseUp { x, y } => {
                 self.dnd_internal = None;
+                // 앱 밖 대상이 받겠다고 했으면 XdndDrop — 결과(Finished)는 틱이 거둔다(`dnd_internal_tick`) · 아니면 창 안 드롭.
+                if let Some(s) = self.xdnd.as_mut() {
+                    if s.release() {
+                        let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
+                        self.set_drag_cursor(None);
+                        return true;
+                    }
+                    self.xdnd = None;
+                }
                 let _ = self.dnd_event(
                     platform::DropEvent::Drop {
                         paths: drag.paths,
@@ -253,6 +300,9 @@ impl App {
 
     /// 창 안 드래그 취소(Esc · 포커스 잃음) — 표시를 걷고 커서를 되돌린다.
     pub(crate) fn dnd_internal_cancel(&mut self) {
+        if let Some(mut s) = self.xdnd.take() {
+            s.cancel();
+        }
         if self.dnd_internal.take().is_some() {
             let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
             self.set_drag_cursor(None);
@@ -261,8 +311,22 @@ impl App {
 
     /// 창 안 드래그 틱(머물면 열기 · 가장자리 자동 스크롤은 사건이 없어도 돌아야 한다) — 화면이 바뀌었으면 `true`.
     pub(crate) fn dnd_internal_tick(&mut self, now: Instant) -> bool {
+        // XDND 세션 응답 수거(Status · Finished · 데이터 요청) — 놓은 뒤에도 Finished까지 돈다.
+        let mut changed = false;
+        if let Some(out) = self.xdnd.as_mut().and_then(|s| s.tick()) {
+            self.xdnd = None;
+            if out != platform::DragOutcome::Cancelled {
+                // 놓였다 — 대상이 옮겼을 수 있으니 다시 읽어 맞춘다(windrag와 같은 수렴).
+                let mut inv = Invalidations::default();
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
+                self.update_status();
+            }
+            changed = true;
+        }
         if self.dnd_internal.is_none() {
-            return false;
+            return changed;
         }
         let _ = self.dnd_event(
             platform::DropEvent::Over {

@@ -298,8 +298,6 @@ pub(crate) trait DragSource {
     fn supports_os_drag(&self) -> bool {
         true
     }
-    /// 메인 창의 OS 창 id(X11 — XWayland 포함)를 호스트가 알린다(드래그 직전 · `None` = X11 창 아님). 기본 = 무시.
-    fn set_window(&self, _x11: Option<u32>) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -461,7 +459,7 @@ pub(crate) fn with_live_drop_sink<R>(sink: DropSink, f: impl FnOnce() -> R) -> R
 /// 실시간 수신기가 걸려 있으면 사건을 그리로 넣고 판정을 돌려준다(없으면 `None`). 수신기를 잠시 꺼내 부른다(부르는 동안
 /// thread_local을 빌려 두지 않는다 — 수신기 안에서 다시 들어와도 안전). Windows OLE 수신부(`windrop`)와 X11 발신부가 자기 창
 /// 위를 지날 때(`xdnd`) 쓴다.
-#[cfg_attr(target_os = "macos", allow(dead_code))]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn live_drop(ev: &DropEvent) -> Option<DropChoice> {
     let mut sink = LIVE_SINK.with(|s| s.borrow_mut().take())?;
     let choice = sink(ev);
@@ -643,6 +641,46 @@ pub(crate) fn pointer_state() -> Option<PointerState> {
 /// 시험 자동화용 XDND 주입(Linux X11 · `xdnd.drop` 기동 명령): 다른 연결이 **프로토콜만으로** 소스가 되어 우리 창에 놓는다.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) use xdnd::inject_drop as xdnd_inject_drop;
+
+/// Linux X11 **비모달 XDND 발신 세션**(`xdnd::Session` · T-147 10-10): 창 안 드래그가 받는 포인터 사건 위에 XDND 메시지를 얹고 틱으로
+/// 응답을 거둔다. 다른 OS = 빈 자리(늘 `None`).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) type XdndSession = xdnd::Session;
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn xdnd_start(paths: &[PathBuf], own: Option<u32>) -> Option<XdndSession> {
+    match xdnd::Session::start(paths, own) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            eprintln!("nexa-dir: {e}");
+            None
+        }
+    }
+}
+/// 세션이 살아 있는 동안 호스트 틱 간격(ms).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) const XDND_TICK_MS: u64 = xdnd::TICK_MS;
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+pub(crate) struct XdndSession;
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+impl XdndSession {
+    pub(crate) fn motion(&mut self, _x: i16, _y: i16, _ctrl: bool, _shift: bool) {}
+    pub(crate) fn external_accepts(&self) -> bool {
+        false
+    }
+    pub(crate) fn release(&mut self) -> bool {
+        false
+    }
+    pub(crate) fn cancel(&mut self) {}
+    pub(crate) fn tick(&mut self) -> Option<DragOutcome> {
+        None
+    }
+}
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+pub(crate) fn xdnd_start(_paths: &[PathBuf], _own: Option<u32>) -> Option<XdndSession> {
+    None
+}
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+pub(crate) const XDND_TICK_MS: u64 = 10;
 
 /// 클러스터 올림(순수 · dir2 fileinfo.rs `round_up_cluster`): 클러스터 0(모름)이면 점유 바이트 그대로 · 0바이트 = 0.
 /// 압축 파일은 점유가 논리 크기보다 작을 수 있다(그대로 둔다).
@@ -1088,13 +1126,11 @@ impl Platform {
             ctxmenu,
             trash,
             clipboard,
-            // 드래그 발신: Windows = OLE(`windrag`) · Linux = X11 XDND(`xdnd` · Wayland 창이면 `supports_os_drag` = false →
-            // 창 안 드래그) · macOS(NSDraggingSource)는 후속 — 그때까지 미지원.
+            // 드래그 발신: Windows = OLE(`windrag` · 모달) · Linux = 창 안 드래그 + 비모달 XDND 세션(`xdnd::Session` — 포인터는 winit의
+            // 암시적 잡기가 들고 있어 따로 잡을 수 없다 · 10-10) · macOS(NSDraggingSource)는 후속 — 모달 발신부는 미지원.
             #[cfg(windows)]
             drag: Rc::new(windrag::NativeDrag),
-            #[cfg(all(unix, not(target_os = "macos")))]
-            drag: Rc::new(xdnd::X11Drag),
-            #[cfg(target_os = "macos")]
+            #[cfg(not(windows))]
             drag: Rc::new(Unsupported),
             watcher,
             opener,
