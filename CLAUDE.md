@@ -49,7 +49,7 @@
 - **push 전 게이트 = `bash scripts/gate.sh`(단계형 · 사용자 10-04)** — 모든 수정에 전수를 돌리지 않는다. **quick**(fmt + 호스트 clippy + 바뀐 크레이트 시험 + `--smoke`)이 기본이고, **full**(3-OS clippy + 전체 시험 + `--smoke` + `--selfcheck --ci` + T4 시나리오)은 ① 이 PC에 전수 기록이 없거나 ② 마지막 전수가 24시간(`NDIR_GATE_FULL_HOURS`)보다 오래됐거나 ③ 핵심 경로(코어 rlib · `platform/` · 설정 엔진 · 라이선스 · 빌드/CI/스크립트 · 시나리오) 또는 형제 저장소가 바뀌었을 때만 자동으로 돈다. **배포 · 태그 · 마일스톤 마감 전에는 `gate.sh full`을 한 번 더.** 빨강이면 push하지 않는다. push 뒤 CI(3-OS 전수) 결과 확인 — quick으로 push했으면 CI가 전수 역할이다.
 - **기록 = 한 트랜잭션**: 커밋 → `docs/journal/YYYY-MM-DD.md` → DEVLOG → STATUS → MILESTONES/TODO → (브랜치면) BRANCHES.
 - **기능 설계 전 이식 원장(docs/port) · dir2 원본 코드 먼저 확인**(재발명 금지). 원장에 없는 기능을 발견하면 원장에 `GAP-NNN`으로 먼저 등재.
-- **컨트롤 추가는 nexa-ui에**(DR-2): 추가 → nexa-ui 테스트 + nexa-sql 빌드 확인 → nexa-ui 커밋/push → dir3에서 사용. nexa-ui 커밋 본문에 `영향: nexa-sql | dir3`.
+- **컨트롤 추가는 nexa-ui에**(DR-2): **① 착수 전 최신화**(`git -C ../nexa-ui fetch` → ff-pull · 상류에 같은 기능이 이미 있는지 확인 · nexa-license도 동일) → ② 추가 → nexa-ui 테스트 + nexa-sql 빌드 확인 → **③ 기능 단위 커밋 1개 + 즉시 push**(여러 기능을 모아 두지 않는다 — 다른 PC·세션이 같은 저장소를 쓰며 바꾸고 있을 수 있다 · 사용자 10-10) → ④ dir3에서 사용. nexa-ui 커밋 본문에 `영향: nexa-sql | dir3`.
 - **OS 분기는 `platform/`에만**(DR-5) · 분기 판정이 2조건 이상이면 순수 함수 + MC/DC 시험 · 다른 OS = `None`/`Err(Unsupported)`로 돌려주고 호출부가 안내.
 - **사용자 문자열은 전부 i18n 키**(dir2 `.lang` 자원) · **설정 키는 `ndir-settings::REGISTRY`에만**(라벨·설명 = i18n 키) · 구현 상수는 설정 키로(자주 안 바꾸면 `HIDDEN`).
 - **새 기능 = 시험 1개 이상**(단위 또는 T3 시나리오) + 검증 매트릭스 행 갱신. 실기만 가능한 것은 "실기 필요" 사유를 매트릭스에.

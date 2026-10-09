@@ -35,7 +35,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 1. 범용 UI는 **nexa-ui에만**. 앱에는 "조립"만(배치·라벨·명령 연결).
 2. 없는 컨트롤은 nexa-ui에 추가: `nexa-ctl/src/controls/<이름>.rs` · 위젯 계약(`Widget`/`Control`) · 토큰 사용 · `geom::place_popup` 팝업 규칙 · 헤드리스 시험(`RecordCtx`) · `controls/mod.rs` 등재 · nexa-ui `docs/` 기록. 절차 = [port/50 §5](port/50-ui-core.md).
 3. nexa-ui 공개 API는 **추가만**. 바꿔야 하면 nexa-sql도 같은 묶음에서 고치고 커밋 본문에 `영향: nexa-sql | dir3`.
-4. 순서 = nexa-ui 커밋 → nexa-ui 테스트 + **nexa-sql 빌드**(`cargo check -p nexa-sql`) → nexa-ui push → dir3 사용.
+4. 순서 = **최신화**(`git -C ../nexa-ui fetch` → `git log HEAD..origin/main` 확인 → ff-pull · 상류에 같은 기능이 있으면 그것을 기본으로) → nexa-ui 커밋(**기능 단위 1개**) → nexa-ui 테스트 + **nexa-sql 빌드**(`cargo check -p nexa-sql`) → **즉시 push** → dir3 사용. 여러 기능을 한 push로 모으지 않는다 — 다른 PC·세션(nexa-sql · nexa-beep 등)이 같은 저장소를 쓰며 바꾸고 있을 수 있다(사용자 10-10). nexa-license도 같은 절차.
 4-1. **소비자 기록(DR-24 · 사용자 10-03)**: nexa-ui · nexa-license를 고치는 커밋은 그 저장소 `docs/CONSUMER-CHANGES.md`에 한 줄을 더한다 — 종류(추가/**동작 변경**/수정/문서) · 소비자별 영향(nexa-sql · dir3 · 발급 도구) · 검증 방법(명령 + 화면에서 볼 곳) · **검증 상태를 정직하게**(`check` / `시험` / `실기` / `미검증`). `동작 변경`·`수정`이면 nexa-sql `cargo test --workspace`를 별도 target-dir(`target/dir3check` · 끝나면 삭제 · 실행 중 nexa-sql.exe 미접촉)로 돌린 결과까지 적는다. 인계 요약에도 "종류 · 소비자 영향 · 검증 방법"을 쓴다. 형제 저장소를 pull했을 때는 그 파일의 `동작 변경`·`미검증` 행부터 dir3 쪽에서 확인한다.
 5. dir2 위젯 이식 시 **배치 수치·동작은 그대로**(DrawCtx 어휘만 어댑트 — 대조표 [port/17](port/17-dir2-rendering-text.md)·[port/14 §3](port/14-dir2-gui-widgets.md)).
 6. 포커스 링 ≤ 1 · 마우스는 커서 아래 컨트롤에만 · 팝업은 표면 밖으로 나가지 않음 · 바깥 클릭은 닫고 흘림 · hover는 `IntentFade`(nexa-sql 규칙 계승 — [port/40 §4](port/40-sql-app-skeleton.md)).
