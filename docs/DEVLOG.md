@@ -4,6 +4,8 @@
 
 ## 2026-10-10
 
+- **T-147 Linux 4차**(438e3fb) — 사용자 "커서 안 바뀜 · 끄는 과정이 안 보임 · 복사는 됨" → 로그 판독(mutter 다리로 복사 성공 · 피드백 없음 · 뗌 미수신) · 드래그 이름 상자(override-redirect 창) · 버튼 폴링 복구 · T4 `xdnd-send` · `dnd-internal`(36/0) · 시험 594/0 → [10-10 §8](journal/2026-10-10.md)
+
 - **T-147 Linux 3차 = XDND 발신 비모달 세션**(75e5f54) — 사용자 실기 "pointer grab failed: ALREADY_GRABBED"(winit 연결의 암시적 잡기) → 창 안 드래그 사건 위에 XDND 메시지만 얹고 응답은 10 ms 폴링 · 노틸러스 → 앱 폴더 행 ✓(사용자) · 시험 594/0 · 앱 PID 87926 → [10-10 §7](journal/2026-10-10.md)
 
 - **T-147 Linux DnD 결함 2건 수정 + 자동화**(c888bf1) — 외부 드롭 자리 = X11 `QueryPointer` · 발신 판정 = 창 id(XWayland 오판 수정 · "XWayland 별도 기동" 안내 정정) · `xdnd.drop`/`xdnd.wait` · T4 `xdnd-drop`(34/0) · 옵트인 왕복 시험 · 시험 594/0 · 형제 저장소 규칙(4ba537d · 착수 전 ff-pull · 기능 단위 즉시 push) · 앱 PID 80179 → [10-10 §6](journal/2026-10-10.md)
