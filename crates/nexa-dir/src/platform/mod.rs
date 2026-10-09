@@ -674,6 +674,30 @@ pub(crate) const XDND_TICK_MS: u64 = xdnd::TICK_MS;
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) use xdnd::fake_target as xdnd_fake_target;
 
+/// 주입 드롭(`xdnd.drop`)의 창 기준 좌표 — 합성 모드에서 이벤트 루프가 포인터 대신 쓴다(다른 OS = `None`).
+pub(crate) fn xdnd_inject_local() -> Option<(i32, i32)> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        xdnd::inject_local()
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        None
+    }
+}
+
+/// 주입 드롭의 창 기준 좌표 적기/지우기(Linux X11 · 다른 OS = 무시).
+pub(crate) fn xdnd_set_inject_local(at: Option<(i32, i32)>) {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        xdnd::set_inject_local(at);
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let _ = at;
+    }
+}
+
 /// 합성 포인터 모드(시나리오 러너 · `NDIR_NO_ACTIVATE`)인가 — 발신 세션의 좌표를 **창 기준**으로 맞춘다(WM이 창을 옮겨도 가짜 대상과
 /// 어긋나지 않게 · 10-10 xdnd-send 흔들림). Linux X11만 뜻이 있다.
 pub(crate) fn synthetic_pointer() -> bool {
@@ -705,6 +729,9 @@ impl XdndSession {
     pub(crate) fn motion(&mut self, _x: i16, _y: i16, _ctrl: bool, _shift: bool) {}
     pub(crate) fn modifiers(&mut self, _ctrl: bool, _shift: bool) {}
     pub(crate) fn set_image(&mut self, _image: DragImage) {}
+    pub(crate) fn external_action(&self) -> Option<DropChoice> {
+        None
+    }
     pub(crate) fn external_accepts(&self) -> bool {
         false
     }

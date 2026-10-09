@@ -281,6 +281,21 @@ impl App {
         }
     }
 
+    /// 앱 밖 대상 위에서 보일 동작: 대상이 Status로 돌려준 동작(받는 쪽의 결정 — 시스템 기본 규칙) · 아직 없으면 수식키 제안(Ctrl 복사 ·
+    /// Shift 이동 · 없음 = 미정 → 이름만).
+    fn external_choice(&self, ctrl: bool, shift: bool) -> platform::DropChoice {
+        self.xdnd
+            .as_ref()
+            .and_then(|s| s.external_action())
+            .unwrap_or(if ctrl {
+                platform::DropChoice::Copy
+            } else if shift {
+                platform::DropChoice::Move
+            } else {
+                platform::DropChoice::None
+            })
+    }
+
     /// 드래그 이름 상자의 동작 표시를 지금 판정으로 맞춘다(바뀐 경우에만 다시 그린다).
     fn refresh_drag_icon(&mut self, paths: &[PathBuf], choice: platform::DropChoice) {
         if self.dnd_icon_choice == Some(choice) {
@@ -337,11 +352,7 @@ impl App {
                 });
                 let choice = if external {
                     let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
-                    if shift && !ctrl {
-                        platform::DropChoice::Move
-                    } else {
-                        platform::DropChoice::Copy
-                    }
+                    self.external_choice(ctrl, shift)
                 } else {
                     self.dnd_event(
                         platform::DropEvent::Over {
@@ -427,12 +438,14 @@ impl App {
             s.modifiers(ctrl, shift);
         }
         if self.xdnd.as_ref().is_some_and(|s| s.external_accepts()) {
-            let choice = if shift && !ctrl {
-                platform::DropChoice::Move
-            } else {
-                platform::DropChoice::Copy
-            };
+            let choice = self.external_choice(ctrl, shift);
             if let Some(d) = self.dnd_internal.clone() {
+                if d.choice != choice {
+                    if let Some(x) = &mut self.dnd_internal {
+                        x.choice = choice;
+                    }
+                    self.set_drag_cursor(Some(choice));
+                }
                 self.refresh_drag_icon(&d.paths, choice);
             }
         }
@@ -710,6 +723,7 @@ impl App {
         let sources = std::mem::take(&mut self.dnd_drop);
         let (x, y) = self.cursor;
         self.external_drop(sources, Point { x, y });
+        platform::xdnd_set_inject_local(None); // 주입 드롭이 처리됐다(시나리오)
         true
     }
 

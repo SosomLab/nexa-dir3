@@ -376,6 +376,7 @@ impl App {
                 i16::try_from(inner.1 + y).unwrap_or(i16::MAX),
             );
             self.xdnd_started = Instant::now();
+            platform::xdnd_set_inject_local(Some((x, y)));
             self.xdnd_job = Some(platform::xdnd_inject_drop(id, at, paths));
         }
         #[cfg(not(all(unix, not(target_os = "macos"))))]

@@ -66,6 +66,26 @@ pub(crate) fn synthetic() -> bool {
 type FakeRect = (Window, i16, i16, u16, u16);
 /// 등록된 가짜 대상 창.
 static FAKE_TARGETS: Mutex<Vec<FakeRect>> = Mutex::new(Vec::new());
+/// 주입 드롭(`inject_drop`)이 진행 중인 루트 좌표 — 합성 모드의 [`pointer_state`]가 실제 포인터 대신 이것을 돌려준다(개발 PC에서
+/// 사용자가 마우스를 쓰는 동안 T4 `xdnd-drop`이 흔들리던 원인 · 10-10).
+static INJECT_AT: Mutex<Option<(i16, i16)>> = Mutex::new(None);
+/// 주입 드롭의 **창 기준** 좌표(호스트가 `xdnd.drop` 때 적고 드롭 처리 뒤 지운다) — 이벤트 루프가 포인터 대신 쓴다(WM 창 배치와 무관).
+static INJECT_LOCAL: Mutex<Option<(i32, i32)>> = Mutex::new(None);
+
+/// 주입 드롭의 창 기준 좌표를 적는다/지운다(합성 모드 전용).
+pub(crate) fn set_inject_local(at: Option<(i32, i32)>) {
+    if let Ok(mut g) = INJECT_LOCAL.lock() {
+        *g = at;
+    }
+}
+
+/// 합성 모드에서 진행 중인 주입 드롭의 창 기준 좌표.
+pub(crate) fn inject_local() -> Option<(i32, i32)> {
+    if !synthetic() {
+        return None;
+    }
+    INJECT_LOCAL.lock().ok().and_then(|g| *g)
+}
 
 /// 시험 자동화(기동 명령 `xdnd.target` · T4 `xdnd-send.scn`): 이 프로세스의 **다른 X 연결**이 XdndAware 창(루트 좌표 `rect`)이 되어
 /// 받은 `text/uri-list`를 `out`에 쓴다(놓일 때마다 덮어씀). Position = Status(받음 · 제안 동작 그대로) · Drop = 데이터 읽기 → Finished.
@@ -203,12 +223,15 @@ pub(crate) fn pack_pos(x: i16, y: i16) -> u32 {
     ((x as u16 as u32) << 16) | (y as u16 as u32)
 }
 
-/// 제안 동작(순수): Ctrl = 복사 · Shift = 이동 · 그 밖 = 복사(대상이 목록에서 고른다).
+/// 제안 동작(순수): Ctrl = 복사 · Shift = 이동 · 그 밖 = **지정 없음**(`None` → XdndPosition 동작 = 0 · 목록 [복사, 이동]만 알린다 →
+/// 받는 쪽의 기본 규칙 — 노틸러스는 같은 파일 시스템이면 이동 · mutter 다리는 지정 동작을 사용자 지정으로 보아 덮어 버린다 · 10-10).
 pub(crate) fn proposed(ctrl: bool, shift: bool) -> DropChoice {
-    if ctrl || !shift {
+    if ctrl {
         DropChoice::Copy
-    } else {
+    } else if shift {
         DropChoice::Move
+    } else {
+        DropChoice::None
     }
 }
 
@@ -331,6 +354,8 @@ struct Target {
     /// `XdndStatus`를 기다리는 중(그동안 온 위치는 하나만 보관해 뒤에 보낸다 — 프로토콜 규약).
     awaiting_status: bool,
     pending: Option<(i16, i16, u32, DropChoice)>,
+    /// 지정 없음(동작 0)을 거부한 대상(GTK X11 등) — 그 뒤로는 복사로 제안한다.
+    needs_action: bool,
 }
 
 struct Payload {
@@ -821,15 +846,33 @@ impl Session {
                     action: NONE,
                     awaiting_status: false,
                     pending: None,
+                    needs_action: false,
                 });
             }
         }
         if let Some(t) = self.target.as_mut() {
+            let choice = if choice == DropChoice::None && t.needs_action {
+                DropChoice::Copy
+            } else {
+                choice
+            };
             if t.awaiting_status {
                 t.pending = Some((x, y, CURRENT_TIME, choice));
             } else {
                 let _ = self.src.position(t, x, y, CURRENT_TIME, choice);
             }
+        }
+    }
+
+    /// 외부 대상이 받겠다며 돌려준 동작(`XdndStatus` data[4] · 받는 쪽의 결정 — 이름 상자에 보인다). 받지 않았거나 모르면 `None`.
+    pub(crate) fn external_action(&self) -> Option<DropChoice> {
+        let t = self.target.as_ref().filter(|t| t.accepted)?;
+        if t.action == self.src.at.action_move {
+            Some(DropChoice::Move)
+        } else if t.action == self.src.at.action_copy {
+            Some(DropChoice::Copy)
+        } else {
+            None
         }
     }
 
@@ -973,7 +1016,15 @@ impl Session {
                         t.accepted = d[1] & 1 != 0;
                         t.action = if t.accepted { d[4] } else { NONE };
                         t.awaiting_status = false;
-                        if let Some((x, y, time, choice)) = t.pending.take() {
+                        // 지정 없음(동작 0)을 거부하는 대상(GTK X11 등)에는 복사로 다시 제안한다.
+                        if !t.accepted
+                            && !t.needs_action
+                            && self.last_choice == Some(DropChoice::None)
+                        {
+                            t.needs_action = true;
+                            let (x, y) = self.last_pos;
+                            let _ = self.src.position(t, x, y, CURRENT_TIME, DropChoice::Copy);
+                        } else if let Some((x, y, time, choice)) = t.pending.take() {
                             let _ = self.src.position(t, x, y, time, choice);
                         }
                     }
@@ -1035,6 +1086,16 @@ thread_local! {
 /// 외부 드래그가 들어와 있는 동안 호스트 틱이 부른다(`event_loop.rs` — 종전 Linux = `None`이라 놓을 자리가 드래그 전 마지막
 /// 포인터 자리였다 → 폴더 행이 아니라 패널 폴더로 떨어졌다 · 사용자 10-10 실기).
 pub(super) fn pointer_state() -> Option<super::PointerState> {
+    if synthetic() {
+        if let Some((x, y)) = INJECT_AT.lock().ok().and_then(|g| *g) {
+            return Some(super::PointerState {
+                x: i32::from(x),
+                y: i32::from(y),
+                ctrl: false,
+                shift: false,
+            });
+        }
+    }
     PTR_CONN.with(|c| {
         let mut slot = c.borrow_mut();
         if slot.is_none() {
@@ -1119,6 +1180,19 @@ fn inject_drop_blocking(
     src.conn
         .warp_pointer(NONE, src.root, 0, 0, 0, 0, at.0, at.1)?;
     src.conn.flush()?;
+    if let Ok(mut g) = INJECT_AT.lock() {
+        *g = Some(at);
+    }
+    // 끝나면(정상·오류 모두) 주입 좌표를 지운다.
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            if let Ok(mut g) = INJECT_AT.lock() {
+                *g = None;
+            }
+        }
+    }
+    let _clear = Clear;
     let a = &src.at;
     src.send(
         target,
@@ -1241,8 +1315,8 @@ mod tests {
         );
         assert_eq!(
             proposed(false, false),
-            DropChoice::Copy,
-            "수식키 없음 = 복사 제안(대상이 고른다)"
+            DropChoice::None,
+            "수식키 없음 = 지정 없음(받는 쪽 기본 규칙)"
         );
         assert_eq!(proposed(true, true), DropChoice::Copy, "Ctrl 우선");
         assert_eq!(proposed(false, true), DropChoice::Move);

@@ -149,7 +149,20 @@ impl ApplicationHandler<Wake> for App {
                 .as_ref()
                 .and_then(|w| w.inner_position().ok())
                 .map(|p| (p.x, p.y));
-            if let (Some(ps), Some(inner)) = (platform::pointer_state(), inner) {
+            // 시나리오의 주입 드롭(`xdnd.drop`)은 창 기준 좌표를 직접 쓴다(실제 포인터 · WM 창 배치와 무관 · 10-10).
+            let injected = platform::xdnd_inject_local().map(|p| {
+                (
+                    platform::PointerState {
+                        x: p.0,
+                        y: p.1,
+                        ctrl: false,
+                        shift: false,
+                    },
+                    (0, 0),
+                )
+            });
+            let polled = injected.or_else(|| platform::pointer_state().zip(inner));
+            if let Some((ps, inner)) = polled {
                 let at = app::dnd::client_point((ps.x, ps.y), inner);
                 // 멈춰 있는 포인터도 계속 본다(머물면 열기의 시간 · 수식키만 바꾼 경우 · 가장자리 자동 스크롤).
                 if self.dnd_hovering() {
