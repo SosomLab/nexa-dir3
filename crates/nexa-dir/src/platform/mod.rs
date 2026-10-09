@@ -298,6 +298,8 @@ pub(crate) trait DragSource {
     fn supports_os_drag(&self) -> bool {
         true
     }
+    /// 메인 창의 OS 창 id(X11 — XWayland 포함)를 호스트가 알린다(드래그 직전 · `None` = X11 창 아님). 기본 = 무시.
+    fn set_window(&self, _x11: Option<u32>) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -621,17 +623,26 @@ pub(crate) struct PointerState {
     pub shift: bool,
 }
 
-/// [`PointerState`] 조회 — Windows = `GetCursorPos` + `GetAsyncKeyState` · macOS · Linux = 후속(`None`).
+/// [`PointerState`] 조회(화면 좌표) — Windows = `GetCursorPos` + `GetAsyncKeyState` · Linux = X11 `QueryPointer`(XWayland 포함 ·
+/// `xdnd::pointer_state` · 10-10: 종전 `None`이라 외부 드롭이 폴더 행이 아니라 패널 폴더로 갔다) · macOS = 후속(`None`).
 pub(crate) fn pointer_state() -> Option<PointerState> {
     #[cfg(windows)]
     {
         windows::pointer_state()
     }
-    #[cfg(not(windows))]
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        xdnd::pointer_state()
+    }
+    #[cfg(target_os = "macos")]
     {
         None
     }
 }
+
+/// 시험 자동화용 XDND 주입(Linux X11 · `xdnd.drop` 기동 명령): 다른 연결이 **프로토콜만으로** 소스가 되어 우리 창에 놓는다.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) use xdnd::inject_drop as xdnd_inject_drop;
 
 /// 클러스터 올림(순수 · dir2 fileinfo.rs `round_up_cluster`): 클러스터 0(모름)이면 점유 바이트 그대로 · 0바이트 = 0.
 /// 압축 파일은 점유가 논리 크기보다 작을 수 있다(그대로 둔다).

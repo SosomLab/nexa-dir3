@@ -17,7 +17,9 @@
 //! - 순수 부분(대상 탐색 · 메시지 패킹 · 동작 매핑 · URI 목록)은 시험 · 실제 교환은 실기(XWayland: `WAYLAND_DISPLAY=` 비우고 기동).
 
 use super::{live_drop, DragOutcome, DragSource, DropChoice, DropEvent, PlatformError};
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
@@ -37,31 +39,72 @@ const FINISH_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub(super) struct X11Drag;
 
+/// 호스트가 알린 우리 메인 창의 X11 id(0 = 없음 · Wayland 네이티브/다른 OS) — 발신 가능 판정 · 자기 창 판정.
+static X11_WINDOW: AtomicU32 = AtomicU32::new(0);
+
 impl DragSource for X11Drag {
     fn begin_drag(&self, paths: &[PathBuf]) -> Result<DragOutcome, PlatformError> {
         if paths.is_empty() {
             return Ok(DragOutcome::Cancelled);
         }
-        if !x11_session() {
-            return Err(PlatformError::Unsupported("drag source (wayland)"));
-        }
-        run_drag(paths).map_err(|e| PlatformError::Failed(format!("xdnd: {e}")))
+        let Some(own) = window() else {
+            return Err(PlatformError::Unsupported("drag source (no x11 window)"));
+        };
+        run_drag(paths, own).map_err(|e| PlatformError::Failed(format!("xdnd: {e}")))
     }
     fn supports_os_drag(&self) -> bool {
-        x11_session()
+        window().is_some()
+    }
+    fn set_window(&self, x11: Option<u32>) {
+        set_window(x11);
     }
 }
 
-/// winit이 X11 창을 쓰는 세션인가(순수 판정은 [`x11_session_of`]): `DISPLAY` 있음 ∧ `WAYLAND_DISPLAY` 비어 있음 — winit은
-/// Wayland가 있으면 그쪽을 먼저 고른다(`wayland-dlopen`).
-pub(crate) fn x11_session() -> bool {
-    let has = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
-    x11_session_of(has("DISPLAY"), has("WAYLAND_DISPLAY"))
+/// 메인 창의 X11 id를 기억한다(호스트 · 드래그 직전). `None` = X11 창이 아님 → 창 안 드래그로.
+pub(crate) fn set_window(id: Option<u32>) {
+    X11_WINDOW.store(id.unwrap_or(0), Ordering::Relaxed);
 }
 
-/// (`DISPLAY` 있음, `WAYLAND_DISPLAY` 있음) → X11 세션인가.
-pub(crate) fn x11_session_of(display: bool, wayland: bool) -> bool {
-    display && !wayland
+/// 기억한 메인 창 id.
+pub(crate) fn window() -> Option<u32> {
+    match X11_WINDOW.load(Ordering::Relaxed) {
+        0 => None,
+        w => Some(w),
+    }
+}
+
+thread_local! {
+    /// 포인터 조회용 연결(틱마다 다시 잇지 않게 · 끊기면 버리고 다시).
+    static PTR_CONN: RefCell<Option<(RustConnection, Window)>> = const { RefCell::new(None) };
+}
+
+/// 화면 좌표의 포인터 자리 + Ctrl/Shift(X11 `QueryPointer` · XWayland 포함 · 10-10). X 연결이 없으면 `None`(Wayland 네이티브).
+/// 외부 드래그가 들어와 있는 동안 호스트 틱이 부른다(`event_loop.rs` — 종전 Linux = `None`이라 놓을 자리가 드래그 전 마지막
+/// 포인터 자리였다 → 폴더 행이 아니라 패널 폴더로 떨어졌다 · 사용자 10-10 실기).
+pub(super) fn pointer_state() -> Option<super::PointerState> {
+    PTR_CONN.with(|c| {
+        let mut slot = c.borrow_mut();
+        if slot.is_none() {
+            let (conn, n) = x11rb::connect(None).ok()?;
+            let root = conn.setup().roots[n].root;
+            *slot = Some((conn, root));
+        }
+        let reply = {
+            let (conn, root) = slot.as_ref()?;
+            conn.query_pointer(*root).ok().and_then(|c| c.reply().ok())
+        };
+        let Some(r) = reply else {
+            *slot = None; // 연결이 끊겼다 — 다음에 다시 잇는다
+            return None;
+        };
+        let (ctrl, shift) = mods(r.mask);
+        Some(super::PointerState {
+            x: i32::from(r.root_x),
+            y: i32::from(r.root_y),
+            ctrl,
+            shift,
+        })
+    })
 }
 
 // ───────────────────────── 순수 부분(시험) ─────────────────────────
@@ -222,7 +265,47 @@ struct Target {
     pending: Option<(i16, i16, u32, DropChoice)>,
 }
 
-fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>> {
+/// 발신 루프가 보는 입력(X 사건 · 시험의 합성 단계를 한 모양으로).
+enum Input {
+    Motion {
+        x: i16,
+        y: i16,
+        ctrl: bool,
+        shift: bool,
+        time: u32,
+    },
+    Release {
+        x: i16,
+        y: i16,
+        ctrl: bool,
+        shift: bool,
+        time: u32,
+    },
+    Escape,
+    Client(ClientMessageEvent),
+    Selection(SelectionRequestEvent),
+    Other,
+}
+
+/// 시험 전용 합성 포인터 단계(실제 잡기 없이 발신 프로토콜만 돌린다 — XTEST는 XWayland에서 잡기 창에 닿지 않았다 · 10-10).
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Step {
+    Move(i16, i16),
+    Release,
+    Escape,
+}
+
+fn run_drag(paths: &[PathBuf], own_win: Window) -> Result<DragOutcome, Box<dyn std::error::Error>> {
+    run_drag_with(paths, own_win, None)
+}
+
+/// `steps` = 시험의 합성 단계(있으면 포인터·키보드를 잡지 않고 X 사건과 단계를 번갈아 읽는다).
+fn run_drag_with(
+    paths: &[PathBuf],
+    own_win: Window,
+    steps: Option<std::sync::mpsc::Receiver<Step>>,
+) -> Result<DragOutcome, Box<dyn std::error::Error>> {
     let (conn, screen_n) = x11rb::connect(None)?;
     let root = conn.setup().roots[screen_n].root;
     let at = Atoms::intern(&conn)?;
@@ -253,26 +336,29 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
     )?;
     conn.set_selection_owner(win, at.selection, CURRENT_TIME)?
         .check()?;
-    let grab = conn
-        .grab_pointer(
-            false,
-            win,
-            EventMask::BUTTON_RELEASE | EventMask::POINTER_MOTION | EventMask::BUTTON_PRESS,
-            GrabMode::ASYNC,
-            GrabMode::ASYNC,
-            NONE,
-            NONE,
-            CURRENT_TIME,
-        )?
-        .reply()?;
-    if grab.status != GrabStatus::SUCCESS {
-        let _ = conn.destroy_window(win);
-        let _ = conn.flush();
-        return Err(format!("pointer grab failed: {:?}", grab.status).into());
+    let synthetic = steps.is_some();
+    if !synthetic {
+        let grab = conn
+            .grab_pointer(
+                false,
+                win,
+                EventMask::BUTTON_RELEASE | EventMask::POINTER_MOTION | EventMask::BUTTON_PRESS,
+                GrabMode::ASYNC,
+                GrabMode::ASYNC,
+                NONE,
+                NONE,
+                CURRENT_TIME,
+            )?
+            .reply()?;
+        if grab.status != GrabStatus::SUCCESS {
+            let _ = conn.destroy_window(win);
+            let _ = conn.flush();
+            return Err(format!("pointer grab failed: {:?}", grab.status).into());
+        }
+        let _ = conn
+            .grab_keyboard(false, win, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?
+            .reply(); // Esc 취소용 — 실패해도 드래그는 된다
     }
-    let _ = conn
-        .grab_keyboard(false, win, CURRENT_TIME, GrabMode::ASYNC, GrabMode::ASYNC)?
-        .reply(); // Esc 취소용 — 실패해도 드래그는 된다
     let escape = escape_keycodes(&conn);
     let my_pid = std::process::id();
     let data = Payload {
@@ -283,33 +369,99 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
     let mut dropped = false;
     let mut finished: Option<(bool, Atom)> = None;
     let mut deadline: Option<Instant> = None;
+    let mut last = (0i16, 0i16);
+    let to_input = |ev: Event| -> Input {
+        match ev {
+            Event::MotionNotify(m) => {
+                let (ctrl, shift) = mods(m.state);
+                Input::Motion {
+                    x: m.root_x,
+                    y: m.root_y,
+                    ctrl,
+                    shift,
+                    time: m.time,
+                }
+            }
+            Event::ButtonRelease(b) if b.detail == 1 => {
+                let (ctrl, shift) = mods(b.state);
+                Input::Release {
+                    x: b.root_x,
+                    y: b.root_y,
+                    ctrl,
+                    shift,
+                    time: b.time,
+                }
+            }
+            Event::KeyPress(k) if escape.contains(&k.detail) => Input::Escape,
+            Event::ClientMessage(cm) => Input::Client(cm),
+            Event::SelectionRequest(r) => Input::Selection(r),
+            _ => Input::Other,
+        }
+    };
     let result = loop {
-        let ev = if let Some(dl) = deadline {
-            // 놓은 뒤: `XdndFinished`를 기다리되 상한을 둔다(그동안 SelectionRequest는 계속 받아 준다).
+        // 놓은 뒤: `XdndFinished`를 기다리되 상한을 둔다(그동안 SelectionRequest는 계속 받아 준다).
+        if let Some(dl) = deadline {
             if Instant::now() >= dl {
                 break finished;
             }
+        }
+        let input = if deadline.is_some() || synthetic {
             match conn.poll_for_event()? {
-                Some(ev) => ev,
-                None => {
-                    std::thread::sleep(Duration::from_millis(5));
-                    continue;
-                }
+                Some(ev) => to_input(ev),
+                None => match &steps {
+                    Some(rx) if deadline.is_none() => {
+                        match rx.recv_timeout(Duration::from_millis(5)) {
+                            Ok(Step::Move(x, y)) => {
+                                last = (x, y);
+                                // 잡기 없는 합성 이동 — 대상 탐색(QueryPointer 자식 추적)이 같은 자리를 보게 포인터를 옮긴다.
+                                let _ = conn.warp_pointer(NONE, root, 0, 0, 0, 0, x, y);
+                                let _ = conn.flush();
+                                Input::Motion {
+                                    x,
+                                    y,
+                                    ctrl: false,
+                                    shift: false,
+                                    time: CURRENT_TIME,
+                                }
+                            }
+                            Ok(Step::Release) => Input::Release {
+                                x: last.0,
+                                y: last.1,
+                                ctrl: false,
+                                shift: false,
+                                time: CURRENT_TIME,
+                            },
+                            Ok(Step::Escape) => Input::Escape,
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Input::Escape,
+                        }
+                    }
+                    _ => {
+                        std::thread::sleep(Duration::from_millis(5));
+                        continue;
+                    }
+                },
             }
         } else {
-            conn.wait_for_event()?
+            to_input(conn.wait_for_event()?)
         };
-        match ev {
-            Event::MotionNotify(m) if deadline.is_none() => {
-                let (ctrl, shift) = mods(m.state);
-                let found = find_target(root, &mut |w| probe(&conn, &at, w));
+        match input {
+            Input::Motion {
+                x,
+                y,
+                ctrl,
+                shift,
+                time,
+            } if deadline.is_none() => {
+                let found = find_target(root, &mut |w| probe(&conn, &at, w))
+                    .or_else(|| find_target_by_geometry(&conn, &at, root, x, y));
                 let same = matches!((&target, found), (Some(t), Some((w, _))) if t.win == w);
                 if !same {
                     if let Some(t) = target.take() {
                         leave(&conn, &at, win, &t, paths);
                     }
                     if let Some((w, version)) = found {
-                        let own = is_own_window(&conn, &at, w, my_pid);
+                        let own = w == own_win || is_own_window(&conn, &at, w, my_pid);
                         let mut t = Target {
                             win: w,
                             version,
@@ -320,7 +472,7 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                             pending: None,
                         };
                         if own {
-                            let at_pt = local_point(&conn, root, w, m.root_x, m.root_y);
+                            let at_pt = local_point(&conn, root, w, x, y);
                             let choice = live_drop(&DropEvent::Enter {
                                 paths: paths.to_vec(),
                                 at: at_pt,
@@ -350,7 +502,7 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                 if let Some(t) = target.as_mut() {
                     let choice = proposed(ctrl, shift);
                     if t.own {
-                        let at_pt = local_point(&conn, root, t.win, m.root_x, m.root_y);
+                        let at_pt = local_point(&conn, root, t.win, x, y);
                         let c = live_drop(&DropEvent::Over {
                             at: at_pt,
                             ctrl,
@@ -360,22 +512,29 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                         t.accepted = c != DropChoice::None;
                         t.action = at.action_of(c);
                     } else if t.awaiting_status {
-                        t.pending = Some((m.root_x, m.root_y, m.time, choice));
+                        t.pending = Some((x, y, time, choice));
                     } else {
-                        position(&conn, &at, win, t, m.root_x, m.root_y, m.time, choice)?;
+                        position(&conn, &at, win, t, x, y, time, choice)?;
                     }
                 }
             }
-            Event::ButtonRelease(b) if b.detail == 1 && deadline.is_none() => {
-                let _ = conn.ungrab_pointer(CURRENT_TIME);
-                let _ = conn.ungrab_keyboard(CURRENT_TIME);
-                let _ = conn.flush();
+            Input::Release {
+                x,
+                y,
+                ctrl,
+                shift,
+                time,
+            } if deadline.is_none() => {
+                if !synthetic {
+                    let _ = conn.ungrab_pointer(CURRENT_TIME);
+                    let _ = conn.ungrab_keyboard(CURRENT_TIME);
+                    let _ = conn.flush();
+                }
                 match target.as_mut() {
                     Some(t) if t.accepted => {
                         dropped = true;
                         if t.own {
-                            let (ctrl, shift) = mods(b.state);
-                            let at_pt = local_point(&conn, root, t.win, b.root_x, b.root_y);
+                            let at_pt = local_point(&conn, root, t.win, x, y);
                             let c = live_drop(&DropEvent::Drop {
                                 paths: paths.to_vec(),
                                 at: at_pt,
@@ -385,7 +544,7 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                             .unwrap_or_default();
                             break Some((c != DropChoice::None, at.action_of(c)));
                         }
-                        send(&conn, t.win, at.drop, [win, 0, b.time, 0, 0])?;
+                        send(&conn, t.win, at.drop, [win, 0, time, 0, 0])?;
                         deadline = Some(Instant::now() + FINISH_TIMEOUT);
                     }
                     Some(t) => {
@@ -395,13 +554,13 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                     None => break None,
                 }
             }
-            Event::KeyPress(k) if escape.contains(&k.detail) && deadline.is_none() => {
+            Input::Escape if deadline.is_none() => {
                 if let Some(t) = target.as_ref() {
                     leave(&conn, &at, win, t, paths);
                 }
                 break None;
             }
-            Event::ClientMessage(cm) if cm.type_ == at.status => {
+            Input::Client(cm) if cm.type_ == at.status => {
                 let d = cm.data.as_data32();
                 if let Some(t) = target.as_mut().filter(|t| t.win == d[0]) {
                     t.accepted = d[1] & 1 != 0;
@@ -412,7 +571,7 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                     }
                 }
             }
-            Event::ClientMessage(cm) if cm.type_ == at.finished => {
+            Input::Client(cm) if cm.type_ == at.finished => {
                 let d = cm.data.as_data32();
                 let (accepted, action) = match target.as_ref() {
                     Some(t) if t.version >= 5 => (d[1] & 1 != 0, d[2]),
@@ -424,7 +583,7 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
                     break finished;
                 }
             }
-            Event::SelectionRequest(r) if r.selection == at.selection => {
+            Input::Selection(r) if r.selection == at.selection => {
                 serve(&conn, &at, &data, &r)?;
             }
             _ => {}
@@ -433,8 +592,10 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
     if let Some(t) = target.as_ref().filter(|t| !dropped && !t.own) {
         leave(&conn, &at, win, t, paths);
     }
-    let _ = conn.ungrab_pointer(CURRENT_TIME);
-    let _ = conn.ungrab_keyboard(CURRENT_TIME);
+    if !synthetic {
+        let _ = conn.ungrab_pointer(CURRENT_TIME);
+        let _ = conn.ungrab_keyboard(CURRENT_TIME);
+    }
     let _ = conn.destroy_window(win);
     let _ = conn.flush();
     let (accepted, action) = result
@@ -446,6 +607,180 @@ fn run_drag(paths: &[PathBuf]) -> Result<DragOutcome, Box<dyn std::error::Error>
 struct Payload {
     uri_list: Vec<u8>,
     plain: Vec<u8>,
+}
+
+/// 시험 자동화(기동 명령 `xdnd.drop` · T4 `xdnd-drop.scn`): 이 프로세스의 **다른 X 연결**이 XDND 소스가 되어 `target` 창의
+/// 루트 좌표 `at`에 `paths`를 놓는다 — 포인터 잡기 없이 **프로토콜만**(Enter → Position → Status 대기 → Drop → Finished 대기 ·
+/// 그동안 SelectionRequest 응대). 먼저 포인터를 그 자리로 옮겨(`WarpPointer`) 수신 쪽 `pointer_state`가 같은 자리를 읽게 한다.
+/// 스레드로 돌고 결과는 `JoinHandle`(`Err` = 대상이 거부/무응답).
+pub(crate) fn inject_drop(
+    target: u32,
+    at: (i16, i16),
+    paths: Vec<PathBuf>,
+) -> std::thread::JoinHandle<Result<(), String>> {
+    std::thread::Builder::new()
+        .name("ndir-xdnd-inject".into())
+        .spawn(move || inject_drop_blocking(target, at, &paths).map_err(|e| e.to_string()))
+        .expect("spawn xdnd inject thread")
+}
+
+fn inject_drop_blocking(
+    target: Window,
+    at: (i16, i16),
+    paths: &[PathBuf],
+) -> Result<(), Box<dyn std::error::Error>> {
+    const WAIT: Duration = Duration::from_secs(3);
+    let (conn, screen_n) = x11rb::connect(None)?;
+    let root = conn.setup().roots[screen_n].root;
+    let atoms = Atoms::intern(&conn)?;
+    let win = conn.generate_id()?;
+    conn.create_window(
+        x11rb::COPY_DEPTH_FROM_PARENT,
+        win,
+        root,
+        0,
+        0,
+        1,
+        1,
+        0,
+        WindowClass::INPUT_ONLY,
+        x11rb::COPY_FROM_PARENT,
+        &CreateWindowAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+    )?
+    .check()?;
+    conn.change_property32(
+        PropMode::REPLACE,
+        win,
+        atoms.action_list,
+        AtomEnum::ATOM,
+        &[atoms.action_copy, atoms.action_move],
+    )?;
+    conn.set_selection_owner(win, atoms.selection, CURRENT_TIME)?
+        .check()?;
+    let (_, version) = probe(&conn, &atoms, target);
+    if version < 3 {
+        return Err(format!("target {target:#x} is not XdndAware").into());
+    }
+    let version = version.min(XDND_VERSION);
+    conn.warp_pointer(NONE, root, 0, 0, 0, 0, at.0, at.1)?;
+    conn.flush()?;
+    let data = Payload {
+        uri_list: uri_list(paths).into_bytes(),
+        plain: plain_list(paths).into_bytes(),
+    };
+    send(
+        &conn,
+        target,
+        atoms.enter,
+        [
+            win,
+            enter_flags(version, false),
+            atoms.uri_list,
+            atoms.text_plain,
+            atoms.utf8,
+        ],
+    )?;
+    send(
+        &conn,
+        target,
+        atoms.position,
+        [
+            win,
+            0,
+            pack_pos(at.0, at.1),
+            CURRENT_TIME,
+            atoms.action_copy,
+        ],
+    )?;
+    // 받겠다는 XdndStatus까지(그동안 데이터 요청 응대 — winit은 Position 때 uri-list를 미리 읽는다).
+    let mut accepted = None;
+    let deadline = Instant::now() + WAIT;
+    while accepted.is_none() {
+        if Instant::now() >= deadline {
+            let _ = send(&conn, target, atoms.leave, [win, 0, 0, 0, 0]);
+            return Err("no XdndStatus from target".into());
+        }
+        match conn.poll_for_event()? {
+            Some(Event::ClientMessage(cm)) if cm.type_ == atoms.status => {
+                accepted = Some(cm.data.as_data32()[1] & 1 != 0);
+            }
+            Some(Event::SelectionRequest(r)) if r.selection == atoms.selection => {
+                serve(&conn, &atoms, &data, &r)?;
+            }
+            Some(_) => {}
+            None => std::thread::sleep(Duration::from_millis(5)),
+        }
+    }
+    if accepted != Some(true) {
+        let _ = send(&conn, target, atoms.leave, [win, 0, 0, 0, 0]);
+        return Err("target rejected the drop".into());
+    }
+    send(&conn, target, atoms.drop, [win, 0, CURRENT_TIME, 0, 0])?;
+    let deadline = Instant::now() + WAIT;
+    let result = loop {
+        if Instant::now() >= deadline {
+            break Err("no XdndFinished from target".into());
+        }
+        match conn.poll_for_event()? {
+            Some(Event::ClientMessage(cm)) if cm.type_ == atoms.finished => break Ok(()),
+            Some(Event::SelectionRequest(r)) if r.selection == atoms.selection => {
+                serve(&conn, &atoms, &data, &r)?;
+            }
+            Some(_) => {}
+            None => std::thread::sleep(Duration::from_millis(5)),
+        }
+    };
+    let _ = conn.destroy_window(win);
+    let _ = conn.flush();
+    result
+}
+
+/// 자식 추적이 비었을 때의 보완(XWayland: `WarpPointer`로 옮긴 자리는 컴포지터 포인터와 달라 `QueryPointer.child`가 0 — 합성
+/// 입력 시험 · 10-10): 루트의 자식들을 **위에서부터** 보며 보이는 창의 사각형이 `(x, y)`를 품으면 그 창(과 그 아래)에서 첫 XdndAware.
+fn find_target_by_geometry(
+    conn: &RustConnection,
+    at: &Atoms,
+    root: Window,
+    x: i16,
+    y: i16,
+) -> Option<(Window, u32)> {
+    fn aware_in(conn: &RustConnection, at: &Atoms, w: Window, depth: u8) -> Option<(Window, u32)> {
+        let (_, version) = probe(conn, at, w);
+        if version >= 3 {
+            return Some((w, version.min(XDND_VERSION)));
+        }
+        if depth >= 4 {
+            return None;
+        }
+        let kids = conn.query_tree(w).ok()?.reply().ok()?.children;
+        kids.iter()
+            .rev()
+            .find_map(|c| aware_in(conn, at, *c, depth + 1))
+    }
+    let kids = conn.query_tree(root).ok()?.reply().ok()?.children;
+    for w in kids.iter().rev() {
+        let Ok(attrs) = conn.get_window_attributes(*w).ok()?.reply() else {
+            continue;
+        };
+        if attrs.map_state != x11rb::protocol::xproto::MapState::VIEWABLE {
+            continue;
+        }
+        let Ok(g) = conn.get_geometry(*w).ok()?.reply() else {
+            continue;
+        };
+        let (gx, gy) = (i32::from(g.x), i32::from(g.y));
+        let inside = i32::from(x) >= gx
+            && i32::from(x) < gx + i32::from(g.width)
+            && i32::from(y) >= gy
+            && i32::from(y) < gy + i32::from(g.height);
+        if !inside {
+            continue;
+        }
+        if let Some(t) = aware_in(conn, at, *w, 0) {
+            return Some(t);
+        }
+    }
+    None
 }
 
 /// 창 하나를 묻는다: (포인터 아래 자식, XdndAware 판).
@@ -695,10 +1030,132 @@ mod tests {
             "file:///tmp/a%20b\r\nfile:///tmp/%ED%95%9C%EA%B8%80.txt\r\n"
         );
         assert_eq!(plain_list(&paths), "/tmp/a b\n/tmp/한글.txt");
-        assert!(
-            x11_session_of(true, false)
-                && !x11_session_of(true, true)
-                && !x11_session_of(false, false)
-        );
+        assert_eq!(window(), None);
+        set_window(Some(7));
+        assert_eq!(window(), Some(7));
+        set_window(None);
+        assert_eq!(window(), None);
+    }
+
+    /// 실제 X 서버 왕복(옵트인 `NDIR_XDND_TEST=1` + `DISPLAY` · XWayland 포함 · 화면에 80×80 검은 창이 잠깐 뜬다): 가짜 XDND 대상 창을
+    /// 만들어 ① `inject_drop`(프로토콜 소스)이 놓은 uri-list를 받는지 ② `run_drag`(실제 발신부)를 XTEST로 포인터를 옮기고 버튼을 떼어
+    /// 몰았을 때 Enter → Position → Drop → Finished가 돌고 결과가 복사인지 본다. 서버가 없으면 건너뛴다(CI `cargo test`는 화면 없음).
+    #[test]
+    fn x11_roundtrip_with_fake_target_opt_in() {
+        use std::sync::mpsc::channel;
+        if std::env::var_os("NDIR_XDND_TEST").is_none() || std::env::var_os("DISPLAY").is_none() {
+            eprintln!("skip: NDIR_XDND_TEST=1 + DISPLAY 필요");
+            return;
+        }
+        let (conn, n) = x11rb::connect(None).expect("X");
+        let root = conn.setup().roots[n].root;
+        let at = Atoms::intern(&conn).expect("atoms");
+        let prop = conn
+            .intern_atom(false, b"NDIR_XDND_TEST_PROP")
+            .unwrap()
+            .reply()
+            .unwrap()
+            .atom;
+        let (tx0, ty0, side) = (300i16, 300i16, 80u16);
+        let target = conn.generate_id().unwrap();
+        conn.create_window(
+            x11rb::COPY_DEPTH_FROM_PARENT,
+            target,
+            root,
+            tx0,
+            ty0,
+            side,
+            side,
+            0,
+            WindowClass::INPUT_OUTPUT,
+            x11rb::COPY_FROM_PARENT,
+            &CreateWindowAux::new()
+                .override_redirect(1)
+                .background_pixel(0)
+                .event_mask(EventMask::PROPERTY_CHANGE),
+        )
+        .unwrap()
+        .check()
+        .unwrap();
+        conn.change_property32(
+            PropMode::REPLACE,
+            target,
+            at.aware,
+            AtomEnum::ATOM,
+            &[XDND_VERSION],
+        )
+        .unwrap();
+        conn.map_window(target).unwrap();
+        conn.flush().unwrap();
+        let (tx, rx) = channel::<(Vec<u8>, u32)>();
+        // 가짜 대상: Enter 기억 · Position = Status(받음 · 소스가 제안한 동작) · Drop = uri-list 읽기 → Finished.
+        std::thread::spawn(move || {
+            let mut source = NONE;
+            let mut action = NONE;
+            loop {
+                let Ok(ev) = conn.wait_for_event() else {
+                    return;
+                };
+                match ev {
+                    Event::ClientMessage(cm) if cm.type_ == at.enter => {
+                        source = cm.data.as_data32()[0];
+                    }
+                    Event::ClientMessage(cm) if cm.type_ == at.position => {
+                        let d = cm.data.as_data32();
+                        source = d[0];
+                        action = d[4];
+                        let _ = send(&conn, source, at.status, [target, 1, 0, 0, action]);
+                    }
+                    Event::ClientMessage(cm) if cm.type_ == at.drop => {
+                        let _ = conn.convert_selection(
+                            target,
+                            at.selection,
+                            at.uri_list,
+                            prop,
+                            CURRENT_TIME,
+                        );
+                        let _ = conn.flush();
+                    }
+                    Event::SelectionNotify(sn) if sn.property != NONE => {
+                        let bytes = conn
+                            .get_property(true, target, prop, AtomEnum::ANY, 0, u32::MAX)
+                            .unwrap()
+                            .reply()
+                            .map(|p| p.value)
+                            .unwrap_or_default();
+                        let _ = send(&conn, source, at.finished, [target, 1, action, 0, 0]);
+                        let _ = tx.send((bytes, action));
+                    }
+                    _ => {}
+                }
+            }
+        });
+        let paths = vec![PathBuf::from("/tmp/x y.txt")];
+        let want = b"file:///tmp/x%20y.txt\r\n".to_vec();
+        let center = (tx0 + side as i16 / 2, ty0 + side as i16 / 2);
+        // ① 프로토콜 소스.
+        let h = inject_drop(target, center, paths.clone());
+        assert_eq!(h.join().unwrap(), Ok(()));
+        let (got, act) = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("drop received");
+        assert_eq!(got, want);
+        assert_eq!(act, at.action_copy, "제안 = 복사");
+        // ② 실제 발신부(프로토콜 전체) — 포인터는 합성 단계로 몬다(대상 가운데로 두 번 → 놓기).
+        let (stx, srx) = channel::<Step>();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            let _ = stx.send(Step::Move(center.0, center.1));
+            std::thread::sleep(Duration::from_millis(150));
+            let _ = stx.send(Step::Move(center.0 + 1, center.1));
+            std::thread::sleep(Duration::from_millis(150));
+            let _ = stx.send(Step::Release);
+        });
+        let out = run_drag_with(&paths, 0, Some(srx)).expect("run_drag");
+        assert_eq!(out, DragOutcome::Copied);
+        let (got2, _) = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("second drop");
+        assert_eq!(got2, want);
     }
 }

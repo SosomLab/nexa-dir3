@@ -133,7 +133,12 @@ impl App {
                 }
                 self.rename_on_up = None;
                 self.rename_due = None;
-                // OS 드래그가 없는 OS(Linux · macOS) = 창 안 드래그로(포인터 사건이 드롭 수신부로 · T-147 1차).
+                // 발신부에 우리 창(X11 id — XWayland 포함)을 알린다: Linux XDND는 이것이 있을 때만 OS 드래그(10-10 · 종전 환경 변수
+                // 판정은 XWayland 위 X11 창을 Wayland로 오판해 발신이 꺼졌다).
+                if let Some(w) = &self.window {
+                    self.platform.drag.set_window(winfocus::x11_window_id(w));
+                }
+                // OS 드래그가 없는 OS(Wayland 네이티브 · macOS) = 창 안 드래그로(포인터 사건이 드롭 수신부로 · T-147 1차).
                 if !self.platform.drag.supports_os_drag() {
                     self.dnd_internal_begin(i, paths, (x, y));
                     return;

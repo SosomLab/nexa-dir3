@@ -1,0 +1,23 @@
+# T4 · T-147 Linux X11 XDND 수신(10-10): 다른 X 연결이 XDND 소스가 되어(`xdnd.drop` 기동 명령 · 프로토콜만) 왼쪽 패널의
+# 폴더 행(`panel0.row:0` = inner) 위에 a.txt를 놓는다 → winit HoveredFile/DroppedFile → 포인터 자리(X11 QueryPointer)로 대상 판정
+# → inner 폴더로 복사. 종전 결함(10-10 사용자 실기): Linux 포인터 조회가 없어 패널 폴더로 떨어졌다.
+# 다른 OS에서는 `xdnd.drop`이 없어(cmd@linux) 목록만 찍고 끝난다 — Linux 검사만 판정.
+id: xdnd-drop
+title: X11 XDND 수신 — 폴더 행 위에 놓으면 그 폴더로 복사
+tree: file src/a.txt 5
+tree: dir dest/inner
+settings: ui.lang=en
+settings: transfer.close_ms=0
+cmd: @ready:nav:<root>/dest
+cmd: @ready:list.dump:<out>/before.txt
+cmd@linux: @ready:xdnd.drop:<root>/src/a.txt@panel0.row:0
+cmd@linux: @ready:xdnd.wait
+cmd@linux: @ready:ops.wait
+cmd: @ready:nav:<root>/dest/inner
+cmd: @ready:list.dump:<out>/inner.txt
+cmd: @ready:nav:<root>/dest
+cmd: @ready:list.dump:<out>/after.txt
+cmd: @ready:quit
+check: before.txt: inner
+check@linux: inner.txt: a.txt
+check@linux: after.txt: !a.txt

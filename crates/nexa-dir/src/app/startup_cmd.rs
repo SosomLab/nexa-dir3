@@ -19,6 +19,7 @@ pub(crate) fn is_wait_cmd(id: &str) -> bool {
     matches!(
         id,
         "ctx.wait"
+            | "xdnd.wait"
             | "ops.wait"
             | "dupes.wait"
             | "compare.wait"
@@ -83,6 +84,10 @@ impl App {
             self.open_prefs = true;
             self.refresh_prefs();
             self.prefs_win.select_category(cat);
+            return;
+        }
+        if let Some(spec) = id.strip_prefix("xdnd.drop:") {
+            self.xdnd_drop_cmd(spec);
             return;
         }
         if let Some(path) = id.strip_prefix("nav:") {
@@ -282,10 +287,76 @@ impl App {
         Some((x, y, it.next().unwrap_or(120)))
     }
 
-    /// 영역 이름 → 사각형(덤프의 줄 이름과 같다).
+    /// 시험 자동화 `xdnd.drop:<경로>[;<경로>…]@<영역|x/y>`(Linux X11 · 10-10): 다른 X 연결이 XDND 소스가 되어 **우리 창의 그 자리**에
+    /// 놓는다(포인터도 그 자리로 옮긴다 → `pointer_state`가 같은 자리를 읽는다). 수신은 winit → `dnd_hover/dnd_dropped` → 틱의
+    /// 실제 경로 그대로. 뒤에 `xdnd.wait` · `ops.wait`.
+    fn xdnd_drop_cmd(&mut self, spec: &str) {
+        let Some((files, where_)) = spec.rsplit_once('@') else {
+            eprintln!("[startup] xdnd.drop: <paths>@<area>");
+            return;
+        };
+        let paths: Vec<PathBuf> = files
+            .split(';')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| PathBuf::from(s.trim()))
+            .collect();
+        let point = if where_
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '/' || c == 'x')
+        {
+            self.resolve_point(where_)
+        } else {
+            self.resolve_point(&format!("@{where_}"))
+        };
+        let Some((x, y, _)) = point else {
+            eprintln!("[startup] xdnd.drop: unknown area: {where_}");
+            return;
+        };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            let Some(w) = self.window.as_ref() else {
+                eprintln!("[startup] xdnd.drop: no window");
+                return;
+            };
+            let Some(id) = winfocus::x11_window_id(w) else {
+                eprintln!("[startup] xdnd.drop: not an X11 window");
+                return;
+            };
+            let inner = w.inner_position().map_or((0, 0), |p| (p.x, p.y));
+            let at = (
+                i16::try_from(inner.0 + x).unwrap_or(i16::MAX),
+                i16::try_from(inner.1 + y).unwrap_or(i16::MAX),
+            );
+            self.xdnd_started = Instant::now();
+            self.xdnd_job = Some(platform::xdnd_inject_drop(id, at, paths));
+        }
+        #[cfg(not(all(unix, not(target_os = "macos"))))]
+        {
+            let _ = (x, y, paths);
+            eprintln!("[startup] xdnd.drop: Linux X11 only");
+        }
+    }
+
+    /// 영역 이름 → 사각형(덤프의 줄 이름과 같다). `panelN.row:<i>` = 목록의 i번째 가시 행(세로로 훑어 `row_at`이 그 행인 띠).
     pub(crate) fn area_rect(&self, name: &str) -> Option<Rect> {
         let panel = |i: usize, part: &str| -> Option<Rect> {
             let p = &self.panels[i];
+            if let Some(n) = part.strip_prefix("row:") {
+                let n: usize = n.trim().parse().ok()?;
+                let b = p.rows().bounds();
+                let x = b.x + 24;
+                let (mut top, mut bottom) = (None, None);
+                for y in b.y..b.bottom() {
+                    if p.rows().row_at(x, y) == Some(n) {
+                        top.get_or_insert(y);
+                        bottom = Some(y);
+                    } else if top.is_some() {
+                        break;
+                    }
+                }
+                let (t, bt) = (top?, bottom?);
+                return Some(Rect::new(b.x, t, b.w, bt - t + 1));
+            }
             Some(match part {
                 "" => p.bounds(),
                 "tabs" => p.tabbar.bounds(),
@@ -721,6 +792,17 @@ impl App {
         match id {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
             "ops.wait" => self.transfer.is_some(),
+            // `xdnd.drop` 뒤: 소스 스레드가 끝나고(XdndFinished) 모인 드롭이 틱에서 처리돼 전송이 시작될 때까지(1초 유예).
+            "xdnd.wait" => match &self.xdnd_job {
+                None => false,
+                Some(j) if !j.is_finished() => true,
+                Some(_) => {
+                    self.dnd_hovering()
+                        || !self.dnd_drop.is_empty()
+                        || (self.transfer.is_none()
+                            && self.xdnd_started.elapsed() < Duration::from_millis(1000))
+                }
+            },
             // 10-08 Linux 실기 자동화: 신규 기능의 워커가 끝날 때까지(중복 찾기 · 폴더 비교 · 체크섬 · 압축 풀기/동기화 · 폴더 크기).
             "dupes.wait" => self.dup_job.is_some() || self.dupes_win.is_running(),
             "compare.wait" => {

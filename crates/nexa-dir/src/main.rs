@@ -405,6 +405,9 @@ struct App {
     dnd_mark: Option<app::dnd::DropMark>,
     /// 창 안 드래그(OS 드래그가 없는 Linux · macOS · T-147): 끌고 있는 경로 · 원래 패널 — 포인터 사건이 드롭 수신부로 간다.
     dnd_internal: Option<app::dnd::InternalDrag>,
+    /// 시험 자동화 `xdnd.drop`(Linux X11): 프로토콜 소스 스레드 · 시작 시각(`xdnd.wait`의 유예).
+    xdnd_job: Option<std::thread::JoinHandle<Result<(), String>>>,
+    xdnd_started: Instant,
     /// 퀵 런처 바(T-42 · dir2 WINA-029: 도구 모음 아래 24 · 숨김/항목 0 = 0) + 항목.
     launcherbar: Toolbar,
     launcher_items: Vec<launcher::LauncherItem>,
@@ -754,6 +757,8 @@ impl App {
             drop_shared: None,
             dnd_mark: None,
             dnd_internal: None,
+            xdnd_job: None,
+            xdnd_started: Instant::now(),
             platform,
             watch_next: Instant::now(),
             watch_deferred: Vec::new(),

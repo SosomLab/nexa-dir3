@@ -187,6 +187,19 @@ pub(crate) fn hwnd(_w: &Window) -> Option<isize> {
     None
 }
 
+/// X11 창 id(XWayland 포함 · 모든 OS에서 부를 수 있는 래퍼) — X11 창이 아니면 `None`(Windows · macOS · Wayland 네이티브).
+pub(crate) fn x11_window_id(w: &Window) -> Option<u32> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        x11_window(w)
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let _ = w;
+        None
+    }
+}
+
 /// X11 창 id(XWayland 포함) — Wayland 네이티브 창이면 `None`.
 #[cfg(all(unix, not(target_os = "macos")))]
 fn x11_window(w: &Window) -> Option<u32> {
