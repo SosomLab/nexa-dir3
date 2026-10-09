@@ -201,7 +201,8 @@ impl App {
             .and_then(|w| winfocus::x11_window_id(w));
         // 가짜 플랫폼(시험)은 열지 않는다 — 시험 PC의 실제 X 창에 Enter/Drop을 보내면 안 된다.
         self.xdnd = if self.platform.log.is_none() {
-            platform::xdnd_start(&paths, own)
+            let image = self.drag_image(&paths);
+            platform::xdnd_start(&paths, own, Some(image))
         } else {
             None
         };
@@ -215,6 +216,52 @@ impl App {
             choice,
         });
         self.set_drag_cursor(Some(choice));
+    }
+
+    /// 드래그 이미지(10-10 사용자 "끄는 과정이 눈에 안 보임"): 첫 항목 이름(여럿이면 "… 외 N개")을 테마 색으로 한 줄 — 발신 세션이
+    /// 포인터 옆에 띄워 따라다닌다(X11 override-redirect 창 · Wayland 창 위에도 보인다).
+    pub(crate) fn drag_image(&self, paths: &[PathBuf]) -> platform::DragImage {
+        let first = paths
+            .first()
+            .map(|p| ndir_ops::leaf_name(p))
+            .unwrap_or_default();
+        let label = if paths.len() > 1 {
+            trf("dnd.dragMore", &[&first, &(paths.len() - 1).to_string()])
+        } else {
+            first
+        };
+        let s = self.scale;
+        let pad = (8.0 * s).round() as i32;
+        let h = (24.0 * s).round().max(12.0) as i32;
+        let max_w = (320.0 * s).round() as i32;
+        // 폭을 재려면 래스터 컨텍스트가 필요하다 → 임시 1픽셀 표면으로 잰 뒤 실제 크기로 다시 그린다.
+        let text_w = {
+            let mut tmp = [0u32; 1];
+            let mut g = nexa_gfx::Surface::new(&mut tmp, 1, 1);
+            let mut dc = RasterCtx::new(&mut g, &self.ui_font, s);
+            dc.text_width(&label)
+        };
+        let w = (text_w + pad * 2).clamp(h, max_w);
+        let mut buf = vec![0u32; (w * h) as usize];
+        {
+            let mut g = nexa_gfx::Surface::new(&mut buf, w as usize, h as usize);
+            let mut dc = RasterCtx::new(&mut g, &self.ui_font, s);
+            dc.fill_rect(Rect::new(0, 0, w, h), self.theme.accent);
+            dc.fill_rect(Rect::new(1, 1, w - 2, h - 2), self.theme.sel_bg);
+            let ty = (h - (h * 4) / 5) / 2;
+            dc.text(
+                pad,
+                ty,
+                Rect::new(pad, 0, w - pad * 2, h),
+                &label,
+                self.theme.text,
+            );
+        }
+        platform::DragImage {
+            w: u16::try_from(w).unwrap_or(u16::MAX),
+            h: u16::try_from(h).unwrap_or(u16::MAX),
+            pixels: buf,
+        }
     }
 
     /// 창 좌표(물리 px) → 화면(루트) 좌표(순수 · XDND 메시지용).
@@ -239,6 +286,13 @@ impl App {
                 // 앱 밖 대상(XDND 세션)에 자리를 알리고, 그쪽이 받겠다고 하면 커서는 제안 동작으로.
                 let (rx, ry) = Self::root_point(self.window.as_deref(), (x, y));
                 let (ctrl, shift) = (self.primary, self.shift);
+                if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
+                    let inside = x >= 0 && y >= 0 && x < self.viewport.0 && y < self.viewport.1;
+                    eprintln!(
+                        "[xdnd-app] move win=({x},{y}) root=({rx},{ry}) inside={inside} session={}",
+                        self.xdnd.is_some()
+                    );
+                }
                 let external = self.xdnd.as_mut().is_some_and(|s| {
                     s.motion(rx, ry, ctrl, shift);
                     s.external_accepts()
@@ -327,6 +381,12 @@ impl App {
         }
         if self.dnd_internal.is_none() {
             return changed;
+        }
+        // 뗌 사건이 X 쪽에 안 온 경우(mutter가 Wayland 표면 위에서 뗌을 삼킴 · 10-10 3회차): 버튼이 이미 떨어져 있으면 지금 자리에서 뗀 것으로.
+        if self.xdnd.is_some() && platform::pointer_button1_down() == Some(false) {
+            let (x, y) = self.cursor;
+            let _ = self.dnd_internal_event(&InputEvent::MouseUp { x, y });
+            return true;
         }
         let _ = self.dnd_event(
             platform::DropEvent::Over {

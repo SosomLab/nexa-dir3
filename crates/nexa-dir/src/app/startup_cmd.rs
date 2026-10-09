@@ -90,6 +90,42 @@ impl App {
             self.xdnd_drop_cmd(spec);
             return;
         }
+        if let Some(spec) = id.strip_prefix("xdnd.target:") {
+            self.xdnd_target_cmd(spec);
+            return;
+        }
+        // 끌기(T4 · 창 안 드래그 · 발신 세션): `ui.drag:@from>@to` = 누름(from) → 임계 넘는 이동 → to까지 이동(뗌은 `ui.up:@to`로 따로 —
+        // 그 사이 틱이 돌아 외부 대상의 Status가 도착한다).
+        if let Some(spec) = id.strip_prefix("ui.drag:") {
+            let Some((from, to)) = spec.split_once('>') else {
+                eprintln!("[startup] ui.drag: <from>><to>");
+                return;
+            };
+            let (Some((fx, fy, _)), Some((tx, ty, _))) = (
+                self.resolve_point(from.trim()),
+                self.resolve_point(to.trim()),
+            ) else {
+                eprintln!("[startup] ui.drag: unknown area: {spec}");
+                return;
+            };
+            let (shift, primary) = (self.shift, self.primary);
+            self.cursor = (fx, fy);
+            self.route(InputEvent::MouseMove { x: fx, y: fy });
+            self.route(InputEvent::MouseDown {
+                x: fx,
+                y: fy,
+                shift,
+                primary,
+            });
+            self.cursor = (fx + 6, fy + 6);
+            self.route(InputEvent::MouseMove {
+                x: fx + 6,
+                y: fy + 6,
+            });
+            self.cursor = (tx, ty);
+            self.route(InputEvent::MouseMove { x: tx, y: ty });
+            return;
+        }
         if let Some(path) = id.strip_prefix("nav:") {
             let mut inv = Invalidations::default();
             let _ = self.panels[self.active].navigate_to(PathBuf::from(path), &mut inv);
@@ -118,7 +154,12 @@ impl App {
         if let Some((kind, where_)) = id
             .strip_prefix("ui.")
             .and_then(|r| r.split_once(':'))
-            .filter(|(k, _)| matches!(*k, "move" | "click" | "dclick" | "rclick" | "wheel"))
+            .filter(|(k, _)| {
+                matches!(
+                    *k,
+                    "move" | "click" | "dclick" | "rclick" | "wheel" | "down" | "up"
+                )
+            })
         {
             let Some((x, y, delta)) = self.resolve_point(where_) else {
                 eprintln!("[startup] unknown area: {where_}");
@@ -155,6 +196,13 @@ impl App {
                     });
                     self.route(InputEvent::MouseUp { x, y });
                 }
+                "down" => self.route(InputEvent::MouseDown {
+                    x,
+                    y,
+                    shift,
+                    primary,
+                }),
+                "up" => self.route(InputEvent::MouseUp { x, y }),
                 _ => {}
             }
             return;
@@ -334,6 +382,41 @@ impl App {
         {
             let _ = (x, y, paths);
             eprintln!("[startup] xdnd.drop: Linux X11 only");
+        }
+    }
+
+    /// 시험 자동화 `xdnd.target:<파일>@<영역>`(Linux X11): 그 영역(루트 좌표)에 가짜 XdndAware 창을 띄워 받은 uri-list를 파일에 쓴다 —
+    /// 발신 세션(합성 모드)은 이 창만 대상으로 본다(`xdnd-send.scn`).
+    fn xdnd_target_cmd(&mut self, spec: &str) {
+        let Some((out, area)) = spec.rsplit_once('@') else {
+            eprintln!("[startup] xdnd.target: <file>@<area>");
+            return;
+        };
+        let Some(r) = self.area_rect(area.trim()) else {
+            eprintln!("[startup] xdnd.target: unknown area: {area}");
+            return;
+        };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            let inner = self
+                .window
+                .as_ref()
+                .and_then(|w| w.inner_position().ok())
+                .map_or((0, 0), |p| (p.x, p.y));
+            let rect = (
+                i16::try_from(inner.0 + r.x).unwrap_or(0),
+                i16::try_from(inner.1 + r.y).unwrap_or(0),
+                u16::try_from(r.w).unwrap_or(1),
+                u16::try_from(r.h).unwrap_or(1),
+            );
+            if let Err(e) = platform::xdnd_fake_target(PathBuf::from(out.trim()), rect) {
+                eprintln!("[startup] xdnd.target: {e}");
+            }
+        }
+        #[cfg(not(all(unix, not(target_os = "macos"))))]
+        {
+            let _ = (out, r);
+            eprintln!("[startup] xdnd.target: Linux X11 only");
         }
     }
 
@@ -793,16 +876,20 @@ impl App {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
             "ops.wait" => self.transfer.is_some(),
             // `xdnd.drop` 뒤: 소스 스레드가 끝나고(XdndFinished) 모인 드롭이 틱에서 처리돼 전송이 시작될 때까지(1초 유예).
-            "xdnd.wait" => match &self.xdnd_job {
-                None => false,
-                Some(j) if !j.is_finished() => true,
-                Some(_) => {
-                    self.dnd_hovering()
-                        || !self.dnd_drop.is_empty()
-                        || (self.transfer.is_none()
-                            && self.xdnd_started.elapsed() < Duration::from_millis(1000))
-                }
-            },
+            // 수신(주입) · 발신(세션) 양쪽의 결정적 대기: 주입 스레드 끝 + 드롭 처리 + 1초 유예 / 세션 = Status(받음)까지 · 놓은 뒤 Finished까지.
+            "xdnd.wait" => {
+                let inject = match &self.xdnd_job {
+                    None => false,
+                    Some(j) if !j.is_finished() => true,
+                    Some(_) => {
+                        self.dnd_hovering()
+                            || !self.dnd_drop.is_empty()
+                            || (self.transfer.is_none()
+                                && self.xdnd_started.elapsed() < Duration::from_millis(1000))
+                    }
+                };
+                inject || self.xdnd.as_ref().is_some_and(|s| s.waiting())
+            }
             // 10-08 Linux 실기 자동화: 신규 기능의 워커가 끝날 때까지(중복 찾기 · 폴더 비교 · 체크섬 · 압축 풀기/동기화 · 폴더 크기).
             "dupes.wait" => self.dup_job.is_some() || self.dupes_win.is_running(),
             "compare.wait" => {

@@ -170,6 +170,7 @@ new.fileOp = new file
 # ── Shell context menu (M3-4) ──
 ctx.new = New
 dnd.rejected = Cannot drop onto itself or its own subfolder.
+dnd.dragMore = {0} and {1} more
 dnd.dropped = Dropped {0} item(s) into {1}
 dnd.willMove = Move → {0}   (Ctrl = copy)
 dnd.willCopy = Copy → {0}   (Shift = move)

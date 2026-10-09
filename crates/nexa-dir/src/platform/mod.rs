@@ -644,11 +644,22 @@ pub(crate) use xdnd::inject_drop as xdnd_inject_drop;
 
 /// Linux X11 **비모달 XDND 발신 세션**(`xdnd::Session` · T-147 10-10): 창 안 드래그가 받는 포인터 사건 위에 XDND 메시지를 얹고 틱으로
 /// 응답을 거둔다. 다른 OS = 빈 자리(늘 `None`).
+/// 끄는 동안 포인터를 따라다니는 드래그 이미지(앱이 그린 0x00RRGGBB 픽셀 · 행 우선) — 10-10 사용자 "끄는 과정이 눈에 안 보임".
+pub(crate) struct DragImage {
+    pub w: u16,
+    pub h: u16,
+    pub pixels: Vec<u32>,
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) type XdndSession = xdnd::Session;
 #[cfg(all(unix, not(target_os = "macos")))]
-pub(crate) fn xdnd_start(paths: &[PathBuf], own: Option<u32>) -> Option<XdndSession> {
-    match xdnd::Session::start(paths, own) {
+pub(crate) fn xdnd_start(
+    paths: &[PathBuf],
+    own: Option<u32>,
+    image: Option<DragImage>,
+) -> Option<XdndSession> {
+    match xdnd::Session::start(paths, own, image) {
         Ok(s) => Some(s),
         Err(e) => {
             eprintln!("nexa-dir: {e}");
@@ -659,6 +670,21 @@ pub(crate) fn xdnd_start(paths: &[PathBuf], own: Option<u32>) -> Option<XdndSess
 /// 세션이 살아 있는 동안 호스트 틱 간격(ms).
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) const XDND_TICK_MS: u64 = xdnd::TICK_MS;
+/// 시험 자동화 가짜 XDND 대상 창(기동 명령 `xdnd.target` · Linux X11).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) use xdnd::fake_target as xdnd_fake_target;
+
+/// 왼쪽 버튼이 지금 눌려 있는가(끌기 중 뗌 사건을 못 받은 경우의 복구 · Linux X11만 · 다른 OS = `None`).
+pub(crate) fn pointer_button1_down() -> Option<bool> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        xdnd::button1_down()
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        None
+    }
+}
 #[cfg(not(all(unix, not(target_os = "macos"))))]
 pub(crate) struct XdndSession;
 #[cfg(not(all(unix, not(target_os = "macos"))))]
@@ -674,9 +700,16 @@ impl XdndSession {
     pub(crate) fn tick(&mut self) -> Option<DragOutcome> {
         None
     }
+    pub(crate) fn waiting(&self) -> bool {
+        false
+    }
 }
 #[cfg(not(all(unix, not(target_os = "macos"))))]
-pub(crate) fn xdnd_start(_paths: &[PathBuf], _own: Option<u32>) -> Option<XdndSession> {
+pub(crate) fn xdnd_start(
+    _paths: &[PathBuf],
+    _own: Option<u32>,
+    _image: Option<DragImage>,
+) -> Option<XdndSession> {
     None
 }
 #[cfg(not(all(unix, not(target_os = "macos"))))]

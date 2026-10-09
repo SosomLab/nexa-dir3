@@ -15,16 +15,19 @@
 //! - **시험**: 순수 부분(대상 탐색 · 메시지 패킹 · 동작 매핑 · URI 목록)은 늘 · 실제 X 서버 왕복은 옵트인(`NDIR_XDND_TEST=1` —
 //!   가짜 XDND 대상 창 ← [`inject_drop`] 프로토콜 소스 · [`Session`]을 합성 포인터로 몰기) · 수신은 T4 `xdnd-drop.scn`(`xdnd.drop` 기동 명령).
 
+use super::DragImage;
 use super::DragOutcome;
 use super::DropChoice;
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
-    Atom, AtomEnum, ClientMessageEvent, ConnectionExt, CreateWindowAux, EventMask, KeyButMask,
-    MapState, PropMode, SelectionNotifyEvent, SelectionRequestEvent, Window, WindowClass,
-    CLIENT_MESSAGE_EVENT, SELECTION_NOTIFY_EVENT,
+    Atom, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt, CreateGCAux,
+    CreateWindowAux, EventMask, Gcontext, ImageFormat, KeyButMask, MapState, PropMode,
+    SelectionNotifyEvent, SelectionRequestEvent, Window, WindowClass, CLIENT_MESSAGE_EVENT,
+    SELECTION_NOTIFY_EVENT,
 };
 use x11rb::protocol::Event;
 use x11rb::rust_connection::RustConnection;
@@ -37,6 +40,139 @@ pub(crate) const XDND_VERSION: u32 = 5;
 const FINISH_TIMEOUT: Duration = Duration::from_secs(3);
 /// 세션이 살아 있는 동안 호스트 틱의 폴링 간격.
 pub(crate) const TICK_MS: u64 = 10;
+
+/// 진단 로그(`NDIR_XDND_DEBUG=1` · stderr) — 실기에서 어디까지 가는지(대상 탐색 · Status · Drop · Finished).
+fn debug() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("NDIR_XDND_DEBUG").is_some_and(|v| !v.is_empty()))
+}
+
+macro_rules! xlog {
+    ($($arg:tt)*) => {
+        if debug() {
+            eprintln!("[xdnd] {}", format!($($arg)*));
+        }
+    };
+}
+
+/// **합성 포인터 모드**(시나리오 러너 = `NDIR_NO_ACTIVATE` · T4): 포인터 사건이 합성이라 실제 X 창을 대상으로 삼으면 안 된다(개발 PC의
+/// 다른 창에 Enter/Drop을 보낼 위험) → [`fake_target`]로 등록한 가짜 대상 창만 사각형으로 찾는다.
+fn synthetic() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("NDIR_NO_ACTIVATE").is_some_and(|v| !v.is_empty()))
+}
+
+/// 가짜 대상 창(창, x, y, w, h — 루트 좌표).
+type FakeRect = (Window, i16, i16, u16, u16);
+/// 등록된 가짜 대상 창.
+static FAKE_TARGETS: Mutex<Vec<FakeRect>> = Mutex::new(Vec::new());
+
+/// 시험 자동화(기동 명령 `xdnd.target` · T4 `xdnd-send.scn`): 이 프로세스의 **다른 X 연결**이 XdndAware 창(루트 좌표 `rect`)이 되어
+/// 받은 `text/uri-list`를 `out`에 쓴다(놓일 때마다 덮어씀). Position = Status(받음 · 제안 동작 그대로) · Drop = 데이터 읽기 → Finished.
+/// 합성 모드의 발신 세션은 이 창만 대상으로 본다.
+pub(crate) fn fake_target(out: PathBuf, rect: (i16, i16, u16, u16)) -> Result<(), String> {
+    let (conn, n) = x11rb::connect(None).map_err(|e| e.to_string())?;
+    let root = conn.setup().roots[n].root;
+    let at = Atoms::intern(&conn).map_err(|e| e.to_string())?;
+    let prop = conn
+        .intern_atom(false, b"NDIR_XDND_FAKE_PROP")
+        .map_err(|e| e.to_string())?
+        .reply()
+        .map_err(|e| e.to_string())?
+        .atom;
+    let target = conn.generate_id().map_err(|e| e.to_string())?;
+    conn.create_window(
+        x11rb::COPY_DEPTH_FROM_PARENT,
+        target,
+        root,
+        rect.0,
+        rect.1,
+        rect.2.max(1),
+        rect.3.max(1),
+        0,
+        WindowClass::INPUT_OUTPUT,
+        x11rb::COPY_FROM_PARENT,
+        &CreateWindowAux::new()
+            .override_redirect(1)
+            .background_pixel(0x20_2020)
+            .event_mask(EventMask::PROPERTY_CHANGE),
+    )
+    .map_err(|e| e.to_string())?
+    .check()
+    .map_err(|e| e.to_string())?;
+    conn.change_property32(
+        PropMode::REPLACE,
+        target,
+        at.aware,
+        AtomEnum::ATOM,
+        &[XDND_VERSION],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.map_window(target).map_err(|e| e.to_string())?;
+    conn.flush().map_err(|e| e.to_string())?;
+    FAKE_TARGETS
+        .lock()
+        .map_err(|e| e.to_string())?
+        .push((target, rect.0, rect.1, rect.2, rect.3));
+    xlog!("fake target {target:#x} at {rect:?} → {}", out.display());
+    std::thread::Builder::new()
+        .name("ndir-xdnd-fake-target".into())
+        .spawn(move || {
+            let send_to = |to: Window, type_: Atom, data: [u32; 5]| {
+                let ev = ClientMessageEvent {
+                    response_type: CLIENT_MESSAGE_EVENT,
+                    format: 32,
+                    sequence: 0,
+                    window: to,
+                    type_,
+                    data: data.into(),
+                };
+                let _ = conn.send_event(false, to, EventMask::NO_EVENT, ev);
+                let _ = conn.flush();
+            };
+            let mut source = NONE;
+            let mut action = NONE;
+            loop {
+                let Ok(ev) = conn.wait_for_event() else {
+                    return;
+                };
+                match ev {
+                    Event::ClientMessage(cm) if cm.type_ == at.enter => {
+                        source = cm.data.as_data32()[0];
+                    }
+                    Event::ClientMessage(cm) if cm.type_ == at.position => {
+                        let d = cm.data.as_data32();
+                        source = d[0];
+                        action = d[4];
+                        send_to(source, at.status, [target, 1, 0, 0, action]);
+                    }
+                    Event::ClientMessage(cm) if cm.type_ == at.drop => {
+                        let _ = conn.convert_selection(
+                            target,
+                            at.selection,
+                            at.uri_list,
+                            prop,
+                            CURRENT_TIME,
+                        );
+                        let _ = conn.flush();
+                    }
+                    Event::SelectionNotify(sn) if sn.property != NONE => {
+                        let bytes = conn
+                            .get_property(true, target, prop, AtomEnum::ANY, 0, u32::MAX)
+                            .ok()
+                            .and_then(|c| c.reply().ok())
+                            .map(|p| p.value)
+                            .unwrap_or_default();
+                        let _ = std::fs::write(&out, &bytes);
+                        send_to(source, at.finished, [target, 1, action, 0, 0]);
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 // ───────────────────────── 순수 부분(시험) ─────────────────────────
 
@@ -123,11 +259,12 @@ struct Atoms {
     utf8: Atom,
     targets: Atom,
     net_wm_pid: Atom,
+    type_list: Atom,
 }
 
 impl Atoms {
     fn intern(conn: &RustConnection) -> Result<Atoms, Box<dyn std::error::Error>> {
-        let names: [&[u8]; 16] = [
+        let names: [&[u8]; 17] = [
             b"XdndAware",
             b"XdndSelection",
             b"XdndEnter",
@@ -144,12 +281,13 @@ impl Atoms {
             b"UTF8_STRING",
             b"TARGETS",
             b"_NET_WM_PID",
+            b"XdndTypeList",
         ];
         let cookies: Vec<_> = names
             .iter()
             .map(|n| conn.intern_atom(false, n))
             .collect::<Result<_, _>>()?;
-        let mut a = [0 as Atom; 16];
+        let mut a = [0 as Atom; 17];
         for (slot, c) in a.iter_mut().zip(cookies) {
             *slot = c.reply()?.atom;
         }
@@ -170,6 +308,7 @@ impl Atoms {
             utf8: a[13],
             targets: a[14],
             net_wm_pid: a[15],
+            type_list: a[16],
         })
     }
 
@@ -203,16 +342,30 @@ struct Payload {
 struct Source {
     conn: RustConnection,
     root: Window,
+    root_depth: u8,
     at: Atoms,
     win: Window,
     data: Payload,
 }
 
+/// 포인터를 따라다니는 드래그 아이콘 창(override-redirect · 앱이 그린 이미지 · Expose 때 다시 올린다).
+struct Icon {
+    win: Window,
+    gc: Gcontext,
+    w: u16,
+    h: u16,
+    bytes: Vec<u8>,
+}
+
+/// 포인터에서 아이콘까지의 간격(px) — 포인터 바로 아래 오른쪽.
+const ICON_OFFSET: i16 = 14;
+
 impl Source {
     /// 연결 → 1×1 InputOnly 헬퍼 창(`XdndSelection` 주인 · 메시지의 소스 창) → `XdndActionList` [복사, 이동].
     fn open(paths: &[PathBuf]) -> Result<Source, Box<dyn std::error::Error>> {
         let (conn, screen_n) = x11rb::connect(None)?;
-        let root = conn.setup().roots[screen_n].root;
+        let screen = &conn.setup().roots[screen_n];
+        let (root, root_depth) = (screen.root, screen.root_depth);
         let at = Atoms::intern(&conn)?;
         let win = conn.generate_id()?;
         conn.create_window(
@@ -236,11 +389,21 @@ impl Source {
             AtomEnum::ATOM,
             &[at.action_copy, at.action_move],
         )?;
+        // GTK X11 소스와 같은 모양: 종류 목록 property + 매핑된 1×1 InputOnly 창(XDND↔Wayland 다리 · 일부 대상이 property로 읽는다).
+        conn.change_property32(
+            PropMode::REPLACE,
+            win,
+            at.type_list,
+            AtomEnum::ATOM,
+            &[at.uri_list, at.text_plain, at.utf8],
+        )?;
+        conn.map_window(win)?;
         conn.set_selection_owner(win, at.selection, CURRENT_TIME)?
             .check()?;
         Ok(Source {
             conn,
             root,
+            root_depth,
             at,
             win,
             data: Payload {
@@ -411,8 +574,21 @@ impl Source {
         None
     }
 
-    /// 포인터 아래의 외부 대상(우리 창 · 우리 프로세스 창은 제외).
+    /// 포인터 아래의 외부 대상(우리 창 · 우리 프로세스 창은 제외). 합성 모드(시나리오)는 등록된 가짜 대상만.
     fn target_at(&self, x: i16, y: i16, own: Option<Window>, my_pid: u32) -> Option<(Window, u32)> {
+        if synthetic() {
+            let list = FAKE_TARGETS.lock().ok()?;
+            return list
+                .iter()
+                .rev()
+                .find(|(_, tx, ty, w, h)| {
+                    x >= *tx
+                        && y >= *ty
+                        && i32::from(x) < i32::from(*tx) + i32::from(*w)
+                        && i32::from(y) < i32::from(*ty) + i32::from(*h)
+                })
+                .map(|(win, ..)| (*win, XDND_VERSION));
+        }
         let found = find_target(self.root, &mut |w| self.probe(w))
             .or_else(|| self.find_by_geometry(x, y))?;
         if Some(found.0) == own || self.pid_of(found.0) == Some(my_pid) {
@@ -425,6 +601,90 @@ impl Source {
         let _ = self.conn.destroy_window(self.win);
         let _ = self.conn.flush();
     }
+
+    /// 드래그 아이콘 창을 만든다(루트 깊이 · 0x00RRGGBB → ZPixmap LE 바이트 = B G R X). 실패하면 아이콘 없이 간다.
+    fn make_icon(&self, image: &DragImage, at: (i16, i16)) -> Option<Icon> {
+        let n = usize::from(image.w) * usize::from(image.h);
+        if image.w == 0 || image.h == 0 || image.pixels.len() < n {
+            return None;
+        }
+        let win = self.conn.generate_id().ok()?;
+        self.conn
+            .create_window(
+                x11rb::COPY_DEPTH_FROM_PARENT,
+                win,
+                self.root,
+                at.0.saturating_add(ICON_OFFSET),
+                at.1.saturating_add(ICON_OFFSET),
+                image.w,
+                image.h,
+                0,
+                WindowClass::INPUT_OUTPUT,
+                x11rb::COPY_FROM_PARENT,
+                &CreateWindowAux::new()
+                    .override_redirect(1)
+                    .event_mask(EventMask::EXPOSURE),
+            )
+            .ok()?
+            .check()
+            .ok()?;
+        let gc = self.conn.generate_id().ok()?;
+        self.conn
+            .create_gc(gc, win, &CreateGCAux::new())
+            .ok()?
+            .check()
+            .ok()?;
+        let bytes: Vec<u8> = image
+            .pixels
+            .iter()
+            .take(n)
+            .flat_map(|p| p.to_le_bytes())
+            .collect();
+        let icon = Icon {
+            win,
+            gc,
+            w: image.w,
+            h: image.h,
+            bytes,
+        };
+        self.paint_icon(&icon);
+        let _ = self.conn.map_window(win);
+        let _ = self.conn.flush();
+        Some(icon)
+    }
+
+    fn paint_icon(&self, icon: &Icon) {
+        let _ = self.conn.put_image(
+            ImageFormat::Z_PIXMAP,
+            icon.win,
+            icon.gc,
+            icon.w,
+            icon.h,
+            0,
+            0,
+            0,
+            self.root_depth,
+            &icon.bytes,
+        );
+        let _ = self.conn.flush();
+    }
+
+    fn move_icon(&self, icon: &Icon, at: (i16, i16)) {
+        let _ = self.conn.configure_window(
+            icon.win,
+            &ConfigureWindowAux::new()
+                .x(i32::from(at.0.saturating_add(ICON_OFFSET)))
+                .y(i32::from(at.1.saturating_add(ICON_OFFSET)))
+                .stack_mode(x11rb::protocol::xproto::StackMode::ABOVE),
+        );
+        let _ = self.conn.flush();
+    }
+
+    fn drop_icon(&self, icon: &Icon) {
+        let _ = self.conn.free_gc(icon.gc);
+        let _ = self.conn.destroy_window(icon.win);
+        let _ = self.conn.flush();
+    }
 }
 
 /// **비모달 발신 세션** — 창 안 드래그가 받는 포인터 사건(루트 좌표)을 [`Self::motion`] · [`Self::release`] · [`Self::cancel`]로
@@ -433,6 +693,8 @@ pub(crate) struct Session {
     src: Source,
     own: Option<Window>,
     my_pid: u32,
+    started: Instant,
+    icon: Option<Icon>,
     target: Option<Target>,
     dropped: bool,
     finished: Option<(bool, Atom)>,
@@ -442,15 +704,36 @@ pub(crate) struct Session {
 
 impl Session {
     /// 드래그 시작(버튼을 누른 채 임계를 넘은 순간). `own` = 우리 메인 창(X11 id · 대상에서 제외).
-    pub(crate) fn start(paths: &[PathBuf], own: Option<u32>) -> Result<Session, String> {
+    pub(crate) fn start(
+        paths: &[PathBuf],
+        own: Option<u32>,
+        image: Option<DragImage>,
+    ) -> Result<Session, String> {
         if paths.is_empty() {
             return Err("empty drag".into());
         }
         let src = Source::open(paths).map_err(|e| format!("xdnd: {e}"))?;
+        // 아이콘은 지금 포인터 자리에 만들고 이동 때마다 따라간다.
+        let icon = image.and_then(|img| {
+            let at = src
+                .conn
+                .query_pointer(src.root)
+                .ok()
+                .and_then(|c| c.reply().ok())
+                .map_or((0, 0), |r| (r.root_x, r.root_y));
+            src.make_icon(&img, at)
+        });
+        xlog!(
+            "start: {} path(s) · own={own:?} · helper={:#x}",
+            paths.len(),
+            src.win
+        );
         Ok(Session {
             src,
             own,
             my_pid: std::process::id(),
+            started: Instant::now(),
+            icon,
             target: None,
             dropped: false,
             finished: None,
@@ -464,9 +747,19 @@ impl Session {
         if self.dropped || self.done.is_some() {
             return;
         }
+        if let Some(icon) = &self.icon {
+            self.src.move_icon(icon, (x, y));
+        }
+        let t0 = Instant::now();
         let found = self.src.target_at(x, y, self.own, self.my_pid);
         let same = matches!((&self.target, found), (Some(t), Some((w, _))) if t.win == w);
         if !same {
+            xlog!(
+                "motion ({x},{y}) → target {:?} (was {:?} · {} ms)",
+                found.map(|(w, v)| format!("{w:#x} v{v}")),
+                self.target.as_ref().map(|t| format!("{:#x}", t.win)),
+                t0.elapsed().as_millis()
+            );
             if let Some(t) = self.target.take() {
                 self.src.leave(&t);
             }
@@ -508,12 +801,26 @@ impl Session {
         self.target.as_ref().is_some_and(|t| t.accepted)
     }
 
+    /// 시나리오 `xdnd.wait`의 대기 조건: 놓은 뒤 Finished 전 · 아직 아무 대상도 받지 않았고 시작 2초 안(Status를 기다리는 중).
+    pub(crate) fn waiting(&self) -> bool {
+        if self.done.is_some() {
+            return false;
+        }
+        self.dropped
+            || (!self.external_accepts() && self.started.elapsed() < Duration::from_secs(2))
+    }
+
     /// 버튼을 뗐다 — 외부 대상이 받겠다고 했으면 `XdndDrop`을 보내고 `true`(이후 `tick`이 Finished까지 본다) · 아니면 Leave + 취소로
     /// 끝내고 `false`(호출부가 창 안 드롭을 처리).
     pub(crate) fn release(&mut self) -> bool {
         if self.dropped || self.done.is_some() {
             return false;
         }
+        xlog!(
+            "release: target {:?} accepted {}",
+            self.target.as_ref().map(|t| format!("{:#x}", t.win)),
+            self.external_accepts()
+        );
         match self.target.as_ref() {
             Some(t) if t.accepted => {
                 self.dropped = true;
@@ -523,6 +830,7 @@ impl Session {
                     [self.src.win, 0, CURRENT_TIME, 0, 0],
                 );
                 self.deadline = Some(Instant::now() + FINISH_TIMEOUT);
+                self.hide_icon();
                 true
             }
             Some(t) => {
@@ -554,7 +862,15 @@ impl Session {
     fn finish(&mut self, out: DragOutcome) {
         if self.done.is_none() {
             self.done = Some(out);
+            self.hide_icon();
             self.src.close();
+        }
+    }
+
+    /// 아이콘을 치운다(놓은 뒤 Finished 대기 중 · 끝) — 대상이 받았으니 끌고 다닐 것이 없다.
+    fn hide_icon(&mut self) {
+        if let Some(icon) = self.icon.take() {
+            self.src.drop_icon(&icon);
         }
     }
 
@@ -576,6 +892,12 @@ impl Session {
             match ev {
                 Event::ClientMessage(cm) if cm.type_ == at.status => {
                     let d = cm.data.as_data32();
+                    xlog!(
+                        "status from {:#x}: accept={} action={}",
+                        d[0],
+                        d[1] & 1,
+                        d[4]
+                    );
                     if let Some(t) = self.target.as_mut().filter(|t| t.win == d[0]) {
                         t.accepted = d[1] & 1 != 0;
                         t.action = if t.accepted { d[4] } else { NONE };
@@ -587,6 +909,7 @@ impl Session {
                 }
                 Event::ClientMessage(cm) if cm.type_ == at.finished => {
                     let d = cm.data.as_data32();
+                    xlog!("finished from {:#x}: data {:?}", d[0], &d[1..3]);
                     let (accepted, action) = match self.target.as_ref() {
                         Some(t) if t.version >= 5 => (d[1] & 1 != 0, d[2]),
                         Some(t) => (t.accepted, t.action),
@@ -598,7 +921,17 @@ impl Session {
                     }
                 }
                 Event::SelectionRequest(r) if r.selection == at.selection => {
+                    xlog!(
+                        "selection request from {:#x} target atom {}",
+                        r.requestor,
+                        r.target
+                    );
                     let _ = self.src.serve(&r);
+                }
+                Event::Expose(e) => {
+                    if let Some(icon) = self.icon.as_ref().filter(|i| i.win == e.window) {
+                        self.src.paint_icon(icon);
+                    }
                 }
                 _ => {}
             }
@@ -606,6 +939,7 @@ impl Session {
         if self.dropped {
             let timed_out = self.deadline.is_some_and(|dl| Instant::now() >= dl);
             if self.finished.is_some() || timed_out {
+                xlog!("done: finished={:?} timed_out={timed_out}", self.finished);
                 let (accepted, action) = self
                     .finished
                     .or_else(|| self.target.as_ref().map(|t| (t.accepted, t.action)))
@@ -652,6 +986,22 @@ pub(super) fn pointer_state() -> Option<super::PointerState> {
             ctrl,
             shift,
         })
+    })
+}
+
+/// 왼쪽 버튼이 지금 눌려 있는가(X11 `QueryPointer` 마스크 · 끌기 중 뗌 사건이 X 쪽에 안 온 경우의 복구용 — mutter가 Wayland 표면 위에서
+/// 뗌을 삼키면 창 안 드래그가 열린 채 남는다 · 10-10 3회차). X 연결이 없으면 `None`.
+pub(super) fn button1_down() -> Option<bool> {
+    PTR_CONN.with(|c| {
+        let mut slot = c.borrow_mut();
+        if slot.is_none() {
+            let (conn, n) = x11rb::connect(None).ok()?;
+            let root = conn.setup().roots[n].root;
+            *slot = Some((conn, root));
+        }
+        let (conn, root) = slot.as_ref()?;
+        let r = conn.query_pointer(*root).ok()?.reply().ok()?;
+        Some(r.mask.contains(KeyButMask::BUTTON1))
     })
 }
 
@@ -963,7 +1313,7 @@ mod tests {
             c.warp_pointer(NONE, r, 0, 0, 0, 0, x, y).unwrap();
             c.flush().unwrap();
         };
-        let mut s = Session::start(&paths, None).expect("session");
+        let mut s = Session::start(&paths, None, None).expect("session");
         warp(center.0, center.1);
         s.motion(center.0, center.1, false, false);
         let pump = |s: &mut Session, ms: u64| -> Option<DragOutcome> {
@@ -993,7 +1343,7 @@ mod tests {
         assert_eq!(got2, want);
         assert_eq!(act2, at.action_move);
         // ③ 대상 밖(빈 루트)에서 떼면 취소 · 세션은 끝난 뒤 결과를 한 번만 준다.
-        let mut s3 = Session::start(&paths, None).expect("session");
+        let mut s3 = Session::start(&paths, None, None).expect("session");
         warp(center.0, center.1);
         s3.motion(center.0, center.1, false, false);
         assert_eq!(pump(&mut s3, 300), None);

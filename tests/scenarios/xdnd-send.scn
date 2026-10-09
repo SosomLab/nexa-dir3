@@ -1,0 +1,18 @@
+# T4 · T-147 Linux X11 XDND 발신(10-10 3차 비모달 세션): 오른쪽 패널 목록 자리에 가짜 XdndAware 창(`xdnd.target`)을 띄우고, 선택된 행을
+# 누른 채 그리로 끌어(`ui.drag` = 누름 → 임계 넘김 → 이동) Status(받음)를 기다린 뒤 뗀다(`ui.up`) → XdndDrop → 가짜 창이 uri-list를 받아
+# 파일에 쓴다. 합성 모드(시나리오)라 실제 창은 대상이 되지 않는다. 다른 OS에서는 Linux 명령이 없어 선택만 하고 끝난다.
+id: xdnd-send
+title: X11 XDND 발신 — 선택 행을 외부 창으로 끌어 놓으면 uri-list가 전달된다
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:list.select:0
+cmd@linux: @ready:xdnd.target:<out>/got.txt@panel1.list
+cmd@linux: @ready:ui.drag:@panel0.row:0>@panel1.list
+cmd@linux: @ready:xdnd.wait
+cmd@linux: @ready:ui.up:@panel1.list
+cmd@linux: @ready:xdnd.wait
+cmd: @ready:list.dump:<out>/left.txt
+cmd: @ready:quit
+check: left.txt: *a.txt
+check@linux: got.txt: file://
+check@linux: got.txt: /a.txt

@@ -1,0 +1,22 @@
+# T4 · T-147 창 안 드래그(Linux · macOS = OS 모달 드래그가 없는 OS): 왼쪽 패널의 선택 행을 오른쪽 패널 목록으로 끌어 놓으면 같은 볼륨 =
+# 이동(원본 사라짐). Windows는 OS 드래그(모달 DoDragDrop)라 시나리오에서 끌지 않는다(목록만 찍고 끝).
+id: dnd-internal
+title: 창 안 드래그 — 선택 행을 반대 패널로 끌어 놓으면 이동
+tree: file left/a.txt 3
+tree: dir right
+settings: ui.lang=en
+cmd: @ready:panel:1
+cmd: @ready:nav:<root>/right
+cmd: @ready:panel:0
+cmd: @ready:nav:<root>/left
+cmd: @ready:list.select:0
+cmd@unix: @ready:ui.drag:@panel0.row:0>@panel1.list
+cmd@unix: @ready:ui.up:@panel1.list
+cmd@unix: @ready:ops.wait
+cmd: @ready:panel:0
+cmd: @ready:list.dump:<out>/left.txt
+cmd: @ready:panel:1
+cmd: @ready:list.dump:<out>/right.txt
+cmd: @ready:quit
+check@unix: right.txt: a.txt
+check@unix: left.txt: !a.txt
