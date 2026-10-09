@@ -31,8 +31,8 @@ pub use commands::{command, preset_default, repeatable, setting_key, Command, Pr
 pub use json::{to_json, Import as JsonImport, Json};
 pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
-    ADVANCED, CATEGORY_TREE, DEPENDS, EXTENSION_CATEGORIES, HIDDEN, INFO_KEYS, INTERNAL,
-    OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED, WINDOWS_ONLY,
+    ADVANCED, CATEGORY_TREE, CONSTRAINTS, DEPENDS, EXTENSION_CATEGORIES, FORCES, HIDDEN, INFO_KEYS,
+    INTERNAL, OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED, WINDOWS_ONLY,
 };
 
 /// 앱 폴더 이름(`%APPDATA%\nexa-dir` · `~/.config/nexa-dir` · `~/Library/Application Support/nexa-dir`).
@@ -288,6 +288,8 @@ pub enum Dep {
     Ne(&'static str),
     /// 부모가 이 값들 중 하나.
     OneOf(&'static [&'static str]),
+    /// 부모(정수)가 이 값보다 큼(예: "최대 배수 1 = 가속 없음" · T-130 S3).
+    Gt(i64),
 }
 
 impl Dep {
@@ -300,8 +302,63 @@ impl Dep {
             Dep::Eq(v) => parent_value == v,
             Dep::Ne(v) => parent_value != v,
             Dep::OneOf(vs) => vs.contains(&parent_value),
+            Dep::Gt(n) => parent_value.trim().parse::<i64>().is_ok_and(|v| v > n),
         }
     }
+}
+
+/// 정수 설정의 한계를 **다른 키의 현재 값**에 묶는다([`CONSTRAINTS`] · T-130 범위 결합).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bound {
+    /// 이 키의 값 이상이어야 한다(하한).
+    AtLeast(&'static str),
+    /// 이 키의 값 이하여야 한다(상한).
+    AtMost(&'static str),
+}
+
+impl Bound {
+    /// 묶인 키.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Bound::AtLeast(k) | Bound::AtMost(k) => k,
+        }
+    }
+}
+
+/// 지금 이 설정의 **유효값을 대신 정하는 강제**(순수 · `value_of` = 키의 유효값): `(부모 키, 조건, 강제값)` — [`FORCES`]의 첫
+/// 성립 행. 없으면 `None`.
+#[must_use]
+pub fn forced_by(
+    key: &str,
+    value_of: &dyn Fn(&str) -> String,
+) -> Option<(&'static str, Dep, &'static str)> {
+    FORCES
+        .iter()
+        .filter(|(c, _, _, _)| *c == key)
+        .find(|(_, parent, dep, _)| dep.satisfied(&value_of(parent)))
+        .map(|(_, p, d, v)| (*p, *d, *v))
+}
+
+/// 정수 설정의 **지금 허용 범위**(순수 · `value_of` = 키의 유효값): 레지스트리 min/max를 [`CONSTRAINTS`]의 묶인 키 값으로
+/// 좁힌 `(min, max, 묶인 키)`. 결합이 없거나 정수 설정이 아니면 `None`. 묶인 값이 레지스트리 범위를 벗어나면 범위 안으로 자른다
+/// (min > max가 되지 않게).
+#[must_use]
+pub fn effective_range(
+    key: &str,
+    value_of: &dyn Fn(&str) -> String,
+) -> Option<(i64, i64, &'static str)> {
+    let e = entry(key)?;
+    let SettingKind::Int { min, max } = e.kind else {
+        return None;
+    };
+    let (_, bound) = CONSTRAINTS.iter().find(|(k, _)| *k == key)?;
+    let other: i64 = value_of(bound.key()).trim().parse().ok()?;
+    let other = other.clamp(min, max);
+    Some(match bound {
+        Bound::AtLeast(k) => (other, max, k),
+        Bound::AtMost(k) => (min, other, k),
+    })
 }
 
 /// 자식 키의 모든 (부모 키, 조건) — 전부 만족해야 쓸 수 있다(AND · [`DEPENDS`]에 여러 줄).
@@ -698,10 +755,63 @@ impl Settings {
             .unwrap_or_default()
     }
 
-    /// on/off 설정(모르는 키·손상 = false).
+    /// **유효값** — 저장값(또는 기본값) 위에 [`FORCES`](다른 설정이 대신 정하는 값)와 [`CONSTRAINTS`](다른 키에 묶인 범위로
+    /// 클램프)를 얹은 값. [`Self::get`]은 저장값 그대로(설정 창 · 파일) · [`Self::flag`] · [`Self::int`]는 이것을 읽는다
+    /// (nexa-sql `perf.boost` 방식 · T-130). 모르는 키 = `None`.
+    #[must_use]
+    pub fn effective(&self, key: &str) -> Option<std::borrow::Cow<'_, str>> {
+        use std::borrow::Cow;
+        let key = canonical_key(key);
+        entry(key)?;
+        // 부모의 값도 유효값으로(강제의 부모가 또 강제될 수 있다 · 깊이 제한 = 곁 표 시험이 순환을 막는다).
+        fn value_of(s: &Settings, k: &str, depth: u8) -> String {
+            if depth > 8 {
+                return s.get(k).unwrap_or("").to_string();
+            }
+            if let Some((_, _, v)) = forced_by(k, &|p| value_of(s, p, depth + 1)) {
+                return v.to_string();
+            }
+            s.get(k).unwrap_or("").to_string()
+        }
+        if let Some((_, _, v)) = forced_by(key, &|p| value_of(self, p, 1)) {
+            return Some(Cow::Borrowed(v));
+        }
+        let stored = self.get(key)?;
+        if let Some((lo, hi, _)) = effective_range(key, &|p| value_of(self, p, 1)) {
+            if let Ok(n) = stored.trim().parse::<i64>() {
+                let c = n.clamp(lo, hi);
+                if c != n {
+                    return Some(Cow::Owned(c.to_string()));
+                }
+            }
+        }
+        Some(Cow::Borrowed(stored))
+    }
+
+    /// 이 키의 유효값이 저장값과 다른 이유(설정 창 덧줄 · 덤프): 강제면 `(부모, 조건, 강제값)`.
+    #[must_use]
+    pub fn forced_by(&self, key: &str) -> Option<(&'static str, Dep, &'static str)> {
+        forced_by(canonical_key(key), &|p| {
+            self.effective(p)
+                .map(|v| v.into_owned())
+                .unwrap_or_default()
+        })
+    }
+
+    /// 이 정수 키의 지금 허용 범위 `(min, max, 묶인 키)` — [`effective_range`]를 유효값으로.
+    #[must_use]
+    pub fn effective_range(&self, key: &str) -> Option<(i64, i64, &'static str)> {
+        effective_range(canonical_key(key), &|p| {
+            self.effective(p)
+                .map(|v| v.into_owned())
+                .unwrap_or_default()
+        })
+    }
+
+    /// on/off 설정의 **유효값**(모르는 키·손상 = false) — 강제가 있으면 강제값([`Self::effective`]).
     #[must_use]
     pub fn flag(&self, key: &str) -> bool {
-        self.get(key) == Some("on")
+        self.effective(key).as_deref() == Some("on")
     }
 
     /// 글꼴 크기(px) — `Size` 항목(`13` · `13px` · `10pt`) · 틀리면 레지스트리 기본.
@@ -713,10 +823,10 @@ impl Settings {
             .unwrap_or(0.0)
     }
 
-    /// 정수 설정(레지스트리 기본값 보장 → 실패 없음 · 모르는 키 = 0).
+    /// 정수 설정의 **유효값**(레지스트리 기본값 보장 → 실패 없음 · 모르는 키 = 0) — 범위 결합이 있으면 클램프([`Self::effective`]).
     #[must_use]
     pub fn int(&self, key: &str) -> i64 {
-        self.get(key)
+        self.effective(key)
             .and_then(|v| v.parse().ok())
             .or_else(|| entry(key).and_then(|e| e.default.parse().ok()))
             .unwrap_or(0)
@@ -831,6 +941,44 @@ mod tests {
                 .unwrap_or_else(|| panic!("DEPENDS 부모 없음: {parent}"));
             assert!(pi < ci, "종속 자식은 부모 뒤에: {child} ← {parent}");
         }
+        for (child, parent, dep, value) in FORCES {
+            let c = entry(child).unwrap_or_else(|| panic!("FORCES 자식 없음: {child}"));
+            let p = entry(parent).unwrap_or_else(|| panic!("FORCES 부모 없음: {parent}"));
+            assert!(
+                normalize(c.kind, value).as_deref() == Some(*value),
+                "FORCES 강제값이 자식 종류에 안 맞음: {child} = {value}"
+            );
+            if let Dep::Gt(_) = dep {
+                assert!(
+                    matches!(p.kind, SettingKind::Int { .. }),
+                    "Gt 부모는 정수: {parent}"
+                );
+            }
+            assert!(
+                !FORCES.iter().any(|(c2, _, _, _)| c2 == parent),
+                "강제의 부모가 또 강제되면 안 된다(순환 방어): {parent}"
+            );
+            assert_ne!(child, parent);
+        }
+        for (key, bound) in CONSTRAINTS {
+            for k in [*key, bound.key()] {
+                let e = entry(k).unwrap_or_else(|| panic!("CONSTRAINTS에 없는 키: {k}"));
+                assert!(
+                    matches!(e.kind, SettingKind::Int { .. }),
+                    "범위 결합은 정수끼리: {k}"
+                );
+            }
+            assert_ne!(*key, bound.key());
+        }
+        for (_, parent, dep) in DEPENDS {
+            if let Dep::Gt(_) = dep {
+                let p = entry(parent).expect("부모");
+                assert!(
+                    matches!(p.kind, SettingKind::Int { .. }),
+                    "Gt 부모는 정수: {parent}"
+                );
+            }
+        }
         let mut hidden_seen = HashSet::new();
         for k in HIDDEN {
             assert!(hidden_seen.insert(*k), "HIDDEN 중복: {k}");
@@ -942,6 +1090,26 @@ mod tests {
             locked_by("scroll.fast_hud_pos", &hud_off),
             Some(("scroll.fast_hud", Dep::On))
         );
+        // S3(T-130): 최대 배수 1 = 가속 없음 → 간격 · 창 · HUD(전이로 HUD 위치까지) · 키보드 · 그리드 가산 잠김.
+        assert!(
+            Dep::Gt(1).satisfied("2") && !Dep::Gt(1).satisfied("1") && !Dep::Gt(1).satisfied("x")
+        );
+        let no_accel = with(&[("scroll.fast_max", "1")]);
+        for k in [
+            "scroll.fast_step",
+            "scroll.fast_window_ms",
+            "scroll.fast_hud",
+            "scroll.fast_hud_pos",
+            "scroll.fast_keys",
+            "scroll.fast_grid_extra",
+        ] {
+            assert_eq!(
+                locked_by(k, &no_accel),
+                Some(("scroll.fast_max", Dep::Gt(1))),
+                "{k}"
+            );
+        }
+        assert_eq!(locked_by("scroll.fast_max", &no_accel), None);
         // 여러 부모(AND): 도크 좌우 분할 = 도크 표시 ∧ 듀얼 정보(∧ 전이로 듀얼 패널).
         assert_eq!(dependencies("layout.dock_split_pct").count(), 2);
         let hidden = with(&[("dock.visible", "off")]);
@@ -972,6 +1140,55 @@ mod tests {
         for (child, _, _) in DEPENDS {
             let _ = locked_by(child, &off);
         }
+    }
+
+    /// 강제 값 · 범위 결합(T-130): `flag`/`int`는 유효값 · `get`은 저장값 · 부모를 되돌리면 복귀 · 설정 파일에는 저장값만.
+    #[test]
+    fn forces_and_constraints_shape_effective_values_only() {
+        let mut s = Settings::from_text(tmp("t130-forces"), "");
+        // 성능 향상 모드 → 행 아이콘 · 메뉴 아이콘 · 폴더 크기 = off(사용자 값 on은 보관).
+        assert!(s.flag("list.row_icons") && s.flag("dock.folder_size"));
+        s.set("perf.boost", "on").expect("set");
+        for k in ["list.row_icons", "menu.icons", "dock.folder_size"] {
+            assert!(!s.flag(k), "{k}");
+            assert_eq!(s.get(k), Some("on"), "{k} 저장값 그대로");
+            assert_eq!(s.forced_by(k), Some(("perf.boost", Dep::On, "off")));
+            assert_eq!(s.effective(k).as_deref(), Some("off"));
+        }
+        // 강제된 부모(dock.folder_size = off)로 하위가 잠긴다 — 유효값으로 판정.
+        let eff = |k: &str| s.effective(k).map(|v| v.into_owned()).unwrap_or_default();
+        assert_eq!(
+            locked_by("dock.folder_size_threads", &eff),
+            Some(("dock.folder_size", Dep::On))
+        );
+        s.set("perf.boost", "off").expect("set");
+        assert!(s.flag("list.row_icons") && s.forced_by("list.row_icons").is_none());
+        // D2: 단일 패널 → 정보 배치 single(저장값 dual 보관).
+        s.set("layout.panel_mode", "single").expect("set");
+        assert_eq!(s.effective("layout.info_mode").as_deref(), Some("single"));
+        assert_eq!(s.get("layout.info_mode"), Some("dual"));
+        s.reset("layout.panel_mode").expect("reset");
+        assert_eq!(s.effective("layout.info_mode").as_deref(), Some("dual"));
+        // 범위 결합: 큐 상한 ≥ 동시 계산 수 — 저장은 레지스트리 범위대로 받고 유효값만 클램프 · 범위 덧줄 재료.
+        assert_eq!(
+            s.effective_range("dock.folder_size_queue"),
+            Some((2, 500, "dock.folder_size_threads"))
+        );
+        s.set("dock.folder_size_threads", "6").expect("set");
+        s.set("dock.folder_size_queue", "3").expect("set");
+        assert_eq!(s.get("dock.folder_size_queue"), Some("3"));
+        assert_eq!(s.int("dock.folder_size_queue"), 6);
+        assert_eq!(s.effective("dock.folder_size_queue").as_deref(), Some("6"));
+        assert_eq!(
+            s.effective_range("dock.folder_size_queue"),
+            Some((6, 500, "dock.folder_size_threads"))
+        );
+        s.set("dock.folder_size_queue", "10").expect("set");
+        assert_eq!(s.int("dock.folder_size_queue"), 10);
+        assert_eq!(s.effective_range("ui.dblclick_ms"), None, "결합 없는 키");
+        // 저장 대상은 저장값만(유효값은 파일에 안 간다).
+        s.set("perf.boost", "on").expect("set");
+        assert!(s.is_modified("perf.boost") && !s.is_modified("list.row_icons"));
     }
 
     /// 시간 단위 규칙(nexa-sql docs/94 §6-5 · 사용자 10-03 "10초 이상은 초 단위 · 10초 미만은 ms"): 기본값이 10초 이하인 시간

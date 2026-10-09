@@ -4,7 +4,7 @@
 //! docs/port/31 §5-3 KEY-501~599 대응표). 등재 순서 = 설정 창 표시 순서(dir2 PREFS-310 카테고리별 항목 순서 그대로).
 //! 라벨은 dir2 `.lang`의 `pref.*` 키 — 없던 것은 10-03에 추가(`ndir-i18n/lang`).
 
-use crate::{Dep, Entry, SettingKind};
+use crate::{Bound, Dep, Entry, SettingKind};
 
 // ── 선택지(값, 라벨 i18n 키)
 const THEME_OPTS: &[(&str, &str)] = &[
@@ -1017,6 +1017,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 최대 배수 = 1이면 가속이 없다 → 아래 항목(간격 · 창 · HUD · 키보드 · 그리드 가산)은 쓰이지 않는다(DEPENDS Gt(1) · T-130 S3).
+    e!(
+        "scroll.fast_max",
+        CAT_SCROLL,
+        "pref.fsMax",
+        "pref.fsMax.desc",
+        Int { min: 1, max: 32 },
+        "16"
+    ),
     // 키보드 이동(↑/↓ 자동 반복)에도 고속 스크롤 적용 — dir3 신규(사용자 10-04 · 기본 켜짐 = 종전 동작).
     e!(
         "scroll.fast_keys",
@@ -1041,14 +1050,6 @@ pub const REGISTRY: &[Entry] = &[
         "pref.fsStep.desc",
         Int { min: 1, max: 50 },
         "3"
-    ),
-    e!(
-        "scroll.fast_max",
-        CAT_SCROLL,
-        "pref.fsMax",
-        "pref.fsMax.desc",
-        Int { min: 1, max: 32 },
-        "16"
     ),
     e!(
         "scroll.fast_window_ms",
@@ -2043,25 +2044,28 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("typeahead.space", "typeahead.enabled", Dep::On),
     ("typeahead.backspace", "typeahead.enabled", Dep::On),
     ("typeahead.hud_pos", "typeahead.enabled", Dep::On),
+    ("scroll.fast_max", "scroll.fast", Dep::On),
     ("scroll.fast_keys", "scroll.fast", Dep::On),
     ("scroll.fast_grid_extra", "scroll.fast", Dep::On),
     ("scroll.fast_step", "scroll.fast", Dep::On),
-    ("scroll.fast_max", "scroll.fast", Dep::On),
     ("scroll.fast_window_ms", "scroll.fast", Dep::On),
     ("scroll.fast_hud", "scroll.fast", Dep::On),
+    // 최대 배수가 1이면 가속이 없다 → 가속 항목은 전부 무의미(T-130 S3 · 전이로 HUD 하위까지).
+    ("scroll.fast_keys", "scroll.fast_max", Dep::Gt(1)),
+    ("scroll.fast_grid_extra", "scroll.fast_max", Dep::Gt(1)),
+    ("scroll.fast_step", "scroll.fast_max", Dep::Gt(1)),
+    ("scroll.fast_window_ms", "scroll.fast_max", Dep::Gt(1)),
+    ("scroll.fast_hud", "scroll.fast_max", Dep::Gt(1)),
     ("scroll.fast_hud_pos", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_hold_ms", "scroll.fast_hud", Dep::On),
     ("scroll.fast_hud_fade_ms", "scroll.fast_hud", Dep::On),
     ("term.cols", "term.wrap", Dep::Eq("off")),
     // 성능 향상 모드가 켜져 있으면 시스템 상태 조회 주기는 쓰이지 않는다.
     ("statusbar.load_interval_ms", "perf.boost", Dep::Eq("off")),
-    // 성능 향상 모드가 켜져 있으면 아이콘 두 설정은 쓰이지 않는다(늘 끔).
-    ("list.row_icons", "perf.boost", Dep::Eq("off")),
-    ("dock.folder_size", "perf.boost", Dep::Eq("off")),
+    // 성능 향상 모드가 켜져 있을 때의 행 아이콘 · 메뉴 아이콘 · 폴더 크기는 잠금이 아니라 **강제 값**(`FORCES` · 유효값 = off).
     ("dock.folder_size_threads", "dock.folder_size", Dep::On),
     ("dock.folder_size_queue", "dock.folder_size", Dep::On),
     ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
-    ("menu.icons", "perf.boost", Dep::Eq("off")),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
@@ -2095,6 +2099,35 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
         Dep::OneOf(&["system", "light"]),
     ),
     ("tabs.scroll_buttons", "tabs.multiline", Dep::Eq("off")),
+];
+
+/// **강제 값**(자식, 부모, 조건, 강제값) — 부모가 조건을 만족하면 자식의 **유효값**(`Settings::effective` · `flag` · `int`)은 강제값이
+/// 된다. 저장된 사용자 값은 그대로(부모를 되돌리면 복귀) · 설정 창은 강제값을 보이고 잠근다(이유 덧줄). `DEPENDS`(잠금 · 값
+/// 유지)와의 구분(nexa-sql docs/78 §6): 하위가 그 자체로 값을 가질 이유가 있으면 잠금 · 상위 때문에 값이 정해져야 하면 강제.
+/// T-130(사용자 10-03 "강제로 설정된 경우는 제약이 풀렸을 때 원래 값으로") · 성능 향상 모드 = 첫 출처(NEW-008 · T-99).
+pub const FORCES: &[(&str, &str, Dep, &str)] = &[
+    // 성능 향상 모드(docs/22 NEW-008): 행 셸 아이콘 · 메뉴 아이콘 · 폴더 크기 계산을 끈다(종전 = 호출부마다 `&& !boost`).
+    ("list.row_icons", "perf.boost", Dep::On, "off"),
+    ("menu.icons", "perf.boost", Dep::On, "off"),
+    ("dock.folder_size", "perf.boost", Dep::On, "off"),
+    // 단일 패널이면 정보 배치는 단일뿐(T-130 D2 · 종전 = 호출부가 `!dual ||`로 따로 판정).
+    (
+        "layout.info_mode",
+        "layout.panel_mode",
+        Dep::Eq("single"),
+        "single",
+    ),
+];
+
+/// 정수 설정의 **범위 결합**(키, 다른 키에 묶인 한계) — 레지스트리 min/max 안에서 다른 키의 현재 값이 한쪽 한계가 된다.
+/// 저장값은 레지스트리 범위만 검사하고(입력은 그대로 받음) **유효값만 클램프**(`Settings::effective` · `int`) · 설정 창은
+/// "허용 범위 a..b" 덧줄로 알린다(T-130 범위 결합).
+pub const CONSTRAINTS: &[(&str, Bound)] = &[
+    // 큐 상한이 동시 계산 수보다 작으면 큐가 뜻이 없다(한 번에 꺼낼 수도 없는 수).
+    (
+        "dock.folder_size_queue",
+        Bound::AtLeast("dock.folder_size_threads"),
+    ),
 ];
 
 /// **내부 전용**(사용자 10-03 "라이선스 게이트처럼 라이선스로 기능을 켜고 끄는 것은 보이면 안 된다") — 고급 토글을 켜도 설정 창에

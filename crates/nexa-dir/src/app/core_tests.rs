@@ -7104,10 +7104,12 @@ fn performance_mode_turns_icons_off() {
     assert!(!has_icon(&app), "성능 모드 = 아이콘 없음");
     app.command("file.new_tab");
     assert!(!has_icon(&app), "새 탭에도");
-    assert!(
-        app.settings.flag("list.row_icons"),
-        "저장값은 건드리지 않는다"
+    assert_eq!(
+        app.settings.get("list.row_icons"),
+        Some("on"),
+        "저장값은 건드리지 않는다(유효값만 FORCES가 off로 · T-130)"
     );
+    assert!(!app.settings.flag("list.row_icons") && !app.dirsize_enabled());
     let _ = app.settings.set("perf.boost", "off");
     app.after_setting_changed("perf.boost");
     assert!(has_icon(&app), "끄면 복귀");
@@ -7122,10 +7124,11 @@ fn performance_mode_turns_icons_off() {
     let _ = app.settings.set("menu.icons", "on");
     app.after_setting_changed("list.row_icons");
     app.after_setting_changed("menu.icons");
+    let _ = app.settings.set("perf.boost", "on");
     assert_eq!(
-        ndir_settings::dependency("list.row_icons").map(|d| d.0),
-        Some("perf.boost"),
-        "성능 모드가 켜져 있으면 설정 창에서 잠긴다"
+        app.settings.forced_by("list.row_icons").map(|f| (f.0, f.2)),
+        Some(("perf.boost", "off")),
+        "성능 모드가 켜져 있으면 설정 창에서 강제값(off)으로 잠긴다(FORCES · T-130)"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

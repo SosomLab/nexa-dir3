@@ -396,9 +396,9 @@ pub(crate) fn size_lines(state: SizeState) -> Vec<String> {
 }
 
 impl App {
-    /// 폴더 크기 계산을 쓰는가 — 설정 `dock.folder_size` · 성능 향상 모드면 끔.
+    /// 폴더 크기 계산을 쓰는가 — 설정 `dock.folder_size`의 유효값(성능 향상 모드면 `FORCES`가 off로 · T-130).
     pub(crate) fn dirsize_enabled(&self) -> bool {
-        self.settings.flag("dock.folder_size") && !self.settings.flag("perf.boost")
+        self.settings.flag("dock.folder_size")
     }
 
     /// 설정 `dock.folder_size_threads` · `_queue` · `_settle_ms` → 조절값.

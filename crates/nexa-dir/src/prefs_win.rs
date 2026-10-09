@@ -122,6 +122,28 @@ fn lock_reason_text(parent: &str, dep: ndir_settings::Dep) -> String {
             let list: Vec<String> = vs.iter().map(|v| value_label(parent, v)).collect();
             trf("pref.lockedNeed", &[&name, &list.join(" · ")])
         }
+        Dep::Gt(n) => trf("pref.lockedGt", &[&name, &n.to_string()]),
+    }
+}
+
+/// 강제 값 이유 덧줄(`ndir_settings::FORCES` · T-130): 부모가 켜져 있어서(On) / 부모가 어떤 값이라서(그 밖) 자식이 `value`로 정해진다.
+fn forced_reason_text(child: &str, parent: &str, dep: ndir_settings::Dep, value: &str) -> String {
+    use ndir_settings::Dep;
+    let name = ndir_settings::entry(parent).map_or_else(|| parent.to_string(), |e| tr(e.label));
+    let shown = value_label(child, value);
+    match dep {
+        Dep::On => trf("pref.forcedBy", &[&name, &shown]),
+        Dep::Eq(v) => trf("pref.forcedEq", &[&name, &value_label(parent, v), &shown]),
+        Dep::Ne(v) => trf(
+            "pref.forcedEq",
+            &[&name, &format!("≠ {}", value_label(parent, v)), &shown],
+        ),
+        Dep::OneOf(vs) => {
+            let list: Vec<String> = vs.iter().map(|v| value_label(parent, v)).collect();
+            trf("pref.forcedEq", &[&name, &list.join(" · "), &shown])
+        }
+        Dep::Gt(n) => trf("pref.forcedEq", &[&name, &format!("> {n}"), &shown]),
+        Dep::NotEmpty => trf("pref.forcedBy", &[&name, &shown]),
     }
 }
 
@@ -154,6 +176,10 @@ pub(crate) struct PrefsWin {
     /// 지금 **다른 설정·상황이 대신 정하고 있는** 값: 키 → (실제로 쓰이는 값, 이유). 카드는 그 값을 보여 주고 잠긴다 —
     /// 사용자가 정해 둔 값은 설정에 그대로 남아(보이지 않을 뿐) 강제가 풀리면 다시 쓰인다(사용자 10-03).
     forced: std::collections::HashMap<String, (String, String)>,
+    /// 호스트 강제([`Self::set_forced`]) ∪ 엔진 강제(`ndir_settings::FORCES` · T-130) — [`Self::refresh`]가 만든다.
+    forced_all: std::collections::HashMap<String, (String, String)>,
+    /// 범위 결합 덧줄(`ndir_settings::CONSTRAINTS` · T-130): 키 → "허용 범위 a..b" — [`Self::refresh`]가 만든다.
+    range_notes: std::collections::HashMap<String, String>,
     notes: std::collections::HashMap<String, String>,
     vtree: Vec<(&'static str, Vec<&'static str>)>,
     advanced: Switch,
@@ -317,6 +343,8 @@ impl PrefsWin {
             dyn_choices: std::collections::HashMap::new(),
             info: std::collections::HashMap::new(),
             forced: std::collections::HashMap::new(),
+            forced_all: std::collections::HashMap::new(),
+            range_notes: std::collections::HashMap::new(),
             notes: std::collections::HashMap::new(),
             vtree,
             window: None,
@@ -427,6 +455,38 @@ impl PrefsWin {
 
     /// 레지스트리 스냅샷 갱신(열 때 · 값이 바뀔 때). 카드는 값만 갱신(입력 중인 상자는 건드리지 않음).
     pub(crate) fn refresh(&mut self, s: &Settings) {
+        // 강제 값 = 호스트가 준 것(터미널 글꼴 등) ∪ 엔진 `FORCES`(성능 향상 모드 · 단일 패널 — T-130) · 범위 결합 덧줄.
+        self.forced_all = self.forced.clone();
+        self.range_notes.clear();
+        for e in ndir_settings::REGISTRY {
+            if let Some((parent, dep, value)) = s.forced_by(e.key) {
+                self.forced_all.entry(e.key.to_string()).or_insert_with(|| {
+                    (
+                        value.to_string(),
+                        forced_reason_text(e.key, parent, dep, value),
+                    )
+                });
+            }
+            if let Some((lo, hi, by)) = s.effective_range(e.key) {
+                let registry = match e.kind {
+                    SettingKind::Int { min, max } => (min, max),
+                    _ => continue,
+                };
+                if (lo, hi) == registry {
+                    continue;
+                }
+                let name = ndir_settings::entry(by).map_or_else(|| by.to_string(), |e| tr(e.label));
+                let stored: i64 = s.get(e.key).and_then(|v| v.parse().ok()).unwrap_or(lo);
+                let (a, b) = (lo.to_string(), hi.to_string());
+                let text = if (lo..=hi).contains(&stored) {
+                    trf("pref.rangeBound", &[&name, &a, &b])
+                } else {
+                    let used = stored.clamp(lo, hi).to_string();
+                    trf("pref.rangeClamped", &[&name, &a, &b, &used])
+                };
+                self.range_notes.insert(e.key.to_string(), text);
+            }
+        }
         self.snap = s
             .list()
             .into_iter()
@@ -434,7 +494,7 @@ impl PrefsWin {
                 entry: e,
                 value: if ndir_settings::is_info(e.key) {
                     self.info.get(e.key).cloned().unwrap_or_default()
-                } else if let Some((shown, _)) = self.forced.get(e.key) {
+                } else if let Some((shown, _)) = self.forced_all.get(e.key) {
                     shown.clone() // 강제 값 표시(저장된 사용자 값은 그대로)
                 } else if let Some(shown) = self.info.get(e.key).filter(|_| {
                     ndir_settings::dependency(e.key)
@@ -504,6 +564,12 @@ impl PrefsWin {
             .iter()
             .find(|c| c.entry.key == key)
             .map(|c| c.value.clone())
+    }
+
+    /// 범위 결합 덧줄(시험).
+    #[cfg(test)]
+    pub(crate) fn range_note(&self, key: &str) -> Option<String> {
+        self.range_notes.get(key).cloned()
     }
 
     /// 카드가 잠긴 이유(상위 설정 때문 · 없으면 None) — 시험 · 덤프.
@@ -676,7 +742,7 @@ impl PrefsWin {
             let cause = ndir_settings::locked_by(c.entry.key, &parent_val);
             // 강제 값이 있으면 그 이유가 먼저(지금 쓰이는 값을 보여 주고 잠근다).
             c.lock_reason = self
-                .forced
+                .forced_all
                 .get(c.entry.key)
                 .map(|(_, why)| why.clone())
                 .or_else(|| cause.map(|(parent, dep)| lock_reason_text(parent, dep)));
@@ -1691,6 +1757,7 @@ impl PrefsWin {
                 let note = c
                     .lock_reason
                     .as_ref()
+                    .or_else(|| self.range_notes.get(c.entry.key))
                     .or_else(|| self.notes.get(c.entry.key))
                     .or_else(|| self.info.get(&format!("{}#note", c.entry.key)));
                 let desc = if c.entry.desc.is_empty() {
@@ -2093,6 +2160,63 @@ mod tests {
         w.refresh(&s);
         assert_eq!(w.is_locked("scroll.fast_step"), Some(false));
         assert_eq!(w.lock_reason("scroll.fast_hud_pos"), None);
+        // 엔진 강제(FORCES · T-130): 성능 향상 모드 → 행 아이콘 카드 = 끔 + 이유 · 저장값 보관 · [초기화] 무시 · 끄면 복귀.
+        s.set("list.row_icons", "on").expect("set");
+        s.set("perf.boost", "on").expect("set");
+        w.refresh(&s);
+        w.select_category("pref.cat.listGeneral");
+        assert_eq!(w.card_value("list.row_icons").as_deref(), Some("off"));
+        assert_eq!(w.is_locked("list.row_icons"), Some(true));
+        let why = w.lock_reason("list.row_icons").expect("강제 이유");
+        assert!(why.contains(&tr("pref.perfBoost")), "{why}");
+        assert_eq!(s.get("list.row_icons"), Some("on"), "저장값 보관");
+        s.set("perf.boost", "off").expect("set");
+        w.refresh(&s);
+        assert_eq!(w.card_value("list.row_icons").as_deref(), Some("on"));
+        assert_eq!(w.is_locked("list.row_icons"), Some(false));
+        // D2: 단일 패널 → 정보 배치 카드 = single(저장값 dual) + 이유(부모 값 문구).
+        s.set("layout.panel_mode", "single").expect("set");
+        w.refresh(&s);
+        // (비노출 키라 카드는 없다 — 강제 표로 확인: 고급 토글을 켜면 카드가 이 값·이유로 잠긴다.)
+        let (shown, why) = w.forced_all.get("layout.info_mode").expect("D2 강제");
+        assert_eq!(shown, "single");
+        assert!(why.contains(&tr("pref.panelMode")), "{why}");
+        s.reset("layout.panel_mode").expect("reset");
+        w.refresh(&s);
+        assert!(!w.forced_all.contains_key("layout.info_mode"));
+        // 범위 결합(CONSTRAINTS · T-130): 큐 상한 카드는 잠기지 않고 덧줄만 — 값이 범위 밖이면 "대신 N이 쓰입니다".
+        s.set("dock.folder_size_threads", "4").expect("set");
+        s.set("dock.folder_size_queue", "2").expect("set");
+        w.refresh(&s);
+        w.set_advanced(true); // 큐 상한은 고급 설정
+        w.select_category("pref.cat.dock");
+        assert_eq!(w.is_locked("dock.folder_size_queue"), Some(false));
+        let note = w.range_note("dock.folder_size_queue").expect("범위 덧줄");
+        assert!(
+            note.contains("4..500") && note.contains(&tr("pref.folderSizeThreads")),
+            "{note}"
+        );
+        assert_eq!(
+            w.card_value("dock.folder_size_queue").as_deref(),
+            Some("2"),
+            "카드는 저장값"
+        );
+        s.set("dock.folder_size_queue", "9").expect("set");
+        w.refresh(&s);
+        let note = w.range_note("dock.folder_size_queue").expect("범위 덧줄");
+        assert_eq!(
+            note,
+            trf(
+                "pref.rangeBound",
+                &[&tr("pref.folderSizeThreads"), "4", "500"]
+            )
+        );
+        s.reset("dock.folder_size_threads").expect("reset");
+        w.refresh(&s);
+        assert!(
+            w.range_note("dock.folder_size_queue").is_some(),
+            "기본(2)도 레지스트리 하한 1과 다르다"
+        );
         // 동적 후보(언어 목록)는 Text 카드를 콤보로 바꾼다.
         w.set_dyn_choices(
             "ui.lang",

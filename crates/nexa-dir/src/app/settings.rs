@@ -116,7 +116,12 @@ impl App {
             "perf.boost" | "statusbar.layout" | "statusbar.load_interval_ms" => {
                 self.load_next = Instant::now();
                 if key == "perf.boost" {
-                    self.apply_icon_switches(); // 성능 향상 모드 = 행 · 메뉴 아이콘도 끈다
+                    // 성능 향상 모드 = 행 · 메뉴 아이콘 · 폴더 크기의 유효값이 바뀐다(`FORCES` · T-130) → 그 적용도 같이.
+                    self.apply_icon_switches();
+                    self.dirsizes.clear();
+                    self.git_detail.clear();
+                    self.update_docks();
+                    self.redraw();
                 }
             }
             "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
@@ -236,13 +241,9 @@ impl App {
 
     /// 스크롤 설정 적용(dir2 X-63 f986415 · 7d8b1e9 — 호스트 누락분): `scroll.fast*` → nexa-grid(목록·도크·그리드 창) +
     /// nexa-ctl(설정 창 등 `ScrollBars`) 전역 고속 스크롤 · 파일 그리드 한 단계 더 빠르게 · 시스템 "한 번에 스크롤할 줄 수".
-    /// 아이콘 스위치(순수): (이름 앞 아이콘, 메뉴 아이콘) — 각 설정이 켜져 있고 **성능 향상 모드가 꺼져 있을 때만** 켠다.
+    /// 아이콘 스위치(순수): (이름 앞 아이콘, 메뉴 아이콘) — 유효값(`flag` = 성능 향상 모드가 켜져 있으면 `FORCES`가 off로 · T-130).
     pub(crate) fn icon_switches(s: &Settings) -> (bool, bool) {
-        let boost = s.flag("perf.boost");
-        (
-            s.flag("list.row_icons") && !boost,
-            s.flag("menu.icons") && !boost,
-        )
+        (s.flag("list.row_icons"), s.flag("menu.icons"))
     }
 
     /// 아이콘 스위치 적용 — 두 패널(모든 탭)의 이름 앞 아이콘 · 메뉴(우클릭 · 메뉴 바) 아이콘. 종전에는 성능 향상 모드를 켜도
