@@ -885,6 +885,12 @@ impl Session {
         self.motion(x, y, ctrl, shift);
     }
 
+    /// 이미 놓았는가(XdndDrop을 보내고 Finished를 기다리는 중) — 이때는 포커스를 잃어도 취소하지 않는다(대상이 데이터를 받는 중 ·
+    /// 10-10: 받는 쪽/mutter가 포커스를 가져가면 취소돼 선택이 사라지던 흔들림).
+    pub(crate) fn is_dropped(&self) -> bool {
+        self.dropped && self.done.is_none()
+    }
+
     /// 외부 대상이 지금 받겠다고 했는가(창 안 드래그가 자기 드롭을 양보할지 판정).
     pub(crate) fn external_accepts(&self) -> bool {
         self.target.as_ref().is_some_and(|t| t.accepted)
@@ -993,15 +999,27 @@ impl Session {
         if let Some(out) = self.done {
             return Some(out);
         }
+        if debug() && self.dropped {
+            xlog!(
+                "tick after drop (deadline in {:?})",
+                self.deadline
+                    .map(|d| d.saturating_duration_since(Instant::now()))
+            );
+        }
         loop {
             let ev = match self.src.conn.poll_for_event() {
                 Ok(Some(ev)) => ev,
                 Ok(None) => break,
-                Err(_) => {
+                Err(e) => {
+                    xlog!("tick: connection error {e}");
                     self.finish(DragOutcome::Cancelled);
                     return self.done;
                 }
             };
+            if debug() {
+                let s = format!("{ev:?}");
+                xlog!("event: {}", &s[..s.len().min(96)]);
+            }
             let at = &self.src.at;
             match ev {
                 Event::ClientMessage(cm) if cm.type_ == at.status => {
@@ -1032,6 +1050,12 @@ impl Session {
                 Event::ClientMessage(cm) if cm.type_ == at.finished => {
                     let d = cm.data.as_data32();
                     xlog!("finished from {:#x}: data {:?}", d[0], &d[1..3]);
+                    // 지금 대상이 보낸 것만(mutter 다리는 우리 XdndSelection 소유를 보고 자기 드래그를 흉내 내다 끝낼 때 Finished를
+                    // 보낸다 — 다른 창의 Finished로 세션을 끝내면 진짜 대상이 데이터를 가져가기 전에 닫힌다 · 10-10 흔들림).
+                    if !self.target.as_ref().is_some_and(|t| t.win == d[0]) {
+                        xlog!("finished ignored (not the current target)");
+                        continue;
+                    }
                     let (accepted, action) = match self.target.as_ref() {
                         Some(t) if t.version >= 5 => (d[1] & 1 != 0, d[2]),
                         Some(t) => (t.accepted, t.action),

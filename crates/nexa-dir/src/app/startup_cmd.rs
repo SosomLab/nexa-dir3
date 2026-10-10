@@ -891,7 +891,14 @@ impl App {
                                 && self.xdnd_started.elapsed() < Duration::from_millis(1000))
                     }
                 };
-                inject || self.xdnd.as_ref().is_some_and(|s| s.waiting())
+                let busy = inject || self.xdnd.as_ref().is_some_and(|s| s.waiting());
+                if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
+                    eprintln!(
+                        "[xdnd-app] xdnd.wait busy={busy} inject={inject} session={}",
+                        self.xdnd.is_some()
+                    );
+                }
+                busy
             }
             // 10-08 Linux 실기 자동화: 신규 기능의 워커가 끝날 때까지(중복 찾기 · 폴더 비교 · 체크섬 · 압축 풀기/동기화 · 폴더 크기).
             "dupes.wait" => self.dup_job.is_some() || self.dupes_win.is_running(),

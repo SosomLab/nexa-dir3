@@ -348,7 +348,12 @@ impl ApplicationHandler<Wake> for App {
             WindowEvent::Focused(on) => {
                 self.main_active = *on;
                 if !*on {
-                    self.dnd_internal_cancel(); // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다)
+                    // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
+                    // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안
+                    // 끊기면 안 된다(10-10 xdnd-send 흔들림 · Windows처럼 Alt-Tab 중에도 드래그 유지).
+                    if self.xdnd.is_none() {
+                        self.dnd_internal_cancel();
+                    }
                 }
                 if *on {
                     // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
@@ -414,7 +419,9 @@ impl ApplicationHandler<Wake> for App {
                 self.ctrl_mac = cfg!(target_os = "macos") && m.state().control_key();
                 self.alt = m.state().alt_key();
             }
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved { position, .. }
+                if !(self.dnd_internal.is_some() && platform::synthetic_pointer()) =>
+            {
                 self.cursor = (position.x as i32, position.y as i32);
                 if let Some(w) = &self.window {
                     let p = Point {

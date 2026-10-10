@@ -282,6 +282,19 @@ impl App {
 
     /// winit 창 사건 → 컨트롤 입력(장치 px · 수식키 반영). 더블클릭은 합성(`ui.dblclick_ms` · 같은 자리 ±4px).
     pub(crate) fn ctl_event(&mut self, event: &WindowEvent) -> Option<InputEvent> {
+        // 시나리오(합성 포인터)의 창 안 드래그 중에는 실제 포인터 사건을 버린다 — 시험 PC에서 사용자 마우스가 창을 지나며 대상을
+        // 지우던 흔들림(10-10 xdnd-send). 끌기 · 뗌은 `ui.drag`/`ui.up` 명령이 넣는다.
+        if self.dnd_internal.is_some()
+            && platform::synthetic_pointer()
+            && matches!(
+                event,
+                WindowEvent::CursorMoved { .. }
+                    | WindowEvent::MouseInput { .. }
+                    | WindowEvent::CursorLeft { .. }
+            )
+        {
+            return None;
+        }
         let (x, y) = self.cursor;
         Some(match event {
             WindowEvent::CursorMoved { position, .. } => InputEvent::MouseMove {

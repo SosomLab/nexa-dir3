@@ -732,6 +732,9 @@ impl XdndSession {
     pub(crate) fn external_action(&self) -> Option<DropChoice> {
         None
     }
+    pub(crate) fn is_dropped(&self) -> bool {
+        false
+    }
     pub(crate) fn external_accepts(&self) -> bool {
         false
     }

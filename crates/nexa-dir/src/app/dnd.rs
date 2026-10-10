@@ -404,8 +404,19 @@ impl App {
 
     /// 창 안 드래그 취소(Esc · 포커스 잃음) — 표시를 걷고 커서를 되돌린다.
     pub(crate) fn dnd_internal_cancel(&mut self) {
-        if let Some(mut s) = self.xdnd.take() {
-            s.cancel();
+        if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
+            eprintln!(
+                "[xdnd-app] cancel requested: session={} dropped={} internal={}",
+                self.xdnd.is_some(),
+                self.xdnd.as_ref().is_some_and(|s| s.is_dropped()),
+                self.dnd_internal.is_some()
+            );
+        }
+        // 이미 놓은 세션(Finished 대기)은 그대로 둔다 — 대상이 데이터를 가져가는 중이라 지금 닫으면 드롭이 깨진다(10-10).
+        if self.xdnd.as_ref().is_some_and(|s| !s.is_dropped()) {
+            if let Some(mut s) = self.xdnd.take() {
+                s.cancel();
+            }
         }
         if self.dnd_internal.take().is_some() {
             let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
@@ -418,6 +429,9 @@ impl App {
         // XDND 세션 응답 수거(Status · Finished · 데이터 요청) — 놓은 뒤에도 Finished까지 돈다.
         let mut changed = false;
         if let Some(out) = self.xdnd.as_mut().and_then(|s| s.tick()) {
+            if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
+                eprintln!("[xdnd-app] session done: {out:?}");
+            }
             self.xdnd = None;
             if out != platform::DragOutcome::Cancelled {
                 // 놓였다 — 대상이 옮겼을 수 있으니 다시 읽어 맞춘다(windrag와 같은 수렴).
