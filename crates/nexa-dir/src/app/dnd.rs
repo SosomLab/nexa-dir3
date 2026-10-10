@@ -437,7 +437,8 @@ impl App {
         if let Some(s) = self.xdnd.as_mut() {
             s.modifiers(ctrl, shift);
         }
-        if self.xdnd.as_ref().is_some_and(|s| s.external_accepts()) {
+        let external = self.xdnd.as_ref().is_some_and(|s| s.external_accepts());
+        if external {
             let choice = self.external_choice(ctrl, shift);
             if let Some(d) = self.dnd_internal.clone() {
                 if d.choice != choice {
@@ -455,7 +456,8 @@ impl App {
             let _ = self.dnd_internal_event(&InputEvent::MouseUp { x, y });
             return true;
         }
-        let _ = self.dnd_event(
+        // 포인터가 멈춘 채 수식키만 바뀌어도(사용자 10-10 "오른쪽 패널 위에서 Ctrl을 떼고 Shift를 눌러도 안 바뀜") 판정 · 커서 · 상자를 맞춘다.
+        let choice = self.dnd_event(
             platform::DropEvent::Over {
                 at: self.cursor,
                 ctrl: self.primary,
@@ -463,6 +465,17 @@ impl App {
             },
             now,
         );
+        if !external {
+            if let Some(d) = self.dnd_internal.clone() {
+                if d.choice != choice {
+                    if let Some(x) = &mut self.dnd_internal {
+                        x.choice = choice;
+                    }
+                    self.set_drag_cursor(Some(choice));
+                }
+                self.refresh_drag_icon(&d.paths, choice);
+            }
+        }
         true
     }
 

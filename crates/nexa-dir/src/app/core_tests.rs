@@ -4490,6 +4490,24 @@ fn internal_drag_moves_into_folder_and_escape_cancels() {
     let mark = app.dnd_mark.clone().expect("놓일 자리 표시");
     assert_eq!(mark.dest, dir.join("sub"));
     assert_eq!(mark.choice, crate::platform::DropChoice::Move);
+    // 포인터를 멈춘 채 수식키만 바꾸면 틱이 판정 · 상자를 맞춘다(10-10): Ctrl = 복사 · 떼면 다시 이동.
+    app.primary = true;
+    assert!(app.dnd_internal_tick(Instant::now()));
+    assert_eq!(
+        app.dnd_internal.as_ref().map(|d| d.choice),
+        Some(crate::platform::DropChoice::Copy),
+        "Ctrl 누름 = 복사"
+    );
+    app.primary = false;
+    app.shift = true;
+    let _ = app.dnd_internal_tick(Instant::now());
+    assert_eq!(
+        app.dnd_internal.as_ref().map(|d| d.choice),
+        Some(crate::platform::DropChoice::Move),
+        "Shift = 이동"
+    );
+    app.shift = false;
+    let _ = app.dnd_internal_tick(Instant::now());
     assert_eq!(
         app.dnd_internal.as_ref().map(|d| d.choice),
         Some(crate::platform::DropChoice::Move)
