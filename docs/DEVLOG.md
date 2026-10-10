@@ -4,6 +4,8 @@
 
 ## 2026-10-10
 
+- **릴리스 v0.24.0**(태그 5b15e7e · run 38034962191 전 잡 ✓ · 자산 9 · brew 탭 264df84 · linux-repo ✓ · winget PR #450020 · #450021 · choco 보류 · 첫 영어 릴리스 노트) — 태그 전 선검증 `release.yml -f tag=` 초안(1차 입력 없음 ✗ → 2차 ✓) 교훈 · 420e440 xdnd 견고화 → [10-10 §15](journal/2026-10-10.md)
+
 - **210차 Linux PC 회차 마감 갱신** — STATUS 시작점(199~210차 = T-130 · T-128 · T-131 P2 · T-147 Linux DnD 2~6차 실기 ✓ · 규칙 2 · DR-28~30 · 전수 f349dfa 594/0 · T4 36/0 · CI 전부 ✓) · 다음 = T-114 macOS 등 사용자 지시 대기 · 태그 전 macOS dmg 빌드 → [10-10 §14](journal/2026-10-10.md)
 
 - **사용자 규칙 — 게시물 · 프로그램 내부 정보 = 영어**(DR-30 · f349dfa) — 릴리스 노트 · 동봉 README(한글본 README.ko.md) · dmg `INSTALL.txt` · uninstall 메시지 · brew caveats 영어화 · 개발 문서는 한글 유지 · 다음 릴리스부터 영어 노트 → [10-10 §13](journal/2026-10-10.md)
