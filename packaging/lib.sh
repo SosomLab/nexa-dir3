@@ -50,6 +50,7 @@ stage_common() {
     install -m 0644 "$ROOT/LICENSE.md" "$dst/LICENSE.md"
     install -m 0644 "$ROOT/LICENSE.ko.md" "$dst/LICENSE.ko.md"
     install -m 0644 "$ROOT/README.md" "$dst/README.md"
+    install -m 0644 "$ROOT/README.ko.md" "$dst/README.ko.md" # 한글 안내(영어 README가 링크 · 게시물 언어 규칙 docs/16 §5-6)
     local pk="${NDIR_PLUGINS_SRC:-$ROOT/plugins}"
     local n=0
     for w in "$pk"/*.wasm; do [ -f "$w" ] && { install -m 0644 "$w" "$dst/plugins/"; n=$((n+1)); }; done

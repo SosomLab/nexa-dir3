@@ -21,7 +21,7 @@ exclude = ["plugins/sdk"]
 
 [workspace.package]
 # ★ 버전 자리는 여기 하나(DR-6). dir2 0.22.0의 다음 = 0.23.0(제품 연속 · 라이선스 max_major 0 호환).
-version = "0.23.3"
+version = "0.24.0"
 edition = "2021"
 rust-version = "1.89"
 license = "LicenseRef-PolyForm-Noncommercial-1.0.0"

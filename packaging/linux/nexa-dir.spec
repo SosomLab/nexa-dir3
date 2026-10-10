@@ -54,10 +54,18 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %license %{_docdir}/nexa-dir/LICENSE.md
 %doc %{_docdir}/nexa-dir/LICENSE.ko.md
 %doc %{_docdir}/nexa-dir/README.md
+%doc %{_docdir}/nexa-dir/README.ko.md
 %doc %{_docdir}/nexa-dir/THIRD-PARTY-NOTICES.txt
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Fri Oct 10 2026 Sangyong Bae <kiros33@gmail.com> - 0.24.0-1
+- Linux drag and drop completed: drag files out to other apps (Nautilus, terminals) over X11/XWayland
+  with a drag label showing copy/move, Ctrl/Shift honoured, drops land on the hovered folder row ·
+  settings dependencies stage 2 (forced values, bound ranges) · sort state inherited by new tabs and
+  kept in the session · Linux context menu: item icons, order editor, Nautilus scripts, copy/move to
+  folder · trash across filesystems fixed · self-check menu hidden in release builds · bundled docs in
+  English (Korean README added).
 * Thu Oct 08 2026 Sangyong Bae <kiros33@gmail.com> - 0.23.3-1
 - Tab status bar git summary: load control as advanced folder-watch settings (settle delay after
   changes, failure backoff, query time limit, no periodic polling while the window is inactive) and

@@ -48,7 +48,7 @@ for n in 16 24 32 48 64 128 256 512; do
 done
 # 공통(라이선스·README·THIRD-PARTY-NOTICES·plugins) → /usr/share/nexa-dir · 문서는 /usr/share/doc 규약 자리에도.
 stage_common "$PKG/usr/share/nexa-dir"
-for f in LICENSE.md LICENSE.ko.md README.md THIRD-PARTY-NOTICES.txt; do mv "$PKG/usr/share/nexa-dir/$f" "$PKG/usr/share/doc/nexa-dir/$f"; done
+for f in LICENSE.md LICENSE.ko.md README.md README.ko.md THIRD-PARTY-NOTICES.txt; do mv "$PKG/usr/share/nexa-dir/$f" "$PKG/usr/share/doc/nexa-dir/$f"; done
 # Debian 정책: /usr/share/doc/<pkg>/copyright
 { echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"; echo "Upstream-Name: nexa-dir"; echo "Source: $HOMEPAGE"; echo;
   echo "Files: *"; echo "Copyright: 2026 SosomLab"; echo "License: PolyForm-Noncommercial-1.0.0"; echo " See LICENSE.md in this directory."; } > "$PKG/usr/share/doc/nexa-dir/copyright"

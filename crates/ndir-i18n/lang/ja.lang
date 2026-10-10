@@ -4,7 +4,7 @@
 @name = 日本語
 @name.en = Japanese
 @author = SosomLab
-@app = 0.23.3
+@app = 0.24.0
 @fallback = en
 
 # ── Menu bar ──
