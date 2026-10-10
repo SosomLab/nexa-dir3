@@ -132,6 +132,7 @@ release: 0.23.0 승격(크로스플랫폼 1차) — GitHub Release 초안
 3. 배포 결과를 다시 기록: `docs: X.Y.Z 배포 결과 동기 — 자산·채널 상태`.
 4. 외부 심사 채널(패키지 매니저·스토어) 대기 중이면 **보류 방침을 문서에 명시**하고 그때까지 신규 태그를 만들지 않는다.
 5. 공개된 버전의 자산·태그는 다시 만들지 않는다(매니페스트 SHA가 깨진다).
+6. **게시물의 언어 = 영어**(사용자 10-10): 패키지 메타데이터(deb `control` description · rpm summary/description · MSI/pkg 제품 설명 · winget/choco/homebrew 매니페스트의 ShortDescription/Description/summary · `.desktop`의 `Name`/`GenericName`/`Comment` · `Cargo.toml` description) · 릴리스 노트/CHANGELOG · 동봉 문서(README · LICENSE · NOTICE · 설치/제거 안내) · 버전/정보(about) 창 문구 · 게시 채널(GitHub Release · 스토어) 본문은 영어로 쓴다. 현지화는 `Comment[ko]` · `[ja]`처럼 **덧붙이는 항목**으로만(영어 원본을 대체하지 않는다). 앱 UI 문자열은 i18n 키(en이 원본 · ko/ja 번역)라 이 규칙과 어긋나지 않는다. 저장소의 개발 문서(docs/ · journal · 커밋 본문 · 코드 주석)는 종전대로 한글.
 
 ## 6. 새 프로젝트 적용 체크리스트
 

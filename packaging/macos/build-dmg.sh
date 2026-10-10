@@ -20,14 +20,15 @@ step "dmg 루트 구성"
 cp -R "$APP" "$DROOT/"
 ln -s /Applications "$DROOT/Applications"
 cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DROOT/"
-cat > "$DROOT/설치 안내.txt" <<EOF
+# 동봉 안내문은 영어(게시물 언어 규칙 · docs/16 §5-6 · 사용자 10-10).
+cat > "$DROOT/INSTALL.txt" <<EOF
 Nexa Dir $VERSION
-1) "Nexa Dir"을 Applications 폴더로 끌어다 놓습니다.
-2) 터미널에서 nexa-dir(--selfcheck 등)을 쓰려면 링크를 하나 만듭니다(pkg 설치본은 자동):
+1) Drag "Nexa Dir" into the Applications folder.
+2) To use nexa-dir from a terminal (e.g. --selfcheck), add a link (the pkg installer does this for you):
    sudo ln -sfn "/Applications/Nexa Dir.app/Contents/MacOS/nexa-dir" /usr/local/bin/nexa-dir
-3) 서명되지 않은 빌드가 실행되지 않으면(Gatekeeper):
+3) If the unsigned build refuses to start (Gatekeeper):
    xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"
-제거: sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"
+Uninstall: sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"
 EOF
 
 step "hdiutil create"

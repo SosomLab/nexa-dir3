@@ -1,43 +1,58 @@
-# Nexa Dir 3 — 크로스플랫폼 네이티브 파일 탐색기 (올 러스트)
+# Nexa Dir 3 — cross-platform native file explorer (all Rust)
 
-> Cross-platform (Windows · macOS · Linux), single-binary, ultra-lightweight native file explorer — the cross-platform successor of [nexa-dir2](https://github.com/SosomLab/nexa-dir2).
+> Cross-platform (Windows · macOS · Linux), single-binary, ultra-lightweight native file explorer — the cross-platform successor of [nexa-dir2](https://github.com/SosomLab/nexa-dir2). Korean guide: [README.ko.md](README.ko.md).
 
-**Nexa Dir 3**는 Windows 전용이던 [nexa-dir2](https://github.com/SosomLab/nexa-dir2)(`0.22.0`)의 **기능·화면 배치·자원을 그대로** 세 OS에서 재현하는 프로젝트입니다. 창·입력은 `winit + softbuffer`, 화면은 자체 CPU 래스터([nexa-ui](https://github.com/SosomLab/nexa-ui)), 설정 구조는 [nexa-sql](https://github.com/SosomLab/nexa-sql) 방식, 라이선스는 [nexa-license](https://github.com/SosomLab/nexa-license)를 씁니다. OS 기본 컨트롤은 쓰지 않습니다 — 세 OS에서 같은 화면.
+**Nexa Dir 3** reproduces the features, screen layout and resources of the Windows-only [nexa-dir2](https://github.com/SosomLab/nexa-dir2) (`0.22.0`) on all three operating systems. Windowing and input use `winit + softbuffer`, the screen is drawn by our own CPU rasterizer ([nexa-ui](https://github.com/SosomLab/nexa-ui)), settings follow the [nexa-sql](https://github.com/SosomLab/nexa-sql) model, and licensing uses [nexa-license](https://github.com/SosomLab/nexa-license). No OS-native controls are used — the same screen on every OS.
 
-## 설계 원칙
+## Highlights
 
-1. **기능·배치 패리티** — nexa-dir2의 기능 목록([docs/port](docs/port/00-index.md) 이식 원장)이 체크리스트. 차이는 "의도된 차이"로만.
-2. **컨트롤은 전부 nexa-ui** — 없으면 nexa-ui에 추가해 공유(nexa-sql 등 계열 앱과 같은 부품).
-3. **OS 분기는 한 층(`platform/`)** — 셸 컨텍스트 메뉴 · 휴지통 · 클립보드 · DnD · 폴더 감시 · 터미널 셸(Windows `pwsh` / macOS·Linux `$SHELL`).
-4. **회귀가 바로 보이게** — 3-OS CI · 헤드리스 앱 시나리오 · `nexa-dir --selfcheck`(자가 점검) · 검증 매트릭스.
+- Dual-panel explorer with tabs, tree/flat/tile views, multi-column sort, type-ahead and fast scrolling.
+- File operations with progress, conflict handling, undo/redo, bulk rename, trash, checksums, duplicate finder, folder compare/sync, archive extract.
+- Built-in terminal, info/preview dock (text, images, Markdown and archives via WASM plugins), favorites, launcher bar.
+- OS integration through one `platform/` layer: shell context menus, trash, file clipboard, drag and drop, folder watching, default apps.
+- Portable first: settings live next to the executable (`data/`) when present, otherwise in the user config directory. One-time import of nexa-dir2 settings.
+- Free for personal and noncommercial use; commercial use requires a license (see below).
 
-## 현재 상태
+## Install
 
-- 단계: **M0 골격**(2026-10-03 착수). 상세 → [docs/STATUS.md](docs/STATUS.md) · 로드맵 → [docs/MILESTONES.md](docs/MILESTONES.md).
+Installers and the portable zip are on [GitHub Releases](https://github.com/SosomLab/nexa-dir3/releases) (verify with `sha256sums.txt`).
 
-## 빌드 · 점검
+```powershell
+winget install SosomLab.NexaDir            # Windows MSI
+winget install SosomLab.NexaDir.Portable   # Windows portable
+choco  install nexa-dir                    # Windows MSI
+```
+```bash
+brew install --cask kiros33/tap/nexa-dir   # macOS (Universal pkg)
+sudo apt install ./nexa-dir_<version>_amd64.deb      # Linux (deb)
+sudo dnf install ./nexa-dir-<version>-1.x86_64.rpm   # Linux (rpm)
+```
 
-형제 저장소를 나란히 둡니다: `../nexa-ui` · `../nexa-license`(path 의존).
+Uninstall: Windows Apps & features · macOS `sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"` · Linux `dpkg -r nexa-dir` / `dnf remove nexa-dir`. User data (settings, sessions, favorites, rename presets) is kept on uninstall.
+
+## Build and check
+
+Keep the sibling repositories next to this one: `../nexa-ui` and `../nexa-license` (path dependencies).
 
 ```bash
 cargo build --workspace
-cargo run -p nexa-dir -- --smoke        # 창 없이 기동 점검
-cargo run -p nexa-dir -- --selfcheck    # 자가 점검(doctor) — 설치본 Windows 콘솔에서는 `ndir --selfcheck`(콘솔 보조 exe · 출력 순서/캡처 정상)
-scripts/check-3os.sh                    # push 전 3-OS 교차 검사
+cargo run -p nexa-dir -- --smoke        # start without a window (startup check)
+cargo run -p nexa-dir -- --selfcheck    # self-check (doctor); in a Windows console use `ndir --selfcheck`
+scripts/check-3os.sh                    # 3-OS cross check before push
 ```
 
-절차 SSOT = [docs/18](docs/18-build-and-test.md).
+Procedures: [docs/18](docs/18-build-and-test.md) (Korean).
 
-## 문서 — [문서 홈](docs/README.md)
+## Documentation — [docs home](docs/README.md) (Korean)
 
-바로가기: [이식 메모리 CLAUDE.md](CLAUDE.md) · [결정 기록](docs/10-decision-record.md) · [개발 기준](docs/15-dev-methodology.md) · [문서·git 규약](docs/16-doc-git-conventions.md) · [이식 원장](docs/port/00-index.md)
+Shortcuts: [project memory CLAUDE.md](CLAUDE.md) · [decision record](docs/10-decision-record.md) · [development rules](docs/15-dev-methodology.md) · [doc and git conventions](docs/16-doc-git-conventions.md) · [port ledger](docs/port/00-index.md)
 
-## 프로젝트 정보 / 라이선스
+## Project / License
 
-| 항목 | 내용 |
+| Item | Value |
 | --- | --- |
-| 조직 | **SosomLab** — <https://sosomlab.com> |
-| 원본 | <https://github.com/SosomLab/nexa-dir2> (기능 원천) · <https://github.com/SosomLab/nexa-dir> (원조) |
-| 개발자 | Sangyong Bae — kiros33@gmail.com |
+| Organization | **SosomLab** — <https://sosomlab.com> |
+| Origin | <https://github.com/SosomLab/nexa-dir2> (feature source) · <https://github.com/SosomLab/nexa-dir> (original) |
+| Developer | Sangyong Bae — kiros33@gmail.com |
 
-**PolyForm Noncommercial 1.0.0** ([LICENSE.md](LICENSE.md) · 한글 [LICENSE.ko.md](LICENSE.ko.md)) — 개인·비상업 무료, 상업 사용은 유료 라이선스(문의 kiros33@sosomlab.com).
+**PolyForm Noncommercial 1.0.0** ([LICENSE.md](LICENSE.md) · Korean [LICENSE.ko.md](LICENSE.ko.md)) — free for personal and noncommercial use; commercial use requires a paid license (contact kiros33@sosomlab.com).

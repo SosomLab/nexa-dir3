@@ -45,6 +45,7 @@
 ## 5. 작업 규약 (전문 = [docs/15](docs/15-dev-methodology.md) · [docs/16](docs/16-doc-git-conventions.md))
 
 - **답은 예외 없이 한글로.** 코드 식별자·명령·경로·오류 원문만 그대로.
+- **패키지 게시물과 프로그램 내부 정보는 영어로**(사용자 10-10): 패키지 메타데이터(deb/rpm/MSI/pkg · winget/choco/homebrew 매니페스트 · `.desktop` · `Cargo.toml` description) · 버전/정보(about) 문구 · 동봉 문서(README · LICENSE · NOTICE · 릴리스 노트/CHANGELOG) · 게시 채널의 설명·요약은 **영어**가 원본이다. 한글·일본어는 `Comment[ko]`처럼 현지화 항목으로만 덧붙인다(원본을 대체하지 않는다). UI 문자열은 종전대로 i18n 키(en 원본 · ko/ja 번역). 저장소 안의 개발 문서(docs/ · journal · 커밋 본문)는 한글 그대로.
 - **수직 슬라이스 · 단위 = 커밋 1개 · main 항상 green · Conventional Commits**(scope 어휘 = docs/16 §3) · `git add <파일>`만(`-A`·`.` 금지) · 이식 커밋은 **출처 경로 + 이식 원장 ID** 명기.
 - **push 전 게이트 = `bash scripts/gate.sh`(단계형 · 사용자 10-04)** — 모든 수정에 전수를 돌리지 않는다. **quick**(fmt + 호스트 clippy + 바뀐 크레이트 시험 + `--smoke`)이 기본이고, **full**(3-OS clippy + 전체 시험 + `--smoke` + `--selfcheck --ci` + T4 시나리오)은 ① 이 PC에 전수 기록이 없거나 ② 마지막 전수가 24시간(`NDIR_GATE_FULL_HOURS`)보다 오래됐거나 ③ 핵심 경로(코어 rlib · `platform/` · 설정 엔진 · 라이선스 · 빌드/CI/스크립트 · 시나리오) 또는 형제 저장소가 바뀌었을 때만 자동으로 돈다. **배포 · 태그 · 마일스톤 마감 전에는 `gate.sh full`을 한 번 더.** 빨강이면 push하지 않는다. push 뒤 CI(3-OS 전수) 결과 확인 — quick으로 push했으면 CI가 전수 역할이다.
 - **기록 = 한 트랜잭션**: 커밋 → `docs/journal/YYYY-MM-DD.md` → DEVLOG → STATUS → MILESTONES/TODO → (브랜치면) BRANCHES.

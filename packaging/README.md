@@ -1,5 +1,7 @@
 # packaging — 설치본 · 패키지 관리자 매니페스트
 
+> **언어 규칙(docs/16 §5-6 · 사용자 10-10)**: 이 폴더의 매니페스트·설명·동봉 문서·릴리스 노트 등 **게시물에 들어가는 문구는 영어**가 원본이다. 한글·일본어는 `Comment[ko]` 같은 현지화 항목으로만 덧붙인다. (이 README처럼 개발자용 설명은 한글.)
+
 | 폴더/파일 | 내용 |
 | --- | --- |
 | `windows/` | WiX v4 MSI(`build-msi.ps1` · perMachine · UpgradeCode 고정 `7D1F7E3A-…`) + 포터블 zip(`build-zip.ps1` · zip 뿌리에 `nexa-dir.exe`) · 빌드가 `<msi>.productcode.txt`를 곁에 남긴다 |

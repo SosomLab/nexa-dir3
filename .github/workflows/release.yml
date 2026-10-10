@@ -282,21 +282,21 @@ jobs:
           cat > notes.md <<EOF
           # Nexa Dir $VERSION
 
-          크로스플랫폼 경량 듀얼 패널 파일 탐색기(nexa-dir2 후속 · Windows·macOS·Linux 같은 화면) — 설치본 + Windows 포터블 zip.
+          Cross-platform lightweight dual-panel file explorer (successor of nexa-dir2; the same screen on Windows, macOS and Linux) — installers plus a Windows portable zip.
 
-          | 운영체제 | 파일 | 설치 |
+          | OS | File | Install |
           | --- | --- | --- |
-          | Windows x64 | \`nexa-dir-$VERSION-windows-x64.msi\` | 더블클릭 또는 \`msiexec /i … /qn\`(조용한 설치 · PATH 추가 옵션) |
-          | macOS (Universal · Apple Silicon/Intel) | \`nexa-dir-$VERSION-macos-universal.pkg\` | 설치기 실행 → \`/Applications/Nexa Dir.app\` + \`/usr/local/bin/nexa-dir\` 링크 |
-          | macOS (drag-to-Applications) | \`nexa-dir-$VERSION-macos-universal.dmg\` | 끌어 놓기 · CLI 링크는 dmg 안 안내문 |
-          | Linux x86_64 (deb) | \`nexa-dir_${VERSION}_amd64.deb\` | \`sudo dpkg -i\` 또는 \`sudo apt install ./…deb\` |
+          | Windows x64 | \`nexa-dir-$VERSION-windows-x64.msi\` | Double-click, or \`msiexec /i … /qn\` (silent; optional PATH entry) |
+          | macOS (Universal · Apple Silicon/Intel) | \`nexa-dir-$VERSION-macos-universal.pkg\` | Run the installer → \`/Applications/Nexa Dir.app\` + \`/usr/local/bin/nexa-dir\` link |
+          | macOS (drag-to-Applications) | \`nexa-dir-$VERSION-macos-universal.dmg\` | Drag and drop; see the note inside the dmg for the CLI link |
+          | Linux x86_64 (deb) | \`nexa-dir_${VERSION}_amd64.deb\` | \`sudo dpkg -i\` or \`sudo apt install ./…deb\` |
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
-          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | 압축 해제 후 \`nexa-dir.exe\` 실행(실행 파일 옆에 \`data\` 폴더를 두면 거기에, 아니면 %APPDATA%\\\\nexa-dir에 설정) · 콘솔(PowerShell)에서는 \`ndir --selfcheck\`처럼 \`ndir.exe\`로 |
+          | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | Unzip and run \`nexa-dir.exe\` (settings go to a \`data\` folder next to the exe if present, otherwise %APPDATA%\\\\nexa-dir); in a console (PowerShell) use \`ndir.exe\`, e.g. \`ndir --selfcheck\` |
 
-          받은 파일은 \`sha256sums.txt\`로 확인하세요. 제거: Windows 프로그램 추가/제거 · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\`/\`dnf remove nexa-dir\`.
-          사용자 데이터(설정 · 세션 · 즐겨찾기 · 이름 변경 프리셋)는 설정 폴더에 있으며 제거해도 보존됩니다. 0.22.0 이하(nexa-dir2)의 설정은 첫 실행 때 한 번 가져옵니다.
+          Verify downloads with \`sha256sums.txt\`. Uninstall: Windows Apps & features · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\` / \`dnf remove nexa-dir\`.
+          User data (settings, sessions, favorites, rename presets) lives in the settings folder and is kept on uninstall. Settings from 0.22.0 and earlier (nexa-dir2) are imported once on first start.
 
-          ## 패키지 관리자
+          ## Package managers
 
           \`\`\`powershell
           winget install SosomLab.NexaDir            # Windows MSI (replaces the 0.22.0 Inno installer)
@@ -307,7 +307,7 @@ jobs:
           \`\`\`bash
           brew install --cask kiros33/tap/nexa-dir   # macOS (Universal pkg)
           \`\`\`
-          Linux(apt/rpm 저장소): <https://pkg.sosomlab.com>
+          Linux (apt/rpm repository): <https://pkg.sosomlab.com>
 
           winget·Chocolatey는 중앙 검수를 거쳐야 위 명령이 동작합니다. 함께 올린 \`nexa-dir-$VERSION-package-manifests.zip\`이 실제 제출본입니다.
 
