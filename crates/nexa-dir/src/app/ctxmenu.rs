@@ -532,6 +532,13 @@ impl App {
         if sel.iter().any(|p| p.is_dir()) {
             items.push(CtxItem::item("ctx.find_dupes", tr("ctx.findDupes")));
         }
+        // 이름을 NFC로 변환(10-18 · macOS NFD 이름): 선택 이름이 분해형이거나 선택한 폴더 바로 아래에 분해형 이름이 있을 때만.
+        if sel.iter().any(|p| {
+            crate::nfc::path_is_decomposed(p)
+                || (p.is_dir() && crate::nfc::dir_has_decomposed_child(p))
+        }) {
+            items.push(CtxItem::item("ctx.nfc", tr("ctx.nfc")));
+        }
         // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일 1개일 때 — 여기에 / "<이름>" 폴더에.
         if let [one] = sel {
             if one.is_file() && app::extract::extract_ext_ok(one) {
@@ -866,6 +873,7 @@ impl App {
                     .join("\r\n");
                 let _ = clipboard::write_text(&text);
             }
+            "ctx.nfc" => self.nfc_convert_ask(panel),
             "ctx.checksum" => {
                 let paths = self.panels[panel].selected_paths_in_view_order();
                 self.open_checksum(&paths);

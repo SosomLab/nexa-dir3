@@ -11,6 +11,26 @@ use ndir_core::secret::Secret;
 
 impl App {
     /// 지정 패널의 단일 선택 파일을 독립 창으로. 폴더·다중 선택·선택 없음 = 무동작.
+    /// Quick Look 토글(10-18 · Finder Space/⌘Y · 노틸러스 Space): 열려 있으면 닫고(프로세스 종료) · 아니면 선택으로 연다 · 이 OS/환경에
+    /// 없으면(Windows · Sushi 없음) 앱 미리보기 창(F3)으로 대신.
+    pub(crate) fn quick_look_toggle(&mut self) {
+        if let Some(mut child) = self.quicklook.take() {
+            if child.try_wait().ok().flatten().is_none() {
+                let _ = child.kill();
+                let _ = child.wait();
+                return;
+            }
+        }
+        let paths = self.panels[self.active].selected_paths_in_view_order();
+        if paths.is_empty() {
+            return;
+        }
+        match self.platform.opener.quick_look(&paths) {
+            Ok(child) => self.quicklook = Some(child),
+            Err(_) => self.open_preview_window(self.active),
+        }
+    }
+
     pub(crate) fn open_preview_window(&mut self, panel: usize) {
         let sel = self.panels[panel].selected_paths();
         let [path] = &sel[..] else {

@@ -71,6 +71,7 @@ mod log_win;
 mod mem_win;
 mod memstat;
 mod nav;
+mod nfc;
 mod order;
 mod order_win;
 mod panel;
@@ -287,6 +288,8 @@ struct App {
     right_press: Option<(usize, i32, i32)>,
     /// 우클릭 드래그로 놓은 뒤 메뉴가 기다리는 (경로들, 놓은 자리) — 복사/이동을 고르면 `external_drop_with`.
     dnd_menu: Option<(Vec<PathBuf>, (i32, i32), PathBuf)>,
+    /// Quick Look 자식 프로세스(macOS `qlmanage -p` · Linux Sushi · 10-18): 살아 있으면 Space가 닫는다(토글 · Finder 꼴).
+    quicklook: Option<std::process::Child>,
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,
@@ -496,6 +499,7 @@ fn list_opts(s: &Settings) -> ListOpts {
         case_sensitive: s.flag("list.sort_case_sensitive"),
         natural: s.flag("list.sort_natural"),
         hide_empty_glyph: s.flag("list.hide_empty_glyph"),
+        nfc_display: s.flag("list.nfc_display"),
     }
 }
 
@@ -686,6 +690,7 @@ impl App {
             drag_press: None,
             right_press: None,
             dnd_menu: None,
+            quicklook: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),

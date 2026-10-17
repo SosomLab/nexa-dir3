@@ -19,6 +19,7 @@ pub(crate) mod log;
 pub(crate) mod memory;
 pub(crate) mod menu_icons;
 pub(crate) mod menus;
+mod nfcconv;
 pub(crate) mod ops;
 pub(crate) mod order;
 mod osopen;

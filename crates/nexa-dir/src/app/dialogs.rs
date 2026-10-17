@@ -27,6 +27,8 @@ pub(crate) enum DlgReply {
     BulkPreset,
     /// 빠른 실행 항목 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`라벨|실행 파일|인자`)을 넣는다(T-133).
     LauncherItem(Option<usize>),
+    /// 이름을 NFC로 변환(10-18): 1 = 폴더 안까지 · 2 = 선택한 것만 · 그 외 취소.
+    NfcConvert(Vec<PathBuf>),
 }
 
 /// 덮어쓰기 질문 글 — 이름 + **대상 폴더**(사용자 10-05 "대상 폴더 식별이 되지 않아": 종전에는 이름만 있어 어느 폴더에
@@ -127,6 +129,11 @@ impl App {
                 }
             }
             DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
+            DlgReply::NfcConvert(paths) => match id {
+                1 => self.nfc_convert(paths, true),
+                2 => self.nfc_convert(paths, false),
+                _ => {}
+            },
             DlgReply::LauncherItem(at) => {
                 if id == 1 {
                     self.launcher_item_entered(at, text.as_deref().unwrap_or(""));

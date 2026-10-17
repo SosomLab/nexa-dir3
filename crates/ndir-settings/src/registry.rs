@@ -839,6 +839,15 @@ pub const REGISTRY: &[Entry] = &[
         "system"
     ),
     // ── 파일 목록 › 보기·정렬(PREFS-310 ①~⑨)
+    // NFC 표시(dir3 신규 · 10-18 · macOS NFD 이름): 켬 = 분해형 이름을 합성해 보임 · 상태 열에 NFD 표식 · 행 메뉴로 변환.
+    e!(
+        "list.nfc_display",
+        CAT_LIST,
+        "pref.nfcDisplay",
+        "pref.nfcDisplay.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "list.show_hidden",
         CAT_LIST,
@@ -1883,6 +1892,14 @@ pub const REGISTRY: &[Entry] = &[
         "key.view.palette",
         CAT_KEYS,
         "cmd.palette",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
+        "key.view.quicklook",
+        CAT_KEYS,
+        "cmd.quickLook",
         "pref.key.desc",
         Text,
         ""

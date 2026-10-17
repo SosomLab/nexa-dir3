@@ -8733,3 +8733,68 @@ fn drop_link_creates_symlinks_in_dest() {
     assert!(a.is_file(), "원본 유지");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// NFC 변환(10-18): NFD 이름 파일 = 행 메뉴에 "이름을 NFC로 변환" · 고르면 바로 변환 · 폴더(안에 NFD) = 확인 창(하위 포함/선택만/취소) · 하위 포함 =
+/// 안까지 변환(후위 순회 · 부모 이름도).
+#[test]
+fn nfc_convert_renames_files_and_asks_for_folders() {
+    let nfd = "\u{1112}\u{1161}\u{11AB}\u{1100}\u{1173}\u{11AF}"; // 한글
+    let (mut app, dir) = fixture("nfc");
+    let f = dir.join(format!("{nfd}.txt"));
+    std::fs::write(&f, b"x").unwrap();
+    let d = dir.join(format!("{nfd}_dir"));
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join(format!("{nfd}.md")), b"x").unwrap();
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.layout_for(1200, 800, 1.0);
+    // 파일: 메뉴 항목 → 바로 변환.
+    app.panels[0].select_paths(std::slice::from_ref(&f), &mut inv);
+    app.open_row_menu(0);
+    assert!(app.ctx_dump().contains("ctx.nfc"), "{}", app.ctx_dump());
+    app.ctx_pick("ctx.nfc");
+    assert!(
+        dir.join("한글.txt").is_file() && !f.exists(),
+        "파일 = 즉시 NFC"
+    );
+    // 폴더(안에 NFD): 확인 창 → 하위 포함.
+    app.panels[0].select_paths(std::slice::from_ref(&d), &mut inv);
+    app.open_row_menu(0);
+    assert!(app.ctx_dump().contains("ctx.nfc"), "{}", app.ctx_dump());
+    app.ctx_pick("ctx.nfc");
+    assert!(app.dlg_pending.is_some(), "폴더 = 확인 창");
+    app.startup_cmd("dlg.pick:1");
+    let nd = dir.join("한글_dir");
+    assert!(
+        nd.is_dir() && nd.join("한글.md").is_file() && !d.exists(),
+        "하위 포함 변환"
+    );
+    // 상태 열 표식: 남은 NFD 없음.
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Quick Look(10-18): 가짜 플랫폼 = 미지원 → 앱 미리보기 창으로 대신 · argv 틀 치환(순수).
+#[test]
+fn quick_look_falls_back_to_preview_window() {
+    use crate::platform::quick_look_argv;
+    let t = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+    let paths = vec![PathBuf::from("/a/1.png"), PathBuf::from("/a/2.png")];
+    assert_eq!(
+        quick_look_argv(&t(&["qlmanage", "-p", "{paths}"]), &paths),
+        Some(t(&["qlmanage", "-p", "/a/1.png", "/a/2.png"]))
+    );
+    assert_eq!(
+        quick_look_argv(&t(&["sushi", "{path}"]), &paths),
+        Some(t(&["sushi", "/a/1.png"]))
+    );
+    assert_eq!(quick_look_argv(&t(&[]), &paths), None, "빈 틀 = 없음");
+    assert_eq!(quick_look_argv(&t(&["x"]), &[]), None, "선택 없음");
+    let (mut app, dir) = fixture("quicklook");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_paths(&[dir.join("a.txt")], &mut inv);
+    app.command("view.quicklook");
+    assert!(app.quicklook.is_none(), "가짜 플랫폼 = 자식 없음");
+    assert!(app.open_preview, "미리보기 창으로 대신");
+    let _ = std::fs::remove_dir_all(&dir);
+}

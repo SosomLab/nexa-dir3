@@ -31,6 +31,7 @@ pub(crate) fn status_icon_key(st: ndir_vfs::FileStatus) -> Option<&'static str> 
         S::AvailableLocally => "status:local",
         S::AlwaysKeep => "status:pinned",
         S::Network => "status:network",
+        S::Nfd => return None, // 아이콘 없음 = 글 "NFD"(상태 열 · 10-18)
     })
 }
 
@@ -43,6 +44,7 @@ pub(crate) fn status_label(st: ndir_vfs::FileStatus) -> String {
         S::AvailableLocally => ndir_i18n::tr("status.availableLocally"),
         S::AlwaysKeep => ndir_i18n::tr("status.alwaysKeep"),
         S::Network => ndir_i18n::tr("status.network"),
+        S::Nfd => ndir_i18n::tr("status.nfd"),
     }
 }
 
@@ -141,6 +143,8 @@ pub(crate) struct ListOpts {
     /// 빈 폴더(현재 보기로 보일 자식이 없는 폴더)의 펼침 글리프 숨김(설정 `list.hide_empty_glyph` · dir2 X-43 · WINC-016 · 10-18 — 종전에는 키만 있고
     /// 읽는 곳이 없어 모든 폴더에 ▸가 그려졌다). 전역(탭 보기 옵션이 아니다).
     pub hide_empty_glyph: bool,
+    /// 이름을 NFC로 합성해 표시(설정 `list.nfc_display` · 10-18 · macOS NFD 이름의 자모가 흩어져 보이는 것) — 정렬·타입어헤드·이름 바꾸기는 원래 이름.
+    pub nfc_display: bool,
 }
 
 /// 탭 보기 옵션 5종 `(숨김, Dot, 폴더 우선, 대소문자 구분 정렬, 자연 정렬)` — 탭이 소유하고 보기 범위(`list.view_scope`)만큼 함께 바뀐다.
@@ -303,6 +307,10 @@ impl TreeSource {
             return ndir_vfs::FileStatus::None;
         };
         match ndir_vfs::cloud_status(r.attrs) {
+            // NFD 이름 식별(10-18) — 클라우드 상태가 없을 때만(상태 열은 한 가지만 보인다).
+            ndir_vfs::FileStatus::None if crate::nfc::is_decomposed(&r.name) => {
+                ndir_vfs::FileStatus::Nfd
+            }
             ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
             st => st,
         }
@@ -670,12 +678,19 @@ impl RowSource for TreeSource {
             } else {
                 Marker::Collapsed
             },
-            text: display_name(
-                &r.name,
-                r.kind == FileKind::Dir,
-                crate::platform::hides_shortcut_ext(),
-            )
-            .to_string(),
+            text: {
+                let shown = display_name(
+                    &r.name,
+                    r.kind == FileKind::Dir,
+                    crate::platform::hides_shortcut_ext(),
+                );
+                // NFC 표시(설정 · 10-18): 분해형 이름은 합성해 보인다(원래 이름은 트리에 그대로 · 상태 열 "NFD").
+                if self.opts.nfc_display {
+                    crate::nfc::compose(shown).into_owned()
+                } else {
+                    shown.to_string()
+                }
+            },
         }
     }
 
@@ -844,7 +859,38 @@ mod tests {
             case_sensitive: false,
             natural: false,
             hide_empty_glyph: false,
+            nfc_display: true,
         }
+    }
+
+    /// NFC 표시(10-18): 분해형 이름은 켬이면 합성해 보이고 끄면 원래대로 · 상태 열 = NFD · 원래 이름은 트리에 그대로(이름 바꾸기 기준).
+    #[test]
+    fn nfd_names_display_composed_and_flagged() {
+        let nfd = "\u{1112}\u{1161}\u{11AB}\u{1100}\u{1173}\u{11AF}.txt";
+        let base = std::env::temp_dir().join(format!("ndir-nfc-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(base.join(nfd), b"x").unwrap();
+        let src = TreeSource::open(&base, opts());
+        assert_eq!(src.row(0).text, "한글.txt", "켬 = 합성");
+        assert_eq!(src.status_of(0), ndir_vfs::FileStatus::Nfd, "상태 열 = NFD");
+        assert_eq!(
+            src.row_path(0)
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            nfd,
+            "원래 이름은 그대로"
+        );
+        let mut off = src;
+        off.set_opts(ListOpts {
+            nfc_display: false,
+            ..opts()
+        });
+        assert_eq!(off.row(0).text, nfd, "끔 = 원래대로");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// 빈 폴더 글리프 억제(X-43 · dir2 `source.rs` 시험 이식): 현재 필터로 보여줄 자식이 없는 폴더 = 마커 없음, is_dir(폴더 서식)은 유지 ·

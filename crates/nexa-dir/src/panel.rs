@@ -2229,6 +2229,7 @@ mod tests {
             case_sensitive: false,
             natural: true,
             hide_empty_glyph: false,
+            nfc_display: true,
         }
     }
 

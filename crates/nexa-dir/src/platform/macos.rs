@@ -34,6 +34,11 @@ pub(super) fn opener() -> CommandOpener {
             .iter()
             .map(|s| (*s).to_string())
             .collect(),
+        // Quick Look(10-18 · Finder Space): `qlmanage -p` = 독립 훑어보기 창(여러 파일 = 화살표로 넘김) · 앱이 토글로 닫는다.
+        quick_look: ["qlmanage", "-p", "{paths}"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect(),
     }
 }
 

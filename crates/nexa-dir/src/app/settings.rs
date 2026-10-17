@@ -64,7 +64,8 @@ impl App {
             | "list.folders_first"
             | "list.sort_case_sensitive"
             | "list.sort_natural"
-            | "list.hide_empty_glyph" => {
+            | "list.hide_empty_glyph"
+            | "list.nfc_display" => {
                 let opts = list_opts(&self.settings);
                 for p in &mut self.panels {
                     p.set_opts(opts, &mut inv);

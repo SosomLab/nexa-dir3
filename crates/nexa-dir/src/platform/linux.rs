@@ -33,6 +33,15 @@ pub(super) fn opener() -> CommandOpener {
             .iter()
             .map(|s| (*s).to_string())
             .collect(),
+        // Quick Look 대응(10-18 · 노틸러스 Space) = GNOME Sushi(`sushi <파일>` · 파일 1개) — 없으면 빈 틀 = 앱 미리보기 창.
+        quick_look: if super::find_in_path("sushi").is_some() {
+            ["sushi", "{path}"]
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        } else {
+            Vec::new()
+        },
     }
 }
 

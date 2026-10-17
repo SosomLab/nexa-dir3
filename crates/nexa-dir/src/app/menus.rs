@@ -1012,6 +1012,7 @@ impl App {
             }
             "view.preview_window" => self.open_preview_window(a),
             "view.palette" => self.toggle_palette(),
+            "view.quicklook" => self.quick_look_toggle(),
             "view.log" => self.toggle_log_window(),
             // `list.context_menu` = 키맵 id(Shift+F10 · 메뉴 키 · macOS ⌃Return) · `cmd.contextMenu` = 기동 명령/시험이 부르던 이름 — 같은 일.
             // 종전에는 뒤 이름만 받아 **키로는 메뉴가 열리지 않았다**(키맵이 가로챈 뒤 분기가 없었다 · 10-05 매트릭스 대조에서 적발).

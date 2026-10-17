@@ -187,6 +187,10 @@ pub const COMMANDS: &[Command] = &[
         "cmd+shift+p",
         "ctrl+shift+p"
     ),
+    // Quick Look(dir3 신규 · 10-18 · Finder = Space/⌘Y 토글 · 노틸러스 = Space(Sushi) · Windows = 바인딩 없음 — Space는 목록 선택 토글 그대로 ·
+    // Quick Look이 없는 OS/환경은 앱 미리보기 창(F3)으로 대신).
+    // ⌘Y는 이 앱에서 `edit.redo`의 둘째 코드라(키맵 충돌 시험) Finder의 ⌘Y 보조 바인딩은 두지 않는다 — Space만.
+    c!("view.quicklook", "cmd.quickLook", "", "space", "space"),
     // 로그 창(dir3 신규 · T-92 · nexa-sql `view.log` F10 계승 · macOS는 ⇧⌘L 보조).
     c!("view.log", "cmd.log", "f10", "cmd+shift+l|f10", "f10"),
     // ── 탐색(CMD-326~329 Alt 조합 · macOS는 ⌘[ ⌘] ⌘↑ ⌘↓ — ⌥←→는 편집 필드 단어 이동)

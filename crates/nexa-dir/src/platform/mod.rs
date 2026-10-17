@@ -353,6 +353,11 @@ pub(crate) trait Opener {
     fn open(&self, path: &Path) -> Result<(), PlatformError>;
     /// 파일 관리자에서 보기(선택 상태).
     fn reveal(&self, path: &Path) -> Result<(), PlatformError>;
+    /// Quick Look(10-18): 선택한 파일들을 OS 훑어보기로 연다 — macOS `qlmanage -p` · Linux GNOME Sushi(`sushi`) · 없는 OS/환경 = Unsupported(호출부가
+    /// 앱 미리보기 창으로). 돌려주는 값 = 자식 프로세스(호출부가 토글로 닫는다 = kill).
+    fn quick_look(&self, _paths: &[PathBuf]) -> Result<std::process::Child, PlatformError> {
+        Err(PlatformError::Unsupported("quick look"))
+    }
     /// 바로 가기 파일(Windows `.lnk`)이 가리키는 대상 경로 — 해석할 수 없거나 이 OS에 그런 파일이 없으면 `None`(GAP-007 ·
     /// 호출부는 대상이 폴더일 때 앱 안에서 이동하고, 아니면 [`Self::open`]으로 연다).
     fn link_target(&self, _path: &Path) -> Option<PathBuf> {
@@ -1120,6 +1125,25 @@ fn shell_from_names(names: &[(&str, &[&str], &str)]) -> Vec<ShellSpec> {
 struct CommandOpener {
     open: Vec<String>,
     reveal: Vec<String>,
+    /// Quick Look 명령 틀(`{paths}` = 전부 · `{path}` = 첫 항목 · 빈 틀 = 없음).
+    quick_look: Vec<String>,
+}
+
+/// Quick Look argv(순수): 틀의 `{paths}`를 모든 경로로 · `{path}`를 첫 경로로 바꾼다 · 빈 틀/경로 없음 = None.
+pub(crate) fn quick_look_argv(template: &[String], paths: &[PathBuf]) -> Option<Vec<String>> {
+    let (first, _) = paths.split_first()?;
+    if template.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for a in template {
+        match a.as_str() {
+            "{paths}" => out.extend(paths.iter().map(|p| p.to_string_lossy().into_owned())),
+            "{path}" => out.push(first.to_string_lossy().into_owned()),
+            _ => out.push(a.clone()),
+        }
+    }
+    Some(out)
 }
 
 impl CommandOpener {
@@ -1155,6 +1179,20 @@ impl Opener for CommandOpener {
     }
     fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
         Self::run(&self.reveal, path)
+    }
+    fn quick_look(&self, paths: &[PathBuf]) -> Result<std::process::Child, PlatformError> {
+        let argv = quick_look_argv(&self.quick_look, paths)
+            .ok_or(PlatformError::Unsupported("quick look"))?;
+        let (prog, rest) = argv
+            .split_first()
+            .ok_or(PlatformError::Unsupported("quick look"))?;
+        std::process::Command::new(prog)
+            .args(rest)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| PlatformError::Failed(format!("{prog}: {e}")))
     }
 }
 
