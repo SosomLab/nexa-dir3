@@ -88,6 +88,10 @@ impl App {
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
+            // 스위치 상태 = 설정(nexa-sql 메모리 창 꼴 · 10-18): 최상위 · 상세.
+            self.mem_win
+                .set_on_top(self.settings.flag("mem.always_on_top"));
+            self.mem_win.set_detail(self.settings.flag("mem.detail"));
             self.mem_win.open(el, theme, over, owner.as_deref());
             // 첫 표본은 지금 바로 — 첫 그리기부터 표가 다 있고 창 높이가 내용에 맞는다(빈 표로 한 번 그렸다 늘리지 않게).
             let s = self.mem_sample();
@@ -380,6 +384,16 @@ impl App {
                     self.mem_win.paint(&font, &self.theme, ui_px);
                 }
                 crate::mem_win::MemAction::Trim => self.mem_trim(),
+                crate::mem_win::MemAction::TopToggled(on) => {
+                    let _ = self
+                        .settings
+                        .set("mem.always_on_top", if on { "on" } else { "off" });
+                }
+                crate::mem_win::MemAction::DetailToggled(on) => {
+                    let _ = self
+                        .settings
+                        .set("mem.detail", if on { "on" } else { "off" });
+                }
                 crate::mem_win::MemAction::Close => {
                     self.mem_win.close();
                     if let Some(w) = &self.window {

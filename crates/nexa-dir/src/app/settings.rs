@@ -206,6 +206,11 @@ impl App {
             | "term.copy_format" | "term.shell" => {
                 self.redraw(); // 다음 paint가 설정을 읽는다(열·팔레트 · 셸은 다음 시작부터).
             }
+            // 메모리 창 스위치(창에서 바꾸면 설정에 · 설정 창에서 바꾸면 창에 · 10-18).
+            "mem.always_on_top" => self
+                .mem_win
+                .set_on_top(self.settings.flag("mem.always_on_top")),
+            "mem.detail" => self.mem_win.set_detail(self.settings.flag("mem.detail")),
             k if k.starts_with("key.") => {
                 self.keymap = Keymap::from_settings(&self.settings);
                 self.sync_menu_shortcuts();

@@ -10,6 +10,7 @@
 
 use crate::memstat::{fmt, fmt_delta, Cat, Group, Sample, Trend};
 use ndir_i18n::{tr, trf};
+use nexa_ctl::controls::{LabelSide, Switch};
 use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
@@ -38,6 +39,10 @@ pub(crate) enum MemAction {
     /// [힙 정리] — 호스트가 `platform::procmem::trim` 뒤 곧바로 새 표본을 넣는다.
     Trim,
     Close,
+    /// [최상위] 스위치가 바뀌었다(설정 `mem.always_on_top`에 반영은 호스트 · nexa-sql 메모리 창 꼴 · 10-18).
+    TopToggled(bool),
+    /// [상세] 스위치가 바뀌었다(설정 `mem.detail`에 반영은 호스트 · 끔 = 묶음마다 한 줄 · 켬 = 분류·시스템 줄 전부).
+    DetailToggled(bool),
 }
 
 pub(crate) struct MemWin {
@@ -47,6 +52,11 @@ pub(crate) struct MemWin {
     cursor: (i32, i32),
     btn_close: Button,
     btn_trim: Button,
+    /// [최상위](창을 다른 창 위에) · [상세](묶음 펼침) 스위치 — nexa-sql 메모리 창과 같은 구성(사용자 10-18).
+    top_switch: Switch,
+    on_top: bool,
+    detail_switch: Switch,
+    detail: bool,
     /// 마지막 표본 · 총량 이력 · 영역별 변화.
     sample: Option<Sample>,
     hist: VecDeque<u64>,
@@ -79,6 +89,10 @@ impl MemWin {
             cursor: (0, 0),
             btn_close: Button::new(tr("license.btn.close")),
             btn_trim: Button::new(tr("mem.trim")),
+            top_switch: Switch::new(tr("log.sw.top"), false).with_label_side(LabelSide::Right),
+            on_top: false,
+            detail_switch: Switch::new(tr("mem.detail"), false).with_label_side(LabelSide::Right),
+            detail: false,
             sample: None,
             hist: VecDeque::new(),
             trend: Trend::default(),
@@ -167,6 +181,7 @@ impl MemWin {
         self.scale = win.scale_factor() as f32;
         self.surface = crate::present::Presenter::new(win.clone()).ok();
         self.window = Some(win);
+        self.apply_level();
         self.redraw();
     }
 
@@ -253,8 +268,42 @@ impl MemWin {
     }
 
     /// 언어 전환 — 버튼 글 · 창 제목.
+    /// 설정 `mem.detail` → 스위치(열 때 · 설정 창에서 바꿀 때) · 내용 높이가 달라지니 다음 그리기에서 창 높이를 다시 맞춘다.
+    pub(crate) fn set_detail(&mut self, on: bool) {
+        if self.detail != on {
+            self.detail = on;
+            self.detail_switch.set_on(on);
+            self.fit_h = None;
+            self.redraw();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn detail(&self) -> bool {
+        self.detail
+    }
+
+    /// 설정 `mem.always_on_top` → 스위치 + 창 레벨.
+    pub(crate) fn set_on_top(&mut self, on: bool) {
+        self.on_top = on;
+        self.top_switch.set_on(on);
+        self.apply_level();
+    }
+
+    fn apply_level(&self) {
+        if let Some(w) = &self.window {
+            w.set_window_level(if self.on_top {
+                winit::window::WindowLevel::AlwaysOnTop
+            } else {
+                winit::window::WindowLevel::Normal
+            });
+        }
+    }
+
     pub(crate) fn relabel(&mut self) {
         self.btn_close.set_label(tr("license.btn.close"));
+        self.top_switch.set_label(tr("log.sw.top"));
+        self.detail_switch.set_label(tr("mem.detail"));
         self.btn_trim.set_label(tr(if self.trim_hold > 0 {
             "mem.trimming"
         } else {
@@ -295,6 +344,8 @@ impl MemWin {
                 let mv = InputEvent::MouseMove { x, y };
                 self.btn_close.on_event(&mv, &mut inv);
                 self.btn_trim.on_event(&mv, &mut inv);
+                self.top_switch.on_event(&mv, &mut inv);
+                self.detail_switch.on_event(&mv, &mut inv);
                 if !inv.is_empty() {
                     self.redraw();
                 }
@@ -319,6 +370,12 @@ impl MemWin {
                 if up || self.btn_trim.bounds().contains(p) {
                     self.btn_trim.on_event(&e, &mut inv);
                 }
+                if up || self.top_switch.bounds().contains(p) {
+                    self.top_switch.on_event(&e, &mut inv);
+                }
+                if up || self.detail_switch.bounds().contains(p) {
+                    self.detail_switch.on_event(&e, &mut inv);
+                }
                 self.redraw();
                 if self.btn_close.take_clicked() {
                     return MemAction::Close;
@@ -326,6 +383,16 @@ impl MemWin {
                 if self.btn_trim.take_clicked() && self.trim_hold == 0 {
                     self.begin_trim();
                     return MemAction::Trim;
+                }
+                if let Some(on) = self.top_switch.take_toggled() {
+                    self.on_top = on;
+                    self.apply_level();
+                    return MemAction::TopToggled(on);
+                }
+                if let Some(on) = self.detail_switch.take_toggled() {
+                    self.detail = on;
+                    self.fit_h = None;
+                    return MemAction::DetailToggled(on);
                 }
             }
             WindowEvent::KeyboardInput { event: kev, .. }
@@ -377,18 +444,33 @@ impl MemWin {
             dc.text(pad, ty, clip, &tr("mem.title"), th.text);
             let title_w = dc.text_width(&tr("mem.title"));
             dc.select_font(FontSlot::Base, false);
+            // [최상위] · [상세] = 라벨 글 폭에 꼭 맞는 너비로 **오른쪽 끝에 빈틈 없이**(nexa-sql 메모리 창 10-16 · nexa-ui 211 `wanted_width`) ·
+            // 그 왼쪽 [힙 정리] · 제목과 버튼 사이 = 막대 그래프(사용자 10-18 "nexa-sql과 동일하게").
+            self.top_switch.set_scale(s);
+            self.detail_switch.set_scale(s);
+            let tsw = self.top_switch.wanted_width(&mut dc);
+            let tsx = wi - pad - tsw;
+            self.top_switch
+                .set_bounds(Rect::new(tsx, y, tsw, head_h), inv);
+            self.top_switch.paint(&mut dc, th);
+            let dsw = self.detail_switch.wanted_width(&mut dc);
+            let dsx = tsx - px(10.0) - dsw;
+            self.detail_switch
+                .set_bounds(Rect::new(dsx, y, dsw, head_h), inv);
+            self.detail_switch.paint(&mut dc, th);
             self.btn_trim.set_scale(s);
             // 버튼 폭 = 두 글("힙 정리" · "정리 중…") 중 넓은 쪽 — 눌러도 자리가 흔들리지 않는다.
             let trim_w = dc
                 .text_width(&tr("mem.trim"))
                 .max(dc.text_width(&tr("mem.trimming")))
                 + px(28.0);
+            let bx = dsx - px(12.0) - trim_w;
             self.btn_trim
-                .set_bounds(Rect::new(wi - pad - trim_w, y, trim_w, head_h), inv);
+                .set_bounds(Rect::new(bx, y, trim_w, head_h), inv);
             self.btn_trim.paint(&mut dc, th);
             // 막대 그래프(제목과 버튼 사이 · 최근 60 표본 · 가장 큰 값 = 꽉 찬 높이).
             let sp_x0 = pad + title_w + px(16.0);
-            let sp_x1 = wi - pad - trim_w - px(12.0);
+            let sp_x1 = bx - px(12.0);
             if self.hist.len() >= 2 && sp_x1 - sp_x0 > px(60.0) {
                 let sp_w = (sp_x1 - sp_x0).min(px(260.0));
                 let area = Rect::new(sp_x1 - sp_w, y, sp_w, head_h);
@@ -518,9 +600,25 @@ impl MemWin {
                 dc.fill_rect(Rect::new(pad, y + row_h - 1, wi - pad * 2, 1), th.border);
             };
 
+            let detail = self.detail;
             if let Some(sm) = sample {
                 for g in Group::ALL {
                     let other = if g == Group::Program { sm.other() } else { 0 };
+                    if !detail {
+                        // ★ 묶음 한 줄(nexa-sql 10-16 "종류가 너무 많고 복잡" → 기본): 칩 = 묶음 첫 분류 색 · 소계 · 변화 = 분류 변화의 합.
+                        let (chip, sum, delta) = compact_group(&sm, &trend, g);
+                        row(
+                            &mut dc,
+                            y,
+                            Some(chip),
+                            &tr(g.label_key()),
+                            sum,
+                            denom,
+                            delta,
+                        );
+                        y += row_h;
+                        continue;
+                    }
                     section(
                         &mut dc,
                         y,
@@ -591,22 +689,25 @@ impl MemWin {
                     }
                     y += px(4.0);
                 }
+                if !detail {
+                    y += px(6.0);
+                }
             }
-            // 운영체제가 보는 값(상주 대비) + 시스템 전체.
+            // 운영체제가 보는 값(상주 대비) + 시스템 전체 — 상세 끔 = 핵심 3줄(총량 · 전용 워킹 셋 · 힙 보유)만.
             section(&mut dc, y, &tr("mem.grp.system"), None);
             y += row_h + px(1.0);
             let scale_max = foot.max(sys.resident).max(1);
             // 전용 워킹 셋 = 작업 관리자 "메모리"와 같은 축(전용 = 커밋과 다름 · 사용자 10-07) · 못 세는 OS(mac)는 0 = 행 숨김.
-            for (key, v, always) in [
-                ("mem.sys.footprint", sys.footprint, true),
-                ("mem.sys.privateWs", sys.private_ws, false),
-                ("mem.sys.resident", sys.resident, true),
-                ("mem.sys.file", sys.file_backed, true),
-                ("mem.sys.compressed", sys.compressed, false),
-                ("mem.sys.heapUsed", sys.heap_used, true),
-                ("mem.sys.heapHeld", sys.heap_held, true),
+            for (key, v, always, core) in [
+                ("mem.sys.footprint", sys.footprint, true, true),
+                ("mem.sys.privateWs", sys.private_ws, false, true),
+                ("mem.sys.resident", sys.resident, true, false),
+                ("mem.sys.file", sys.file_backed, true, false),
+                ("mem.sys.compressed", sys.compressed, false, false),
+                ("mem.sys.heapUsed", sys.heap_used, true, false),
+                ("mem.sys.heapHeld", sys.heap_held, true, true),
             ] {
-                if always || v > 0 {
+                if (always || v > 0) && (detail || core) {
                     row(&mut dc, y, None, &tr(key), v, scale_max, None);
                     y += row_h;
                 }
@@ -670,10 +771,55 @@ impl MemWin {
     }
 }
 
+/// 묶음 한 줄 값(순수 · 상세 끔): (칩 색 = 묶음 첫 분류 색 · 소계 = 분류 합 + 프로그램 묶음은 "기타"까지 · 변화 = 보이는 분류 변화의 합 ·
+/// 하나도 안 보이면 None).
+pub(crate) fn compact_group(
+    sm: &Sample,
+    trend: &Trend,
+    g: Group,
+) -> ((u8, u8, u8), u64, Option<i64>) {
+    let cats = || Cat::ALL.into_iter().filter(move |c| c.group() == g);
+    let chip = cats().next().map_or(Cat::OTHER_COLOR, |c| c.color());
+    let other = if g == Group::Program { sm.other() } else { 0 };
+    let sum = sm.data.group_sum(g) + other;
+    let mut ds: Vec<i64> = cats().filter_map(|c| trend.shown(c.idx())).collect();
+    if g == Group::Program {
+        ds.extend(trend.shown(Trend::OTHER));
+    }
+    let delta = (!ds.is_empty()).then(|| ds.iter().sum());
+    (chip, sum, delta)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::memstat::Acc;
+
+    /// 묶음 한 줄(상세 끔): 소계 = 분류 합(프로그램 묶음은 기타 포함) · 칩 = 첫 분류 색 · 변화 없음 = None · 스위치 = 설정 반영.
+    #[test]
+    fn compact_group_sums_and_switches() {
+        let mb = 1024 * 1024;
+        let mut a = sample();
+        a.sys.footprint = 100 * mb;
+        a.data.add(crate::memstat::Cat::ListsActive, 10 * mb);
+        a.data.add(crate::memstat::Cat::History, 2 * mb);
+        let (chip, sum, delta) = compact_group(&a, &Trend::default(), Group::Lists);
+        assert_eq!(sum, 12 * mb);
+        assert_eq!(chip, crate::memstat::Cat::ListsActive.color());
+        assert_eq!(delta, None, "변화 표본 없음");
+        let (_, prog, _) = compact_group(&a, &Trend::default(), Group::Program);
+        assert_eq!(
+            prog,
+            a.data.group_sum(Group::Program) + a.other(),
+            "프로그램 = 기타 포함"
+        );
+        let mut w = MemWin::new();
+        assert!(!w.detail(), "기본 = 묶음 한 줄");
+        w.set_detail(true);
+        assert!(w.detail());
+        w.set_on_top(true);
+        assert!(w.top_switch.is_on());
+    }
 
     fn sample() -> Sample {
         Sample {

@@ -736,6 +736,23 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 3600 },
         "60"
     ),
+    // 메모리 창 스위치 상태(nexa-sql 메모리 창 꼴 · 10-18): 최상위 · 상세(끔 = 묶음마다 한 줄 · 켬 = 분류·시스템 줄 전부) — 창에서만 바뀐다(HIDDEN).
+    e!(
+        "mem.always_on_top",
+        CAT_APPEARANCE,
+        "pref.memOnTop",
+        "pref.memOnTop.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "mem.detail",
+        CAT_APPEARANCE,
+        "pref.memDetail",
+        "pref.memDetail.desc",
+        Bool,
+        "off"
+    ),
     // 상태줄 구성(dir3 신규 · docs/22 NEW-003 · NEW-004): 오른쪽 칸 순서 · 부하 조회 주기(고급) · 패널마다 탭 상태바.
     e!(
         "statusbar.layout",
@@ -2142,6 +2159,8 @@ pub const WINDOWS_ONLY: &[&str] = &["list.show_dotfiles", "key.view.dot"];
 /// 비노출(자동 기억 값 · 메뉴/툴바로만 바뀌는 값 · 구현 상수) — `set/get/reset`은 되지만 설정 창에는 안 보인다.
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",
+    "mem.always_on_top",
+    "mem.detail",
     "layout.panel_mode",
     "layout.info_mode",
     "layout.panel_split_pct",

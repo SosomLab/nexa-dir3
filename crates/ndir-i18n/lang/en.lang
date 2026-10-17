@@ -1177,6 +1177,7 @@ mem.trimming = Trimming…
 mem.trimmed = Heap trimmed - {0} returned ({1} ms)
 mem.trimmedNone = Heap trimmed - nothing to return ({0} ms)
 mem.trim = Trim heap
+mem.detail = Detail
 mem.updated = Updated {0} · every {1} s
 mem.grp.program = Program (runtime · libraries)
 mem.grp.lists = Tabs · file lists
@@ -1220,3 +1221,7 @@ pref.perfBoost = Performance mode
 pref.perfBoost.desc = Turns off heavier extras to keep the app light. Currently: system status monitoring in the status bar (CPU, memory, disk, network, app memory), icons before file names, and icons before menu items. Your other settings are kept.
 pref.idleTrim = Idle memory trim (seconds)
 pref.idleTrim.desc = After this many seconds without input, return the glyph cache, shell menu objects, free heap blocks and the working set to the OS. Coming back costs a brief reload. 0 = off.
+pref.memOnTop = Memory window always on top
+pref.memOnTop.desc = Keep the memory window above other windows (changed with the switch in the window).
+pref.memDetail = Memory window detail rows
+pref.memDetail.desc = Show every category and system row in the memory window. Off = one row per group (changed with the switch in the window).
