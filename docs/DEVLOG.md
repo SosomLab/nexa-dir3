@@ -4,6 +4,8 @@
 
 ## 2026-10-18
 
+- **스위치 폭 맞춤**(4e3b3b4 · nexa-ui 211) · **Windows 드래그 그림**(a999a88 · T-147) · **macOS 파일 열기 전달**(930a505 · nexa-ui 212 · T-114) · ⚠ 미게이트 커밋 동반 push(b168555) → gate full 602/0 · CI ✓로 사후 확인 · push 전 범위 확인 규칙 → [10-18 §3 · §4](journal/2026-10-18.md)
+
 - **자가 점검 ctxmenu 그룹 = 공급자 기준**(700fa99 · T-131) — Linux xdg 메뉴도 실제 점검(CI ubuntu PASS 3) · macOS SKIP · gate quick 363/0 → [10-18 §2](journal/2026-10-18.md)
 
 - **저장소 최신화 · nexa-ui 192~213차 따라잡기** — 210차 `CtxItem.danger` 필드로 깨진 빌드 복구(fc9125d) · nexa-sql 1af10da 이식 macOS 클립보드 `LC_ALL=en_US.UTF-8`(2f7950d · 실기 = Mac) · gate full 598/0 · T4 36/0 → [10-18 §1](journal/2026-10-18.md)
