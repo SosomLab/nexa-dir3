@@ -379,7 +379,7 @@
 | OPS-018 · 035 | 새 폴더/새 파일(unique 이름 · CreateOp · 생성 즉시 이름 바꾸기) | `app/ops.rs::create_new` | T2·T4 | 위 | ✅ | |
 | CI-107 | 기동 명령 `ui.type:<text>` · `ui.press:<key>`(편집 흐름 재현) | `app/startup_cmd.rs` | T4 | `new-rename.scn` | ✅ | |
 | GUI(overlaybar) | OverlayBars(두 축 오버레이 스크롤바) | nexa-ui `nexa-explorer/src/overlaybar.rs` | T2 | dir2 시험 5 | ✅ | 106차 |
-| SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 |
+| SKEL-403 · 001~020 | 호스트 껍질(present·winhost·wingeom·winfocus·theme·input·clipboard·toast) — nexa-sql 복사 · `NDIR_*` | `crates/nexa-dir/src/*.rs` | T0 | 복사 스크립트 치환 점검 · 원본 시험(wingeom·winfocus·theme·input·toast 32) | ✅ | T-40 · 보조 창 호스트(winhost)는 T-44에서 소비 · 10-18 2f7950d(macOS): 텍스트 클립보드 외부 명령(pbpaste · pbcopy · osascript)에 `LC_ALL=en_US.UTF-8` 고정 — GUI 앱 C 로캘에서 한글 `?` 결함(nexa-sql 1af10da 이식) · mac 타깃 check ✓ · 🖐 실기 필요(Mac 세션 · T-114) |
 | SKEL-424 | 창 아이콘 = dir2 `nexa-dir-256.png`/`.ico`(Windows `.rc` · mac Dock · Linux app_id) | `nexa-dir/src/icon.rs` · `packaging/branding` · `build.rs` | T2 | `dir2_png_decodes_and_downscales` · `resample_box_and_nearest` | ✅ | T-40 |
 | SKEL-401·402·406~412 | `App` 골격(창·표면·자원·입력 상태·시간·깃발·진단) + `app/*.rs` 조각 + 재그리기 3원칙 | `nexa-dir/src/main.rs` · `app/{event_loop,input,paint}.rs` | T4 | `NDIR_STARTUP_CMD=layout.dump` 실증(10-03 Windows) | ✅ | T-40 · 깨움 표(워커)는 M4 |
 | SKEL-421 · CMD-120~167 | 명령 한 길 `App::command` — 메뉴 5 · 툴바 13 · 단축키 · 기동 명령 | `nexa-dir/src/app/menus.rs` | T2·T4 | `menu_ids_are_commands` · `menus_build_with_labels` · 실증(메뉴 클릭·F6·`view.hidden`) | 🚧 | T-42 · 미구현 id = 상태줄 `cmd.notYet` |
