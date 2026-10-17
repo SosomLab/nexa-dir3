@@ -42,6 +42,7 @@ pub(super) fn opener() -> CommandOpener {
         } else {
             Vec::new()
         },
+        viewer: Vec::new(),
     }
 }
 

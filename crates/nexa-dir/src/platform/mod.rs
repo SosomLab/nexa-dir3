@@ -358,6 +358,14 @@ pub(crate) trait Opener {
     fn quick_look(&self, _paths: &[PathBuf]) -> Result<std::process::Child, PlatformError> {
         Err(PlatformError::Unsupported("quick look"))
     }
+    /// OS 기본 뷰어로 열기(10-18 · macOS = Preview.app `open -a Preview` — 도크 미리보기 메뉴 "Preview에서 열기"). 없는 OS = Unsupported.
+    fn open_in_viewer(&self, _path: &Path) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported("viewer"))
+    }
+    /// 뷰어가 있는가(메뉴 표시 판정).
+    fn viewer_available(&self) -> bool {
+        false
+    }
     /// 바로 가기 파일(Windows `.lnk`)이 가리키는 대상 경로 — 해석할 수 없거나 이 OS에 그런 파일이 없으면 `None`(GAP-007 ·
     /// 호출부는 대상이 폴더일 때 앱 안에서 이동하고, 아니면 [`Self::open`]으로 연다).
     fn link_target(&self, _path: &Path) -> Option<PathBuf> {
@@ -1127,6 +1135,8 @@ struct CommandOpener {
     reveal: Vec<String>,
     /// Quick Look 명령 틀(`{paths}` = 전부 · `{path}` = 첫 항목 · 빈 틀 = 없음).
     quick_look: Vec<String>,
+    /// OS 뷰어 명령 틀(macOS `open -a Preview {path}` · 빈 틀 = 없음).
+    viewer: Vec<String>,
 }
 
 /// Quick Look argv(순수): 틀의 `{paths}`를 모든 경로로 · `{path}`를 첫 경로로 바꾼다 · 빈 틀/경로 없음 = None.
@@ -1179,6 +1189,15 @@ impl Opener for CommandOpener {
     }
     fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
         Self::run(&self.reveal, path)
+    }
+    fn open_in_viewer(&self, path: &Path) -> Result<(), PlatformError> {
+        if self.viewer.is_empty() {
+            return Err(PlatformError::Unsupported("viewer"));
+        }
+        Self::run(&self.viewer, path)
+    }
+    fn viewer_available(&self) -> bool {
+        !self.viewer.is_empty()
     }
     fn quick_look(&self, paths: &[PathBuf]) -> Result<std::process::Child, PlatformError> {
         let argv = quick_look_argv(&self.quick_look, paths)

@@ -335,11 +335,19 @@ impl App {
     pub(crate) fn open_dock_text_menu(&mut self, dock: usize) {
         let has_sel = self.docks[dock].selected_text().is_some();
         let selectable = self.docks[dock].text_selectable();
-        let items = vec![
+        let mut items = vec![
             CtxItem::maybe("edit.copy", tr("menu.edit.copy"), has_sel),
             CtxItem::Separator,
             CtxItem::maybe("edit.select_all", tr("menu.edit.selectAll"), selectable),
         ];
+        // 미리보기 도크 + OS 뷰어가 있는 OS(macOS Preview.app) + 파일 1개 선택 = "Preview에서 열기"(10-18).
+        if self.docks[dock].active_kind() == 1
+            && self.platform.opener.viewer_available()
+            && matches!(self.panels[self.active].selected_paths().as_slice(), [one] if one.is_file())
+        {
+            items.push(CtxItem::Separator);
+            items.push(CtxItem::item("dock.open_viewer", tr("ctx.openInPreview")));
+        }
         self.ctx_wait = None;
         self.open_ctx(CtxKind::DockText(dock), items);
     }
@@ -372,6 +380,17 @@ impl App {
                 "edit.select_all" => {
                     let mut inv = Invalidations::default();
                     self.docks[i].select_all_text(&mut inv);
+                }
+                "dock.open_viewer" => {
+                    if let [one] = self.panels[self.active].selected_paths().as_slice() {
+                        if let Err(e) = self.platform.opener.open_in_viewer(one) {
+                            self.toasts.push(
+                                toast::ToastKind::Warn,
+                                tr("ctx.openInPreview"),
+                                e.to_string(),
+                            );
+                        }
+                    }
                 }
                 _ => {}
             },

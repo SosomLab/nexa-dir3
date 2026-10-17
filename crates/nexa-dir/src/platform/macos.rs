@@ -39,6 +39,11 @@ pub(super) fn opener() -> CommandOpener {
             .iter()
             .map(|s| (*s).to_string())
             .collect(),
+        // 도크 미리보기 "Preview에서 열기"(10-18) = Preview.app.
+        viewer: ["open", "-a", "Preview", "{path}"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect(),
     }
 }
 

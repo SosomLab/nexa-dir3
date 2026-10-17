@@ -10,6 +10,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod archive;
+pub(crate) mod quicklook;
 #[cfg(test)]
 mod sample_tests;
 pub(crate) mod wasm;
@@ -218,6 +219,9 @@ fn builtins() -> Vec<Box<dyn PreviewProvider>> {
         Box::new(BuiltinImage {
             exts: IMAGE_EXTS.iter().map(|s| s.to_string()).collect(),
         }),
+        // macOS: 자체 렌더러가 없는 문서/미디어는 Quick Look 썸네일(10-18 · Finder 미리보기 패널과 같은 원천) — 텍스트 폴백보다 앞.
+        #[cfg(target_os = "macos")]
+        Box::new(quicklook::QuickLook::new()),
         Box::new(BuiltinText { exts: Vec::new() }),
     ]
 }

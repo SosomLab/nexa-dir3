@@ -46,6 +46,7 @@ pub(super) fn opener() -> NativeOpener {
                 .map(|s| (*s).to_string())
                 .collect(),
             quick_look: Vec::new(), // Windows = 없음(Space는 목록 선택 토글 · 미리보기 창 F3)
+            viewer: Vec::new(),
         },
     }
 }
