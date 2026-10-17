@@ -35,6 +35,7 @@ pub(super) fn register(hwnd: isize) -> Option<Rc<RefCell<DropShared>>> {
         hwnd: HWND(hwnd as *mut core::ffi::c_void),
         shared: Rc::clone(&shared),
         paths: RefCell::new(Vec::new()),
+        right: std::cell::Cell::new(false),
     }
     .into();
     // SAFETY: UI 스레드(STA)에서 부른다 · OleInitialize는 이미 돼 있으면 S_FALSE(무해) · 등록된 COM 객체의 수명은 OLE가 쥔다.
@@ -51,6 +52,9 @@ struct DropTarget {
     shared: Rc<RefCell<DropShared>>,
     /// `DragEnter`에서 읽은 경로(CF_HDROP) — `DragOver`가 판정에 쓰고 `Drop`이 다시 읽어 갱신한다.
     paths: RefCell<Vec<PathBuf>>,
+    /// 끌기 중 오른쪽 버튼을 봤는가(탐색기 꼴 우클릭 드래그 · 10-18 실기): `Drop`이 불릴 때는 버튼이 **이미 떼어져** `grfKeyState`에
+    /// `MK_RBUTTON`이 없다 → Enter/Over에서 기억해 두고 Drop에서 쓴다(탐색기도 같은 방식).
+    right: std::cell::Cell<bool>,
 }
 
 /// 데이터 객체의 CF_HDROP 경로 목록(없거나 실패 = 빈 목록).
@@ -125,6 +129,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
             .map(|d| unsafe { hdrop_paths(d) })
             .unwrap_or_default();
         *self.paths.borrow_mut() = paths.clone();
+        self.right.set(keys.0 & MK_RBUTTON.0 != 0);
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if paths.is_empty() {
             DropChoice::None // 파일이 아닌 것(글자 · 가상 파일)은 아직 받지 않는다
@@ -149,6 +154,9 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pt: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> ::windows::core::Result<()> {
+        if keys.0 & MK_RBUTTON.0 != 0 {
+            self.right.set(true);
+        }
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if self.paths.borrow().is_empty() {
             DropChoice::None
@@ -163,6 +171,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
     }
 
     fn DragLeave(&self) -> ::windows::core::Result<()> {
+        self.right.set(false);
         if !self.paths.borrow().is_empty() {
             self.paths.borrow_mut().clear();
             let _ = self.send(DropEvent::Leave);
@@ -198,8 +207,8 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 at,
                 ctrl,
                 shift,
-                // 오른쪽 버튼으로 놓음 = 메뉴(탐색기 · 자기 창 발신 모두 keys로 온다).
-                menu: keys.0 & MK_RBUTTON.0 != 0,
+                // 오른쪽 버튼으로 끌어 놓음 = 메뉴(놓는 순간 keys에는 버튼이 없다 → 끌기 중 본 것 · 탐색기 · 자기 창 발신 모두).
+                menu: self.right.replace(false) || keys.0 & MK_RBUTTON.0 != 0,
             })
         };
         if !effect.is_null() {
