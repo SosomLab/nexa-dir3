@@ -286,7 +286,7 @@ struct App {
     /// 우클릭 드래그 후보(탐색기 꼴 · 10-18): 선택된 행을 오른쪽 버튼으로 누른 (패널, 자리) — 임계 넘게 끌면 드래그 · 그냥 떼면 메뉴.
     right_press: Option<(usize, i32, i32)>,
     /// 우클릭 드래그로 놓은 뒤 메뉴가 기다리는 (경로들, 놓은 자리) — 복사/이동을 고르면 `external_drop_with`.
-    dnd_menu: Option<(Vec<PathBuf>, (i32, i32))>,
+    dnd_menu: Option<(Vec<PathBuf>, (i32, i32), PathBuf)>,
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,

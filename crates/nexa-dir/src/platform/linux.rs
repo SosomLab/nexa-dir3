@@ -841,6 +841,18 @@ impl ContextMenuProvider for XdgMenu {
         }
     }
 
+    /// 우클릭 드래그 드롭 메뉴(10-18): 노틸러스 스크립트 ▸ — 작업 폴더 = 놓은 폴더(노틸러스 규약 = 현재 폴더 · 선택 = 끌고 온 것들).
+    fn drop_items(&self, _dest: &Path, _paths: &[PathBuf]) -> Vec<ShellMenuItem> {
+        self.scripts_item().into_iter().collect()
+    }
+
+    fn invoke_drop(&self, id: &str, dest: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        match id.strip_prefix("xdg.script:") {
+            Some(label) => self.run_script(label, dest, paths),
+            None => Err(PlatformError::Failed(format!("unknown drop item: {id}"))),
+        }
+    }
+
     fn invoke(&self, id: &str, paths: &[PathBuf]) -> Result<(), PlatformError> {
         if let Some(label) = id.strip_prefix("xdg.script:") {
             let cwd = paths

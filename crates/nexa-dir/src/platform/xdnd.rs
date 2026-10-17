@@ -283,11 +283,13 @@ struct Atoms {
     targets: Atom,
     net_wm_pid: Atom,
     type_list: Atom,
+    /// 우클릭 드래그 = "묻기" 동작(`XdndActionAsk` · GTK/노틸러스 대상이 놓을 때 복사/이동/링크/취소 메뉴를 띄운다 · 10-18).
+    action_ask: Atom,
 }
 
 impl Atoms {
     fn intern(conn: &RustConnection) -> Result<Atoms, Box<dyn std::error::Error>> {
-        let names: [&[u8]; 17] = [
+        let names: [&[u8]; 18] = [
             b"XdndAware",
             b"XdndSelection",
             b"XdndEnter",
@@ -305,12 +307,13 @@ impl Atoms {
             b"TARGETS",
             b"_NET_WM_PID",
             b"XdndTypeList",
+            b"XdndActionAsk",
         ];
         let cookies: Vec<_> = names
             .iter()
             .map(|n| conn.intern_atom(false, n))
             .collect::<Result<_, _>>()?;
-        let mut a = [0 as Atom; 17];
+        let mut a = [0 as Atom; 18];
         for (slot, c) in a.iter_mut().zip(cookies) {
             *slot = c.reply()?.atom;
         }
@@ -332,6 +335,7 @@ impl Atoms {
             targets: a[14],
             net_wm_pid: a[15],
             type_list: a[16],
+            action_ask: a[17],
         })
     }
 
@@ -371,6 +375,8 @@ struct Source {
     at: Atoms,
     win: Window,
     data: Payload,
+    /// 우클릭 드래그: 제안 동작을 늘 `XdndActionAsk`로(대상이 메뉴 · 10-18).
+    ask: bool,
 }
 
 /// 포인터를 따라다니는 드래그 아이콘 창(override-redirect · 앱이 그린 이미지 · Expose 때 다시 올린다).
@@ -431,6 +437,7 @@ impl Source {
             root_depth,
             at,
             win,
+            ask: false,
             data: Payload {
                 uri_list: uri_list(paths).into_bytes(),
                 plain: plain_list(paths).into_bytes(),
@@ -468,7 +475,17 @@ impl Source {
         self.send(
             t.win,
             self.at.position,
-            [self.win, 0, pack_pos(x, y), time, self.at.action_of(choice)],
+            [
+                self.win,
+                0,
+                pack_pos(x, y),
+                time,
+                if self.ask {
+                    self.at.action_ask
+                } else {
+                    self.at.action_of(choice)
+                },
+            ],
         )?;
         t.awaiting_status = true;
         Ok(())
@@ -480,7 +497,10 @@ impl Source {
 
     /// 소스 창의 `XdndActionList` = 수식키에 따른 허용 동작(Ctrl = 복사만 · Shift = 이동만 · 없음 = 복사·이동 — 대상이 고른다).
     fn set_action_list(&self, choice: DropChoice, ctrl: bool, shift: bool) {
-        let list: Vec<Atom> = if ctrl {
+        let list: Vec<Atom> = if self.ask {
+            // 우클릭 드래그 = 묻기 우선(GTK/노틸러스 = 놓을 때 복사/이동/링크/취소 메뉴) · 복사/이동도 허용 목록에.
+            vec![self.at.action_ask, self.at.action_copy, self.at.action_move]
+        } else if ctrl {
             vec![self.at.action_copy]
         } else if shift {
             vec![self.at.action_move]
@@ -756,11 +776,13 @@ impl Session {
         paths: &[PathBuf],
         own: Option<u32>,
         image: Option<DragImage>,
+        ask: bool,
     ) -> Result<Session, String> {
         if paths.is_empty() {
             return Err("empty drag".into());
         }
-        let src = Source::open(paths).map_err(|e| format!("xdnd: {e}"))?;
+        let mut src = Source::open(paths).map_err(|e| format!("xdnd: {e}"))?;
+        src.ask = ask;
         // 아이콘은 지금 포인터 자리에 만들고 이동 때마다 따라간다.
         let icon = image.and_then(|img| {
             let at = src
@@ -1147,7 +1169,7 @@ pub(super) fn pointer_state() -> Option<super::PointerState> {
 
 /// 왼쪽 버튼이 지금 눌려 있는가(X11 `QueryPointer` 마스크 · 끌기 중 뗌 사건이 X 쪽에 안 온 경우의 복구용 — mutter가 Wayland 표면 위에서
 /// 뗌을 삼키면 창 안 드래그가 열린 채 남는다 · 10-10 3회차). X 연결이 없으면 `None`.
-pub(super) fn button1_down() -> Option<bool> {
+pub(super) fn button_down(right: bool) -> Option<bool> {
     if synthetic() {
         return None; // 시나리오의 끌기는 합성 입력 — 실제 버튼 상태로 뗀 것으로 보면 안 된다(10-10 xdnd-send 흔들림)
     }
@@ -1160,7 +1182,11 @@ pub(super) fn button1_down() -> Option<bool> {
         }
         let (conn, root) = slot.as_ref()?;
         let r = conn.query_pointer(*root).ok()?.reply().ok()?;
-        Some(r.mask.contains(KeyButMask::BUTTON1))
+        Some(r.mask.contains(if right {
+            KeyButMask::BUTTON3
+        } else {
+            KeyButMask::BUTTON1
+        }))
     })
 }
 
@@ -1485,7 +1511,7 @@ mod tests {
             c.warp_pointer(NONE, r, 0, 0, 0, 0, x, y).unwrap();
             c.flush().unwrap();
         };
-        let mut s = Session::start(&paths, None, None).expect("session");
+        let mut s = Session::start(&paths, None, None, false).expect("session");
         warp(center.0, center.1);
         s.motion(center.0, center.1, false, false);
         let pump = |s: &mut Session, ms: u64| -> Option<DragOutcome> {
@@ -1515,7 +1541,7 @@ mod tests {
         assert_eq!(got2, want);
         assert_eq!(act2, at.action_move);
         // ③ 대상 밖(빈 루트)에서 떼면 취소 · 세션은 끝난 뒤 결과를 한 번만 준다.
-        let mut s3 = Session::start(&paths, None, None).expect("session");
+        let mut s3 = Session::start(&paths, None, None, false).expect("session");
         warp(center.0, center.1);
         s3.motion(center.0, center.1, false, false);
         assert_eq!(pump(&mut s3, 300), None);

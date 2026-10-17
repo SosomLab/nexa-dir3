@@ -43,7 +43,7 @@ fn intercept(verb: &str) -> Option<&'static str> {
 }
 
 /// 셸 항목 → 메뉴 항목(가로채기 id 치환 · 서브메뉴 재귀).
-fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
+pub(crate) fn shell_to_ctx(it: &ShellMenuItem) -> CtxItem {
     if it.separator {
         return CtxItem::Separator;
     }

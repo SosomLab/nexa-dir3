@@ -5,6 +5,7 @@
 
 use crate::*;
 use ndir_ops::Op;
+use std::path::Path;
 
 /// 누른 자리에서 이만큼 넘게 움직이면 끌기다(px · Windows 기본 드래그 임계 `SM_CXDRAG` = 4와 같은 뜻).
 const DRAG_SLOP: i32 = 4;
@@ -109,6 +110,58 @@ pub(crate) fn drop_folder_of(
 /// 끌기가 시작됐는가(순수): 가로나 세로로 임계를 넘었다.
 pub(crate) fn drag_started(press: (i32, i32), now: (i32, i32)) -> bool {
     (now.0 - press.0).abs() > DRAG_SLOP || (now.1 - press.1).abs() > DRAG_SLOP
+}
+
+/// 자체 드롭 메뉴 항목(순수 · 셸 위임이 없는 OS = Linux/macOS · Windows는 위임 실패 때만 · 10-18 "기본 메뉴 + 확장"): 복사 · 이동 ·
+/// 링크(`link_ok` = 심링크를 만들 수 있는 OS) · ─ · 압축 풀기(끌고 온 것이 아카이브 1개) · OS 항목(`extra` · Linux 스크립트 ▸) · ─ · 취소.
+pub(crate) fn drop_menu_items(
+    paths: &[PathBuf],
+    link_ok: bool,
+    extra: Vec<nexa_ctl::controls::CtxItem>,
+) -> Vec<nexa_ctl::controls::CtxItem> {
+    use nexa_ctl::controls::CtxItem;
+    let mut items = vec![
+        CtxItem::item("dnd.copy", tr("ctx.dropCopy")),
+        CtxItem::item("dnd.move", tr("ctx.dropMove")),
+    ];
+    if link_ok {
+        items.push(CtxItem::item("dnd.link", tr("ctx.dropLink")));
+    }
+    items.push(CtxItem::Separator);
+    let archive = match paths {
+        [one] => one
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| ndir_vfs::archive::is_archive_ext(&e.to_ascii_lowercase())),
+        _ => false,
+    };
+    if archive {
+        items.push(CtxItem::item("dnd.extract", tr("ctx.extractHere")));
+    }
+    items.extend(extra);
+    items.push(CtxItem::Separator);
+    items.push(CtxItem::item("dnd.cancel", tr("ctx.dropCancel")));
+    items
+}
+
+/// "여기에 링크 만들기": 끌고 온 각 항목의 심링크를 놓은 폴더에(이름 그대로 · Unix) — Windows는 셸(.lnk) 몫이라 미지원. 돌려주는 값 = 만든 수.
+pub(crate) fn make_links(paths: &[PathBuf], dest: &Path) -> Result<usize, String> {
+    #[cfg(unix)]
+    {
+        for p in paths {
+            let Some(name) = p.file_name() else {
+                continue;
+            };
+            let to = dest.join(name);
+            std::os::unix::fs::symlink(p, &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        }
+        Ok(paths.len())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (paths, dest);
+        Err(tr("dnd.linkUnsupported"))
+    }
 }
 
 impl App {
@@ -250,10 +303,10 @@ impl App {
             .as_ref()
             .and_then(|w| winfocus::x11_window_id(w));
         // 가짜 플랫폼(시험)은 열지 않는다 — 시험 PC의 실제 X 창에 Enter/Drop을 보내면 안 된다.
-        // 오른쪽 버튼 드래그(메뉴)는 앱 밖 대상(XDND)으로 내보내지 않는다 — 창 안에서 놓을 때만 메뉴(10-18).
-        self.xdnd = if self.platform.log.is_none() && !menu {
+        // 우클릭 드래그(메뉴) = XDND "묻기"(XdndActionAsk) — 노틸러스 등 대상이 놓을 때 복사/이동/링크/취소 메뉴를 띄운다(탐색기 꼴 · 10-18).
+        self.xdnd = if self.platform.log.is_none() {
             let image = self.drag_image(&paths, choice);
-            platform::xdnd_start(&paths, own, Some(image))
+            platform::xdnd_start(&paths, own, Some(image), menu)
         } else {
             None
         };
@@ -518,7 +571,8 @@ impl App {
             }
         }
         // 뗌 사건이 X 쪽에 안 온 경우(mutter가 Wayland 표면 위에서 뗌을 삼킴 · 10-10 3회차): 버튼이 이미 떨어져 있으면 지금 자리에서 뗀 것으로.
-        if self.xdnd.is_some() && platform::pointer_button1_down() == Some(false) {
+        let right = self.dnd_internal.as_ref().is_some_and(|d| d.menu);
+        if self.xdnd.is_some() && platform::pointer_button_down(right) == Some(false) {
             let (x, y) = self.cursor;
             let _ = self.dnd_internal_event(&InputEvent::MouseUp { x, y });
             return true;
@@ -603,7 +657,7 @@ impl App {
                                     self.after_shell_drop();
                                 }
                             }
-                            Err(_) => self.open_drop_menu(paths, at),
+                            Err(_) => self.open_drop_menu(paths, at, dest),
                         }
                     } else {
                         self.external_drop(paths, Point { x: at.0, y: at.1 });
@@ -869,32 +923,59 @@ impl App {
     }
 
     /// 우클릭 드래그로 놓은 자리에 복사/이동/취소 메뉴(셸 위임이 없는 OS · 10-18) — 고르면 `drop_menu_action`.
-    pub(crate) fn open_drop_menu(&mut self, paths: Vec<PathBuf>, at: (i32, i32)) {
-        use nexa_ctl::controls::CtxItem;
-        self.dnd_menu = Some((paths, at));
+    pub(crate) fn open_drop_menu(&mut self, paths: Vec<PathBuf>, at: (i32, i32), dest: PathBuf) {
+        let extra: Vec<_> = self
+            .platform
+            .ctxmenu
+            .drop_items(&dest, &paths)
+            .iter()
+            .map(app::ctxmenu::shell_to_ctx)
+            .collect();
+        let items = drop_menu_items(&paths, cfg!(unix), extra);
+        self.dnd_menu = Some((paths, at, dest));
         self.ctx_anchor_next = Some(at);
-        self.open_ctx(
-            app::ctxmenu::CtxKind::Drop,
-            vec![
-                CtxItem::item("dnd.copy", tr("ctx.dropCopy")),
-                CtxItem::item("dnd.move", tr("ctx.dropMove")),
-                CtxItem::Separator,
-                CtxItem::item("dnd.cancel", tr("ctx.dropCancel")),
-            ],
-        );
+        self.open_ctx(app::ctxmenu::CtxKind::Drop, items);
     }
 
-    /// 드롭 메뉴 선택: 복사/이동 = 그 연산으로 전송 · 취소/그 밖 = 아무 일 없음.
+    /// 드롭 메뉴 선택(기준 폴더 = 놓은 폴더 `dest`): 복사/이동 = 그 연산으로 전송 · 링크 = 심링크 · 압축 풀기 = `dest`로 · OS 항목 = `invoke_drop` ·
+    /// 취소/그 밖 = 아무 일 없음.
     pub(crate) fn drop_menu_action(&mut self, id: &str) {
-        let Some((paths, at)) = self.dnd_menu.take() else {
+        let Some((paths, at, dest)) = self.dnd_menu.take() else {
             return;
         };
-        let op = match id {
-            "dnd.copy" => Op::Copy,
-            "dnd.move" => Op::Move,
-            _ => return,
-        };
-        self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(op));
+        match id {
+            "dnd.copy" => {
+                self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(Op::Copy));
+            }
+            "dnd.move" => {
+                self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(Op::Move));
+            }
+            "dnd.link" => match make_links(&paths, &dest) {
+                Ok(n) => {
+                    self.note_status(&trf(
+                        "dnd.dropped",
+                        &[&n.to_string(), &ndir_ops::leaf_name(&dest)],
+                    ));
+                    self.after_shell_drop();
+                }
+                Err(e) => self
+                    .toasts
+                    .push(toast::ToastKind::Warn, tr("ctx.dropLink"), e),
+            },
+            "dnd.extract" => {
+                if let Some(a) = paths.first() {
+                    self.start_extract_to(a, &dest);
+                }
+            }
+            "dnd.cancel" => {}
+            other => match self.platform.ctxmenu.invoke_drop(other, &dest, &paths) {
+                Ok(()) => self.after_shell_drop(),
+                Err(e) => {
+                    self.toasts
+                        .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string())
+                }
+            },
+        }
     }
 
     /// 외부 드롭 실행(연산 지정 가능 · `None` = 수식키 규칙).

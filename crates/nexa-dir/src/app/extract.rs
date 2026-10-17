@@ -88,13 +88,19 @@ pub(crate) fn extract_summary(rep: &Report) -> String {
 impl App {
     /// `ctx.extract_here` / `ctx.extract_to` — 풀기 시작(전송 · 다른 풀기가 진행 중이면 거부).
     pub(crate) fn start_extract(&mut self, archive: &Path, here: bool) {
+        let dest = extract_dest(archive, here);
+        self.start_extract_to(archive, &dest);
+    }
+
+    /// 지정 폴더로 풀기(우클릭 드래그 드롭 메뉴 "여기에 풀기" = 놓은 폴더 · 10-18).
+    pub(crate) fn start_extract_to(&mut self, archive: &Path, dest: &Path) {
         if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("ops.busy"), &mut inv);
             self.redraw();
             return;
         }
-        let dest = extract_dest(archive, here);
+        let dest = dest.to_path_buf();
         let total = xt::total_bytes(archive).unwrap_or(0);
         let shared = Arc::new(ExtractShared::default());
         shared.total.store(total, Ordering::Relaxed);

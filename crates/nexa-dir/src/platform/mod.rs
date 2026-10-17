@@ -270,6 +270,19 @@ pub(crate) trait ContextMenuProvider {
     ) -> Result<bool, PlatformError> {
         Err(PlatformError::Unsupported("shell drop menu"))
     }
+    /// 자체 드롭 메뉴(셸 위임이 없는 OS)에 OS가 덧붙이는 항목(Linux = 노틸러스 스크립트 ▸ …) — 실행은 [`Self::invoke_drop`] · 기준 폴더 = 놓은 폴더.
+    fn drop_items(&self, _dest: &Path, _paths: &[PathBuf]) -> Vec<ShellMenuItem> {
+        Vec::new()
+    }
+    /// [`Self::drop_items`] 항목 실행 — `dest` = 놓은 폴더(작업 폴더) · `paths` = 끌고 온 것들.
+    fn invoke_drop(
+        &self,
+        _id: &str,
+        _dest: &Path,
+        _paths: &[PathBuf],
+    ) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported("drop item"))
+    }
 }
 
 pub(crate) trait Trash {
@@ -679,8 +692,9 @@ pub(crate) fn xdnd_start(
     paths: &[PathBuf],
     own: Option<u32>,
     image: Option<DragImage>,
+    ask: bool,
 ) -> Option<XdndSession> {
-    match xdnd::Session::start(paths, own, image) {
+    match xdnd::Session::start(paths, own, image, ask) {
         Ok(s) => Some(s),
         Err(e) => {
             eprintln!("nexa-dir: {e}");
@@ -733,13 +747,14 @@ pub(crate) fn synthetic_pointer() -> bool {
 }
 
 /// 왼쪽 버튼이 지금 눌려 있는가(끌기 중 뗌 사건을 못 받은 경우의 복구 · Linux X11만 · 다른 OS = `None`).
-pub(crate) fn pointer_button1_down() -> Option<bool> {
+pub(crate) fn pointer_button_down(right: bool) -> Option<bool> {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        xdnd::button1_down()
+        xdnd::button_down(right)
     }
     #[cfg(not(all(unix, not(target_os = "macos"))))]
     {
+        let _ = right;
         None
     }
 }
@@ -775,6 +790,7 @@ pub(crate) fn xdnd_start(
     _paths: &[PathBuf],
     _own: Option<u32>,
     _image: Option<DragImage>,
+    _ask: bool,
 ) -> Option<XdndSession> {
     None
 }

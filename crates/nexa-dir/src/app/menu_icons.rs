@@ -33,6 +33,8 @@ fn spec_of(id: &str) -> Option<(char, Option<GlyphKind>)> {
         "dnd.copy" => ('\u{E8C8}', Some(GlyphKind::Copy)),
         "dnd.move" => ('\u{E8DE}', None),
         "dnd.cancel" => ('\u{E711}', None),
+        "dnd.link" => ('\u{E71B}', Some(GlyphKind::Link)),
+        "dnd.extract" => ('\u{E7B8}', None),
         "edit.paste" => ('\u{E77F}', None),
         "edit.delete" | "aux.launch.remove" => ('\u{E74D}', None),
         "edit.select_all" => ('\u{E8B3}', None),

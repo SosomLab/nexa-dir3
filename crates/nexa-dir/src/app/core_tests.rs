@@ -8677,3 +8677,59 @@ fn right_button_drop_opens_copy_move_menu() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 자체 드롭 메뉴 구성(순수 · Linux/macOS · 10-18 "기본 메뉴 + 확장"): 복사·이동 항상 · 링크는 Unix · 아카이브 1개 = "여기에 풀기" · OS 항목(스크립트 ▸)은
+/// 구분선 사이 · 끝 = 취소.
+#[test]
+fn drop_menu_items_follow_sources_and_os() {
+    use crate::app::dnd::drop_menu_items;
+    let ids = |items: &[nexa_ctl::controls::CtxItem]| -> Vec<String> {
+        items
+            .iter()
+            .map(|it| match it {
+                nexa_ctl::controls::CtxItem::Item { id, .. } => id.clone(),
+                nexa_ctl::controls::CtxItem::Separator => "-".into(),
+            })
+            .collect()
+    };
+    let zip = vec![PathBuf::from("a/b.zip")];
+    let two = vec![PathBuf::from("a/b.zip"), PathBuf::from("a/c.txt")];
+    let extra = vec![nexa_ctl::controls::CtxItem::item("xdg.scripts", "Scripts")];
+    assert_eq!(
+        ids(&drop_menu_items(&zip, true, extra)),
+        [
+            "dnd.copy",
+            "dnd.move",
+            "dnd.link",
+            "-",
+            "dnd.extract",
+            "xdg.scripts",
+            "-",
+            "dnd.cancel"
+        ]
+    );
+    assert_eq!(
+        ids(&drop_menu_items(&two, false, Vec::new())),
+        ["dnd.copy", "dnd.move", "-", "-", "dnd.cancel"],
+        "아카이브 2개/링크 불가 = 풀기·링크 없음(구분선 정리는 메뉴가 한다)"
+    );
+}
+
+/// "여기에 링크 만들기"(Unix): 놓은 폴더에 같은 이름의 심링크 — 원본은 그대로.
+#[cfg(unix)]
+#[test]
+fn drop_link_creates_symlinks_in_dest() {
+    use crate::app::dnd::make_links;
+    let (_app, dir) = fixture("droplink");
+    let a = dir.join("a.txt");
+    let dest = dir.join("sub");
+    assert_eq!(make_links(std::slice::from_ref(&a), &dest), Ok(1));
+    let link = dest.join("a.txt");
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(std::fs::read_link(&link).unwrap(), a);
+    assert!(a.is_file(), "원본 유지");
+    let _ = std::fs::remove_dir_all(&dir);
+}
