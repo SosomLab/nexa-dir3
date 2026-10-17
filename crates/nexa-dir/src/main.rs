@@ -71,7 +71,6 @@ mod log_win;
 mod mem_win;
 mod memstat;
 mod nav;
-mod nfc;
 mod order;
 mod order_win;
 mod panel;

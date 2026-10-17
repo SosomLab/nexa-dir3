@@ -12,6 +12,7 @@ pub mod dupes;
 pub mod fastcopy;
 pub mod hash;
 pub mod history;
+pub mod nfc;
 
 use std::fs;
 use std::io;

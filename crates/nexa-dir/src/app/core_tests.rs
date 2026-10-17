@@ -8753,8 +8753,15 @@ fn nfc_convert_renames_files_and_asks_for_folders() {
     app.open_row_menu(0);
     assert!(app.ctx_dump().contains("ctx.nfc"), "{}", app.ctx_dump());
     app.ctx_pick("ctx.nfc");
+    // 단언은 **디렉터리 항목 바이트**로(APFS는 정규화 둔감이라 NFD 경로 `exists()`가 NFC 파일에도 참 · 10-18 CI macOS).
+    let has = |d: &std::path::Path, n: &str| {
+        std::fs::read_dir(d)
+            .unwrap()
+            .flatten()
+            .any(|e| e.file_name() == n)
+    };
     assert!(
-        dir.join("한글.txt").is_file() && !f.exists(),
+        has(&dir, "한글.txt") && !has(&dir, &format!("{nfd}.txt")),
         "파일 = 즉시 NFC"
     );
     // 폴더(안에 NFD): 확인 창 → 하위 포함.
@@ -8766,7 +8773,7 @@ fn nfc_convert_renames_files_and_asks_for_folders() {
     app.startup_cmd("dlg.pick:1");
     let nd = dir.join("한글_dir");
     assert!(
-        nd.is_dir() && nd.join("한글.md").is_file() && !d.exists(),
+        has(&dir, "한글_dir") && !has(&dir, &format!("{nfd}_dir")) && has(&nd, "한글.md"),
         "하위 포함 변환"
     );
     // 상태 열 표식: 남은 NFD 없음.

@@ -308,7 +308,7 @@ impl TreeSource {
         };
         match ndir_vfs::cloud_status(r.attrs) {
             // NFD 이름 식별(10-18) — 클라우드 상태가 없을 때만(상태 열은 한 가지만 보인다).
-            ndir_vfs::FileStatus::None if crate::nfc::is_decomposed(&r.name) => {
+            ndir_vfs::FileStatus::None if ndir_ops::nfc::is_decomposed(&r.name) => {
                 ndir_vfs::FileStatus::Nfd
             }
             ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
@@ -686,7 +686,7 @@ impl RowSource for TreeSource {
                 );
                 // NFC 표시(설정 · 10-18): 분해형 이름은 합성해 보인다(원래 이름은 트리에 그대로 · 상태 열 "NFD").
                 if self.opts.nfc_display {
-                    crate::nfc::compose(shown).into_owned()
+                    ndir_ops::nfc::compose(shown).into_owned()
                 } else {
                     shown.to_string()
                 }

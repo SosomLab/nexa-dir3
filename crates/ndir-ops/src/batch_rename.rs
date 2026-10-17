@@ -781,8 +781,16 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQ: AtomicU64 = AtomicU64::new(0);
-    let key = |p: &Path| p.to_string_lossy().to_lowercase();
+    // 같은 이름으로 보는 FS가 있다: 대소문자(NTFS · APFS 기본) · **유니코드 정규화**(APFS = NFD/NFC 둔감 · 10-18 CI macOS) → 둘 다 접은 열쇠.
+    let key = |p: &Path| crate::nfc::compose(&p.to_string_lossy()).to_lowercase();
     let exists = |p: &Path| p.symlink_metadata().is_ok();
+    let mk_tmp = |from: &Path| {
+        from.with_file_name(format!(
+            ".nexa-ren-{}-{}",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        ))
+    };
     // 새 자리가 **다른 항목**으로 차 있는가.
     let occupied = |from: &Path, to: &Path| {
         if key(from) == key(to) {
@@ -810,11 +818,7 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
         } else if !occupied(from, to) {
             direct.push(i);
         } else if key(from) != key(to) && moving.contains(&key(to)) {
-            let tmp = from.with_file_name(format!(
-                ".nexa-ren-{}-{}",
-                std::process::id(),
-                SEQ.fetch_add(1, Ordering::Relaxed)
-            ));
+            let tmp = mk_tmp(from);
             match std::fs::rename(from, &tmp) {
                 Ok(()) => staged.push((i, tmp)),
                 Err(e) => out.failed.push((from.clone(), e.to_string())),
@@ -831,6 +835,19 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
             continue;
         }
         match std::fs::rename(from, to) {
+            // 대소문자/정규화만 다른 이름을 FS가 같은 이름으로 봐 **바이트를 안 바꿨다**(APFS 정규화 둔감 · 10-18) → 임시 이름 경유 2단계.
+            Ok(()) if key(from) == key(to) && !exact_entry_exists(to) => {
+                let tmp = mk_tmp(from);
+                match std::fs::rename(from, &tmp).and_then(|()| std::fs::rename(&tmp, to)) {
+                    Ok(()) => out.done.push((from.clone(), to.clone())),
+                    Err(e) => {
+                        if !exists(from) {
+                            let _ = std::fs::rename(&tmp, from);
+                        }
+                        out.failed.push((from.clone(), e.to_string()));
+                    }
+                }
+            }
             Ok(()) => out.done.push((from.clone(), to.clone())),
             Err(e) => out.failed.push((from.clone(), e.to_string())),
         }
@@ -1645,6 +1662,18 @@ mod tests {
             "{:?}",
             names(&d)
         );
+        // ⑦ 정규화만 다른 이름(NFD → NFC · 10-18): 같은 이름으로 보는 FS(APFS)에서도 디렉터리 항목 바이트가 NFC가 된다 · 다른 FS = 보통 이름 바꾸기.
+        let nfd = "\u{1112}\u{1161}\u{11AB}.txt"; // 한.txt(분해형)
+        std::fs::write(d.join(nfd), "nfd").unwrap();
+        let out = apply_renames(&[(p(nfd), p("한.txt"))]);
+        assert!(out.failed.is_empty() && out.done.len() == 1, "{out:?}");
+        assert!(names(&d).contains(&"한.txt".to_string()), "{:?}", names(&d));
+        assert!(
+            !names(&d).contains(&nfd.to_string()),
+            "NFD 항목은 사라진다: {:?}",
+            names(&d)
+        );
+        assert_eq!(read("한.txt"), "nfd");
         // ⑥ 원본 없음 · 같은 이름(무동작).
         let out = apply_renames(&[(p("ghost"), p("g2")), (p("x"), p("x"))]);
         assert!(out.done.is_empty() && out.failed.len() == 1);

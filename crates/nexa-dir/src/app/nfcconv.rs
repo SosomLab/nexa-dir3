@@ -33,7 +33,7 @@ impl App {
 
     /// 변환 실행(`recursive` = 폴더 안까지 · 후위 순회라 부모 이름이 바뀌어도 자식 경로가 유효).
     pub(crate) fn nfc_convert(&mut self, paths: Vec<PathBuf>, recursive: bool) {
-        let list = crate::nfc::rename_plan(&paths, recursive);
+        let list = ndir_ops::nfc::rename_plan(&paths, recursive);
         if list.is_empty() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("nfc.none"), &mut inv);

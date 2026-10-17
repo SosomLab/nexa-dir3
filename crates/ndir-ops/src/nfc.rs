@@ -1,4 +1,5 @@
-//! 유니코드 정규화(NFC 표시 · NFD 식별 · 변환 계획 · 10-18 사용자 "맥에서 NFD 이름의 자모가 깨져 보임"): 외부 crate 0(DR-8) · 범위 =
+//! 유니코드 정규화(NFC 표시 · NFD 식별 · 변환 계획 · 10-18 사용자 "맥에서 NFD 이름의 자모가 깨져 보임" · ndir-ops에 두는 이유 = 이름 바꾸기 엔진
+//! `batch_rename::apply_renames`가 "정규화만 다른 이름"을 같은 항목으로 판정해야 한다(APFS 정규화 둔감)): 외부 crate 0(DR-8) · 범위 =
 //! **한글 자모 합성**(알고리즘 · 표 없음)과 흔한 라틴 결합 기호 7종(표). Finder는 모든 이름을 정규화해 보이고, HFS+/SMB에서 온 NFD 이름은
 //! 다른 앱에서 자모가 흩어져 보인다 → 설정 `list.nfc_display`(켬 = 합성해 표시) · 상태 열 "NFD" 표식 · 행 메뉴 "이름을 NFC로 변환".
 
@@ -6,7 +7,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 /// 이름에 분해(결합) 문자가 있는가 = "NFD" 식별: 조합형 한글 자모(U+1100~U+11FF) 또는 결합 기호(U+0300~U+036F).
-pub(crate) fn is_decomposed(s: &str) -> bool {
+pub fn is_decomposed(s: &str) -> bool {
     s.chars()
         .any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{0300}'..='\u{036F}'))
 }
@@ -60,7 +61,7 @@ fn latin(base: char, mark: char) -> Option<char> {
 
 /// NFC 합성(표시 · 변환용): 한글 초성+중성(+종성) → 완성형 · 완성형 + 종성 자모 → 완성형 · 라틴 글자 + 결합 기호 → 미리 조합된 글자.
 /// 바뀌는 것이 없으면 빌림 그대로(할당 0).
-pub(crate) fn compose(s: &str) -> Cow<'_, str> {
+pub fn compose(s: &str) -> Cow<'_, str> {
     if !is_decomposed(s) {
         return Cow::Borrowed(s);
     }
@@ -116,14 +117,14 @@ pub(crate) fn compose(s: &str) -> Cow<'_, str> {
 }
 
 /// 경로의 이름이 분해형인가(파일 이름만 본다).
-pub(crate) fn path_is_decomposed(p: &Path) -> bool {
+pub fn path_is_decomposed(p: &Path) -> bool {
     p.file_name()
         .and_then(|n| n.to_str())
         .is_some_and(is_decomposed)
 }
 
 /// 폴더 바로 아래에 분해형 이름이 있는가(얕은 1단계 · 메뉴 표시 판정용 · 읽기 실패 = false).
-pub(crate) fn dir_has_decomposed_child(dir: &Path) -> bool {
+pub fn dir_has_decomposed_child(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|rd| {
         rd.flatten()
             .any(|e| e.file_name().to_str().is_some_and(is_decomposed))
@@ -132,7 +133,7 @@ pub(crate) fn dir_has_decomposed_child(dir: &Path) -> bool {
 
 /// 변환 계획(순수 · 파일 시스템 읽기만): 선택한 항목들 중 분해형 이름 → (경로, NFC 이름). `recursive`면 폴더 안을 **후위 순회**(자식 먼저 ·
 /// 부모 나중)해 부모 이름이 바뀌어도 자식 경로가 유효하다. 합성해도 같은 이름은 뺀다.
-pub(crate) fn rename_plan(paths: &[PathBuf], recursive: bool) -> Vec<(PathBuf, String)> {
+pub fn rename_plan(paths: &[PathBuf], recursive: bool) -> Vec<(PathBuf, String)> {
     fn walk(p: &Path, recursive: bool, out: &mut Vec<(PathBuf, String)>) {
         if recursive && p.is_dir() {
             if let Ok(rd) = std::fs::read_dir(p) {

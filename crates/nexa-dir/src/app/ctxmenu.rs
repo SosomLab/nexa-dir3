@@ -553,8 +553,8 @@ impl App {
         }
         // 이름을 NFC로 변환(10-18 · macOS NFD 이름): 선택 이름이 분해형이거나 선택한 폴더 바로 아래에 분해형 이름이 있을 때만.
         if sel.iter().any(|p| {
-            crate::nfc::path_is_decomposed(p)
-                || (p.is_dir() && crate::nfc::dir_has_decomposed_child(p))
+            ndir_ops::nfc::path_is_decomposed(p)
+                || (p.is_dir() && ndir_ops::nfc::dir_has_decomposed_child(p))
         }) {
             items.push(CtxItem::item("ctx.nfc", tr("ctx.nfc")));
         }
