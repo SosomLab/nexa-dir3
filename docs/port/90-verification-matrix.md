@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 46 | 46 | 37 | 7 | 0 | 0 | 0 |
+| NEW | 46 | 46 | 38 | 6 | 0 | 0 | 0 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4335 | 4335 | 2523 | 924 | 761 | 0 | 0 |
+| **합계** | 4335 | 4335 | 2524 | 923 | 761 | 0 | 0 |
 
 ## 행
 
@@ -84,6 +84,7 @@
 | LIC-192 | `Product.version` = 앱 버전 | `Cargo.toml version.workspace` | T5 | selfcheck `license/product` | ✅ | |
 | LIC-181~182 | 기기 ID 원천 · 기기 공용 폴더(3-OS) | nexa-license `machine.rs` · `machine_dir()` | T5 | selfcheck `license/machine id`·`installed state` | ✅ | |
 | CI-110(license) | 자가 점검 license 그룹 5항목 | `nexa-dir/src/selfcheck.rs` | T5 | 스모크 | ✅ | |
+| CI-110(ctxmenu) · T-54 · NEW-025 | 자가 점검 ctxmenu 그룹 = **공급자 기준**(종전 `cfg!(windows)`로 Windows 외 전부 SKIP → Linux xdg 메뉴가 점검에서 빠짐) — 첫 항목 `items()`가 `PlatformError::Unsupported`면 SKIP + 나머지 생략 · 아니면 세 항목(행 항목 · 즉시 조회 · 배경 항목) · 상세 = Windows 동사 / Linux id · Windows 셸 · Linux xdg 실제 · macOS Unsupported → SKIP | `nexa-dir/src/selfcheck.rs` | T1 + T5 | `ctxmenu_group_probes_where_a_provider_exists` · CI ubuntu "selfcheck (ci subset)" 단계 | ✅ | 10-18 §2(700fa99) · CI run 39045362644 ubuntu: PASS row menu items 13 ms(3 items · xdg.email,xdg.showin,xdg.props) · PASS prepared menu is instant(13 µs) · PASS background menu items(2 items) · 전체 pass 23 · fail 0 · Windows `--selfcheck --ci --only ctxmenu` PASS 3 |
 | CMD-120~159 · 287~329 | dir2 명령 상수·단축키 → 명령 표 48(문자열 id · OS별 기본 코드) | `ndir-settings/src/commands.rs` | T1 | `dir2_windows_bindings_resolve`(31건) · `every_default_code_parses` | ✅ | 동적 명령(언어·런처·클라우드 i)은 호스트 조립(M3) |
 | CMD-480~497 | macOS 대응안 | 〃 | T1 | `macos_preset_follows_cmd_480_497`(13건) | ✅ | ⌘Y 충돌 → 미리보기 ⇧⌘Y(시험 적발) |
 | CMD-487 | `tab.prev`(dir2에 없음) | 〃 | T1 | 〃 | ⚠ DR-3 | 의도된 차이(권장안 채택) |

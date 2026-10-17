@@ -4,6 +4,8 @@
 
 ## 2026-10-18
 
+- **자가 점검 ctxmenu 그룹 = 공급자 기준**(700fa99 · T-131) — Linux xdg 메뉴도 실제 점검(CI ubuntu PASS 3) · macOS SKIP · gate quick 363/0 → [10-18 §2](journal/2026-10-18.md)
+
 - **저장소 최신화 · nexa-ui 192~213차 따라잡기** — 210차 `CtxItem.danger` 필드로 깨진 빌드 복구(fc9125d) · nexa-sql 1af10da 이식 macOS 클립보드 `LC_ALL=en_US.UTF-8`(2f7950d · 실기 = Mac) · gate full 598/0 · T4 36/0 → [10-18 §1](journal/2026-10-18.md)
 
 ## 2026-10-10
