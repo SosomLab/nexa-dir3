@@ -588,12 +588,23 @@ impl App {
                 let mods = (self.shift, self.primary);
                 self.cursor = at;
                 (self.shift, self.primary) = (shift, ctrl);
-                let (plan, choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
+                let (plan, mut choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
                 self.dnd_end();
-                if plan.is_some() {
+                if let Some((_, dest)) = plan {
                     if menu {
-                        // 오른쪽 버튼 = 바로 옮기지 않고 그 자리에 복사/이동/취소 메뉴(탐색기 꼴 · 사용자 10-18).
-                        self.open_drop_menu(paths, at);
+                        // 오른쪽 버튼 = 바로 옮기지 않는다(탐색기 꼴 · 사용자 10-18): Windows = 놓은 폴더의 셸 IDropTarget에 위임(기본 동사 + 끌고 온
+                        // 파일/폴더의 드래그 드롭 핸들러(7-Zip 등 서드파티 · 다중 선택 = 교집합) · **놓은 폴더 기준**으로 셸이 실행 · 모달) ·
+                        // 그 밖 OS/실패 = 자체 복사/이동/취소 메뉴.
+                        match self.platform.ctxmenu.drop_menu(&dest, &paths, at) {
+                            Ok(done) => {
+                                // 셸이 (최적화) 수행했다 → 소스에는 NONE(원본을 지우지 않게) · 결과는 다시 읽어 맞춘다.
+                                choice = DropChoice::None;
+                                if done {
+                                    self.after_shell_drop();
+                                }
+                            }
+                            Err(_) => self.open_drop_menu(paths, at),
+                        }
                     } else {
                         self.external_drop(paths, Point { x: at.0, y: at.1 });
                     }
@@ -847,7 +858,17 @@ impl App {
         self.external_drop_with(sources, at, None)
     }
 
-    /// 우클릭 드래그로 놓은 자리에 복사/이동/취소 메뉴(탐색기 꼴 · 10-18) — 고르면 `drop_menu_action`.
+    /// 셸이 드롭 메뉴의 동작을 실행한 뒤(복사 · 이동 · 압축 풀기 …) — 패널을 다시 읽어 맞춘다(결과와 무관하게 수렴 · windrag와 같은 규칙).
+    pub(crate) fn after_shell_drop(&mut self) {
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.reopen(&mut inv);
+        }
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 우클릭 드래그로 놓은 자리에 복사/이동/취소 메뉴(셸 위임이 없는 OS · 10-18) — 고르면 `drop_menu_action`.
     pub(crate) fn open_drop_menu(&mut self, paths: Vec<PathBuf>, at: (i32, i32)) {
         use nexa_ctl::controls::CtxItem;
         self.dnd_menu = Some((paths, at));

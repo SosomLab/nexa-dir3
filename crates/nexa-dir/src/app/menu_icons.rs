@@ -29,6 +29,10 @@ fn spec_of(id: &str) -> Option<(char, Option<GlyphKind>)> {
     let exact = match id {
         "edit.copy" | "aux.git.copy" => ('\u{E8C8}', Some(GlyphKind::Copy)),
         "edit.cut" => ('\u{E8C6}', None),
+        // 우클릭 드래그 드롭 메뉴(자체 · 셸 위임이 없는 OS · 10-18): 복사 · 폴더로 이동 · 취소.
+        "dnd.copy" => ('\u{E8C8}', Some(GlyphKind::Copy)),
+        "dnd.move" => ('\u{E8DE}', None),
+        "dnd.cancel" => ('\u{E711}', None),
         "edit.paste" => ('\u{E77F}', None),
         "edit.delete" | "aux.launch.remove" => ('\u{E74D}', None),
         "edit.select_all" => ('\u{E8B3}', None),
@@ -257,6 +261,9 @@ mod tests {
             "view.refresh",
             "ctx.copy_path",
             "aux.prefs",
+            "dnd.copy",
+            "dnd.move",
+            "dnd.cancel",
         ] {
             assert!(spec_of(id).is_some(), "{id}");
         }

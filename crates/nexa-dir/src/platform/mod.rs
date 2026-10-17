@@ -259,6 +259,17 @@ pub(crate) trait ContextMenuProvider {
     fn busy(&self) -> bool {
         false
     }
+    /// 우클릭 드래그로 놓은 파일들의 **셸 드롭 메뉴**(탐색기 꼴 · 10-18): 놓은 폴더의 셸 `IDropTarget`에 오른쪽 버튼 드롭을 위임해 "여기에 복사 ·
+    /// 여기로 이동 · 바로 가기 만들기 + 드롭 핸들러(7-Zip …)" 메뉴를 띄우고 셸이 **놓은 폴더를 기준으로** 실행한다(모달 · 돌아오면 끝). 돌려주는
+    /// 값 = 셸이 동작을 골랐는가. 기본 = 미지원(호출부가 자체 복사/이동/취소 메뉴).
+    fn drop_menu(
+        &self,
+        _dest: &Path,
+        _paths: &[PathBuf],
+        _at: (i32, i32),
+    ) -> Result<bool, PlatformError> {
+        Err(PlatformError::Unsupported("shell drop menu"))
+    }
 }
 
 pub(crate) trait Trash {

@@ -1418,6 +1418,9 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     };
     // 시작 폴더: 명령행 경로(dir2 KEY-301 · 세션보다 우선) → 세션 복원(T-45) → 현재 폴더/홈(`App::new`가 고른다).
     // 세션 복원(dir2 PREFS-054 — 창 생성 전) · 저장 폴더 = 설정 폴더.
+    // 모든 우클릭 메뉴에 아이콘 칸을 늘 예약(사용자 10-18 "메뉴 앞에 이미지가 들어갈 구조" · nexa-sql 10-13 같은 규칙): 아이콘이 하나도 없는
+    // 메뉴도 같은 칸을 두어 글 시작 x가 같다 · 그리기 자체는 항목의 아이콘 유무(`menu_icons`)가 정한다.
+    nexa_ctl::controls::ctxmenu::set_icon_col_always(true);
     let session_dir = ndir_settings::config_dir();
     let session = session_dir.as_deref().and_then(Session::load);
     let mut app = App::new(settings, ui.font, start, session, Platform::native());

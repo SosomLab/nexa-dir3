@@ -8617,7 +8617,31 @@ fn right_button_drop_opens_copy_move_menu() {
         Some(0),
         "선택된 행"
     );
-    // 오른쪽 버튼 놓기 = 메뉴(복사 · 이동 · 취소) · 아직 전송 없음.
+    // 우클릭 드래그 중에도 폴더 위에 머물면 열린다(왼쪽과 같은 DragOver 길 · 사용자 10-18 "우클릭도 동일한 이동") → 그 폴더가 기준.
+    let _ = app.settings.set("transfer.dnd_hover_ms", "500");
+    let _ = app.dnd_event(
+        DropEvent::Enter {
+            paths: vec![a.clone()],
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+        now,
+    );
+    let _ = app.dnd_event(
+        DropEvent::Over {
+            at: on_sub,
+            ctrl: false,
+            shift: false,
+        },
+        now + Duration::from_millis(600),
+    );
+    assert_eq!(
+        app.panels[0].rows().source().expanded_dirs(4),
+        vec![sub.clone()],
+        "머묾 = 폴더 펼침"
+    );
+    // 오른쪽 버튼 놓기 = 메뉴(복사 · 이동 · 취소 · 가짜 플랫폼 = 셸 위임 없음 → 자체 메뉴) · 아직 전송 없음.
     let drop = |menu: bool| DropEvent::Drop {
         paths: vec![a.clone()],
         at: on_sub,

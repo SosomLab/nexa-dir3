@@ -724,6 +724,15 @@ impl ContextMenuProvider for NativeShellMenu {
         self.owner.set(hwnd);
     }
 
+    fn drop_menu(
+        &self,
+        dest: &Path,
+        paths: &[PathBuf],
+        at: (i32, i32),
+    ) -> Result<bool, PlatformError> {
+        super::windrag::shell_drop_menu(self.owner.get(), dest, paths, at)
+    }
+
     fn items(&self, paths: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError> {
         if paths.is_empty() {
             return Ok(Vec::new());
