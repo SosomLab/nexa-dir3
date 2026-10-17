@@ -86,6 +86,13 @@ impl App {
             self.prefs_win.select_category(cat);
             return;
         }
+        // OS 파일 열기 흉내(T3/T4 · nexa-sys `open_files::simulate` → 바로 펌프 · 10-18): `os.open:<경로>`.
+        if let Some(spec) = id.strip_prefix("os.open:") {
+            nexa_sys::open_files::simulate([std::path::PathBuf::from(spec.trim())]);
+            let mut inv = Invalidations::default();
+            self.pump_os_open_files(&mut inv);
+            return;
+        }
         if let Some(spec) = id.strip_prefix("xdnd.drop:") {
             self.xdnd_drop_cmd(spec);
             return;

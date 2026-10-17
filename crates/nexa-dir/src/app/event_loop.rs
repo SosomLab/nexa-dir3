@@ -100,6 +100,8 @@ impl ApplicationHandler<Wake> for App {
         for p in &mut self.panels {
             p.tick(now_ms, &mut inv);
         }
+        // OS 파일 열기 큐(macOS Finder/Dock/`open -a` · nexa-sys 212차 · 10-18) — 비어 있으면 잠금 한 번.
+        self.pump_os_open_files(&mut inv);
         // 도크의 오버레이 스크롤 막대 자동 숨김 · 속도 배지 사라짐(dir2 e230f36 — 틱이 없으면 그대로 남는다).
         for d in &mut self.docks {
             if d.bounds().h > 0 {

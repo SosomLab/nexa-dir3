@@ -8563,3 +8563,28 @@ fn copy_to_and_move_to_pick_folder_then_transfer() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// nexa-sys 212차 `open_files` 소비(10-18 · macOS Finder/Dock/`open -a` → 탭): 폴더 = 활성 패널 새 탭 · 파일 = 부모 폴더 새 탭 + 그 파일 선택 ·
+/// 없는 경로 = 탭 그대로 + 토스트. 시험 훅 `os.open:<경로>`(모든 OS · 큐 시뮬레이션 → 즉시 펌프).
+#[test]
+fn os_open_files_open_tabs_and_select_file() {
+    let (mut app, dir) = fixture("osopen");
+    app.layout_for(1200, 800, 1.0);
+    let a = app.active;
+    let n0 = app.panels[a].tab_count();
+    app.startup_cmd(&format!("os.open:{}", dir.join("sub").display()));
+    assert_eq!(app.panels[a].tab_count(), n0 + 1, "폴더 = 새 탭");
+    assert_eq!(app.panels[a].root_path(), dir.join("sub"));
+    app.startup_cmd(&format!("os.open:{}", dir.join("a.txt").display()));
+    assert_eq!(app.panels[a].tab_count(), n0 + 2, "파일 = 부모 폴더 새 탭");
+    assert_eq!(app.panels[a].root_path(), dir);
+    assert_eq!(
+        app.panels[a].selected_paths(),
+        vec![dir.join("a.txt")],
+        "그 파일 선택"
+    );
+    app.startup_cmd(&format!("os.open:{}", dir.join("nope").display()));
+    assert_eq!(app.panels[a].tab_count(), n0 + 2, "없는 경로 = 탭 그대로");
+    assert!(app.toasts.animating(), "없는 경로 = 토스트");
+    let _ = std::fs::remove_dir_all(&dir);
+}

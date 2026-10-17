@@ -178,6 +178,8 @@ dnd.dropped = Dropped {0} item(s) into {1}
 dnd.willMove = Move → {0}   (Ctrl = copy)
 dnd.willCopy = Copy → {0}   (Shift = move)
 dnd.cannot = Cannot drop here
+osopen.title = Open
+osopen.missing = Cannot open {0} — not found
 new.menuFolder = Folder
 new.menuTextFile = Text Document
 new.named = New {0}

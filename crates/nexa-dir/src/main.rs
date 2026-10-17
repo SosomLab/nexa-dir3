@@ -1423,6 +1423,13 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
             trf("crash.reported", &[&p.display().to_string()]),
         );
     }
+    // macOS Finder/Dock/`open -a`가 넘기는 경로(Apple Event · argv 아님) — 델리게이트에 `application:openFiles:`를 덧붙인다(이벤트 루프
+    // 생성 뒤 · run 전 · nexa-sys 212차). 다른 OS = false(argv 경로가 받는다).
+    if !nexa_sys::open_files::install() && cfg!(target_os = "macos") {
+        say_err!(
+            "nexa-dir: os open-files hook not installed (Finder/Dock open falls back to argv)"
+        );
+    }
     if let Err(e) = el.run_app(&mut app) {
         say_err!("nexa-dir: event loop error: {e}");
         return ExitCode::FAILURE;

@@ -177,6 +177,8 @@ dnd.opNone = {0}
 dnd.dropped = {0} 個の項目を {1} に置きました
 dnd.willMove = 移動 → {0}   (Ctrl = コピー)
 dnd.willCopy = コピー → {0}   (Shift = 移動)
+osopen.title = 開く
+osopen.missing = {0} を開けません — 見つかりません
 dnd.cannot = ここにはドロップできません
 new.menuFolder = フォルダー
 new.menuTextFile = テキスト ドキュメント

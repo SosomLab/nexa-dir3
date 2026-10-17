@@ -21,6 +21,7 @@ pub(crate) mod menu_icons;
 pub(crate) mod menus;
 pub(crate) mod ops;
 pub(crate) mod order;
+mod osopen;
 mod paint;
 pub(crate) mod palette;
 pub(crate) mod plugins;
