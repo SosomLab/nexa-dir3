@@ -210,6 +210,7 @@ pub(crate) fn decorate(items: Vec<CtxItem>) -> Vec<CtxItem> {
                 checked,
                 active,
                 mark,
+                danger,
             } => {
                 let icon = icon.or_else(|| {
                     (checked.is_none() && mark.is_none())
@@ -229,6 +230,7 @@ pub(crate) fn decorate(items: Vec<CtxItem>) -> Vec<CtxItem> {
                     checked,
                     active,
                     mark,
+                    danger,
                 }
             }
             CtxItem::Separator => CtxItem::Separator,
