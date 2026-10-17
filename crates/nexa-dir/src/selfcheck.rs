@@ -572,44 +572,48 @@ fn check_watch(r: &mut Report) {
 
 /// 셸 컨텍스트 메뉴(T-51 B `ContextMenuProvider` 포트): 임시 파일의 행 메뉴 · 임시 폴더의 배경 메뉴를 **실제로 구축**해 항목 수를 본다
 /// (실행은 하지 않는다). Windows 외 OS는 자체 메뉴만이라 SKIP.
+/// 우클릭 메뉴 공급자(T-51 Windows 셸 · T-131 Linux xdg · macOS = `Unsupported`): OS를 묻지 않고 **포트가 `Unsupported`를 돌려주는지**로
+/// 가른다(10-18 · T-131 "selfcheck ctxmenu 항목" · 종전 = `cfg!(windows)`라 Linux xdg 메뉴가 점검에서 통째로 빠졌다). 첫 항목이 SKIP이면 나머지도 묻지 않는다.
 fn check_ctxmenu(r: &mut Report) {
-    if !cfg!(windows) {
-        r.items.push(Item {
-            group: "ctxmenu",
-            name: "shell menu".into(),
-            verdict: Verdict::Skip,
-            detail: "app menu only on this OS".into(),
-            ms: 0,
-        });
-        return;
-    }
     let p = crate::platform::Platform::native();
     let dir = std::env::temp_dir().join(format!("ndir-selfcheck-ctx-{}", unique_tag()));
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join("probe.txt");
     let _ = std::fs::write(&file, b"x");
+    let unsupported = std::cell::Cell::new(false);
     timed(r, "ctxmenu", "row menu items", || {
         match p.ctxmenu.items(std::slice::from_ref(&file)) {
             Ok(v) if !v.is_empty() => {
-                let verbs = v
+                // Windows = 셸 동사(verb) · Linux = 항목 id(`xdg.*`) — 비어 있지 않은 쪽을 보인다(구분선 제외).
+                let names = v
                     .iter()
-                    .filter(|i| !i.verb.is_empty())
-                    .map(|i| i.verb.to_ascii_lowercase())
+                    .filter(|i| !i.separator)
+                    .map(|i| {
+                        if i.verb.is_empty() {
+                            i.id.clone()
+                        } else {
+                            i.verb.to_ascii_lowercase()
+                        }
+                    })
                     .collect::<Vec<_>>();
                 let icons = v.iter().filter(|i| i.icon.is_some()).count();
                 (
                     Verdict::Pass,
-                    format!(
-                        "{} items · {icons} icons · verbs {}",
-                        v.len(),
-                        verbs.join(",")
-                    ),
+                    format!("{} items · {icons} icons · {}", v.len(), names.join(",")),
                 )
             }
             Ok(_) => (Verdict::Warn, "no items".into()),
+            Err(crate::platform::PlatformError::Unsupported(_)) => {
+                unsupported.set(true);
+                (Verdict::Skip, "app menu only on this OS".into())
+            }
             Err(e) => (Verdict::Fail, e.to_string()),
         }
     });
+    if unsupported.get() {
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
     // 우클릭 가속(dir2 X-61): 선행 구축된 같은 대상의 재조회는 캐시에서 즉시(구축 시간 = 위 항목의 ms).
     timed(r, "ctxmenu", "prepared menu is instant", || {
         let target = crate::platform::MenuTarget::Rows(vec![file.clone()]);
@@ -858,6 +862,33 @@ mod tests {
             .filter(|i| i.verdict == Verdict::Fail)
             .collect();
         assert!(fails.is_empty(), "{fails:?}");
+    }
+
+    /// ctxmenu 그룹은 OS가 아니라 공급자로 가른다(T-131 · 10-18): Windows 셸·Linux xdg = 행/배경 항목 실제 점검 · macOS = SKIP 1건.
+    #[test]
+    fn ctxmenu_group_probes_where_a_provider_exists() {
+        let _g = crate::platform::os_test_guard();
+        let r = run(&Options {
+            ci: true,
+            only: Some("ctxmenu".into()),
+            ..Options::default()
+        });
+        assert!(r.items.iter().all(|i| i.group == "ctxmenu"));
+        assert_eq!(r.failed(), 0, "{}", r.to_table());
+        if cfg!(target_os = "macos") {
+            assert_eq!(r.items.len(), 1, "{}", r.to_table());
+            assert!(r.items.iter().all(|i| i.verdict == Verdict::Skip));
+        } else {
+            for name in ["row menu items", "background menu items"] {
+                assert!(
+                    r.items
+                        .iter()
+                        .any(|i| i.name == name && i.verdict != Verdict::Skip),
+                    "{name}: {}",
+                    r.to_table()
+                );
+            }
+        }
     }
 
     #[test]
