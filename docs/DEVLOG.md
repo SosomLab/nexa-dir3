@@ -4,6 +4,8 @@
 
 ## 2026-10-18
 
+- **NFC 표시·NFD 식별·NFC 변환 + Quick Look**(4b4abeb · T-185 · NEW-047 · NEW-048) · **macOS 미리보기 ↔ Quick Look 썸네일 · Preview 열기**(ac2780f · T-186) · gate full 616/0 · CI macOS ✗ → 6829a24 APFS 정규화 둔감 대응(ndir-ops nfc · 임시 이름 2단계) ✓ → [10-18 §12~§14](journal/2026-10-18.md)
+
 - **우클릭 드래그 2차**: a27276e 수신부 우클릭 기억(OLE Drop 시점 키) · 27f01e6 Windows 셸 드롭 위임(7-Zip 등 · 놓은 폴더 기준) · be9f5b8 Linux/macOS 자체 드롭 메뉴(링크 · 풀기 · 스크립트 · XDND Ask) · gate full 610/0 → [10-18 §10 · §11](journal/2026-10-18.md)
 
 - **사용자 요청 4건**(ea9d330 Space 입력 · be56227 빈 폴더 글리프 X-43 · df64859 메모리 창 [상세]/[최상위] · b3b4b34 우클릭 드래그) + d968728 T4 기대값 · 26e98f1 게이트 OS 조건부 cfg 격상 · gate full 608/0 · T4 36/0 → [10-18 §5~§9](journal/2026-10-18.md)
