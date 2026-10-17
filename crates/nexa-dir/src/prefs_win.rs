@@ -2061,6 +2061,17 @@ impl PrefsWin {
                 self.scroll,
                 s,
             );
+            // 고급 스위치 = 라벨 글 폭에 꼭 맞는 너비(nexa-ui 211차 `wanted_width` · 10-18): 종전 고정 160px은 짧은 라벨 뒤 빈 자리를
+            // 눌러도 토글됐다. 배치 때는 DrawCtx가 없어 160으로 두고 그릴 때 맞춘다(nexa-sql 메모리 창과 같은 꼴).
+            {
+                let b = self.advanced.bounds();
+                let w = self.advanced.wanted_width(&mut dc) + (8.0 * s).round() as i32;
+                if w != b.w {
+                    let mut inv = Invalidations::default();
+                    self.advanced
+                        .set_bounds(Rect::new(b.x, b.y, w, b.h), &mut inv);
+                }
+            }
             self.advanced.paint(&mut dc, th);
             self.close_btn.paint(&mut dc, th);
             self.json_btn.paint(&mut dc, th);

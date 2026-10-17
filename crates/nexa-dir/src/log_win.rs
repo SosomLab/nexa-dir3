@@ -1382,7 +1382,6 @@ impl LogWin {
             let mut inv = Invalidations::default();
             let mut x = pad / 2;
             let sep_gap = pad;
-            let track_w = (20.0 * self.switch_mult * s).round() as i32;
             for (i, (sw, msg)) in [
                 (&mut self.wrap_switch, "log.sw.wrap"),
                 (&mut self.newest_switch, "log.sw.sort"),
@@ -1404,8 +1403,9 @@ impl LogWin {
                 // 스위치 앞 3px 여백(사용자 09-16).
                 x += (3.0 * s).round() as i32;
                 sw.set_scale(s);
-                // 트랙(배율) + 간격 + 라벨 폭 + 여백 — Switch는 폭을 스스로 재지 않는다.
-                let w = track_w + dc.text_width(&t_(msg)) + (14.0 * s).round() as i32;
+                // 트랙(배율 · `ui.control_size`) + 틈 + 라벨 글 폭 = `Switch::wanted_width`(nexa-ui 211차 · 10-18) + 뒤 여백 6px(종전 근사 = 트랙 20 + 14).
+                let _ = msg;
+                let w = sw.wanted_width(&mut dc) + (6.0 * s).round() as i32;
                 sw.set_bounds(Rect::new(x, fy + 2, w, footer_row_h + pad - 2), &mut inv);
                 sw.paint(&mut dc, th);
                 x += w;
