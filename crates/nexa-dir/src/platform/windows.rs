@@ -126,11 +126,11 @@ extern "system" {
         total: *mut u64,
         total_free: *mut u64,
     ) -> i32;
-    fn GlobalAlloc(flags: u32, bytes: usize) -> *mut c_void;
-    fn GlobalLock(h: *mut c_void) -> *mut c_void;
-    fn GlobalUnlock(h: *mut c_void) -> i32;
-    fn GlobalSize(h: *mut c_void) -> usize;
-    fn GlobalFree(h: *mut c_void) -> *mut c_void;
+    pub(super) fn GlobalAlloc(flags: u32, bytes: usize) -> *mut c_void;
+    pub(super) fn GlobalLock(h: *mut c_void) -> *mut c_void;
+    pub(super) fn GlobalUnlock(h: *mut c_void) -> i32;
+    pub(super) fn GlobalSize(h: *mut c_void) -> usize;
+    pub(super) fn GlobalFree(h: *mut c_void) -> *mut c_void;
     fn GetLastError() -> u32;
     fn CreateFileW(
         name: *const u16,
@@ -235,7 +235,7 @@ const FOF_SILENT: u16 = 0x4;
 const FOF_NOCONFIRMATION: u16 = 0x10;
 const FOF_ALLOWUNDO: u16 = 0x40;
 const FOF_NOERRORUI: u16 = 0x400;
-const GMEM_MOVEABLE: u32 = 0x2;
+pub(super) const GMEM_MOVEABLE: u32 = 0x2;
 const CF_HDROP: u32 = 15;
 const DROPEFFECT_COPY: u32 = 1;
 const DROPEFFECT_MOVE: u32 = 2;

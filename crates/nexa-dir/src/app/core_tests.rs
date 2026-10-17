@@ -6547,6 +6547,15 @@ fn dragging_selected_rows_starts_os_drag() {
     // 임계를 넘으면 선택 전체로 시작 · 돌아온 뒤 선택 유지 · 누름 정리.
     app.route(InputEvent::MouseMove { x: ax + 12, y: ay });
     assert_eq!(drags(&log), ["drag:2"], "선택 2개로 드래그");
+    // 드래그 그림(이름 상자 · 10-18 Windows 셸 헬퍼 전제)이 포트까지 넘어간다 — 폭·높이 0이 아님.
+    assert!(
+        log.borrow()
+            .calls
+            .iter()
+            .any(|c| c.starts_with("drag-image:") && !c.ends_with("0x0")),
+        "드래그 그림 전달: {:?}",
+        log.borrow().calls
+    );
     assert_eq!(app.panels[0].selected_paths().len(), 2, "선택 유지");
     assert!(app.drag_press.is_none() && app.rename_due.is_none());
     // 같은 누름에서 더 움직여도 다시 시작하지 않는다.

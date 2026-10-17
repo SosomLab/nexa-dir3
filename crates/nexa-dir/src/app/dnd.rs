@@ -144,6 +144,8 @@ impl App {
                 // SAFETY(아래 `&mut *app`): 수신기는 `begin_drag`가 도는 동안에만, 같은 UI 스레드에서, OLE 콜백으로 불린다.
                 // 그동안 이 함수는 `self`를 쓰지 않고(`drag` · `paths`는 지역 복제) 돌아온 뒤에야 다시 쓴다 → 동시에 살아 있는
                 // 두 접근이 없다.
+                // 드래그 그림 = 이름 상자(Linux 이름 상자와 같은 그림 · 동작 글은 없음 — Windows는 대상이 "복사 → …" 글을 붙인다 · 10-18).
+                let image = Some(self.drag_image(&paths, platform::DropChoice::None));
                 let app: *mut App = self;
                 let sink: platform::DropSink = Box::new(move |ev| {
                     let app = unsafe { &mut *app };
@@ -152,7 +154,7 @@ impl App {
                     choice
                 });
                 let drag = Rc::clone(&self.platform.drag);
-                let result = platform::with_live_drop_sink(sink, || drag.begin_drag(&paths));
+                let result = platform::with_live_drop_sink(sink, || drag.begin_drag(&paths, image));
                 self.dnd_end();
                 // 뗌은 OS가 삼켰다 — 누름 상태 정리(선택은 유지).
                 self.panels[i].abort_press();

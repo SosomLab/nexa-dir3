@@ -221,8 +221,16 @@ impl FileClipboard for FakeClip {
 }
 
 impl DragSource for FakeDrag {
-    fn begin_drag(&self, paths: &[PathBuf]) -> Result<DragOutcome, PlatformError> {
+    fn begin_drag(
+        &self,
+        paths: &[PathBuf],
+        image: Option<DragImage>,
+    ) -> Result<DragOutcome, PlatformError> {
         note(&self.0, format!("drag:{}", paths.len()));
+        // 드래그 그림이 넘어왔는지(T3 증거 · 10-18) — 크기만 적는다.
+        if let Some(img) = image {
+            note(&self.0, format!("drag-image:{}x{}", img.w, img.h));
+        }
         Ok(DragOutcome::Cancelled)
     }
 }

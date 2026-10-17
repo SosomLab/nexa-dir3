@@ -291,8 +291,13 @@ pub(crate) trait FileClipboard {
 }
 
 pub(crate) trait DragSource {
-    /// OS 드래그 시작(끝날 때까지 막힘) — 결과 = 옮김/복사/취소.
-    fn begin_drag(&self, paths: &[PathBuf]) -> Result<DragOutcome, PlatformError>;
+    /// OS 드래그 시작(끝날 때까지 막힘) — 결과 = 옮김/복사/취소. `image` = 포인터를 따라다닐 드래그 그림(앱이 그린 이름 상자 ·
+    /// Windows = 셸 `IDragSourceHelper` 10-18 · 없으면 OS 기본 커서만).
+    fn begin_drag(
+        &self,
+        paths: &[PathBuf],
+        image: Option<DragImage>,
+    ) -> Result<DragOutcome, PlatformError>;
     /// 이 OS에 **외부로 내보내는** 드래그가 있는가 — 없으면(Linux · macOS · T-147) 호스트가 **창 안 드래그**(패널 ↔ 패널 · 폴더 행 ·
     /// 탭 머묾)를 포인터만으로 흉내 낸다(`App::dnd_internal_*`). 기본 = 있음.
     fn supports_os_drag(&self) -> bool {
@@ -969,7 +974,11 @@ impl FileClipboard for Unsupported {
 }
 
 impl DragSource for Unsupported {
-    fn begin_drag(&self, _paths: &[PathBuf]) -> Result<DragOutcome, PlatformError> {
+    fn begin_drag(
+        &self,
+        _paths: &[PathBuf],
+        _image: Option<DragImage>,
+    ) -> Result<DragOutcome, PlatformError> {
         Err(PlatformError::Unsupported("drag source"))
     }
     fn supports_os_drag(&self) -> bool {
