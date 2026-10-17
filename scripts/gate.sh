@@ -5,7 +5,7 @@
 #   scripts/gate.sh quick      # 빠른 게이트만
 #   scripts/gate.sh full       # 전수(배포 전 · 태그 전 · 마일스톤 마감 같은 중요 시점에는 반드시)
 #
-# quick = fmt + 호스트 clippy(-D warnings) + **바뀐 크레이트의 시험** + --smoke
+# quick = fmt + 호스트 clippy(-D warnings · 바뀐 diff에 OS 조건부 cfg가 있으면 3-OS clippy) + **바뀐 크레이트의 시험** + --smoke
 # full  = fmt + 3-OS clippy + 워크스페이스 전체 시험 + --smoke + --selfcheck --ci + T4 시나리오(ndir-check)
 #
 # auto가 full을 고르는 때(하나라도):
@@ -46,9 +46,18 @@ echo "▶ gate: $MODE${WHY:+ — $WHY}"
 fail() { echo "★ GATE 실패($MODE): $1"; exit 1; }
 
 if [[ "$MODE" == quick ]]; then
-    bash scripts/check-3os.sh --quick >/tmp/ndir-gate-check.$$ 2>&1 || { grep -E "^(error|warning)" -A12 /tmp/ndir-gate-check.$$ | head -60; rm -f /tmp/ndir-gate-check.$$; fail "fmt/clippy(호스트)"; }
-    rm -f /tmp/ndir-gate-check.$$; echo "  ✓ fmt + clippy(호스트)"
     BASE="$( [[ -f "$REC" ]] && cut -d' ' -f2 "$REC" || echo HEAD )"
+    # OS 조건부 코드(`cfg(unix|windows|target_os …)` · `cfg!`)가 더해졌으면 quick에서도 **3-OS clippy**(Windows 호스트 clippy는 cfg(unix/macos)
+    # 가지를 보지 않는다 — 10-18 930a505 교훈 · 메모리 "push 전 3-OS clippy"). 그 밖 = 호스트만.
+    os_cfg_lines() {
+        { git diff "$BASE" HEAD -- '*.rs'; git diff HEAD -- '*.rs'; } 2>/dev/null | grep -E '^\+.*cfg!?\(.*(unix|windows|target_os)'
+        git ls-files --others --exclude-standard -- '*.rs' | xargs -r grep -hE 'cfg!?\(.*(unix|windows|target_os)' 2>/dev/null
+        return 0
+    }
+    OSCFG="$(os_cfg_lines | wc -l | tr -d ' ')"
+    if (( OSCFG > 0 )); then C3=""; CWHY="3-OS · OS 조건부 코드 ${OSCFG}줄"; else C3="--quick"; CWHY="호스트"; fi
+    bash scripts/check-3os.sh $C3 >/tmp/ndir-gate-check.$$ 2>&1 || { grep -E "^(error|warning)" -A12 /tmp/ndir-gate-check.$$ | head -60; rm -f /tmp/ndir-gate-check.$$; fail "fmt/clippy($CWHY)"; }
+    rm -f /tmp/ndir-gate-check.$$; echo "  ✓ fmt + clippy($CWHY)"
     PKGS="$(changed_since "$BASE" | sed -n 's|^crates/\([^/]*\)/.*|\1|p' | sort -u | tr '\n' ' ')"
     # 언어 파일 · 설정 표는 앱 시험이 함께 본다.
     case " $PKGS " in *" ndir-i18n "*|*" ndir-settings "*) PKGS="$PKGS nexa-dir";; esac

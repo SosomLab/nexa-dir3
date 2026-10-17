@@ -26,7 +26,7 @@ cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
 
 | 단계 | 하는 일 |
 | --- | --- |
-| `quick` | fmt + 호스트 clippy(`check-3os.sh --quick` · `-D warnings`) + **마지막 전수 뒤 바뀐 크레이트만** `cargo test -p …`(ndir-i18n · ndir-settings가 바뀌면 nexa-dir 포함) + `--smoke` |
+| `quick` | fmt + 호스트 clippy(`check-3os.sh --quick` · `-D warnings` · **마지막 전수 뒤 diff에 `cfg(unix|windows|target_os …)`/`cfg!`가 더해졌으면 `check-3os.sh` 전체 = 3-OS clippy** — Windows 호스트 clippy는 cfg(unix/macos) 가지를 못 본다 · 10-18 930a505) + **마지막 전수 뒤 바뀐 크레이트만** `cargo test -p …`(ndir-i18n · ndir-settings가 바뀌면 nexa-dir 포함) + `--smoke` |
 | `full` | `check-3os.sh`(fmt + 3-OS clippy) + `cargo test --workspace` + `--smoke` + `--selfcheck --ci` + T4(`ndir-check --ci` — Windows 전제 3개 `ctx-menu` · `launcher` · `selfcheck-win`는 다른 OS에서 실패가 기준선 · T-117) → 통과하면 `target/gate/last-full`에 `시각 HEAD nexa-ui-HEAD nexa-license-HEAD` 기록(PC별 · git 미추적) |
 | `auto`(기본) | **full을 고르는 때**(하나라도): ① 이 PC에 전수 기록 없음 ② 마지막 전수가 `NDIR_GATE_FULL_HOURS`(기본 24)시간 경과 ③ 형제 저장소(nexa-ui · nexa-license) HEAD 변경 ④ 마지막 전수 뒤 **핵심 경로** 변경 — `crates/{ndir-core,ndir-vfs,ndir-tree,ndir-ops,ndir-term,ndir-license}/` · `crates/ndir-settings/src/lib.rs` · `crates/nexa-dir/src/platform/` · `crates/nexa-dir/Cargo.toml` · `crates/ndir-check/` · `Cargo.toml`/`Cargo.lock` · `.github/` · `scripts/` · `tests/scenarios/`. 그 밖 = quick |
 
