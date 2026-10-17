@@ -138,6 +138,9 @@ pub(crate) struct ListOpts {
     pub case_sensitive: bool,
     /// 자연 정렬(숫자를 값으로 · 설정 `list.sort_natural` = 새 탭 기본값 · 탭 보기 옵션 5번째 — 10-08 `list.view_scope` 적용).
     pub natural: bool,
+    /// 빈 폴더(현재 보기로 보일 자식이 없는 폴더)의 펼침 글리프 숨김(설정 `list.hide_empty_glyph` · dir2 X-43 · WINC-016 · 10-18 — 종전에는 키만 있고
+    /// 읽는 곳이 없어 모든 폴더에 ▸가 그려졌다). 전역(탭 보기 옵션이 아니다).
+    pub hide_empty_glyph: bool,
 }
 
 /// 탭 보기 옵션 5종 `(숨김, Dot, 폴더 우선, 대소문자 구분 정렬, 자연 정렬)` — 탭이 소유하고 보기 범위(`list.view_scope`)만큼 함께 바뀐다.
@@ -202,6 +205,8 @@ pub(crate) struct TreeSource {
     cut_marks: std::collections::HashSet<PathBuf>,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
     no_icons: bool,
+    /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
+    probe_cache: std::cell::RefCell<std::collections::HashMap<ndir_tree::NodeId, bool>>,
 }
 
 impl TreeSource {
@@ -216,6 +221,7 @@ impl TreeSource {
             drive_space: std::collections::HashMap::new(),
             cut_marks: std::collections::HashSet::new(),
             no_icons: false,
+            probe_cache: Default::default(),
         };
         s.reload();
         s
@@ -241,6 +247,7 @@ impl TreeSource {
     /// 정렬 키 · 펼친 폴더 · 선택을 스냅샷해 새 트리에 경로로 되돌린다(사라진 항목은 조용히 빠진다). 종전에는 새 트리를 기본 정렬로
     /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
+        self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
         let (keys, expanded, selected) = match &self.tree {
             Some(t) => {
                 let expanded: Vec<String> = (0..t.visible_len())
@@ -311,6 +318,27 @@ impl TreeSource {
             self.opts = opts;
             self.reload();
         }
+    }
+
+    /// 폴더에 현재 보기(필터)로 보여줄 자식이 있는가(X-43 · dir2 `dir_has_visible_children` 이식) — 마커 판정 전용:
+    /// 열거 완료 폴더 = 트리 실측(필터 반영 children) · 미열거 = 프로브 1회 후 캐시 · 네트워크 위치 = 프로브 생략(글리프 유지 · X-43 β).
+    fn dir_has_visible_children(&self, id: ndir_tree::NodeId) -> bool {
+        let Some(t) = self.tree.as_ref() else {
+            return true;
+        };
+        if let Some(n) = t.loaded_child_count(id) {
+            return n > 0;
+        }
+        if let Some(&v) = self.probe_cache.borrow().get(&id) {
+            return v;
+        }
+        let v = match t.node_path(id) {
+            Some(_) if self.on_network => true,
+            Some(p) => t.probe_has_visible_child(p),
+            None => true,
+        };
+        self.probe_cache.borrow_mut().insert(id, v);
+        v
     }
 
     /// 가상 최상위(내 PC)를 보고 있는가.
@@ -632,7 +660,10 @@ impl RowSource for TreeSource {
         RowItem {
             is_dir: r.kind == FileKind::Dir,
             depth: r.depth,
-            marker: if !r.has_children {
+            // 빈 폴더 글리프 숨김(X-43 · dir2 `source.rs` `row`): 현재 보기로 보일 자식이 없으면 마커 없음(탐색기 트리 관례) · 폴더 서식은 유지.
+            marker: if !r.has_children
+                || (self.opts.hide_empty_glyph && !self.dir_has_visible_children(r.id))
+            {
                 Marker::None
             } else if r.expanded {
                 Marker::Expanded
@@ -812,7 +843,74 @@ mod tests {
             folders_first: true,
             case_sensitive: false,
             natural: false,
+            hide_empty_glyph: false,
         }
+    }
+
+    /// 빈 폴더 글리프 억제(X-43 · dir2 `source.rs` 시험 이식): 현재 필터로 보여줄 자식이 없는 폴더 = 마커 없음, is_dir(폴더 서식)은 유지 ·
+    /// 필터가 내용을 드러내면 마커 복귀 · 토글 즉시 반영(옵션 변경 = 재로드 = 캐시 소거).
+    #[test]
+    fn hide_empty_glyph_suppresses_by_current_filter() {
+        let base = std::env::temp_dir().join(format!("ndir-hide-glyph-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("a_empty")).unwrap();
+        std::fs::create_dir_all(base.join("b_dotonly")).unwrap();
+        std::fs::write(base.join("b_dotonly/.dot"), b"x").unwrap();
+        std::fs::create_dir_all(base.join("c_full")).unwrap();
+        std::fs::write(base.join("c_full/a.txt"), b"x").unwrap();
+        // 점 파일 숨김(Unix = show_hidden · Windows = show_dotfiles — 둘 다 끔) · 억제 꺼짐 = 현행(전부 Collapsed).
+        let hidden = ListOpts {
+            show_hidden: false,
+            show_dotfiles: false,
+            ..opts()
+        };
+        let mut src = TreeSource::open(&base, hidden);
+        assert_eq!(
+            src.row(0).marker,
+            Marker::Collapsed,
+            "억제 꺼짐 = 현행 유지"
+        );
+        src.set_opts(ListOpts {
+            hide_empty_glyph: true,
+            ..hidden
+        });
+        assert_eq!(src.row(0).marker, Marker::None, "빈 폴더 = 마커 억제");
+        assert!(src.row(0).is_dir, "마커가 억제돼도 폴더 서식은 유지(X-43)");
+        assert_eq!(
+            src.row(1).marker,
+            Marker::None,
+            "점 파일뿐 = 현재 보기 기준 빔"
+        );
+        assert_eq!(
+            src.row(2).marker,
+            Marker::Collapsed,
+            "가시 자식 있음 = 마커 유지"
+        );
+        // 필터가 내용을 드러내면(점 파일 표시) 마커 복귀.
+        src.set_opts(ListOpts {
+            hide_empty_glyph: true,
+            ..opts()
+        });
+        assert_eq!(
+            src.row(1).marker,
+            Marker::Collapsed,
+            "보기 변경 = 글리프 복귀"
+        );
+        // 설정을 다시 끄면 즉시 현행 복귀.
+        src.set_opts(opts());
+        assert_eq!(src.row(0).marker, Marker::Collapsed);
+        // 열거 완료(펼침) 폴더는 프로브 없이 트리 실측 — 펼친 빈 폴더는 억제 켜짐에서 마커 없음.
+        src.set_opts(ListOpts {
+            hide_empty_glyph: true,
+            ..opts()
+        });
+        assert!(src.expand_row(0), "빈 폴더 펼침");
+        assert_eq!(
+            src.row(0).marker,
+            Marker::None,
+            "열거 완료·가시 자식 0 = 억제(실측)"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

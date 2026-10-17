@@ -2228,6 +2228,7 @@ mod tests {
             folders_first: true,
             case_sensitive: false,
             natural: true,
+            hide_empty_glyph: false,
         }
     }
 

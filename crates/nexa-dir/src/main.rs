@@ -491,6 +491,7 @@ fn list_opts(s: &Settings) -> ListOpts {
         folders_first: s.flag("list.folders_first"),
         case_sensitive: s.flag("list.sort_case_sensitive"),
         natural: s.flag("list.sort_natural"),
+        hide_empty_glyph: s.flag("list.hide_empty_glyph"),
     }
 }
 

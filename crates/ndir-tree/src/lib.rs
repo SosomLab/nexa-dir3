@@ -685,6 +685,17 @@ impl Tree {
 
     /// 현재 가시성 필터 `(show_hidden, show_dotfiles)` — 호스트의 미열거 폴더
     /// 프로브(X-43)가 열거와 같은 규칙을 적용하기 위한 노출.
+    /// 미열거 폴더에 현재 필터로 보일 자식이 **하나라도** 있는가(dir2 `nexa-app/src/source.rs` `probe_has_visible_child` X-43 이식 ·
+    /// 10-18): 첫 가시 항목에서 멈춘다 · 읽기 실패 = `true`(글리프 유지 = 안전 방향). 호출자가 노드별로 캐시한다(페인트 경로 · 폴더당 1회).
+    pub fn probe_has_visible_child(&self, dir: &Path) -> bool {
+        let Ok(entries) = read_dir_entries(dir) else {
+            return true;
+        };
+        entries
+            .flatten()
+            .any(|e| self.filter.allows(&e.name, e.attrs))
+    }
+
     pub fn filter_flags(&self) -> (bool, bool) {
         (self.filter.show_hidden, self.filter.show_dotfiles)
     }
@@ -1777,5 +1788,34 @@ mod tests {
             vec!["file1.txt", "file10.txt", "file2.txt"],
             "사양을 되돌리면 종전 순서"
         );
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+
+    /// X-43 프로브: 점 파일만 있는 폴더는 점 파일을 숨기는 필터에서 "자식 없음" · 보이는 필터에서 "있음" · 없는 경로 = true(글리프 유지).
+    #[test]
+    fn probe_follows_the_tree_filter() {
+        let base = std::env::temp_dir().join(format!("ndir-tree-probe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("d")).unwrap();
+        std::fs::write(base.join("d/.dot"), b"x").unwrap();
+        let hidden = Tree::open_visible(&base, false, false, true).unwrap();
+        assert!(
+            !hidden.probe_has_visible_child(&base.join("d")),
+            "점 파일뿐 = 없음"
+        );
+        let shown = Tree::open_visible(&base, true, true, true).unwrap();
+        assert!(
+            shown.probe_has_visible_child(&base.join("d")),
+            "점 파일 표시 = 있음"
+        );
+        assert!(
+            shown.probe_has_visible_child(&base.join("nope")),
+            "읽기 실패 = true"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
