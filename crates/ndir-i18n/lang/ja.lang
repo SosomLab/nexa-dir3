@@ -180,6 +180,9 @@ dnd.willCopy = コピー → {0}   (Shift = 移動)
 osopen.title = 開く
 osopen.missing = {0} を開けません — 見つかりません
 dnd.cannot = ここにはドロップできません
+ctx.dropCopy = ここにコピー
+ctx.dropMove = ここに移動
+ctx.dropCancel = キャンセル
 new.menuFolder = フォルダー
 new.menuTextFile = テキスト ドキュメント
 new.named = 新しい {0}

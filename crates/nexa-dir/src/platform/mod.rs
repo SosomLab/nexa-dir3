@@ -297,6 +297,8 @@ pub(crate) trait DragSource {
         &self,
         paths: &[PathBuf],
         image: Option<DragImage>,
+        // 오른쪽 버튼 드래그(탐색기 꼴 · 그 버튼을 뗄 때 놓는다 · 대상이 복사/이동 메뉴를 연다 · 10-18).
+        right: bool,
     ) -> Result<DragOutcome, PlatformError>;
     /// 이 OS에 **외부로 내보내는** 드래그가 있는가 — 없으면(Linux · macOS · T-147) 호스트가 **창 안 드래그**(패널 ↔ 패널 · 폴더 행 ·
     /// 탭 머묾)를 포인터만으로 흉내 낸다(`App::dnd_internal_*`). 기본 = 있음.
@@ -379,6 +381,8 @@ pub(crate) enum DropEvent {
         at: (i32, i32),
         ctrl: bool,
         shift: bool,
+        /// 오른쪽 버튼으로 놓았다(탐색기 꼴 · 호스트가 그 자리에 복사/이동/취소 메뉴를 연다 · 10-18).
+        menu: bool,
     },
 }
 
@@ -506,6 +510,7 @@ pub(crate) fn drop_dispatch(shared: &Rc<RefCell<DropShared>>, ev: DropEvent) -> 
             at,
             ctrl,
             shift,
+            ..
         } => {
             let c = zone_choice(&sh.zones, paths, *at, *ctrl, *shift);
             sh.dragging.clear();
@@ -978,6 +983,7 @@ impl DragSource for Unsupported {
         &self,
         _paths: &[PathBuf],
         _image: Option<DragImage>,
+        _right: bool,
     ) -> Result<DragOutcome, PlatformError> {
         Err(PlatformError::Unsupported("drag source"))
     }

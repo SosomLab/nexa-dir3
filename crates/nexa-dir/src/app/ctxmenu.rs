@@ -25,6 +25,8 @@ pub(crate) enum CtxKind {
     TermEdit(usize),
     /// 보조 메뉴(탭 상태바 칸 · 툴바 · 런처) — 항목 id가 스스로 뜻을 가진다(`aux.*` → `App::aux_menu_action`).
     Aux(usize),
+    /// 우클릭 드래그로 놓은 뒤의 복사/이동/취소 메뉴(탐색기 꼴 · 10-18) — 항목 id `dnd.*` → `App::drop_menu_action`.
+    Drop,
 }
 
 /// 셸 verb → 앱 명령(dir2 SHELL-005/006 가로채기).
@@ -837,6 +839,7 @@ impl App {
         let panel = match kind {
             CtxKind::Row(p) | CtxKind::Bg(p) | CtxKind::PathEdit(p) | CtxKind::RenameEdit(p) => p,
             CtxKind::Aux(p) => return self.aux_menu_action(p, id),
+            CtxKind::Drop => return self.drop_menu_action(id),
             CtxKind::DockText(_) | CtxKind::TermEdit(_) => return self.dock_edit_action(kind, id),
         };
         if panel != self.active {
@@ -987,6 +990,7 @@ impl App {
             (Some(CtxKind::DockText(_)), _) => "docktext",
             (Some(CtxKind::TermEdit(_)), _) => "termedit",
             (Some(CtxKind::Aux(_)), _) => "aux",
+            (Some(CtxKind::Drop), _) => "drop",
             (None, Some(_)) => "tab",
             _ => "?",
         };

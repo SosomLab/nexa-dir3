@@ -303,10 +303,18 @@ impl App {
         }
         let (x, y) = self.cursor;
         Some(match event {
-            WindowEvent::CursorMoved { position, .. } => InputEvent::MouseMove {
-                x: position.x as i32,
-                y: position.y as i32,
-            },
+            WindowEvent::CursorMoved { position, .. } => {
+                let (mx, my) = (position.x as i32, position.y as i32);
+                // 우클릭 드래그 시작(탐색기 꼴 · 10-18): 선택된 행을 오른쪽 버튼으로 누른 채 임계 넘게 끌면.
+                if let Some((i, px, py)) = self.right_press {
+                    if app::dnd::drag_started((px, py), (mx, my)) {
+                        self.right_press = None;
+                        self.drag_out_begin(i, (mx, my), true);
+                        return None;
+                    }
+                }
+                InputEvent::MouseMove { x: mx, y: my }
+            }
             WindowEvent::MouseInput { state, button, .. } => match (state, button) {
                 (ElementState::Pressed, winit::event::MouseButton::Left) => {
                     let now = Instant::now();
@@ -340,7 +348,21 @@ impl App {
                     InputEvent::MouseUp { x, y }
                 }
                 (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                    // 탐색기 꼴 우클릭 드래그(사용자 10-18): 선택된 행 위의 우클릭은 **뗄 때** 메뉴 · 임계 넘게 끌면 드래그(놓을 때 복사/이동 메뉴).
+                    if let Some(i) = self.right_drag_candidate(x, y) {
+                        self.right_press = Some((i, x, y));
+                        return None;
+                    }
                     InputEvent::RightDown { x, y }
+                }
+                (ElementState::Released, winit::event::MouseButton::Right) => {
+                    if self.dnd_internal.as_ref().is_some_and(|d| d.menu) {
+                        InputEvent::MouseUp { x, y } // 창 안 우클릭 드래그의 뗌 = 놓기(메뉴)
+                    } else if self.right_press.take().is_some() {
+                        InputEvent::RightDown { x, y } // 끌지 않았다 = 메뉴(뗄 때 · 탐색기 꼴)
+                    } else {
+                        return None;
+                    }
                 }
                 (ElementState::Pressed, winit::event::MouseButton::Middle) => {
                     InputEvent::MiddleDown { x, y }

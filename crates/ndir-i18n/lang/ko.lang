@@ -179,6 +179,9 @@ dnd.willCopy = 복사 → {0}   (Shift = 이동)
 osopen.title = 열기
 osopen.missing = {0}을(를) 열 수 없습니다 — 찾을 수 없음
 dnd.cannot = 여기에는 놓을 수 없습니다
+ctx.dropCopy = 여기에 복사
+ctx.dropMove = 여기로 이동
+ctx.dropCancel = 취소
 new.menuFolder = 폴더
 new.menuTextFile = 텍스트 문서
 new.named = 새 {0}

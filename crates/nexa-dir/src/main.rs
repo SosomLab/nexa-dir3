@@ -283,6 +283,10 @@ struct App {
     rename_due: Option<(usize, PathBuf, Instant)>,
     /// 드래그 발신 후보(`app/dnd.rs::drag_out_after`): 선택된 행을 누른 (패널, 자리) — 임계 넘게 끌면 OS 드래그를 시작한다.
     drag_press: Option<(usize, i32, i32)>,
+    /// 우클릭 드래그 후보(탐색기 꼴 · 10-18): 선택된 행을 오른쪽 버튼으로 누른 (패널, 자리) — 임계 넘게 끌면 드래그 · 그냥 떼면 메뉴.
+    right_press: Option<(usize, i32, i32)>,
+    /// 우클릭 드래그로 놓은 뒤 메뉴가 기다리는 (경로들, 놓은 자리) — 복사/이동을 고르면 `external_drop_with`.
+    dnd_menu: Option<(Vec<PathBuf>, (i32, i32))>,
     exit_requested: bool,
     startup_timed: Vec<(Instant, String)>,
     trace_ime: bool,
@@ -680,6 +684,8 @@ impl App {
             rename_on_up: None,
             rename_due: None,
             drag_press: None,
+            right_press: None,
+            dnd_menu: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),

@@ -7041,6 +7041,7 @@ fn drop_events_choose_effect_and_mark_the_target() {
             at: empty,
             ctrl: true,
             shift: false,
+            menu: false,
         },
         now,
     );
@@ -8586,5 +8587,69 @@ fn os_open_files_open_tabs_and_select_file() {
     app.startup_cmd(&format!("os.open:{}", dir.join("nope").display()));
     assert_eq!(app.panels[a].tab_count(), n0 + 2, "없는 경로 = 탭 그대로");
     assert!(app.toasts.animating(), "없는 경로 = 토스트");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 우클릭 드래그(탐색기 꼴 · 사용자 10-18): 오른쪽 버튼으로 놓으면 바로 옮기지 않고 그 자리에 복사/이동/취소 메뉴 · 취소 = 아무 일 없음 ·
+/// 복사를 고르면 복사(원본 유지). 후보 판정 = 선택된 행 위에서만.
+#[test]
+fn right_button_drop_opens_copy_move_menu() {
+    use crate::platform::{DropChoice, DropEvent};
+    let (mut app, dir) = fixture("rightdrop");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let sub = dir.join("sub");
+    let a = dir.join("a.txt");
+    let sub_rect = app.panels[0].row_rect_of(&sub).expect("sub row");
+    let on_sub = (sub_rect.x + 60, sub_rect.y + sub_rect.h / 2);
+    let now = Instant::now();
+    // 후보: 선택 안 된 행 = 아님 · 선택한 행 = 그 패널.
+    assert_eq!(
+        app.right_drag_candidate(on_sub.0, on_sub.1),
+        None,
+        "선택 안 됨"
+    );
+    let mut inv = Invalidations::default();
+    app.panels[0].select_paths(std::slice::from_ref(&sub), &mut inv);
+    assert_eq!(
+        app.right_drag_candidate(on_sub.0, on_sub.1),
+        Some(0),
+        "선택된 행"
+    );
+    // 오른쪽 버튼 놓기 = 메뉴(복사 · 이동 · 취소) · 아직 전송 없음.
+    let drop = |menu: bool| DropEvent::Drop {
+        paths: vec![a.clone()],
+        at: on_sub,
+        ctrl: false,
+        shift: false,
+        menu,
+    };
+    let c = app.dnd_event(drop(true), now);
+    assert_eq!(
+        c,
+        DropChoice::Move,
+        "효과 판정은 종전대로(같은 볼륨 = 이동)"
+    );
+    assert!(app.tab_menu.is_open(), "메뉴가 열린다");
+    assert!(app.transfer.is_none(), "고르기 전에는 전송 없음");
+    let dump = app.ctx_dump();
+    assert!(dump.starts_with("drop dnd.copy dnd.move"), "{dump}");
+    // 취소 = 아무 일 없음.
+    app.ctx_pick("dnd.cancel");
+    assert!(!app.tab_menu.is_open() && app.transfer.is_none());
+    assert!(!sub.join("a.txt").exists());
+    // 다시 놓고 복사를 고르면 복사된다(원본 유지).
+    let _ = app.dnd_event(drop(true), now);
+    app.ctx_pick("dnd.copy");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.transfer.is_some() && Instant::now() < deadline {
+        let _ = app.ops_tick();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        sub.join("a.txt").is_file() && a.is_file(),
+        "복사 = 원본 유지"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

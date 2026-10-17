@@ -21,7 +21,9 @@ use ::windows::Win32::System::Ole::{
     IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, ReleaseStgMedium, CF_HDROP,
     DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_MOVE, DROPEFFECT_NONE,
 };
-use ::windows::Win32::System::SystemServices::{MK_CONTROL, MK_SHIFT, MODIFIERKEYS_FLAGS};
+use ::windows::Win32::System::SystemServices::{
+    MK_CONTROL, MK_RBUTTON, MK_SHIFT, MODIFIERKEYS_FLAGS,
+};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -196,6 +198,8 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 at,
                 ctrl,
                 shift,
+                // 오른쪽 버튼으로 놓음 = 메뉴(탐색기 · 자기 창 발신 모두 keys로 온다).
+                menu: keys.0 & MK_RBUTTON.0 != 0,
             })
         };
         if !effect.is_null() {

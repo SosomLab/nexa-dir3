@@ -39,6 +39,8 @@ pub(crate) struct InternalDrag {
     pub panel: usize,
     pub paths: Vec<PathBuf>,
     pub choice: platform::DropChoice,
+    /// 오른쪽 버튼 드래그 — 놓을 때 복사/이동/취소 메뉴(탐색기 꼴 · 10-18).
+    pub menu: bool,
 }
 
 /// 창 안 드래그의 커서(순수): 효과 → winit 커서 모양.
@@ -127,54 +129,7 @@ impl App {
                     return;
                 }
                 self.drag_press = None;
-                let paths = self.panels[i].selected_paths_in_view_order();
-                if paths.is_empty() || self.transfer.is_some() {
-                    return;
-                }
-                self.rename_on_up = None;
-                self.rename_due = None;
-                // 모달 OS 드래그가 없는 OS(Linux · macOS) = 창 안 드래그(포인터 사건이 드롭 수신부로 · T-147 1차) + Linux X11은 그 위에
-                // 비모달 XDND 세션(앱 밖 대상 · 10-10 — 포인터는 winit의 암시적 잡기가 들고 있어 따로 잡을 수 없다).
-                if !self.platform.drag.supports_os_drag() {
-                    self.dnd_internal_begin(i, paths, (x, y));
-                    return;
-                }
-                // 드래그가 도는 동안(OS 모달) 앱은 여기 멈춰 있다 → 우리 창 위에서의 추적 · 그리기 · 효과 판정은 드롭 수신부가
-                // **실시간 수신기**로 바로 불러 준다(사용자 10-05 실기: 머물러도 안 열리고 커서도 안 바뀌던 원인).
-                // SAFETY(아래 `&mut *app`): 수신기는 `begin_drag`가 도는 동안에만, 같은 UI 스레드에서, OLE 콜백으로 불린다.
-                // 그동안 이 함수는 `self`를 쓰지 않고(`drag` · `paths`는 지역 복제) 돌아온 뒤에야 다시 쓴다 → 동시에 살아 있는
-                // 두 접근이 없다.
-                // 드래그 그림 = 이름 상자(Linux 이름 상자와 같은 그림 · 동작 글은 없음 — Windows는 대상이 "복사 → …" 글을 붙인다 · 10-18).
-                let image = Some(self.drag_image(&paths, platform::DropChoice::None));
-                let app: *mut App = self;
-                let sink: platform::DropSink = Box::new(move |ev| {
-                    let app = unsafe { &mut *app };
-                    let choice = app.dnd_event(ev.clone(), Instant::now());
-                    app.paint(); // 모달 중에는 RedrawRequested가 오지 않는다 — 직접 그린다
-                    choice
-                });
-                let drag = Rc::clone(&self.platform.drag);
-                let result = platform::with_live_drop_sink(sink, || drag.begin_drag(&paths, image));
-                self.dnd_end();
-                // 뗌은 OS가 삼켰다 — 누름 상태 정리(선택은 유지).
-                self.panels[i].abort_press();
-                self.pressed = None;
-                self.last_click = None;
-                match result {
-                    Ok(platform::DragOutcome::Cancelled)
-                    | Err(platform::PlatformError::Unsupported(_)) => {}
-                    Ok(_) => {
-                        // 놓였다 — 대상이 옮겼을 수 있으니 다시 읽어 맞춘다(dir2: 결과와 무관하게 재로드로 수렴).
-                        for p in &mut self.panels {
-                            p.reopen(inv);
-                        }
-                        self.update_status();
-                    }
-                    Err(e) => {
-                        self.toasts
-                            .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string());
-                    }
-                }
+                self.drag_out_begin(i, (x, y), false);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
             InputEvent::MouseUp { .. } => self.drag_press = None,
@@ -182,8 +137,101 @@ impl App {
         }
     }
 
+    /// 우클릭이 **선택된 행** 위인가(탐색기 꼴 우클릭 드래그 후보 · 10-18) → 패널 번호. 모달(대화상자 · 열린 메뉴) · 창 안 드래그 중 ·
+    /// 이름 바꾸기 중 · 내 PC(드라이브) = 아님.
+    pub(crate) fn right_drag_candidate(&self, x: i32, y: i32) -> Option<usize> {
+        if self.dlg.is_open()
+            || self.tab_menu.is_open()
+            || self.menubar.is_open()
+            || self.dnd_internal.is_some()
+        {
+            return None;
+        }
+        (0..2).find(|&i| {
+            let p = &self.panels[i];
+            if (i == 1 && !self.dual) || !p.bounds().contains(Point { x, y }) {
+                return false;
+            }
+            let rows = p.rows();
+            if rows.is_renaming() || rows.source().is_virtual_root() {
+                return false;
+            }
+            rows.row_at(x, y)
+                .and_then(|r| rows.source().row_path(r))
+                .is_some_and(|path| p.selected_paths().contains(&path))
+        })
+    }
+
+    /// 드래그 발신 본체(왼쪽 = `drag_out_after` · 오른쪽 = `ctl_event`의 우클릭 끌기 · 10-18): 선택 전체(화면 순서)를 OS 드래그로 ·
+    /// OS 드래그가 없는 OS = 창 안 드래그. `right` = 오른쪽 버튼(놓을 때 대상이 복사/이동 메뉴).
+    pub(crate) fn drag_out_begin(&mut self, i: usize, at: (i32, i32), right: bool) {
+        let paths = self.panels[i].selected_paths_in_view_order();
+        if paths.is_empty() || self.transfer.is_some() {
+            return;
+        }
+        self.rename_on_up = None;
+        self.rename_due = None;
+        let (x, y) = at;
+        let mut inv = Invalidations::default();
+        let inv = &mut inv;
+        {
+            // 모달 OS 드래그가 없는 OS(Linux · macOS) = 창 안 드래그(포인터 사건이 드롭 수신부로 · T-147 1차) + Linux X11은 그 위에
+            // 비모달 XDND 세션(앱 밖 대상 · 10-10 — 포인터는 winit의 암시적 잡기가 들고 있어 따로 잡을 수 없다).
+            if !self.platform.drag.supports_os_drag() {
+                self.dnd_internal_begin(i, paths, (x, y), right);
+                return;
+            }
+            // 드래그가 도는 동안(OS 모달) 앱은 여기 멈춰 있다 → 우리 창 위에서의 추적 · 그리기 · 효과 판정은 드롭 수신부가
+            // **실시간 수신기**로 바로 불러 준다(사용자 10-05 실기: 머물러도 안 열리고 커서도 안 바뀌던 원인).
+            // SAFETY(아래 `&mut *app`): 수신기는 `begin_drag`가 도는 동안에만, 같은 UI 스레드에서, OLE 콜백으로 불린다.
+            // 그동안 이 함수는 `self`를 쓰지 않고(`drag` · `paths`는 지역 복제) 돌아온 뒤에야 다시 쓴다 → 동시에 살아 있는
+            // 두 접근이 없다.
+            // 드래그 그림 = 이름 상자(Linux 이름 상자와 같은 그림 · 동작 글은 없음 — Windows는 대상이 "복사 → …" 글을 붙인다 · 10-18).
+            let image = Some(self.drag_image(&paths, platform::DropChoice::None));
+            let app: *mut App = self;
+            let sink: platform::DropSink = Box::new(move |ev| {
+                let app = unsafe { &mut *app };
+                let choice = app.dnd_event(ev.clone(), Instant::now());
+                app.paint(); // 모달 중에는 RedrawRequested가 오지 않는다 — 직접 그린다
+                choice
+            });
+            let drag = Rc::clone(&self.platform.drag);
+            let result =
+                platform::with_live_drop_sink(sink, || drag.begin_drag(&paths, image, right));
+            self.dnd_end();
+            // 뗌은 OS가 삼켰다 — 누름 상태 정리(선택은 유지).
+            self.panels[i].abort_press();
+            self.pressed = None;
+            self.last_click = None;
+            match result {
+                Ok(platform::DragOutcome::Cancelled)
+                | Err(platform::PlatformError::Unsupported(_)) => {}
+                Ok(_) => {
+                    // 놓였다 — 대상이 옮겼을 수 있으니 다시 읽어 맞춘다(dir2: 결과와 무관하게 재로드로 수렴).
+                    for p in &mut self.panels {
+                        p.reopen(inv);
+                    }
+                    self.update_status();
+                }
+                Err(e) => {
+                    self.toasts
+                        .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string());
+                }
+            }
+        }
+        if !inv.is_empty() {
+            self.redraw();
+        }
+    }
+
     /// 창 안 드래그 시작(T-147 Linux/macOS 1차): 누름 상태를 정리하고(뗌은 드롭이 된다) 드롭 수신부에 "들어옴"을 넣는다.
-    pub(crate) fn dnd_internal_begin(&mut self, panel: usize, paths: Vec<PathBuf>, at: (i32, i32)) {
+    pub(crate) fn dnd_internal_begin(
+        &mut self,
+        panel: usize,
+        paths: Vec<PathBuf>,
+        at: (i32, i32),
+        menu: bool,
+    ) {
         self.panels[panel].abort_press();
         self.pressed = None;
         self.last_click = None;
@@ -202,7 +250,8 @@ impl App {
             .as_ref()
             .and_then(|w| winfocus::x11_window_id(w));
         // 가짜 플랫폼(시험)은 열지 않는다 — 시험 PC의 실제 X 창에 Enter/Drop을 보내면 안 된다.
-        self.xdnd = if self.platform.log.is_none() {
+        // 오른쪽 버튼 드래그(메뉴)는 앱 밖 대상(XDND)으로 내보내지 않는다 — 창 안에서 놓을 때만 메뉴(10-18).
+        self.xdnd = if self.platform.log.is_none() && !menu {
             let image = self.drag_image(&paths, choice);
             platform::xdnd_start(&paths, own, Some(image))
         } else {
@@ -217,6 +266,7 @@ impl App {
             panel,
             paths,
             choice,
+            menu,
         });
         self.set_drag_cursor(Some(choice));
     }
@@ -390,6 +440,7 @@ impl App {
                         at: (x, y),
                         ctrl: self.primary,
                         shift: self.shift,
+                        menu: drag.menu,
                     },
                     Instant::now(),
                 );
@@ -532,6 +583,7 @@ impl App {
                 at,
                 ctrl,
                 shift,
+                menu,
             } => {
                 let mods = (self.shift, self.primary);
                 self.cursor = at;
@@ -539,7 +591,12 @@ impl App {
                 let (plan, choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
                 self.dnd_end();
                 if plan.is_some() {
-                    self.external_drop(paths, Point { x: at.0, y: at.1 });
+                    if menu {
+                        // 오른쪽 버튼 = 바로 옮기지 않고 그 자리에 복사/이동/취소 메뉴(탐색기 꼴 · 사용자 10-18).
+                        self.open_drop_menu(paths, at);
+                    } else {
+                        self.external_drop(paths, Point { x: at.0, y: at.1 });
+                    }
                 }
                 (self.shift, self.primary) = mods;
                 choice
@@ -781,11 +838,50 @@ impl App {
         Some((i, dest))
     }
 
-    /// 외부 드롭 실행 — 시작했으면 (대상, 연산). 거부 사유는 상태줄.
+    /// 외부 드롭 실행 — 시작했으면 (대상, 연산). 거부 사유는 상태줄. 연산 = 수식키(Ctrl 복사 · Shift 이동 · 없으면 같은 볼륨 = 이동).
     pub(crate) fn external_drop(
         &mut self,
         sources: Vec<PathBuf>,
         at: Point,
+    ) -> Option<(PathBuf, Op)> {
+        self.external_drop_with(sources, at, None)
+    }
+
+    /// 우클릭 드래그로 놓은 자리에 복사/이동/취소 메뉴(탐색기 꼴 · 10-18) — 고르면 `drop_menu_action`.
+    pub(crate) fn open_drop_menu(&mut self, paths: Vec<PathBuf>, at: (i32, i32)) {
+        use nexa_ctl::controls::CtxItem;
+        self.dnd_menu = Some((paths, at));
+        self.ctx_anchor_next = Some(at);
+        self.open_ctx(
+            app::ctxmenu::CtxKind::Drop,
+            vec![
+                CtxItem::item("dnd.copy", tr("ctx.dropCopy")),
+                CtxItem::item("dnd.move", tr("ctx.dropMove")),
+                CtxItem::Separator,
+                CtxItem::item("dnd.cancel", tr("ctx.dropCancel")),
+            ],
+        );
+    }
+
+    /// 드롭 메뉴 선택: 복사/이동 = 그 연산으로 전송 · 취소/그 밖 = 아무 일 없음.
+    pub(crate) fn drop_menu_action(&mut self, id: &str) {
+        let Some((paths, at)) = self.dnd_menu.take() else {
+            return;
+        };
+        let op = match id {
+            "dnd.copy" => Op::Copy,
+            "dnd.move" => Op::Move,
+            _ => return,
+        };
+        self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(op));
+    }
+
+    /// 외부 드롭 실행(연산 지정 가능 · `None` = 수식키 규칙).
+    pub(crate) fn external_drop_with(
+        &mut self,
+        sources: Vec<PathBuf>,
+        at: Point,
+        forced: Option<Op>,
     ) -> Option<(PathBuf, Op)> {
         if sources.is_empty() {
             return None;
@@ -816,13 +912,13 @@ impl App {
             self.note_status(&tr("dnd.rejected"));
             return None;
         }
-        let op = if self.primary {
+        let op = forced.unwrap_or(if self.primary {
             Op::Copy
         } else if self.shift || ndir_ops::same_volume(&sources[0], &dest) {
             Op::Move
         } else {
             Op::Copy
-        };
+        });
         if panel != self.active {
             self.set_active(panel);
         }

@@ -225,8 +225,12 @@ impl DragSource for FakeDrag {
         &self,
         paths: &[PathBuf],
         image: Option<DragImage>,
+        right: bool,
     ) -> Result<DragOutcome, PlatformError> {
-        note(&self.0, format!("drag:{}", paths.len()));
+        note(
+            &self.0,
+            format!("drag:{}{}", paths.len(), if right { ":right" } else { "" }),
+        );
         // 드래그 그림이 넘어왔는지(T3 증거 · 10-18) — 크기만 적는다.
         if let Some(img) = image {
             note(&self.0, format!("drag-image:{}x{}", img.w, img.h));

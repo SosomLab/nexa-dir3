@@ -36,7 +36,7 @@ use ::windows::Win32::System::Ole::{
     DoDragDrop, IDropSource, IDropSource_Impl, OleInitialize, ReleaseStgMedium, CF_HDROP,
     DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_MOVE, DROPEFFECT_NONE,
 };
-use ::windows::Win32::System::SystemServices::{MK_LBUTTON, MODIFIERKEYS_FLAGS};
+use ::windows::Win32::System::SystemServices::{MK_LBUTTON, MK_RBUTTON, MODIFIERKEYS_FLAGS};
 use ::windows::Win32::UI::Shell::{
     CLSID_DragDropHelper, IDragSourceHelper, IDragSourceHelper2, SHCreateStdEnumFmtEtc,
     DSH_ALLOWDROPDESCRIPTIONTEXT, SHDRAGIMAGE,
@@ -52,12 +52,13 @@ impl DragSource for NativeDrag {
         &self,
         paths: &[PathBuf],
         image: Option<DragImage>,
+        right: bool,
     ) -> Result<DragOutcome, PlatformError> {
         if paths.is_empty() {
             return Ok(DragOutcome::Cancelled);
         }
         let data: IDataObject = FileListDataObject::new(paths.to_vec()).into();
-        let source: IDropSource = DropSource.into();
+        let source: IDropSource = DropSource { right }.into();
         // SAFETY: UI 스레드(STA)에서 부른다 — OleInitialize는 이미 초기화돼 있으면 S_FALSE(무해 · winit도 창 스레드에서 부른다).
         unsafe {
             let _ = OleInitialize(None);
@@ -173,16 +174,20 @@ fn attach_drag_image(data: &IDataObject, image: &DragImage) -> Option<IDragSourc
     }
 }
 
-/// 드래그 발신원 — 표준 종료 판정(Esc = 취소 · 왼쪽 버튼을 떼면 놓기) · 기본 커서.
+/// 드래그 발신원 — 표준 종료 판정(Esc = 취소 · 끌기 시작한 버튼을 떼면 놓기) · 기본 커서.
 #[implement(IDropSource)]
-struct DropSource;
+struct DropSource {
+    /// 오른쪽 버튼 드래그(탐색기 꼴 · 10-18) — 그 버튼이 떨어질 때 놓는다 · 대상(탐색기 · 자기 창)이 복사/이동 메뉴를 연다.
+    right: bool,
+}
 
 impl IDropSource_Impl for DropSource_Impl {
     fn QueryContinueDrag(&self, escape_pressed: BOOL, keys: MODIFIERKEYS_FLAGS) -> HRESULT {
         if escape_pressed.as_bool() {
             return DRAGDROP_S_CANCEL;
         }
-        if keys.0 & MK_LBUTTON.0 == 0 {
+        let held = if self.right { MK_RBUTTON } else { MK_LBUTTON };
+        if keys.0 & held.0 == 0 {
             return DRAGDROP_S_DROP;
         }
         S_OK
