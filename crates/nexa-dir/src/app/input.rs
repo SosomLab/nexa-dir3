@@ -72,6 +72,12 @@ pub(crate) fn ime_sink(
     }
 }
 
+/// Space 키를 `Key::Space`(목록 = 캐럿 행 선택 토글)로 보낼지 글자 `' '`로 보낼지(순수 · MC/DC · 10-18): Ctrl+Space는 늘 키 ·
+/// 글을 넣는 곳(경로 바 편집 · 이름 바꾸기 · 팔레트 · 대화상자/메뉴 · 터미널)이면 글자. 종전 = 늘 키라 경로 바에 공백을 못 넣었다.
+pub(crate) fn space_is_key(primary: bool, sink: ImeSink) -> bool {
+    primary || matches!(sink, ImeSink::List)
+}
+
 /// 글자 키가 목록의 타입어헤드로 가는 상태인가(순수 · MC/DC): 글을 넣는 곳(대화상자 · 열린 메뉴 · 경로 편집 · 이름 바꾸기 ·
 /// 터미널)이 하나도 없을 때만.
 pub(crate) fn typeahead_target_of(
@@ -373,7 +379,17 @@ impl App {
                     Key::Named(NamedKey::PageUp) => key(CtlKey::PageUp),
                     Key::Named(NamedKey::PageDown) => key(CtlKey::PageDown),
                     Key::Named(NamedKey::Delete) => key(CtlKey::Delete),
-                    Key::Named(NamedKey::Space) => key(CtlKey::Space),
+                    // Space(사용자 10-18 "경로 바에 공백이 안 들어간다"): 글을 넣는 곳(경로 바 편집 · 이름 바꾸기 · 팔레트 ·
+                    // 대화상자 · 터미널)이면 글자 ' ' · 목록이면 Key::Space(캐럿 행 선택 토글 · nexa-grid) · Ctrl+Space = 늘 Key::Space.
+                    Key::Named(NamedKey::Space)
+                        if space_is_key(self.primary, self.ime_sink_now()) =>
+                    {
+                        key(CtlKey::Space)
+                    }
+                    Key::Named(NamedKey::Space) => InputEvent::Char {
+                        c: ' ',
+                        now_ms: self.started.elapsed().as_millis() as u64,
+                    },
                     Key::Named(NamedKey::Backspace) => InputEvent::Char {
                         c: '\u{8}',
                         // 시각을 싣는다 — 0이면 타입어헤드의 유지 시간 기준이 0으로 되돌아가 다음 틱에 바로 지워진다.
@@ -1137,6 +1153,26 @@ impl App {
         }
         if !inv.is_empty() {
             self.redraw();
+        }
+    }
+}
+
+#[cfg(test)]
+mod space_tests {
+    use super::*;
+
+    /// Space 라우팅(MC/DC): Ctrl → 키 · 목록 → 키 · 편집/팔레트/모달/터미널 → 글자(사용자 10-18 경로 바 공백).
+    #[test]
+    fn space_goes_to_text_fields_as_char() {
+        assert!(space_is_key(true, ImeSink::Edit), "Ctrl+Space = 늘 키");
+        assert!(space_is_key(false, ImeSink::List), "목록 = 선택 토글 키");
+        for sink in [
+            ImeSink::Edit,
+            ImeSink::Palette,
+            ImeSink::Other,
+            ImeSink::Terminal,
+        ] {
+            assert!(!space_is_key(false, sink), "{sink:?} = 글자 ' '");
         }
     }
 }
