@@ -1,4 +1,5 @@
 # T4 · dir2 G-7: 위로 가면 떠난 폴더가 캐럿 + 단일 선택 · 히스토리 뒤로 가능.
+# zeta = 빈 폴더 → 마커 None(설정 `list.hide_empty_glyph` 기본 켬 · dir2 X-43 · be56227부터 실제 동작) · sub = 자식 있음 → Collapsed.
 id: nav-up-select
 title: 위로 = 떠난 폴더 선택 · 뒤로/앞으로
 tree: dir sub/deep
@@ -19,5 +20,5 @@ check: panel.txt: path <root>
 check: panel.txt: selected 1 caret Some(0)
 check: panel.txt: back true forward false
 check: list.txt: 0 d0 Collapsed *sub |
-check: list.txt: 1 d0 Collapsed zeta |
+check: list.txt: 1 d0 None zeta |
 check: list.txt: a.txt |  | 5 B |
