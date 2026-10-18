@@ -8928,3 +8928,90 @@ fn compare_uses_panel_order_and_shows_mode_and_dates() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 프리셋(사용자 10-18): 순서 파일(`order.txt` 먼저 · 나머지 이름순) · 편집 반영(삭제 + 순서) · 모두 제거 — 임시 폴더에서(실제 설정 폴더 무접촉).
+#[test]
+fn preset_order_edit_and_clear_on_temp_dir() {
+    let dir = std::env::temp_dir().join(format!("ndir-presets-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in ["b", "a", "C"] {
+        std::fs::write(dir.join(format!("{n}.cfg")), "").unwrap();
+    }
+    assert_eq!(
+        App::preset_names(&dir),
+        ["a", "b", "C"],
+        "순서 파일 없음 = 이름순(대소문자 무시)"
+    );
+    std::fs::write(dir.join("order.txt"), "C\nzzz\nb\n").unwrap();
+    assert_eq!(
+        App::preset_names(&dir),
+        ["C", "b", "a"],
+        "order.txt 순서 먼저(없는 이름 무시) · 나머지 뒤에"
+    );
+    App::apply_preset_edit(&dir, &["a".into(), "C".into()]);
+    assert!(!dir.join("b.cfg").exists(), "편집에서 빠진 이름 = 삭제");
+    assert_eq!(App::preset_names(&dir), ["a", "C"]);
+    App::clear_presets(&dir);
+    assert!(App::preset_names(&dir).is_empty() && !dir.join("order.txt").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 프리셋 저장 흐름(사용자 10-18): 저장 창 = 본문 없음(라벨 중복 제거) · 빈 파이프라인(기본 카드 1장)도 저장 · 같은 이름 = 덮어쓰기 질문(3초 잠금 버튼 ·
+/// 취소 = 그대로 · 확인 = 덮어씀) · 모두 제거 = 확인창(잠금) · 편집 창 요청 = 창 깃발 + 현재 목록.
+#[test]
+fn preset_save_overwrite_asks_with_locked_button() {
+    use crate::bulk_win::BulkAction;
+    let (mut app, dir) = fixture("bulkpre");
+    let pdir = App::presets_dir();
+    let name = format!("T10 dup {}", std::process::id());
+    let file = pdir.join(format!("{name}.cfg"));
+    let _ = std::fs::remove_file(&file);
+    app.bulk_action(BulkAction::SavePreset(String::new()));
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.starts_with("pending") && d.contains("|  | 1:") && !d.contains("wait"),
+        "본문 없음: {d}"
+    );
+    app.dlg_type(&name);
+    app.dlg_pick(1);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "",
+        "빈 파이프라인 저장"
+    );
+    assert!(
+        app.bulk_win.dump().contains(&format!("[{name}"))
+            || app.bulk_win.dump().contains(&format!("|{name}")),
+        "{}",
+        app.bulk_win.dump()
+    );
+    // 같은 이름 → 덮어쓰기 질문(1 = 3초 잠금) · 취소.
+    app.bulk_action(BulkAction::SavePreset("x".into()));
+    app.dlg_type(&name);
+    app.dlg_pick(1);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains("pending") && d.contains("wait 1:3000") && d.contains(&name),
+        "{d}"
+    );
+    app.dlg_pick(0);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "", "취소 = 그대로");
+    assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    // 확인(창 없는 시험 경로 = 잠금 없이 바로).
+    app.bulk_action(BulkAction::SavePreset("x".into()));
+    app.dlg_type(&name);
+    app.dlg_pick(1);
+    app.dlg_pick(1);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "x", "덮어쓰기");
+    // 편집 창 요청 = 깃발 + 목록 · 모두 제거 = 확인창(잠금) → 취소면 그대로.
+    app.bulk_action(BulkAction::EditPresets);
+    assert!(app.open_presets && app.preset_win.names().contains(&name));
+    app.bulk_action(BulkAction::ClearPresets);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(d.contains("pending") && d.contains("wait 1:3000"), "{d}");
+    app.dlg_pick(0);
+    assert!(file.is_file(), "취소 = 제거 안 함");
+    let _ = std::fs::remove_file(&file);
+    let _ = std::fs::remove_dir_all(&dir);
+}

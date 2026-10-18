@@ -239,6 +239,7 @@ impl App {
             default: 1,
             cancel: 1,
             input: None,
+            delay: None,
         };
         self.ask(spec, DlgReply::About);
     }

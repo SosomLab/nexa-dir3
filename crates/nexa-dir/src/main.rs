@@ -81,6 +81,7 @@ mod prefs_win;
 #[allow(dead_code)]
 // `set_mode`(macOS IOSurface 설정 · dir2에 키 없음 → Q-8) · `backend`(프레임 계측 T-46).
 mod present;
+mod preset_win;
 mod preview;
 mod preview_win;
 mod progress_win;
@@ -125,6 +126,7 @@ use order_win::OrderWin;
 use panel::{Panel, PanelMetrics};
 use platform::Platform;
 use prefs_win::PrefsWin;
+use preset_win::PresetWin;
 use preview_win::PreviewWin;
 use progress_win::ProgressWin;
 use session::Session;
@@ -326,6 +328,9 @@ struct App {
     bulk_win: BulkWin,
     open_bulk: bool,
     bulk_pending_preset: Option<String>,
+    /// 프리셋 편집 창(10-18 · 순서·삭제) + 열기 깃발.
+    preset_win: PresetWin,
+    open_presets: bool,
     /// 순서/표시 편집 창(T-71 DLG-069 · 툴바/컬럼/컨텍스트 메뉴 공통) + 열기 깃발.
     order_win: OrderWin,
     open_order: bool,
@@ -721,6 +726,8 @@ impl App {
             bulk_win: BulkWin::new(),
             open_bulk: false,
             bulk_pending_preset: None,
+            preset_win: PresetWin::new(),
+            open_presets: false,
             order_win: OrderWin::new(),
             open_order: false,
             archive_win: ArchiveWin::new(),

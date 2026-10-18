@@ -35,6 +35,9 @@ pub(crate) fn tz_min_from(utc_secs: i64, ymd: (i32, u32, u32), hms: (u32, u32, u
     i32::try_from((local - utc_secs + 30).div_euclid(60)).unwrap_or(0)
 }
 
+/// 되돌릴 수 없는 프리셋 확정(덮어쓰기 · 모두 제거)의 버튼 잠금 시간.
+const PRESET_CONFIRM_MS: u64 = 3000;
+
 impl App {
     /// `edit.bulk_rename` — 선택 없음 = 상태줄 안내(창 열지 않음 · DLG-074).
     pub(crate) fn open_bulk_rename(&mut self) {
@@ -62,9 +65,14 @@ impl App {
             .join("renames")
     }
 
-    /// 프리셋 이름 목록(`*.cfg` · 이름순 · 최대 64).
+    /// 프리셋 순서 파일(`renames/order.txt` · 한 줄 = 이름 · 10-18 편집 창의 순서).
+    fn preset_order_path(dir: &Path) -> PathBuf {
+        dir.join("order.txt")
+    }
+
+    /// 프리셋 이름 목록(`*.cfg` · 최대 64): `order.txt`의 순서를 먼저, 거기 없는 이름은 뒤에 이름순.
     pub(crate) fn preset_names(dir: &Path) -> Vec<String> {
-        let mut v: Vec<String> = std::fs::read_dir(dir)
+        let mut found: Vec<String> = std::fs::read_dir(dir)
             .map(|rd| {
                 rd.flatten()
                     .filter_map(|e| {
@@ -76,9 +84,44 @@ impl App {
                     .collect()
             })
             .unwrap_or_default();
-        v.sort_by_key(|n| n.to_lowercase());
+        found.sort_by_key(|n| n.to_lowercase());
+        let mut v: Vec<String> = Vec::new();
+        if let Ok(text) = std::fs::read_to_string(Self::preset_order_path(dir)) {
+            for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                if let Some(pos) = found.iter().position(|n| n == line) {
+                    v.push(found.remove(pos));
+                }
+            }
+        }
+        v.extend(found);
         v.truncate(64);
         v
+    }
+
+    /// 편집 창 결과 반영(10-18): `names`에 없는 프리셋 파일은 지우고 순서를 `order.txt`에.
+    pub(crate) fn apply_preset_edit(dir: &Path, names: &[String]) {
+        for n in Self::preset_names(dir) {
+            if !names.contains(&n) {
+                let _ = std::fs::remove_file(dir.join(format!("{n}.cfg")));
+            }
+        }
+        let _ = std::fs::create_dir_all(dir);
+        let _ = std::fs::write(Self::preset_order_path(dir), names.join("\n"));
+    }
+
+    /// 모든 프리셋 제거(`*.cfg` + `order.txt`).
+    pub(crate) fn clear_presets(dir: &Path) {
+        for n in Self::preset_names(dir) {
+            let _ = std::fs::remove_file(dir.join(format!("{n}.cfg")));
+        }
+        let _ = std::fs::remove_file(Self::preset_order_path(dir));
+    }
+
+    /// 창의 프리셋 메뉴를 폴더 상태로 다시.
+    fn refresh_presets(&mut self) {
+        let dir = Self::presets_dir();
+        self.bulk_win.set_presets(Self::preset_names(&dir));
+        self.bulk_win.redraw();
     }
 
     /// 프리셋 이름 정리(DLG-083: `<>:"/\|?*` 제거 + trim · 빈 값 = None).
@@ -111,7 +154,8 @@ impl App {
                 self.bulk_pending_preset = Some(text);
                 let spec = DlgSpec {
                     title: tr("bulk.preset.saveSeq"),
-                    text: tr("bulk.preset.savePrompt"),
+                    // 본문 없음 — 입력칸 라벨 하나로(종전 = "프리셋 이름"이 두 번 · 사용자 10-18).
+                    text: String::new(),
                     buttons: vec![(1, tr("bulk.preset.ok")), (0, tr("bulk.preset.cancel"))],
                     default: 1,
                     cancel: 0,
@@ -120,6 +164,7 @@ impl App {
                         masked: false,
                         initial: tr("bulk.preset.savedSeq"),
                     }),
+                    delay: None,
                 };
                 self.ask(spec, DlgReply::BulkPreset);
             }
@@ -130,10 +175,27 @@ impl App {
                 }
             }
             BulkAction::EditPresets => {
-                // 관리 팝업(DLG-084)은 후속 — 폴더를 연다.
-                let dir = Self::presets_dir();
-                let _ = std::fs::create_dir_all(&dir);
-                let _ = self.platform.opener.open(&dir);
+                // 편집 창(DLG-084 · 10-18): 순서 · 개별 삭제 → OK에서 반영.
+                self.preset_win
+                    .set(Self::preset_names(&Self::presets_dir()));
+                self.open_presets = true;
+            }
+            BulkAction::ClearPresets => {
+                let n = Self::preset_names(&Self::presets_dir()).len();
+                if n == 0 {
+                    return;
+                }
+                // 되돌릴 수 없다 → 확인창 + 3초 잠금 버튼(사용자 10-18 "시간제한 버튼으로 2중 확인").
+                let spec = DlgSpec {
+                    title: tr("bulk.preset.removeAll"),
+                    text: trf("bulk.preset.removeAllText", &[&n.to_string()]),
+                    buttons: vec![(1, tr("bulk.preset.removeAllOk")), (0, tr("dlg.cancel"))],
+                    default: 0,
+                    cancel: 0,
+                    input: None,
+                    delay: Some((1, PRESET_CONFIRM_MS)),
+                };
+                self.ask(spec, DlgReply::BulkPresetsClear);
             }
             BulkAction::Paint | BulkAction::None => {}
         }
@@ -152,10 +214,58 @@ impl App {
             return;
         };
         let dir = Self::presets_dir();
-        let _ = std::fs::create_dir_all(&dir);
+        if dir.join(format!("{name}.cfg")).is_file() {
+            // 같은 이름 = 미리 경고 + 3초 잠금 "덮어쓰기"(사용자 10-18 "중복은 미리 보여주고 시간제한 버튼으로 2중 확인").
+            self.bulk_pending_preset = Some(text);
+            let spec = DlgSpec {
+                title: tr("bulk.preset.saveSeq"),
+                text: trf("bulk.preset.dupText", &[&name]),
+                buttons: vec![(1, tr("bulk.preset.overwrite")), (0, tr("dlg.cancel"))],
+                default: 0,
+                cancel: 0,
+                input: None,
+                delay: Some((1, PRESET_CONFIRM_MS)),
+            };
+            if !self.ask(spec, DlgReply::BulkPresetOverwrite(name)) {
+                self.bulk_pending_preset = None;
+            }
+            return;
+        }
+        Self::write_preset(&dir, &name, &text);
+        self.refresh_presets();
+    }
+
+    fn write_preset(dir: &Path, name: &str, text: &str) {
+        let _ = std::fs::create_dir_all(dir);
         let _ = std::fs::write(dir.join(format!("{name}.cfg")), text);
-        self.bulk_win.set_presets(Self::preset_names(&dir));
-        self.bulk_win.redraw();
+    }
+
+    /// 덮어쓰기 확인 회신(1 = 덮어쓰기).
+    pub(crate) fn bulk_preset_overwrite(&mut self, id: i32, name: String) {
+        let Some(text) = self.bulk_pending_preset.take() else {
+            return;
+        };
+        if id != 1 {
+            return;
+        }
+        Self::write_preset(&Self::presets_dir(), &name, &text);
+        self.refresh_presets();
+    }
+
+    /// 모두 제거 확인 회신(1 = 제거).
+    pub(crate) fn bulk_presets_cleared(&mut self, id: i32) {
+        if id != 1 {
+            return;
+        }
+        Self::clear_presets(&Self::presets_dir());
+        self.refresh_presets();
+    }
+
+    /// 편집 창 OK(10-18): 순서 + 삭제 반영 → 메뉴 갱신 → 일괄 창으로 포커스.
+    pub(crate) fn presets_edited(&mut self, names: Vec<String>) {
+        Self::apply_preset_edit(&Self::presets_dir(), &names);
+        self.refresh_presets();
+        self.bulk_win.focus();
     }
 
     /// 순차 rename(실패 개별 격리) + undo 1건 + 재열람 + 토스트.

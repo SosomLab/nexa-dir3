@@ -24,6 +24,7 @@ impl App {
                 default: 1,
                 cancel: 0,
                 input: None,
+                delay: None,
             };
             self.ask(spec, DlgReply::NfcConvert(sel));
         } else {

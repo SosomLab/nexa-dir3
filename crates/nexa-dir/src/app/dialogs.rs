@@ -25,6 +25,10 @@ pub(crate) enum DlgReply {
     About,
     /// 일괄 이름 변경 프리셋 저장(이름 입력 · T-71).
     BulkPreset,
+    /// 같은 이름 프리셋 덮어쓰기(10-18 · 1 = 덮어쓰기 · 3초 잠금).
+    BulkPresetOverwrite(String),
+    /// 모든 프리셋 제거(10-18 · 1 = 제거 · 3초 잠금).
+    BulkPresetsClear,
     /// 빠른 실행 항목 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`라벨|실행 파일|인자`)을 넣는다(T-133).
     LauncherItem(Option<usize>),
     /// 이름을 NFC로 변환(10-18): 1 = 폴더 안까지 · 2 = 선택한 것만 · 그 외 취소.
@@ -129,6 +133,8 @@ impl App {
                 }
             }
             DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
+            DlgReply::BulkPresetOverwrite(name) => self.bulk_preset_overwrite(id, name),
+            DlgReply::BulkPresetsClear => self.bulk_presets_cleared(id),
             DlgReply::NfcConvert(paths) => match id {
                 1 => self.nfc_convert(paths, true),
                 2 => self.nfc_convert(paths, false),
@@ -227,6 +233,7 @@ impl App {
             default: 1,
             cancel: 4,
             input: None,
+            delay: None,
         };
         if !self.ask(spec, DlgReply::Conflict(tx.clone())) {
             let _ = tx.send(ConflictChoice::Skip);

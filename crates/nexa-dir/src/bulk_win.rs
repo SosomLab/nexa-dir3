@@ -8,13 +8,14 @@ use ndir_ops::batch_rename::{
     self as br, CaseMode, Conflict, DateKind, DateSpec, InsertAt, NumberSpec, RenameInput,
     RenameOp, ReplaceMode, Scope,
 };
+use nexa_ctl::controls::ctxmenu::{ContextMenu, CtxItem};
 use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, Theme};
 use nexa_ctl::{
-    Button, Checkbox, Combo, ComboControl, ComboItem, Control, InputEvent, Invalidations, TextBox,
-    Widget,
+    Button, Checkbox, Combo, ComboControl, ComboItem, Control, InputEvent, Invalidations,
+    Key as CtlKey, TextBox, Widget,
 };
 use nexa_gfx::{Font, Surface};
 use nexa_grid::{Column, Marker, RowItem, RowSource, SelectOp, VirtualRows};
@@ -35,8 +36,10 @@ pub(crate) enum BulkAction {
     Rename(Vec<(PathBuf, String)>),
     /// 프리셋 저장 요청(직렬화된 파이프라인) — 호스트가 이름을 묻고 파일로.
     SavePreset(String),
-    /// 프리셋 관리 요청(호스트가 폴더/목록 처리).
+    /// 프리셋 편집 창 요청(순서 · 삭제 · 10-18).
     EditPresets,
+    /// 모든 프리셋 제거 요청(호스트가 확인창 뒤 삭제 · 10-18).
+    ClearPresets,
     /// 프리셋 불러오기(이름) — 호스트가 파일을 읽어 `load_ops`.
     LoadPreset(String),
 }
@@ -569,8 +572,12 @@ pub(crate) struct BulkWin {
     cards_h: i32,
     cards_rect: Rect,
     grid_rect: Rect,
-    presets: Combo,
+    /// `[…]` 버튼 + 그 위로 펴는 프리셋 메뉴(사용자 10-18 · 종전 콤보 = ✓ 칸 · 헤더/구분자 불가).
+    presets_btn: Button,
+    preset_menu: ContextMenu,
     preset_names: Vec<String>,
+    /// 메뉴 라벨 최대 폭(마지막 paint에서 측정 · `open_at`에 준다 · 첫 paint가 실측으로 보정한다).
+    menu_text_w: i32,
     btn_cancel: Button,
     btn_rename: Button,
     /// 검증 오류(`⚠ #블록: 메시지`) · 건수 · 마지막 수확 서명(변경 감지).
@@ -613,8 +620,10 @@ impl BulkWin {
             cards_h: 0,
             cards_rect: Rect::default(),
             grid_rect: Rect::default(),
-            presets: Combo::new(vec![ComboItem::new("", "…")], 0),
+            presets_btn: Button::new("…"),
+            preset_menu: ContextMenu::new(),
             preset_names: Vec::new(),
+            menu_text_w: 160,
             btn_cancel: Button::new(tr("bulk.cancel")),
             btn_rename: Button::new(tr("bulk.rename")),
             error: None,
@@ -689,18 +698,69 @@ impl BulkWin {
         self.items.len()
     }
 
-    /// 프리셋 목록(이름순 · 최대 64) → `[… ⌄]` 메뉴 = 프리셋들 · 저장… · 관리….
+    /// 프리셋 목록(호스트가 정한 순서 · 최대 64) — `[…]` 버튼의 메뉴에 그대로 실린다(10-18 · 순서 = `renames/order.txt`).
     pub(crate) fn set_presets(&mut self, mut names: Vec<String>) {
-        names.sort_by_key(|n| n.to_lowercase());
         names.truncate(64);
-        let mut items = vec![ComboItem::new("", "…")];
-        for n in &names {
-            items.push(ComboItem::new(format!("preset:{n}"), n.clone()));
-        }
-        items.push(ComboItem::new("save", tr("bulk.preset.saveSeq")));
-        items.push(ComboItem::new("edit", tr("bulk.preset.editSeq")));
         self.preset_names = names;
-        self.presets = Combo::new(items, 0);
+        if self.preset_menu.is_open() {
+            self.preset_menu.close();
+        }
+    }
+
+    /// 프리셋 메뉴(사용자 10-18 · Path Finder 꼴): `Presets` 헤더(클릭 없음) · ─ · 저장된 프리셋들(있을 때만 · 뒤에 ─) ·
+    /// 저장 · 편집 · ─ · 모든 프리셋 제거(없으면 끔).
+    pub(crate) fn preset_menu_items(&self) -> Vec<CtxItem> {
+        let mut items = vec![
+            CtxItem::maybe("hdr", tr("bulk.preset.header"), false),
+            CtxItem::Separator,
+        ];
+        for n in &self.preset_names {
+            items.push(CtxItem::item(format!("preset:{n}"), n.clone()));
+        }
+        if !self.preset_names.is_empty() {
+            items.push(CtxItem::Separator);
+        }
+        items.push(CtxItem::item("save", tr("bulk.preset.saveSeq")));
+        items.push(CtxItem::item("edit", tr("bulk.preset.editSeq")));
+        items.push(CtxItem::Separator);
+        items.push(
+            CtxItem::maybe(
+                "clear",
+                tr("bulk.preset.removeAll"),
+                !self.preset_names.is_empty(),
+            )
+            .with_danger(true),
+        );
+        items
+    }
+
+    /// `[…]` 위로 메뉴를 편다(창 안에서 자리 접기 = ContextMenu 공용 규칙).
+    fn open_preset_menu(&mut self) {
+        let b = self.presets_btn.bounds();
+        let host = self
+            .window
+            .as_ref()
+            .map_or(Rect::new(0, 0, 4096, 4096), |w| {
+                let s = w.inner_size();
+                Rect::new(0, 0, s.width as i32, s.height as i32)
+            });
+        let items = self.preset_menu_items();
+        self.preset_menu.set_scale(self.scale);
+        self.preset_menu
+            .open_at(b.x, b.y, items, host, self.menu_text_w);
+    }
+
+    /// 메뉴 선택 → 호스트 요청. 저장은 카드가 1장(무효 포함)이어도 된다(사용자 10-18 "들어가서 바로 저장" — 빈 파이프라인 = 기본 카드).
+    fn preset_pick(&mut self, id: &str) -> Option<BulkAction> {
+        if let Some(name) = id.strip_prefix("preset:") {
+            return Some(BulkAction::LoadPreset(name.to_string()));
+        }
+        match id {
+            "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops()))),
+            "edit" => Some(BulkAction::EditPresets),
+            "clear" => Some(BulkAction::ClearPresets),
+            _ => None,
+        }
     }
 
     /// 파이프라인 교체(프리셋 불러오기 · 시험) — 빈/전부 스킵 = 기본 카드 1장.
@@ -713,6 +773,9 @@ impl BulkWin {
         };
         self.scroll = 0;
         self.sig.clear();
+        // 새 카드에 bounds·축척을 준다(종전에는 없어서 프리셋을 불러오면 왼쪽 카드가 전부 사라졌다 · 사용자 10-18).
+        self.layout_cards();
+        self.clamp_scroll();
         self.recompute(true);
     }
 
@@ -869,6 +932,7 @@ impl BulkWin {
                 }
             ));
         }
+        s.push_str(&format!("presets [{}]\n", self.preset_names.join("|")));
         s
     }
 
@@ -883,6 +947,13 @@ impl BulkWin {
     pub(crate) fn redraw(&self) {
         if let Some(w) = &self.window {
             w.request_redraw();
+        }
+    }
+
+    /// 보조 창(프리셋 편집)이 닫힌 뒤 이 창으로 포커스.
+    pub(crate) fn focus(&self) {
+        if let Some(w) = &self.window {
+            w.focus_window();
         }
     }
 
@@ -905,8 +976,7 @@ impl BulkWin {
         self.rows.set_columns(cols, &mut inv);
         self.btn_cancel.set_label(tr("bulk.cancel"));
         self.btn_rename.set_label(tr("bulk.rename"));
-        let names = self.preset_names.clone();
-        self.set_presets(names);
+        // 프리셋 메뉴는 열 때 만든다(라벨 = 그때의 언어).
         if let Some(w) = &self.window {
             w.set_title(&format!("{} — {}", crate::APP_TITLE, tr("bulk.title")));
             w.request_redraw();
@@ -950,6 +1020,7 @@ impl BulkWin {
     pub(crate) fn close(&mut self) {
         self.surface = None;
         self.window = None;
+        self.preset_menu.close();
         for c in &mut self.cards {
             for b in c.boxes() {
                 b.set_focused(false);
@@ -963,7 +1034,8 @@ impl BulkWin {
             return false;
         }
         let mut any = self.btn_cancel.tick(now_ms) | self.btn_rename.tick(now_ms);
-        any |= self.presets.tick_hover(now_ms);
+        any |= self.presets_btn.tick(now_ms);
+        any |= self.preset_menu.tick(std::time::Instant::now());
         for c in &mut self.cards {
             for b in c.buttons() {
                 any |= b.tick(now_ms);
@@ -984,7 +1056,8 @@ impl BulkWin {
         self.window.is_some()
             && (self.btn_cancel.is_animating()
                 || self.btn_rename.is_animating()
-                || self.presets.hover_animating())
+                || self.presets_btn.is_animating()
+                || self.preset_menu.next_wake().is_some())
     }
 
     /// 배치(DLG-074): 좌 카드 열 320 + 썸 10 · 우 그리드 · 하단 행.
@@ -1010,9 +1083,10 @@ impl BulkWin {
             Rect::new(w - pad - bw * 2 - pad, bottom_y, bw, bh),
             &mut inv,
         );
-        self.presets.set_scale(self.scale);
-        self.presets
+        self.presets_btn.set_scale(self.scale);
+        self.presets_btn
             .set_bounds(Rect::new(pad, bottom_y, self.s(64.0), bh), &mut inv);
+        self.preset_menu.set_scale(self.scale);
         self.layout_cards();
     }
 
@@ -1158,9 +1232,6 @@ impl BulkWin {
 
     /// 열린 콤보(팝업이 모든 입력을 먼저 받는다).
     fn open_combo(&mut self) -> Option<&mut Combo> {
-        if self.presets.is_open() {
-            return Some(&mut self.presets);
-        }
         for c in &mut self.cards {
             for cb in c.combos() {
                 if cb.is_open() {
@@ -1217,21 +1288,6 @@ impl BulkWin {
             if self.cards.len() > 1 {
                 self.cards.remove(i);
                 restructure = true;
-            }
-        }
-        if let Some(v) = self.presets.take_changed() {
-            self.presets.select_value("");
-            if let Some(name) = v.strip_prefix("preset:") {
-                return Some(BulkAction::LoadPreset(name.to_string()));
-            }
-            if v == "save" {
-                let ops = self.ops();
-                if !ops.is_empty() {
-                    return Some(BulkAction::SavePreset(br::serialize_ops(&ops)));
-                }
-            }
-            if v == "edit" {
-                return Some(BulkAction::EditPresets);
             }
         }
         if restructure {
@@ -1292,6 +1348,33 @@ impl BulkWin {
                 return BulkAction::None;
             }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
+                if self.preset_menu.is_open() {
+                    let k = match kev.logical_key.as_ref() {
+                        Key::Named(NamedKey::Escape) => {
+                            self.preset_menu.close();
+                            self.redraw();
+                            return BulkAction::None;
+                        }
+                        Key::Named(NamedKey::ArrowUp) => Some(CtlKey::Up),
+                        Key::Named(NamedKey::ArrowDown) => Some(CtlKey::Down),
+                        Key::Named(NamedKey::Enter) => Some(CtlKey::Enter),
+                        _ => None,
+                    };
+                    if let Some(key) = k {
+                        self.preset_menu.on_event(&InputEvent::Key {
+                            key,
+                            shift: false,
+                            primary: false,
+                        });
+                        self.redraw();
+                        if let Some(id) = self.preset_menu.take_picked() {
+                            if let Some(a) = self.preset_pick(&id) {
+                                return a;
+                            }
+                        }
+                    }
+                    return BulkAction::None;
+                }
                 if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Escape)) {
                     if let Some(cb) = self.open_combo() {
                         cb.close(&mut inv);
@@ -1363,6 +1446,12 @@ impl BulkWin {
                 self.cursor = (position.x as i32, position.y as i32);
                 let (x, y) = self.cursor;
                 let mv = InputEvent::MouseMove { x, y };
+                if self.preset_menu.is_open() {
+                    if self.preset_menu.on_event(&mv) {
+                        self.redraw();
+                    }
+                    return BulkAction::None;
+                }
                 if let Some(cb) = self.open_combo() {
                     cb.on_event(&mv, &mut inv);
                 } else {
@@ -1381,7 +1470,7 @@ impl BulkWin {
                         }
                         c.match_case.on_event(&mv, &mut inv);
                     }
-                    self.presets.on_event(&mv, &mut inv);
+                    self.presets_btn.on_event(&mv, &mut inv);
                     self.btn_cancel.on_event(&mv, &mut inv);
                     self.btn_rename.on_event(&mv, &mut inv);
                     self.rows.on_event(&mv, &mut inv);
@@ -1404,6 +1493,21 @@ impl BulkWin {
                     ElementState::Released => InputEvent::MouseUp { x, y },
                 };
                 let up = matches!(e, InputEvent::MouseUp { .. });
+                if self.preset_menu.is_open() {
+                    if self.preset_menu.is_outside_click(&e) {
+                        self.preset_menu.close();
+                        self.redraw();
+                        return BulkAction::None;
+                    }
+                    self.preset_menu.on_event(&e);
+                    self.redraw();
+                    if let Some(id) = self.preset_menu.take_picked() {
+                        if let Some(a) = self.preset_pick(&id) {
+                            return a;
+                        }
+                    }
+                    return BulkAction::None;
+                }
                 if let Some(cb) = self.open_combo() {
                     cb.on_event(&e, &mut inv);
                     self.redraw();
@@ -1456,8 +1560,9 @@ impl BulkWin {
                     }
                     let _ = c.match_case.take_toggled();
                 }
-                if up || self.presets.bounds().contains(p) {
-                    self.presets.on_event(&e, &mut inv);
+                if up || self.presets_btn.bounds().contains(p) {
+                    self.presets_btn.on_event(&e, &mut inv);
+                    self.presets_btn.set_focused(false);
                 }
                 for b in [&mut self.btn_cancel, &mut self.btn_rename] {
                     if up || b.bounds().contains(p) {
@@ -1469,6 +1574,11 @@ impl BulkWin {
                     self.rows.on_event(&e, &mut inv);
                 }
                 self.redraw();
+                if self.presets_btn.take_clicked() {
+                    self.open_preset_menu();
+                    self.redraw();
+                    return BulkAction::None;
+                }
                 if self.btn_cancel.take_clicked() {
                     return BulkAction::Close;
                 }
@@ -1611,12 +1721,19 @@ impl BulkWin {
             // 그리드.
             self.rows.paint(&mut dc, th);
             // 하단: 프리셋 콤보 · 건수/오류 · 버튼.
-            if !self.presets.is_open() {
-                self.presets.paint(&mut dc, th);
-            }
+            self.presets_btn.paint(&mut dc, th);
+            let items = self.preset_menu_items();
+            self.menu_text_w = items
+                .iter()
+                .filter_map(|it| match it {
+                    CtxItem::Item { label, .. } => Some(dc.text_width(label)),
+                    CtxItem::Separator => None,
+                })
+                .max()
+                .unwrap_or(0);
             let bottom_y = hi - pad - self.s(BTN_H);
             let info = self.error.clone().unwrap_or_else(|| self.count_text());
-            let ix = self.presets.bounds().right() + pad;
+            let ix = self.presets_btn.bounds().right() + pad;
             let iw = (self.btn_cancel.bounds().x - pad - ix).max(0);
             let info = nexa_ctl::draw::ellipsize_middle(&mut dc, &info, iw);
             dc.text(
@@ -1649,10 +1766,8 @@ impl BulkWin {
                     }
                 }
             }
-            if self.presets.is_open() {
-                self.presets.paint(&mut dc, th);
-                self.presets.paint_dropdown(&mut dc, th);
-            }
+            // 프리셋 메뉴 = 맨 뒤(모든 컨트롤 위).
+            self.preset_menu.paint(&mut dc, th);
         }
         for c in &self.cards {
             for tb in [
@@ -1813,7 +1928,49 @@ mod tests {
         w.set_presets(vec!["zeta".into(), "Alpha".into()]);
         assert_eq!(
             w.preset_names,
-            vec!["Alpha".to_string(), "zeta".to_string()]
+            vec!["zeta".to_string(), "Alpha".to_string()],
+            "순서는 호스트(order.txt)가 정한다"
+        );
+        let ids = |w: &BulkWin| -> Vec<String> {
+            w.preset_menu_items()
+                .iter()
+                .map(|it| match it {
+                    CtxItem::Item { id, enabled, .. } => {
+                        format!("{id}{}", if *enabled { "" } else { "!" })
+                    }
+                    CtxItem::Separator => "-".into(),
+                })
+                .collect()
+        };
+        assert_eq!(
+            ids(&w),
+            [
+                "hdr!",
+                "-",
+                "preset:zeta",
+                "preset:Alpha",
+                "-",
+                "save",
+                "edit",
+                "-",
+                "clear"
+            ],
+            "헤더(클릭 없음) · ─ · 프리셋들 · ─ · 저장 · 편집 · ─ · 모두 제거"
+        );
+        w.set_presets(Vec::new());
+        assert_eq!(
+            ids(&w),
+            ["hdr!", "-", "save", "edit", "-", "clear!"],
+            "없으면 목록 구간 없음 · 모두 제거 끔"
+        );
+        assert!(
+            matches!(w.preset_pick("save"), Some(BulkAction::SavePreset(_))),
+            "기본 카드 1장(무효)이어도 저장 요청은 나간다(빈 파이프라인)"
+        );
+        assert_eq!(w.preset_pick("clear"), Some(BulkAction::ClearPresets));
+        assert_eq!(
+            w.preset_pick("preset:zeta"),
+            Some(BulkAction::LoadPreset("zeta".into()))
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

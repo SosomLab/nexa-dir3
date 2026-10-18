@@ -475,6 +475,7 @@ impl App {
         self.check_win.relabel();
         self.license_win.relabel();
         self.order_win.relabel();
+        self.preset_win.relabel();
         self.bulk_win.relabel();
         self.mem_win.relabel();
         self.hash_win.relabel();

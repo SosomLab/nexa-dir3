@@ -98,6 +98,7 @@ impl App {
                 masked: true,
                 initial: String::new(),
             }),
+            delay: None,
         };
         self.ask(spec, DlgReply::ArchivePassword(path.to_path_buf()));
     }

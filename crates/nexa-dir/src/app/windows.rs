@@ -12,6 +12,7 @@ use crate::keys_win::KeysAction;
 use crate::license_win::LicAction;
 use crate::order_win::OrderAction;
 use crate::prefs_win::PrefsAction;
+use crate::preset_win::PresetAction;
 use crate::preview_win::PvAction;
 use crate::progress_win::ProgAction;
 use crate::*;
@@ -71,6 +72,12 @@ impl App {
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.order_win.open(el, theme, over, owner.as_deref());
+        }
+        if std::mem::take(&mut self.open_presets) && self.window.is_some() {
+            let over = self.main_rect();
+            let theme = theme::window_theme(self.settings.theme_mode());
+            let owner = self.window.clone();
+            self.preset_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_progress) && self.window.is_some() {
             let over = self.main_rect();
@@ -296,6 +303,18 @@ impl App {
                 }
                 BulkAction::None => {}
                 other => self.bulk_action(other),
+            }
+            return true;
+        }
+        if self.preset_win.is(id) {
+            let ui_px = self.font_px("ui.font_size");
+            match self.preset_win.handle(event) {
+                PresetAction::Paint => {
+                    let font = Rc::clone(&self.ui_font);
+                    self.preset_win.paint(&font, &self.theme, ui_px);
+                }
+                PresetAction::Apply(names) => self.presets_edited(names),
+                PresetAction::None => {}
             }
             return true;
         }
@@ -650,6 +669,9 @@ impl App {
         if self.order_win.tick(now_ms) {
             self.order_win.redraw();
         }
+        if self.preset_win.tick(now_ms) {
+            self.preset_win.redraw();
+        }
         if self.file_win.tick(now_ms) {
             self.file_win.redraw();
         }
@@ -671,6 +693,7 @@ impl App {
             || self.progress_win.animating()
             || self.bulk_win.animating()
             || self.order_win.animating()
+            || self.preset_win.animating()
             || self.file_win.animating()
     }
 
