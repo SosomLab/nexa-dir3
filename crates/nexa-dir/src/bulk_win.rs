@@ -1408,11 +1408,12 @@ impl BulkWin {
         let inside = top.is_some();
         let win = Rect::new(0, 0, wi, hi);
         if let Some(top) = top {
-            let iy = self.insert_y(self.insert_index(top));
             let cr = self.cards_rect;
-            if iy >= cr.y && iy <= cr.bottom() {
-                dc.fill_rect(Rect::new(cr.x, iy - 1, cr.w, 2), th.accent);
-            }
+            // 맨 앞 자리는 첫 카드 위 틈 가운데(= 열 위 경계 밖)라 종전 범위 검사에 걸려 안 보였다 → 열 안으로 당긴다(사용자 10-18).
+            let iy = self
+                .insert_y(self.insert_index(top))
+                .clamp(cr.y + 1, (cr.bottom() - 1).max(cr.y + 1));
+            dc.fill_rect(Rect::new(cr.x, iy - 1, cr.w, 2), th.accent);
         }
         let k = if inside { 1.0 } else { CARD_GHOST_SCALE };
         let w = (card.rect.w as f32 * k).round() as i32;

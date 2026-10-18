@@ -714,7 +714,8 @@ pub const REGISTRY: &[Entry] = &[
         "pref.flashFontSize",
         "pref.flashFontSize.desc",
         Size { min: 6, max: 40 },
-        "10"
+        // 고속 스크롤 속도 HUD 수준(UI 글꼴 12px × 1.75 ≈ 21 · 사용자 10-18 "고속 스크롤 수준으로 키워줘" · 종전 10).
+        "21"
     ),
     e!(
         "statusbar.font_face",
