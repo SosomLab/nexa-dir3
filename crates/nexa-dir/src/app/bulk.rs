@@ -53,6 +53,7 @@ impl App {
         self.bulk_win
             .set_natural(self.panels[self.active].active_view().4);
         self.bulk_win.set_items(items, local_tz_min());
+        self.bulk_win.set_toast_corner(self.toast_corner());
         self.bulk_win
             .set_presets(Self::preset_names(&Self::presets_dir()));
         self.open_bulk = true;
@@ -174,6 +175,7 @@ impl App {
                 let path = Self::presets_dir().join(format!("{name}.cfg"));
                 if let Ok(text) = std::fs::read_to_string(&path) {
                     self.bulk_win.load_ops(&br::parse_ops(&text));
+                    self.bulk_win.notify_preset_loaded(&name);
                 }
             }
             BulkAction::EditPresets => {

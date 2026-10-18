@@ -4061,6 +4061,11 @@ fn bulk_rename_window_apply_undo_and_presets() {
     assert_eq!(App::sanitize_preset_name(" <> "), None);
     app.bulk_action(crate::bulk_win::BulkAction::LoadPreset("T71 test".into()));
     assert_eq!(app.bulk_win.ops().len(), 1);
+    assert_eq!(
+        app.bulk_win.toasts_len(),
+        1,
+        "불러옴 토스트(프리셋 이름 · 카드 수 · 10-18)"
+    );
     let _ = std::fs::remove_file(pdir.join("T71 test.cfg"));
     let _ = std::fs::remove_dir_all(&dir);
 }

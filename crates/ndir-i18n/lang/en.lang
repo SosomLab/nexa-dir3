@@ -692,6 +692,7 @@ bulk.preset.dupText = A preset named "{0}" already exists. Overwrite it?
 bulk.preset.overwrite = Overwrite
 bulk.preset.editTitle = Edit Renaming Sequences
 bulk.preset.empty = No saved presets
+bulk.preset.loaded = Preset "{0}" loaded · {1} card(s)
 bulk.grid.name = Name
 bulk.grid.apply = Apply
 bulk.grid.before = Before
