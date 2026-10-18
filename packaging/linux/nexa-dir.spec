@@ -59,6 +59,19 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Sat Oct 18 2026 Sangyong Bae <kiros33@gmail.com> - 0.25.0-1
+- Right-button drag and drop like File Explorer: a drop menu with copy, move, create shortcut,
+  extract and the shell's own handlers (7-Zip and others; the intersection for multi-selection);
+  copy/move go through the app's transfer engine with the same progress and conflict dialogs ·
+  Linux XDND ask and macOS equivalents · macOS: NFC display, NFD marker and "Convert to NFC",
+  Quick Look (Space) and the preview panel linked to Preview.app (Linux: Sushi) · batch rename:
+  preset menu rebuilt (header, reset, save/edit/remove-all with in-place timed confirmation),
+  sequence editor with drag ordering and per-item delete, card drag reordering with an insertion
+  indicator, card header band, overlay scroll bar with fast scroll, input fields with shortcuts
+  and a right-click edit menu, regex replacement "$2_$1" fixed, presets keep every card, several
+  rename windows at once · flash messages (settings-driven) · toasts scoped to the panel that did
+  the work · folder compare window fixes · rename retried on Windows sharing violations ·
+  breadcrumb Space key · empty-folder chevron hidden · memory window grouped with a detail switch.
 * Fri Oct 10 2026 Sangyong Bae <kiros33@gmail.com> - 0.24.0-1
 - Linux drag and drop completed: drag files out to other apps (Nautilus, terminals) over X11/XWayland
   with a drag label showing copy/move, Ctrl/Shift honoured, drops land on the hovered folder row ·
