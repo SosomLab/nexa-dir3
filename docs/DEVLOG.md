@@ -4,6 +4,8 @@
 
 ## 2026-10-18
 
+- **T-190 ① 부분 다시 그리기**(683b9ec · `gfx.partial_redraw` · 부분 paint ≈ 0.9 ms vs 전체 1.8~2.7 ms) → T-190 4건 모두 구현 → [10-18 §19](journal/2026-10-18.md)
+
 - **T-190 ② 2단계**(59f3342 · 재열람 · F5 · 감시도 워커) · **② 1단계**(1826683) — 폴더 진입 열거 워커 · `list.async_read` · `list.async_wait_ms` 150 → [10-18 §19](journal/2026-10-18.md)
 
 - **T-190 ③④**(3d8da00) — 자기 변경 무시 `watch.self_window_ms` · 유휴 정리 기본 300 s + `mem.idle_trim_scope` · docs/23 → [10-18 §19](journal/2026-10-18.md)
