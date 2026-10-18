@@ -1292,6 +1292,20 @@ impl BulkWin {
             .count()
     }
 
+    /// 드래그 중 고스트의 위 모서리 y — 고스트가 카드 열과 겹칠 때만 `Some`(= 놓으면 이동 · 아니면 취소).
+    fn drag_ghost_top(&self, d: &CardDrag) -> Option<i32> {
+        let card = self.cards.get(d.from)?;
+        let top = d.cur.1 - (d.press.1 - card.rect.y);
+        let ghost = Rect::new(
+            d.cur.0 - (d.press.0 - card.rect.x),
+            top,
+            card.rect.w,
+            card.rect.h,
+        );
+        let hit = ghost.intersection(&self.cards_rect);
+        (hit.w > 0 && hit.h > 0).then_some(top)
+    }
+
     /// 삽입 자리의 인디케이터 y(카드 사이 틈 가운데).
     fn insert_y(&self, idx: usize) -> i32 {
         let gap = self.s(6.0);
@@ -1329,10 +1343,11 @@ impl BulkWin {
             return;
         };
         let (cx, cy) = d.cur;
-        let inside = self.cards_rect.contains(Point { x: cx, y: cy });
+        let top = self.drag_ghost_top(d);
+        let inside = top.is_some();
         let win = Rect::new(0, 0, wi, hi);
-        if inside {
-            let iy = self.insert_y(self.insert_index(cy));
+        if let Some(top) = top {
+            let iy = self.insert_y(self.insert_index(top));
             let cr = self.cards_rect;
             if iy >= cr.y && iy <= cr.bottom() {
                 dc.fill_rect(Rect::new(cr.x, iy - 1, cr.w, 2), th.accent);
@@ -1837,8 +1852,10 @@ impl BulkWin {
                 if up {
                     if let Some(d) = self.card_drag.take() {
                         if d.active {
-                            if self.cards_rect.contains(p) {
-                                let to = self.insert_index(y);
+                            // 판정 = 고스트(끌고 있는 카드) 위 모서리(커서가 아니다 — 카드 아래쪽을 잡으면 커서가 1번 카드 중심 위까지
+                            // 못 올라가 맨 앞으로 옮길 수 없었다 · 사용자 10-18).
+                            if let Some(top) = self.drag_ghost_top(&d) {
+                                let to = self.insert_index(top);
                                 self.move_card(d.from, to);
                             }
                             self.redraw();
