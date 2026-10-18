@@ -236,6 +236,10 @@ impl App {
 
     /// 빈 폴더 프로브 결과를 기다린다(덤프·단언 · T4 결정성 · 상한 안에서).
     pub(crate) fn probe_wait(&mut self, limit: Duration) {
+        // 그리기가 아직 안 돌았으면 제출된 프로브가 없다 → 보이는 폴더 행 것을 먼저 제출하고 기다린다(T4 결정성).
+        for p in &self.panels {
+            p.probe_prefetch();
+        }
         let at = Instant::now();
         while self.panels.iter().any(panel::Panel::probes_pending) && at.elapsed() < limit {
             let now_ms = self.started.elapsed().as_millis() as u64;

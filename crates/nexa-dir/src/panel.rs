@@ -1173,6 +1173,11 @@ impl Panel {
         self.poll_drive_space(inv);
     }
 
+    /// 활성 탭의 보이는 폴더 프로브를 지금 제출(덤프 전).
+    pub(crate) fn probe_prefetch(&self) {
+        self.tabs[self.active].rows.source().probe_prefetch();
+    }
+
     /// 활성 탭이 프로브 결과를 기다리는가(이벤트 루프 깨움 · 덤프 대기).
     pub(crate) fn probes_pending(&self) -> bool {
         self.tabs[self.active].rows.source().probes_pending()

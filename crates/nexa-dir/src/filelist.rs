@@ -260,6 +260,22 @@ impl TreeSource {
         changed
     }
 
+    /// 보이는 폴더 행의 프로브를 **지금** 제출한다(덤프·단언 전 · 10-18): 그리기가 한 번도 안 돈 채 덤프가 오면 제출된 프로브가 없어
+    /// 기다릴 것도 없고, 덤프가 행을 읽는 순간에야 제출돼 ▸가 남았다(T4 `nav-up-select` 게이트 빨강 · 기계 속도에 따라 결정적).
+    pub(crate) fn probe_prefetch(&self) {
+        if !probe::is_async() || !self.opts.hide_empty_glyph {
+            return;
+        }
+        let Some(t) = &self.tree else { return };
+        for i in 0..t.visible_len().min(PROBE_PREFETCH_CAP) {
+            if let Some(r) = t.row_ref(i) {
+                if r.has_children {
+                    let _ = self.dir_has_visible_children(r.id);
+                }
+            }
+        }
+    }
+
     /// 워커 결과를 기다리는 폴더가 있는가(이벤트 루프 깨움 · 덤프 대기).
     pub(crate) fn probes_pending(&self) -> bool {
         !self.probe_pending.borrow().is_empty()
@@ -905,6 +921,9 @@ impl RowSource for TreeSource {
             .find_prefix(caret, prefix, FindScope::VisibleStream)
     }
 }
+
+/// 덤프 전 프로브 선제출 상한(행 수 · 큰 폴더에서 수만 개를 한꺼번에 넣지 않게).
+const PROBE_PREFETCH_CAP: usize = 4096;
 
 /// 빈 폴더 프로브 워커(10-18 체감 점검): 스레드 1(첫 요청 때) · 큐 · 결과는 요청에 실린 결과함으로. 창이 없는(시험) 동안은 끔 = 종전 동기 프로브.
 pub(crate) mod probe {
