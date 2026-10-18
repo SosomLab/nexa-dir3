@@ -299,6 +299,8 @@ impl App {
             match self.bulk_win.handle(event) {
                 BulkAction::Paint => {
                     let font = Rc::clone(&self.ui_font);
+                    let style = self.flash_style();
+                    self.bulk_win.set_flash_style(style);
                     self.bulk_win.paint(&font, &self.theme, ui_px);
                 }
                 BulkAction::None => {}
@@ -479,16 +481,8 @@ impl App {
                     let font = Rc::clone(&self.ui_font);
                     let view = self.license_view();
                     // 플래시 모양·글꼴은 그리기 직전에 설정에서(모양·크기 변경이 바로 반영 · 비용 = 조회 2).
-                    self.license_win
-                        .set_flash_style(crate::license_win::FlashStyle {
-                            shape: self
-                                .settings
-                                .get("ui.flash_shape")
-                                .unwrap_or("rounded")
-                                .to_string(),
-                            font: self.flash_font.clone(),
-                            px: self.font_px("ui.flash_font_size"),
-                        });
+                    let style = self.flash_style();
+                    self.license_win.set_flash_style(style);
                     self.license_win.paint(view, &font, &self.theme, ui_px);
                 }
                 LicAction::Close => {

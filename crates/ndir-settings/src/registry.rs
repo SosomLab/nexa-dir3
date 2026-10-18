@@ -2160,6 +2160,9 @@ pub const FORCES: &[(&str, &str, Dep, &str)] = &[
     ("list.row_icons", "perf.boost", Dep::On, "off"),
     ("menu.icons", "perf.boost", Dep::On, "off"),
     ("dock.folder_size", "perf.boost", Dep::On, "off"),
+    // 플래시 메시지(nexa-sql perf BOOST 차용 · 10-18): 유지 0.3초 · 페이드 0.2초(최소) + 즉시 모드(`FlashStyle::from_settings`).
+    ("ui.flash_hold_ms", "perf.boost", Dep::On, "300"),
+    ("ui.flash_ms", "perf.boost", Dep::On, "200"),
     // 단일 패널이면 정보 배치는 단일뿐(T-130 D2 · 종전 = 호출부가 `!dual ||`로 따로 판정).
     (
         "layout.info_mode",

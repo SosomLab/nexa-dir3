@@ -36,6 +36,9 @@ impl App {
                     RasterCtx::with_font_set(&mut gfx, self.font_set(&font, mono.as_deref()), s)
                         .with_fonts(prefs);
                 self.paint_into(&mut dc, wi, hi, s);
+                // 플래시 = 맨 마지막 · 자체 글꼴 dc(nexa-sql 10-07 꼴 · 10-18).
+                drop(dc);
+                self.paint_flash(&mut gfx, wi, hi, s);
             }
             let t1 = tracing.then(Instant::now);
             let _ = buf.present();

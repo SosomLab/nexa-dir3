@@ -32,8 +32,10 @@ const BTN_W: f32 = 64.0;
 const LIST_W: f32 = 320.0;
 /// 행 오른쪽 삭제(⊖) 칸 폭.
 const DEL_W: f32 = 30.0;
-const MIN_ROWS: usize = 4;
-const MAX_ROWS: usize = 12;
+/// 보이는 행 = 6.5(사용자 10-18 "6개 + 0.5개" — 반 행은 다음에 더 있음을 알리는 창).
+const VISIBLE_ROWS: f32 = 6.5;
+/// 드래그 자동 스크롤: 목록 위/아래 가장자리 띠(행 높이)에 들어오면 틱마다 이만큼(논리 px).
+const AUTO_SCROLL_STEP: f32 = 6.0;
 const DRAG_THRESHOLD: i32 = 5;
 
 struct Drag {
@@ -187,14 +189,36 @@ impl PresetWin {
         for b in self.buttons() {
             any |= b.tick(now_ms);
         }
+        // 드래그 자동 스크롤(사용자 10-18 "위로 끌면 자동 스크롤"): 가장자리 띠 안이면 한 걸음.
+        if let Some(dir) = self.auto_scroll_dir() {
+            let before = self.scroll;
+            self.scroll += dir * self.s(AUTO_SCROLL_STEP);
+            self.clamp_scroll();
+            any |= self.scroll != before;
+        }
         any
+    }
+
+    /// 드래그 중 커서가 목록 위/아래 가장자리 띠에 있으면 `-1`/`+1`(아직 더 갈 수 있을 때만).
+    fn auto_scroll_dir(&self) -> Option<i32> {
+        let d = self.drag.as_ref().filter(|d| d.active)?;
+        let edge = self.row_h();
+        let max = (self.names.len() as i32 * self.row_h() - self.list.h).max(0);
+        if d.cur_y < self.list.y + edge && self.scroll > 0 {
+            Some(-1)
+        } else if d.cur_y > self.list.bottom() - edge && self.scroll < max {
+            Some(1)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn animating(&self) -> bool {
         self.window.is_some()
-            && [&self.ok_btn, &self.cancel_btn]
+            && ([&self.ok_btn, &self.cancel_btn]
                 .iter()
                 .any(|b| b.is_animating())
+                || self.auto_scroll_dir().is_some())
     }
 
     fn buttons(&mut self) -> [&mut Button; 2] {
@@ -203,7 +227,7 @@ impl PresetWin {
 
     /// 창 논리 크기 — 행 수(4~12)에 맞춘다.
     fn logical_size(&self) -> (f64, f64) {
-        let n = self.names.len().clamp(MIN_ROWS, MAX_ROWS) as f32;
+        let n = VISIBLE_ROWS;
         let w = PAD * 2.0 + LIST_W;
         let h = PAD * 3.0 + n * ROW_H + 2.0 + BTN_H;
         (w as f64, h as f64)

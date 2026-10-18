@@ -4061,10 +4061,10 @@ fn bulk_rename_window_apply_undo_and_presets() {
     assert_eq!(App::sanitize_preset_name(" <> "), None);
     app.bulk_action(crate::bulk_win::BulkAction::LoadPreset("T71 test".into()));
     assert_eq!(app.bulk_win.ops().len(), 1);
-    assert_eq!(
-        app.bulk_win.toasts_len(),
-        1,
-        "불러옴 토스트(프리셋 이름 · 카드 수 · 10-18)"
+    assert!(
+        app.bulk_win.flash_text().contains("T71 test") && app.bulk_win.flash_text().contains('1'),
+        "불러옴 플래시(프리셋 이름 · 카드 수 · 10-18): {}",
+        app.bulk_win.flash_text()
     );
     let _ = std::fs::remove_file(pdir.join("T71 test.cfg"));
     let _ = std::fs::remove_dir_all(&dir);
@@ -9009,6 +9009,11 @@ fn preset_save_overwrite_asks_with_locked_button() {
     app.dlg_pick(1);
     app.dlg_pick(1);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "x", "덮어쓰기");
+    assert!(
+        app.bulk_win.flash_text().contains(&name),
+        "저장됨 플래시: {}",
+        app.bulk_win.flash_text()
+    );
     // 편집 창 요청 = 깃발 + 목록 · 모두 제거 = 확인창(잠금) → 취소면 그대로.
     app.bulk_action(BulkAction::EditPresets);
     assert!(app.open_presets && app.preset_win.names().contains(&name));
@@ -9018,5 +9023,40 @@ fn preset_save_overwrite_asks_with_locked_button() {
     app.dlg_pick(0);
     assert!(file.is_file(), "취소 = 제거 안 함");
     let _ = std::fs::remove_file(&file);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 주 창 플래시(nexa-sql 꼴 · 10-18): 기동 명령 `flash:<글>` → 덤프 `flash` · 깨움 시각 · 성능 향상 모드 = 즉시 모드 + 짧은 시간(FORCES).
+#[test]
+fn main_window_flash_command_dump_and_boost_forces() {
+    let (mut app, dir) = fixture("flash");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(
+        app.dump_of("flash").unwrap(),
+        "active=false instant=false text=\n"
+    );
+    assert!(app.aux_next_wake().is_none());
+    app.startup_cmd("flash:hello there");
+    assert_eq!(
+        app.dump_of("flash").unwrap(),
+        "active=true instant=false text=hello there\n"
+    );
+    assert!(app.flash.animating() && app.aux_next_wake().is_some());
+    let _ = app.settings.set("perf.boost", "on");
+    assert_eq!(
+        app.settings.int("ui.flash_hold_ms"),
+        300,
+        "성능 향상 모드 = 유지 0.3초"
+    );
+    assert_eq!(app.settings.int("ui.flash_ms"), 200);
+    app.startup_cmd("flash:fast");
+    assert_eq!(
+        app.dump_of("flash").unwrap(),
+        "active=true instant=true text=fast\n"
+    );
+    assert!(
+        !app.flash.animating(),
+        "즉시 모드 = 프레임 없음(마감 때 한 번)"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

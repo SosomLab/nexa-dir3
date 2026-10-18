@@ -10,6 +10,7 @@ pub(crate) mod dupes;
 mod event_loop;
 pub(crate) mod extract;
 pub(crate) mod favorites;
+mod flash;
 pub(crate) mod fonts;
 pub(crate) mod input;
 pub(crate) mod keywinit;

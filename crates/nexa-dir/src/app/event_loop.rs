@@ -219,6 +219,7 @@ impl ApplicationHandler<Wake> for App {
         let live = inv.tick_requested()
             || aux_live
             || self.toasts_animating()
+            || self.flash.animating()
             || self.palette.is_animating()
             // 스플리터: 페이드가 움직이는 동안과 드래그 중에만 프레임 간격으로 깬다(종전 = hover 내내 16 ms 폴링 ·
             // 벗어난 뒤 페이드아웃은 깨우지 않았다).
@@ -301,6 +302,13 @@ impl ApplicationHandler<Wake> for App {
         }
         if ops_live {
             next = next.min(now + Duration::from_millis(app::ops::OPS_POLL_MS));
+        }
+        // 플래시(주 창·보조 창): 마감이 지났으면 지우고 한 번 그린다 · 페이드 시작/마감 시각에 깬다.
+        if self.flash.tick(now) {
+            self.redraw();
+        }
+        if let Some(t) = self.aux_next_wake() {
+            next = next.min(t);
         }
         el.set_control_flow(ControlFlow::WaitUntil(next));
     }

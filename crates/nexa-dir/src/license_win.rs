@@ -45,15 +45,7 @@ pub(crate) enum LicAction {
     CopyText(String),
 }
 
-/// 순간 메시지 모양·글꼴(설정 `ui.flash_*` · nexa-sql 10-07 차용) — 호스트가 그리기 전에 넘긴다.
-#[derive(Clone, Default)]
-pub(crate) struct FlashStyle {
-    /// `rect` · `rounded` · `none`(배경 없음 · 글만).
-    pub shape: String,
-    /// 전용 글꼴(`ui.flash_font_face` · None = 창의 UI 글꼴) · 글자 크기(논리 px · 0 = UI 크기).
-    pub font: Option<Rc<Font>>,
-    pub px: f32,
-}
+pub(crate) use crate::flashmsg::FlashStyle;
 
 pub(crate) struct LicenseWin {
     window: Option<Rc<Window>>,
@@ -109,15 +101,6 @@ impl LicenseWin {
     /// 순간 메시지 모양·글꼴(설정 `ui.flash_shape` · `ui.flash_font_*`) — 호스트가 그리기 전에 넘긴다(비용 = 문자열 비교 1).
     pub(crate) fn set_flash_style(&mut self, style: FlashStyle) {
         self.flash_style = style;
-    }
-
-    /// 모양 → nexa-ctl `Flash` 상태(배경 · 반지름(물리 px)). 순수 — `(배경 켬, 반지름)`.
-    pub(crate) fn flash_shape(shape: &str, scale: f32) -> (bool, i32) {
-        match shape {
-            "none" => (false, 0),
-            "rect" => (true, 0),
-            _ => (true, (5.0 * scale).round() as i32),
-        }
     }
 
     /// 언어 전환 — 버튼 글 · 창 제목(T-134 · 표의 라벨은 그릴 때마다 호스트가 만든다).
@@ -588,7 +571,7 @@ impl LicenseWin {
         // 플래시 메시지 = 창의 맨 마지막(다른 컨트롤·팝업이 덮지 않음) · 진행 중이면 다시 그린다. 글꼴·크기·모양은 설정
         // (`ui.flash_font_*` · `ui.flash_shape` — 호스트가 `set_flash_style`로 넘긴 것 · 비면 창의 UI 글꼴·크기).
         {
-            let (bg, radius) = Self::flash_shape(&self.flash_style.shape, s);
+            let (bg, radius) = FlashStyle::shape_of(&self.flash_style.shape, s);
             self.flash.set_background(bg);
             self.flash.set_radius(radius);
             let flash_font: &Font = self.flash_style.font.as_deref().unwrap_or(font);

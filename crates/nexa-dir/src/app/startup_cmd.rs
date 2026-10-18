@@ -248,6 +248,11 @@ impl App {
             self.ctx_pick(item.trim());
             return;
         }
+        if let Some(text) = id.strip_prefix("flash:") {
+            // 순간 메시지(10-18 · 시험·실기 확인용).
+            self.flash(text.to_string(), nexa_ctl::FlashTone::Info);
+            return;
+        }
         if let Some(key) = id.strip_prefix("order.open:") {
             // 순서 편집 창(T-71 · `toolbar.layout` / `list.col_layout` / `ctxmenu.layout`).
             self.open_order_editor(key.trim());
@@ -541,6 +546,7 @@ impl App {
             "bulk" => self.bulk_win.dump(),
             "order" => self.order_win.dump(),
             "presets" => self.preset_win.dump(),
+            "flash" => self.flash.dump(),
             "ops" => self.ops_dump(),
             "dlg" => self.dlg_dump(),
             "pvwin" => self.preview_win.dump(),

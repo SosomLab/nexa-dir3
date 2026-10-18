@@ -594,6 +594,11 @@ impl Panel {
         self.bounds
     }
 
+    /// 경로 바 사각형(플래시 앵커 · 10-18).
+    pub(crate) fn pathbar_bounds(&self) -> Rect {
+        self.pathbar.bounds()
+    }
+
     pub(crate) fn nav_rect(&self) -> Rect {
         self.navbtns.bounds()
     }

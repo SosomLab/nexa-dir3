@@ -3,18 +3,19 @@
 //! 건수/검증 오류 · [취소][Rename]. 코어는 `ndir_ops::batch_rename`(수확 규칙 DLG-077 · 실시간 미리보기 DLG-079 · 충돌 · 프리셋 직렬화).
 //! 창 880×620 고정 · 소유자 중앙. [Rename] 활성 = 동작 ≥ 1 · 변경 ≥ 1 · 검증 통과 · 충돌 0. 결과 = `(전체 경로, 새 이름)` 목록 → 호스트가 순차 rename + undo 1건.
 
+use crate::flashmsg::{FlashBox, FlashStyle};
 use ndir_i18n::{tr, trf};
 use ndir_ops::batch_rename::{
     self as br, CaseMode, Conflict, DateKind, DateSpec, InsertAt, NumberSpec, RenameInput,
     RenameOp, ReplaceMode, Scope,
 };
 use nexa_ctl::controls::ctxmenu::{ContextMenu, CtxItem};
-use nexa_ctl::controls::toast::{ToastCorner, ToastKind, Toasts};
 use nexa_ctl::controls::EditCtxAction;
 use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, Theme};
+use nexa_ctl::FlashTone;
 use nexa_ctl::ScrollBars;
 use nexa_ctl::{
     Button, Checkbox, Combo, ComboControl, ComboItem, Control, InputEvent, Invalidations,
@@ -598,8 +599,7 @@ pub(crate) struct BulkWin {
     /// 카드 열 스크롤 막대(오버레이 · 썸 드래그 · 전역 고속 스크롤 설정 공유 · 사용자 10-18).
     bars: ScrollBars,
     /// 창 안 토스트(프리셋 불러옴 안내 · 사용자 10-18) + 모서리(설정 `ui.toast_position` · 호스트가 준다).
-    toasts: Toasts,
-    toast_corner: ToastCorner,
+    flash: FlashBox,
     presets_btn: Button,
     preset_menu: ContextMenu,
     preset_names: Vec<String>,
@@ -649,8 +649,7 @@ impl BulkWin {
             grid_rect: Rect::default(),
             card_drag: None,
             bars: ScrollBars::new(),
-            toasts: Toasts::new(),
-            toast_corner: ToastCorner::BottomRight,
+            flash: FlashBox::new(),
             presets_btn: Button::new("…"),
             preset_menu: ContextMenu::new(),
             preset_names: Vec::new(),
@@ -732,22 +731,48 @@ impl BulkWin {
         self.items.len()
     }
 
-    /// 토스트 모서리(설정 `ui.toast_position` · 열 때 호스트가 준다).
-    pub(crate) fn set_toast_corner(&mut self, corner: ToastCorner) {
-        self.toast_corner = corner;
+    /// 플래시 스타일(설정 `ui.flash_*` · 호스트가 그리기 전에).
+    pub(crate) fn set_flash_style(&mut self, style: FlashStyle) {
+        self.flash.set_style(style);
     }
 
-    /// 프리셋을 불러왔음을 창 안 토스트로(사용자 10-18 "어떤 프리셋으로 몇 개 카드가 읽어졌는지").
-    pub(crate) fn notify_preset_loaded(&mut self, name: &str) {
-        let body = trf("bulk.preset.loaded", &[name, &self.cards.len().to_string()]);
-        self.toasts
-            .push(ToastKind::Info, tr("bulk.preset.header"), body);
+    /// 창 안 순간 메시지 — 기본 자리 = **카드 열 기준**(열 위 오른쪽 · 사용자 10-18 "카드 영역을 기준으로 기본 위치").
+    pub(crate) fn flash_msg(&mut self, text: String) {
+        let cr = self.cards_rect;
+        self.flash
+            .show(text, FlashTone::Info, Rect::new(cr.x, cr.y, cr.w, 1));
         self.redraw();
     }
 
+    /// 프리셋을 불러왔음(사용자 10-18 "어떤 프리셋으로 몇 개 카드가 읽어졌는지").
+    pub(crate) fn notify_preset_loaded(&mut self, name: &str) {
+        let n = self.cards.len().to_string();
+        self.flash_msg(trf("bulk.preset.loaded", &[name, &n]));
+    }
+
+    /// 프리셋 저장됨(사용자 10-18).
+    pub(crate) fn notify_preset_saved(&mut self, name: &str) {
+        self.flash_msg(trf("bulk.preset.saved", &[name]));
+    }
+
+    /// 모든 프리셋 제거됨(사용자 10-18).
+    pub(crate) fn notify_presets_cleared(&mut self) {
+        self.flash_msg(tr("bulk.preset.cleared"));
+    }
+
+    /// 현재 플래시 글(시험).
     #[cfg(test)]
-    pub(crate) fn toasts_len(&self) -> usize {
-        self.toasts.len()
+    pub(crate) fn flash_text(&self) -> String {
+        self.flash.text().to_string()
+    }
+
+    /// 플래시 깨움 시각(호스트 이벤트 루프).
+    pub(crate) fn flash_next_wake(&self) -> Option<std::time::Instant> {
+        if self.window.is_some() {
+            self.flash.next_wake()
+        } else {
+            None
+        }
     }
 
     /// 프리셋 목록(호스트가 정한 순서 · 최대 64) — `[…]` 버튼의 메뉴에 그대로 실린다(10-18 · 순서 = `renames/order.txt`).
@@ -1097,7 +1122,7 @@ impl BulkWin {
         any |= self.presets_btn.tick(now_ms);
         let now = std::time::Instant::now();
         any |= self.preset_menu.tick(now);
-        any |= self.toasts.tick(now);
+        any |= self.flash.tick(now);
         for c in &mut self.cards {
             for b in c.buttons() {
                 any |= b.tick(now_ms);
@@ -1119,7 +1144,7 @@ impl BulkWin {
             && (self.btn_cancel.is_animating()
                 || self.btn_rename.is_animating()
                 || self.presets_btn.is_animating()
-                || self.toasts.animating()
+                || self.flash.animating()
                 || self.preset_menu.next_wake().is_some())
     }
 
@@ -1164,6 +1189,7 @@ impl BulkWin {
         let cr = self.cards_rect;
         let bw = self.s(26.0);
         let w56 = self.s(56.0);
+        let s2 = self.s(2.0);
         let mut y = cr.y - self.scroll;
         let mut inv = Invalidations::default();
         let cw = cr.w;
@@ -1184,20 +1210,22 @@ impl BulkWin {
             let field_x = x0 + label_w;
             let field_w = cw - inner_pad * 2 - label_w;
             let mut ry = y + inner_pad;
-            // 행 1: 종류 콤보 + [+][−].
+            // 행 1: 종류 콤보 + [+][−] — 헤더 띠(높이 inner_pad + row_h − 2) 세로 중앙에(사용자 10-18).
+            let head_h = inner_pad + row_h - s2;
+            let hy = y + (head_h - (row_h - 4)) / 2;
             c.kind.set_scale(s);
             c.kind.set_bounds(
-                Rect::new(x0, ry, cw - inner_pad * 2 - bw * 2 - gap * 2, row_h - 4),
+                Rect::new(x0, hy, cw - inner_pad * 2 - bw * 2 - gap * 2, row_h - 4),
                 &mut inv,
             );
             c.add.set_scale(s);
             c.add.set_bounds(
-                Rect::new(cr.right() - inner_pad - bw * 2 - gap, ry, bw, row_h - 4),
+                Rect::new(cr.right() - inner_pad - bw * 2 - gap, hy, bw, row_h - 4),
                 &mut inv,
             );
             c.del.set_scale(s);
             c.del.set_bounds(
-                Rect::new(cr.right() - inner_pad - bw, ry, bw, row_h - 4),
+                Rect::new(cr.right() - inner_pad - bw, hy, bw, row_h - 4),
                 &mut inv,
             );
             ry += row_h;
@@ -1916,10 +1944,6 @@ impl BulkWin {
                         return BulkAction::None;
                     }
                 }
-                if !up && self.toasts.click(p) {
-                    self.redraw();
-                    return BulkAction::None;
-                }
                 if self.preset_menu.is_open() {
                     if self.preset_menu.is_outside_click(&e) {
                         self.preset_menu.close();
@@ -2268,10 +2292,6 @@ impl BulkWin {
                 }
             }
             self.paint_card_drag(&mut dc, th, wi, hi);
-            // 토스트 영역 = 하단 버튼 줄 제외(버튼을 가리지 않게 · 사용자 10-18).
-            let toast_area = Rect::new(0, 0, wi, (hi - pad * 2 - self.s(BTN_H)).max(0));
-            self.toasts
-                .paint_in(&mut dc, th, toast_area, self.toast_corner, s);
             // 프리셋 메뉴 = 맨 뒤(모든 컨트롤 위).
             self.preset_menu.paint(&mut dc, th);
         }
@@ -2286,6 +2306,19 @@ impl BulkWin {
                     let mut dc = RasterCtx::new(&mut gfx, ui, s).with_fonts(prefs);
                     tb.paint_popup(&mut dc, th);
                 }
+            }
+        }
+        // 플래시 = 창의 맨 마지막 · 자체 글꼴 dc · 호스트 = 카드 열(오른쪽 8px 안쪽 · nexa-sql 꼴).
+        if self.flash.active() {
+            let mut gfx = Surface::new(&mut buf, size.width as usize, size.height as usize);
+            let style_font = self.flash.style_font();
+            let font: &Font = style_font.as_deref().unwrap_or(ui);
+            let prefs = FontPrefs::with_base(self.flash.px_or(font_px));
+            let mut dc = RasterCtx::new(&mut gfx, font, s).with_fonts(prefs);
+            let cr = self.cards_rect;
+            let host = Rect::new(cr.x, cr.y, (cr.w - self.s(8.0)).max(1), cr.h);
+            if self.flash.paint(&mut dc, th, s, host) {
+                win.request_redraw();
             }
         }
         let _ = buf.present();

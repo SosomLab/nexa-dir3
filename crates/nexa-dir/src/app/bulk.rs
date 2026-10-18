@@ -53,7 +53,8 @@ impl App {
         self.bulk_win
             .set_natural(self.panels[self.active].active_view().4);
         self.bulk_win.set_items(items, local_tz_min());
-        self.bulk_win.set_toast_corner(self.toast_corner());
+        let style = self.flash_style();
+        self.bulk_win.set_flash_style(style);
         self.bulk_win
             .set_presets(Self::preset_names(&Self::presets_dir()));
         self.open_bulk = true;
@@ -238,6 +239,7 @@ impl App {
         }
         Self::write_preset(&dir, &name, &text);
         self.refresh_presets();
+        self.bulk_win.notify_preset_saved(&name);
     }
 
     fn write_preset(dir: &Path, name: &str, text: &str) {
@@ -255,6 +257,7 @@ impl App {
         }
         Self::write_preset(&Self::presets_dir(), &name, &text);
         self.refresh_presets();
+        self.bulk_win.notify_preset_saved(&name);
     }
 
     /// 모두 제거 확인 회신(1 = 제거).
@@ -264,6 +267,7 @@ impl App {
         }
         Self::clear_presets(&Self::presets_dir());
         self.refresh_presets();
+        self.bulk_win.notify_presets_cleared();
     }
 
     /// 편집 창 OK(10-18): 순서 + 삭제 반영 → 메뉴 갱신 → 일괄 창으로 포커스.
