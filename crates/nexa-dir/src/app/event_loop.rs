@@ -251,7 +251,11 @@ impl ApplicationHandler<Wake> for App {
         if self.preview_decode.busy() {
             next = next.min(now + Duration::from_millis(30));
         }
-        if self.panels.iter().any(panel::Panel::probes_pending) {
+        if self
+            .panels
+            .iter()
+            .any(|p| p.probes_pending() || p.drive_space_pending())
+        {
             next = next.min(now + Duration::from_millis(50));
         }
         if self.panels.iter().any(panel::Panel::typeahead_active) {

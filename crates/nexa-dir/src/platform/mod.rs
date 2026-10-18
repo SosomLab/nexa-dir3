@@ -405,9 +405,23 @@ pub(crate) trait Opener {
     }
 }
 
+/// 드라이브 용량 묶음 `(루트, (전체, 여유))` — `Disk::space_async`의 채널 항목.
+pub(crate) type DriveSpaces = Vec<(String, (u64, u64))>;
+
 pub(crate) trait Disk {
     /// (전체, 여유) 바이트 · 모르면 `None`.
     fn space(&self, root: &Path) -> Option<(u64, u64)>;
+    /// 여러 루트의 용량을 재어 채널로(10-18 체감 점검 · 내 PC: 끊긴 네트워크 드라이브는 조회가 몇 초 멈춘다 → Windows는 워커 스레드).
+    /// 기본 = 지금 동기로 재서 바로 보낸다(가짜 · 미지원 OS).
+    fn space_async(&self, roots: Vec<String>) -> std::sync::mpsc::Receiver<DriveSpaces> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let v: DriveSpaces = roots
+            .into_iter()
+            .filter_map(|n| self.space(Path::new(&n)).map(|s| (n, s)))
+            .collect();
+        let _ = tx.send(v);
+        rx
+    }
     /// **볼륨 구성 지문** — 드라이브/볼륨이 붙거나 떨어지면 값이 바뀐다(dir2 WINC-061 `WM_DEVICECHANGE` 대응: "내 PC"를 보는 패널이
     /// 이 값이 바뀌면 다시 읽는다). 디스크 I/O 없이 싸게(Windows = `GetLogicalDrives` 비트맵 · Unix = 마운트 목록).
     /// 0 = 모름(다시 읽지 않는다).

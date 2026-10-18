@@ -205,6 +205,8 @@ pub(crate) struct TreeSource {
     error: Option<String>,
     /// 드라이브 이름(`C:\`) → (전체, 여유) — 가상 최상위에서만 · 호스트가 Disk 포트로 채운다.
     drive_space: std::collections::HashMap<String, (u64, u64)>,
+    /// 용량을 이미 물었다(워커 진행 중이거나 결과가 비었음 — 매 사건 재시도하지 않는다 · 10-18). 다시 읽으면 내린다.
+    drive_space_asked: bool,
     /// 잘라내기 대기 경로(dir2 SHELL-044/X-32 — 그 행은 흐리게 · 호스트가 클립보드와 동기).
     cut_marks: std::collections::HashSet<PathBuf>,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
@@ -227,6 +229,7 @@ impl TreeSource {
             on_network: !ndir_vfs::is_virtual_root(path) && ndir_vfs::is_network_path(path),
             error: None,
             drive_space: std::collections::HashMap::new(),
+            drive_space_asked: false,
             cut_marks: std::collections::HashSet::new(),
             no_icons: false,
             probe_cache: Default::default(),
@@ -283,6 +286,7 @@ impl TreeSource {
     /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
         self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
+        self.drive_space_asked = false;
         self.probe_gen += 1;
         self.probe_pending.borrow_mut().clear();
         let (keys, expanded, selected) = match &self.tree {
@@ -411,6 +415,14 @@ impl TreeSource {
 
     pub(crate) fn drive_space_known(&self) -> bool {
         !self.drive_space.is_empty()
+    }
+
+    pub(crate) fn drive_space_asked(&self) -> bool {
+        self.drive_space_asked
+    }
+
+    pub(crate) fn mark_drive_space_asked(&mut self) {
+        self.drive_space_asked = true;
     }
 
     pub(crate) fn set_drive_space(&mut self, space: Vec<(String, (u64, u64))>) {

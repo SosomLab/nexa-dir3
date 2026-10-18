@@ -96,6 +96,8 @@ pub(crate) struct Panel {
     bounds: Rect,
     m: PanelMetrics,
     focused: bool,
+    /// 내 PC 드라이브 용량 워커 결과 채널(10-18 · `fill_drive_space` → 틱 수거).
+    drive_rx: Option<std::sync::mpsc::Receiver<crate::platform::DriveSpaces>>,
     opts: ListOpts,
     nav_up_align: ScrollAlign,
     pressed: Option<Part>,
@@ -314,6 +316,7 @@ impl Panel {
             bounds: Rect::default(),
             m,
             focused: false,
+            drive_rx: None,
             opts,
             nav_up_align: ScrollAlign::Center,
             pressed: None,
@@ -954,21 +957,35 @@ impl Panel {
         }
     }
 
-    /// 내 PC 드라이브 용량 채우기 — 호스트가 Disk 포트를 넘긴다(한 번만 · 이미 알면 건너뜀).
+    /// 내 PC 드라이브 용량 채우기 — Disk 포트의 워커 경로에 한 번만 묻고(`drive_space_asked`) 결과는 [`Self::tick`]이 수거한다
+    /// (10-18: 종전엔 UI 스레드에서 드라이브마다 동기 조회 · 결과가 비면 사건마다 재시도).
     pub(crate) fn fill_drive_space(
         &mut self,
-        space_of: &dyn Fn(&Path) -> Option<(u64, u64)>,
+        disk: &dyn crate::platform::Disk,
         inv: &mut Invalidations,
     ) {
         let src = self.rows().source();
-        if !src.is_virtual_root() || src.drive_space_known() {
+        if !src.is_virtual_root() || src.drive_space_known() || src.drive_space_asked() {
             return;
         }
         let names = src.drive_names();
-        let space: Vec<(String, (u64, u64))> = names
-            .into_iter()
-            .filter_map(|n| space_of(Path::new(&n)).map(|s| (n, s)))
-            .collect();
+        self.tabs[self.active]
+            .rows
+            .source_mut()
+            .mark_drive_space_asked();
+        self.drive_rx = Some(disk.space_async(names));
+        self.poll_drive_space(inv); // 동기 포트(가짜 · 미지원)는 이미 보냈다 → 바로 채운다
+    }
+
+    /// 워커 결과 수거(틱) — 채워졌으면 목록 무효화.
+    fn poll_drive_space(&mut self, inv: &mut Invalidations) {
+        let Some(rx) = &self.drive_rx else {
+            return;
+        };
+        let Ok(space) = rx.try_recv() else {
+            return;
+        };
+        self.drive_rx = None;
         if !space.is_empty() {
             self.tabs[self.active]
                 .rows
@@ -976,6 +993,11 @@ impl Panel {
                 .set_drive_space(space);
             inv.push(self.rows().bounds());
         }
+    }
+
+    /// 용량 워커 결과를 기다리는가(이벤트 루프 깨움).
+    pub(crate) fn drive_space_pending(&self) -> bool {
+        self.drive_rx.is_some()
     }
 
     pub(crate) fn set_focused(&mut self, focused: bool, inv: &mut Invalidations) {
@@ -1148,6 +1170,7 @@ impl Panel {
         if self.tabs[self.active].rows.source_mut().drain_probes() {
             inv.push(self.tabs[self.active].rows.bounds());
         }
+        self.poll_drive_space(inv);
     }
 
     /// 활성 탭이 프로브 결과를 기다리는가(이벤트 루프 깨움 · 덤프 대기).
@@ -2498,7 +2521,17 @@ mod tests {
         let keys: Vec<u32> = p.rows().columns().iter().map(|c| c.key).collect();
         assert_eq!(keys, vec![0, 4, 5, 6]);
         assert_eq!(p.rows().columns()[0].width, 200, "이름 폭은 기본 열 상속");
-        p.fill_drive_space(&|_| Some((10, 5)), &mut inv);
+        struct FixedDisk;
+        impl crate::platform::Disk for FixedDisk {
+            fn space(&self, _root: &Path) -> Option<(u64, u64)> {
+                Some((10, 5))
+            }
+        }
+        p.fill_drive_space(&FixedDisk, &mut inv);
+        assert!(
+            p.rows().source().drive_space_known(),
+            "동기 포트 = 바로 채움"
+        );
         p.nav_back(&mut inv);
         assert_eq!(p.rows().columns().len(), 2);
         let _ = std::fs::remove_dir_all(&dir);

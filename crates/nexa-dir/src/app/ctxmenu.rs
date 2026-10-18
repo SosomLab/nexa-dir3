@@ -780,18 +780,28 @@ impl App {
         {
             let a = self.active.min(self.panels.len().saturating_sub(1));
             let count = self.panels[a].rows().source().selection_count();
-            let target = if count == 0 {
-                let dir = self.panels[a].root_path();
-                (!ndir_vfs::is_virtual_root(&dir)).then_some(MenuTarget::Bg(dir))
-            } else if count <= CTX_PREBUILD_MAX {
-                Some(MenuTarget::Rows(self.panels[a].selected_paths()))
-            } else {
-                None
-            };
-            if target != self.ctx_dwell_target {
-                self.ctx_dwell_target = target;
-                self.ctx_dwell_since = now;
-                self.ctx_dwell_done = false;
+            // 선택 키가 같으면 대상을 다시 모으지 않는다(종전 = 틱마다 선택 경로 ≤256개 복제 · 10-18).
+            let key = (
+                a,
+                count,
+                self.panels[a].rows().caret(),
+                self.panels[a].root_path(),
+            );
+            if self.ctx_dwell_key.as_ref() != Some(&key) {
+                let target = if count == 0 {
+                    let dir = key.3.clone();
+                    (!ndir_vfs::is_virtual_root(&dir)).then_some(MenuTarget::Bg(dir))
+                } else if count <= CTX_PREBUILD_MAX {
+                    Some(MenuTarget::Rows(self.panels[a].selected_paths()))
+                } else {
+                    None
+                };
+                self.ctx_dwell_key = Some(key);
+                if target != self.ctx_dwell_target {
+                    self.ctx_dwell_target = target;
+                    self.ctx_dwell_since = now;
+                    self.ctx_dwell_done = false;
+                }
             }
             if !self.ctx_dwell_done {
                 if let Some(t) = &self.ctx_dwell_target {

@@ -318,13 +318,31 @@ impl Disk for NativeDisk {
     }
 
     fn space(&self, root: &Path) -> Option<(u64, u64)> {
-        let w = wide(root);
-        let (mut total, mut free) = (0u64, 0u64);
-        // SAFETY: NUL 종단 UTF-16 경로 · 출력 포인터는 살아 있는 지역 변수 · 실패 = 0 반환.
-        let ok =
-            unsafe { GetDiskFreeSpaceExW(w.as_ptr(), &mut free, &mut total, std::ptr::null_mut()) };
-        (ok != 0).then_some((total, free))
+        disk_space(root)
     }
+
+    /// 워커 스레드에서 전부 재고 한 번에 보낸다(끊긴 네트워크 드라이브의 몇 초 대기가 UI를 막지 않게 · 10-18).
+    fn space_async(&self, roots: Vec<String>) -> std::sync::mpsc::Receiver<DriveSpaces> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let v: DriveSpaces = roots
+                .into_iter()
+                .filter_map(|n| disk_space(Path::new(&n)).map(|s| (n, s)))
+                .collect();
+            let _ = tx.send(v);
+        });
+        rx
+    }
+}
+
+/// `GetDiskFreeSpaceExW` — (전체, 여유).
+fn disk_space(root: &Path) -> Option<(u64, u64)> {
+    let w = wide(root);
+    let (mut total, mut free) = (0u64, 0u64);
+    // SAFETY: NUL 종단 UTF-16 경로 · 출력 포인터는 살아 있는 지역 변수 · 실패 = 0 반환.
+    let ok =
+        unsafe { GetDiskFreeSpaceExW(w.as_ptr(), &mut free, &mut total, std::ptr::null_mut()) };
+    (ok != 0).then_some((total, free))
 }
 
 /// 휴지통 = `SHFileOperationW(FO_DELETE | FOF_ALLOWUNDO)`(dir2 `delete_to_recycle_bin`과 같은 호출 · 확인창·진행창 없음).

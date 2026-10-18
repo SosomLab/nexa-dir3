@@ -415,6 +415,8 @@ struct App {
     ctx_dwell_target: Option<platform::MenuTarget>,
     ctx_dwell_since: Instant,
     ctx_dwell_done: bool,
+    /// 선행 구축 대상을 마지막으로 계산한 선택 키(활성 패널 · 선택 수 · 캐럿 · 현재 폴더) — 같으면 선택 경로 전체를 다시 모으지 않는다(10-18).
+    ctx_dwell_key: Option<(usize, usize, Option<usize>, PathBuf)>,
     /// 외부 끌어다 놓기 1차(winit HoveredFile/DroppedFile · 틱에서 처리).
     dnd_hover: Vec<PathBuf>,
     dnd_drop: Vec<PathBuf>,
@@ -796,6 +798,7 @@ impl App {
             ctx_dwell_target: None,
             ctx_dwell_since: Instant::now(),
             ctx_dwell_done: false,
+            ctx_dwell_key: None,
             dnd_hover: Vec::new(),
             dnd_drop: Vec::new(),
             dnd_dwell: None,
@@ -922,7 +925,7 @@ impl App {
             for p in &mut self.panels {
                 // 전환·닫기로 드러난 배경 탭은 그동안의 바깥 변경을 모른다 → 여기서 다시 읽는다(dir2 X-44 S1 · win.rs:4967-4976).
                 p.refresh_stale(&mut inv);
-                p.fill_drive_space(&|root| disk.space(root), &mut inv);
+                p.fill_drive_space(disk, &mut inv);
             }
         }
         // 세션 더러움 수거 길목(dir2 PREFS-051: update_status가 양 패널 플래그를 거둔다).
