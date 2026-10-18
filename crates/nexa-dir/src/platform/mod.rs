@@ -311,9 +311,16 @@ pub(crate) fn create_link(target: &Path, dest_dir: &Path) -> Result<PathBuf, Str
     }
 }
 
+/// 휴지통 워커 결과 채널(`Trash::trash_async`).
+pub(crate) type TrashRx = std::sync::mpsc::Receiver<Result<usize, PlatformError>>;
+
 pub(crate) trait Trash {
     /// 휴지통으로 — 옮긴 개수.
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError>;
+    /// 휴지통 작업을 **워커**에서(10-18 체감 점검 · 큰 트리·다른 볼륨 삭제가 UI를 멈추지 않게) — 결과 채널. 기본 = `None`(호출부가 동기로).
+    fn trash_async(&self, _paths: Vec<PathBuf>) -> Option<TrashRx> {
+        None
+    }
     /// 휴지통에서 **원래 경로**로 복원(삭제 undo · dir2 SHELL-049) — 복원한 개수(없으면 0). 기본 = 미지원.
     fn restore(&self, _original: &[PathBuf]) -> Result<usize, PlatformError> {
         Err(PlatformError::Unsupported("trash.restore"))

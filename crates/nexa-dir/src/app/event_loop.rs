@@ -251,6 +251,13 @@ impl ApplicationHandler<Wake> for App {
         if self.preview_decode.busy() {
             next = next.min(now + Duration::from_millis(30));
         }
+        // 휴지통 워커(10-18) — 끝나면 결과 반영 · 기다리는 동안 50 ms.
+        if self.trash_tick() {
+            self.redraw();
+        }
+        if self.trash_busy() {
+            next = next.min(now + Duration::from_millis(50));
+        }
         if self
             .panels
             .iter()

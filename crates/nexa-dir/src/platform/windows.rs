@@ -401,27 +401,41 @@ impl Trash for NativeTrash {
     }
 
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
-        if paths.is_empty() {
-            return Ok(0);
-        }
-        let list = double_null_list(paths);
-        let mut op = ShFileOpStructW {
-            hwnd: std::ptr::null_mut(),
-            func: FO_DELETE,
-            from: list.as_ptr(),
-            to: std::ptr::null(),
-            flags: FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
-            any_aborted: 0,
-            name_mappings: std::ptr::null_mut(),
-            progress_title: std::ptr::null(),
-        };
-        // SAFETY: 구조체·목록은 호출 동안 살아 있다 · 이중 NUL 종단.
-        let rc = unsafe { SHFileOperationW(&mut op) };
-        if rc == 0 && op.any_aborted == 0 {
-            Ok(paths.len())
-        } else {
-            Err(PlatformError::Failed(format!("SHFileOperationW: {rc}")))
-        }
+        shell_trash(paths)
+    }
+
+    /// 워커 스레드에서 `SHFileOperationW`(큰 트리 삭제가 UI를 막지 않게 · 10-18).
+    fn trash_async(&self, paths: Vec<PathBuf>) -> Option<TrashRx> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(shell_trash(&paths));
+        });
+        Some(rx)
+    }
+}
+
+/// 휴지통 = `SHFileOperationW(FO_DELETE | FOF_ALLOWUNDO)` — 어느 스레드에서나.
+fn shell_trash(paths: &[PathBuf]) -> Result<usize, PlatformError> {
+    if paths.is_empty() {
+        return Ok(0);
+    }
+    let list = double_null_list(paths);
+    let mut op = ShFileOpStructW {
+        hwnd: std::ptr::null_mut(),
+        func: FO_DELETE,
+        from: list.as_ptr(),
+        to: std::ptr::null(),
+        flags: FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
+        any_aborted: 0,
+        name_mappings: std::ptr::null_mut(),
+        progress_title: std::ptr::null(),
+    };
+    // SAFETY: 구조체·목록은 호출 동안 살아 있다 · 이중 NUL 종단.
+    let rc = unsafe { SHFileOperationW(&mut op) };
+    if rc == 0 && op.any_aborted == 0 {
+        Ok(paths.len())
+    } else {
+        Err(PlatformError::Failed(format!("SHFileOperationW: {rc}")))
     }
 }
 

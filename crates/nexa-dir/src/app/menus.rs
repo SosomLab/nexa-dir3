@@ -521,8 +521,48 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let mut inv = Invalidations::default();
+        // 워커 경로(Windows · 10-18): 큰 트리·다른 볼륨 삭제가 UI를 멈추지 않는다 — 결과는 `trash_tick`이 수거. 다른 OS·시험 = 동기.
+        if self.trash_job.is_none() {
+            if let Some(rx) = self.platform.trash.trash_async(paths.clone()) {
+                let mut inv = Invalidations::default();
+                self.statusbar.set_left(&tr("del.progress"), &mut inv);
+                self.trash_job = Some((rx, paths));
+                self.redraw();
+                return;
+            }
+        }
         let result = self.platform.trash.trash(&paths);
+        self.trash_finish(paths, result);
+    }
+
+    /// 휴지통 워커 결과 수거(틱) — 끝났으면 `true`(다시 그림).
+    pub(crate) fn trash_tick(&mut self) -> bool {
+        let Some((rx, _)) = &self.trash_job else {
+            return false;
+        };
+        let result = match rx.try_recv() {
+            Ok(r) => r,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err(platform::PlatformError::Failed("trash worker".into()))
+            }
+        };
+        let (_, paths) = self.trash_job.take().expect("checked above");
+        self.trash_finish(paths, result);
+        true
+    }
+
+    pub(crate) fn trash_busy(&self) -> bool {
+        self.trash_job.is_some()
+    }
+
+    /// 삭제 결과 반영(동기·워커 공용): 남은 항목으로 성패를 가르고 실행 취소 · 토스트 · 재열람 · 실패 안내.
+    fn trash_finish(
+        &mut self,
+        paths: Vec<PathBuf>,
+        result: Result<usize, platform::PlatformError>,
+    ) {
+        let mut inv = Invalidations::default();
         let failed = self.platform.trash.remaining(&paths);
         let deleted: Vec<PathBuf> = paths
             .iter()

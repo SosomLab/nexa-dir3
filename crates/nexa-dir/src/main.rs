@@ -481,6 +481,8 @@ struct App {
     clip: Option<(Vec<PathBuf>, bool)>,
     /// 진행 중 전송(동시 1건).
     transfer: Option<app::ops::TransferJob>,
+    /// 휴지통 워커(10-18 · `Trash::trash_async`) — (결과 채널, 대상) · 끝나면 `trash_finish`.
+    trash_job: Option<(platform::TrashRx, Vec<PathBuf>)>,
     /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
     dirsizes: app::dirsize::DirSizes,
     /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
@@ -816,6 +818,7 @@ impl App {
             drives_seen: None,
             clip: None,
             transfer: None,
+            trash_job: None,
             dirsizes: app::dirsize::DirSizes::default(),
             docks_due: None,
             preview_decode: app::imgjobs::PreviewDecoder::new(),
