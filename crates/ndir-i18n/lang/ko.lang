@@ -1151,6 +1151,8 @@ pref.watchGitRetry = git 조회 실패 재시도 간격(초)
 pref.watchGitRetry.desc = git 조회가 실패하거나 시간 상한을 넘겨 중단된 저장소는 이 간격이 지나기 전엔 다시 조회하지 않습니다(파일 변경·포커스 복귀에도). 아주 큰 저장소가 CPU·디스크를 계속 쓰지 않게 하는 안전장치입니다. 0 = 수동 새로 고침이나 git 요약 표시를 껐다 켜기 전까지 재시도 안 함.
 pref.watchGitBackground = 창이 비활성일 때도 git 주기 갱신
 pref.watchGitBackground.desc = 끄면 창이 비활성이거나 최소화된 동안 git 요약 주기 갱신(탭 상태바 설정)을 멈춥니다. 창으로 돌아오면 즉시 다시 조회하므로 보통은 끄는 편이 가볍습니다.
+pref.watchSelfWindow = 자기 변경 메아리 무시(ms)
+pref.watchSelfWindow.desc = 탭이 폴더를 스스로 다시 읽은 뒤(전송 · 삭제 · 이름 바꾸기 · 새로 고침 · 진입) 이 시간 안에 온 감시 통지는 폴더의 수정 시각이 그때와 같으면 우리 작업의 메아리로 보고 버립니다. 다시 읽기를 한 번 아낍니다. 0 = 끔.
 pref.toolbarOnColor = 툴바: 켜짐 색
 pref.toolbarOnColor.desc = 켜진 툴바 버튼의 모양입니다. 선 색 = 배경은 강조색 옅은 채움 그대로 두고 테두리와 아이콘 선을 아래 색으로. 강조색 = 테두리 · 아이콘이 강조색 설정을 따릅니다.
 pref.toolbarOnColor.line = 선 색
@@ -1266,6 +1268,10 @@ pref.perfBoost = 성능 향상 모드
 pref.perfBoost.desc = 무거운 부가 기능을 꺼서 앱을 가볍게 합니다. 지금 끄는 것: 상태바의 시스템 상태 모니터링(CPU · 메모리 · 디스크 · 네트워크 · 앱 메모리) · 파일 이름 앞 아이콘 · 메뉴 항목 앞 아이콘. 다른 설정값은 그대로 유지됩니다.
 pref.idleTrim = 유휴 메모리 정리(초)
 pref.idleTrim.desc = 마지막 입력 뒤 이 시간이 지나면 글자 캐시 · 셸 메뉴 객체 · 힙의 빈 조각 · 작업 집합을 운영체제에 돌려줍니다. 돌아올 때 잠깐 다시 읽어 들이는 비용이 있습니다. 0 = 끔.
+pref.idleTrimScope = 유휴 정리 범위
+pref.idleTrimScope.desc = 전부 = 글자 캐시 · 그림 캐시 · 셸 메뉴 객체 · 힙 · 작업 집합을 모두 돌려줍니다. 가볍게 = 힙과 셸 메뉴 객체만 돌려주어 돌아올 때 잠깐의 끊김이 없습니다.
+pref.idleTrimScope.full = 전부
+pref.idleTrimScope.light = 가볍게(힙 · 셸 메뉴만)
 pref.memOnTop = 메모리 창 항상 위
 pref.memOnTop.desc = 메모리 창을 다른 창 위에 둡니다(창의 스위치로 바뀝니다).
 pref.memDetail = 메모리 창 상세 줄

@@ -1152,6 +1152,8 @@ pref.watchGitRetry = git query failure retry interval (s)
 pref.watchGitRetry.desc = A repository whose git query failed or was stopped after exceeding the time limit is not queried again until this interval has passed (even on file changes or focus return). A safeguard so very large repositories do not keep using CPU and disk. 0 = no retry until a manual refresh or toggling the git summary off and on.
 pref.watchGitBackground = Keep refreshing git while the window is inactive
 pref.watchGitBackground.desc = When off, the periodic git summary refresh (Status bar setting) pauses while the window is inactive or minimized. It is queried again as soon as you return to the window, so leaving this off is usually lighter.
+pref.watchSelfWindow = Ignore own-change echoes (ms)
+pref.watchSelfWindow.desc = After a tab re-reads its folder (transfer, delete, rename, refresh, entering), a watch notification that arrives within this time is dropped when the folder's modified time is unchanged — it is the echo of our own change. Saves one re-read. 0 = off.
 pref.toolbarOnColor = Toolbar: toggled-on color
 pref.toolbarOnColor.desc = How a toggled-on toolbar button looks. Line color = light accent background, outline and icon drawn in the color below. Accent = outline and icon follow the accent settings.
 pref.toolbarOnColor.line = Line color
@@ -1267,6 +1269,10 @@ pref.perfBoost = Performance mode
 pref.perfBoost.desc = Turns off heavier extras to keep the app light. Currently: system status monitoring in the status bar (CPU, memory, disk, network, app memory), icons before file names, and icons before menu items. Your other settings are kept.
 pref.idleTrim = Idle memory trim (seconds)
 pref.idleTrim.desc = After this many seconds without input, return the glyph cache, shell menu objects, free heap blocks and the working set to the OS. Coming back costs a brief reload. 0 = off.
+pref.idleTrimScope = Idle trim scope
+pref.idleTrimScope.desc = Full returns everything (glyph cache, image cache, shell menu objects, heap, working set). Light returns only the heap and shell menu objects, so coming back has no brief stutter.
+pref.idleTrimScope.full = Full
+pref.idleTrimScope.light = Light (heap and shell menu only)
 pref.memOnTop = Memory window always on top
 pref.memOnTop.desc = Keep the memory window above other windows (changed with the switch in the window).
 pref.memDetail = Memory window detail rows

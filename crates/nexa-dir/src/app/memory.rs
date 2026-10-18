@@ -140,15 +140,22 @@ impl App {
             IdleTrim::Off => None,
             IdleTrim::Wait(ms) => Some(now + Duration::from_millis(ms.max(1))),
             IdleTrim::Trim => {
-                self.ui_font.clear_glyph_cache();
-                if let Some(m) = &self.mono_font {
-                    m.clear_glyph_cache();
+                // 범위(10-18 결정 ④ · `mem.idle_trim_scope`): light = 힙 · 셸 메뉴 객체만(글리프 · 그림 캐시 · 작업 집합은 둔다 —
+                // 돌아올 때 재래스터 · 페이지 폴트 없음) · full = 전부.
+                let full = self.settings.get("mem.idle_trim_scope").unwrap_or("full") != "light";
+                if full {
+                    self.ui_font.clear_glyph_cache();
+                    if let Some(m) = &self.mono_font {
+                        m.clear_glyph_cache();
+                    }
+                    // 그림 캐시는 보이는 1~2장 몫만 남긴다(축소본 ≈ 1 MB/장 · 돌아왔을 때 재디코드 없이 그린다).
+                    nexa_ctl::raster::image_cache::evict_to(IDLE_IMAGE_KEEP);
                 }
-                // 그림 캐시는 보이는 1~2장 몫만 남긴다(축소본 ≈ 1 MB/장 · 돌아왔을 때 재디코드 없이 그린다).
-                nexa_ctl::raster::image_cache::evict_to(IDLE_IMAGE_KEEP);
                 self.platform.ctxmenu.release();
                 platform::procmem::trim();
-                platform::trim_working_set();
+                if full {
+                    platform::trim_working_set();
+                }
                 self.idle_trimmed = true;
                 None
             }

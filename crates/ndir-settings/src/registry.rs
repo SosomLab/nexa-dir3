@@ -25,6 +25,10 @@ const FLASH_SHAPE_OPTS: &[(&str, &str)] = &[
     ("rounded", "pref.flashShape.rounded"),
     ("none", "pref.flashShape.none"),
 ];
+const IDLE_TRIM_SCOPE_OPTS: &[(&str, &str)] = &[
+    ("full", "pref.idleTrimScope.full"),
+    ("light", "pref.idleTrimScope.light"),
+];
 const TOOLBAR_SIZE_OPTS: &[(&str, &str)] = &[
     ("16", "pref.toolbarSize.16"),
     ("20", "pref.toolbarSize.20"),
@@ -744,14 +748,23 @@ pub const REGISTRY: &[Entry] = &[
         "off"
     ),
     // 유휴 메모리 트림(dir2 M2-8 계승 · T-179 A · 고급): 마지막 입력 뒤 이 초가 지나면 글리프 캐시 · 셸 메뉴 객체 · 힙 ·
-    // 작업 집합을 돌려준다. 0 = 끔.
+    // 작업 집합을 돌려준다. 0 = 끔. 기본 300 s(10-18 결정 ④ — 종전 60 s는 잠깐 손을 뗀 뒤 첫 입력이 끊겨 보였다: 글리프 재래스터 ·
+    // 작업 집합 페이지 폴트). 범위 = full(전부) | light(힙 · 셸 메뉴 객체만 — 글리프 · 그림 캐시 · 작업 집합은 둔다 = 돌아올 때 끊김 없음).
     e!(
         "mem.idle_trim_s",
         CAT_APPEARANCE,
         "pref.idleTrim",
         "pref.idleTrim.desc",
         Int { min: 0, max: 3600 },
-        "60"
+        "300"
+    ),
+    e!(
+        "mem.idle_trim_scope",
+        CAT_APPEARANCE,
+        "pref.idleTrimScope",
+        "pref.idleTrimScope.desc",
+        Choice(IDLE_TRIM_SCOPE_OPTS),
+        "full"
     ),
     // 메모리 창 스위치 상태(nexa-sql 메모리 창 꼴 · 10-18): 최상위 · 상세(끔 = 묶음마다 한 줄 · 켬 = 분류·시스템 줄 전부) — 창에서만 바뀐다(HIDDEN).
     e!(
@@ -1393,6 +1406,19 @@ pub const REGISTRY: &[Entry] = &[
         "pref.watchGitBackground.desc",
         Bool,
         "off"
+    ),
+    // 자기 변경 억제 창(10-18 결정 ③ · 고급): 탭이 스스로 다시 읽은 뒤(전송 · 삭제 · 이름 바꾸기 · F5 · 진입) 이 시간 안에 온
+    // 감시 통지는 그 폴더의 수정 시각이 그때와 같으면 우리 작업의 메아리로 보고 버린다(재열거 1회 절약). 0 = 끔.
+    e!(
+        "watch.self_window_ms",
+        CAT_WATCH,
+        "pref.watchSelfWindow",
+        "pref.watchSelfWindow.desc",
+        Int {
+            min: 0,
+            max: 10_000
+        },
+        "2000"
     ),
     e!(
         "dock.visible",
@@ -2250,6 +2276,7 @@ pub const ADVANCED: &[&str] = &[
     "watch.git_retry_s",
     "watch.git_timeout_s",
     "watch.git_background",
+    "watch.self_window_ms",
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
@@ -2260,6 +2287,7 @@ pub const ADVANCED: &[&str] = &[
     "hash.algos",
     "hash.auto_limit_mb",
     "mem.idle_trim_s",
+    "mem.idle_trim_scope",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",

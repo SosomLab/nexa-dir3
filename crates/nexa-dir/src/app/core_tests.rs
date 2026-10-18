@@ -5754,6 +5754,46 @@ fn context_targets_keep_only_carets_parent() {
     assert_eq!(context_targets(sel.clone(), Some(&p("/other/x.txt"))), sel);
 }
 
+/// 10-18 결정 ③ 자기 변경 억제(`watch.self_window_ms`): 탭이 스스로 다시 읽은 직후 온 감시 통지는 폴더 수정 시각이 같으면
+/// 메아리 = 생략 · 실제로 바뀌었으면(수정 시각 다름) 읽는다 · 감시가 읽은 것은 창을 열지 않는다(연속 통지 = 매번) · 0 = 끔.
+#[test]
+fn watch_skips_echo_of_own_reload() {
+    let (mut app, dir) = fixture("watchecho");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let tick = |app: &mut App| {
+        app.watch_next = Instant::now();
+        app.watch_tick(Instant::now());
+    };
+    let reloads = |app: &App| app.panels[0].rows().source().reloads();
+    tick(&mut app);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv); // 자기 작업 뒤 다시 읽기(전송 · 삭제 · F5와 같은 길)
+    let n = reloads(&app);
+    log.borrow_mut().changed = vec![dir.clone()];
+    tick(&mut app);
+    assert_eq!(reloads(&app), n, "메아리(수정 시각 같음) = 생략");
+    std::fs::write(dir.join("zz-echo.txt"), b"new").expect("write");
+    log.borrow_mut().changed = vec![dir.clone()];
+    tick(&mut app);
+    assert_eq!(reloads(&app), n + 1, "실제 변경(수정 시각 다름) = 읽음");
+    assert!(app.panels[0].rows().source().len() >= 3);
+    log.borrow_mut().changed = vec![dir.clone()];
+    tick(&mut app);
+    assert_eq!(
+        reloads(&app),
+        n + 2,
+        "감시가 읽은 것은 억제 창을 열지 않는다"
+    );
+    let _ = app.settings.set("watch.self_window_ms", "0");
+    app.panels[0].reopen(&mut inv);
+    let n = reloads(&app);
+    log.borrow_mut().changed = vec![dir.clone()];
+    tick(&mut app);
+    assert_eq!(reloads(&app), n + 1, "0 = 끔(종전대로)");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 감시 다시 읽기 미루기(dir2 win.rs:9457-9485 · X-35 D4 · T-149 14): 인라인 이름 편집 중에는 폴더가 바뀌어도 다시 읽지 않고,
 /// 편집이 끝난 다음 틱에 반영한다. 종전 dir3 = 편집 중에도 다시 읽어 편집 행이 흔들릴 수 있었다.
 #[test]

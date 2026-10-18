@@ -217,6 +217,12 @@ pub(crate) struct TreeSource {
     probe_inbox: probe::Inbox,
     probe_gen: u64,
     probe_pending: std::cell::RefCell<std::collections::HashSet<ndir_tree::NodeId>>,
+    /// 스스로 읽은 시각과 그때의 폴더 수정 시각(10-18 결정 ③ 자기 변경 억제): 감시 통지가 이 뒤 창 안에 오고 수정 시각이
+    /// 같으면 우리 작업의 메아리 — 호스트가 버린다. 감시가 읽은 것은 `clear_fresh`로 지운다(연속 통지는 종전대로).
+    fresh: Option<(std::time::Instant, Option<std::time::SystemTime>)>,
+    /// 재로드 횟수(시험 증거).
+    #[cfg(test)]
+    reloads: u32,
 }
 
 impl TreeSource {
@@ -236,9 +242,38 @@ impl TreeSource {
             probe_inbox: Default::default(),
             probe_gen: 0,
             probe_pending: Default::default(),
+            fresh: None,
+            #[cfg(test)]
+            reloads: 0,
         };
         s.reload();
         s
+    }
+
+    /// 스스로 읽은 지 `within` 안이고 폴더 수정 시각이 그때와 같은가(= 감시 통지가 우리 변경의 메아리) — 가상 최상위 · 수정 시각을
+    /// 못 읽는 위치는 거짓(억제 없음).
+    pub(crate) fn self_fresh(&self, within: std::time::Duration) -> bool {
+        let Some((at, Some(mtime))) = self.fresh else {
+            return false;
+        };
+        at.elapsed() < within && Self::root_mtime(&self.path) == Some(mtime)
+    }
+
+    /// 감시가 읽었다 — 스탬프를 지운다(다음 통지는 종전대로 다시 읽는다).
+    pub(crate) fn clear_fresh(&mut self) {
+        self.fresh = None;
+    }
+
+    fn root_mtime(path: &Path) -> Option<std::time::SystemTime> {
+        if ndir_vfs::is_virtual_root(path) {
+            return None;
+        }
+        std::fs::metadata(path).and_then(|m| m.modified()).ok()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reloads(&self) -> u32 {
+        self.reloads
     }
 
     /// 프로브 워커 결과를 캐시에 옮긴다(유휴 틱) — 바뀐 것이 있으면 `true`(마커 다시 그리기).
@@ -301,6 +336,11 @@ impl TreeSource {
     /// 정렬 키 · 펼친 폴더 · 선택을 스냅샷해 새 트리에 경로로 되돌린다(사라진 항목은 조용히 빠진다). 종전에는 새 트리를 기본 정렬로
     /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
+        #[cfg(test)]
+        {
+            self.reloads += 1;
+        }
+        self.fresh = Some((std::time::Instant::now(), Self::root_mtime(&self.path)));
         self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
         self.drive_space_asked = false;
         self.probe_gen += 1;

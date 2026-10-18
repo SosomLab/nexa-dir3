@@ -101,11 +101,21 @@ impl App {
             self.dirsizes.invalidate(&changed); // 폴더 크기 캐시(T-166) — 닿는 항목만.
             let mut inv = Invalidations::default();
             let transfer = self.transfer.is_some();
+            let self_window =
+                Duration::from_millis(self.settings.int("watch.self_window_ms").max(0) as u64);
             let mut reloaded = false;
             for p in &mut self.panels {
                 let root = p.root_path();
                 // 현재 폴더나 펼쳐진 하위 폴더가 바뀌었으면 이 패널을 다시 읽는다(펼침 · 선택 · 캐럿 · 스크롤 유지).
-                if !p.watch_dirs().iter().any(|d| changed.contains(d)) {
+                let dirs = p.watch_dirs();
+                let hits: Vec<&PathBuf> = dirs.iter().filter(|d| changed.contains(d)).collect();
+                if hits.is_empty() {
+                    continue;
+                }
+                // 자기 변경 억제(10-18 결정 ③ · `watch.self_window_ms`): 바뀐 것이 현재 폴더뿐이고 이 탭이 방금 스스로 읽었으며
+                // 폴더 수정 시각이 그때와 같다 = 우리 작업(전송 · 삭제 · 이름 바꾸기 · 새로 고침 · 진입)의 메아리 — 같은 목록을 두 번
+                // 읽지 않는다. 바깥 변경은 수정 시각이 달라져 그대로 읽는다(내용만 바뀐 파일은 다음 통지에).
+                if hits.iter().all(|d| **d == root) && p.self_fresh(&root, self_window) {
                     continue;
                 }
                 // 인라인 이름 편집 · 경로 편집 · 전송 중에는 미룬다(dir2 win.rs:9457-9485 · X-35 D4: 다시 읽기가 편집 행을 흔들거나
@@ -115,7 +125,7 @@ impl App {
                         self.watch_deferred.push(root);
                     }
                 } else {
-                    p.reopen(&mut inv);
+                    p.reopen_from_watch(&mut inv);
                     reloaded = true;
                 }
             }

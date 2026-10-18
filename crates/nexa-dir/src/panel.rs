@@ -1940,6 +1940,19 @@ impl Panel {
         self.sync_chrome(inv);
     }
 
+    /// 감시 통지로 다시 읽기(10-18 결정 ③): `reopen` + 신선 스탬프 지움 — 감시가 읽은 것은 억제 창을 열지 않는다
+    /// (바깥에서 변경이 이어지면 통지마다 종전대로 다시 읽는다).
+    pub(crate) fn reopen_from_watch(&mut self, inv: &mut Invalidations) {
+        self.reopen(inv);
+        self.tabs[self.active].rows.source_mut().clear_fresh();
+    }
+
+    /// 활성 탭이 `dir`을 방금(`within` 안) 스스로 읽었고 폴더 수정 시각이 그때와 같은가 — 감시 통지 = 우리 변경의 메아리.
+    pub(crate) fn self_fresh(&self, dir: &Path, within: std::time::Duration) -> bool {
+        let src = self.rows().source();
+        src.path() == dir && src.self_fresh(within)
+    }
+
     /// 활성 탭이 낡았는가(전환·닫기로 드러난 뒤 아직 다시 읽지 않음 · dir2 `active_tab_stale`).
     #[cfg(test)]
     pub(crate) fn active_tab_stale(&self) -> bool {
