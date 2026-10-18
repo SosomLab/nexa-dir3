@@ -9022,14 +9022,9 @@ fn preset_save_overwrite_arms_button_in_place() {
         "저장됨 플래시: {}",
         app.bulk_win.flash_text()
     );
-    // 편집 창 요청 = 깃발 + 목록 · 모두 제거 = 확인창(잠금) → 취소면 그대로.
+    // 편집 창 요청 = 깃발 + 목록(모두 제거는 창 안 무장 2회 선택 = bulk_win 시험 · 실제 프리셋 폴더에서는 돌리지 않는다).
     app.bulk_action(BulkAction::EditPresets);
     assert!(app.open_presets && app.preset_win.names().contains(&name));
-    app.bulk_action(BulkAction::ClearPresets);
-    let d = app.dump_of("dlg").unwrap();
-    assert!(d.contains("pending") && d.contains("wait 1:3000"), "{d}");
-    app.dlg_pick(0);
-    assert!(file.is_file(), "취소 = 제거 안 함");
     let _ = std::fs::remove_file(&file);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -230,22 +230,10 @@ impl App {
                 self.open_presets = true;
             }
             BulkAction::ClearPresets => {
-                let n = Self::preset_names(&Self::presets_dir()).len();
-                if n == 0 {
-                    return;
-                }
-                // 되돌릴 수 없다 → 확인창 + 3초 잠금 버튼(사용자 10-18 "시간제한 버튼으로 2중 확인").
-                let spec = DlgSpec {
-                    title: tr("bulk.preset.removeAll"),
-                    text: trf("bulk.preset.removeAllText", &[&n.to_string()]),
-                    buttons: vec![(1, tr("bulk.preset.removeAllOk")), (0, tr("dlg.cancel"))],
-                    default: 0,
-                    cancel: 0,
-                    input: None,
-                    delay: Some((1, PRESET_CONFIRM_MS)),
-                    arm: None,
-                };
-                self.ask(spec, DlgReply::BulkPresetsClear);
+                // 창이 이미 "제한 시간 안에 두 번"으로 확인했다(사용자 10-18) → 바로.
+                Self::clear_presets(&Self::presets_dir());
+                self.refresh_presets();
+                self.bulk_win.notify_presets_cleared();
             }
             BulkAction::Paint | BulkAction::None => {}
         }
@@ -274,16 +262,6 @@ impl App {
     fn write_preset(dir: &Path, name: &str, text: &str) {
         let _ = std::fs::create_dir_all(dir);
         let _ = std::fs::write(dir.join(format!("{name}.cfg")), text);
-    }
-
-    /// 모두 제거 확인 회신(1 = 제거).
-    pub(crate) fn bulk_presets_cleared(&mut self, id: i32) {
-        if id != 1 {
-            return;
-        }
-        Self::clear_presets(&Self::presets_dir());
-        self.refresh_presets();
-        self.bulk_win.notify_presets_cleared();
     }
 
     /// 편집 창 OK(10-18): 순서 + 삭제 반영 → 메뉴 갱신 → 일괄 창으로 포커스.

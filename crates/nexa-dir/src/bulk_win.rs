@@ -42,7 +42,7 @@ pub(crate) enum BulkAction {
     SavePreset(String),
     /// 프리셋 편집 창 요청(순서 · 삭제 · 10-18).
     EditPresets,
-    /// 모든 프리셋 제거 요청(호스트가 확인창 뒤 삭제 · 10-18).
+    /// 모든 프리셋 제거 요청(메뉴 항목을 제한 시간 안에 두 번 — 창이 무장을 판정한 뒤 보낸다 · 호스트는 바로 삭제 · 10-18).
     ClearPresets,
     /// 프리셋 불러오기(이름) — 호스트가 파일을 읽어 `load_ops`.
     LoadPreset(String),
@@ -567,6 +567,8 @@ const LABEL_W: f32 = 96.0;
 const BTN_H: f32 = 28.0;
 /// 카드 드래그가 시작되는 이동 거리(px).
 const CARD_DRAG_THRESHOLD: i32 = 5;
+/// "모든 프리셋 제거" 무장 유지 시간(ms · 두 번째 선택 기한).
+const CLEAR_ARM_MS: u64 = 3000;
 /// 카드 열 밖 고스트 축소 비율.
 const CARD_GHOST_SCALE: f32 = 0.4;
 
@@ -596,6 +598,9 @@ pub(crate) struct BulkWin {
     /// `[…]` 버튼 + 그 위로 펴는 프리셋 메뉴(사용자 10-18 · 종전 콤보 = ✓ 칸 · 헤더/구분자 불가).
     /// 카드 드래그 이동(사용자 10-18 · Path Finder 꼴): 카드 바탕(컨트롤 밖)을 잡고 끌면 삽입 위치 인디케이터 + 고스트(열 밖 = 축소).
     card_drag: Option<CardDrag>,
+    /// "모든 프리셋 제거" 무장 시각(사용자 10-18 "제한 시간에 2번"): 첫 선택 = 무장(메뉴를 다시 열어 항목이 `(N)` 카운트다운) ·
+    /// 그 안에 다시 선택 = 실행 · 지나면 원복.
+    clear_armed: Option<std::time::Instant>,
     /// 카드 열 스크롤 막대(오버레이 · 썸 드래그 · 전역 고속 스크롤 설정 공유 · 사용자 10-18).
     bars: ScrollBars,
     /// 창 안 토스트(프리셋 불러옴 안내 · 사용자 10-18) + 모서리(설정 `ui.toast_position` · 호스트가 준다).
@@ -648,6 +653,7 @@ impl BulkWin {
             cards_rect: Rect::default(),
             grid_rect: Rect::default(),
             card_drag: None,
+            clear_armed: None,
             bars: ScrollBars::new(),
             flash: FlashBox::new(),
             presets_btn: Button::new("…"),
@@ -805,13 +811,12 @@ impl BulkWin {
         items.push(CtxItem::item("save", tr("bulk.preset.saveSeq")));
         items.push(CtxItem::item("edit", tr("bulk.preset.editSeq")));
         items.push(CtxItem::Separator);
+        let clear_label = match self.clear_armed_secs() {
+            Some(secs) => format!("{} ({secs})", tr("bulk.preset.removeAllOk")),
+            None => tr("bulk.preset.removeAll"),
+        };
         items.push(
-            CtxItem::maybe(
-                "clear",
-                tr("bulk.preset.removeAll"),
-                !self.preset_names.is_empty(),
-            )
-            .with_danger(true),
+            CtxItem::maybe("clear", clear_label, !self.preset_names.is_empty()).with_danger(true),
         );
         items
     }
@@ -832,6 +837,13 @@ impl BulkWin {
             .open_at(b.x, b.y, items, host, self.menu_text_w);
     }
 
+    /// "모두 제거" 무장이 살아 있으면 남은 초(`CLEAR_ARM_MS` 안).
+    fn clear_armed_secs(&self) -> Option<u64> {
+        let at = self.clear_armed?;
+        let left = CLEAR_ARM_MS.saturating_sub(at.elapsed().as_millis() as u64);
+        (left > 0).then_some(left.div_ceil(1000))
+    }
+
     /// 카드 초기화 = 기본 카드 1장(메뉴 · ⌘/Ctrl+Shift+N · 사용자 10-18) + 플래시.
     pub(crate) fn reset_cards(&mut self) {
         self.load_ops(&[]);
@@ -850,7 +862,18 @@ impl BulkWin {
             }
             "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops_all()))),
             "edit" => Some(BulkAction::EditPresets),
-            "clear" => Some(BulkAction::ClearPresets),
+            "clear" => {
+                if self.clear_armed_secs().is_some() {
+                    // 제한 시간 안의 둘째 선택 = 실행.
+                    self.clear_armed = None;
+                    Some(BulkAction::ClearPresets)
+                } else {
+                    // 첫 선택 = 무장: 메뉴를 그 자리에 다시 열어 항목이 "모두 제거 (3)"으로 세는 걸 보인다.
+                    self.clear_armed = Some(std::time::Instant::now());
+                    self.open_preset_menu();
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -1138,6 +1161,16 @@ impl BulkWin {
         let now = std::time::Instant::now();
         any |= self.preset_menu.tick(now);
         any |= self.flash.tick(now);
+        if self.clear_armed.is_some() {
+            if self.clear_armed_secs().is_none() {
+                self.clear_armed = None;
+            }
+            if self.preset_menu.is_open() {
+                let items = self.preset_menu_items();
+                self.preset_menu.replace_items(items, self.menu_text_w);
+            }
+            any = true;
+        }
         for c in &mut self.cards {
             for b in c.buttons() {
                 any |= b.tick(now_ms);
@@ -1160,6 +1193,7 @@ impl BulkWin {
                 || self.btn_rename.is_animating()
                 || self.presets_btn.is_animating()
                 || self.flash.animating()
+                || self.clear_armed.is_some()
                 || self.preset_menu.next_wake().is_some())
     }
 
@@ -2564,7 +2598,19 @@ mod tests {
             matches!(w.preset_pick("save"), Some(BulkAction::SavePreset(_))),
             "기본 카드 1장(무효)이어도 저장 요청은 나간다(빈 파이프라인)"
         );
+        // 모두 제거 = 제한 시간 안에 두 번(10-18): 첫 선택 = 무장(요청 없음 · 라벨 카운트다운) · 둘째 = 요청.
+        w.set_presets(vec!["a".into()]);
+        assert!(w.preset_pick("clear").is_none() && w.clear_armed.is_some());
+        assert!(
+            ids(&w).last().is_some_and(|id| id == "clear")
+                && w.preset_menu_items()
+                    .iter()
+                    .any(|it| matches!(it, CtxItem::Item { label, .. } if label.ends_with("(3)"))),
+            "무장 라벨"
+        );
         assert_eq!(w.preset_pick("clear"), Some(BulkAction::ClearPresets));
+        assert!(w.clear_armed.is_none(), "실행 뒤 원복");
+        w.set_presets(Vec::new());
         assert_eq!(
             w.preset_pick("preset:zeta"),
             Some(BulkAction::LoadPreset("zeta".into()))
