@@ -534,7 +534,9 @@ impl App {
                 trf("del.recycleOp", &[&n]),
                 Rc::clone(&self.platform.trash),
             )));
-            self.toasts.push(
+            let a = self.active;
+            self.toast_panel(
+                a,
                 toast::ToastKind::Info,
                 tr("menu.edit.delete"),
                 trf("status.deletedCount", &[&n]),
@@ -542,7 +544,9 @@ impl App {
         } else if failed.is_empty() {
             // 지운 것도 남은 것도 없다(대상이 이미 없음 등) — 포트 오류만 알린다.
             if let Err(e) = &result {
-                self.toasts.push(
+                let a = self.active;
+                self.toast_panel(
+                    a,
                     toast::ToastKind::Warn,
                     tr("menu.edit.delete"),
                     e.to_string(),
@@ -569,7 +573,9 @@ impl App {
         };
         if !self.ask(spec, app::dialogs::DlgReply::DeleteFailed(failed)) {
             // 다른 대화상자가 열려 있다 — 알림으로라도 남긴다.
-            self.toasts.push(
+            let a = self.active;
+            self.toast_panel(
+                a,
                 toast::ToastKind::Warn,
                 tr("del.failTitle"),
                 match result {

@@ -123,7 +123,7 @@ impl ApplicationHandler<Wake> for App {
                 redraw = true;
             }
         }
-        if self.toasts.tick(now) {
+        if self.toasts_tick(now) {
             redraw = true;
         }
         if self.palette.tick(now_ms) {
@@ -218,7 +218,7 @@ impl ApplicationHandler<Wake> for App {
         // 애니메이션 중에만 프레임 간격으로 깬다 · 아니면 다음 예약(기동 지연 명령)까지 잔다.
         let live = inv.tick_requested()
             || aux_live
-            || self.toasts.animating()
+            || self.toasts_animating()
             || self.palette.is_animating()
             // 스플리터: 페이드가 움직이는 동안과 드래그 중에만 프레임 간격으로 깬다(종전 = hover 내내 16 ms 폴링 ·
             // 벗어난 뒤 페이드아웃은 깨우지 않았다).

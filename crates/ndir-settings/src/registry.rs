@@ -12,6 +12,13 @@ const THEME_OPTS: &[(&str, &str)] = &[
     ("light", "pref.theme.light"),
     ("dark", "pref.theme.dark"),
 ];
+/// 토스트 모서리(10-18 · 전역 = 창 · 패널 작업 = 그 패널 사각형 · 둘 다 같은 모서리).
+const TOAST_POS_OPTS: &[(&str, &str)] = &[
+    ("bottom-right", "pref.toastPos.br"),
+    ("bottom-left", "pref.toastPos.bl"),
+    ("top-right", "pref.toastPos.tr"),
+    ("top-left", "pref.toastPos.tl"),
+];
 /// 플래시 메시지 배경 상자(nexa-sql `FLASH_SHAPE_OPTS` · 10-07).
 const FLASH_SHAPE_OPTS: &[(&str, &str)] = &[
     ("rect", "pref.flashShape.rect"),
@@ -176,6 +183,15 @@ pub const REGISTRY: &[Entry] = &[
         "pref.theme.desc",
         Choice(THEME_OPTS),
         "system"
+    ),
+    // 토스트 위치(dir3 신규 · 10-18): 전역 알림 = 창 영역의 이 모서리 · 패널 파일 작업 알림 = 그 패널 영역의 같은 모서리.
+    e!(
+        "ui.toast_position",
+        CAT_APPEARANCE,
+        "pref.toastPos",
+        "pref.toastPos.desc",
+        Choice(TOAST_POS_OPTS),
+        "bottom-right"
     ),
     e!(
         "window.always_on_top",

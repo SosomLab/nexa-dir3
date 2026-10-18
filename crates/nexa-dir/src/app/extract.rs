@@ -180,7 +180,9 @@ impl App {
         if job.dest.is_dir() && self.panels[self.active].root_path() != job.dest {
             self.panels[self.active].select_path(&job.dest, &mut inv);
         }
-        self.toasts.push(
+        let a = self.active;
+        self.toast_panel(
+            a,
             if warn {
                 toast::ToastKind::Warn
             } else {

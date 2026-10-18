@@ -269,6 +269,8 @@ struct App {
     dual: bool,
     statusbar: StatusBar,
     toasts: toast::Toasts,
+    /// 패널 범위 토스트(좌/우 · 파일 작업 알림은 그 패널 안에 · 10-18 · `app/toasts.rs`).
+    panel_toasts: [toast::Toasts; 2],
     started: Instant,
     main_active: bool,
     pending_chord: Option<Chord>,
@@ -595,6 +597,10 @@ impl App {
         let mut inv = Invalidations::default();
         let mut toasts = toast::Toasts::new();
         toasts.configure(3000, 85);
+        let mut panel_toasts = [toast::Toasts::new(), toast::Toasts::new()];
+        for t in &mut panel_toasts {
+            t.configure(3000, 85);
+        }
         // 도구 모음 = dir2 28px 셀 / 아이콘 20(08-11 사용자 확정).
         // 런처 시드/마이그레이션(dir2 WINA-054): 첫 실행 = OS별 시드 · 구버전 = 누락분 추가 · 결과는 설정에 저장.
         let (launcher_items, seeded) = launcher::load_or_seed(
@@ -654,6 +660,7 @@ impl App {
             dual,
             statusbar: StatusBar::new(),
             toasts,
+            panel_toasts,
             flash_font: App::load_flash_font(&settings),
             menu_was_open: false,
             settings,

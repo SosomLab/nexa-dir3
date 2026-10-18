@@ -840,8 +840,7 @@ impl App {
                 self.update_status();
             }
             Err(e) => {
-                self.toasts
-                    .push(toast::ToastKind::Warn, tr("cmd.contextMenu"), e);
+                self.toast_panel(panel, toast::ToastKind::Warn, tr("cmd.contextMenu"), e);
             }
         }
     }

@@ -261,8 +261,7 @@ impl App {
                     self.update_status();
                 }
                 Err(e) => {
-                    self.toasts
-                        .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string());
+                    self.toast_panel(i, toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string());
                 }
             }
         }
@@ -898,7 +897,13 @@ impl App {
 
     /// 셸이 드롭 메뉴의 동작을 실행한 뒤(복사 · 이동 · 바로 가기 · 드롭 핸들러) — 패널을 다시 읽어 맞추고(결과와 무관하게 수렴) **상태줄 + 토스트**로
     /// 동사·개수·대상을 알린다(셸은 작은 작업에 진행 창을 띄우지 않아 아무 피드백이 없었다 · 10-18). 취소(None) = 안내 없음.
-    pub(crate) fn after_shell_drop(&mut self, verb: platform::DropVerb, n: usize, dest: &Path) {
+    pub(crate) fn after_shell_drop(
+        &mut self,
+        panel: usize,
+        verb: platform::DropVerb,
+        n: usize,
+        dest: &Path,
+    ) {
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.reopen(&mut inv);
@@ -909,8 +914,7 @@ impl App {
         };
         let msg = trf(key, &[&n.to_string(), &ndir_ops::leaf_name(dest)]);
         self.statusbar.set_left(&msg, &mut inv);
-        self.toasts
-            .push(toast::ToastKind::Info, tr("dnd.shellTitle"), msg);
+        self.toast_panel(panel, toast::ToastKind::Info, tr("dnd.shellTitle"), msg);
         self.redraw();
     }
 
@@ -935,6 +939,10 @@ impl App {
         let Some((paths, at, dest)) = self.dnd_menu.take() else {
             return;
         };
+        // 놓은 자리의 패널(토스트 범위) — 판정 불가면 활성 패널.
+        let panel = self
+            .drop_dest_at(Point { x: at.0, y: at.1 })
+            .map_or(self.active, |(p, _)| p);
         match id {
             "dnd.copy" => {
                 self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(Op::Copy));
@@ -943,10 +951,8 @@ impl App {
                 self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(Op::Move));
             }
             "dnd.link" => match make_links(&paths, &dest) {
-                Ok(n) => self.after_shell_drop(platform::DropVerb::Link, n, &dest),
-                Err(e) => self
-                    .toasts
-                    .push(toast::ToastKind::Warn, tr("ctx.dropLink"), e),
+                Ok(n) => self.after_shell_drop(panel, platform::DropVerb::Link, n, &dest),
+                Err(e) => self.toast_panel(panel, toast::ToastKind::Warn, tr("ctx.dropLink"), e),
             },
             "dnd.extract" => {
                 if let Some(a) = paths.first() {
@@ -955,11 +961,15 @@ impl App {
             }
             "dnd.cancel" => {}
             other => match self.platform.ctxmenu.invoke_drop(other, &dest, &paths) {
-                Ok(()) => self.after_shell_drop(platform::DropVerb::Other, paths.len(), &dest),
-                Err(e) => {
-                    self.toasts
-                        .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string())
+                Ok(()) => {
+                    self.after_shell_drop(panel, platform::DropVerb::Other, paths.len(), &dest)
                 }
+                Err(e) => self.toast_panel(
+                    panel,
+                    toast::ToastKind::Warn,
+                    tr("dnd.rejected"),
+                    e.to_string(),
+                ),
             },
         }
     }

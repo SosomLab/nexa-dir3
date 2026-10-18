@@ -146,8 +146,13 @@ impl App {
         match self.platform.clipboard.write_files(&paths, cut) {
             Ok(()) | Err(PlatformError::Unsupported(_)) => {}
             Err(e) => {
-                self.toasts
-                    .push(toast::ToastKind::Warn, tr("menu.edit.copy"), e.to_string());
+                let a = self.active;
+                self.toast_panel(
+                    a,
+                    toast::ToastKind::Warn,
+                    tr("menu.edit.copy"),
+                    e.to_string(),
+                );
             }
         }
         let n = paths.len().to_string();
@@ -512,7 +517,8 @@ impl App {
         } else {
             "menu.edit.copy"
         });
-        self.toasts.push(kind, title, parts.join(" · "));
+        let a = self.active;
+        self.toast_panel(a, kind, title, parts.join(" · "));
         self.statusbar.set_left(&parts.join(" · "), &mut inv);
         self.update_status();
         self.redraw();

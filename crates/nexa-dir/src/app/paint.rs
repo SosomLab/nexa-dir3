@@ -119,7 +119,7 @@ impl App {
         dc.fill_rect(Rect::new(0, sb.y, wi, 1), th.border);
         self.statusbar.paint(dc, &th);
         // 팝업 층
-        self.toasts.paint(dc, &th, wi, sb.y, s);
+        self.paint_toasts(dc, &th, Rect::new(0, 0, wi, sb.y), s);
         self.toolbar.paint_tooltip(dc, &th);
         self.toolbar.paint_drag_overlay(dc, &th); // 끌려가는 그룹(툴바 밖까지 나간다)
         self.panels[0].paint_popups(dc, &th);

@@ -187,7 +187,9 @@ impl App {
             msg.push_str(" · ");
             msg.push_str(&trf("bulk.fail", &[&failed.to_string()]));
         }
-        self.toasts.push(
+        let a = self.active;
+        self.toast_panel(
+            a,
             if failed > 0 {
                 toast::ToastKind::Warn
             } else {

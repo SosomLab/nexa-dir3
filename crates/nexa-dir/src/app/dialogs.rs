@@ -180,7 +180,9 @@ impl App {
             text.push_str(" · ");
             text.push_str(&trf("del.partialFail", &[&failed.to_string()]));
         }
-        self.toasts.push(
+        let a = self.active;
+        self.toast_panel(
+            a,
             if failed > 0 {
                 toast::ToastKind::Warn
             } else {

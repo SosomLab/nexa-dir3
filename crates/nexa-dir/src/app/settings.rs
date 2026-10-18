@@ -212,6 +212,7 @@ impl App {
                 .mem_win
                 .set_on_top(self.settings.flag("mem.always_on_top")),
             "mem.detail" => self.mem_win.set_detail(self.settings.flag("mem.detail")),
+            "ui.toast_position" => self.redraw(), // 다음 그리기가 설정을 읽는다(전역·패널 토스트 모서리).
             k if k.starts_with("key.") => {
                 self.keymap = Keymap::from_settings(&self.settings);
                 self.sync_menu_shortcuts();

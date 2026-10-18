@@ -763,10 +763,10 @@ fn platform_ports_wire_open_and_watch() {
         "{:?}",
         log.borrow().calls
     );
-    assert!(!app.toasts.animating(), "성공은 조용히");
+    assert!(!app.toasts_animating(), "성공은 조용히");
     log.borrow_mut().open_fails = true;
     app.open_external(&dir.join("b.md"));
-    assert!(app.toasts.animating(), "실패 = 토스트 한 번");
+    assert!(app.toasts_animating(), "실패 = 토스트 한 번");
     // 감시: 1 s 틱 → 대상 = 두 패널 폴더 · 변경 주입 → 재열람(새 파일이 보인다 · 캐럿 유지).
     app.watch_next = Instant::now();
     app.watch_tick(Instant::now());
@@ -803,7 +803,7 @@ fn delete_goes_through_trash_port() {
         "{:?}",
         log.borrow().calls
     );
-    assert!(app.toasts.animating());
+    assert!(app.toasts_animating());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -4852,9 +4852,9 @@ fn context_menu_opens_once_when_shell_items_are_ready() {
     // ④ 셸 항목 실행 = 비동기 접수 → 결과(오류)는 틱에서 토스트.
     app.startup_cmd("ctx.pick:shell:7");
     assert_eq!(shared.borrow().invoked, vec!["shell:7".to_string()]);
-    assert!(!app.toasts.animating());
+    assert!(!app.toasts_animating());
     let _ = app.ctx_shell_tick(t1);
-    assert!(app.toasts.animating(), "실행 오류 = 토스트");
+    assert!(app.toasts_animating(), "실행 오류 = 토스트");
     // ⑤ 메뉴가 열려 있는 동안에는 선행 구축을 걸지 않고, 닫힌 뒤 선택이 바뀌면 다시 머무름부터.
     app.panels[0].select_path(&dir.join("b.md"), &mut inv);
     let t2 = t1 + Duration::from_secs(1);
@@ -5310,7 +5310,7 @@ fn path_edit_shortcuts_edit_text_not_files() {
         "파일 변화 없음"
     );
     assert!(dir.join("a.txt").exists());
-    assert!(!app.toasts.animating(), "전송/오류 토스트 없음");
+    assert!(!app.toasts_animating(), "전송/오류 토스트 없음");
     // 전체 선택 → 삭제 = 경로 글자가 비워진다.
     app.command("edit.select_all");
     app.command("edit.delete");
@@ -8586,7 +8586,7 @@ fn os_open_files_open_tabs_and_select_file() {
     );
     app.startup_cmd(&format!("os.open:{}", dir.join("nope").display()));
     assert_eq!(app.panels[a].tab_count(), n0 + 2, "없는 경로 = 탭 그대로");
-    assert!(app.toasts.animating(), "없는 경로 = 토스트");
+    assert!(app.toasts_animating(), "없는 경로 = 토스트");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -8822,5 +8822,109 @@ fn drop_link_creates_shortcut_in_dest() {
         lnk.display()
     );
     assert!(a.is_file(), "원본 유지");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 토스트 범위(사용자 10-18): 패널 작업 알림은 그 패널 사각형 안(설정 모서리) · 전역 알림은 창 영역 · 설정 `ui.toast_position` 바꾸면 모서리가 옮겨짐 ·
+/// 클릭은 전역·패널 어느 쪽이든 닫는다.
+#[test]
+fn toasts_are_scoped_to_panel_or_window() {
+    let (mut app, dir) = fixture("toastscope");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.dual, "두 패널");
+    app.toast_panel(1, toast::ToastKind::Info, "panel", "right");
+    app.toasts.push(toast::ToastKind::Info, "global", "window");
+    assert_eq!(
+        (
+            app.panel_toasts[0].len(),
+            app.panel_toasts[1].len(),
+            app.toasts.len()
+        ),
+        (0, 1, 1)
+    );
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let pb = app.panels[1].bounds();
+    let pr = app.panel_toasts[1]
+        .rects()
+        .next()
+        .expect("panel toast rect");
+    assert!(
+        pr.x >= pb.x && pr.right() <= pb.right() && pr.y >= pb.y && pr.bottom() <= pb.bottom(),
+        "{pr:?} in {pb:?}"
+    );
+    assert_eq!(pr.right(), pb.right() - 6, "기본 = 우하단(패널 오른쪽)");
+    let sb = app.statusbar.bounds();
+    let gr = app.toasts.rects().next().expect("global toast rect");
+    assert_eq!(
+        (gr.right(), gr.bottom()),
+        (1200 - 6, sb.y - 6),
+        "전역 = 창 우하단(상태줄 위)"
+    );
+    // 모서리 설정 → 좌상단.
+    let _ = app.settings.set("ui.toast_position", "top-left");
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let pr = app.panel_toasts[1].rects().next().unwrap();
+    assert_eq!((pr.x, pr.y), (pb.x + 6, pb.y + 6), "좌상단 = 패널 왼쪽 위");
+    let gr = app.toasts.rects().next().unwrap();
+    assert_eq!((gr.x, gr.y), (6, 6));
+    // 클릭으로 닫기(패널 토스트).
+    assert!(app.toasts_click(Point {
+        x: pr.x + 5,
+        y: pr.y + 5
+    }));
+    assert!(app.panel_toasts[1].is_empty() && app.toasts.len() == 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 폴더 비교(사용자 10-18): 왼쪽 패널 = 왼쪽 · 오른쪽 패널 = 오른쪽(활성 패널과 무관) · 날짜 셀은 `YYYY-MM-DD HH:mm`(종전 `${hh}` 미치환) ·
+/// 요약에 비교 모드 · 내용 비교로 다시 돌리면 모드가 "내용"으로 바뀌고 버튼은 꺼진다.
+#[test]
+fn compare_uses_panel_order_and_shows_mode_and_dates() {
+    let (mut app, dir) = fixture("cmporder");
+    app.layout_for(1200, 800, 1.0);
+    let sub = dir.join("sub");
+    std::fs::write(sub.join("a.txt"), b"hello").unwrap(); // 양쪽에 다 있는 파일(내용 비교 대상)
+    let mut inv = Invalidations::default();
+    assert!(app.panels[1].navigate_to(sub.clone(), &mut inv).is_none());
+    app.set_active(1);
+    app.compare_panels();
+    assert_eq!(
+        (&app.compare_win.left, &app.compare_win.right),
+        (&dir, &sub),
+        "왼쪽 패널 = 왼쪽"
+    );
+    let wait = |app: &mut App| {
+        let at = Instant::now();
+        while app.compare_win.is_running() {
+            let _ = app.compare_tick();
+            std::thread::sleep(Duration::from_millis(5));
+            assert!(at.elapsed().as_secs() < 30);
+        }
+    };
+    wait(&mut app);
+    let status = app.compare_win.status().to_string();
+    assert!(status.contains(&tr("cmp.modeQuick")), "{status}");
+    for row in 0..app.compare_win.rows_len() {
+        for col in [2u32, 5] {
+            let c = app.compare_win.cell(row, col);
+            assert!(!c.contains("${"), "미치환 토큰: {c}");
+            if !c.is_empty() {
+                assert!(
+                    c.len() == 16 && c.as_bytes()[10] == b' ' && c.as_bytes()[13] == b':',
+                    "{c}"
+                );
+            }
+        }
+    }
+    // 내용 비교 = 모드 전환 · 버튼 끔.
+    let (l, r) = (app.compare_win.left.clone(), app.compare_win.right.clone());
+    app.start_compare(&l, &r, true);
+    wait(&mut app);
+    assert!(
+        app.compare_win.status().contains(&tr("cmp.modeContent")),
+        "{}",
+        app.compare_win.status()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

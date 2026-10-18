@@ -761,7 +761,7 @@ impl App {
             | InputEvent::MiddleDown { x, y }
             | InputEvent::DoubleClick { x, y, .. } => {
                 let p = Point { x, y };
-                if self.toasts.click(p) {
+                if self.toasts_click(p) {
                     inv.push(Rect::new(0, 0, 1, 1));
                     return;
                 }
@@ -1009,8 +1009,7 @@ impl App {
                 let a = self.active;
                 let mut inv = Invalidations::default();
                 if let Some(why) = self.panels[a].navigate_to(dir, &mut inv) {
-                    self.toasts
-                        .push(toast::ToastKind::Warn, tr("cmd.activate"), why);
+                    self.toast_panel(a, toast::ToastKind::Warn, tr("cmd.activate"), why);
                 }
                 self.update_status();
                 self.redraw();
@@ -1018,8 +1017,8 @@ impl App {
             }
         }
         if let Err(e) = self.platform.opener.open(path) {
-            self.toasts
-                .push(toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());
+            let a = self.active;
+            self.toast_panel(a, toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());
         }
         self.redraw();
     }
