@@ -803,6 +803,27 @@ fn exact_entry_exists(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// `std::fs::rename`에 짧은 재시도를 더한 것(10-18). Windows는 다른 스레드가 그 폴더를 걷는 중(도크 폴더 크기 · 아이콘 · 감시)이면
+/// 폴더 이름 바꾸기를 공유 위반(os 32)이나 접근 거부(os 5)로 거부한다. 앱 자체 워커와의 경쟁이라 25 ms × 8 안에 거의 풀린다.
+/// 그 밖의 오류(없음 · 이미 있음 …)는 바로 돌려준다. 다른 OS는 재시도 없음.
+fn rename_retry(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut last = std::fs::rename(from, to);
+    if !cfg!(windows) {
+        return last;
+    }
+    for _ in 0..8 {
+        match &last {
+            Ok(()) => return Ok(()),
+            Err(e) if matches!(e.raw_os_error(), Some(5) | Some(32)) => {
+                std::thread::sleep(std::time::Duration::from_millis(25));
+                last = std::fs::rename(from, to);
+            }
+            Err(_) => return last,
+        }
+    }
+    last
+}
+
 /// (이전 경로 → 새 경로) 목록을 **기존 파일을 덮어쓰지 않고** 적용한다.
 ///
 /// - 새 이름의 자리에 다른 항목이 있으면 그 항목은 실패로 격리한다(미리보기와 적용 사이에 생긴 파일을 지키려는 재확인 —
@@ -852,7 +873,7 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
             direct.push(i);
         } else if key(from) != key(to) && moving.contains(&key(to)) {
             let tmp = mk_tmp(from);
-            match std::fs::rename(from, &tmp) {
+            match rename_retry(from, &tmp) {
                 Ok(()) => staged.push((i, tmp)),
                 Err(e) => out.failed.push((from.clone(), e.to_string())),
             }
@@ -867,15 +888,15 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
             out.failed.push((from.clone(), taken()));
             continue;
         }
-        match std::fs::rename(from, to) {
+        match rename_retry(from, to) {
             // 대소문자/정규화만 다른 이름을 FS가 같은 이름으로 봐 **바이트를 안 바꿨다**(APFS 정규화 둔감 · 10-18) → 임시 이름 경유 2단계.
             Ok(()) if key(from) == key(to) && !exact_entry_exists(to) => {
                 let tmp = mk_tmp(from);
-                match std::fs::rename(from, &tmp).and_then(|()| std::fs::rename(&tmp, to)) {
+                match rename_retry(from, &tmp).and_then(|()| rename_retry(&tmp, to)) {
                     Ok(()) => out.done.push((from.clone(), to.clone())),
                     Err(e) => {
                         if !exists(from) {
-                            let _ = std::fs::rename(&tmp, from);
+                            let _ = rename_retry(&tmp, from);
                         }
                         out.failed.push((from.clone(), e.to_string()));
                     }
@@ -891,13 +912,13 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
         let moved = if exists(to) {
             Err(taken())
         } else {
-            std::fs::rename(&tmp, to).map_err(|e| e.to_string())
+            rename_retry(&tmp, to).map_err(|e| e.to_string())
         };
         match moved {
             Ok(()) => out.done.push((from.clone(), to.clone())),
             Err(why) => {
                 if !exists(from) {
-                    let _ = std::fs::rename(&tmp, from);
+                    let _ = rename_retry(&tmp, from);
                 }
                 out.failed.push((from.clone(), why));
             }
@@ -1127,6 +1148,21 @@ pub fn parse_ops(text: &str) -> Vec<RenameOp> {
 
 #[cfg(test)]
 mod tests {
+    /// `rename_retry`(10-18): 정상 = Ok · 없는 원본 = 재시도 없이 바로 NotFound(공유 위반·접근 거부만 재시도).
+    #[test]
+    fn rename_retry_only_retries_sharing_errors() {
+        let dir = std::env::temp_dir().join(format!("ndir-renretry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a"), b"").unwrap();
+        assert!(super::rename_retry(&dir.join("a"), &dir.join("b")).is_ok());
+        let t = std::time::Instant::now();
+        let e = super::rename_retry(&dir.join("nope"), &dir.join("c")).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::NotFound);
+        assert!(t.elapsed().as_millis() < 150, "재시도 없이 바로");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// `$N` 뒤에 글자·숫자·`_`가 붙어도 그 그룹으로(10-18) · `$$` 리터럴 · `${1}` 그대로 · 이름 그룹 `$name`은 손대지 않는다.
     #[test]
     fn regex_replace_group_refs_followed_by_word_chars() {
