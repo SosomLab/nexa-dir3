@@ -512,6 +512,7 @@ impl App {
         }
         // 미리보기 워커(10-18)가 계산 중이면 결과까지 기다린다(상한 5 s).
         self.preview_wait(Duration::from_secs(5));
+        self.probe_wait(Duration::from_secs(2));
         Some(match target {
             "layout" => self.layout_dump(),
             "log" => self.log_dump(),

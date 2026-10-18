@@ -234,6 +234,23 @@ impl App {
         true
     }
 
+    /// 빈 폴더 프로브 결과를 기다린다(덤프·단언 · T4 결정성 · 상한 안에서).
+    pub(crate) fn probe_wait(&mut self, limit: Duration) {
+        let at = Instant::now();
+        while self.panels.iter().any(panel::Panel::probes_pending) && at.elapsed() < limit {
+            let now_ms = self.started.elapsed().as_millis() as u64;
+            let mut inv = Invalidations::default();
+            for p in &mut self.panels {
+                p.tick(now_ms, &mut inv);
+            }
+            if !inv.is_empty() {
+                self.redraw();
+                continue;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     /// 워커 결과를 기다린다(덤프·단언 · T4 결정성 · 상한 안에서) — 창 없는 시험은 동기 경로라 기다릴 것이 없다.
     pub(crate) fn preview_wait(&mut self, limit: Duration) {
         let at = Instant::now();

@@ -36,6 +36,8 @@ pub(crate) struct DirSizeShared {
 pub(crate) struct DirSizeJob {
     pub(crate) path: PathBuf,
     shared: Arc<DirSizeShared>,
+    /// 시작 시각 — 오래 도는 작업(큰 트리)이 슬롯을 막고 있으면 새 요청이 밀어낸다(10-18).
+    started: Instant,
 }
 
 /// 끝난 계산.
@@ -104,6 +106,9 @@ pub(crate) struct DirSizes {
 
 /// 재는 중 진행값 표시 간격(ms).
 pub(crate) const DISPLAY_EVERY_MS: u64 = 250;
+/// 이보다 오래 도는 작업이 슬롯을 전부 막고 있을 때 새 요청(지금 보는 폴더)이 가장 오래된 것을 취소한다(ms · 10-18 체감 점검 —
+/// 종전엔 `C:\Windows` 같은 큰 트리 2개가 끝날 때까지 새로 고른 폴더가 "측정 대기 중"에 머물렀다). 짧은 작업은 그대로 끝낸다.
+const LONG_RUN_MS: u64 = 2_000;
 
 /// 도크에 반영할 때인가(순수 · MC/DC): 상태 전이가 있으면 즉시 · 재는 중이면 마지막 표시에서 `every_ms` 이상 지났을 때 ·
 /// 둘 다 아니면(유휴 · 방금 보여 줌) 아니다.
@@ -201,6 +206,19 @@ impl DirSizes {
         if ok {
             self.pending = None;
             self.enqueue_front(path.to_path_buf());
+            // 슬롯이 전부 다른(지금 안 보는) 폴더로 차 있으면 가장 오래된 것을 취소해 자리를 비운다(10-18 체감 점검 —
+            // 종전엔 `C:\\Windows` 같은 큰 트리 2개가 끝날 때까지 새로 고른 폴더가 "측정 대기 중"에 머물렀다). 취소된 결과는 캐시에
+            // 넣지 않는다(다시 고르면 다시 잰다).
+            if self.running.len() >= self.tuning.threads {
+                if let Some(j) = self
+                    .running
+                    .iter()
+                    .filter(|j| j.started.elapsed().as_millis() as u64 >= LONG_RUN_MS)
+                    .min_by_key(|j| j.started)
+                {
+                    j.shared.cancel.store(true, Ordering::Relaxed);
+                }
+            }
             self.fill();
         } else {
             self.pending = Some((path.to_path_buf(), now));
@@ -230,7 +248,11 @@ impl DirSizes {
                 walk(&root, &sh);
                 sh.done.store(true, Ordering::Relaxed);
             });
-            self.running.push(DirSizeJob { path, shared });
+            self.running.push(DirSizeJob {
+                path,
+                shared,
+                started: Instant::now(),
+            });
         }
     }
 

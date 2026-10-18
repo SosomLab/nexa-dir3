@@ -1144,6 +1144,15 @@ impl Panel {
     /// 틱(목록 스크롤바 페이드 · 타입어헤드 · 툴팁) — 더 돌아야 하면 `inv.request_tick`.
     pub(crate) fn tick(&mut self, now_ms: u64, inv: &mut Invalidations) {
         self.tabs[self.active].rows.tick(now_ms, inv);
+        // 빈 폴더 프로브 결과(워커 · 10-18) — 바뀐 마커만큼 목록을 다시 그린다.
+        if self.tabs[self.active].rows.source_mut().drain_probes() {
+            inv.push(self.tabs[self.active].rows.bounds());
+        }
+    }
+
+    /// 활성 탭이 프로브 결과를 기다리는가(이벤트 루프 깨움 · 덤프 대기).
+    pub(crate) fn probes_pending(&self) -> bool {
+        self.tabs[self.active].rows.source().probes_pending()
     }
 
     /// 탭 바·경로 바·네비 활성을 활성 탭 상태와 동기화(dir2 `sync_chrome` · PANEL-032).

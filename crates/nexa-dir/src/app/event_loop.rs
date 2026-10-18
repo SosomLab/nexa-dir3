@@ -71,6 +71,7 @@ impl ApplicationHandler<Wake> for App {
             Err(e) => eprintln!("nexa-dir: {e}"),
         }
         self.window = Some(win);
+        crate::filelist::probe::set_async(true); // 창이 있으면 빈 폴더 판정은 워커(10-18)
         self.layout();
         // 복원된 활성 패널을 덮지 않는다(10-03 창 2회 실행 실증: 세션 active_panel=1이 0으로 돌아갔다).
         let a = self.active;
@@ -249,6 +250,9 @@ impl ApplicationHandler<Wake> for App {
         }
         if self.preview_decode.busy() {
             next = next.min(now + Duration::from_millis(30));
+        }
+        if self.panels.iter().any(panel::Panel::probes_pending) {
+            next = next.min(now + Duration::from_millis(50));
         }
         if self.panels.iter().any(panel::Panel::typeahead_active) {
             // 타입어헤드 입력 중 = 유지 시간이 지나면 배지를 지워야 한다(사건이 없어도) → 짧게 깬다.

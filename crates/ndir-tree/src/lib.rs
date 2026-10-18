@@ -90,6 +90,26 @@ pub enum SelectMode {
     Toggle,
 }
 
+/// 미열거 폴더에 이 필터로 보일 자식이 **하나라도** 있는가 — 트리 없이(어느 스레드에서나 · 호스트 프로브 워커 · 10-18). 첫 가시 항목에서
+/// 멈춘다 · 읽기 실패 = `true`(글리프 유지 = 안전 방향).
+#[must_use]
+pub fn probe_visible_child(
+    dir: &Path,
+    show_hidden: bool,
+    show_dotfiles: bool,
+    show_protected: bool,
+) -> bool {
+    let f = Filter {
+        show_hidden,
+        show_dotfiles,
+        show_protected,
+    };
+    let Ok(entries) = read_dir_entries(dir) else {
+        return true;
+    };
+    entries.flatten().any(|e| f.allows(&e.name, e.attrs))
+}
+
 /// 정렬 키(컬럼) — **실제 필드**로 비교(표시 텍스트가 아님: 크기/날짜는 숫자).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortKey {
@@ -710,12 +730,12 @@ impl Tree {
     /// 미열거 폴더에 현재 필터로 보일 자식이 **하나라도** 있는가(dir2 `nexa-app/src/source.rs` `probe_has_visible_child` X-43 이식 ·
     /// 10-18): 첫 가시 항목에서 멈춘다 · 읽기 실패 = `true`(글리프 유지 = 안전 방향). 호출자가 노드별로 캐시한다(페인트 경로 · 폴더당 1회).
     pub fn probe_has_visible_child(&self, dir: &Path) -> bool {
-        let Ok(entries) = read_dir_entries(dir) else {
-            return true;
-        };
-        entries
-            .flatten()
-            .any(|e| self.filter.allows(&e.name, e.attrs))
+        probe_visible_child(
+            dir,
+            self.filter.show_hidden,
+            self.filter.show_dotfiles,
+            self.filter.show_protected,
+        )
     }
 
     pub fn filter_flags(&self) -> (bool, bool) {

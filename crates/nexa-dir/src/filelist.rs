@@ -211,6 +211,10 @@ pub(crate) struct TreeSource {
     no_icons: bool,
     /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
     probe_cache: std::cell::RefCell<std::collections::HashMap<ndir_tree::NodeId, bool>>,
+    /// 프로브 워커 결과함(10-18 · 창이 있으면 그리기 중 `read_dir`을 하지 않고 워커에 맡긴다) · 세대(재로드 = 새 노드 id) · 워커에 가 있는 노드.
+    probe_inbox: probe::Inbox,
+    probe_gen: u64,
+    probe_pending: std::cell::RefCell<std::collections::HashSet<ndir_tree::NodeId>>,
 }
 
 impl TreeSource {
@@ -226,9 +230,36 @@ impl TreeSource {
             cut_marks: std::collections::HashSet::new(),
             no_icons: false,
             probe_cache: Default::default(),
+            probe_inbox: Default::default(),
+            probe_gen: 0,
+            probe_pending: Default::default(),
         };
         s.reload();
         s
+    }
+
+    /// 프로브 워커 결과를 캐시에 옮긴다(유휴 틱) — 바뀐 것이 있으면 `true`(마커 다시 그리기).
+    pub(crate) fn drain_probes(&mut self) -> bool {
+        let got: Vec<(u64, ndir_tree::NodeId, bool)> = self
+            .probe_inbox
+            .lock()
+            .map(|mut v| v.drain(..).collect())
+            .unwrap_or_default();
+        let mut changed = false;
+        for (gen, id, v) in got {
+            if gen != self.probe_gen {
+                continue; // 재로드 전 노드 id(낡은 결과)
+            }
+            self.probe_pending.borrow_mut().remove(&id);
+            self.probe_cache.borrow_mut().insert(id, v);
+            changed = true;
+        }
+        changed
+    }
+
+    /// 워커 결과를 기다리는 폴더가 있는가(이벤트 루프 깨움 · 덤프 대기).
+    pub(crate) fn probes_pending(&self) -> bool {
+        !self.probe_pending.borrow().is_empty()
     }
 
     /// 이름 앞 아이콘 켬/끔 — 바뀌었으면 true.
@@ -252,6 +283,8 @@ impl TreeSource {
     /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
         self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
+        self.probe_gen += 1;
+        self.probe_pending.borrow_mut().clear();
         let (keys, expanded, selected) = match &self.tree {
             Some(t) => {
                 let expanded: Vec<String> = (0..t.visible_len())
@@ -339,6 +372,23 @@ impl TreeSource {
         }
         let v = match t.node_path(id) {
             Some(_) if self.on_network => true,
+            // 창이 있으면 워커에 맡기고 결과가 올 때까지 ▸ 유지(그리기 중 `read_dir` 없음 · 매핑 드라이브·느린 디스크에서도 프레임 유지 · 10-18).
+            Some(p) if probe::is_async() => {
+                if self.probe_pending.borrow_mut().insert(id) {
+                    probe::submit(probe::Job {
+                        gen: self.probe_gen,
+                        id,
+                        path: p.to_path_buf(),
+                        flags: (
+                            self.opts.show_hidden,
+                            self.opts.show_dotfiles,
+                            self.opts.show_protected,
+                        ),
+                        inbox: std::sync::Arc::clone(&self.probe_inbox),
+                    });
+                }
+                return true;
+            }
             Some(p) => t.probe_has_visible_child(p),
             None => true,
         };
@@ -843,6 +893,82 @@ impl RowSource for TreeSource {
     }
 }
 
+/// 빈 폴더 프로브 워커(10-18 체감 점검): 스레드 1(첫 요청 때) · 큐 · 결과는 요청에 실린 결과함으로. 창이 없는(시험) 동안은 끔 = 종전 동기 프로브.
+pub(crate) mod probe {
+    use std::collections::VecDeque;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Condvar, Mutex, OnceLock};
+
+    /// 결과함: (세대, 노드, 가시 자식 있음).
+    pub(crate) type Inbox = Arc<Mutex<Vec<(u64, ndir_tree::NodeId, bool)>>>;
+
+    pub(crate) struct Job {
+        pub gen: u64,
+        pub id: ndir_tree::NodeId,
+        pub path: PathBuf,
+        /// (show_hidden, show_dotfiles, show_protected).
+        pub flags: (bool, bool, bool),
+        pub inbox: Inbox,
+    }
+
+    struct Prober {
+        queue: Mutex<VecDeque<Job>>,
+        cv: Condvar,
+    }
+
+    static PROBER: OnceLock<Prober> = OnceLock::new();
+    static ASYNC: AtomicBool = AtomicBool::new(false);
+
+    /// 워커 모드(창이 생기면 켠다 · 시험은 끔 = 동기).
+    pub(crate) fn set_async(on: bool) {
+        ASYNC.store(on, Ordering::Relaxed);
+    }
+
+    pub(crate) fn is_async() -> bool {
+        ASYNC.load(Ordering::Relaxed)
+    }
+
+    fn prober() -> &'static Prober {
+        PROBER.get_or_init(|| {
+            let p = Prober {
+                queue: Mutex::new(VecDeque::new()),
+                cv: Condvar::new(),
+            };
+            std::thread::Builder::new()
+                .name("ndir-probe".into())
+                .spawn(|| {
+                    let p = prober();
+                    loop {
+                        let job = {
+                            let mut q = p.queue.lock().unwrap_or_else(|e| e.into_inner());
+                            while q.is_empty() {
+                                q = p.cv.wait(q).unwrap_or_else(|e| e.into_inner());
+                            }
+                            q.pop_front()
+                        };
+                        let Some(job) = job else { continue };
+                        let (h, d, pr) = job.flags;
+                        let v = ndir_tree::probe_visible_child(&job.path, h, d, pr);
+                        let (gen, id, inbox) = (job.gen, job.id, job.inbox);
+                        let _ = inbox.lock().map(|mut g| g.push((gen, id, v)));
+                    }
+                })
+                .expect("spawn probe worker");
+            p
+        })
+    }
+
+    /// 큐에 넣는다(워커는 첫 호출 때 생긴다).
+    pub(crate) fn submit(job: Job) {
+        let p = prober();
+        if let Ok(mut q) = p.queue.lock() {
+            q.push_back(job);
+        }
+        p.cv.notify_one();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1134,5 +1260,79 @@ mod tests {
             (l.hour, l.min, l.sec),
         );
         assert_eq!(shown == format_time(ms), off == 0, "offset {off}");
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+
+    #[test]
+    fn probe_worker_fills_cache_and_ignores_stale_generation() {
+        let dir = std::env::temp_dir().join(format!("ndir-probe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("empty")).unwrap();
+        std::fs::create_dir_all(dir.join("full")).unwrap();
+        std::fs::write(dir.join("full/a.txt"), b"x").unwrap();
+        let opts = ListOpts {
+            show_hidden: false,
+            show_dotfiles: false,
+            show_protected: false,
+            folders_first: true,
+            case_sensitive: false,
+            natural: true,
+            hide_empty_glyph: true,
+            nfc_display: false,
+        };
+        let mut src = TreeSource::open(&dir, opts);
+        let ids: Vec<(String, ndir_tree::NodeId)> = (0..src.len())
+            .filter_map(|i| {
+                let r = src.tree.as_ref()?.row(i)?;
+                Some((r.name.clone(), r.id))
+            })
+            .collect();
+        let id_of = |n: &str| {
+            ids.iter()
+                .find(|(name, _)| name == n)
+                .map(|(_, id)| *id)
+                .unwrap()
+        };
+        let flags = (false, false, false);
+        for n in ["empty", "full"] {
+            let id = id_of(n);
+            src.probe_pending.borrow_mut().insert(id);
+            probe::submit(probe::Job {
+                gen: src.probe_gen,
+                id,
+                path: dir.join(n),
+                flags,
+                inbox: std::sync::Arc::clone(&src.probe_inbox),
+            });
+        }
+        // 낡은 세대 결과는 버려진다.
+        probe::submit(probe::Job {
+            gen: src.probe_gen + 99,
+            id: id_of("empty"),
+            path: dir.join("full"),
+            flags,
+            inbox: std::sync::Arc::clone(&src.probe_inbox),
+        });
+        assert!(src.probes_pending());
+        let at = std::time::Instant::now();
+        while src.probes_pending() && at.elapsed() < std::time::Duration::from_secs(5) {
+            let _ = src.drain_probes();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let _ = src.drain_probes();
+        assert!(!src.probes_pending());
+        let cache = src.probe_cache.borrow();
+        assert_eq!(
+            cache.get(&id_of("empty")),
+            Some(&false),
+            "빈 폴더 = 글리프 없음"
+        );
+        assert_eq!(cache.get(&id_of("full")), Some(&true));
+        drop(cache);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
