@@ -5808,6 +5808,48 @@ fn async_navigation_applies_on_tick() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 10-18 결정 ② 2단계 비동기 재열람: 문턱 0 = 늘 워커 → `reopen` 직후엔 옛 목록(캐럿 유지) → 틱이 결과를 끼운다 · 진행 중 또
+/// 요청(통지 폭주)은 워커 하나로 끝난 뒤 한 번 더 · 전환 수렴(`refresh_stale`)도 같은 길 · 진입이 걸려 있으면 재열람은 낡음만.
+#[test]
+fn async_reload_applies_on_tick() {
+    let (mut app, dir) = fixture("asyncreload");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("list.select:1");
+    let caret = app.panels[0].rows().caret();
+    app.panels[0].force_async();
+    app.panels[0].set_async_read(true, 0);
+    let reloads = |app: &App| app.panels[0].rows().source().reloads();
+    let n0 = reloads(&app);
+    let len0 = app.panels[0].rows().source().len();
+    std::fs::write(dir.join("zz-reload.txt"), b"new").expect("write");
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    assert!(app.panels[0].nav_pending(), "워커에 맡김");
+    assert_eq!(
+        app.panels[0].rows().source().len(),
+        len0,
+        "결과 전 = 옛 목록"
+    );
+    app.panels[0].reopen(&mut inv); // 진행 중 재요청 = 끝난 뒤 한 번 더(워커는 하나)
+    app.nav_wait(Duration::from_secs(5));
+    assert!(!app.panels[0].nav_pending());
+    assert_eq!(app.panels[0].rows().source().len(), len0 + 1);
+    assert_eq!(reloads(&app), n0 + 2, "두 번 끼움(again)");
+    assert_eq!(app.panels[0].rows().caret(), caret, "캐럿 유지");
+    // 전환 수렴: 낡은 활성 탭 = 같은 길(워커) · 진행 중엔 다시 시작하지 않는다.
+    app.panels[0].new_tab(&mut inv);
+    app.panels[0].switch_tab(0, &mut inv);
+    assert!(app.panels[0].active_tab_stale());
+    assert!(app.panels[0].refresh_stale(&mut inv));
+    assert!(
+        !app.panels[0].refresh_stale(&mut inv),
+        "진행 중 = 재시작 없음"
+    );
+    app.nav_wait(Duration::from_secs(5));
+    assert!(!app.panels[0].active_tab_stale());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 10-18 결정 ③ 자기 변경 억제(`watch.self_window_ms`): 탭이 스스로 다시 읽은 직후 온 감시 통지는 폴더 수정 시각이 같으면
 /// 메아리 = 생략 · 실제로 바뀌었으면(수정 시각 다름) 읽는다 · 감시가 읽은 것은 창을 열지 않는다(연속 통지 = 매번) · 0 = 끔.
 #[test]

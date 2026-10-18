@@ -47,6 +47,18 @@ pub(crate) struct Tab {
     pub stale: bool,
     /// 워커에서 읽는 중인 진입(10-18 결정 ② · `list.async_read`) — 결과는 [`Panel::nav_poll`](틱)이 적용한다.
     pub pending: Option<PendingNav>,
+    /// 워커에서 다시 읽는 중(② 2단계 · 재열람 = F5 · 작업 뒤 · 감시 · 전환 수렴) — 결과는 [`Panel::nav_poll`]이 끼운다.
+    pub reloading: Option<PendingReload>,
+}
+
+/// 워커 재열람 1건: 결과 채널 · 만들 때의 경로·옵션(그 사이 진입·옵션이 바뀌었으면 버린다) · 감시가 시킨 것인가(신선 스탬프 지움) ·
+/// 진행 중에 또 요청이 오면 `again`(끝난 뒤 한 번 더 — 통지 폭주에도 워커는 하나).
+pub(crate) struct PendingReload {
+    rx: std::sync::mpsc::Receiver<crate::filelist::ReloadBuilt>,
+    path: PathBuf,
+    opts: ListOpts,
+    from_watch: bool,
+    again: bool,
 }
 
 /// 워커 열기 1건: 결과 채널 · 대상 · 적용 뒤 선택할 경로(위로/홈 = 떠난 폴더) · 히스토리 동작(적용 때 움직인다).
@@ -334,6 +346,7 @@ impl Panel {
                 pinned: false,
                 stale: false,
                 pending: None,
+                reloading: None,
             }],
             active: 0,
             bounds: Rect::default(),
@@ -1312,6 +1325,7 @@ impl Panel {
             pinned: false,
             stale: false,
             pending: None,
+            reloading: None,
         });
         self.active = self.tabs.len() - 1;
         self.navigated = true;
@@ -1453,6 +1467,7 @@ impl Panel {
                 pinned: false,
                 stale: false,
                 pending: None,
+                reloading: None,
             },
         );
         self.active = i + 1;
@@ -1759,6 +1774,7 @@ impl Panel {
         inv: &mut Invalidations,
     ) {
         let tab = &mut self.tabs[i];
+        tab.reloading = None; // 진입 결과가 최신 — 걸려 있던 재열람은 버린다
         match kind {
             NavKind::Push => tab.nav.push(src.path().to_path_buf()),
             NavKind::Back => {
@@ -1783,7 +1799,7 @@ impl Panel {
 
     /// 워커 열기 결과 수거(틱) — 적용했거나 버렸으면 `true`. 오류 결과(그 사이 사라짐)는 자리 유지 · 경로 바 복귀.
     pub(crate) fn nav_poll(&mut self, inv: &mut Invalidations) -> bool {
-        let mut done = false;
+        let mut done = self.reload_poll(inv);
         for i in 0..self.tabs.len() {
             let Some(p) = &self.tabs[i].pending else {
                 continue;
@@ -1811,9 +1827,44 @@ impl Panel {
         done
     }
 
-    /// 어느 탭이든 워커가 읽는 중인가(이벤트 루프 깨움 · 덤프 대기).
+    /// 워커 재열람 결과 수거(틱 · `nav_poll`이 부른다) — 끼웠거나 버렸으면 `true`. 만들 때와 경로·옵션이 다르거나 진입이 걸려
+    /// 있으면 버린다(낡음). 진행 중 또 요청이 있었으면(`again`) 한 번 더.
+    fn reload_poll(&mut self, inv: &mut Invalidations) -> bool {
+        let mut done = false;
+        for i in 0..self.tabs.len() {
+            let Some(r) = &self.tabs[i].reloading else {
+                continue;
+            };
+            match r.rx.try_recv() {
+                Ok(built) => {
+                    let r = self.tabs[i].reloading.take().expect("reloading");
+                    let src = self.tabs[i].rows.source();
+                    let same = self.tabs[i].pending.is_none()
+                        && src.path() == r.path
+                        && src.opts() == r.opts;
+                    if same {
+                        self.apply_reload(i, built, r.from_watch, inv);
+                    }
+                    if r.again {
+                        self.reload_tab(i, r.from_watch, inv);
+                    }
+                    done = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.tabs[i].reloading = None;
+                    done = true;
+                }
+            }
+        }
+        done
+    }
+
+    /// 어느 탭이든 워커가 읽는 중인가(진입 · 재열람 — 이벤트 루프 깨움 · 덤프 대기).
     pub(crate) fn nav_pending(&self) -> bool {
-        self.tabs.iter().any(|t| t.pending.is_some())
+        self.tabs
+            .iter()
+            .any(|t| t.pending.is_some() || t.reloading.is_some())
     }
 
     /// 활성 탭이 읽는 중인 대상(경로 바 · 상태줄 "읽는 중…").
@@ -2102,25 +2153,82 @@ impl Panel {
     /// 다시 읽기(활성 탭 **자기 보기 옵션 그대로** · 캐럿·스크롤 유지). 배경 탭은 다시 읽지 않고 **낡음**만 세운다(10-18 체감 점검:
     /// 감시 통지·파일 작업 뒤마다 모든 탭을 동기 재열거하던 낭비 — 배경 탭은 어차피 전환 때 `stale`로 다시 읽는다 · dir2 X-44 S1).
     pub(crate) fn reopen(&mut self, inv: &mut Invalidations) {
-        let active = self.active;
-        for (i, tab) in self.tabs.iter_mut().enumerate() {
-            if i != active {
-                tab.stale = true;
-                continue;
-            }
-            let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
-            tab.rows.source_mut().reload();
-            tab.rows.restore_view(caret, sr, sx, inv);
-            tab.stale = false;
-        }
-        self.sync_chrome(inv);
+        self.reopen_with(false, inv);
     }
 
     /// 감시 통지로 다시 읽기(10-18 결정 ③): `reopen` + 신선 스탬프 지움 — 감시가 읽은 것은 억제 창을 열지 않는다
     /// (바깥에서 변경이 이어지면 통지마다 종전대로 다시 읽는다).
     pub(crate) fn reopen_from_watch(&mut self, inv: &mut Invalidations) {
-        self.reopen(inv);
-        self.tabs[self.active].rows.source_mut().clear_fresh();
+        self.reopen_with(true, inv);
+    }
+
+    fn reopen_with(&mut self, from_watch: bool, inv: &mut Invalidations) {
+        let active = self.active;
+        for (i, tab) in self.tabs.iter_mut().enumerate() {
+            if i != active {
+                tab.stale = true;
+            }
+        }
+        self.reload_tab(active, from_watch, inv);
+        self.sync_chrome(inv);
+    }
+
+    /// 탭 하나 다시 읽기(동기 · 워커 공용 · ② 2단계): 진입이 걸려 있으면 그 결과가 최신(낡음만 세움) · 재열람이 진행 중이면 끝난 뒤
+    /// 한 번 더(`again`) · 동기(창 없음 · 설정 끔)면 그 자리에서 · 아니면 워커 + 문턱 안에 끝나면 그 자리 · 넘으면 `reloading`.
+    fn reload_tab(&mut self, i: usize, from_watch: bool, inv: &mut Invalidations) {
+        let (is_async, wait_ms) = (self.async_enabled(), self.async_wait_ms);
+        let tab = &mut self.tabs[i];
+        if tab.pending.is_some() {
+            tab.stale = true;
+            return;
+        }
+        if let Some(r) = &mut tab.reloading {
+            r.again = true;
+            r.from_watch |= from_watch;
+            return;
+        }
+        if !is_async {
+            let src = tab.rows.source();
+            let built = TreeSource::reload_build(&src.reload_plan());
+            self.apply_reload(i, built, from_watch, inv);
+            return;
+        }
+        let rx = tab.rows.source().reload_async();
+        match rx.recv_timeout(std::time::Duration::from_millis(wait_ms)) {
+            Ok(built) => self.apply_reload(i, built, from_watch, inv),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                let src = tab.rows.source();
+                tab.reloading = Some(PendingReload {
+                    rx,
+                    path: src.path().to_path_buf(),
+                    opts: src.opts(),
+                    from_watch,
+                    again: false,
+                });
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {}
+        }
+    }
+
+    /// 만든 트리를 끼운다(캐럿 · 스크롤 유지 · 낡음 내림 · 감시가 시킨 것이면 신선 스탬프 지움 · 활성 탭이면 크롬).
+    fn apply_reload(
+        &mut self,
+        i: usize,
+        built: crate::filelist::ReloadBuilt,
+        from_watch: bool,
+        inv: &mut Invalidations,
+    ) {
+        let tab = &mut self.tabs[i];
+        let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
+        tab.rows.source_mut().reload_apply(built);
+        tab.rows.restore_view(caret, sr, sx, inv);
+        tab.stale = false;
+        if from_watch {
+            tab.rows.source_mut().clear_fresh();
+        }
+        if i == self.active {
+            self.sync_chrome(inv);
+        }
     }
 
     /// 활성 탭이 `dir`을 방금(`within` 안) 스스로 읽었고 폴더 수정 시각이 그때와 같은가 — 감시 통지 = 우리 변경의 메아리.
@@ -2138,14 +2246,16 @@ impl Panel {
     /// 낡은 활성 탭만 다시 읽는다(캐럿·스크롤 유지 · dir2 win.rs:4967-4976 "전환 수렴") — 읽었으면 `true`.
     /// 인라인 이름 편집 중이면 미룬다(편집 행이 바뀌면 안 된다 — 다음 길목에서 다시 본다).
     pub(crate) fn refresh_stale(&mut self, inv: &mut Invalidations) -> bool {
-        if !self.tabs[self.active].stale || self.rows().is_renaming() {
+        let tab = &self.tabs[self.active];
+        if !tab.stale
+            || tab.reloading.is_some()
+            || tab.pending.is_some()
+            || self.rows().is_renaming()
+        {
             return false;
         }
-        let tab = &mut self.tabs[self.active];
-        let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
-        tab.rows.source_mut().reload();
-        tab.rows.restore_view(caret, sr, sx, inv);
-        tab.stale = false;
+        let active = self.active;
+        self.reload_tab(active, false, inv);
         self.sync_chrome(inv);
         true
     }

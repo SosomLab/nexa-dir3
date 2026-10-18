@@ -193,6 +193,23 @@ impl ListOpts {
     }
 }
 
+/// 재열람 계획([`TreeSource::reload_plan`]) — 워커로 넘어간다.
+#[derive(Debug, Clone)]
+pub(crate) struct ReloadPlan {
+    path: PathBuf,
+    opts: ListOpts,
+    keys: Vec<(SortKey, bool)>,
+    expanded: Vec<String>,
+    selected: Vec<String>,
+}
+
+/// 만든 트리 + 열거 전 폴더 수정 시각([`TreeSource::reload_build`] → [`TreeSource::reload_apply`]).
+#[derive(Debug)]
+pub(crate) struct ReloadBuilt {
+    tree: Result<Tree, String>,
+    mtime: Option<std::time::SystemTime>,
+}
+
 /// 한 패널의 행 공급자.
 #[derive(Debug)]
 pub(crate) struct TreeSource {
@@ -362,15 +379,13 @@ impl TreeSource {
     /// 정렬 키 · 펼친 폴더 · 선택을 스냅샷해 새 트리에 경로로 되돌린다(사라진 항목은 조용히 빠진다). 종전에는 새 트리를 기본 정렬로
     /// 열기만 해 폴더가 밖에서 바뀔 때마다 선택·펼침·정렬이 풀렸다(GAP-005 · 10-03 T4 `ctx.wait` 시나리오가 적발).
     pub(crate) fn reload(&mut self) {
-        #[cfg(test)]
-        {
-            self.reloads += 1;
-        }
-        self.fresh = Some((std::time::Instant::now(), Self::root_mtime(&self.path)));
-        self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
-        self.drive_space_asked = false;
-        self.probe_gen += 1;
-        self.probe_pending.borrow_mut().clear();
+        let plan = self.reload_plan();
+        self.reload_apply(Self::reload_build(&plan));
+    }
+
+    /// 재열람 계획(UI 스레드 · 싼 복제): 경로 · 옵션 · 정렬 키 · 펼친 폴더 · 선택 — [`Self::reload_build`]가 어느 스레드에서든
+    /// 트리를 만들고 [`Self::reload_apply`]가 UI 스레드에서 바꿔 끼운다(10-18 결정 ② 2단계 · 재열람도 워커).
+    pub(crate) fn reload_plan(&self) -> ReloadPlan {
         let (keys, expanded, selected) = match &self.tree {
             Some(t) => {
                 let expanded: Vec<String> = (0..t.visible_len())
@@ -388,33 +403,78 @@ impl TreeSource {
             }
             None => (vec![(SortKey::Name, false)], Vec::new(), Vec::new()),
         };
-        match Tree::open_visible(
-            &self.path,
-            self.opts.show_hidden,
-            self.opts.show_dotfiles,
-            self.opts.show_protected,
-        ) {
-            Ok(mut t) => {
-                t.set_sort(SortSpec {
-                    keys,
-                    folders_first: self.opts.folders_first,
-                    case_sensitive: self.opts.case_sensitive,
-                    natural: self.opts.natural,
-                });
-                // 펼침은 가시 순서(부모 먼저)로 모았으므로 그대로 다시 펼치면 된다 · 없어진 폴더는 건너뛴다.
-                for dir in &expanded {
-                    let _ = t.expand_path(dir);
-                }
-                // 선택 복원 = 색인 한 번(O(n + k) · 종전 경로마다 선형 검색 · 10-18).
-                let _ = t.select_paths(&selected);
+        ReloadPlan {
+            path: self.path.clone(),
+            opts: self.opts,
+            keys,
+            expanded,
+            selected,
+        }
+    }
+
+    /// 트리 만들기(열거 · 정렬 · 펼침 · 선택 복원) — 폴더 수정 시각은 **열거 전에** 잰다(열거 중 바뀐 것은 스탬프와 달라져
+    /// 다음 감시 통지가 억제되지 않는다 · 결정 ③).
+    pub(crate) fn reload_build(plan: &ReloadPlan) -> ReloadBuilt {
+        let mtime = Self::root_mtime(&plan.path);
+        let tree = Tree::open_visible(
+            &plan.path,
+            plan.opts.show_hidden,
+            plan.opts.show_dotfiles,
+            plan.opts.show_protected,
+        )
+        .map(|mut t| {
+            t.set_sort(SortSpec {
+                keys: plan.keys.clone(),
+                folders_first: plan.opts.folders_first,
+                case_sensitive: plan.opts.case_sensitive,
+                natural: plan.opts.natural,
+            });
+            // 펼침은 가시 순서(부모 먼저)로 모았으므로 그대로 다시 펼치면 된다 · 없어진 폴더는 건너뛴다.
+            for dir in &plan.expanded {
+                let _ = t.expand_path(dir);
+            }
+            // 선택 복원 = 색인 한 번(O(n + k) · 종전 경로마다 선형 검색 · 10-18).
+            let _ = t.select_paths(&plan.selected);
+            t
+        })
+        .map_err(|e| e.to_string());
+        ReloadBuilt { tree, mtime }
+    }
+
+    /// 만든 트리를 끼운다(UI 스레드): 프로브 캐시 · 세대 · 용량 질문 · 신선 스탬프 갱신.
+    pub(crate) fn reload_apply(&mut self, built: ReloadBuilt) {
+        #[cfg(test)]
+        {
+            self.reloads += 1;
+        }
+        self.fresh = Some((std::time::Instant::now(), built.mtime));
+        self.probe_cache.borrow_mut().clear(); // 새 트리 = 새 노드 id · FS 변화 재실측(X-43)
+        self.drive_space_asked = false;
+        self.probe_gen += 1;
+        self.probe_pending.borrow_mut().clear();
+        match built.tree {
+            Ok(t) => {
                 self.tree = Some(t);
                 self.error = None;
             }
             Err(e) => {
                 self.tree = None;
-                self.error = Some(e.to_string());
+                self.error = Some(e);
             }
         }
+    }
+
+    /// 워커에서 다시 읽는다(10-18 결정 ② 2단계) — 결과 채널(수신자를 버리면 결과도 버려진다).
+    pub(crate) fn reload_async(&self) -> std::sync::mpsc::Receiver<ReloadBuilt> {
+        let plan = self.reload_plan();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("ndir-reload".into())
+            .spawn(move || {
+                let _ = tx.send(Self::reload_build(&plan));
+            })
+            .expect("spawn reload worker");
+        rx
     }
 
     /// 행의 저장 상태(상태 열): 클라우드 속성이 있으면 그것 · 없고 네트워크 위치면 네트워크 · 그 밖 = 없음.
