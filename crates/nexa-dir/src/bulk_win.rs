@@ -1440,6 +1440,24 @@ impl BulkWin {
         }
     }
 
+    /// 스크롤 값 적용(막대·휠·썸 드래그 공용): 카드 재배치 + 열린 카드 콤보는 닫는다(가려진 팝업이 입력을 먹지 않게 · 사용자 10-18).
+    fn apply_scroll(&mut self, ny: i32) {
+        if ny == self.scroll {
+            return;
+        }
+        self.scroll = ny;
+        self.clamp_scroll();
+        self.layout_cards();
+        let mut inv = Invalidations::default();
+        for c in &mut self.cards {
+            for cb in c.combos() {
+                if cb.is_open() {
+                    cb.close(&mut inv);
+                }
+            }
+        }
+    }
+
     /// 열린 콤보(팝업이 모든 입력을 먼저 받는다).
     fn open_combo(&mut self) -> Option<&mut Combo> {
         for c in &mut self.cards {
@@ -1466,6 +1484,9 @@ impl BulkWin {
 
     /// 커서 아래 입력칸(보이는 것만).
     fn box_at(&mut self, p: Point) -> Option<&mut TextBox> {
+        if !self.cards_rect.contains(p) {
+            return None;
+        }
         for c in &mut self.cards {
             if c.rect.h == 0 {
                 continue;
@@ -1518,9 +1539,10 @@ impl BulkWin {
     }
 
     fn own_focus(&mut self, p: Point) {
+        let in_cards = self.cards_rect.contains(p);
         for c in &mut self.cards {
             for tb in c.boxes() {
-                tb.set_focused(tb.bounds().h > 0 && tb.bounds().contains(p));
+                tb.set_focused(in_cards && tb.bounds().h > 0 && tb.bounds().contains(p));
             }
         }
     }
@@ -1750,11 +1772,7 @@ impl BulkWin {
                         self.scroll,
                         self.scale,
                     );
-                    if ny != self.scroll {
-                        self.scroll = ny;
-                        self.clamp_scroll();
-                        self.layout_cards();
-                    }
+                    self.apply_scroll(ny);
                 } else if self.grid_rect.contains(p) {
                     let e = crate::input::wheel_event(delta, self.shift);
                     self.rows.on_event(&e, &mut inv);
@@ -1800,11 +1818,7 @@ impl BulkWin {
                         self.scroll,
                         self.scale,
                     );
-                    if ny != self.scroll {
-                        self.scroll = ny;
-                        self.clamp_scroll();
-                        self.layout_cards();
-                    }
+                    self.apply_scroll(ny);
                     if consumed {
                         self.redraw();
                         return BulkAction::None;
@@ -1813,20 +1827,27 @@ impl BulkWin {
                 if let Some(cb) = self.open_combo() {
                     cb.on_event(&mv, &mut inv);
                 } else {
+                    // 카드 열 밖(스크롤로 가려진 자리 · 하단 줄)에서는 카드 컨트롤에 '벗어남' 좌표를 준다 — 가려진 컨트롤이 hover를
+                    // 받지 않는다(사용자 10-18 "뒤에 숨은 객체가 이벤트를 먼저 받음").
+                    let cmv = if self.cards_rect.contains(Point { x, y }) {
+                        mv
+                    } else {
+                        InputEvent::MouseMove { x: -1, y: -1 }
+                    };
                     for c in &mut self.cards {
                         if c.rect.h == 0 {
                             continue;
                         }
                         for b in c.buttons() {
-                            b.on_event(&mv, &mut inv);
+                            b.on_event(&cmv, &mut inv);
                         }
                         for cb in c.combos() {
-                            cb.on_event(&mv, &mut inv);
+                            cb.on_event(&cmv, &mut inv);
                         }
                         for tb in c.boxes() {
-                            tb.on_event(&mv, &mut inv);
+                            tb.on_event(&cmv, &mut inv);
                         }
-                        c.match_case.on_event(&mv, &mut inv);
+                        c.match_case.on_event(&cmv, &mut inv);
                     }
                     self.presets_btn.on_event(&mv, &mut inv);
                     self.btn_cancel.on_event(&mv, &mut inv);
@@ -1937,11 +1958,7 @@ impl BulkWin {
                         self.scroll,
                         self.scale,
                     );
-                    if ny != self.scroll {
-                        self.scroll = ny;
-                        self.clamp_scroll();
-                        self.layout_cards();
-                    }
+                    self.apply_scroll(ny);
                     if consumed {
                         self.redraw();
                         return BulkAction::None;
@@ -1982,28 +1999,29 @@ impl BulkWin {
                         }
                     }
                 }
-                // 누름 = 커서 아래 컨트롤만 · 뗌 = 전부.
+                // 누름 = 커서 아래 컨트롤만(카드 열 안에서만 — 스크롤로 가려진 컨트롤은 받지 않는다 · 사용자 10-18) · 뗌 = 전부.
+                let in_cards = self.cards_rect.contains(p);
                 for c in &mut self.cards {
                     if c.rect.h == 0 {
                         continue;
                     }
                     for b in c.buttons() {
-                        if up || b.bounds().contains(p) {
+                        if up || (in_cards && b.bounds().contains(p)) {
                             b.on_event(&e, &mut inv);
                         }
                         b.set_focused(false);
                     }
                     for cb in c.combos() {
-                        if up || cb.bounds().contains(p) {
+                        if up || (in_cards && cb.bounds().contains(p)) {
                             cb.on_event(&e, &mut inv);
                         }
                     }
                     for tb in c.boxes() {
-                        if up || tb.bounds().contains(p) {
+                        if up || (in_cards && tb.bounds().contains(p)) {
                             tb.on_event(&e, &mut inv);
                         }
                     }
-                    if up || c.match_case.bounds().contains(p) {
+                    if up || (in_cards && c.match_case.bounds().contains(p)) {
                         c.match_case.on_event(&e, &mut inv);
                     }
                     let _ = c.match_case.take_toggled();
@@ -2084,6 +2102,18 @@ impl BulkWin {
                 }
                 let clip = r.intersection(&cr);
                 dc.fill_round_rect(clip, self.s(6.0), th.panel_bg_alt);
+                // 헤더 띠(종류 콤보 행 · Path Finder 꼴 · 사용자 10-18): 패널과 대비되는 `bubble_peer` · 위 모서리만 둥글게 · 아래 경계선.
+                let rad = self.s(6.0);
+                let head =
+                    Rect::new(r.x, r.y, r.w, inner_pad + row_h - self.s(2.0)).intersection(&cr);
+                if head.h > 0 {
+                    dc.fill_round_rect(head, rad, th.bubble_peer);
+                    dc.fill_rect(
+                        Rect::new(head.x, head.y + rad, head.w, (head.h - rad).max(0)),
+                        th.bubble_peer,
+                    );
+                    dc.fill_rect(Rect::new(head.x, head.bottom() - 1, head.w, 1), th.border);
+                }
                 dc.stroke_round_rect(clip, self.s(6.0), th.border, 1.0);
                 let lx = r.x + inner_pad;
                 let ty = |ry: i32| ry + (row_h - 4 - th_txt) / 2;
@@ -2216,8 +2246,11 @@ impl BulkWin {
             );
             self.btn_cancel.paint(&mut dc, th);
             self.btn_rename.paint(&mut dc, th);
-            // 열린 콤보 드롭다운 = 맨 뒤.
+            // 열린 콤보 드롭다운 = 맨 뒤(카드가 열 안에 보일 때만 — 가려진 카드의 상자가 하단 줄 위에 그려졌다 · 10-18).
             for c in &self.cards {
+                if c.rect.bottom() <= cr.y || c.rect.y >= cr.bottom() {
+                    continue;
+                }
                 for cb in [
                     &c.kind,
                     &c.scope,
@@ -2234,8 +2267,10 @@ impl BulkWin {
                 }
             }
             self.paint_card_drag(&mut dc, th, wi, hi);
+            // 토스트 영역 = 하단 버튼 줄 제외(버튼을 가리지 않게 · 사용자 10-18).
+            let toast_area = Rect::new(0, 0, wi, (hi - pad * 2 - self.s(BTN_H)).max(0));
             self.toasts
-                .paint_in(&mut dc, th, Rect::new(0, 0, wi, hi), self.toast_corner, s);
+                .paint_in(&mut dc, th, toast_area, self.toast_corner, s);
             // 프리셋 메뉴 = 맨 뒤(모든 컨트롤 위).
             self.preset_menu.paint(&mut dc, th);
         }
