@@ -459,6 +459,8 @@ struct App {
     git_fail: std::collections::HashMap<PathBuf, Instant>,
     /// 저장소 → 변경 뒤 재조회 **정착 시각**(`watch.git_settle_ms`) — 변경이 이어지는 동안은 미뤄지고 조용해지면 한 번만 조회.
     git_settle: std::collections::HashMap<PathBuf, Instant>,
+    /// 요청 때의 `.git` 스탬프(`dirinfo::git_stamp`) — 포커스 복귀 때 같으면 요약을 다시 묻지 않는다(10-18).
+    git_stamps: std::collections::HashMap<PathBuf, (u128, u128, u128)>,
     /// `git` 프로세스를 돌려 상태를 조회하는가(시험에서는 끈다 — 실제 프로세스를 띄우지 않는다).
     git_enabled: bool,
     git_tx: std::sync::mpsc::Sender<(PathBuf, Option<dirinfo::GitDetail>)>,
@@ -832,6 +834,7 @@ impl App {
             git_busy: std::collections::HashSet::new(),
             git_fail: std::collections::HashMap::new(),
             git_settle: std::collections::HashMap::new(),
+            git_stamps: std::collections::HashMap::new(),
             git_enabled,
             git_tx,
             git_rx,

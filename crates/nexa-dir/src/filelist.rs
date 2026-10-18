@@ -333,12 +333,12 @@ impl TreeSource {
 
     /// 행의 저장 상태(상태 열): 클라우드 속성이 있으면 그것 · 없고 네트워크 위치면 네트워크 · 그 밖 = 없음.
     pub(crate) fn status_of(&self, index: usize) -> ndir_vfs::FileStatus {
-        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return ndir_vfs::FileStatus::None;
         };
         match ndir_vfs::cloud_status(r.attrs) {
             // NFD 이름 식별(10-18) — 클라우드 상태가 없을 때만(상태 열은 한 가지만 보인다).
-            ndir_vfs::FileStatus::None if ndir_ops::nfc::is_decomposed(&r.name) => {
+            ndir_vfs::FileStatus::None if ndir_ops::nfc::is_decomposed(r.name) => {
                 ndir_vfs::FileStatus::Nfd
             }
             ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
@@ -466,7 +466,7 @@ impl TreeSource {
     pub(crate) fn row_is_dir(&self, index: usize) -> bool {
         self.tree
             .as_ref()
-            .and_then(|t| t.row(index))
+            .and_then(|t| t.row_ref(index))
             .is_some_and(|r| r.kind == FileKind::Dir)
     }
 
@@ -684,7 +684,7 @@ impl RowSource for TreeSource {
         if self.no_icons {
             return None;
         }
-        let row = self.tree.as_ref()?.row(index)?;
+        let row = self.tree.as_ref()?.row_ref(index)?;
         let is_dir = row.kind == FileKind::Dir;
         let path = self.row_path(index)?;
         // 링크(심볼릭 링크 · 정션)는 경로로 조회해야 셸이 화살표 오버레이를 얹는다(GAP-008 — 종류별 아이콘에는 링크 정보가 없다).
@@ -704,7 +704,8 @@ impl RowSource for TreeSource {
     }
 
     fn row(&self, index: usize) -> RowItem {
-        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+        // 무할당 행 참조(10-18 체감 점검 — 종전 `row()`는 행마다 이름 String을 복제했다 · 셀마다 반복).
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return RowItem {
                 text: String::new(),
                 is_dir: false,
@@ -727,7 +728,7 @@ impl RowSource for TreeSource {
             },
             text: {
                 let shown = display_name(
-                    &r.name,
+                    r.name,
                     r.kind == FileKind::Dir,
                     crate::platform::hides_shortcut_ext(),
                 );
@@ -742,7 +743,7 @@ impl RowSource for TreeSource {
     }
 
     fn cell(&self, index: usize, key: u32) -> String {
-        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return String::new();
         };
         match key {
@@ -756,20 +757,20 @@ impl RowSource for TreeSource {
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time_local(r.modified_unix_ms),
             COL_KIND
-                if (self.drive_space.contains_key(&r.name) || r.name.ends_with(":\\"))
-                    && !is_home_dir(&r.name) =>
+                if (self.drive_space.contains_key(r.name) || r.name.ends_with(":\\"))
+                    && !is_home_dir(r.name) =>
             {
                 ndir_i18n::tr("kind.drive")
             }
-            COL_KIND => kind_label(r.kind, &r.name),
+            COL_KIND => kind_label(r.kind, r.name),
             COL_TOTAL => self
                 .drive_space
-                .get(&r.name)
+                .get(r.name)
                 .map(|(t, _)| format_size(*t))
                 .unwrap_or_default(),
             COL_FREE => self
                 .drive_space
-                .get(&r.name)
+                .get(r.name)
                 .map(|(_, f)| format_size(*f))
                 .unwrap_or_default(),
             _ => String::new(),
@@ -778,10 +779,10 @@ impl RowSource for TreeSource {
 
     /// 타일 보조 줄(dir2 07-16): 드라이브 = "X 중 Y 사용 가능" + 사용량 바 · 그 밖 = 종류.
     fn tile_info(&self, index: usize) -> (String, Option<f32>) {
-        let Some(r) = self.tree.as_ref().and_then(|t| t.row(index)) else {
+        let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return (String::new(), None);
         };
-        if let Some(&(total, free)) = self.drive_space.get(&r.name) {
+        if let Some(&(total, free)) = self.drive_space.get(r.name) {
             let used = total.saturating_sub(free);
             let frac = if total > 0 {
                 used as f32 / total as f32

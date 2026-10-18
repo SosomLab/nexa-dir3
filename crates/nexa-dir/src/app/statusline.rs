@@ -560,6 +560,8 @@ impl App {
         if !self.git_busy.insert(repo.clone()) {
             return;
         }
+        self.git_stamps
+            .insert(repo.clone(), dirinfo::git_stamp(&repo));
         let tx = self.git_tx.clone();
         let untracked = self.settings.flag("git.untracked");
         let timeout = git_timeout(&self.settings);
@@ -717,7 +719,13 @@ impl App {
         if self.git_detail.is_empty() && self.git_fail.is_empty() {
             return;
         }
-        self.git_detail.clear();
+        // `.git` 스탬프가 요청 때와 같은 저장소는 요약을 그대로 둔다(10-18 — 종전엔 Alt-Tab마다 보이는 저장소 전부 `git status`).
+        let stamps = &self.git_stamps;
+        self.git_detail.retain(|repo, _| {
+            stamps
+                .get(repo)
+                .is_some_and(|s| *s == dirinfo::git_stamp(repo))
+        });
         for p in &mut self.panels {
             p.invalidate_dir_info();
         }

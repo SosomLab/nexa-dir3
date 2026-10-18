@@ -58,10 +58,16 @@ pub struct VisibleRow {
 /// 셀 렌더용 경량 참조 뷰([`Tree::row_ref`] — X-16) — 이름은 빌린 `&str`(클론 없음).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VisibleRowRef<'a> {
+    pub id: NodeId,
+    pub depth: u32,
     pub kind: FileKind,
     pub name: &'a str,
     pub size: u64,
     pub modified_unix_ms: i64,
+    pub attrs: u32,
+    pub expanded: bool,
+    /// 폴더(펼칠 수 있음) — [`VisibleRow::has_children`]과 같은 뜻.
+    pub has_children: bool,
 }
 
 /// 펼침/접힘으로 인한 가시 목록 변경 구간(호스트가 행 삽입/삭제에 사용).
@@ -576,10 +582,15 @@ impl Tree {
         let id = *self.visible.get(index)?;
         let n = &self.nodes[id as usize];
         Some(VisibleRowRef {
+            id: n.id,
+            depth: n.depth,
             kind: n.kind,
             name: &n.name,
             size: n.size,
             modified_unix_ms: n.modified_unix_ms,
+            attrs: n.attrs,
+            expanded: n.expanded,
+            has_children: n.is_dir(),
         })
     }
 

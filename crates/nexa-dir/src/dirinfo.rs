@@ -21,6 +21,26 @@ pub(crate) fn parse_gitdir_file(text: &str) -> Option<&str> {
 }
 
 /// 저장소 루트의 **git 디렉터리**(`.git` 폴더 · worktree식 `.git` 파일이면 그 안의 `gitdir:`) — 상태 갱신 감시용(10-06).
+/// 저장소 상태가 바뀌었는지 가늠하는 스탬프(10-18 · 포커스 복귀마다 `git status`를 다시 돌리지 않게): `.git/index` · `HEAD` · `logs/HEAD`의
+/// 수정 시각(ms · 없으면 0). 커밋 · 체크아웃 · 스테이징은 이 셋 중 하나를 바꾼다(작업 트리 편집은 폴더 감시가 맡는다).
+pub(crate) fn git_stamp(repo: &Path) -> (u128, u128, u128) {
+    let Some(g) = git_dir(repo) else {
+        return (0, 0, 0);
+    };
+    let m = |p: PathBuf| {
+        std::fs::metadata(p)
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_millis())
+    };
+    (
+        m(g.join("index")),
+        m(g.join("HEAD")),
+        m(g.join("logs").join("HEAD")),
+    )
+}
+
 pub(crate) fn git_dir(repo: &Path) -> Option<PathBuf> {
     let dot = repo.join(".git");
     let meta = std::fs::metadata(&dot).ok()?;
