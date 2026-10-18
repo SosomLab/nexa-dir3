@@ -8806,16 +8806,21 @@ fn quick_look_falls_back_to_preview_window() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 셸 드롭 동사 보정(순수 · 10-18): NONE + 원본 소멸 = 최적화 이동 · 그 밖은 그대로.
+/// "여기에 바로 가기 만들기"(Windows · 10-18): 놓은 폴더에 `<이름>.lnk` — 원본은 그대로.
+#[cfg(windows)]
 #[test]
-fn shell_drop_verb_is_corrected_for_optimized_move() {
-    use crate::platform::{verb_after_drop, DropVerb};
-    assert_eq!(verb_after_drop(DropVerb::None, true), DropVerb::Move);
-    assert_eq!(
-        verb_after_drop(DropVerb::None, false),
-        DropVerb::None,
-        "취소"
+fn drop_link_creates_shortcut_in_dest() {
+    use crate::app::dnd::make_links;
+    let (_app, dir) = fixture("droplnk");
+    let a = dir.join("a.txt");
+    let dest = dir.join("sub");
+    assert_eq!(make_links(std::slice::from_ref(&a), &dest), Ok(1));
+    let lnk = dest.join("a.txt.lnk");
+    assert!(
+        lnk.is_file() && std::fs::metadata(&lnk).unwrap().len() > 0,
+        "{}",
+        lnk.display()
     );
-    assert_eq!(verb_after_drop(DropVerb::Copy, true), DropVerb::Copy);
-    assert_eq!(verb_after_drop(DropVerb::Other, false), DropVerb::Other);
+    assert!(a.is_file(), "원본 유지");
+    let _ = std::fs::remove_dir_all(&dir);
 }

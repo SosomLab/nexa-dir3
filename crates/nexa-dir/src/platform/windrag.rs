@@ -16,35 +16,34 @@
 //!   (dir2 α — 최적화하지 않는 대상의 이동은 복사로 남는 안전한 쪽). 호출부는 결과와 무관하게 다시 읽어 맞춘다.
 
 use super::windows::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
-use super::{DragImage, DragOutcome, DragSource, DropVerb, PlatformError};
-use ::windows::core::{implement, Interface as _, Ref, BOOL, HRESULT, PCWSTR};
+use super::{DragImage, DragOutcome, DragSource, PlatformError};
+use ::windows::core::{implement, Interface as _, Ref, BOOL, HRESULT};
 use ::windows::Win32::Foundation::{
     COLORREF, DATA_S_SAMEFORMATETC, DRAGDROP_S_CANCEL, DRAGDROP_S_DROP,
     DRAGDROP_S_USEDEFAULTCURSORS, DV_E_FORMATETC, DV_E_TYMED, E_INVALIDARG, E_NOTIMPL,
-    E_OUTOFMEMORY, HGLOBAL, HWND, OLE_E_ADVISENOTSUPPORTED, POINT, POINTL, SIZE, S_OK,
+    E_OUTOFMEMORY, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, POINT, SIZE, S_OK,
 };
 use ::windows::Win32::Graphics::Gdi::{
-    ClientToScreen, CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
-    DIB_RGB_COLORS, HBITMAP, HGDIOBJ,
+    CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
+    HGDIOBJ,
 };
 use ::windows::Win32::System::Com::{
-    CoCreateInstance, CoTaskMemFree, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC,
-    IEnumSTATDATA, IStream, CLSCTX_INPROC_SERVER, DATADIR_GET, DVASPECT_CONTENT, FORMATETC,
-    STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
+    CoCreateInstance, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
+    IStream, CLSCTX_INPROC_SERVER, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, STGMEDIUM,
+    STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
 };
 use ::windows::Win32::System::Ole::{
-    DoDragDrop, IDropSource, IDropSource_Impl, IDropTarget, OleInitialize, ReleaseStgMedium,
-    CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE, DROPEFFECT_NONE,
+    DoDragDrop, IDropSource, IDropSource_Impl, OleInitialize, ReleaseStgMedium, CF_HDROP,
+    DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_MOVE, DROPEFFECT_NONE,
 };
 use ::windows::Win32::System::SystemServices::{MK_LBUTTON, MK_RBUTTON, MODIFIERKEYS_FLAGS};
 use ::windows::Win32::UI::Shell::{
-    CLSID_DragDropHelper, IDragSourceHelper, IDragSourceHelper2, IShellFolder, SHBindToObject,
-    SHCreateStdEnumFmtEtc, SHParseDisplayName, DSH_ALLOWDROPDESCRIPTIONTEXT, SHDRAGIMAGE,
+    CLSID_DragDropHelper, IDragSourceHelper, IDragSourceHelper2, SHCreateStdEnumFmtEtc,
+    DSH_ALLOWDROPDESCRIPTIONTEXT, SHDRAGIMAGE,
 };
 use std::cell::RefCell;
 use std::ffi::c_void;
-use std::os::windows::ffi::OsStrExt as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub(super) struct NativeDrag;
 
@@ -175,78 +174,9 @@ fn attach_drag_image(data: &IDataObject, image: &DragImage) -> Option<IDragSourc
     }
 }
 
-// ── 셸 드롭 메뉴(우클릭 드래그 · 탐색기 꼴 · 10-18) ──────────────────────────────
-
-/// 폴더의 셸 `IDropTarget`(탐색기가 그 폴더 보기에서 쓰는 것 · `IShellFolder::CreateViewObject`) — 오른쪽 버튼 드롭을 주면 셸이 "여기에 복사 ·
-/// 여기로 이동 · 바로 가기 만들기 + 끌고 온 파일/폴더의 드래그 드롭 핸들러(7-Zip 압축 풀기/압축 · 서드파티 · 다중 선택 = 집합 전체에 맞는 것만)" 메뉴를
-/// 띄우고 **그 폴더를 기준으로** 실행한다(탐색기 ↔ 탐색기 우클릭 끌기와 같은 길 · 사용자 10-18).
-pub(super) fn shell_drop_target(hwnd: HWND, dir: &Path) -> Result<IDropTarget, PlatformError> {
-    let wide: Vec<u16> = dir
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    // SAFETY: NUL로 끝나는 경로 · pidl은 여기서 해제 · 돌려주는 COM 객체는 호출자 소유.
-    unsafe {
-        let mut pidl = std::ptr::null_mut();
-        SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut pidl, 0, None)
-            .map_err(|e| PlatformError::Failed(format!("SHParseDisplayName: {e}")))?;
-        let folder: ::windows::core::Result<IShellFolder> = SHBindToObject(None, pidl, None);
-        CoTaskMemFree(Some(pidl as *const c_void));
-        let folder = folder.map_err(|e| PlatformError::Failed(format!("SHBindToObject: {e}")))?;
-        folder
-            .CreateViewObject::<IDropTarget>(hwnd)
-            .map_err(|e| PlatformError::Failed(format!("CreateViewObject(IDropTarget): {e}")))
-    }
-}
-
-/// 우클릭 드래그 드롭을 셸에 위임(`at` = 창 안 좌표 → 화면 좌표): DragEnter → DragOver → Drop 전부 `MK_RBUTTON`으로 — 셸이 메뉴를 띄우고
-/// 고른 동작을 실행한다(모달 · 돌아오면 끝 · 복사/이동은 셸 파일 작업 = 탐색기 진행 창). 돌려주는 값 = 셸이 동작을 골랐는가(`DROPEFFECT_NONE` 아님).
-pub(super) fn shell_drop_menu(
-    owner: isize,
-    dest: &Path,
-    paths: &[PathBuf],
-    at: (i32, i32),
-) -> Result<DropVerb, PlatformError> {
-    if paths.is_empty() {
-        return Ok(DropVerb::None);
-    }
-    let hwnd = HWND(owner as *mut c_void);
-    let target = shell_drop_target(hwnd, dest)?;
-    let data: IDataObject = FileListDataObject::new(paths.to_vec()).into();
-    let mut p = POINT { x: at.0, y: at.1 };
-    // SAFETY: STA UI 스레드 · 유효한 COM 객체들 · 출력 자리는 지역 변수.
-    unsafe {
-        if owner != 0 {
-            let _ = ClientToScreen(hwnd, &mut p);
-        }
-        let pt = POINTL { x: p.x, y: p.y };
-        let all = DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK;
-        let mut effect = all;
-        target
-            .DragEnter(&data, MK_RBUTTON, pt, &mut effect)
-            .map_err(|e| PlatformError::Failed(format!("DragEnter: {e}")))?;
-        let mut effect = all;
-        target
-            .DragOver(MK_RBUTTON, pt, &mut effect)
-            .map_err(|e| PlatformError::Failed(format!("DragOver: {e}")))?;
-        let mut effect = all;
-        target
-            .Drop(&data, MK_RBUTTON, pt, &mut effect)
-            .map_err(|e| PlatformError::Failed(format!("Drop: {e}")))?;
-        // 실행한 동사(셸이 pdwEffect에 적는다 · 최적화 이동은 NONE → 호출부가 원본 소멸로 보정).
-        Ok(if effect.0 & DROPEFFECT_MOVE.0 != 0 {
-            DropVerb::Move
-        } else if effect.0 & DROPEFFECT_COPY.0 != 0 {
-            DropVerb::Copy
-        } else if effect.0 & DROPEFFECT_LINK.0 != 0 {
-            DropVerb::Link
-        } else if effect == DROPEFFECT_NONE {
-            DropVerb::None
-        } else {
-            DropVerb::Other
-        })
-    }
+/// 끌고 온 파일들의 CF_HDROP 데이터 객체(우클릭 드롭 메뉴의 DragDropHandlers `IShellExtInit::Initialize`용 · winshell · 10-18).
+pub(super) fn hdrop_data_object(paths: &[PathBuf]) -> IDataObject {
+    FileListDataObject::new(paths.to_vec()).into()
 }
 
 /// 드래그 발신원 — 표준 종료 판정(Esc = 취소 · 끌기 시작한 버튼을 떼면 놓기) · 기본 커서.
@@ -625,33 +555,6 @@ mod tests {
             assert!(n >= 2, "헬퍼가 사설 형식을 넣었다(HDROP 외 {n})");
         }
         drop(helper);
-    }
-
-    /// 셸 드롭 위임(우클릭 드래그 · 10-18): 임시 폴더의 셸 IDropTarget을 얻어 CF_HDROP 데이터 객체의 오른쪽 버튼 DragEnter가 받아들여지고
-    /// DragLeave로 끝난다(Drop은 메뉴가 떠 시험에서 부르지 않는다 = 실기).
-    #[test]
-    fn shell_drop_target_accepts_hdrop_without_dropping() {
-        // SAFETY: 시험 스레드를 STA로.
-        unsafe {
-            let _ = OleInitialize(None);
-        }
-        let dir = std::env::temp_dir().join(format!("ndir-shell-drop-{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let src = dir.join("src.txt");
-        std::fs::write(&src, b"x").unwrap();
-        let target =
-            shell_drop_target(HWND(std::ptr::null_mut()), &dir).expect("shell drop target");
-        let data: IDataObject = FileListDataObject::new(vec![src]).into();
-        // SAFETY: 유효한 COM 객체 · 출력 자리는 지역 변수.
-        unsafe {
-            let mut effect = DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK;
-            target
-                .DragEnter(&data, MK_RBUTTON, POINTL { x: 0, y: 0 }, &mut effect)
-                .expect("DragEnter");
-            assert_ne!(effect, DROPEFFECT_NONE, "셸이 받아들인다");
-            target.DragLeave().expect("DragLeave");
-        }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// 앱 그림 → 셸 비트맵 바이트(순수): 여백은 투명 · 그림 픽셀은 BGRA + 알파 255 · top-down 행 순서.

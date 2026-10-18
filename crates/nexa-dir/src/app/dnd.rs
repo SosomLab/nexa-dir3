@@ -125,7 +125,13 @@ pub(crate) fn drop_menu_items(
         CtxItem::item("dnd.move", tr("ctx.dropMove")),
     ];
     if link_ok {
-        items.push(CtxItem::item("dnd.link", tr("ctx.dropLink")));
+        // Windows 탐색기 = "여기에 바로 가기 만들기" · 그 밖 = 링크.
+        let key = if cfg!(windows) {
+            "ctx.dropShortcut"
+        } else {
+            "ctx.dropLink"
+        };
+        items.push(CtxItem::item("dnd.link", tr(key)));
     }
     items.push(CtxItem::Separator);
     let archive = match paths {
@@ -144,24 +150,12 @@ pub(crate) fn drop_menu_items(
     items
 }
 
-/// "여기에 링크 만들기": 끌고 온 각 항목의 심링크를 놓은 폴더에(이름 그대로 · Unix) — Windows는 셸(.lnk) 몫이라 미지원. 돌려주는 값 = 만든 수.
+/// "여기에 링크/바로 가기 만들기": 끌고 온 각 항목의 링크를 놓은 폴더에(Windows `.lnk` · Unix 심링크 · `platform::create_link`). 돌려주는 값 = 만든 수.
 pub(crate) fn make_links(paths: &[PathBuf], dest: &Path) -> Result<usize, String> {
-    #[cfg(unix)]
-    {
-        for p in paths {
-            let Some(name) = p.file_name() else {
-                continue;
-            };
-            let to = dest.join(name);
-            std::os::unix::fs::symlink(p, &to).map_err(|e| format!("{}: {e}", to.display()))?;
-        }
-        Ok(paths.len())
+    for p in paths {
+        platform::create_link(p, dest)?;
     }
-    #[cfg(not(unix))]
-    {
-        let _ = (paths, dest);
-        Err(tr("dnd.linkUnsupported"))
-    }
+    Ok(paths.len())
 }
 
 impl App {
@@ -642,25 +636,13 @@ impl App {
                 let mods = (self.shift, self.primary);
                 self.cursor = at;
                 (self.shift, self.primary) = (shift, ctrl);
-                let (plan, mut choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
+                let (plan, choice) = self.drop_plan(&paths, Point { x: at.0, y: at.1 });
                 self.dnd_end();
                 if let Some((_, dest)) = plan {
                     if menu {
-                        // 오른쪽 버튼 = 바로 옮기지 않는다(탐색기 꼴 · 사용자 10-18): Windows = 놓은 폴더의 셸 IDropTarget에 위임(기본 동사 + 끌고 온
-                        // 파일/폴더의 드래그 드롭 핸들러(7-Zip 등 서드파티 · 다중 선택 = 교집합) · **놓은 폴더 기준**으로 셸이 실행 · 모달) ·
-                        // 그 밖 OS/실패 = 자체 복사/이동/취소 메뉴.
-                        // 소유자 창 = 메인 창(셸 진행 창·메뉴가 우리 창 위에 · 10-18 사용자 "진행 상태가 안 보임").
-                        self.ctx_set_owner();
-                        match self.platform.ctxmenu.drop_menu(&dest, &paths, at) {
-                            Ok(reported) => {
-                                // 셸이 (최적화) 수행했다 → 소스에는 NONE(원본을 지우지 않게) · 결과는 다시 읽어 맞추고 동사·개수를 안내한다.
-                                choice = DropChoice::None;
-                                let gone = paths.iter().any(|p| !p.exists());
-                                let verb = platform::verb_after_drop(reported, gone);
-                                self.after_shell_drop(verb, paths.len(), &dest);
-                            }
-                            Err(_) => self.open_drop_menu(paths, at, dest),
-                        }
+                        // 오른쪽 버튼 = 바로 옮기지 않고 그 자리에 메뉴(탐색기 꼴 · 사용자 10-18): 복사·이동·바로 가기는 **앱 전송 엔진**(좌클릭 DnD와
+                        // 같은 길 = 진행 창 · 충돌 대화상자) · 확장 항목 = OS(Windows DragDropHandlers = 7-Zip 등 · Linux 스크립트).
+                        self.open_drop_menu(paths, at, dest);
                     } else {
                         self.external_drop(paths, Point { x: at.0, y: at.1 });
                     }
@@ -922,20 +904,13 @@ impl App {
             p.reopen(&mut inv);
         }
         let key = match verb {
-            platform::DropVerb::Copy => Some("dnd.shellCopy"),
-            platform::DropVerb::Move => Some("dnd.shellMove"),
-            platform::DropVerb::Link => Some("dnd.shellLink"),
-            platform::DropVerb::Other => Some("dnd.shellOther"),
-            platform::DropVerb::None => None,
+            platform::DropVerb::Link => "dnd.shellLink",
+            platform::DropVerb::Other => "dnd.shellOther",
         };
-        if let Some(key) = key {
-            let msg = trf(key, &[&n.to_string(), &ndir_ops::leaf_name(dest)]);
-            self.statusbar.set_left(&msg, &mut inv);
-            self.toasts
-                .push(toast::ToastKind::Info, tr("dnd.shellTitle"), msg);
-        } else {
-            self.update_status();
-        }
+        let msg = trf(key, &[&n.to_string(), &ndir_ops::leaf_name(dest)]);
+        self.statusbar.set_left(&msg, &mut inv);
+        self.toasts
+            .push(toast::ToastKind::Info, tr("dnd.shellTitle"), msg);
         self.redraw();
     }
 
@@ -948,7 +923,7 @@ impl App {
             .iter()
             .map(app::ctxmenu::shell_to_ctx)
             .collect();
-        let items = drop_menu_items(&paths, cfg!(unix), extra);
+        let items = drop_menu_items(&paths, platform::links_supported(), extra);
         self.dnd_menu = Some((paths, at, dest));
         self.ctx_anchor_next = Some(at);
         self.open_ctx(app::ctxmenu::CtxKind::Drop, items);

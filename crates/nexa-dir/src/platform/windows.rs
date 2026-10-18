@@ -112,6 +112,29 @@ fn shell_link_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// `.lnk` 만들기(IShellLinkW::SetPath + IPersistFile::Save · 드롭 메뉴 "여기에 바로 가기 만들기" · 10-18).
+pub(super) fn create_shortcut(target: &Path, lnk: &Path) -> Result<(), String> {
+    use ::windows::core::{Interface, PCWSTR};
+    use ::windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER,
+        COINIT_APARTMENTTHREADED,
+    };
+    use ::windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    let (t, l) = (wide(target), wide(lnk));
+    // SAFETY: STA UI 스레드(이미 초기화돼 있으면 S_FALSE) · 버퍼는 호출 동안 살아 있다 · 인터페이스는 Drop에서 Release.
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let link: IShellLinkW =
+            CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).map_err(|e| e.to_string())?;
+        link.SetPath(PCWSTR(t.as_ptr()))
+            .map_err(|e| e.to_string())?;
+        let persist: IPersistFile = link.cast().map_err(|e| e.to_string())?;
+        persist
+            .Save(PCWSTR(l.as_ptr()), true)
+            .map_err(|e| e.to_string())
+    }
+}
+
 fn wide(p: &Path) -> Vec<u16> {
     let mut w: Vec<u16> = p.as_os_str().encode_wide().collect();
     w.push(0);
@@ -623,28 +646,11 @@ mod tests {
     /// `.lnk`가 아닌 파일 = `None`. 사용자 파일은 건드리지 않는다.
     #[test]
     fn shell_link_target_reads_a_real_lnk() {
-        use ::windows::core::{Interface, PCWSTR};
-        use ::windows::Win32::System::Com::{
-            CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER,
-            COINIT_APARTMENTTHREADED,
-        };
-        use ::windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
         let dir = std::env::temp_dir().join(format!("ndir-lnk-{}", std::process::id()));
         let target = dir.join("대상 폴더");
         std::fs::create_dir_all(&target).unwrap();
         let lnk = dir.join("to.lnk");
-        // SAFETY: 시험 스레드에서 COM 초기화 뒤 표준 호출 · 버퍼는 호출 동안 살아 있다.
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            let link: IShellLinkW =
-                CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).expect("ShellLink");
-            link.SetPath(PCWSTR(wide(&target).as_ptr()))
-                .expect("SetPath");
-            let persist: IPersistFile = link.cast().expect("IPersistFile");
-            persist
-                .Save(PCWSTR(wide(&lnk).as_ptr()), true)
-                .expect("Save");
-        }
+        create_shortcut(&target, &lnk).expect("create_shortcut");
         // 경로 문자열은 표기가 다를 수 있다(CI 러너의 TEMP = 8.3 짧은 이름 `RUNNER~1` · 바로 가기는 긴 이름을 저장) → 양쪽 다
         // 정규화해 같은 폴더인지로 비교(지우기 전에 계산).
         let got = shell_link_target(&lnk).map(|p| std::fs::canonicalize(p).expect("대상 존재"));

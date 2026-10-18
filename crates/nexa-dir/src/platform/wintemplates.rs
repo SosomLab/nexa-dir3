@@ -14,7 +14,7 @@ use ::windows::Win32::System::Registry::{
 use ::windows::Win32::UI::Shell::{FOLDERID_Templates, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
 use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
 
-struct Key(HKEY);
+pub(super) struct Key(pub(super) HKEY);
 
 impl Drop for Key {
     fn drop(&mut self) {
@@ -31,14 +31,14 @@ fn wide(s: &str) -> Vec<u16> {
         .collect()
 }
 
-fn open(parent: HKEY, sub: &str) -> Option<Key> {
+pub(super) fn open(parent: HKEY, sub: &str) -> Option<Key> {
     let w = wide(sub);
     let mut h = HKEY::default();
     let rc = unsafe { RegOpenKeyExW(parent, PCWSTR(w.as_ptr()), None, KEY_READ, &mut h) };
     (rc == ERROR_SUCCESS).then_some(Key(h))
 }
 
-fn subkeys(k: HKEY) -> Vec<String> {
+pub(super) fn subkeys(k: HKEY) -> Vec<String> {
     let mut out = Vec::new();
     let mut i = 0u32;
     loop {
@@ -66,7 +66,7 @@ fn subkeys(k: HKEY) -> Vec<String> {
 }
 
 /// 값(종류 · 바이트) — 없으면 None.
-fn value(k: HKEY, name: &str) -> Option<(REG_VALUE_TYPE, Vec<u8>)> {
+pub(super) fn value(k: HKEY, name: &str) -> Option<(REG_VALUE_TYPE, Vec<u8>)> {
     let w = wide(name);
     let mut ty = REG_VALUE_TYPE(0);
     let mut len = 0u32;
@@ -100,7 +100,7 @@ fn value(k: HKEY, name: &str) -> Option<(REG_VALUE_TYPE, Vec<u8>)> {
     })
 }
 
-fn reg_string(bytes: &[u8]) -> String {
+pub(super) fn reg_string(bytes: &[u8]) -> String {
     let u: Vec<u16> = bytes
         .as_chunks::<2>()
         .0

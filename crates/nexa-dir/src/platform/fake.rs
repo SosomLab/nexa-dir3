@@ -140,6 +140,7 @@ impl ContextMenuProvider for FakeMenu {
                     });
                     v
                 }),
+                MenuTarget::Drop { dest, paths } => Ok(self.drop_items(dest, paths)),
                 MenuTarget::Bg(dir) => self.bg_items(dir),
                 MenuTarget::BgExtended(dir) => self.bg_items(dir).map(|mut v| {
                     note(&self.0, "menu.bg.extended".into());

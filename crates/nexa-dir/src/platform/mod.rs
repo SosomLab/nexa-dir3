@@ -157,6 +157,8 @@ pub(crate) enum MenuTarget {
     Bg(PathBuf),
     /// 폴더 배경 + **확장 동사**(Shift+우클릭 · dir2 win.rs:2875 — "여기에 PowerShell 창 열기" 등 평소 숨는 항목).
     BgExtended(PathBuf),
+    /// 우클릭 드래그로 놓은 자리(놓은 폴더 + 끌고 온 것들) — 셸 DragDropHandlers(7-Zip 등) 항목(10-18). 기본 동사(복사·이동·바로 가기)는 앱 자체.
+    Drop { dest: PathBuf, paths: Vec<PathBuf> },
 }
 
 /// 터미널에서 수식키 없는 Ctrl+V가 **붙여넣기**인가 — Windows(dir2 · Windows Terminal 관례)만. 다른 OS의 터미널에서 Ctrl+V는
@@ -241,6 +243,7 @@ pub(crate) trait ContextMenuProvider {
             match target {
                 MenuTarget::Rows(paths) | MenuTarget::RowsExtended(paths) => self.items(paths),
                 MenuTarget::Bg(dir) | MenuTarget::BgExtended(dir) => self.bg_items(dir),
+                MenuTarget::Drop { dest, paths } => Ok(self.drop_items(dest, paths)),
             }
             .unwrap_or_default(),
         )
@@ -259,17 +262,6 @@ pub(crate) trait ContextMenuProvider {
     fn busy(&self) -> bool {
         false
     }
-    /// 우클릭 드래그로 놓은 파일들의 **셸 드롭 메뉴**(탐색기 꼴 · 10-18): 놓은 폴더의 셸 `IDropTarget`에 오른쪽 버튼 드롭을 위임해 "여기에 복사 ·
-    /// 여기로 이동 · 바로 가기 만들기 + 드롭 핸들러(7-Zip …)" 메뉴를 띄우고 셸이 **놓은 폴더를 기준으로** 실행한다(모달 · 돌아오면 끝). 돌려주는
-    /// 값 = 셸이 동작을 골랐는가. 기본 = 미지원(호출부가 자체 복사/이동/취소 메뉴).
-    fn drop_menu(
-        &self,
-        _dest: &Path,
-        _paths: &[PathBuf],
-        _at: (i32, i32),
-    ) -> Result<DropVerb, PlatformError> {
-        Err(PlatformError::Unsupported("shell drop menu"))
-    }
     /// 자체 드롭 메뉴(셸 위임이 없는 OS)에 OS가 덧붙이는 항목(Linux = 노틸러스 스크립트 ▸ …) — 실행은 [`Self::invoke_drop`] · 기준 폴더 = 놓은 폴더.
     fn drop_items(&self, _dest: &Path, _paths: &[PathBuf]) -> Vec<ShellMenuItem> {
         Vec::new()
@@ -285,22 +277,37 @@ pub(crate) trait ContextMenuProvider {
     }
 }
 
-/// 셸 드롭 메뉴가 **실행한 동사**(`IDropTarget::Drop`의 pdwEffect · 10-18 사용자 "진행 상태가 안 보임" → 끝난 뒤 안내): 복사 · 이동 · 바로 가기 ·
-/// 없음(취소 · 또는 최적화 이동 = 셸이 NONE으로 돌려준다 → [`verb_after_drop`]) · 그 밖(드롭 핸들러 = 7-Zip 등).
+/// 자체 드롭 메뉴가 실행한 것(안내용 · 10-18): 링크/바로 가기 · OS 항목(DragDropHandlers = 7-Zip 등). 복사·이동은 앱 전송 엔진(진행 창)이 안내한다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DropVerb {
-    None,
-    Copy,
-    Move,
     Link,
     Other,
 }
 
-/// 셸이 돌려준 동사 보정(순수): NONE인데 원본이 사라졌으면 **최적화 이동**(셸은 이동을 스스로 끝내고 NONE을 돌려준다 · 소스가 지우지 않게).
-pub(crate) fn verb_after_drop(reported: DropVerb, any_source_gone: bool) -> DropVerb {
-    match reported {
-        DropVerb::None if any_source_gone => DropVerb::Move,
-        v => v,
+/// 드롭 메뉴 "여기에 링크/바로 가기 만들기"(10-18): Windows = `.lnk`(IShellLink) · Unix = 심링크 · 그 밖 = 미지원.
+pub(crate) fn links_supported() -> bool {
+    cfg!(any(windows, unix))
+}
+
+/// 링크 하나 만들기 → 만든 경로(Windows `<이름>.lnk` · Unix 같은 이름 심링크).
+pub(crate) fn create_link(target: &Path, dest_dir: &Path) -> Result<PathBuf, String> {
+    let name = target.file_name().ok_or_else(|| "no name".to_string())?;
+    #[cfg(windows)]
+    {
+        let lnk = dest_dir.join(format!("{}.lnk", name.to_string_lossy()));
+        windows::create_shortcut(target, &lnk)?;
+        Ok(lnk)
+    }
+    #[cfg(unix)]
+    {
+        let to = dest_dir.join(name);
+        std::os::unix::fs::symlink(target, &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        Ok(to)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        let _ = (name, dest_dir);
+        Err("links are not supported on this OS".into())
     }
 }
 

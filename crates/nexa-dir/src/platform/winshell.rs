@@ -28,11 +28,13 @@ use ::windows::Win32::Graphics::Gdi::{
     DIB_RGB_COLORS, HBITMAP,
 };
 use ::windows::Win32::System::Com::{
-    CoFreeUnusedLibrariesEx, CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED,
+    CLSIDFromString, CoCreateInstance, CoFreeUnusedLibrariesEx, CoInitializeEx, CoTaskMemFree,
+    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
 };
+use ::windows::Win32::System::Registry::HKEY_CLASSES_ROOT;
 use ::windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use ::windows::Win32::UI::Shell::{
-    IContextMenu, IContextMenu2, IShellFolder, SHBindToParent, SHGetDesktopFolder,
+    IContextMenu, IContextMenu2, IShellExtInit, IShellFolder, SHBindToParent, SHGetDesktopFolder,
     SHParseDisplayName, CMF_EXTENDEDVERBS, CMF_NORMAL, CMINVOKECOMMANDINFO, CMINVOKECOMMANDINFOEX,
     GCS_VERBW,
 };
@@ -53,6 +55,9 @@ const ID_LAST: u32 = 0x6FFF;
 const CMIC_MASK_UNICODE: u32 = 0x4000;
 /// 서브메뉴 열거 깊이(보내기 ▸ · 연결 프로그램 ▸).
 const MAX_DEPTH: u32 = 2;
+/// 우클릭 드롭 메뉴 DragDropHandlers: 핸들러마다 id 대역 폭 · 최대 수(ID_FIRST + 16·0x400 < ID_LAST).
+const DROP_STEP: u32 = 0x400;
+const MAX_DROP_HANDLERS: usize = 16;
 /// 항목 아이콘 한 변 상한(px) — 그보다 큰 비트맵은 아이콘이 아니다.
 const ICON_MAX: i32 = 64;
 /// 동기 호출이 메뉴 스레드를 기다리는 상한(느린 셸 확장 · 네트워크 경로).
@@ -63,12 +68,17 @@ const PUMP_MS: u64 = 25;
 /// 만든 메뉴 1벌(COM 수명 = 이 구조체 · **메뉴 스레드 밖으로 나가지 않는다**).
 struct Built {
     key: MenuTarget,
-    icm: IContextMenu,
+    /// 행/배경 메뉴의 IContextMenu(우클릭 드롭 메뉴는 `None` · `handlers`가 대신).
+    icm: Option<IContextMenu>,
     hmenu: HMENU,
     pidls: Vec<*mut ITEMIDLIST>,
-    _folder: IShellFolder,
+    _folder: Option<IShellFolder>,
     /// 실행 때 쓸 소유 창.
     hwnd_owner: *mut core::ffi::c_void,
+    /// 우클릭 드롭 메뉴의 DragDropHandlers(각각 IContextMenu + 자기 HMENU + id 첫 값 · 10-18).
+    handlers: Vec<(IContextMenu, HMENU, u32)>,
+    /// 드롭 메뉴의 작업 폴더(놓은 폴더 · `InvokeCommand` lpDirectoryW).
+    dir: Option<PathBuf>,
 }
 
 impl Drop for Built {
@@ -76,6 +86,9 @@ impl Drop for Built {
         // SAFETY: 우리가 만든 HMENU · CoTaskMem PIDL.
         unsafe {
             let _ = DestroyMenu(self.hmenu);
+            for (_, h, _) in &self.handlers {
+                let _ = DestroyMenu(*h);
+            }
             for &p in &self.pidls {
                 CoTaskMemFree(Some(p as *const core::ffi::c_void));
             }
@@ -186,11 +199,13 @@ impl Worker {
             } else {
                 MenuTarget::Rows(paths.to_vec())
             },
-            icm,
+            icm: Some(icm),
             hmenu,
             pidls,
-            _folder: folder,
+            _folder: Some(folder),
             hwnd_owner: owner as *mut core::ffi::c_void,
+            handlers: Vec::new(),
+            dir: None,
         })
     }
 
@@ -251,16 +266,83 @@ impl Worker {
             } else {
                 MenuTarget::Bg(dir.to_path_buf())
             },
-            icm,
+            icm: Some(icm),
             hmenu,
             pidls: vec![pidl],
-            _folder: folder,
+            _folder: Some(folder),
             hwnd_owner: owner as *mut core::ffi::c_void,
+            handlers: Vec::new(),
+            dir: None,
+        })
+    }
+
+    /// 우클릭 드롭 메뉴(10-18 · 탐색기 `CFSDropTarget` 꼴): 놓은 폴더 PIDL + 끌고 온 파일들의 CF_HDROP 데이터 객체로 레지스트리
+    /// `Directory|Folder(|Drive)\\shellex\\DragDropHandlers`의 확장(7-Zip 등)을 `IShellExtInit::Initialize` → 각자 HMENU에 `QueryContextMenu`
+    /// (id 대역 = ID_FIRST + k·DROP_STEP). 기본 동사(복사·이동·바로 가기)는 앱 자체 항목(우리 전송 엔진 = 좌클릭 DnD와 같은 길 · 진행 창).
+    unsafe fn build_drop(
+        owner: isize,
+        dest: &Path,
+        paths: &[PathBuf],
+    ) -> Result<Built, PlatformError> {
+        let wide: Vec<u16> = dest
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+        SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut pidl, 0, None)
+            .map_err(|e| PlatformError::Failed(format!("SHParseDisplayName: {e}")))?;
+        let data = super::windrag::hdrop_data_object(paths);
+        let mut handlers = Vec::new();
+        for (k, clsid) in drag_drop_handler_clsids(dest)
+            .iter()
+            .take(MAX_DROP_HANDLERS)
+            .enumerate()
+        {
+            let Ok(init) = CoCreateInstance::<_, IShellExtInit>(clsid, None, CLSCTX_INPROC_SERVER)
+            else {
+                continue;
+            };
+            if init
+                .Initialize(Some(pidl as *const ITEMIDLIST), &data, None)
+                .is_err()
+            {
+                continue;
+            }
+            let Ok(icm) = init.cast::<IContextMenu>() else {
+                continue;
+            };
+            let Ok(hmenu) = CreatePopupMenu() else {
+                continue;
+            };
+            let first = ID_FIRST + (k as u32) * DROP_STEP;
+            let hr = icm.QueryContextMenu(hmenu, 0, first, first + DROP_STEP - 1, CMF_NORMAL);
+            if hr.is_err() || GetMenuItemCount(Some(hmenu)) <= 0 {
+                let _ = DestroyMenu(hmenu);
+                continue;
+            }
+            handlers.push((icm, hmenu, first));
+        }
+        let hmenu = CreatePopupMenu()
+            .map_err(|e| PlatformError::Failed(format!("CreatePopupMenu: {e}")))?;
+        Ok(Built {
+            key: MenuTarget::Drop {
+                dest: dest.to_path_buf(),
+                paths: paths.to_vec(),
+            },
+            icm: None,
+            hmenu,
+            pidls: vec![pidl],
+            _folder: None,
+            hwnd_owner: owner as *mut core::ffi::c_void,
+            handlers,
+            dir: Some(dest.to_path_buf()),
         })
     }
 
     unsafe fn build_for(owner: isize, target: &MenuTarget) -> Result<Built, PlatformError> {
         match target {
+            MenuTarget::Drop { dest, paths } => Self::build_drop(owner, dest, paths),
             MenuTarget::Rows(paths) => Self::build(owner, paths, false),
             MenuTarget::RowsExtended(paths) => Self::build(owner, paths, true),
             MenuTarget::Bg(dir) => Self::build_bg(owner, dir, false),
@@ -278,7 +360,29 @@ impl Worker {
         // SAFETY: COM/셸 API — 입력 포인터는 호출 안의 유효 버퍼 · 산출 핸들은 `Built`가 수명 관리(이 스레드 전용).
         let built = unsafe { Self::build_for(owner, target)? };
         // SAFETY: 살아 있는 COM 객체 · 우리가 만든 HMENU.
-        let items = unsafe { enumerate(&built.icm, built.hmenu, 0) };
+        let items = unsafe {
+            match &built.icm {
+                Some(icm) => enumerate(icm, built.hmenu, 0, ID_FIRST, true),
+                // 드롭 핸들러 = 핸들러마다 자기 메뉴 · 사이에 구분선 · 셸 동사 가로채기 없음(verbs = false).
+                None => {
+                    let mut all: Vec<ShellMenuItem> = Vec::new();
+                    for (icm, hmenu, first) in &built.handlers {
+                        let part = enumerate(icm, *hmenu, 0, *first, false);
+                        if part.is_empty() {
+                            continue;
+                        }
+                        if !all.is_empty() {
+                            all.push(ShellMenuItem {
+                                separator: true,
+                                ..Default::default()
+                            });
+                        }
+                        all.extend(part);
+                    }
+                    all
+                }
+            }
+        };
         self.built = Some(built);
         Ok(items)
     }
@@ -301,6 +405,16 @@ impl Worker {
         };
         b.hwnd_owner = owner as *mut core::ffi::c_void;
         match target {
+            MenuTarget::Drop { dest, .. } => {
+                let k = (offset / DROP_STEP) as usize;
+                let local = offset % DROP_STEP;
+                let Some((icm, _, _)) = b.handlers.get(k) else {
+                    return Err(PlatformError::Failed(format!("no such drop handler: {id}")));
+                };
+                // SAFETY: icm은 살아 있는 COM 객체 · 오프셋은 대역 안 · 작업 폴더 = 놓은 폴더.
+                unsafe { invoke_icm(icm, b.hwnd_owner, local, Some(dest))? };
+                Ok(None)
+            }
             MenuTarget::Rows(_) | MenuTarget::RowsExtended(_) => {
                 // SAFETY: icm은 살아 있는 COM 객체 · 오프셋은 범위 검사됨.
                 unsafe { invoke_offset(b, offset)? };
@@ -330,24 +444,92 @@ fn offset_of(id: &str) -> Result<u32, PlatformError> {
     Ok(n - ID_FIRST)
 }
 
-/// InvokeCommand(오프셋 · 유니코드 · SW_SHOWNORMAL).
+/// InvokeCommand(행/배경 메뉴 · 오프셋 · 유니코드 · SW_SHOWNORMAL).
 unsafe fn invoke_offset(b: &Built, offset: u32) -> Result<(), PlatformError> {
+    let icm = b
+        .icm
+        .as_ref()
+        .ok_or_else(|| PlatformError::Failed("menu has no context menu".into()))?;
+    invoke_icm(icm, b.hwnd_owner, offset, None)
+}
+
+/// InvokeCommand(오프셋 · 유니코드 · SW_SHOWNORMAL · `dir` = 작업 폴더(드롭 메뉴 = 놓은 폴더 · lpDirectoryW)).
+unsafe fn invoke_icm(
+    icm: &IContextMenu,
+    owner: *mut core::ffi::c_void,
+    offset: u32,
+    dir: Option<&Path>,
+) -> Result<(), PlatformError> {
+    let dir_w: Vec<u16> = dir
+        .map(|d| {
+            d.as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
+        })
+        .unwrap_or_default();
     let inv = CMINVOKECOMMANDINFOEX {
         cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
         fMask: CMIC_MASK_UNICODE,
-        hwnd: HWND(b.hwnd_owner),
+        hwnd: HWND(owner),
         lpVerb: ::windows::core::PCSTR(offset as usize as *const u8),
         lpVerbW: PCWSTR(offset as usize as *const u16),
+        lpDirectoryW: if dir.is_some() {
+            PCWSTR(dir_w.as_ptr())
+        } else {
+            PCWSTR::null()
+        },
         nShow: SW_SHOWNORMAL.0,
         ..Default::default()
     };
-    b.icm
-        .InvokeCommand(&inv as *const _ as *const CMINVOKECOMMANDINFO)
+    icm.InvokeCommand(&inv as *const _ as *const CMINVOKECOMMANDINFO)
         .map_err(|e| PlatformError::Failed(format!("InvokeCommand: {e}")))
 }
 
+/// 레지스트리 `HKCR\\{Directory,Folder(,Drive)}\\shellex\\DragDropHandlers\\*` 기본값(CLSID) — 중복 제거 · 순서 유지.
+fn drag_drop_handler_clsids(dest: &Path) -> Vec<::windows::core::GUID> {
+    use super::wintemplates::{open, reg_string, subkeys, value};
+    let mut classes = vec!["Directory", "Folder"];
+    if dest.parent().is_none() {
+        classes.push("Drive");
+    }
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for class in classes {
+        let Some(k) = open(
+            HKEY_CLASSES_ROOT,
+            &format!("{class}\\shellex\\DragDropHandlers"),
+        ) else {
+            continue;
+        };
+        for name in subkeys(k.0) {
+            let Some(sub) = open(k.0, &name) else {
+                continue;
+            };
+            let Some((_, bytes)) = value(sub.0, "") else {
+                continue;
+            };
+            let w: Vec<u16> = reg_string(&bytes).encode_utf16().chain(Some(0)).collect();
+            // SAFETY: NUL로 끝나는 `{GUID}` 문자열.
+            let Ok(guid) = (unsafe { CLSIDFromString(PCWSTR(w.as_ptr())) }) else {
+                continue;
+            };
+            if seen.insert(guid.to_u128()) {
+                out.push(guid);
+            }
+        }
+    }
+    out
+}
+
 /// HMENU 열거 → 항목 트리(서브메뉴는 `HandleMenuMsg(WM_INITMENUPOPUP)` 뒤 · 아이콘 = `hbmpItem`).
-unsafe fn enumerate(icm: &IContextMenu, hmenu: HMENU, depth: u32) -> Vec<ShellMenuItem> {
+unsafe fn enumerate(
+    icm: &IContextMenu,
+    hmenu: HMENU,
+    depth: u32,
+    first: u32,
+    verbs: bool,
+) -> Vec<ShellMenuItem> {
     let mut out = Vec::new();
     let icm2: Option<IContextMenu2> = icm.cast().ok();
     // 최상위 메뉴도 "열리기 직전" 통지를 준다 — 셸 기본 메뉴(DefCM)와 확장은 이때 항목 비트맵·상태를 채운다(dir2는 표시 중
@@ -392,11 +574,11 @@ unsafe fn enumerate(icm: &IContextMenu, hmenu: HMENU, depth: u32) -> Vec<ShellMe
                     LPARAM(pos as isize),
                 );
             }
-            children = enumerate(icm, mii.hSubMenu, depth + 1);
+            children = enumerate(icm, mii.hSubMenu, depth + 1, first, verbs);
         }
         let id = mii.wID;
-        let verb = if (ID_FIRST..=ID_LAST).contains(&id) && children.is_empty() {
-            verb_of(icm, id - ID_FIRST).unwrap_or_default()
+        let verb = if verbs && (first..=ID_LAST).contains(&id) && children.is_empty() {
+            verb_of(icm, id - first).unwrap_or_default()
         } else {
             String::new()
         };
@@ -724,13 +906,24 @@ impl ContextMenuProvider for NativeShellMenu {
         self.owner.set(hwnd);
     }
 
-    fn drop_menu(
-        &self,
-        dest: &Path,
-        paths: &[PathBuf],
-        at: (i32, i32),
-    ) -> Result<DropVerb, PlatformError> {
-        super::windrag::shell_drop_menu(self.owner.get(), dest, paths, at)
+    /// 우클릭 드롭 메뉴의 셸 확장 항목(DragDropHandlers · 메뉴 스레드에서 동기 구축 · 10-18) — 실패/없음 = 빈 목록.
+    fn drop_items(&self, dest: &Path, paths: &[PathBuf]) -> Vec<ShellMenuItem> {
+        self.wait_items(&MenuTarget::Drop {
+            dest: dest.to_path_buf(),
+            paths: paths.to_vec(),
+        })
+        .unwrap_or_default()
+    }
+
+    fn invoke_drop(&self, id: &str, dest: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        self.wait_invoke(
+            id,
+            &MenuTarget::Drop {
+                dest: dest.to_path_buf(),
+                paths: paths.to_vec(),
+            },
+        )
+        .map(|_| ())
     }
 
     fn items(&self, paths: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError> {
@@ -962,6 +1155,34 @@ mod tests {
     }
 
     /// GDI DIB → RGBA: 프리멀티플라이드 풀기 · 완전 투명 · 알파 채널 없는 비트맵(전부 0) = 불투명.
+    /// 우클릭 드롭 메뉴(DragDropHandlers · 10-18): 임시 폴더를 놓은 폴더로, 임시 파일을 끌고 온 것으로 구축 — 설치된 핸들러가 없으면 빈 목록이고,
+    /// 있으면 항목 id는 `shell:` 대역(핸들러별 id 첫 값 + 오프셋) · 구분선/서브메뉴 허용 · 패닉 없음.
+    #[test]
+    fn drop_handlers_build_for_temp_folder() {
+        let dir = std::env::temp_dir().join(format!("ndir-ddh-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let f = dir.join("drag.txt");
+        std::fs::write(&f, b"x").unwrap();
+        let m = NativeShellMenu::new();
+        let items = m.drop_items(&dir, std::slice::from_ref(&f));
+        fn check(items: &[ShellMenuItem]) {
+            for it in items {
+                if it.separator {
+                    continue;
+                }
+                assert!(it.id.starts_with("shell:"), "{}", it.id);
+                assert!(
+                    it.verb.is_empty(),
+                    "드롭 핸들러 동사는 가로채지 않는다: {}",
+                    it.verb
+                );
+                check(&it.children);
+            }
+        }
+        check(&items);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn bgra_premultiplied_to_straight_rgba() {
         // (B,G,R,A) = (64,32,16,128) → 풀면 (R,G,B) = (31,63,127).

@@ -188,6 +188,7 @@ ctx.dropCopy = Copy here
 ctx.dropMove = Move here
 ctx.dropCancel = Cancel
 ctx.dropLink = Create link here
+ctx.dropShortcut = Create shortcut here
 dnd.linkUnsupported = Links are not supported on this OS
 osopen.title = Open
 osopen.missing = Cannot open {0} — not found

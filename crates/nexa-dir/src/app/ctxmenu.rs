@@ -992,6 +992,11 @@ impl App {
                         MenuTarget::Bg(dir) | MenuTarget::BgExtended(dir) => {
                             self.platform.ctxmenu.invoke_bg(other, dir)
                         }
+                        MenuTarget::Drop { dest, paths } => self
+                            .platform
+                            .ctxmenu
+                            .invoke_drop(other, dest, paths)
+                            .map(|()| None),
                         MenuTarget::Rows(sel) | MenuTarget::RowsExtended(sel) => {
                             self.platform.ctxmenu.invoke(other, sel).map(|()| None)
                         }
