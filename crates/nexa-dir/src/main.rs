@@ -316,6 +316,8 @@ struct App {
     /// 과 프레임 번호 — `[frame]` 줄의 `wait`(요청 → 그리기 시작) · `paint` · `present` µs.
     frame_req_at: std::cell::Cell<Option<Instant>>,
     frame_no: u64,
+    /// 다음 프레임의 더러워진 영역(10-18 결정 ① 부분 다시 그리기 · `app::paint::Damage`): `redraw()` = 전체 · `redraw_inv` = 사각형만.
+    damage: std::cell::RefCell<app::paint::Damage>,
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
     keys_win: KeysWin,
@@ -737,6 +739,7 @@ impl App {
             startup_blocked_since: Instant::now(),
             ready_fired: false,
             frame_req_at: std::cell::Cell::new(None),
+            damage: std::cell::RefCell::new(app::paint::Damage::default()),
             frame_no: 0,
             prefs_win: PrefsWin::new(),
             keys_win: KeysWin::new(),
@@ -904,7 +907,29 @@ impl App {
         app
     }
 
+    /// 창 전체 다시 그리기 요청(기본 · 보수적 — 호출처 121곳 그대로).
     fn redraw(&self) {
+        self.damage.borrow_mut().full = true;
+        self.request_frame();
+    }
+
+    /// 무효화 사각형만으로 다시 그리기 요청(10-18 결정 ① · 입력 · 틱 경로) — 설정 `gfx.partial_redraw`가 꺼져 있으면 전체.
+    /// `inv`의 사각형을 비워 가져간다(틱 요청은 사각형이 아니다 — 프레임만 예약).
+    fn redraw_inv(&self, inv: &mut Invalidations) {
+        {
+            let mut d = self.damage.borrow_mut();
+            if self.settings.flag("gfx.partial_redraw") {
+                for r in inv.drain() {
+                    d.push(r);
+                }
+            } else {
+                d.full = true;
+            }
+        }
+        self.request_frame();
+    }
+
+    fn request_frame(&self) {
         if let Some(w) = &self.window {
             if input::trace_frames() && self.frame_req_at.get().is_none() {
                 self.frame_req_at.set(Some(Instant::now()));

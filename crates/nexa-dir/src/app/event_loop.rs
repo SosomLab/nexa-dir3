@@ -121,7 +121,9 @@ impl ApplicationHandler<Wake> for App {
                 d.tick(&mut inv);
             }
         }
-        let mut redraw = !inv.is_empty();
+        // 전체 그리기가 필요한 틱(스플리터 · 토스트 · 팔레트 · 끌기 · 작업 진행 …)만 `redraw` · 위젯 틱이 모은 무효화 사각형만이면
+        // 부분(10-18 결정 ①).
+        let mut redraw = false;
         for k in [
             SplitKind::Panel,
             SplitKind::DockHeight,
@@ -222,6 +224,8 @@ impl ApplicationHandler<Wake> for App {
         }
         if redraw {
             self.redraw();
+        } else if !inv.is_empty() || inv.tick_requested() {
+            self.redraw_inv(&mut inv);
         }
         // 애니메이션 중에만 프레임 간격으로 깬다 · 아니면 다음 예약(기동 지연 명령)까지 잔다.
         let live = inv.tick_requested()

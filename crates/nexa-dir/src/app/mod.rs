@@ -25,7 +25,7 @@ mod nfcconv;
 pub(crate) mod ops;
 pub(crate) mod order;
 mod osopen;
-mod paint;
+pub(crate) mod paint;
 pub(crate) mod palette;
 pub(crate) mod plugins;
 mod previewcmd;

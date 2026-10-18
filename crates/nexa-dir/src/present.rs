@@ -113,6 +113,42 @@ impl Presenter {
 }
 
 impl Buffer<'_> {
+    /// 이 버퍼가 몇 프레임 전 것인가(softbuffer `age` · 1 = 지난 프레임 그대로 → 부분 다시 그리기 가능 · 0 = 새 버퍼(내용 미정 ·
+    /// 크기 변경 뒤 · macOS CG) · 2+ = 이중 버퍼(Wayland) · IOSurface 레이어 = 0).
+    pub(crate) fn age(&self) -> u8 {
+        match self {
+            Buffer::Soft(b) => b.age(),
+            Buffer::Layer(_) => 0,
+        }
+    }
+
+    /// 더러워진 사각형만 낸다(softbuffer `present_with_damage` · 10-18 결정 ①) — 레이어는 전체. 빈 목록 = 내지 않는다.
+    pub(crate) fn present_damage(self, rects: &[nexa_ctl::Rect]) -> Result<(), ()> {
+        match self {
+            Buffer::Soft(b) => {
+                let dmg: Vec<softbuffer::Rect> = rects
+                    .iter()
+                    .filter_map(|r| {
+                        Some(softbuffer::Rect {
+                            x: u32::try_from(r.x.max(0)).ok()?,
+                            y: u32::try_from(r.y.max(0)).ok()?,
+                            width: NonZeroU32::new(u32::try_from(r.w).ok()?)?,
+                            height: NonZeroU32::new(u32::try_from(r.h).ok()?)?,
+                        })
+                    })
+                    .collect();
+                if dmg.is_empty() {
+                    return Ok(());
+                }
+                b.present_with_damage(&dmg).map_err(|_| ())
+            }
+            Buffer::Layer(f) => {
+                f.present();
+                Ok(())
+            }
+        }
+    }
+
     /// 화면에 낸다.
     pub(crate) fn present(self) -> Result<(), ()> {
         match self {

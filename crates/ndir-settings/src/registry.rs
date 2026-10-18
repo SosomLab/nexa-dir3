@@ -747,6 +747,17 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 부분 다시 그리기(10-18 결정 ① · 고급): 입력·틱이 모은 무효화 사각형만 클립해 그리고 그 영역만 낸다(softbuffer
+    // `present_with_damage`) — 지난 프레임 버퍼가 그대로일 때(`age` 1 · Windows/X11)만 · 오버레이(메뉴 · 툴팁 · 플래시 · 토스트 ·
+    // 끌기 표식)나 전체 요청이 있으면 전체. 끄면 종전처럼 매번 창 전체(그림이 어긋나면 되돌리는 스위치).
+    e!(
+        "gfx.partial_redraw",
+        CAT_APPEARANCE,
+        "pref.partialRedraw",
+        "pref.partialRedraw.desc",
+        Bool,
+        "on"
+    ),
     // 유휴 메모리 트림(dir2 M2-8 계승 · T-179 A · 고급): 마지막 입력 뒤 이 초가 지나면 글리프 캐시 · 셸 메뉴 객체 · 힙 ·
     // 작업 집합을 돌려준다. 0 = 끔. 기본 300 s(10-18 결정 ④ — 종전 60 s는 잠깐 손을 뗀 뒤 첫 입력이 끊겨 보였다: 글리프 재래스터 ·
     // 작업 집합 페이지 폴트). 범위 = full(전부) | light(힙 · 셸 메뉴 객체만 — 글리프 · 그림 캐시 · 작업 집합은 둔다 = 돌아올 때 끊김 없음).
@@ -2309,6 +2320,7 @@ pub const ADVANCED: &[&str] = &[
     "hash.auto_limit_mb",
     "mem.idle_trim_s",
     "mem.idle_trim_scope",
+    "gfx.partial_redraw",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",

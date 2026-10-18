@@ -621,8 +621,9 @@ impl App {
         self.route_inner(ev, &mut inv);
         self.drag_out_after(&ev, &mut inv); // 선택된 행을 끌면 OS 드래그 발신(T-147)
         self.after_event(&mut inv, moved);
+        // 입력 경로 = 더러워진 사각형만(10-18 결정 ①) · 틱 요청만 있으면 프레임만 예약(사각형 없음 = 그릴 것 없음).
         if !inv.is_empty() || inv.tick_requested() {
-            self.redraw();
+            self.redraw_inv(&mut inv);
         }
     }
 
@@ -1197,7 +1198,7 @@ impl App {
             }
         }
         if !inv.is_empty() {
-            self.redraw();
+            self.redraw_inv(&mut inv);
         }
     }
 }

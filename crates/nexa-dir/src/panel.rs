@@ -1194,6 +1194,11 @@ impl Panel {
     }
 
     /// 팝업 층(툴팁 · 경로 제안) — 호스트가 맨 뒤에 그린다.
+    /// 자기 사각형 밖에 그리는 팝업이 보이는가(네비 버튼 툴팁 · 경로 제안) — 호스트의 부분 다시 그리기가 전체로 바꾸는 판정(10-18 결정 ①).
+    pub(crate) fn popups_open(&self) -> bool {
+        self.navbtns.tooltip_visible() || self.pathbar.suggest_open()
+    }
+
     pub(crate) fn paint_popups(&self, ctx: &mut dyn DrawCtx, theme: &Theme) {
         self.navbtns.paint_tooltip(ctx, theme);
         let mut a = nexa_grid::Adapt(ctx);
