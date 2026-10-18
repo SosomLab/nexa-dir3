@@ -484,10 +484,9 @@ impl RowSource for PvSource {
             COL_AFTER => {
                 if r.conflict != Conflict::None {
                     format!("⚠ {} ({})", r.after, conflict_text(r.conflict))
-                } else if r.changed {
-                    r.after.clone()
                 } else {
-                    String::new()
+                    // 바뀌지 않아도 이름을 그대로 보인다(사용자 10-18 "변경 설정이 없으면 이후 이름도 그대로") — 바뀜 여부는 "적용" 열.
+                    r.after.clone()
                 }
             }
             COL_APPLY => {
