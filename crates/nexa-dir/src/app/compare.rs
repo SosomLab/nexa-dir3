@@ -42,7 +42,7 @@ pub(crate) struct SyncJob {
 }
 
 impl App {
-    /// 비교 시작(활성 패널 = 왼쪽 · 반대 패널 = 오른쪽). 진행 중이면 거부.
+    /// 비교 시작(`left`/`right` = 호출자가 정한다 · 패널 비교는 왼쪽 패널 = 왼쪽). 진행 중이면 거부.
     pub(crate) fn start_compare(&mut self, left: &Path, right: &Path, by_content: bool) {
         if self.cmp_job.is_some() {
             return;
@@ -63,7 +63,7 @@ impl App {
         });
         self.cmp_job = Some(CmpJob { shared, by_content });
         self.compare_win
-            .start(left, right, app::bulk::local_tz_min());
+            .start(left, right, app::bulk::local_tz_min(), by_content);
         self.open_compare = true;
     }
 
@@ -72,8 +72,9 @@ impl App {
         if !self.dual {
             return;
         }
-        let left = self.panels[self.active].root_path();
-        let right = self.panels[1 - self.active].root_path();
+        // 왼쪽 패널 = 왼쪽 · 오른쪽 패널 = 오른쪽(활성 패널과 무관 · 사용자 10-18 "실제 패널 위치와 일치").
+        let left = self.panels[0].root_path();
+        let right = self.panels[1].root_path();
         if ndir_vfs::is_virtual_root(&left) || ndir_vfs::is_virtual_root(&right) {
             return;
         }

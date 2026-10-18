@@ -87,7 +87,8 @@ impl CmpSource {
         let Some(m) = m else {
             return String::new();
         };
-        if key % 2 == 1 {
+        // 열 = 0 경로 · 1 크기(L) · 2 수정(L) · 3 상태 · 4 크기(R) · 5 수정(R) — 종전 `key % 2`는 오른쪽에서 크기/날짜가 뒤바뀌었다(10-18 화면).
+        if matches!(key, 1 | 4) {
             if m.is_dir {
                 tr("kind.folder")
             } else {
@@ -95,7 +96,7 @@ impl CmpSource {
             }
         } else if m.mtime > 0 {
             ndir_ops::batch_rename::format_date(
-                "${YYYY}-${MM}-${DD} ${hh}:${mm}",
+                "${YYYY}-${MM}-${DD} ${HH}:${mm}", // 포맷터 토큰은 `HH`(종전 `hh` = 미치환 글자가 그대로 보임 · 10-18)
                 m.mtime * 1000,
                 self.tz,
             )
@@ -181,6 +182,8 @@ pub(crate) struct CompareWin {
     pub(crate) right: PathBuf,
     status: String,
     running: bool,
+    /// 이번 결과가 내용 비교인가(요약에 모드 표시 · "내용 비교" 버튼은 다시 누를 일이 없으면 끔 · 10-18).
+    by_content: bool,
     row_h: i32,
     filter: Combo,
     only_diff: bool,
@@ -206,6 +209,7 @@ impl CompareWin {
             right: PathBuf::new(),
             status: String::new(),
             running: false,
+            by_content: false,
             row_h: 0,
             filter: Self::filter_combo(),
             only_diff: true,
@@ -238,10 +242,17 @@ impl CompareWin {
         ]
     }
 
-    pub(crate) fn start(&mut self, left: &std::path::Path, right: &std::path::Path, tz: i32) {
+    pub(crate) fn start(
+        &mut self,
+        left: &std::path::Path,
+        right: &std::path::Path,
+        tz: i32,
+        by_content: bool,
+    ) {
         self.left = left.to_path_buf();
         self.right = right.to_path_buf();
         self.tz = tz;
+        self.by_content = by_content;
         self.rows = None;
         self.running = true;
         self.status = trf("cmp.scanning", &["0"]);
@@ -308,9 +319,27 @@ impl CompareWin {
         ] {
             b.set_enabled(true);
         }
+        // "내용 비교"는 양쪽에 다 있는 항목이 있을 때만 뜻이 있다(한쪽에만 있는 항목 = 비교할 내용 없음 · 사용자 10-18 "눌러도 아무 동작 없음") ·
+        // 이미 내용 비교 결과면 다시 누를 일이 없다.
+        let both_sided = self.rows.as_ref().is_some_and(|r| {
+            r.source().all.iter().any(|e| {
+                matches!(
+                    e.verdict,
+                    Verdict::Same | Verdict::LeftNewer | Verdict::RightNewer | Verdict::Differ
+                )
+            })
+        });
+        self.btn_content.set_enabled(both_sided && !self.by_content);
         self.refresh_summary();
         self.layout();
         self.redraw();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cell(&self, row: usize, key: u32) -> String {
+        self.rows
+            .as_ref()
+            .map_or_else(String::new, |r| r.source().cell(row, key))
     }
 
     pub(crate) fn set_error(&mut self, text: &str) {
@@ -326,16 +355,27 @@ impl CompareWin {
         let all = &r.source().all;
         let count = |v: Verdict| all.iter().filter(|e| e.verdict == v).count();
         let differ = all.iter().filter(|e| e.verdict.differs()).count();
-        self.status = trf(
-            "cmp.summary",
-            &[
-                &all.len().to_string(),
-                &differ.to_string(),
-                &count(Verdict::OnlyLeft).to_string(),
-                &count(Verdict::OnlyRight).to_string(),
-                &(count(Verdict::LeftNewer) + count(Verdict::RightNewer) + count(Verdict::Differ))
+        // 요약 끝에 비교 모드(크기·시각 / 내용) — "내용 비교"를 눌렀을 때 무엇이 바뀌었는지 보이게(10-18).
+        self.status = format!(
+            "{} · {}",
+            trf(
+                "cmp.summary",
+                &[
+                    &all.len().to_string(),
+                    &differ.to_string(),
+                    &count(Verdict::OnlyLeft).to_string(),
+                    &count(Verdict::OnlyRight).to_string(),
+                    &(count(Verdict::LeftNewer)
+                        + count(Verdict::RightNewer)
+                        + count(Verdict::Differ))
                     .to_string(),
-            ],
+                ],
+            ),
+            tr(if self.by_content {
+                "cmp.modeContent"
+            } else {
+                "cmp.modeQuick"
+            })
         );
     }
 
@@ -793,6 +833,7 @@ mod tests {
             std::path::Path::new("D:/L"),
             std::path::Path::new("D:/R"),
             0,
+            false,
         );
         assert!(w.is_running());
         w.set_result(vec![

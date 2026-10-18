@@ -248,7 +248,7 @@ impl RowSource for DupSource {
             COL_MTIME => {
                 if r.mtime > 0 {
                     ndir_ops::batch_rename::format_date(
-                        "${YYYY}-${MM}-${DD} ${hh}:${mm}",
+                        "${YYYY}-${MM}-${DD} ${HH}:${mm}", // 토큰 `HH`(10-18)
                         r.mtime * 1000,
                         self.tz,
                     )
