@@ -635,6 +635,9 @@ impl BulkWin {
             natural: true,
         };
         w.set_presets(Vec::new());
+        // [이름 변경] = 기본 버튼(Accent · 사용자 10-18).
+        w.btn_rename
+            .set_tone(nexa_ctl::controls::ButtonTone::Accent);
         w
     }
 
@@ -1085,7 +1088,7 @@ impl BulkWin {
         );
         self.presets_btn.set_scale(self.scale);
         self.presets_btn
-            .set_bounds(Rect::new(pad, bottom_y, self.s(64.0), bh), &mut inv);
+            .set_bounds(Rect::new(pad, bottom_y, self.s(32.0), bh), &mut inv); // 폭 절반(사용자 10-18)
         self.preset_menu.set_scale(self.scale);
         self.layout_cards();
     }

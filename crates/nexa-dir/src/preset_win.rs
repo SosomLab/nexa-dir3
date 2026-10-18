@@ -1,5 +1,5 @@
 //! 프리셋 편집 창(일괄 이름 변경 · 사용자 10-18 · Path Finder "Edit Renaming Sequences" 꼴): 저장된 프리셋 전체를 **순서대로** 보이고
-//! ▲▼ · 드래그 · Ctrl+↑↓로 순서를 바꾸며 행 오른쪽 ⊖(또는 Delete)로 개별 삭제한다. OK = 호스트가 순서 파일 + 파일 삭제를 반영
+//! 드래그(또는 Ctrl+↑↓)로 순서를 바꾸며(▲▼ 버튼 없음 · 사용자 10-18) 행 오른쪽 ⊖(또는 Delete)로 개별 삭제한다. OK = 호스트가 순서 파일 + 파일 삭제를 반영
 //! ([`PresetAction::Apply`]) · 취소/Esc = 버린다. `order_win.rs`와 같은 보조 창 골격 — 창 없이도 모델을 조작할 수 있다(시험).
 
 use ndir_i18n::tr;
@@ -26,10 +26,10 @@ pub(crate) enum PresetAction {
 
 const PAD: f32 = 12.0;
 const ROW_H: f32 = 26.0;
-const BTN_H: f32 = 28.0;
-const BTN_W: f32 = 88.0;
+/// 버튼(사용자 10-18 "크기를 줄여줘" · 확인 = 기본 버튼 Accent).
+const BTN_H: f32 = 24.0;
+const BTN_W: f32 = 64.0;
 const LIST_W: f32 = 320.0;
-const SIDE_W: f32 = 36.0;
 /// 행 오른쪽 삭제(⊖) 칸 폭.
 const DEL_W: f32 = 30.0;
 const MIN_ROWS: usize = 4;
@@ -54,15 +54,13 @@ pub(crate) struct PresetWin {
     scroll: i32,
     list: Rect,
     drag: Option<Drag>,
-    up_btn: Button,
-    down_btn: Button,
     ok_btn: Button,
     cancel_btn: Button,
 }
 
 impl PresetWin {
     pub(crate) fn new() -> Self {
-        PresetWin {
+        let mut w = PresetWin {
             window: None,
             surface: None,
             scale: 1.0,
@@ -74,11 +72,11 @@ impl PresetWin {
             scroll: 0,
             list: Rect::default(),
             drag: None,
-            up_btn: Button::new("▲"),
-            down_btn: Button::new("▼"),
             ok_btn: Button::new(tr("bulk.preset.ok")),
             cancel_btn: Button::new(tr("bulk.preset.cancel")),
-        }
+        };
+        w.ok_btn.set_tone(nexa_ctl::controls::ButtonTone::Accent);
+        w
     }
 
     /// 편집 대상(열 때 · 호스트가 읽은 순서 그대로).
@@ -87,7 +85,6 @@ impl PresetWin {
         self.sel = (!self.names.is_empty()).then_some(0);
         self.scroll = 0;
         self.drag = None;
-        self.sync_buttons();
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -102,7 +99,6 @@ impl PresetWin {
             self.sel = Some(i);
             self.ensure_visible(i);
         }
-        self.sync_buttons();
     }
 
     /// 선택 행을 한 칸 위/아래로. 움직였으면 `true`.
@@ -121,7 +117,6 @@ impl PresetWin {
         self.names.swap(i, j);
         self.sel = Some(j);
         self.ensure_visible(j);
-        self.sync_buttons();
         true
     }
 
@@ -136,7 +131,6 @@ impl PresetWin {
         let n = self.names.remove(i);
         self.names.insert(to, n);
         self.sel = Some(to);
-        self.sync_buttons();
         true
     }
 
@@ -152,18 +146,7 @@ impl PresetWin {
             Some(i.min(self.names.len() - 1))
         };
         self.clamp_scroll();
-        self.sync_buttons();
         true
-    }
-
-    fn sync_buttons(&mut self) {
-        let n = self.names.len();
-        let (up, down) = match self.sel {
-            Some(i) => (i > 0, i + 1 < n),
-            None => (false, false),
-        };
-        self.up_btn.set_enabled(up);
-        self.down_btn.set_enabled(down);
     }
 
     /// 자체 시험 덤프(`presets.dump`): `open|closed sel=<i|-> [a|b|c]`.
@@ -209,24 +192,19 @@ impl PresetWin {
 
     pub(crate) fn animating(&self) -> bool {
         self.window.is_some()
-            && [&self.up_btn, &self.down_btn, &self.ok_btn, &self.cancel_btn]
+            && [&self.ok_btn, &self.cancel_btn]
                 .iter()
                 .any(|b| b.is_animating())
     }
 
-    fn buttons(&mut self) -> [&mut Button; 4] {
-        [
-            &mut self.up_btn,
-            &mut self.down_btn,
-            &mut self.ok_btn,
-            &mut self.cancel_btn,
-        ]
+    fn buttons(&mut self) -> [&mut Button; 2] {
+        [&mut self.ok_btn, &mut self.cancel_btn]
     }
 
     /// 창 논리 크기 — 행 수(4~12)에 맞춘다.
     fn logical_size(&self) -> (f64, f64) {
         let n = self.names.len().clamp(MIN_ROWS, MAX_ROWS) as f32;
-        let w = PAD * 3.0 + LIST_W + SIDE_W;
+        let w = PAD * 2.0 + LIST_W;
         let h = PAD * 3.0 + n * ROW_H + 2.0 + BTN_H;
         (w as f64, h as f64)
     }
@@ -281,7 +259,6 @@ impl PresetWin {
         self.scale = win.scale_factor() as f32;
         self.surface = crate::present::Presenter::new(win.clone()).ok();
         self.window = Some(win);
-        self.sync_buttons();
         self.layout();
         self.redraw();
     }
@@ -299,22 +276,10 @@ impl PresetWin {
         let s = self.scale;
         let pad = self.s(PAD);
         let by = h - pad - self.s(BTN_H);
-        let list_w = w - pad * 3 - self.s(SIDE_W);
+        let list_w = w - pad * 2;
         self.list = Rect::new(pad, pad, list_w, by - pad * 2);
         let mut inv = Invalidations::default();
-        let side_x = pad * 2 + list_w;
-        let sw = self.s(SIDE_W);
         let (bh, gap) = (self.s(BTN_H), self.s(6.0));
-        for (i, b) in [&mut self.up_btn, &mut self.down_btn]
-            .into_iter()
-            .enumerate()
-        {
-            b.set_scale(s);
-            b.set_bounds(
-                Rect::new(side_x, pad + i as i32 * (bh + gap), sw, bh),
-                &mut inv,
-            );
-        }
         let bw = self.s(BTN_W);
         // Path Finder 꼴: [취소] [OK] 오른쪽 정렬 · OK가 맨 오른쪽.
         self.ok_btn.set_scale(s);
@@ -495,12 +460,6 @@ impl PresetWin {
                 b.set_focused(hit);
             }
         }
-        if self.up_btn.take_clicked() {
-            self.move_sel(true);
-        }
-        if self.down_btn.take_clicked() {
-            self.move_sel(false);
-        }
         if self.cancel_btn.take_clicked() {
             self.close();
             return PresetAction::None;
@@ -518,7 +477,7 @@ impl PresetWin {
         PresetAction::Apply(names)
     }
 
-    /// 키: ↑/↓ 선택 · Ctrl+↑/↓ 이동 · Delete = 선택 삭제 · Enter = OK · Esc = 드래그 취소 → 아니면 닫기.
+    /// 키: ↑/↓ 선택 · Ctrl+↑/↓ 이동(드래그와 같다) · Delete = 선택 삭제 · Enter = 확인(기본 버튼) · Esc = 드래그 취소 → 아니면 닫기.
     fn on_key(&mut self, k: &Key) -> PresetAction {
         match k.as_ref() {
             Key::Named(NamedKey::Escape) => {
@@ -647,12 +606,7 @@ impl PresetWin {
                     th.text,
                 );
             }
-            for b in [
-                &mut self.up_btn,
-                &mut self.down_btn,
-                &mut self.ok_btn,
-                &mut self.cancel_btn,
-            ] {
+            for b in [&mut self.ok_btn, &mut self.cancel_btn] {
                 b.paint(&mut dc, th);
             }
         }
@@ -670,7 +624,7 @@ mod tests {
         let mut w = PresetWin::new();
         w.set(vec!["a".into(), "b".into(), "c".into()]);
         assert_eq!(w.dump(), "closed sel=0 [a|b|c]\n");
-        assert!(!w.move_sel(true), "맨 위에서 ▲ = 없음");
+        assert!(!w.move_sel(true), "맨 위에서 Ctrl+↑ = 없음");
         assert!(w.move_sel(false));
         assert_eq!(w.dump(), "closed sel=1 [b|a|c]\n");
         w.select(0);
