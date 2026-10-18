@@ -83,7 +83,8 @@ impl App {
                         let rows = p.rows();
                         let row = rows.row_at(x, y)?;
                         let path = rows.source().row_path(row)?;
-                        let selected = p.selected_paths().contains(&path);
+                        // 선택 여부는 행으로 바로(종전 `selected_paths().contains` = 선택 전체 PathBuf 복제 + 선형 검색 · 10-18).
+                        let selected = rows.source().is_selected(row);
                         Some((i, path, selected, rows.is_renaming()))
                     })
                 };

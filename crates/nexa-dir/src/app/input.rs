@@ -90,6 +90,9 @@ pub(crate) fn typeahead_target_of(
     !(dialog || menu || path_edit || renaming || terminal)
 }
 
+/// 상태줄 갱신 키([`App::status_key`]) — (활성 패널, 패널별 (행 수, 선택 수, 캐럿, 활성 탭, 탭 수)).
+pub(crate) type StatusKey = (usize, [(usize, usize, Option<usize>, usize, usize); 2]);
+
 impl App {
     /// 지금 글자 키가 활성 패널 목록의 타입어헤드로 가는가([`typeahead_target_of`]).
     pub(crate) fn typeahead_target(&self) -> bool {
@@ -609,14 +612,15 @@ impl App {
         let mut inv = Invalidations::default();
         // 창 안 드래그 중(T-147 Linux/macOS)이면 포인터 · Esc는 드롭 수신부가 먹는다.
         if self.dnd_internal_event(&ev) {
-            self.after_event(&mut inv);
+            self.after_event(&mut inv, false);
             self.redraw();
             return;
         }
         self.slow_click_before(&ev); // 느린 재클릭 = 이름 바꾸기 예약/폐기(선택이 바뀌기 전 상태로 판정)
+        let moved = matches!(ev, InputEvent::MouseMove { .. });
         self.route_inner(ev, &mut inv);
         self.drag_out_after(&ev, &mut inv); // 선택된 행을 끌면 OS 드래그 발신(T-147)
-        self.after_event(&mut inv);
+        self.after_event(&mut inv, moved);
         if !inv.is_empty() || inv.tick_requested() {
             self.redraw();
         }
@@ -896,7 +900,7 @@ impl App {
     }
 
     /// 사건 뒤 컨트롤 보고 수거 — 메뉴 선택 · 툴바 클릭 · 패널 보고(탭·네비·경로·파일 열기) · 토스트 동작.
-    fn after_event(&mut self, inv: &mut Invalidations) {
+    fn after_event(&mut self, inv: &mut Invalidations, moved: bool) {
         if let Some(id) = self.menubar.take_picked() {
             self.command(&id);
         }
@@ -992,8 +996,28 @@ impl App {
         if let Some(id) = self.toasts.take_action() {
             self.command(&id);
         }
-        // 선택 수·탭이 바뀌면 상태줄.
-        self.update_status();
+        // 선택 수·탭이 바뀌면 상태줄 — 마우스 이동만으로는 건너뛴다(10-18: 이동마다 상태줄·탭 상태바·메뉴 체크·git 동기를
+        // 다시 만들던 낭비 · 러버밴드로 선택이 바뀌면 키가 달라져 다시 만든다).
+        let key = self.status_key();
+        if !moved || key != self.last_status_key {
+            self.last_status_key = key;
+            self.update_status();
+        }
+    }
+
+    /// 상태줄을 다시 만들 조건의 키(활성 패널 · 패널마다 행 수 · 선택 수 · 캐럿 · 활성 탭 · 탭 수).
+    pub(crate) fn status_key(&self) -> StatusKey {
+        let k = |p: &panel::Panel| {
+            let s = p.rows().source();
+            (
+                s.len(),
+                s.selection_count(),
+                p.rows().caret(),
+                p.active_index(),
+                p.tab_count(),
+            )
+        };
+        (self.active, [k(&self.panels[0]), k(&self.panels[1])])
     }
 
     /// 파일 활성화 — 연결 프로그램으로 열기(platform 층 T-6x). 지금은 토스트.

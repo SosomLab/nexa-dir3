@@ -480,6 +480,10 @@ struct App {
     /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
     /// 않고 이동이 멈춘 뒤 [`DOCK_DEBOUNCE_MS`]에 한 번만(10개를 빠르게 지나가면 마지막 것만 계산한다).
     docks_due: Option<Instant>,
+    /// 도크 사진 디코드 워커(10-18 · `app/imgjobs.rs` — 마우스 선택 체감: UI 스레드 디코드 제거).
+    preview_decode: app::imgjobs::PreviewDecoder,
+    /// 마지막 상태줄 갱신 때의 키(활성 패널 · 행 수 · 선택 수 · 캐럿 · 탭) — 마우스 이동만으로는 상태줄을 다시 만들지 않는다(10-18).
+    last_status_key: app::input::StatusKey,
     /// 진행 창 안에서 묻고 있는 덮어쓰기 질문의 회신 통로(워커가 기다린다 · app/dialogs.rs `conflict_ask`).
     conflict_inline: Option<std::sync::mpsc::Sender<app::ops::ConflictChoice>>,
     /// 파일 작업 undo/redo(세션 한정 100).
@@ -806,6 +810,8 @@ impl App {
             transfer: None,
             dirsizes: app::dirsize::DirSizes::default(),
             docks_due: None,
+            preview_decode: app::imgjobs::PreviewDecoder::new(),
+            last_status_key: (usize::MAX, [(0, 0, None, 0, 0); 2]),
             conflict_inline: None,
             history: ndir_ops::history::OperationHistory::default(),
             launcherbar,
@@ -959,6 +965,7 @@ impl App {
     /// 키 = 종류 + 대상(선택 경로·없으면 현재 폴더) → 같은 대상의 갱신은 스크롤·선택 유지.
     pub(crate) fn update_docks(&mut self) {
         self.docks_due = None;
+        let t0 = crate::input::trace_frames().then(Instant::now);
         let single_info =
             !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
         let mut inv = Invalidations::default();
@@ -990,7 +997,19 @@ impl App {
                 1 => {
                     let out = dockinfo::preview_content(&selected, &map, &disabled);
                     self.dock_preview[i] = (out.provider, out.lines.clone());
-                    (out.lines, out.image)
+                    // 사진 디코드는 워커에서(10-18 · 종전 = 첫 paint가 UI 스레드에서 전체 디코드 → 마우스 선택마다 멈춤).
+                    match out.image {
+                        Some(path) if self.window.is_some() => {
+                            let (w, h) = self.dock_image_box(i);
+                            if nexa_ctl::raster::image_cache::has_fit(&path, w, h) {
+                                (out.lines, Some(path))
+                            } else {
+                                self.preview_decode.request(i, path, w, h);
+                                (vec![tr("preview.loading")], None)
+                            }
+                        }
+                        other => (out.lines, other),
+                    }
                 }
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => {
@@ -1015,6 +1034,9 @@ impl App {
             self.docks[i].set_content(&key, lines, &mut inv);
             self.docks[i].set_image(image, &mut inv);
             self.docks[i].set_popout(kind == 1, &mut inv);
+        }
+        if let Some(t0) = t0 {
+            eprintln!("[docks] update={}us", t0.elapsed().as_micros());
         }
     }
 

@@ -12,6 +12,7 @@ pub(crate) mod extract;
 pub(crate) mod favorites;
 mod flash;
 pub(crate) mod fonts;
+pub(crate) mod imgjobs;
 pub(crate) mod input;
 pub(crate) mod keywinit;
 pub(crate) mod launcher_icons;

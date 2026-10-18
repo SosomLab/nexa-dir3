@@ -211,6 +211,7 @@ preview.fail = 読み取りに失敗しました
 preview.plugin.error = プラグインエラー({0}): {1}
 preview.plugin.disabled = プラグインを隔離({0}): {1}回連続で失敗 — このセッションでは実行しません
 preview.window.image = 画像ファイル — 下部ドックのプレビューに表示されます
+preview.loading = プレビューを読み込み中…
 preview.ql.generating = クイックルックのサムネイルを生成中…
 preview.ql.none = このファイルのクイックルックサムネイルはありません
 pref.cat.plugins = プラグイン

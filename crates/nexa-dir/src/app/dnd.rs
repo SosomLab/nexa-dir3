@@ -203,9 +203,9 @@ impl App {
             if rows.is_renaming() || rows.source().is_virtual_root() {
                 return false;
             }
+            // 선택 여부는 행으로 바로(종전 = 선택 전체 복제 + 선형 검색 · 10-18).
             rows.row_at(x, y)
-                .and_then(|r| rows.source().row_path(r))
-                .is_some_and(|path| p.selected_paths().contains(&path))
+                .is_some_and(|r| rows.source().is_selected(r))
         })
     }
 

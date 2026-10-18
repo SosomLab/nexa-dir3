@@ -243,6 +243,13 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.docks_tick(now) {
             next = next.min(t);
         }
+        // 도크 사진 디코드 결과(워커 → 큐 폴링 · 10-18) — 기다리는 동안만 30 ms 간격.
+        if self.preview_decode_tick() {
+            self.redraw();
+        }
+        if self.preview_decode.busy() {
+            next = next.min(now + Duration::from_millis(30));
+        }
         if self.panels.iter().any(panel::Panel::typeahead_active) {
             // 타입어헤드 입력 중 = 유지 시간이 지나면 배지를 지워야 한다(사건이 없어도) → 짧게 깬다.
             next = next.min(now + Duration::from_millis(100));
