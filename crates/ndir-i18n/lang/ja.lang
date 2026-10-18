@@ -176,6 +176,11 @@ dnd.opCopy = コピー · {0}
 dnd.opMove = 移動 · {0}
 dnd.opNone = {0}
 dnd.dropped = {0} 個の項目を {1} に置きました
+dnd.shellTitle = ドロップ
+dnd.shellCopy = {0} 個の項目を {1} にコピーしました
+dnd.shellMove = {0} 個の項目を {1} に移動しました
+dnd.shellLink = {1} にショートカットを {0} 個作成しました
+dnd.shellOther = {1} で実行しました
 dnd.willMove = 移動 → {0}   (Ctrl = コピー)
 dnd.willCopy = コピー → {0}   (Shift = 移動)
 osopen.title = 開く

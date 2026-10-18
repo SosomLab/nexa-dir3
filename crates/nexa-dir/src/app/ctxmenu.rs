@@ -182,7 +182,7 @@ impl App {
         self.redraw();
     }
 
-    fn ctx_set_owner(&self) {
+    pub(crate) fn ctx_set_owner(&self) {
         if let Some(w) = &self.window {
             if let Some(h) = winfocus::hwnd(w) {
                 self.platform.ctxmenu.set_owner(h);

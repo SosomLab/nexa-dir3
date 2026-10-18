@@ -729,7 +729,7 @@ impl ContextMenuProvider for NativeShellMenu {
         dest: &Path,
         paths: &[PathBuf],
         at: (i32, i32),
-    ) -> Result<bool, PlatformError> {
+    ) -> Result<DropVerb, PlatformError> {
         super::windrag::shell_drop_menu(self.owner.get(), dest, paths, at)
     }
 

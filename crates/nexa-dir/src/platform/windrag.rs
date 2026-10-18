@@ -16,7 +16,7 @@
 //!   (dir2 α — 최적화하지 않는 대상의 이동은 복사로 남는 안전한 쪽). 호출부는 결과와 무관하게 다시 읽어 맞춘다.
 
 use super::windows::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
-use super::{DragImage, DragOutcome, DragSource, PlatformError};
+use super::{DragImage, DragOutcome, DragSource, DropVerb, PlatformError};
 use ::windows::core::{implement, Interface as _, Ref, BOOL, HRESULT, PCWSTR};
 use ::windows::Win32::Foundation::{
     COLORREF, DATA_S_SAMEFORMATETC, DRAGDROP_S_CANCEL, DRAGDROP_S_DROP,
@@ -207,9 +207,9 @@ pub(super) fn shell_drop_menu(
     dest: &Path,
     paths: &[PathBuf],
     at: (i32, i32),
-) -> Result<bool, PlatformError> {
+) -> Result<DropVerb, PlatformError> {
     if paths.is_empty() {
-        return Ok(false);
+        return Ok(DropVerb::None);
     }
     let hwnd = HWND(owner as *mut c_void);
     let target = shell_drop_target(hwnd, dest)?;
@@ -234,7 +234,18 @@ pub(super) fn shell_drop_menu(
         target
             .Drop(&data, MK_RBUTTON, pt, &mut effect)
             .map_err(|e| PlatformError::Failed(format!("Drop: {e}")))?;
-        Ok(effect != DROPEFFECT_NONE)
+        // 실행한 동사(셸이 pdwEffect에 적는다 · 최적화 이동은 NONE → 호출부가 원본 소멸로 보정).
+        Ok(if effect.0 & DROPEFFECT_MOVE.0 != 0 {
+            DropVerb::Move
+        } else if effect.0 & DROPEFFECT_COPY.0 != 0 {
+            DropVerb::Copy
+        } else if effect.0 & DROPEFFECT_LINK.0 != 0 {
+            DropVerb::Link
+        } else if effect == DROPEFFECT_NONE {
+            DropVerb::None
+        } else {
+            DropVerb::Other
+        })
     }
 }
 

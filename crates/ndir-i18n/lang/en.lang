@@ -176,6 +176,11 @@ dnd.opCopy = Copy · {0}
 dnd.opMove = Move · {0}
 dnd.opNone = {0}
 dnd.dropped = Dropped {0} item(s) into {1}
+dnd.shellTitle = Drop
+dnd.shellCopy = Copied {0} item(s) → {1}
+dnd.shellMove = Moved {0} item(s) → {1}
+dnd.shellLink = Created {0} shortcut(s) in {1}
+dnd.shellOther = Done in {1}
 dnd.willMove = Move → {0}   (Ctrl = copy)
 dnd.willCopy = Copy → {0}   (Shift = move)
 dnd.cannot = Cannot drop here

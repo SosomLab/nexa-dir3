@@ -649,13 +649,15 @@ impl App {
                         // 오른쪽 버튼 = 바로 옮기지 않는다(탐색기 꼴 · 사용자 10-18): Windows = 놓은 폴더의 셸 IDropTarget에 위임(기본 동사 + 끌고 온
                         // 파일/폴더의 드래그 드롭 핸들러(7-Zip 등 서드파티 · 다중 선택 = 교집합) · **놓은 폴더 기준**으로 셸이 실행 · 모달) ·
                         // 그 밖 OS/실패 = 자체 복사/이동/취소 메뉴.
+                        // 소유자 창 = 메인 창(셸 진행 창·메뉴가 우리 창 위에 · 10-18 사용자 "진행 상태가 안 보임").
+                        self.ctx_set_owner();
                         match self.platform.ctxmenu.drop_menu(&dest, &paths, at) {
-                            Ok(done) => {
-                                // 셸이 (최적화) 수행했다 → 소스에는 NONE(원본을 지우지 않게) · 결과는 다시 읽어 맞춘다.
+                            Ok(reported) => {
+                                // 셸이 (최적화) 수행했다 → 소스에는 NONE(원본을 지우지 않게) · 결과는 다시 읽어 맞추고 동사·개수를 안내한다.
                                 choice = DropChoice::None;
-                                if done {
-                                    self.after_shell_drop();
-                                }
+                                let gone = paths.iter().any(|p| !p.exists());
+                                let verb = platform::verb_after_drop(reported, gone);
+                                self.after_shell_drop(verb, paths.len(), &dest);
                             }
                             Err(_) => self.open_drop_menu(paths, at, dest),
                         }
@@ -912,13 +914,28 @@ impl App {
         self.external_drop_with(sources, at, None)
     }
 
-    /// 셸이 드롭 메뉴의 동작을 실행한 뒤(복사 · 이동 · 압축 풀기 …) — 패널을 다시 읽어 맞춘다(결과와 무관하게 수렴 · windrag와 같은 규칙).
-    pub(crate) fn after_shell_drop(&mut self) {
+    /// 셸이 드롭 메뉴의 동작을 실행한 뒤(복사 · 이동 · 바로 가기 · 드롭 핸들러) — 패널을 다시 읽어 맞추고(결과와 무관하게 수렴) **상태줄 + 토스트**로
+    /// 동사·개수·대상을 알린다(셸은 작은 작업에 진행 창을 띄우지 않아 아무 피드백이 없었다 · 10-18). 취소(None) = 안내 없음.
+    pub(crate) fn after_shell_drop(&mut self, verb: platform::DropVerb, n: usize, dest: &Path) {
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }
-        self.update_status();
+        let key = match verb {
+            platform::DropVerb::Copy => Some("dnd.shellCopy"),
+            platform::DropVerb::Move => Some("dnd.shellMove"),
+            platform::DropVerb::Link => Some("dnd.shellLink"),
+            platform::DropVerb::Other => Some("dnd.shellOther"),
+            platform::DropVerb::None => None,
+        };
+        if let Some(key) = key {
+            let msg = trf(key, &[&n.to_string(), &ndir_ops::leaf_name(dest)]);
+            self.statusbar.set_left(&msg, &mut inv);
+            self.toasts
+                .push(toast::ToastKind::Info, tr("dnd.shellTitle"), msg);
+        } else {
+            self.update_status();
+        }
         self.redraw();
     }
 
@@ -951,13 +968,7 @@ impl App {
                 self.external_drop_with(paths, Point { x: at.0, y: at.1 }, Some(Op::Move));
             }
             "dnd.link" => match make_links(&paths, &dest) {
-                Ok(n) => {
-                    self.note_status(&trf(
-                        "dnd.dropped",
-                        &[&n.to_string(), &ndir_ops::leaf_name(&dest)],
-                    ));
-                    self.after_shell_drop();
-                }
+                Ok(n) => self.after_shell_drop(platform::DropVerb::Link, n, &dest),
                 Err(e) => self
                     .toasts
                     .push(toast::ToastKind::Warn, tr("ctx.dropLink"), e),
@@ -969,7 +980,7 @@ impl App {
             }
             "dnd.cancel" => {}
             other => match self.platform.ctxmenu.invoke_drop(other, &dest, &paths) {
-                Ok(()) => self.after_shell_drop(),
+                Ok(()) => self.after_shell_drop(platform::DropVerb::Other, paths.len(), &dest),
                 Err(e) => {
                     self.toasts
                         .push(toast::ToastKind::Warn, tr("dnd.rejected"), e.to_string())

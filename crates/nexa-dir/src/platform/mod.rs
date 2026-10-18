@@ -267,7 +267,7 @@ pub(crate) trait ContextMenuProvider {
         _dest: &Path,
         _paths: &[PathBuf],
         _at: (i32, i32),
-    ) -> Result<bool, PlatformError> {
+    ) -> Result<DropVerb, PlatformError> {
         Err(PlatformError::Unsupported("shell drop menu"))
     }
     /// 자체 드롭 메뉴(셸 위임이 없는 OS)에 OS가 덧붙이는 항목(Linux = 노틸러스 스크립트 ▸ …) — 실행은 [`Self::invoke_drop`] · 기준 폴더 = 놓은 폴더.
@@ -282,6 +282,25 @@ pub(crate) trait ContextMenuProvider {
         _paths: &[PathBuf],
     ) -> Result<(), PlatformError> {
         Err(PlatformError::Unsupported("drop item"))
+    }
+}
+
+/// 셸 드롭 메뉴가 **실행한 동사**(`IDropTarget::Drop`의 pdwEffect · 10-18 사용자 "진행 상태가 안 보임" → 끝난 뒤 안내): 복사 · 이동 · 바로 가기 ·
+/// 없음(취소 · 또는 최적화 이동 = 셸이 NONE으로 돌려준다 → [`verb_after_drop`]) · 그 밖(드롭 핸들러 = 7-Zip 등).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DropVerb {
+    None,
+    Copy,
+    Move,
+    Link,
+    Other,
+}
+
+/// 셸이 돌려준 동사 보정(순수): NONE인데 원본이 사라졌으면 **최적화 이동**(셸은 이동을 스스로 끝내고 NONE을 돌려준다 · 소스가 지우지 않게).
+pub(crate) fn verb_after_drop(reported: DropVerb, any_source_gone: bool) -> DropVerb {
+    match reported {
+        DropVerb::None if any_source_gone => DropVerb::Move,
+        v => v,
     }
 }
 

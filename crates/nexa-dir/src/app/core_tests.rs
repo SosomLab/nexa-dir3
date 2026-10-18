@@ -8805,3 +8805,17 @@ fn quick_look_falls_back_to_preview_window() {
     assert!(app.open_preview, "미리보기 창으로 대신");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 셸 드롭 동사 보정(순수 · 10-18): NONE + 원본 소멸 = 최적화 이동 · 그 밖은 그대로.
+#[test]
+fn shell_drop_verb_is_corrected_for_optimized_move() {
+    use crate::platform::{verb_after_drop, DropVerb};
+    assert_eq!(verb_after_drop(DropVerb::None, true), DropVerb::Move);
+    assert_eq!(
+        verb_after_drop(DropVerb::None, false),
+        DropVerb::None,
+        "취소"
+    );
+    assert_eq!(verb_after_drop(DropVerb::Copy, true), DropVerb::Copy);
+    assert_eq!(verb_after_drop(DropVerb::Other, false), DropVerb::Other);
+}
