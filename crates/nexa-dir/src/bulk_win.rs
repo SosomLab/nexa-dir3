@@ -790,6 +790,9 @@ impl BulkWin {
         let mut items = vec![
             CtxItem::maybe("hdr", tr("bulk.preset.header"), false),
             CtxItem::Separator,
+            // 카드 초기화(기본 카드 1장 · 파일 무관 · 사용자 10-18) — 단축키 ⌘/Ctrl+Shift+N.
+            CtxItem::item("reset", tr("bulk.preset.reset")),
+            CtxItem::Separator,
         ];
         for n in &self.preset_names {
             items.push(CtxItem::item(format!("preset:{n}"), n.clone()));
@@ -827,12 +830,22 @@ impl BulkWin {
             .open_at(b.x, b.y, items, host, self.menu_text_w);
     }
 
+    /// 카드 초기화 = 기본 카드 1장(메뉴 · ⌘/Ctrl+Shift+N · 사용자 10-18) + 플래시.
+    pub(crate) fn reset_cards(&mut self) {
+        self.load_ops(&[]);
+        self.flash_msg(tr("bulk.preset.resetDone"));
+    }
+
     /// 메뉴 선택 → 호스트 요청. 저장은 카드가 1장(무효 포함)이어도 된다(사용자 10-18 "들어가서 바로 저장" — 빈 파이프라인 = 기본 카드).
     fn preset_pick(&mut self, id: &str) -> Option<BulkAction> {
         if let Some(name) = id.strip_prefix("preset:") {
             return Some(BulkAction::LoadPreset(name.to_string()));
         }
         match id {
+            "reset" => {
+                self.reset_cards();
+                None
+            }
             "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops_all()))),
             "edit" => Some(BulkAction::EditPresets),
             "clear" => Some(BulkAction::ClearPresets),
@@ -1733,6 +1746,10 @@ impl BulkWin {
                     }
                     return BulkAction::None;
                 }
+                if self.primary && self.shift && crate::input::shortcut_letter(kev) == Some('n') {
+                    self.reset_cards();
+                    return BulkAction::None;
+                }
                 if self.primary {
                     // 편집 단축키(사용자 10-18): ⌘/Ctrl+C·X·V·Z·Y·A — 포커스 입력칸.
                     match crate::input::shortcut_letter(kev) {
@@ -2514,6 +2531,8 @@ mod tests {
             [
                 "hdr!",
                 "-",
+                "reset",
+                "-",
                 "preset:zeta",
                 "preset:Alpha",
                 "-",
@@ -2522,14 +2541,23 @@ mod tests {
                 "-",
                 "clear"
             ],
-            "헤더(클릭 없음) · ─ · 프리셋들 · ─ · 저장 · 편집 · ─ · 모두 제거"
+            "헤더(클릭 없음) · ─ · 초기화 · ─ · 프리셋들 · ─ · 저장 · 편집 · ─ · 모두 제거"
         );
         w.set_presets(Vec::new());
         assert_eq!(
             ids(&w),
-            ["hdr!", "-", "save", "edit", "-", "clear!"],
+            ["hdr!", "-", "reset", "-", "save", "edit", "-", "clear!"],
             "없으면 목록 구간 없음 · 모두 제거 끔"
         );
+        // 초기화 = 기본 카드 1장 + 플래시(파일 무관).
+        w.load_ops(&ops);
+        assert_eq!(w.cards.len(), 2);
+        assert!(
+            w.preset_pick("reset").is_none(),
+            "창 안에서 끝난다(호스트 요청 없음)"
+        );
+        assert_eq!(w.cards.len(), 1);
+        assert!(w.ops().is_empty() && w.flash_text() == tr("bulk.preset.resetDone"));
         assert!(
             matches!(w.preset_pick("save"), Some(BulkAction::SavePreset(_))),
             "기본 카드 1장(무효)이어도 저장 요청은 나간다(빈 파이프라인)"

@@ -345,6 +345,32 @@ impl PresetWin {
         (i >= 0 && (i as usize) < self.names.len()).then_some(i as usize)
     }
 
+    /// 드래그 중 놓일 자리(`move_to` 대상 행) — 커서 y(목록 밖 = 끝자리).
+    fn drop_target(&self) -> Option<usize> {
+        let d = self.drag.as_ref().filter(|d| d.active)?;
+        if self.names.is_empty() {
+            return None;
+        }
+        let yy = d.cur_y.clamp(self.list.y, self.list.bottom() - 1);
+        Some(
+            self.row_at(Point {
+                x: self.list.x + 1,
+                y: yy,
+            })
+            .unwrap_or(self.names.len() - 1),
+        )
+    }
+
+    /// 인디케이터 y(강조색 가로줄): 아래로 옮기면 대상 행 **아래** · 위로 옮기면 대상 행 **위**(`move_to` 결과와 같은 자리).
+    fn drop_indicator_y(&self) -> Option<i32> {
+        let to = self.drop_target()?;
+        let from = self.sel?;
+        let top = self.list.y + to as i32 * self.row_h() - self.scroll;
+        let y = if to > from { top + self.row_h() } else { top };
+        (y >= self.list.y && y <= self.list.bottom())
+            .then_some(y.clamp(self.list.y + 1, self.list.bottom() - 1))
+    }
+
     /// 행 오른쪽 ⊖ 칸.
     fn del_rect(&self, row: usize) -> Rect {
         let y = self.list.y + row as i32 * self.row_h() - self.scroll;
@@ -454,18 +480,12 @@ impl PresetWin {
                 }
             }
             InputEvent::MouseUp { .. } => {
+                let target = self.drop_target();
                 if let Some(d) = self.drag.take() {
                     if d.active {
-                        // 목록 밖(위/아래)으로 끌어 놓으면 끝자리로.
-                        let yy = y.clamp(self.list.y, self.list.bottom() - 1);
-                        if let Some(r) = self.row_at(Point {
-                            x: self.list.x + 1,
-                            y: yy,
-                        }) {
+                        // 놓일 자리 = 인디케이터와 같은 판정(목록 밖 = 끝자리).
+                        if let Some(r) = target {
                             self.move_to(r);
-                        } else if !self.names.is_empty() {
-                            let last = self.names.len() - 1;
-                            self.move_to(last);
                         }
                         self.redraw();
                         return PresetAction::None;
@@ -547,6 +567,7 @@ impl PresetWin {
         let row_h = self.row_h();
         let del_w = self.s(DEL_W);
         let ghost = self.drag.as_ref().filter(|d| d.active).map(|d| d.cur_y);
+        let indicator = self.drop_indicator_y();
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -610,6 +631,10 @@ impl PresetWin {
                 }
             }
             dc.stroke_round_rect(list, 0, th.border, 1.0);
+            // 놓일 자리 인디케이터(강조색 2px · 사용자 10-18).
+            if let Some(iy) = indicator {
+                dc.fill_rect(Rect::new(list.x, iy - 1, list.w, 2), th.accent);
+            }
             // 드래그 고스트(커서 y 추종).
             if let (Some(cy), Some(i)) = (ghost, self.sel) {
                 let text = self.names.get(i).cloned().unwrap_or_default();
