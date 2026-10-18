@@ -8965,7 +8965,7 @@ fn preset_order_edit_and_clear_on_temp_dir() {
 /// 프리셋 저장 흐름(사용자 10-18): 저장 창 = 본문 없음(라벨 중복 제거) · 빈 파이프라인(기본 카드 1장)도 저장 · 같은 이름 = 덮어쓰기 질문(3초 잠금 버튼 ·
 /// 취소 = 그대로 · 확인 = 덮어씀) · 모두 제거 = 확인창(잠금) · 편집 창 요청 = 창 깃발 + 현재 목록.
 #[test]
-fn preset_save_overwrite_asks_with_locked_button() {
+fn preset_save_overwrite_arms_button_in_place() {
     use crate::bulk_win::BulkAction;
     let (mut app, dir) = fixture("bulkpre");
     let pdir = App::presets_dir();
@@ -8991,21 +8991,29 @@ fn preset_save_overwrite_asks_with_locked_button() {
         "{}",
         app.bulk_win.dump()
     );
-    // 같은 이름 → 덮어쓰기 질문(1 = 3초 잠금) · 취소.
+    // 같은 이름 → 별도 창 없이 [확인]이 그 자리에서 "덮어쓰기 (3)" 무장 버튼으로(10-18) · 취소 = 그대로.
     app.bulk_action(BulkAction::SavePreset("x".into()));
+    let d = app.dump_of("dlg").unwrap();
+    assert!(d.contains("pending") && d.contains("arm 1:3000"), "{d}");
     app.dlg_type(&name);
     app.dlg_pick(1);
-    let d = app.dump_of("dlg").unwrap();
+    assert!(app.dlg.armed(), "첫 누름 = 무장(확정 아님)");
     assert!(
-        d.contains("pending") && d.contains("wait 1:3000") && d.contains(&name),
-        "{d}"
+        app.dump_of("dlg").unwrap().starts_with("open"),
+        "창(상태기계) 그대로"
     );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "", "아직 안 씀");
     app.dlg_pick(0);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "", "취소 = 그대로");
     assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
-    // 확인(창 없는 시험 경로 = 잠금 없이 바로).
+    // 무장 뒤 시간이 지나면 원복(확정 없음) → 다시 두 번 누르면 덮어쓰기.
     app.bulk_action(BulkAction::SavePreset("x".into()));
     app.dlg_type(&name);
+    app.dlg_pick(1);
+    assert!(app.dlg.armed());
+    app.aux_tick(100_000);
+    app.aux_tick(104_000);
+    assert!(!app.dlg.armed(), "시간 지나면 원복");
     app.dlg_pick(1);
     app.dlg_pick(1);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "x", "덮어쓰기");

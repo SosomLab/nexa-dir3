@@ -100,6 +100,7 @@ impl App {
                 placeholder: String::new(),
             }),
             delay: None,
+            arm: None,
         };
         self.ask(spec, DlgReply::ArchivePassword(path.to_path_buf()));
     }

@@ -4,7 +4,7 @@
 
 use crate::app::dialogs::DlgReply;
 use crate::bulk_win::{BulkAction, BulkItem, BulkWin};
-use crate::dlg_win::{DlgInput, DlgSpec};
+use crate::dlg_win::{DlgArm, DlgInput, DlgSpec};
 use crate::*;
 use ndir_ops::batch_rename as br;
 use std::path::Path;
@@ -205,6 +205,14 @@ impl App {
                         placeholder: tr("bulk.preset.savedSeq"),
                     }),
                     delay: None,
+                    // 같은 이름이면 [확인]이 그 자리에서 "덮어쓰기 (3)" 무장 버튼으로(사용자 10-18 · 별도 창 없음 · 시간 지나면 원복).
+                    arm: Some(DlgArm {
+                        id: 1,
+                        label: tr("bulk.preset.overwrite"),
+                        ms: PRESET_CONFIRM_MS,
+                        names: Self::preset_names(&Self::presets_dir()),
+                        empty_as: tr("bulk.preset.savedSeq"),
+                    }),
                 };
                 self.ask(spec, DlgReply::BulkPreset);
             }
@@ -235,6 +243,7 @@ impl App {
                     cancel: 0,
                     input: None,
                     delay: Some((1, PRESET_CONFIRM_MS)),
+                    arm: None,
                 };
                 self.ask(spec, DlgReply::BulkPresetsClear);
             }
@@ -256,23 +265,7 @@ impl App {
             .and_then(Self::sanitize_preset_name)
             .unwrap_or_else(|| tr("bulk.preset.savedSeq"));
         let dir = Self::presets_dir();
-        if dir.join(format!("{name}.cfg")).is_file() {
-            // 같은 이름 = 미리 경고 + 3초 잠금 "덮어쓰기"(사용자 10-18 "중복은 미리 보여주고 시간제한 버튼으로 2중 확인").
-            self.bulk_pending_preset = Some(text);
-            let spec = DlgSpec {
-                title: tr("bulk.preset.saveSeq"),
-                text: trf("bulk.preset.dupText", &[&name]),
-                buttons: vec![(1, tr("bulk.preset.overwrite")), (0, tr("dlg.cancel"))],
-                default: 0,
-                cancel: 0,
-                input: None,
-                delay: Some((1, PRESET_CONFIRM_MS)),
-            };
-            if !self.ask(spec, DlgReply::BulkPresetOverwrite(name)) {
-                self.bulk_pending_preset = None;
-            }
-            return;
-        }
+        // 같은 이름은 저장 창 안에서 이미 무장 버튼으로 재확인했다(`DlgArm` · 10-18) → 그대로 덮어쓴다.
         Self::write_preset(&dir, &name, &text);
         self.refresh_presets();
         self.bulk_win.notify_preset_saved(&name);
@@ -281,19 +274,6 @@ impl App {
     fn write_preset(dir: &Path, name: &str, text: &str) {
         let _ = std::fs::create_dir_all(dir);
         let _ = std::fs::write(dir.join(format!("{name}.cfg")), text);
-    }
-
-    /// 덮어쓰기 확인 회신(1 = 덮어쓰기).
-    pub(crate) fn bulk_preset_overwrite(&mut self, id: i32, name: String) {
-        let Some(text) = self.bulk_pending_preset.take() else {
-            return;
-        };
-        if id != 1 {
-            return;
-        }
-        Self::write_preset(&Self::presets_dir(), &name, &text);
-        self.refresh_presets();
-        self.bulk_win.notify_preset_saved(&name);
     }
 
     /// 모두 제거 확인 회신(1 = 제거).

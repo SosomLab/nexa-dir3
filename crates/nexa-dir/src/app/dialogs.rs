@@ -25,8 +25,6 @@ pub(crate) enum DlgReply {
     About,
     /// 일괄 이름 변경 프리셋 저장(이름 입력 · T-71).
     BulkPreset,
-    /// 같은 이름 프리셋 덮어쓰기(10-18 · 1 = 덮어쓰기 · 3초 잠금).
-    BulkPresetOverwrite(String),
     /// 모든 프리셋 제거(10-18 · 1 = 제거 · 3초 잠금).
     BulkPresetsClear,
     /// 빠른 실행 항목 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`라벨|실행 파일|인자`)을 넣는다(T-133).
@@ -48,7 +46,7 @@ pub(crate) fn overwrite_question(path: &std::path::Path) -> String {
 impl App {
     /// 대화상자 요청(이미 하나가 열려 있거나 대기 중이면 거절 — 동시 1건 · 상태줄 안내).
     pub(crate) fn ask(&mut self, spec: DlgSpec, reply: DlgReply) -> bool {
-        if self.dlg.is_open() || self.dlg_pending.is_some() {
+        if self.dlg.is_open() || self.dlg.spec().is_some() || self.dlg_pending.is_some() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("ops.busy"), &mut inv);
             self.redraw();
@@ -71,26 +69,24 @@ impl App {
 
     /// 버튼 id로 결정(기동 명령 `dlg.pick:<id>` · 시험) — 창이 있으면 창의 입력란 텍스트를 동봉, 없으면 대기 사양으로 바로.
     pub(crate) fn dlg_pick(&mut self, id: i32) {
-        if self.dlg.is_open() {
-            if let Some(DlgAction::Done { id, text }) = self.dlg.pick(id) {
-                self.dlg.close();
-                self.dlg_done(id, text);
-            }
-            return;
-        }
-        if let Some((spec, reply)) = self.dlg_pending.take() {
-            // 창 없이: 사양을 창 상태기계에 실어 입력란 텍스트(dlg.type)까지 동봉.
+        if self.dlg.spec().is_none() {
+            // 창 없이: 사양을 창 상태기계에 싣는다(입력란 텍스트 · 잠금 · 무장이 창과 같은 규칙으로 돈다 · 10-18).
+            let Some((spec, reply)) = self.dlg_pending.take() else {
+                return;
+            };
             self.dlg.set_spec(spec);
-            let text = self.dlg.input_text();
-            self.dlg.close();
             self.dlg_reply = Some(reply);
+        }
+        // 잠김·무장(첫 누름)은 `None` = 대화상자가 그대로 남는다.
+        if let Some(DlgAction::Done { id, text }) = self.dlg.pick(id) {
+            self.dlg.close();
             self.dlg_done(id, text);
         }
     }
 
     /// 입력란 텍스트(기동 명령 `dlg.type:<text>`).
     pub(crate) fn dlg_type(&mut self, text: &str) {
-        if self.dlg.is_open() {
+        if self.dlg.is_open() || self.dlg.spec().is_some() {
             self.dlg.set_input_text(text);
         } else if let Some((spec, _)) = &mut self.dlg_pending {
             if let Some(i) = &mut spec.input {
@@ -133,7 +129,6 @@ impl App {
                 }
             }
             DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
-            DlgReply::BulkPresetOverwrite(name) => self.bulk_preset_overwrite(id, name),
             DlgReply::BulkPresetsClear => self.bulk_presets_cleared(id),
             DlgReply::NfcConvert(paths) => match id {
                 1 => self.nfc_convert(paths, true),
@@ -234,6 +229,7 @@ impl App {
             cancel: 4,
             input: None,
             delay: None,
+            arm: None,
         };
         if !self.ask(spec, DlgReply::Conflict(tx.clone())) {
             let _ = tx.send(ConflictChoice::Skip);

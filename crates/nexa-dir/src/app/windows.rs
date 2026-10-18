@@ -170,6 +170,12 @@ impl App {
                 let theme = theme::window_theme(self.settings.theme_mode());
                 let owner = self.window.clone();
                 self.dlg.open(el, spec, theme, over, owner.as_deref());
+            } else if self.dlg.spec().is_some() {
+                // 기동 명령(`dlg.pick`)으로 창 없이 실린 사양(잠김·무장 상태 포함)을 창으로.
+                let over = self.main_rect();
+                let theme = theme::window_theme(self.settings.theme_mode());
+                let owner = self.window.clone();
+                self.dlg.open_kept(el, theme, over, owner.as_deref());
             }
         }
     }

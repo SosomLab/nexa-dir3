@@ -509,6 +509,7 @@ impl App {
             cancel: 0,
             input: None,
             delay: None,
+            arm: None,
         };
         self.ask(spec, app::dialogs::DlgReply::DeleteLocked { paths, locked });
     }
@@ -572,6 +573,7 @@ impl App {
             cancel: 0,
             input: None,
             delay: None,
+            arm: None,
         };
         if !self.ask(spec, app::dialogs::DlgReply::DeleteFailed(failed)) {
             // 다른 대화상자가 열려 있다 — 알림으로라도 남긴다.

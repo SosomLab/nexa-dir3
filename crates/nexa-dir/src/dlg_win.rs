@@ -26,6 +26,18 @@ pub(crate) struct DlgInput {
     pub placeholder: String,
 }
 
+/// 무장 버튼(사용자 10-18 "중복이면 별도 창이 아니라 그 자리에서 버튼만 강조된 타임아웃 버튼으로 재확인 · 시간 지나면 원복"):
+/// 입력란 글(정리한 이름 · 비면 `empty_as`)이 `names`에 있으면 `id` 버튼의 첫 누름은 확정하지 않고 **무장**한다(라벨 `label (N)` · 위험색 ·
+/// `ms` 동안) — 그 안에 다시 누르면 확정 · 지나면 원래 라벨로 돌아간다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DlgArm {
+    pub id: i32,
+    pub label: String,
+    pub ms: u64,
+    pub names: Vec<String>,
+    pub empty_as: String,
+}
+
 /// 대화상자 사양.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DlgSpec {
@@ -40,6 +52,8 @@ pub(crate) struct DlgSpec {
     pub input: Option<DlgInput>,
     /// (버튼 id, ms): 그 버튼은 ms 동안 눌리지 않고 라벨에 남은 초를 보인다 — 되돌릴 수 없는 확정의 2중 확인(사용자 10-18).
     pub delay: Option<(i32, u64)>,
+    /// 무장 버튼(그 자리 재확인) — [`DlgArm`].
+    pub arm: Option<DlgArm>,
 }
 
 impl DlgSpec {
@@ -53,6 +67,7 @@ impl DlgSpec {
             cancel: 0,
             input: None,
             delay: None,
+            arm: None,
         }
     }
 
@@ -79,6 +94,11 @@ impl DlgSpec {
             .delay
             .map(|(id, ms)| format!(" | wait {id}:{ms}"))
             .unwrap_or_default()
+            + &self
+                .arm
+                .as_ref()
+                .map(|a| format!(" | arm {}:{}", a.id, a.ms))
+                .unwrap_or_default()
     }
 }
 
@@ -113,6 +133,8 @@ pub(crate) struct DlgWin {
     done: Option<(i32, Option<String>)>,
     /// 잠금 버튼(사양 `delay`): 첫 틱부터 ms 동안 끔 + 라벨 `(N)`.
     wait: Option<Wait>,
+    /// 무장 상태(사양 `arm`): 무장한 뒤 첫 틱의 시각(ms) — 없으면 무장 안 됨.
+    armed: Option<Option<u64>>,
 }
 
 /// 잠금 버튼 상태.
@@ -139,6 +161,7 @@ impl DlgWin {
             input: None,
             done: None,
             wait: None,
+            armed: None,
         }
     }
 
@@ -167,8 +190,8 @@ impl DlgWin {
     }
 
     pub(crate) fn tick(&mut self, now_ms: u64) -> bool {
-        // 잠금 카운트다운은 창 없이도 돈다(시험 · 창 생성 전 틱).
-        let wait = self.wait_tick(now_ms);
+        // 잠금·무장 카운트다운은 창 없이도 돈다(시험 · 창 생성 전 틱).
+        let wait = self.wait_tick(now_ms) | self.arm_tick(now_ms);
         if self.window.is_none() {
             return wait;
         }
@@ -211,10 +234,105 @@ impl DlgWin {
         self.wait.as_ref().is_some_and(|w| w.id == id && !w.done)
     }
 
+    /// 지금 입력란 글이 무장을 요구하는가(`arm.names`에 있는 이름).
+    fn arm_needed(&self, id: i32) -> bool {
+        let Some(arm) = self.spec.as_ref().and_then(|s| s.arm.as_ref()) else {
+            return false;
+        };
+        if arm.id != id {
+            return false;
+        }
+        let text = self.input_text().unwrap_or_default();
+        let name = crate::App::sanitize_preset_name(&text).unwrap_or_else(|| arm.empty_as.clone());
+        arm.names.contains(&name)
+    }
+
+    fn arm_button(&mut self) -> Option<(usize, DlgArm)> {
+        let arm = self.spec.as_ref()?.arm.clone()?;
+        let idx = self
+            .spec
+            .as_ref()?
+            .buttons
+            .iter()
+            .position(|(i, _)| *i == arm.id)?;
+        Some((idx, arm))
+    }
+
+    /// 무장(라벨 `label (N)` · 위험색).
+    fn arm(&mut self) {
+        let Some((idx, arm)) = self.arm_button() else {
+            return;
+        };
+        if let Some(b) = self.buttons.get_mut(idx) {
+            b.set_label(format!("{} ({})", arm.label, arm.ms.div_ceil(1000)));
+            b.set_tone(nexa_ctl::controls::ButtonTone::Danger);
+        }
+        self.armed = Some(None);
+    }
+
+    /// 원복(원래 라벨 · 기본 톤).
+    fn disarm(&mut self) {
+        self.armed = None;
+        let Some((idx, _)) = self.arm_button() else {
+            return;
+        };
+        let label = self
+            .spec
+            .as_ref()
+            .map(|s| s.buttons[idx].1.clone())
+            .unwrap_or_default();
+        if let Some(b) = self.buttons.get_mut(idx) {
+            b.set_label(label);
+            b.set_tone(nexa_ctl::controls::ButtonTone::Default);
+        }
+    }
+
+    /// 무장 중인가(시험).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn armed(&self) -> bool {
+        self.armed.is_some()
+    }
+
+    /// 무장 카운트다운(시각은 호스트가 준다). 라벨이 바뀌거나 원복되면 `true`.
+    fn arm_tick(&mut self, now_ms: u64) -> bool {
+        let Some(started) = self.armed.as_mut() else {
+            return false;
+        };
+        let started = *started.get_or_insert(now_ms);
+        let Some((idx, arm)) = self.arm_button() else {
+            return false;
+        };
+        let elapsed = now_ms.saturating_sub(started);
+        if elapsed >= arm.ms {
+            self.disarm();
+            return true;
+        }
+        let secs = (arm.ms - elapsed).div_ceil(1000);
+        if let Some(b) = self.buttons.get_mut(idx) {
+            b.set_label(format!("{} ({secs})", arm.label));
+        }
+        true
+    }
+
+    /// 버튼 `id`의 결정: 잠김 = 없음 · 무장이 필요한데 아직이면 무장만(없음) · 그 밖 = 확정.
+    fn decide(&mut self, id: i32) -> Option<DlgAction> {
+        if self.locked(id) {
+            return None;
+        }
+        if self.arm_needed(id) && self.armed.is_none() {
+            self.arm();
+            self.redraw();
+            return None;
+        }
+        let text = self.input_text();
+        Some(DlgAction::Done { id, text })
+    }
+
     pub(crate) fn animating(&self) -> bool {
         self.window.is_some()
             && (self.buttons.iter().any(|b| b.is_animating())
                 || self.wait.as_ref().is_some_and(|w| !w.done)
+                || self.armed.is_some()
                 || self.input.as_ref().is_some_and(|t| t.is_animating()))
     }
 
@@ -231,6 +349,7 @@ impl DlgWin {
             tb
         });
         self.done = None;
+        self.armed = None;
         self.wait = spec.delay.and_then(|(id, ms)| {
             let idx = spec.buttons.iter().position(|(i, _)| *i == id)?;
             let label = spec.buttons[idx].1.clone();
@@ -266,11 +385,7 @@ impl DlgWin {
     /// 버튼 id로 결정(기동 명령 · 시험) — 입력란 텍스트 동봉.
     pub(crate) fn pick(&mut self, id: i32) -> Option<DlgAction> {
         self.spec.as_ref()?;
-        if self.locked(id) {
-            return None;
-        }
-        let text = self.input_text();
-        Some(DlgAction::Done { id, text })
+        self.decide(id)
     }
 
     pub(crate) fn open(
@@ -282,13 +397,26 @@ impl DlgWin {
         owner: Option<&Window>,
     ) {
         self.set_spec(spec);
+        self.open_kept(el, theme, over, owner);
+    }
+
+    /// 이미 실린 사양(창 없이 `set_spec`/`pick`으로 상태만 있던 것 · 기동 명령 뒤)으로 창을 만든다.
+    pub(crate) fn open_kept(
+        &mut self,
+        el: &ActiveEventLoop,
+        theme: Option<winit::window::Theme>,
+        over: Option<(i32, i32, u32, u32)>,
+        owner: Option<&Window>,
+    ) {
         if let Some(w) = &self.window {
             w.focus_window();
             self.layout();
             self.redraw();
             return;
         }
-        let spec = self.spec.as_ref().expect("set above");
+        let Some(spec) = self.spec.as_ref() else {
+            return;
+        };
         // 높이 = 여백 + 본문 줄(대략 60자/줄) + 입력란 + 버튼.
         let est_lines: usize = if spec.text.is_empty() {
             0
@@ -339,6 +467,7 @@ impl DlgWin {
         self.buttons.clear();
         self.input = None;
         self.wait = None;
+        self.armed = None;
     }
 
     fn s(&self, v: f32) -> i32 {
@@ -428,10 +557,9 @@ impl DlgWin {
                             text: None,
                         }
                     }
-                    Key::Named(NamedKey::Enter) if !self.locked(default_id) => {
-                        return DlgAction::Done {
-                            id: default_id,
-                            text: self.input_text(),
+                    Key::Named(NamedKey::Enter) => {
+                        if let Some(a) = self.decide(default_id) {
+                            return a;
                         }
                     }
                     _ => {}
@@ -536,14 +664,15 @@ impl DlgWin {
             .as_ref()
             .map(|s| s.buttons.iter().map(|(id, _)| *id).collect())
             .unwrap_or_default();
+        let mut clicked: Option<i32> = None;
         for (i, b) in self.buttons.iter_mut().enumerate() {
-            if b.take_clicked() {
-                let id = ids.get(i).copied().unwrap_or(cancel_id);
-                if self.wait.as_ref().is_some_and(|w| w.id == id && !w.done) {
-                    continue;
-                }
-                let text = self.input.as_ref().map(|t| t.text());
-                return DlgAction::Done { id, text };
+            if b.take_clicked() && clicked.is_none() {
+                clicked = Some(ids.get(i).copied().unwrap_or(cancel_id));
+            }
+        }
+        if let Some(id) = clicked {
+            if let Some(a) = self.decide(id) {
+                return a;
             }
         }
         self.redraw();
@@ -644,6 +773,7 @@ mod tests {
                 placeholder: String::new(),
             }),
             delay: None,
+            arm: None,
         });
         assert!(w.spec().unwrap().dump().ends_with("input(masked)"));
         w.set_input_text("s3cret");
@@ -653,6 +783,79 @@ mod tests {
                 id: 1,
                 text: Some("s3cret".into())
             })
+        );
+        // 무장 버튼(10-18): 이름이 `names`에 있으면 첫 pick = 무장(라벨 `덮어쓰기 (3)` · 확정 없음) · 둘째 pick = 확정 · 시간이 지나면 원복 ·
+        // 다른 이름은 바로 확정 · 덤프 `arm`.
+        w.set_spec(DlgSpec {
+            title: "S".into(),
+            text: String::new(),
+            buttons: vec![(1, "OK".into()), (0, "Cancel".into())],
+            default: 1,
+            cancel: 0,
+            input: Some(DlgInput {
+                label: "Name".into(),
+                masked: false,
+                initial: "dup".into(),
+                placeholder: String::new(),
+            }),
+            delay: None,
+            arm: Some(DlgArm {
+                id: 1,
+                label: "Overwrite".into(),
+                ms: 3000,
+                names: vec!["dup".into()],
+                empty_as: "Default".into(),
+            }),
+        });
+        assert!(
+            w.spec().unwrap().dump().ends_with("| input | arm 1:3000"),
+            "{}",
+            w.spec().unwrap().dump()
+        );
+        assert!(w.pick(1).is_none() && w.armed(), "첫 누름 = 무장");
+        assert_eq!(w.buttons[0].label(), "Overwrite (3)");
+        assert!(w.tick(5_000) && w.tick(6_200));
+        assert_eq!(w.buttons[0].label(), "Overwrite (2)");
+        assert_eq!(
+            w.pick(1),
+            Some(DlgAction::Done {
+                id: 1,
+                text: Some("dup".into())
+            }),
+            "둘째 누름 = 확정"
+        );
+        w.set_spec(DlgSpec::confirm("T".into(), "a".into(), "OK".into()));
+        w.set_spec(DlgSpec {
+            title: "S".into(),
+            text: String::new(),
+            buttons: vec![(1, "OK".into()), (0, "Cancel".into())],
+            default: 1,
+            cancel: 0,
+            input: Some(DlgInput {
+                label: "Name".into(),
+                masked: false,
+                initial: String::new(),
+                placeholder: String::new(),
+            }),
+            delay: None,
+            arm: Some(DlgArm {
+                id: 1,
+                label: "Overwrite".into(),
+                ms: 3000,
+                names: vec!["Default".into()],
+                empty_as: "Default".into(),
+            }),
+        });
+        assert!(w.pick(1).is_none(), "빈 이름 = 기본 이름이 겹침 → 무장");
+        assert!(
+            w.tick(10_000) && w.tick(13_000) && !w.armed(),
+            "시간 지나면 원복"
+        );
+        assert_eq!(w.buttons[0].label(), "OK");
+        w.set_input_text("other");
+        assert!(
+            matches!(w.pick(1), Some(DlgAction::Done { id: 1, .. })),
+            "다른 이름 = 바로 확정"
         );
         // 잠금 버튼(10-18): 틱 전·중에는 pick 거부 + 라벨 `(N)` · 시간이 지나면 풀리고 라벨 복원 · 덤프에 `wait`.
         let mut spec = DlgSpec::confirm("W".into(), "sure?".into(), "Remove".into());
