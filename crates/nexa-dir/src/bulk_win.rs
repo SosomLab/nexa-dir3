@@ -1123,7 +1123,7 @@ impl BulkWin {
                 || self.preset_menu.next_wake().is_some())
     }
 
-    /// 배치(DLG-074): 좌 카드 열 320 + 썸 10 · 우 그리드 · 하단 행.
+    /// 배치(DLG-074): 좌 카드 열 320(막대는 열 안 오버레이) + 틈 6 · 우 그리드 · 하단 행.
     fn layout(&mut self) {
         let Some(win) = &self.window else { return };
         let size = win.inner_size();
@@ -1133,7 +1133,8 @@ impl BulkWin {
         let bottom_y = h - pad - bh;
         let mut inv = Invalidations::default();
         self.cards_rect = Rect::new(pad, pad, self.s(CARD_W), bottom_y - pad * 2);
-        let gx = pad + self.s(CARD_W + 10.0) + pad;
+        // 카드 열과 그리드 사이 = 6px(종전 썸 10 + 여백 10 — 막대는 이제 카드 열 안 오버레이 · 사용자 10-18 "여백이 너무 많다").
+        let gx = pad + self.s(CARD_W) + self.s(6.0);
         self.grid_rect = Rect::new(gx, pad, w - gx - pad, bottom_y - pad * 2);
         self.rows.set_bounds(self.grid_rect, &mut inv);
         let bw = self.s(88.0);
