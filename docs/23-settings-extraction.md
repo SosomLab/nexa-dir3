@@ -126,7 +126,7 @@
 | 700 ms(라이선스 창 상수) | `license_win.rs` · nexa-ctl `Flash` | 플래시 메시지 페이드아웃 시간(200~30000 ms) | 3000 | 설정(일반 › 모양) | `ui.flash_ms`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
 | 둥근 모서리(고정) | `license_win.rs` · `FlashStyle` | 플래시 모양(rect · rounded · none) | rounded | 설정(일반 › 모양) | `ui.flash_shape`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
 | UI 글꼴(고정) | `app/fonts.rs::apply_flash_font` | 플래시 글꼴(비면 UI 글꼴 · 즉시 적용) | "" | 설정(일반 › 글꼴) | `ui.flash_font_face`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
-| UI 글꼴 크기(고정) | `app/fonts.rs` | 플래시 글꼴 크기(6~40) | 10 | 설정(일반 › 글꼴) | `ui.flash_font_size`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
+| UI 글꼴 크기(고정) | `app/fonts.rs` | 플래시 글꼴 크기(6~40) | 21(10-18 6dd1f05 · 종전 10) | 설정(일반 › 글꼴) | `ui.flash_font_size`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) · 기본 21 10-18 §17(6dd1f05) |
 | git 상세 = 저장소마다 한 번 조회 · 자동 갱신 없음(dir3 종전) | `app/statusline.rs` · `app/watch.rs` · `dirinfo.rs` | 탭 상태바 git 요약 안전망 재조회 주기(사건 기반 갱신 외 · 보이는 탭의 저장소만 · 0~3600 s) | 30 | 고급(탭 상태바 · 0 = 끔) | `git.refresh_s`(NEW-005 2차) | ✅ 10-05 §86(348da08) |
 | git 요약 항상 켜짐(dir3 종전) | `app/statusline.rs` · `app/dirinfo.rs` | 탭 상태바 git 요약 표시(끄면 브랜치·상세 조회 모두 안 함) | on | 설정(탭 상태바) | `git.enabled`(T-180) | ✅ 10-08 §2(f7a1fb3) |
 | 미추적 파일 항상 탐색(dir3 종전) | `app/statusline.rs` | 미추적 파일 셈(끄면 `git status -uno` · 큰 저장소 빠름 · `?n` 사라짐) | on | 고급(탭 상태바) | `git.untracked`(T-180) | ✅ 10-08 §2(f7a1fb3) |
