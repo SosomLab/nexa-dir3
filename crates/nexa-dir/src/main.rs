@@ -1007,21 +1007,42 @@ impl App {
             let current = self.panels[src].root_path();
             let (lines, image) = match kind {
                 1 => {
-                    let out = dockinfo::preview_content(&selected, &map, &disabled);
-                    self.dock_preview[i] = (out.provider, out.lines.clone());
-                    // 사진 디코드는 워커에서(10-18 · 종전 = 첫 paint가 UI 스레드에서 전체 디코드 → 마우스 선택마다 멈춤).
-                    match out.image {
-                        Some(path) if self.window.is_some() => {
-                            let (w, h) = self.dock_image_box(i);
-                            if nexa_ctl::raster::image_cache::has_fit(&path, w, h) {
-                                (out.lines, Some(path))
-                            } else {
-                                self.preview_decode.request(i, path, w, h);
-                                (vec![tr("preview.loading")], None)
+                    // 미리보기 계산(텍스트 · 플러그인 · 압축 목록)과 사진 디코드는 워커에서(10-18 · 종전 = UI 스레드 동기 → 마우스
+                    // 선택마다 멈춤). 결과는 키(선택 · 스탬프 · 시임)로 보관 — 같은 대상의 재계산 없음. 창 없는 시험 = 종전 동기 경로.
+                    let out = if self.window.is_some() {
+                        let key = App::preview_key(&selected, &map, &disabled);
+                        match self.preview_decode.ready(i, &key) {
+                            Some(out) => out.clone(),
+                            None => {
+                                if !self.preview_decode.is_pending(i, &key) {
+                                    let box_ = self.dock_image_box(i);
+                                    let face =
+                                        self.settings.get("ui.font_face").unwrap_or("").to_string();
+                                    self.preview_decode.request(
+                                        i,
+                                        key,
+                                        selected.clone(),
+                                        &map,
+                                        &disabled,
+                                        self.theme.is_dark,
+                                        box_,
+                                        &face,
+                                    );
+                                }
+                                dockinfo::PreviewOut {
+                                    lines: vec![tr("preview.loading")],
+                                    image: None,
+                                    provider: String::new(),
+                                }
                             }
                         }
-                        other => (out.lines, other),
+                    } else {
+                        dockinfo::preview_content(&selected, &map, &disabled)
+                    };
+                    if !out.provider.is_empty() {
+                        self.dock_preview[i] = (out.provider, out.lines.clone());
                     }
+                    (out.lines, out.image)
                 }
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => {

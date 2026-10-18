@@ -96,6 +96,7 @@ impl App {
         let rows = self.plugin_rows();
         self.prefs_win.set_plugins(rows, preview::load_notes());
         self.prefs_win.redraw();
+        self.preview_decode.invalidate(); // 워커 쪽 공급자 캐시 · 보관 결과(10-18)
         self.update_docks();
         self.redraw();
     }

@@ -372,16 +372,11 @@ fn with_providers<R>(
 /// 올라와 있는 플러그인 모듈의 어림 바이트(메모리 창) = 로드한 `.wasm` 파일 크기 합. 공급자 캐시가 아직 없으면 0 —
 /// 재려고 플러그인을 올리지 않는다(처음 미리보기를 쓸 때 늘어나는 것이 보인다).
 pub(crate) fn loaded_plugin_bytes() -> u64 {
-    PROVIDERS.with(|c| {
-        c.borrow().as_ref().map_or(0, |(_, infos, _)| {
-            infos
-                .iter()
-                .filter_map(|i| std::fs::metadata(&i.path).ok())
-                .map(|m| m.len())
-                .sum()
-        })
-    })
+    PLUGIN_BYTES.load(std::sync::atomic::Ordering::Relaxed)
 }
+
+/// 마지막으로 구성한 공급자 캐시의 `.wasm` 바이트 합(어느 스레드든 · 미리보기 워커가 올린 것도 메모리 창에 보이게 · 10-18).
+static PLUGIN_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// 공급자 캐시를 버린다(설치/삭제 뒤 — 다음 사용 때 폴더를 다시 읽는다).
 pub(crate) fn invalidate() {
@@ -441,6 +436,12 @@ fn build_cache() -> Cache {
         .map(|p| Box::new(wasm::WasmProvider::new(p)) as Box<dyn PreviewProvider>)
         .collect();
     v.extend(builtins());
+    let bytes: u64 = infos
+        .iter()
+        .filter_map(|i| std::fs::metadata(&i.path).ok())
+        .map(|m| m.len())
+        .sum();
+    PLUGIN_BYTES.store(bytes, std::sync::atomic::Ordering::Relaxed);
     (v, infos, notes)
 }
 
