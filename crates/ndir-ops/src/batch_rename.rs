@@ -548,6 +548,37 @@ fn scoped(
     }
 }
 
+/// 바꾸기 글의 `$N`을 `${N}`으로(사용자 10-18 "`$2_$1`이 `$1`만 보임"): regex 치환 규칙은 `$` 뒤의 `[A-Za-z0-9_]+` 전부를
+/// 그룹 이름으로 읽어 `$2_`가 없는 그룹(= 빈 글)이 된다. `$$`(리터럴 `$`)와 이미 중괄호인 `${…}`는 그대로.
+pub fn expand_group_refs(with: &str) -> String {
+    let mut out = String::with_capacity(with.len() + 4);
+    let mut it = with.chars().peekable();
+    while let Some(c) = it.next() {
+        if c != '$' {
+            out.push(c);
+            continue;
+        }
+        match it.peek() {
+            Some('$') => {
+                it.next();
+                out.push_str("$$");
+            }
+            Some(d) if d.is_ascii_digit() => {
+                let mut num = String::new();
+                while let Some(d) = it.peek().filter(|d| d.is_ascii_digit()) {
+                    num.push(*d);
+                    it.next();
+                }
+                out.push_str("${");
+                out.push_str(&num);
+                out.push('}');
+            }
+            _ => out.push('$'),
+        }
+    }
+    out
+}
+
 /// 정규식 패턴 구성(`match_case`=false → `(?i)`).
 fn regex_of(find: &str, match_case: bool) -> Result<Regex, String> {
     let pat = if match_case {
@@ -598,7 +629,9 @@ fn apply(
         } => scoped(stem, ext, *scope, is_dir, |s| {
             if *regex {
                 match regex_of(find, *match_case) {
-                    Ok(re) => re.replace_all(s, with.as_str()).into_owned(),
+                    Ok(re) => re
+                        .replace_all(s, expand_group_refs(with).as_str())
+                        .into_owned(),
                     Err(_) => s.to_string(), // validate가 사전 차단 — 방어적 무변경
                 }
             } else {
@@ -1094,6 +1127,33 @@ pub fn parse_ops(text: &str) -> Vec<RenameOp> {
 
 #[cfg(test)]
 mod tests {
+    /// `$N` 뒤에 글자·숫자·`_`가 붙어도 그 그룹으로(10-18) · `$$` 리터럴 · `${1}` 그대로 · 이름 그룹 `$name`은 손대지 않는다.
+    #[test]
+    fn regex_replace_group_refs_followed_by_word_chars() {
+        use super::*;
+        assert_eq!(expand_group_refs("$2_$1"), "${2}_${1}");
+        assert_eq!(expand_group_refs("$10x$$"), "${10}x$$");
+        assert_eq!(expand_group_refs("${1}_$name"), "${1}_$name");
+        let ops = [RenameOp::Replace {
+            scope: Scope::Name,
+            find: "([a-zA-Z]+)_([a-zA-Z]+)".into(),
+            with: "$2_$1".into(),
+            match_case: false,
+            regex: true,
+            mode: ReplaceMode::All,
+        }];
+        let inputs = [RenameInput {
+            name: "cache_file_04.txt".into(),
+            is_dir: false,
+            modified_ms: 0,
+            created_ms: 0,
+        }];
+        assert_eq!(
+            preview(&inputs, &ops, 0),
+            vec!["file_cache_04.txt".to_string()]
+        );
+    }
+
     use super::*;
 
     fn files(names: &[&str]) -> Vec<RenameInput> {

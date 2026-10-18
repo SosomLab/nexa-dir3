@@ -228,6 +228,11 @@ impl Card {
 
     /// 폼 → 동작(DLG-077 수확 규칙): 무효 카드 = None(파이프라인에서 건너뜀).
     fn op(&self) -> Option<RenameOp> {
+        self.op_with(true)
+    }
+
+    /// 폼 → 동작 · `strict = false`면 빈 찾기/글도 그대로 담는다(프리셋 저장 = 카드 전부 · 사용자 10-18).
+    fn op_with(&self, strict: bool) -> Option<RenameOp> {
         let scope = scope_of(&self.scope.selected_value());
         match self.kind_value().as_str() {
             "replace" => {
@@ -238,7 +243,7 @@ impl Card {
                     _ => ReplaceMode::All,
                 };
                 let find = self.find.text();
-                if find.is_empty() && mode != ReplaceMode::Entire {
+                if strict && find.is_empty() && mode != ReplaceMode::Entire {
                     return None;
                 }
                 Some(RenameOp::Replace {
@@ -252,7 +257,7 @@ impl Card {
             }
             "replacerx" => {
                 let find = self.find.text();
-                if find.is_empty() {
+                if strict && find.is_empty() {
                     return None;
                 }
                 Some(RenameOp::Replace {
@@ -266,7 +271,7 @@ impl Card {
             }
             "insert" => {
                 let text = self.text.text();
-                if text.is_empty() {
+                if strict && text.is_empty() {
                     return None;
                 }
                 Some(RenameOp::Insert {
@@ -775,7 +780,7 @@ impl BulkWin {
             return Some(BulkAction::LoadPreset(name.to_string()));
         }
         match id {
-            "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops()))),
+            "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops_all()))),
             "edit" => Some(BulkAction::EditPresets),
             "clear" => Some(BulkAction::ClearPresets),
             _ => None,
@@ -801,6 +806,11 @@ impl BulkWin {
     /// 현재 파이프라인(유효 카드만).
     pub(crate) fn ops(&self) -> Vec<RenameOp> {
         self.cards.iter().filter_map(Card::op).collect()
+    }
+
+    /// 카드 전부(무효 포함) — 프리셋 저장용(불러오면 같은 카드 수로 돌아온다).
+    pub(crate) fn ops_all(&self) -> Vec<RenameOp> {
+        self.cards.iter().filter_map(|c| c.op_with(false)).collect()
     }
 
     /// 시험용 카드 폼 접근(종류 · 찾기 · 바꾸기 · 텍스트).
@@ -2276,6 +2286,17 @@ mod tests {
         assert!(w.dump().contains("kinds [case|number]"), "{}", w.dump());
         assert_eq!(w.ops(), vec![ops[1].clone(), ops[0].clone()]);
         assert!(w.move_card(1, 0));
+        assert_eq!(w.ops(), ops);
+        // 프리셋 저장 = 카드 전부(빈 찾기 카드 포함 · 사용자 10-18): 유효 2 + 빈 치환 1 → 3장으로 돌아온다.
+        w.load_ops(&ops);
+        w.cards.push(Card::new(0));
+        assert_eq!((w.ops().len(), w.ops_all().len()), (2, 3));
+        let saved = match w.preset_pick("save") {
+            Some(BulkAction::SavePreset(t)) => t,
+            other => panic!("{other:?}"),
+        };
+        w.load_ops(&br::parse_ops(&saved));
+        assert_eq!(w.cards.len(), 3, "무효 카드도 저장·복원");
         assert_eq!(w.ops(), ops);
         w.load_ops(&[]);
         assert_eq!(w.cards.len(), 1, "빈 프리셋 = 기본 카드 1장");
