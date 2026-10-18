@@ -3,8 +3,10 @@
 //! 키(`filelist::icon_key`) → nexa-fs [`IconService`](OS 셸 아이콘 · 워커 스레드 · 캐시 · 타 OS는 폴백) 조회:
 //! `dir` = 폴더 종류 · `file` = 확장자 없는 파일 · 확장자 = 그 종류 · 그 밖(경로) = 파일별 아이콘(exe·lnk·ico… · 드라이브).
 //! 조회 중(`Pending`)이거나 OS가 아이콘을 안 주면 **자체 그림**(nexa-ctl `fallback_file_icon`)을 돌려준다 — 칸이 비지 않는다.
-//! 이미지는 스레드 로컬에 `Rc`로 캐시하고(매 프레임 RGBA 복사 금지) 서비스 `version()`이 바뀌면 비운다. 조회 중이 있었으면
-//! [`App::row_icons_tick`]이 버전 변화를 보고 다시 그린다(150 ms 폴링 · 런처 아이콘과 같은 규약).
+//! 이미지는 스레드 로컬에 `Rc`로 캐시한다(매 프레임 RGBA 복사 금지) — 완료된 답(아이콘 · 없음)만 넣으므로 서비스 `version()`이
+//! 올라도 비우지 않고(10-18 체감 점검 — 종전엔 결과가 하나 도착할 때마다 전부 비워 큰 폴더에서 매 프레임 다시 채웠다) 상한을
+//! 넘으면 **가장 오래 안 쓴 절반**만 버린다. 조회 중이 있었으면 [`App::row_icons_tick`]이 버전 변화를 보고 다시 그린다
+//! (150 ms 폴링 · 런처 아이콘과 같은 규약).
 //! `L|` 접두(타일 보기) = 큰 아이콘.
 //!
 //! ★ **아이콘 계층**(사용자 10-03 — 위가 이긴다):
@@ -21,8 +23,42 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 const ICON_POLL_MS: u64 = 150;
-/// 캐시 상한(dir2 `CAPACITY 256`의 여유분 — 넘으면 통째로 비운다 · 다음 프레임에 서비스 캐시에서 다시 채워진다).
+/// 캐시 상한(dir2 `CAPACITY 256`의 여유분 — 셸 아이콘 캐시는 넘으면 가장 오래 안 쓴 절반을 버린다 · 테마 이미지는 통째로).
 const CACHE_MAX: usize = 512;
+
+/// 셸 아이콘 캐시(스레드 로컬): 키 → (이미지, 마지막 사용 틱). `tick`은 조회마다 1씩 올라 LRU 축출의 기준이 된다.
+#[derive(Default)]
+struct IconCache {
+    tick: u64,
+    map: HashMap<String, (Rc<nexa_gfx::IconImage>, u64)>,
+}
+
+impl IconCache {
+    fn get(&mut self, key: &str) -> Option<Rc<nexa_gfx::IconImage>> {
+        self.tick += 1;
+        let tick = self.tick;
+        self.map.get_mut(key).map(|e| {
+            e.1 = tick;
+            e.0.clone()
+        })
+    }
+
+    fn insert(&mut self, key: &str, img: Rc<nexa_gfx::IconImage>) {
+        if self.map.len() >= CACHE_MAX {
+            self.evict_half();
+        }
+        self.tick += 1;
+        self.map.insert(key.to_string(), (img, self.tick));
+    }
+
+    /// 가장 오래 안 쓴 절반 축출(O(n log n) · 상한에 닿을 때만).
+    fn evict_half(&mut self) {
+        let mut ticks: Vec<u64> = self.map.values().map(|e| e.1).collect();
+        ticks.sort_unstable();
+        let cut = ticks[ticks.len() / 2];
+        self.map.retain(|_, e| e.1 > cut);
+    }
+}
 
 /// 사용자 지정 아이콘 규칙 1건(계층 1).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,7 +171,7 @@ fn user_icon(hint: &str, is_dir: bool) -> Option<Rc<nexa_gfx::IconImage>> {
 }
 
 thread_local! {
-    static CACHE: RefCell<(u64, HashMap<String, Rc<nexa_gfx::IconImage>>)> = RefCell::new((0, HashMap::new()));
+    static CACHE: RefCell<IconCache> = RefCell::new(IconCache::default());
     static PENDING: Cell<bool> = const { Cell::new(false) };
     static FALLBACK: RefCell<[Option<Rc<nexa_gfx::IconImage>>; 2]> = const { RefCell::new([None, None]) };
 }
@@ -233,7 +269,7 @@ fn theme_icon(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage
 /// 행 아이콘 캐시가 쥔 픽셀 바이트(메모리 창 · 가로 × 세로 × 4 — 셸/테마/상태 아이콘 합).
 pub(crate) fn cache_bytes() -> u64 {
     let px = |img: &nexa_gfx::IconImage| u64::from(img.w) * u64::from(img.h) * 4;
-    let shell: u64 = CACHE.with(|c| c.borrow().1.values().map(|i| px(i)).sum());
+    let shell: u64 = CACHE.with(|c| c.borrow().map.values().map(|e| px(&e.0)).sum());
     let theme: u64 = THEME_IMAGES.with(|c| c.borrow().values().flatten().map(|i| px(i)).sum());
     let status: u64 = STATUS_IMAGES.with(|c| c.borrow().values().flatten().map(|i| px(i)).sum());
     shell + theme + status
@@ -307,15 +343,7 @@ pub(crate) fn resolve(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::I
         return Some(img);
     }
     let svc = IconService::global();
-    let ver = svc.version();
-    let hit = CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        if c.0 != ver || c.1.len() > CACHE_MAX {
-            c.0 = ver;
-            c.1.clear();
-        }
-        c.1.get(key).cloned()
-    });
+    let hit = CACHE.with(|c| c.borrow_mut().get(key));
     if hit.is_some() {
         return hit;
     }
@@ -327,12 +355,12 @@ pub(crate) fn resolve(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::I
                 h: icon.h,
                 rgba: icon.rgba.clone(),
             });
-            CACHE.with(|c| c.borrow_mut().1.insert(key.to_string(), img.clone()));
+            CACHE.with(|c| c.borrow_mut().insert(key, img.clone()));
             Some(img)
         }
         Lookup::Ready(None) => {
             let img = fallback(is_dir);
-            CACHE.with(|c| c.borrow_mut().1.insert(key.to_string(), img.clone()));
+            CACHE.with(|c| c.borrow_mut().insert(key, img.clone()));
             Some(img)
         }
         Lookup::Pending => {
@@ -378,6 +406,32 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 셸 아이콘 캐시(10-18): 상한에 닿으면 **가장 오래 안 쓴 절반**만 나간다 — 방금 쓴 키는 남고 · 넣기만 한 옛 키가 나간다.
+    #[test]
+    fn icon_cache_evicts_least_recently_used_half() {
+        let img = Rc::new(nexa_gfx::IconImage {
+            w: 1,
+            h: 1,
+            rgba: vec![0; 4],
+        });
+        let mut c = IconCache::default();
+        for i in 0..CACHE_MAX {
+            c.insert(&format!("k{i}"), img.clone());
+        }
+        assert_eq!(c.map.len(), CACHE_MAX);
+        // 옛 키 둘을 방금 사용 → 축출에서 살아남는다.
+        assert!(c.get("k0").is_some());
+        assert!(c.get("k1").is_some());
+        c.insert("new", img);
+        assert!(c.map.len() <= CACHE_MAX / 2 + 1, "{}", c.map.len());
+        assert!(c.map.contains_key("k0") && c.map.contains_key("k1") && c.map.contains_key("new"));
+        assert!(!c.map.contains_key("k2"), "안 쓴 옛 키는 나간다");
+        assert!(
+            c.map.contains_key(&format!("k{}", CACHE_MAX - 1)),
+            "최근 넣은 키는 남는다"
+        );
+    }
 
     /// 키 해석: dir/file/확장자 = 종류 · 경로 = 파일별 · `L|` = 큰 아이콘.
     /// Linux 아이콘 테마: 테마가 설치돼 있으면 폴더·파일 행이 테마 PNG(디코드 성공 · 정사각)를 받는다 — 폴더와 파일은 다른 그림.

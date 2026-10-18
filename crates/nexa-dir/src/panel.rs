@@ -374,16 +374,20 @@ impl Panel {
         if valid.is_empty() {
             valid.push((usize::MAX, fallback.to_path_buf()));
         }
-        let (_, first) = &valid[0];
-        let mut panel = Panel::new(first, opts, m, columns);
+        // 탭별 보기 옵션(dir2 `views` — 없는 자리는 설정 기본 그대로) — 열 때부터 적용해 탭당 열거 1회(10-18).
+        let tab_opts = |orig: usize| {
+            ps.views
+                .get(orig)
+                .map_or(opts, |&f| opts.with_view(ListOpts::view_of_flags(f)))
+        };
+        let (orig0, first) = &valid[0];
+        let mut panel = Panel::new(first, tab_opts(*orig0), m, columns);
+        panel.opts = opts; // 패널 기본(새 탭용)은 설정값
         panel.pool_columns = pool; // 저장된 레이아웃이 기본 숨김 열(확장자 · 종류)을 켜 두었을 때 그 열의 원형
         let mut inv = Invalidations::default();
-        for (_, p) in valid.iter().skip(1) {
-            panel.new_tab(&mut inv);
-            let _ = panel.navigate_to(p.clone(), &mut inv);
-            // 복원한 탭의 히스토리는 새로(dir2 — 히스토리는 영속하지 않는다).
-            let i = panel.active;
-            panel.tabs[i].nav = History::new(p.clone());
+        for (orig, p) in valid.iter().skip(1) {
+            // 복원한 탭의 히스토리는 새로(dir2 — 히스토리는 영속하지 않는다) = `push_tab`의 `History::new`.
+            panel.push_tab(p.clone(), tab_opts(*orig), &mut inv);
         }
         for (slot, (orig, _)) in valid.iter().enumerate() {
             if let Some(mode) = ps.modes.get(*orig) {
@@ -402,13 +406,6 @@ impl Panel {
             .unwrap_or(0)
             .min(panel.tabs.len() - 1);
         panel.active = active;
-        // 탭별 보기 옵션(dir2 `views` — 없는 자리는 설정 기본 그대로).
-        for (slot, (orig, _)) in valid.iter().enumerate() {
-            if let Some(&f) = ps.views.get(*orig) {
-                let o = opts.with_view(ListOpts::view_of_flags(f));
-                panel.tabs[slot].rows.source_mut().set_opts(o);
-            }
-        }
         for (slot, (orig, _)) in valid.iter().enumerate() {
             panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
             panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
@@ -1255,8 +1252,15 @@ impl Panel {
     /// 현재 경로를 복제한 새 탭(Ctrl+T · [+]) — 열·포커스·보기 모드 계승 · 히스토리는 새로.
     pub(crate) fn new_tab(&mut self, inv: &mut Invalidations) {
         let path = self.root_path();
+        self.push_tab(path, self.opts, inv); // 새 탭의 보기 옵션 = 설정 기본값(사용자 10-03)
+    }
+
+    /// 탭 하나를 **열거 1회**로 더한다(새 탭 · 세션 복원 공용 · 10-18 체감 점검 — 종전 복원은 `new_tab`(현재 폴더 열거) →
+    /// `navigate_to`(대상 열거) → `set_opts`(옵션이 다르면 재열거)로 탭마다 2~3회 열거했다). 열 · 보기 모드 · 정렬 · 포커스는
+    /// 활성 탭에서 물려받고 루트 종류(내 PC = 드라이브 열)에 맞춰 열을 맞춘다.
+    fn push_tab(&mut self, path: PathBuf, opts: ListOpts, inv: &mut Invalidations) {
         let mut rows = VirtualRows::new(
-            TreeSource::open(&path, self.opts), // 새 탭의 보기 옵션 = 설정 기본값(사용자 10-03)
+            TreeSource::open(&path, opts),
             self.m.row_h,
             self.m.pad_x,
             self.m.indent_w,
@@ -1277,6 +1281,7 @@ impl Panel {
         self.active = self.tabs.len() - 1;
         self.navigated = true;
         self.session_dirty = true;
+        self.sync_columns_for_root(inv);
         self.set_bounds(self.bounds, inv);
         self.sync_chrome(inv);
     }

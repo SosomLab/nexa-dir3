@@ -1122,6 +1122,29 @@ pub(crate) fn find_in_path(name: &str) -> Option<PathBuf> {
 pub(crate) struct PollWatcher {
     dirs: Vec<PathBuf>,
     snap: HashMap<PathBuf, (Option<SystemTime>, usize)>,
+    /// 워커(10-18 체감 점검): 스냅숏(`read_dir` 개수)은 네트워크·큰 폴더에서 수백 ms를 잡아먹는다 — 창이 있으면
+    /// (`set_poll_async`) 스레드가 재고 UI는 결과만 수거한다(한 틱 늦게 보고 · 폴링 간격 1 s). 시험·헤드리스 = 동기.
+    worker: Option<PollWorker>,
+}
+
+/// 폴링 워커 쪽 손잡이: 요청(감시 집합 · 재기) · 결과(바뀐 폴더) · 재는 중 표시(겹쳐 보내지 않는다).
+#[derive(Debug)]
+struct PollWorker {
+    to: std::sync::mpsc::Sender<PollMsg>,
+    from: std::sync::mpsc::Receiver<Vec<PathBuf>>,
+    busy: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+enum PollMsg {
+    Watch(Vec<PathBuf>),
+    Scan,
+}
+
+static POLL_ASYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 폴링 감시자 워커 모드(창이 생기면 켠다 · 시험은 끔 = 동기) — 켜진 뒤 처음 `watch`/`poll`에서 스레드를 띄운다.
+pub(crate) fn set_poll_async(on: bool) {
+    POLL_ASYNC.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 impl PollWatcher {
@@ -1130,28 +1153,116 @@ impl PollWatcher {
         let count = std::fs::read_dir(dir).map_or(0, |rd| rd.count());
         (mtime, count)
     }
+
+    /// 집합이 바뀌면 스냅숏을 새로(같은 집합 재지정은 보존).
+    fn rewatch(
+        dirs: &mut Vec<PathBuf>,
+        snap: &mut HashMap<PathBuf, (Option<SystemTime>, usize)>,
+        new: &[PathBuf],
+    ) {
+        if dirs.as_slice() == new {
+            return;
+        }
+        *dirs = new.to_vec();
+        *snap = new.iter().map(|d| (d.clone(), Self::snapshot(d))).collect();
+    }
+
+    /// 스냅숏을 다시 재서 바뀐 폴더를 돌려준다.
+    fn scan(
+        dirs: &[PathBuf],
+        snap: &mut HashMap<PathBuf, (Option<SystemTime>, usize)>,
+    ) -> Vec<PathBuf> {
+        let mut changed = Vec::new();
+        for d in dirs {
+            let now = Self::snapshot(d);
+            if snap.get(d) != Some(&now) {
+                snap.insert(d.clone(), now);
+                changed.push(d.clone());
+            }
+        }
+        changed
+    }
+
+    /// 워커 스레드를 띄운 감시자(시험·워커 모드 전환용) — 현재 집합을 넘겨 준다.
+    pub(crate) fn with_worker() -> Self {
+        let mut w = Self::default();
+        w.spawn_worker();
+        w
+    }
+
+    fn spawn_worker(&mut self) {
+        let (to, req) = std::sync::mpsc::channel::<PollMsg>();
+        let (res, from) = std::sync::mpsc::channel::<Vec<PathBuf>>();
+        let busy = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = std::sync::Arc::clone(&busy);
+        let mut dirs = std::mem::take(&mut self.dirs);
+        let mut snap = std::mem::take(&mut self.snap);
+        std::thread::Builder::new()
+            .name("ndir-pollwatch".into())
+            .spawn(move || {
+                while let Ok(msg) = req.recv() {
+                    match msg {
+                        PollMsg::Watch(new) => Self::rewatch(&mut dirs, &mut snap, &new),
+                        PollMsg::Scan => {
+                            let changed = Self::scan(&dirs, &mut snap);
+                            flag.store(false, std::sync::atomic::Ordering::Release);
+                            if !changed.is_empty() && res.send(changed).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            })
+            .expect("spawn poll watcher");
+        self.worker = Some(PollWorker { to, from, busy });
+    }
+
+    fn want_worker(&mut self) {
+        if self.worker.is_none() && POLL_ASYNC.load(std::sync::atomic::Ordering::Relaxed) {
+            self.spawn_worker();
+        }
+    }
 }
 
 impl Watcher for PollWatcher {
     fn watch(&mut self, dirs: &[PathBuf]) {
-        if self.dirs == dirs {
+        self.want_worker();
+        if let Some(w) = &self.worker {
+            if self.dirs.as_slice() == dirs {
+                return;
+            }
+            self.dirs = dirs.to_vec();
+            if w.to.send(PollMsg::Watch(self.dirs.clone())).is_err() {
+                self.worker = None; // 워커가 죽었다 — 동기로 돌아간다
+                let dirs = std::mem::take(&mut self.dirs);
+                Self::rewatch(&mut self.dirs, &mut self.snap, &dirs);
+            }
             return;
         }
-        self.dirs = dirs.to_vec();
-        self.snap = dirs
-            .iter()
-            .map(|d| (d.clone(), Self::snapshot(d)))
-            .collect();
+        let new = dirs.to_vec();
+        Self::rewatch(&mut self.dirs, &mut self.snap, &new);
     }
 
     fn poll(&mut self) -> Vec<PathBuf> {
-        let mut changed = Vec::new();
-        for d in &self.dirs {
-            let now = Self::snapshot(d);
-            if self.snap.get(d) != Some(&now) {
-                self.snap.insert(d.clone(), now);
-                changed.push(d.clone());
+        self.want_worker();
+        let Some(w) = &self.worker else {
+            return Self::scan(&self.dirs, &mut self.snap);
+        };
+        let mut changed: Vec<PathBuf> = Vec::new();
+        while let Ok(v) = w.from.try_recv() {
+            for d in v {
+                if !changed.contains(&d) {
+                    changed.push(d);
+                }
             }
+        }
+        // 재는 중이 아니면 다음 재기를 맡긴다(결과는 다음 틱에).
+        if !w.busy.swap(true, std::sync::atomic::Ordering::AcqRel)
+            && w.to.send(PollMsg::Scan).is_err()
+        {
+            self.worker = None;
+            let dirs = std::mem::take(&mut self.dirs);
+            Self::rewatch(&mut self.dirs, &mut self.snap, &dirs);
         }
         changed
     }
@@ -1769,6 +1880,58 @@ mod tests {
         w.watch(&[a, b.clone()]);
         std::fs::write(b.join("y.txt"), b"1").unwrap();
         assert_eq!(w.poll(), vec![b]);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 폴링 감시자 워커(10-18): 스냅숏은 스레드가 재고 `poll`은 결과만 수거한다 — 변화는 한 틱 뒤에 보고 · 같은 집합
+    /// 재지정은 스냅숏 보존 · 집합이 바뀌면 다시(동기판과 같은 규약).
+    #[test]
+    fn poll_watcher_worker_reports_changes_without_blocking() {
+        let base = std::env::temp_dir().join(format!("ndir-watchw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (a, b) = (base.join("a"), base.join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut w = PollWatcher::with_worker();
+        assert!(w.worker.is_some());
+        w.watch(&[a.clone(), b.clone()]);
+        // 보고가 올 때까지 폴링(5 s 한도) → 그 뒤 **조용해질 때까지**(연속 3회 빈 보고) 더 수거해 돌려준다. 쓰기와 재기가 겹치면
+        // (mtime은 옛것 · 개수는 새것) 같은 폴더가 한 번 더 보고될 수 있다(동기판엔 없던 겹침 · 재열람 1회 — 해롭지 않다).
+        let collect = |w: &mut PollWatcher| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut got: Vec<PathBuf> = Vec::new();
+            let mut quiet = 0;
+            while std::time::Instant::now() < deadline {
+                let v = w.poll();
+                if v.is_empty() {
+                    quiet += 1;
+                    if !got.is_empty() && quiet >= 3 {
+                        break;
+                    }
+                } else {
+                    quiet = 0;
+                    got.extend(v);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            got.dedup();
+            got
+        };
+        // 첫 재기 뒤에도 변화 없음.
+        let _ = w.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(w.poll().is_empty(), "변화 없음");
+        std::fs::write(a.join("x.txt"), b"1").unwrap();
+        assert_eq!(
+            collect(&mut w),
+            vec![a.clone()],
+            "a만 · b는 보고되지 않는다"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(w.poll().is_empty(), "조용해진 뒤엔 더 보고하지 않는다");
+        w.watch(&[a, b.clone()]);
+        std::fs::write(b.join("y.txt"), b"1").unwrap();
+        assert_eq!(collect(&mut w), vec![b], "같은 집합 재지정은 스냅숏 보존");
         let _ = std::fs::remove_dir_all(&base);
     }
 

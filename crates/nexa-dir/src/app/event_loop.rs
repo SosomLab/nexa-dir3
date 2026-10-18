@@ -72,6 +72,7 @@ impl ApplicationHandler<Wake> for App {
         }
         self.window = Some(win);
         crate::filelist::probe::set_async(true); // 창이 있으면 빈 폴더 판정은 워커(10-18)
+        crate::platform::set_poll_async(true); // 폴링 감시 스냅숏(read_dir 개수)도 워커(10-18)
         self.layout();
         // 복원된 활성 패널을 덮지 않는다(10-03 창 2회 실행 실증: 세션 active_panel=1이 0으로 돌아갔다).
         let a = self.active;
