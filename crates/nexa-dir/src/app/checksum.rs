@@ -132,7 +132,8 @@ impl App {
                     slot.push((i, out));
                 }
             }
-            sh.finished.store(true, Ordering::Relaxed);
+            // 결과를 다 넣은 **뒤** 끝 표시(Release) — 수거 쪽은 끝 표시를 먼저 읽고(Acquire) 결과를 비운다 → 마지막 결과를 잃지 않는다.
+            sh.finished.store(true, Ordering::Release);
         });
         self.hash_job = Some(HashJob { paths, shared });
     }
@@ -146,6 +147,9 @@ impl App {
             job.shared.done.load(Ordering::Relaxed),
             job.shared.current.load(Ordering::Relaxed),
         );
+        // 끝 표시를 **먼저** 읽고(Acquire) 결과를 비운다 — 종전(비운 뒤 읽기)은 그 사이 워커가 마지막 결과를 넣고 끝 표시를 세우면
+        // 그 결과를 영영 못 받았다(10-18 전수 흔들림 `checksum_window_computes_…` = 첫 파일 값 None).
+        let finished = job.shared.finished.load(Ordering::Acquire);
         let ready: Vec<(usize, FileOutcome)> = job
             .shared
             .results
@@ -155,7 +159,7 @@ impl App {
         for (i, out) in ready {
             self.hash_win.set_file_result(i, out);
         }
-        if !job.shared.finished.load(Ordering::Relaxed) {
+        if !finished {
             return true;
         }
         let job = self.hash_job.take().expect("checked above");

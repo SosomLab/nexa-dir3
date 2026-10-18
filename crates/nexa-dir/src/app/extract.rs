@@ -118,7 +118,7 @@ impl App {
             if let Ok(mut slot) = sh.result.lock() {
                 *slot = Some(r);
             }
-            sh.finished.store(true, Ordering::Relaxed);
+            sh.finished.store(true, Ordering::Release); // 결과를 넣은 뒤(Release) — 수거는 Acquire(10-18)
         });
         let label = trf("extract.label", &[&ndir_ops::leaf_name(archive)]);
         if self.settings.int("transfer.close_ms") > 0 {
@@ -148,7 +148,7 @@ impl App {
                 job.shared.cancel.store(true, Ordering::Relaxed);
             }
         }
-        if !job.shared.finished.load(Ordering::Relaxed) {
+        if !job.shared.finished.load(Ordering::Acquire) {
             return true;
         }
         let job = self.extract_job.take().expect("checked above");

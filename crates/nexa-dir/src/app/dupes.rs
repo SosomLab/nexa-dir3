@@ -57,7 +57,7 @@ impl App {
             if let Ok(mut slot) = sh.result.lock() {
                 *slot = Some(r);
             }
-            sh.finished.store(true, Ordering::Relaxed);
+            sh.finished.store(true, Ordering::Release); // 결과를 넣은 뒤(Release) — 수거는 Acquire(10-18)
         });
         self.dup_job = Some(DupJob { shared });
         self.dupes_win.start(app::bulk::local_tz_min());
@@ -75,7 +75,7 @@ impl App {
             p.candidates.load(Ordering::Relaxed),
             p.hashed.load(Ordering::Relaxed),
         );
-        if !job.shared.finished.load(Ordering::Relaxed) {
+        if !job.shared.finished.load(Ordering::Acquire) {
             return true;
         }
         let job = self.dup_job.take().expect("checked above");

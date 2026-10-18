@@ -59,7 +59,7 @@ impl App {
             if let Ok(mut slot) = sh.result.lock() {
                 *slot = Some(res);
             }
-            sh.finished.store(true, Ordering::Relaxed);
+            sh.finished.store(true, Ordering::Release); // 결과를 넣은 뒤(Release) — 수거는 Acquire(10-18)
         });
         self.cmp_job = Some(CmpJob { shared, by_content });
         self.compare_win
@@ -90,7 +90,7 @@ impl App {
                 p.scanned.load(Ordering::Relaxed),
                 p.hashed.load(Ordering::Relaxed),
             );
-            if job.shared.finished.load(Ordering::Relaxed) {
+            if job.shared.finished.load(Ordering::Acquire) {
                 let job = self.cmp_job.take().expect("checked above");
                 self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
@@ -121,7 +121,7 @@ impl App {
                     job.shared.cancel.store(true, Ordering::Relaxed);
                 }
             }
-            if job.shared.finished.load(Ordering::Relaxed) {
+            if job.shared.finished.load(Ordering::Acquire) {
                 let job = self.sync_job.take().expect("checked above");
                 self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
@@ -221,7 +221,7 @@ impl App {
             if let Ok(mut slot) = sh.result.lock() {
                 *slot = Some(res);
             }
-            sh.finished.store(true, Ordering::Relaxed);
+            sh.finished.store(true, Ordering::Release); // 결과를 넣은 뒤(Release) — 수거는 Acquire(10-18)
         });
         let label = trf("cmp.syncLabel", &[&count.to_string()]);
         if self.settings.int("transfer.close_ms") > 0 {
