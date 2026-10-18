@@ -9060,3 +9060,30 @@ fn main_window_flash_command_dump_and_boost_forces() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 일괄 이름 변경 중복 띄우기(사용자 10-18): 열린 창이 있으면 그 창은 두고 새 창을 준비한다 · 새 창은 카드 1장(종전 = 0장) ·
+/// 닫힌 창 정리(`bulk_settle`).
+#[test]
+fn bulk_rename_opens_second_window_with_one_card() {
+    let (mut app, dir) = fixture("bulk2");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0]
+        .rows_mut()
+        .select_program(0, nexa_grid::SelectOp::Single, &mut inv);
+    app.command("edit.bulk_rename");
+    assert!(app.open_bulk);
+    assert_eq!(
+        app.bulk_others.len(),
+        0,
+        "창이 아직 없다 = 같은 자리 재사용"
+    );
+    assert!(
+        app.dump_of("bulk").unwrap().contains(" 1 cards "),
+        "{}",
+        app.dump_of("bulk").unwrap()
+    );
+    app.bulk_settle();
+    assert_eq!(app.bulk_open_count(), 0, "창 없는 시험 = 열린 창 0");
+    let _ = std::fs::remove_dir_all(&dir);
+}

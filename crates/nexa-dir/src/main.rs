@@ -329,6 +329,8 @@ struct App {
     open_progress: bool,
     /// 일괄 이름 변경 창(T-71) + 열기 깃발 + 저장 대기 프리셋 본문.
     bulk_win: BulkWin,
+    /// 함께 열린 다른 일괄 이름 변경 창들(사용자 10-18 "중복 띄우기") — 이벤트가 온 창을 `bulk_win` 자리로 바꿔 넣고 다룬다.
+    bulk_others: Vec<BulkWin>,
     open_bulk: bool,
     bulk_pending_preset: Option<String>,
     /// 프리셋 편집 창(10-18 · 순서·삭제) + 열기 깃발.
@@ -728,6 +730,7 @@ impl App {
             progress_win: ProgressWin::new(),
             open_progress: false,
             bulk_win: BulkWin::new(),
+            bulk_others: Vec::new(),
             open_bulk: false,
             bulk_pending_preset: None,
             preset_win: PresetWin::new(),

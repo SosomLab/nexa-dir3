@@ -477,6 +477,9 @@ impl App {
         self.order_win.relabel();
         self.preset_win.relabel();
         self.bulk_win.relabel();
+        for w in &mut self.bulk_others {
+            w.relabel();
+        }
         self.mem_win.relabel();
         self.hash_win.relabel();
         self.dupes_win.relabel();

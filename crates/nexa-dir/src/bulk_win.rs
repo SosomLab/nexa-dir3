@@ -683,6 +683,8 @@ impl BulkWin {
         self.cards = vec![Card::new(0)];
         self.scroll = 0;
         self.sig.clear();
+        // 창이 이미 있으면 새 카드에 bounds를 준다(종전 = 열린 창을 다시 채우면 카드가 0장처럼 보였다 · 사용자 10-18).
+        self.layout_cards();
         // 이전 대상의 적용 체크를 버린다(종전에는 행 번호로 이어받아, 지난번에 뺀 행 번호가 새 대상에서도 빠진 채 열렸다).
         let mut inv = Invalidations::default();
         self.rows.replace_source(

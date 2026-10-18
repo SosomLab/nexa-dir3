@@ -62,7 +62,11 @@ impl App {
             self.preview_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_bulk) && self.window.is_some() {
-            let over = self.main_rect();
+            // 겹쳐 열리면 구분되게 창마다 24px씩 비켜 놓는다.
+            let off = 24 * self.bulk_others.len() as i32;
+            let over = self
+                .main_rect()
+                .map(|(x, y, w, h)| (x + off, y + off, w, h));
             let theme = theme::window_theme(self.settings.theme_mode());
             let owner = self.window.clone();
             self.bulk_win.open(el, theme, over, owner.as_deref());
@@ -294,7 +298,7 @@ impl App {
             }
             return true;
         }
-        if self.bulk_win.is(id) {
+        if self.bulk_select(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.bulk_win.handle(event) {
                 BulkAction::Paint => {
@@ -306,6 +310,7 @@ impl App {
                 BulkAction::None => {}
                 other => self.bulk_action(other),
             }
+            self.bulk_settle();
             return true;
         }
         if self.preset_win.is(id) {
@@ -593,8 +598,10 @@ impl App {
         if self.archive_win.is_open() {
             self.archive_win.redraw();
         }
-        if self.bulk_win.is_open() {
-            self.bulk_win.redraw();
+        for w in std::iter::once(&self.bulk_win).chain(self.bulk_others.iter()) {
+            if w.is_open() {
+                w.redraw();
+            }
         }
         // 편집 창이 다루는 키가 밖에서(설정 창 텍스트 · JSON) 바뀌면 모델을 다시 읽는다 — 창 자신의 통지는 값이 같아 무해.
         if self.order_win.is_open() && self.order_win.setting_key() == Some(key) {
@@ -657,8 +664,10 @@ impl App {
         if self.progress_win.tick(now_ms) {
             self.progress_win.redraw();
         }
-        if self.bulk_win.tick(now_ms) {
-            self.bulk_win.redraw();
+        for w in std::iter::once(&mut self.bulk_win).chain(self.bulk_others.iter_mut()) {
+            if w.tick(now_ms) {
+                w.redraw();
+            }
         }
         if self.order_win.tick(now_ms) {
             self.order_win.redraw();
@@ -686,6 +695,7 @@ impl App {
             || self.preview_win.animating()
             || self.progress_win.animating()
             || self.bulk_win.animating()
+            || self.bulk_others.iter().any(|w| w.animating())
             || self.order_win.animating()
             || self.preset_win.animating()
             || self.file_win.animating()

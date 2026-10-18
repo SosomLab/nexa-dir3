@@ -48,8 +48,12 @@ impl App {
 
     /// 보조 창·주 창 플래시의 다음 깨움 시각(페이드 시작 · 마감 — 즉시 모드는 마감 때 한 번 지운다).
     pub(crate) fn aux_next_wake(&self) -> Option<Instant> {
-        [self.flash.next_wake(), self.bulk_win.flash_next_wake()]
-            .into_iter()
+        std::iter::once(self.flash.next_wake())
+            .chain(
+                std::iter::once(&self.bulk_win)
+                    .chain(self.bulk_others.iter())
+                    .map(|w| w.flash_next_wake()),
+            )
             .flatten()
             .min()
     }

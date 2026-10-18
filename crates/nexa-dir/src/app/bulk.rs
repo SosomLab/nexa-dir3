@@ -3,7 +3,7 @@
 //! 이름 금지 문자 제거 · 같은 이름 덮어쓰기 · 최대 64).
 
 use crate::app::dialogs::DlgReply;
-use crate::bulk_win::{BulkAction, BulkItem};
+use crate::bulk_win::{BulkAction, BulkItem, BulkWin};
 use crate::dlg_win::{DlgInput, DlgSpec};
 use crate::*;
 use ndir_ops::batch_rename as br;
@@ -48,6 +48,11 @@ impl App {
             self.statusbar.set_left(&tr("bulk.noSelection"), &mut inv);
             self.redraw();
             return;
+        }
+        // 이미 열린 창이 있으면 그 창은 그대로 두고 새 창을 연다(사용자 10-18 "중복 띄우기" · 종전 = 같은 창을 다시 채워 카드 0장으로 열렸다).
+        if self.bulk_win.is_open() {
+            let old = std::mem::replace(&mut self.bulk_win, BulkWin::new());
+            self.bulk_others.push(old);
         }
         // 이전/이후 열의 정렬 순서 = 여는 탭의 자연 정렬 값(탭 보기 옵션 · 10-08).
         self.bulk_win
@@ -119,11 +124,42 @@ impl App {
         let _ = std::fs::remove_file(Self::preset_order_path(dir));
     }
 
-    /// 창의 프리셋 메뉴를 폴더 상태로 다시.
+    /// 열린 모든 일괄 창의 프리셋 메뉴를 폴더 상태로 다시.
     fn refresh_presets(&mut self) {
-        let dir = Self::presets_dir();
-        self.bulk_win.set_presets(Self::preset_names(&dir));
-        self.bulk_win.redraw();
+        let names = Self::preset_names(&Self::presets_dir());
+        for w in std::iter::once(&mut self.bulk_win).chain(self.bulk_others.iter_mut()) {
+            w.set_presets(names.clone());
+            w.redraw();
+        }
+    }
+
+    /// `id` 창을 `bulk_win` 자리로(다른 창이었으면 바꿔 넣는다) · 닫힌 창은 버린다. 그 창이면 `true`.
+    pub(crate) fn bulk_select(&mut self, id: winit::window::WindowId) -> bool {
+        if !self.bulk_win.is(id) {
+            let Some(i) = self.bulk_others.iter().position(|w| w.is(id)) else {
+                return false;
+            };
+            std::mem::swap(&mut self.bulk_win, &mut self.bulk_others[i]);
+        }
+        self.bulk_others.retain(BulkWin::is_open);
+        true
+    }
+
+    /// `bulk_win`이 닫혔으면 남은 창 하나를 그 자리로.
+    pub(crate) fn bulk_settle(&mut self) {
+        self.bulk_others.retain(BulkWin::is_open);
+        if !self.bulk_win.is_open() {
+            if let Some(w) = self.bulk_others.pop() {
+                self.bulk_win = w;
+            }
+        }
+    }
+
+    /// 열린 일괄 창 수(시험).
+    #[cfg(test)]
+    pub(crate) fn bulk_open_count(&self) -> usize {
+        usize::from(self.bulk_win.is_open())
+            + self.bulk_others.iter().filter(|w| w.is_open()).count()
     }
 
     /// 프리셋 이름 정리(DLG-083: `<>:"/\|?*` 제거 + trim · 빈 값 = None).
