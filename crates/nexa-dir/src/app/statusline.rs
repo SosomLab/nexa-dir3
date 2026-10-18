@@ -880,6 +880,7 @@ impl App {
             label: tr("launcher.dlg.input"),
             masked: false,
             initial,
+            placeholder: String::new(),
         });
         let _ = self.ask(spec, crate::app::dialogs::DlgReply::LauncherItem(at));
     }

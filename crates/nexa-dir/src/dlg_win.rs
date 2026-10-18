@@ -22,6 +22,8 @@ pub(crate) struct DlgInput {
     pub label: String,
     pub masked: bool,
     pub initial: String,
+    /// 빈 칸에 흐리게 보이는 안내(사용자 10-18 "설명은 플레이스홀더로").
+    pub placeholder: String,
 }
 
 /// 대화상자 사양.
@@ -224,7 +226,7 @@ impl DlgWin {
             .map(|(_, l)| Button::new(l.clone()))
             .collect();
         self.input = spec.input.as_ref().map(|i| {
-            let mut tb = TextBox::new("").with_text(&i.initial);
+            let mut tb = TextBox::new(i.placeholder.as_str()).with_text(&i.initial);
             tb.set_masked(i.masked);
             tb
         });
@@ -639,6 +641,7 @@ mod tests {
                 label: "Password".into(),
                 masked: true,
                 initial: String::new(),
+                placeholder: String::new(),
             }),
             delay: None,
         });

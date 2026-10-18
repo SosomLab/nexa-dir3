@@ -97,6 +97,7 @@ impl App {
                 label: tr("archive.pw.label"),
                 masked: true,
                 initial: String::new(),
+                placeholder: String::new(),
             }),
             delay: None,
         };

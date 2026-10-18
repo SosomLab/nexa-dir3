@@ -9,6 +9,7 @@ use ndir_ops::batch_rename::{
     RenameOp, ReplaceMode, Scope,
 };
 use nexa_ctl::controls::ctxmenu::{ContextMenu, CtxItem};
+use nexa_ctl::controls::EditCtxAction;
 use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
@@ -556,6 +557,18 @@ const CARD_W: f32 = 320.0;
 const ROW_H: f32 = 28.0;
 const LABEL_W: f32 = 96.0;
 const BTN_H: f32 = 28.0;
+/// 카드 드래그가 시작되는 이동 거리(px).
+const CARD_DRAG_THRESHOLD: i32 = 5;
+/// 카드 열 밖 고스트 축소 비율.
+const CARD_GHOST_SCALE: f32 = 0.4;
+
+/// 진행 중인 카드 드래그.
+struct CardDrag {
+    from: usize,
+    press: (i32, i32),
+    cur: (i32, i32),
+    active: bool,
+}
 
 pub(crate) struct BulkWin {
     window: Option<Rc<Window>>,
@@ -573,6 +586,8 @@ pub(crate) struct BulkWin {
     cards_rect: Rect,
     grid_rect: Rect,
     /// `[…]` 버튼 + 그 위로 펴는 프리셋 메뉴(사용자 10-18 · 종전 콤보 = ✓ 칸 · 헤더/구분자 불가).
+    /// 카드 드래그 이동(사용자 10-18 · Path Finder 꼴): 카드 바탕(컨트롤 밖)을 잡고 끌면 삽입 위치 인디케이터 + 고스트(열 밖 = 축소).
+    card_drag: Option<CardDrag>,
     presets_btn: Button,
     preset_menu: ContextMenu,
     preset_names: Vec<String>,
@@ -620,6 +635,7 @@ impl BulkWin {
             cards_h: 0,
             cards_rect: Rect::default(),
             grid_rect: Rect::default(),
+            card_drag: None,
             presets_btn: Button::new("…"),
             preset_menu: ContextMenu::new(),
             preset_names: Vec::new(),
@@ -936,6 +952,8 @@ impl BulkWin {
             ));
         }
         s.push_str(&format!("presets [{}]\n", self.preset_names.join("|")));
+        let kinds: Vec<String> = self.cards.iter().map(Card::kind_value).collect();
+        s.push_str(&format!("kinds [{}]\n", kinds.join("|")));
         s
     }
 
@@ -1233,6 +1251,138 @@ impl BulkWin {
         self.scroll = self.scroll.clamp(0, max);
     }
 
+    /// `p`가 어느 카드의 **바탕**(컨트롤 밖 · 카드 열 안)인가 → 그 카드 번호.
+    fn card_background_at(&mut self, p: Point) -> Option<usize> {
+        if !self.cards_rect.contains(p) {
+            return None;
+        }
+        let i = self
+            .cards
+            .iter()
+            .position(|c| c.rect.h > 0 && c.rect.contains(p))?;
+        let c = &mut self.cards[i];
+        let mut hit = c.match_case.bounds().h > 0 && c.match_case.bounds().contains(p);
+        hit |= c.buttons().iter().any(|b| b.bounds().contains(p));
+        hit |= c
+            .combos()
+            .iter()
+            .any(|cb| cb.bounds().h > 0 && cb.bounds().contains(p));
+        hit |= c
+            .boxes()
+            .iter()
+            .any(|tb| tb.bounds().h > 0 && tb.bounds().contains(p));
+        (!hit).then_some(i)
+    }
+
+    /// 커서 y → 삽입 자리(0..=카드 수): 중심이 y보다 위에 있는 카드 수.
+    fn insert_index(&self, y: i32) -> usize {
+        self.cards
+            .iter()
+            .filter(|c| c.rect.y + c.rect.h / 2 < y)
+            .count()
+    }
+
+    /// 삽입 자리의 인디케이터 y(카드 사이 틈 가운데).
+    fn insert_y(&self, idx: usize) -> i32 {
+        let gap = self.s(6.0);
+        match self.cards.get(idx) {
+            Some(c) => c.rect.y - gap / 2,
+            None => self
+                .cards
+                .last()
+                .map_or(self.cards_rect.y, |c| c.rect.bottom() + gap / 2),
+        }
+    }
+
+    /// 카드 `from`을 삽입 자리 `to`(0..=카드 수)로. 자리가 같으면 아무것도 안 한다. 움직였으면 `true`.
+    pub(crate) fn move_card(&mut self, from: usize, to: usize) -> bool {
+        let n = self.cards.len();
+        if from >= n || to > n || to == from || to == from + 1 {
+            return false;
+        }
+        let c = self.cards.remove(from);
+        let at = if to > from { to - 1 } else { to };
+        self.cards.insert(at, c);
+        self.sig.clear();
+        self.layout_cards();
+        self.clamp_scroll();
+        self.recompute(true);
+        true
+    }
+
+    /// 드래그 중 그리기: 열 안 = 삽입 인디케이터(강조색 2px) + 원래 크기 반투명 고스트 · 열 밖 = 축소 고스트(DnD 식별만).
+    fn paint_card_drag(&self, dc: &mut dyn DrawCtx, th: &Theme, wi: i32, hi: i32) {
+        let Some(d) = self.card_drag.as_ref().filter(|d| d.active) else {
+            return;
+        };
+        let Some(card) = self.cards.get(d.from) else {
+            return;
+        };
+        let (cx, cy) = d.cur;
+        let inside = self.cards_rect.contains(Point { x: cx, y: cy });
+        let win = Rect::new(0, 0, wi, hi);
+        if inside {
+            let iy = self.insert_y(self.insert_index(cy));
+            let cr = self.cards_rect;
+            if iy >= cr.y && iy <= cr.bottom() {
+                dc.fill_rect(Rect::new(cr.x, iy - 1, cr.w, 2), th.accent);
+            }
+        }
+        let k = if inside { 1.0 } else { CARD_GHOST_SCALE };
+        let w = (card.rect.w as f32 * k).round() as i32;
+        let h = (card.rect.h as f32 * k).round() as i32;
+        // 잡은 점이 카드 안에서 차지하던 비율을 유지해 축소돼도 커서 아래에 머문다.
+        let (dx, dy) = (d.press.0 - card.rect.x, d.press.1 - card.rect.y);
+        let gx = cx - (dx as f32 * k).round() as i32;
+        let gy = cy - (dy as f32 * k).round() as i32;
+        let ghost = Rect::new(gx, gy, w, h);
+        let r = self.s(6.0);
+        dc.fill_round_rect_alpha(ghost, r, th.panel_bg_alt, 0.92);
+        dc.stroke_round_rect(ghost, r, th.accent, 1.0);
+        // 헤더 글(종류) + 행 틀(필드 자리 윤곽)로 카드 모양을 흉내 낸다.
+        let kind = card.kind_value();
+        let title = KINDS
+            .iter()
+            .find(|(v, _)| *v == kind)
+            .map(|(_, key)| tr(key))
+            .unwrap_or_default();
+        dc.select_font(FontSlot::Base, false);
+        let th_txt = dc.text_height();
+        let inner = (self.s(8.0) as f32 * k).round() as i32;
+        let row_h = (self.s(ROW_H) as f32 * k).round() as i32;
+        let label_w = (self.s(LABEL_W) as f32 * k).round() as i32;
+        let clip = ghost.intersection(&win);
+        let head = Rect::new(
+            ghost.x + inner,
+            ghost.y + inner,
+            (ghost.w - inner * 2).max(0),
+            (row_h - 4).max(0),
+        );
+        dc.stroke_round_rect(head, self.s(4.0), th.border, 1.0);
+        if head.h >= th_txt {
+            dc.text(
+                head.x + self.s(6.0),
+                head.y + (head.h - th_txt) / 2,
+                head.intersection(&clip),
+                &title,
+                th.text,
+            );
+        }
+        let rows = 1 + card.body_rows() as i32;
+        for i in 0..rows {
+            let ry = ghost.y + inner + row_h * (i + 1);
+            let fr = Rect::new(
+                ghost.x + inner + label_w,
+                ry,
+                (ghost.w - inner * 2 - label_w).max(0),
+                (row_h - 4).max(0),
+            );
+            if fr.bottom() <= ghost.bottom() {
+                dc.stroke_round_rect(fr, self.s(4.0), th.border, 1.0);
+            }
+        }
+    }
+
     /// 열린 콤보(팝업이 모든 입력을 먼저 받는다).
     fn open_combo(&mut self) -> Option<&mut Combo> {
         for c in &mut self.cards {
@@ -1243,6 +1393,60 @@ impl BulkWin {
             }
         }
         None
+    }
+
+    /// 우클릭 편집 메뉴가 열린 입력칸(팝업이 모든 입력을 먼저 받는다).
+    fn popup_textbox(&mut self) -> Option<&mut TextBox> {
+        for c in &mut self.cards {
+            for tb in c.boxes() {
+                if tb.popup_open() {
+                    return Some(tb);
+                }
+            }
+        }
+        None
+    }
+
+    /// 커서 아래 입력칸(보이는 것만).
+    fn box_at(&mut self, p: Point) -> Option<&mut TextBox> {
+        for c in &mut self.cards {
+            if c.rect.h == 0 {
+                continue;
+            }
+            for tb in c.boxes() {
+                if tb.bounds().h > 0 && tb.bounds().contains(p) {
+                    return Some(tb);
+                }
+            }
+        }
+        None
+    }
+
+    /// 편집 메뉴·단축키의 클립보드 동작(사용자 10-18 "입력 컨트롤 단축키·우클릭 정상 동작") — 대상 = 포커스 입력칸.
+    fn clip(&mut self, act: EditCtxAction) {
+        let mut inv = Invalidations::default();
+        match act {
+            EditCtxAction::Copy => {
+                if let Some(text) = self.focused_box().and_then(|tb| tb.copy_selection()) {
+                    let _ = crate::clipboard::write_text(&text);
+                }
+            }
+            EditCtxAction::Cut => {
+                if let Some(text) = self.focused_box().and_then(|tb| tb.cut_selection(&mut inv)) {
+                    let _ = crate::clipboard::write_text(&text);
+                }
+            }
+            EditCtxAction::Paste => {
+                if let Some(text) = crate::clipboard::read_text() {
+                    if let Some(tb) = self.focused_box() {
+                        tb.paste(&text, &mut inv);
+                    }
+                }
+            }
+            EditCtxAction::Custom(_) => {}
+        }
+        self.recompute(false);
+        self.redraw();
     }
 
     fn focused_box(&mut self) -> Option<&mut TextBox> {
@@ -1379,6 +1583,22 @@ impl BulkWin {
                     return BulkAction::None;
                 }
                 if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Escape)) {
+                    if let Some(tb) = self.popup_textbox() {
+                        tb.on_event(
+                            &InputEvent::Key {
+                                key: CtlKey::Escape,
+                                shift: false,
+                                primary: false,
+                            },
+                            &mut inv,
+                        );
+                        self.redraw();
+                        return BulkAction::None;
+                    }
+                    if self.card_drag.take().is_some_and(|d| d.active) {
+                        self.redraw();
+                        return BulkAction::None;
+                    }
                     if let Some(cb) = self.open_combo() {
                         cb.close(&mut inv);
                         self.redraw();
@@ -1404,12 +1624,37 @@ impl BulkWin {
                     }
                     return BulkAction::None;
                 }
-                if self.primary && crate::input::shortcut_letter(kev) == Some('a') {
-                    if let Some(tb) = self.focused_box() {
-                        tb.on_event(&InputEvent::SelectAll, &mut inv);
+                if self.primary {
+                    // 편집 단축키(사용자 10-18): ⌘/Ctrl+C·X·V·Z·Y·A — 포커스 입력칸.
+                    match crate::input::shortcut_letter(kev) {
+                        Some('c') => {
+                            self.clip(EditCtxAction::Copy);
+                            return BulkAction::None;
+                        }
+                        Some('x') => {
+                            self.clip(EditCtxAction::Cut);
+                            return BulkAction::None;
+                        }
+                        Some('v') => {
+                            self.clip(EditCtxAction::Paste);
+                            return BulkAction::None;
+                        }
+                        Some(l @ ('z' | 'y' | 'a')) => {
+                            let ev = match l {
+                                'z' if self.shift => InputEvent::Redo,
+                                'z' => InputEvent::Undo,
+                                'y' => InputEvent::Redo,
+                                _ => InputEvent::SelectAll,
+                            };
+                            if let Some(tb) = self.focused_box() {
+                                tb.on_event(&ev, &mut inv);
+                            }
+                            self.recompute(false);
+                            self.redraw();
+                            return BulkAction::None;
+                        }
+                        _ => {}
                     }
-                    self.redraw();
-                    return BulkAction::None;
                 }
                 if let Some(e) = crate::input::text_key_event(
                     kev,
@@ -1430,6 +1675,13 @@ impl BulkWin {
             WindowEvent::MouseWheel { delta, .. } => {
                 let (x, y) = self.cursor;
                 let p = Point { x, y };
+                let we = crate::input::wheel_event(delta, self.shift);
+                if let Some(tb) = self.box_at(p) {
+                    // 입력칸 위 휠 = 그 입력칸(긴 글 가로 스크롤 · 사용자 10-18).
+                    tb.on_event(&we, &mut inv);
+                    self.redraw();
+                    return BulkAction::None;
+                }
                 if self.cards_rect.contains(p) {
                     let dy = match delta {
                         MouseScrollDelta::LineDelta(_, y) => *y * 48.0 * self.scale,
@@ -1454,6 +1706,24 @@ impl BulkWin {
                         self.redraw();
                     }
                     return BulkAction::None;
+                }
+                if let Some(tb) = self.popup_textbox() {
+                    tb.on_event(&mv, &mut inv);
+                    self.redraw();
+                    return BulkAction::None;
+                }
+                if let Some(d) = self.card_drag.as_mut() {
+                    d.cur = (x, y);
+                    if !d.active
+                        && ((x - d.press.0).abs() > CARD_DRAG_THRESHOLD
+                            || (y - d.press.1).abs() > CARD_DRAG_THRESHOLD)
+                    {
+                        d.active = true;
+                    }
+                    if d.active {
+                        self.redraw();
+                        return BulkAction::None;
+                    }
                 }
                 if let Some(cb) = self.open_combo() {
                     cb.on_event(&mv, &mut inv);
@@ -1483,6 +1753,36 @@ impl BulkWin {
                 }
                 return BulkAction::None;
             }
+            WindowEvent::MouseInput { state, button, .. }
+                if *button == MouseButton::Right && *state == ElementState::Pressed =>
+            {
+                let (x, y) = self.cursor;
+                let p = Point { x, y };
+                let e = InputEvent::RightDown { x, y };
+                if self.preset_menu.is_open() {
+                    self.preset_menu.close();
+                }
+                if let Some(tb) = self.popup_textbox() {
+                    tb.on_event(&e, &mut inv);
+                    self.redraw();
+                    return BulkAction::None;
+                }
+                // 우클릭 = 입력칸 편집 메뉴(복사·잘라내기·붙여넣기·전체 선택 — TextBox 내장 · 사용자 10-18).
+                let has = crate::clipboard::read_text().is_some_and(|s| !s.is_empty());
+                for c in &mut self.cards {
+                    for tb in c.boxes() {
+                        tb.set_clipboard_has_text(has);
+                    }
+                }
+                if self.box_at(p).is_some() {
+                    self.own_focus(p);
+                    if let Some(tb) = self.box_at(p) {
+                        tb.on_event(&e, &mut inv);
+                    }
+                    self.redraw();
+                }
+                return BulkAction::None;
+            }
             WindowEvent::MouseInput { state, button, .. } if *button == MouseButton::Left => {
                 let (x, y) = self.cursor;
                 let p = Point { x, y };
@@ -1496,6 +1796,19 @@ impl BulkWin {
                     ElementState::Released => InputEvent::MouseUp { x, y },
                 };
                 let up = matches!(e, InputEvent::MouseUp { .. });
+                if let Some(tb) = self.popup_textbox() {
+                    tb.on_event(&e, &mut inv);
+                    let act = tb.take_edit_ctx();
+                    let still_open = tb.popup_open();
+                    if let Some(act) = act {
+                        self.clip(act);
+                        return BulkAction::None;
+                    }
+                    if still_open || up {
+                        self.redraw();
+                        return BulkAction::None;
+                    }
+                }
                 if self.preset_menu.is_open() {
                     if self.preset_menu.is_outside_click(&e) {
                         self.preset_menu.close();
@@ -1511,6 +1824,18 @@ impl BulkWin {
                     }
                     return BulkAction::None;
                 }
+                if up {
+                    if let Some(d) = self.card_drag.take() {
+                        if d.active {
+                            if self.cards_rect.contains(p) {
+                                let to = self.insert_index(y);
+                                self.move_card(d.from, to);
+                            }
+                            self.redraw();
+                            return BulkAction::None;
+                        }
+                    }
+                }
                 if let Some(cb) = self.open_combo() {
                     cb.on_event(&e, &mut inv);
                     self.redraw();
@@ -1521,6 +1846,15 @@ impl BulkWin {
                 }
                 if !up {
                     self.own_focus(p);
+                    // 카드 바탕(컨트롤 밖) 누름 = 드래그 이동 후보(사용자 10-18).
+                    if let Some(i) = self.card_background_at(p) {
+                        self.card_drag = Some(CardDrag {
+                            from: i,
+                            press: (x, y),
+                            cur: (x, y),
+                            active: false,
+                        });
+                    }
                     // 적용 열 클릭 = 그 행 토글(DLG-080).
                     if self.grid_rect.contains(p) && x >= self.apply_column_x() {
                         if let Some(row) = self.rows.row_at(x, y) {
@@ -1769,6 +2103,7 @@ impl BulkWin {
                     }
                 }
             }
+            self.paint_card_drag(&mut dc, th, wi, hi);
             // 프리셋 메뉴 = 맨 뒤(모든 컨트롤 위).
             self.preset_menu.paint(&mut dc, th);
         }
@@ -1926,6 +2261,22 @@ mod tests {
             "{}",
             w.dump()
         );
+        // 카드 드래그 이동(사용자 10-18): 삽입 자리 = 카드 중심 기준 · 같은 자리 = 무변화 · 이동 뒤 파이프라인 순서가 바뀐다.
+        w.load_ops(&ops);
+        assert!(w.dump().contains("kinds [number|case]"), "{}", w.dump());
+        let mid0 = w.cards[0].rect.y + w.cards[0].rect.h / 2;
+        assert_eq!(w.insert_index(mid0 - 1), 0);
+        assert_eq!(w.insert_index(mid0 + 1), 1);
+        assert_eq!(w.insert_index(i32::MAX), 2);
+        assert!(
+            !w.move_card(0, 0) && !w.move_card(0, 1),
+            "같은 자리 = 무변화"
+        );
+        assert!(w.move_card(0, 2));
+        assert!(w.dump().contains("kinds [case|number]"), "{}", w.dump());
+        assert_eq!(w.ops(), vec![ops[1].clone(), ops[0].clone()]);
+        assert!(w.move_card(1, 0));
+        assert_eq!(w.ops(), ops);
         w.load_ops(&[]);
         assert_eq!(w.cards.len(), 1, "빈 프리셋 = 기본 카드 1장");
         w.set_presets(vec!["zeta".into(), "Alpha".into()]);

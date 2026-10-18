@@ -162,7 +162,9 @@ impl App {
                     input: Some(DlgInput {
                         label: tr("bulk.preset.name"),
                         masked: false,
-                        initial: tr("bulk.preset.savedSeq"),
+                        // 바로 칠 수 있게 비워 두고 기본 이름은 플레이스홀더로(사용자 10-18) · 비운 채 확인 = 기본 이름.
+                        initial: String::new(),
+                        placeholder: tr("bulk.preset.savedSeq"),
                     }),
                     delay: None,
                 };
@@ -210,9 +212,10 @@ impl App {
         if id != 1 {
             return;
         }
-        let Some(name) = name.as_deref().and_then(Self::sanitize_preset_name) else {
-            return;
-        };
+        let name = name
+            .as_deref()
+            .and_then(Self::sanitize_preset_name)
+            .unwrap_or_else(|| tr("bulk.preset.savedSeq"));
         let dir = Self::presets_dir();
         if dir.join(format!("{name}.cfg")).is_file() {
             // 같은 이름 = 미리 경고 + 3초 잠금 "덮어쓰기"(사용자 10-18 "중복은 미리 보여주고 시간제한 버튼으로 2중 확인").
