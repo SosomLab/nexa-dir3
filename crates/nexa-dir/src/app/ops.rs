@@ -26,6 +26,10 @@ pub(crate) struct TransferShared {
     pub items: Mutex<Vec<SegItem>>,
     /// 현재 항목 번호(1부터 · 0 = 아직).
     pub current: AtomicUsize,
+    /// 항목별 앞 항목 크기 누적 합(계획 때 한 번 · `Bytes`마다 O(n) 합산하던 것을 O(1)로 · 10-18 체감 점검).
+    pub offsets: Mutex<Vec<u64>>,
+    /// 워커가 무엇이든 바꿨다 — UI 틱이 진행 창 스냅숏(항목 전체 복제)을 **바뀐 때만** 만든다(10-18).
+    pub dirty: AtomicBool,
 }
 
 /// 충돌 결정(UI → 작업 스레드).
@@ -245,6 +249,8 @@ impl App {
             outcome: Mutex::new(None),
             items: Mutex::new(Vec::new()),
             current: AtomicUsize::new(0),
+            offsets: Mutex::new(Vec::new()),
+            dirty: AtomicBool::new(false),
         });
         // 진행 창(dir2 DLG-059: `transfer.close_ms > 0`일 때만).
         if self.settings.int("transfer.close_ms") > 0 {
@@ -286,6 +292,18 @@ impl App {
                 &mut |ev| match ev {
                     Event::Plan { sizes, total_bytes } => {
                         sh.total.store(total_bytes, Ordering::Relaxed);
+                        if let Ok(mut off) = sh.offsets.lock() {
+                            let mut acc = 0u64;
+                            *off = sizes
+                                .iter()
+                                .map(|&s| {
+                                    let o = acc;
+                                    acc = acc.saturating_add(s);
+                                    o
+                                })
+                                .collect();
+                        }
+                        sh.dirty.store(true, Ordering::Relaxed);
                         if let Ok(mut it) = sh.items.lock() {
                             *it = sizes
                                 .iter()
@@ -299,6 +317,7 @@ impl App {
                     }
                     Event::ItemStart { index, .. } => {
                         sh.current.store(index + 1, Ordering::Relaxed);
+                        sh.dirty.store(true, Ordering::Relaxed);
                         if let Ok(mut it) = sh.items.lock() {
                             if let Some(i) = it.get_mut(index) {
                                 i.status = SegStatus::Active;
@@ -307,15 +326,22 @@ impl App {
                     }
                     Event::Bytes(p) => {
                         sh.done.store(p.done_bytes, Ordering::Relaxed);
-                        // 항목 내 진행 = 전체 누적 − 앞 항목 크기 합(세그먼트 부분 채움).
+                        sh.dirty.store(true, Ordering::Relaxed);
+                        // 항목 내 진행 = 전체 누적 − 앞 항목 크기 합(세그먼트 부분 채움) — 누적 합은 계획 때 만든 표에서 O(1).
+                        let before: u64 = sh
+                            .offsets
+                            .lock()
+                            .ok()
+                            .and_then(|o| o.get(p.item_index).copied())
+                            .unwrap_or(0);
                         if let Ok(mut it) = sh.items.lock() {
-                            let before: u64 = it.iter().take(p.item_index).map(|i| i.size).sum();
                             if let Some(i) = it.get_mut(p.item_index) {
                                 i.done = p.done_bytes.saturating_sub(before).min(i.size);
                             }
                         }
                     }
                     Event::ItemEnd { index, status } => {
+                        sh.dirty.store(true, Ordering::Relaxed);
                         if let Ok(mut it) = sh.items.lock() {
                             if let Some(i) = it.get_mut(index) {
                                 i.status = match status {
@@ -358,6 +384,10 @@ impl App {
         let Some(job) = &self.transfer else {
             return;
         };
+        // 바뀐 것이 없으면 항목 전체 복제(수만 개)도 없다(10-18).
+        if !job.shared.dirty.swap(false, Ordering::Relaxed) {
+            return;
+        }
         let items = job
             .shared
             .items
@@ -429,7 +459,10 @@ impl App {
                 let mut inv = Invalidations::default();
                 self.statusbar
                     .set_left(&trf("ops.progress", &[&pct]), &mut inv);
-                self.redraw();
+                // 퍼센트 글이 바뀐 틱만 창을 다시 그린다(종전 = 100 ms마다 무조건 · 10-18).
+                if !inv.is_empty() {
+                    self.redraw();
+                }
                 true
             }
         }

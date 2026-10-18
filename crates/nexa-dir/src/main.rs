@@ -247,6 +247,8 @@ struct App {
     viewport: (i32, i32),
     /// 포인터(장치 px) · 수식키.
     cursor: (i32, i32),
+    /// 마지막으로 OS에 넘긴 커서 모양 — 같은 모양이면 `set_cursor`를 부르지 않는다(마우스 이동마다 호출하던 것 · 10-18).
+    cursor_icon: winit::window::CursorIcon,
     shift: bool,
     primary: bool,
     alt: bool,
@@ -692,6 +694,7 @@ impl App {
             scale: 1.0,
             viewport: (0, 0),
             cursor: (0, 0),
+            cursor_icon: winit::window::CursorIcon::Default,
             shift: false,
             primary: false,
             alt: false,

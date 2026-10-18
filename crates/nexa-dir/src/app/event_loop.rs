@@ -451,7 +451,7 @@ impl ApplicationHandler<Wake> for App {
                         y: self.cursor.1,
                     };
                     let over_edge = self.panels.iter().any(|g| g.rows().resize_hot(p.x, p.y));
-                    w.set_cursor(match (&self.dnd_internal, self.split_at(p)) {
+                    let icon = match (&self.dnd_internal, self.split_at(p)) {
                         // 창 안 드래그(T-147) = 효과 커서(복사 · 이동 · 금지).
                         (Some(d), _) => app::dnd::drag_cursor(d.choice),
                         // 가로 경계(패널 ↔ 도크) = 위아래 화살표(dir2 IDC_SIZENS) · 세로 경계 = 좌우.
@@ -459,7 +459,11 @@ impl ApplicationHandler<Wake> for App {
                         (None, Some(_)) => winit::window::CursorIcon::ColResize,
                         (None, None) if over_edge => winit::window::CursorIcon::ColResize,
                         (None, None) => winit::window::CursorIcon::Default,
-                    });
+                    };
+                    if icon != self.cursor_icon {
+                        self.cursor_icon = icon;
+                        w.set_cursor(icon);
+                    }
                 }
             }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
