@@ -45,6 +45,23 @@ pub(crate) struct Tab {
     /// 내용이 낡았을 수 있다(dir2 X-44 S1): 배경 탭은 폴더 감시 대상이 아니라 그동안의 바깥 변경을 모른다 —
     /// 전환·닫기로 드러날 때 세우고, 호스트(`update_status`)가 [`Panel::refresh_stale`]로 다시 읽어 내린다.
     pub stale: bool,
+    /// 워커에서 읽는 중인 진입(10-18 결정 ② · `list.async_read`) — 결과는 [`Panel::nav_poll`](틱)이 적용한다.
+    pub pending: Option<PendingNav>,
+}
+
+/// 워커 열기 1건: 결과 채널 · 대상 · 적용 뒤 선택할 경로(위로/홈 = 떠난 폴더) · 히스토리 동작(적용 때 움직인다).
+pub(crate) struct PendingNav {
+    rx: std::sync::mpsc::Receiver<TreeSource>,
+    path: PathBuf,
+    select: Option<PathBuf>,
+    kind: NavKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NavKind {
+    Push,
+    Back,
+    Forward,
 }
 
 /// 정렬 키 목록 → `name+,size-`(T-128 세션 표기 · 빈 목록 = `""`).
@@ -100,6 +117,11 @@ pub(crate) struct Panel {
     drive_rx: Option<std::sync::mpsc::Receiver<crate::platform::DriveSpaces>>,
     opts: ListOpts,
     nav_up_align: ScrollAlign,
+    /// 비동기 폴더 읽기(10-18 결정 ② · `list.async_read` · 문턱 `list.async_wait_ms`) — 창이 있을 때만(`probe::is_async`).
+    async_read: bool,
+    async_wait_ms: u64,
+    #[cfg(test)]
+    async_force: bool,
     pressed: Option<Part>,
     /// 사용자가 열 폭을 바꿨다 — 배치가 기본 열을 다시 넣지 않는다(dir2 "사용자 폭 리셋 방지").
     user_cols: bool,
@@ -311,6 +333,7 @@ impl Panel {
                 locked: false,
                 pinned: false,
                 stale: false,
+                pending: None,
             }],
             active: 0,
             bounds: Rect::default(),
@@ -319,6 +342,10 @@ impl Panel {
             drive_rx: None,
             opts,
             nav_up_align: ScrollAlign::Center,
+            async_read: true,
+            async_wait_ms: 150,
+            #[cfg(test)]
+            async_force: false,
             pressed: None,
             user_cols: false,
             base_columns: Vec::new(),
@@ -1162,6 +1189,9 @@ impl Panel {
 
     /// 틱(목록 스크롤바 페이드 · 타입어헤드 · 툴팁) — 더 돌아야 하면 `inv.request_tick`.
     pub(crate) fn tick(&mut self, now_ms: u64, inv: &mut Invalidations) {
+        if self.nav_poll(inv) {
+            inv.push(self.bounds);
+        }
         self.tabs[self.active].rows.tick(now_ms, inv);
         // 빈 폴더 프로브 결과(워커 · 10-18) — 바뀐 마커만큼 목록을 다시 그린다.
         if self.tabs[self.active].rows.source_mut().drain_probes() {
@@ -1238,7 +1268,11 @@ impl Panel {
         self.tabbar
             .set_pinned(self.tabs.iter().map(|t| t.pinned).collect(), inv);
         let root = self.root_path();
-        self.pathbar.set_path(display_path(&root), inv);
+        // 워커가 읽는 중이면 경로 바는 이미 새 위치(결과가 올 때까지 목록만 옛것 · 10-18 결정 ②).
+        let shown = self
+            .nav_reading()
+            .map_or_else(|| root.clone(), Path::to_path_buf);
+        self.pathbar.set_path(display_path(&shown), inv);
         let at_root = ndir_vfs::is_virtual_root(&root);
         let (cb, cf) = (self.can_back(), self.can_forward());
         self.navbtns.set_item_enabled(BTN_BACK, cb, inv);
@@ -1277,6 +1311,7 @@ impl Panel {
             locked: false,
             pinned: false,
             stale: false,
+            pending: None,
         });
         self.active = self.tabs.len() - 1;
         self.navigated = true;
@@ -1417,6 +1452,7 @@ impl Panel {
                 locked: false,
                 pinned: false,
                 stale: false,
+                pending: None,
             },
         );
         self.active = i + 1;
@@ -1611,39 +1647,181 @@ impl Panel {
 
     /// 새 경로 진입(히스토리 push — 앞으로 절단). 열기 실패 시 현 위치 유지(경로 바는 복귀) · 실패 사유를 돌려준다.
     pub(crate) fn navigate_to(&mut self, path: PathBuf, inv: &mut Invalidations) -> Option<String> {
-        let src = TreeSource::open(&path, self.tab_opts());
-        if let Some(e) = src.error() {
-            let why = e.to_string();
-            self.sync_chrome(inv);
-            return Some(why);
-        }
-        self.tabs[self.active].nav.push(path);
-        self.apply_source(src, inv);
-        None
+        self.open_nav(path, NavKind::Push, None, inv)
     }
 
     pub(crate) fn nav_back(&mut self, inv: &mut Invalidations) {
-        let Some(p) = self.tabs[self.active].nav.back().map(Path::to_path_buf) else {
+        let Some(p) = self.tabs[self.active]
+            .nav
+            .peek_back()
+            .map(Path::to_path_buf)
+        else {
             return;
         };
-        let src = TreeSource::open(&p, self.tab_opts());
-        if src.error().is_some() {
-            let _ = self.tabs[self.active].nav.forward(); // 실패 — 위치 복원
-            return;
-        }
-        self.apply_source(src, inv);
+        let _ = self.open_nav(p, NavKind::Back, None, inv); // 실패 = 위치 그대로
     }
 
     pub(crate) fn nav_forward(&mut self, inv: &mut Invalidations) {
-        let Some(p) = self.tabs[self.active].nav.forward().map(Path::to_path_buf) else {
+        let Some(p) = self.tabs[self.active]
+            .nav
+            .peek_forward()
+            .map(Path::to_path_buf)
+        else {
             return;
         };
-        let src = TreeSource::open(&p, self.tab_opts());
-        if src.error().is_some() {
-            let _ = self.tabs[self.active].nav.back();
-            return;
+        let _ = self.open_nav(p, NavKind::Forward, None, inv);
+    }
+
+    /// 비동기 폴더 읽기 설정(`list.async_read` · `list.async_wait_ms`).
+    pub(crate) fn set_async_read(&mut self, on: bool, wait_ms: i64) {
+        self.async_read = on;
+        self.async_wait_ms = wait_ms.max(0) as u64;
+    }
+
+    /// 시험: 창 없이도 워커 경로를 쓴다.
+    #[cfg(test)]
+    pub(crate) fn force_async(&mut self) {
+        self.async_force = true;
+    }
+
+    fn async_enabled(&self) -> bool {
+        #[cfg(test)]
+        if self.async_force {
+            return self.async_read;
         }
-        self.apply_source(src, inv);
+        self.async_read && crate::filelist::probe::is_async()
+    }
+
+    /// 폴더 열기 한 길(10-18 결정 ②): 사전 점검(없음 · 권한) → 동기(창 없음 · 설정 끔)면 그 자리에서 · 아니면 워커에 맡기고
+    /// 문턱(`async_wait_ms`) 안에 끝나면 그 자리에서 적용 · 넘으면 `pending`(경로 바만 새 위치 · 목록은 결과가 올 때까지 옛것 ·
+    /// 결과는 [`Self::nav_poll`]). 히스토리는 적용 때 움직인다(연속 진입이면 앞 결과는 버려진다).
+    fn open_nav(
+        &mut self,
+        path: PathBuf,
+        kind: NavKind,
+        select: Option<PathBuf>,
+        inv: &mut Invalidations,
+    ) -> Option<String> {
+        if let Err(why) = TreeSource::can_open(&path) {
+            self.sync_chrome(inv);
+            return Some(why);
+        }
+        let opts = self.tab_opts();
+        if !self.async_enabled() {
+            let src = TreeSource::open(&path, opts);
+            if let Some(e) = src.error() {
+                let why = e.to_string();
+                self.sync_chrome(inv);
+                return Some(why);
+            }
+            self.tabs[self.active].pending = None;
+            let i = self.active;
+            self.apply_nav(i, src, kind, select, inv);
+            return None;
+        }
+        let rx = TreeSource::open_async(path.clone(), opts);
+        match rx.recv_timeout(std::time::Duration::from_millis(self.async_wait_ms)) {
+            Ok(src) => {
+                if let Some(e) = src.error() {
+                    let why = e.to_string();
+                    self.sync_chrome(inv);
+                    return Some(why);
+                }
+                self.tabs[self.active].pending = None;
+                let i = self.active;
+                self.apply_nav(i, src, kind, select, inv);
+                None
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                self.tabs[self.active].pending = Some(PendingNav {
+                    rx,
+                    path,
+                    select,
+                    kind,
+                });
+                self.sync_chrome(inv); // 경로 바 = 새 위치 · 상태줄 "읽는 중…"은 호스트(`update_status`)
+                None
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                self.sync_chrome(inv);
+                Some("enumeration worker stopped".into())
+            }
+        }
+    }
+
+    /// 열기 결과 적용(동기 · 워커 공용): 히스토리 이동 → 소스 교체(활성 탭 = 열 맞춤 · 크롬 · 선택 / 배경 탭 = 교체만).
+    fn apply_nav(
+        &mut self,
+        i: usize,
+        src: TreeSource,
+        kind: NavKind,
+        select: Option<PathBuf>,
+        inv: &mut Invalidations,
+    ) {
+        let tab = &mut self.tabs[i];
+        match kind {
+            NavKind::Push => tab.nav.push(src.path().to_path_buf()),
+            NavKind::Back => {
+                let _ = tab.nav.back();
+            }
+            NavKind::Forward => {
+                let _ = tab.nav.forward();
+            }
+        }
+        if i == self.active {
+            self.apply_source(src, inv);
+            if let Some(p) = select {
+                self.select_path(&p, inv);
+            }
+        } else {
+            tab.rows.replace_source(src, inv);
+            tab.stale = false;
+            self.session_dirty = true;
+            self.navigated = true;
+        }
+    }
+
+    /// 워커 열기 결과 수거(틱) — 적용했거나 버렸으면 `true`. 오류 결과(그 사이 사라짐)는 자리 유지 · 경로 바 복귀.
+    pub(crate) fn nav_poll(&mut self, inv: &mut Invalidations) -> bool {
+        let mut done = false;
+        for i in 0..self.tabs.len() {
+            let Some(p) = &self.tabs[i].pending else {
+                continue;
+            };
+            match p.rx.try_recv() {
+                Ok(src) => {
+                    let p = self.tabs[i].pending.take().expect("pending");
+                    if src.error().is_none() {
+                        self.apply_nav(i, src, p.kind, p.select, inv);
+                    } else if i == self.active {
+                        self.sync_chrome(inv);
+                    }
+                    done = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.tabs[i].pending = None;
+                    if i == self.active {
+                        self.sync_chrome(inv);
+                    }
+                    done = true;
+                }
+            }
+        }
+        done
+    }
+
+    /// 어느 탭이든 워커가 읽는 중인가(이벤트 루프 깨움 · 덤프 대기).
+    pub(crate) fn nav_pending(&self) -> bool {
+        self.tabs.iter().any(|t| t.pending.is_some())
+    }
+
+    /// 활성 탭이 읽는 중인 대상(경로 바 · 상태줄 "읽는 중…").
+    pub(crate) fn nav_reading(&self) -> Option<&Path> {
+        self.tabs[self.active]
+            .pending
+            .as_ref()
+            .map(|p| p.path.as_path())
     }
 
     /// 위로(부모 폴더) — **떠난 폴더를 자동 선택**(dir2 G-7 · `list.nav_up_align`). 드라이브 루트에서는 가상 최상위(내 PC)로.
@@ -1656,9 +1834,7 @@ impl Panel {
             Some(p) if !p.as_os_str().is_empty() => p,
             _ => PathBuf::from(ndir_vfs::MY_PC),
         };
-        if self.navigate_to(parent, inv).is_none() {
-            self.select_path(&left, inv);
-        }
+        let _ = self.open_nav(parent, NavKind::Push, Some(left), inv); // 떠난 폴더 선택은 결과 적용 때
     }
 
     /// [홈] — 깊이와 무관하게 내 PC로 한 번에(dir2 08-01) · 떠난 위치를 선택.
@@ -1667,12 +1843,12 @@ impl Panel {
         if ndir_vfs::is_virtual_root(&left) {
             return;
         }
-        if self
-            .navigate_to(PathBuf::from(ndir_vfs::MY_PC), inv)
-            .is_none()
-        {
-            self.select_path(&left, inv);
-        }
+        let _ = self.open_nav(
+            PathBuf::from(ndir_vfs::MY_PC),
+            NavKind::Push,
+            Some(left),
+            inv,
+        );
     }
 
     pub(crate) fn set_nav_up_align(&mut self, align: ScrollAlign) {

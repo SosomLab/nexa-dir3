@@ -99,8 +99,14 @@ impl ApplicationHandler<Wake> for App {
         let now = Instant::now();
         let now_ms = self.started.elapsed().as_millis() as u64;
         let mut inv = Invalidations::default();
+        let reading = self.panels.iter().any(panel::Panel::nav_pending);
         for p in &mut self.panels {
             p.tick(now_ms, &mut inv);
+        }
+        // 워커 열기(10-18 결정 ②)가 끝났으면 상태줄 · 도크 · 감시 대상을 새 폴더로.
+        if reading && !self.panels.iter().any(panel::Panel::nav_pending) {
+            self.update_status();
+            self.watch_next = now;
         }
         // OS 파일 열기 큐(macOS Finder/Dock/`open -a` · nexa-sys 212차 · 10-18) — 비어 있으면 잠금 한 번.
         self.pump_os_open_files(&mut inv);
@@ -262,7 +268,7 @@ impl ApplicationHandler<Wake> for App {
         if self
             .panels
             .iter()
-            .any(|p| p.probes_pending() || p.drive_space_pending())
+            .any(|p| p.probes_pending() || p.drive_space_pending() || p.nav_pending())
         {
             next = next.min(now + Duration::from_millis(50));
         }

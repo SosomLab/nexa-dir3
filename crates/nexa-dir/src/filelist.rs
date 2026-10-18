@@ -250,6 +250,32 @@ impl TreeSource {
         s
     }
 
+    /// 열 수 있는가 — 싼 사전 점검(핸들만 연다 · 열거 없음): 없는 경로 · 권한 없음을 **그 자리에서** 알린다(워커 열기 앞 · 10-18 결정 ②).
+    pub(crate) fn can_open(path: &Path) -> Result<(), String> {
+        if ndir_vfs::is_virtual_root(path) {
+            return Ok(());
+        }
+        std::fs::read_dir(path)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// 워커에서 연다(10-18 결정 ② · 큰 폴더 · 네트워크가 UI를 멈추지 않게) — 결과 채널. 수신자를 버리면 결과도 버려진다
+    /// (연속 진입 = 탭의 `pending` 교체가 세대 가드).
+    pub(crate) fn open_async(
+        path: PathBuf,
+        opts: ListOpts,
+    ) -> std::sync::mpsc::Receiver<TreeSource> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("ndir-enum".into())
+            .spawn(move || {
+                let _ = tx.send(TreeSource::open(&path, opts));
+            })
+            .expect("spawn enum worker");
+        rx
+    }
+
     /// 스스로 읽은 지 `within` 안이고 폴더 수정 시각이 그때와 같은가(= 감시 통지가 우리 변경의 메아리) — 가상 최상위 · 수정 시각을
     /// 못 읽는 위치는 거짓(억제 없음).
     pub(crate) fn self_fresh(&self, within: std::time::Duration) -> bool {

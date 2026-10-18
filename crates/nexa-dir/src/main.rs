@@ -659,6 +659,10 @@ impl App {
         let mode = view_mode_of(settings.get("list.view_mode").unwrap_or("tree"));
         for p in &mut panels {
             p.set_nav_up_align(nav_up_align(&settings));
+            p.set_async_read(
+                settings.flag("list.async_read"),
+                settings.int("list.async_wait_ms"),
+            );
             if session.is_none() {
                 p.set_view_mode(mode, &mut inv);
             }
@@ -934,7 +938,12 @@ impl App {
         // 세션 더러움 수거 길목(dir2 PREFS-051: update_status가 양 패널 플래그를 거둔다).
         self.session_collect_dirty(Instant::now());
         let p = &self.panels[self.active];
-        let left = p.status_text();
+        // 워커가 읽는 중(10-18 결정 ②)이면 "폴더 읽는 중…" — 결과가 오면 틱이 다시 부른다.
+        let left = if p.nav_reading().is_some() {
+            tr("list.reading")
+        } else {
+            p.status_text()
+        };
         let right = trf(
             "status.tab",
             &[

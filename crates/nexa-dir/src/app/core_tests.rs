@@ -5754,6 +5754,60 @@ fn context_targets_keep_only_carets_parent() {
     assert_eq!(context_targets(sel.clone(), Some(&p("/other/x.txt"))), sel);
 }
 
+/// 10-18 결정 ② 비동기 폴더 읽기(`list.async_read` · 문턱 `list.async_wait_ms`): 문턱 0 = 늘 워커 → 진입 직후엔 옛 목록 + 경로 바는
+/// 새 경로 → 틱이 결과를 받으면 적용(히스토리 push) · 위로는 떠난 폴더 선택 · 연속 진입은 마지막 것만 · 없는 경로는 그 자리에서 실패 ·
+/// 뒤로의 히스토리는 결과 적용 때 움직인다.
+#[test]
+fn async_navigation_applies_on_tick() {
+    let (mut app, dir) = fixture("asyncnav");
+    app.layout_for(1200, 800, 1.0);
+    app.panels[0].force_async();
+    app.panels[0].set_async_read(true, 0);
+    let sub = dir.join("sub");
+    let mut inv = Invalidations::default();
+    assert!(app.panels[0].navigate_to(sub.clone(), &mut inv).is_none());
+    assert!(app.panels[0].nav_pending(), "워커에 맡김");
+    assert_eq!(app.panels[0].root_path(), dir, "결과 전 = 옛 목록");
+    assert_eq!(app.panels[0].nav_reading(), Some(sub.as_path()));
+    assert_eq!(
+        app.panels[0].pathbar.path(),
+        filelist::display_path(&sub),
+        "경로 바 = 새 위치"
+    );
+    app.nav_wait(Duration::from_secs(5));
+    assert!(!app.panels[0].nav_pending());
+    assert_eq!(app.panels[0].root_path(), sub);
+    assert!(app.panels[0].can_back());
+    // 위로 = 떠난 폴더 선택(결과 뒤).
+    app.panels[0].nav_up(&mut inv);
+    app.nav_wait(Duration::from_secs(5));
+    assert_eq!(app.panels[0].root_path(), dir);
+    let caret = app.panels[0].rows().caret().expect("caret");
+    assert_eq!(
+        app.panels[0].rows().source().row_path(caret).as_deref(),
+        Some(sub.as_path())
+    );
+    // 연속 진입 = 마지막 것만(앞 결과는 버린다).
+    let _ = app.panels[0].navigate_to(sub.clone(), &mut inv);
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    app.nav_wait(Duration::from_secs(5));
+    assert_eq!(app.panels[0].root_path(), dir);
+    // 없는 경로 = 그 자리에서 실패 · 자리 유지 · 경로 바 복귀.
+    assert!(app.panels[0]
+        .navigate_to(dir.join("nope"), &mut inv)
+        .is_some());
+    assert!(!app.panels[0].nav_pending());
+    assert_eq!(app.panels[0].root_path(), dir);
+    assert_eq!(app.panels[0].pathbar.path(), filelist::display_path(&dir));
+    // 뒤로(워커) = 히스토리는 결과 적용 때.
+    assert!(app.panels[0].can_back());
+    app.panels[0].nav_back(&mut inv);
+    assert_eq!(app.panels[0].root_path(), dir, "결과 전 = 자리 그대로");
+    app.nav_wait(Duration::from_secs(5));
+    assert_eq!(app.panels[0].root_path(), sub);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 10-18 결정 ③ 자기 변경 억제(`watch.self_window_ms`): 탭이 스스로 다시 읽은 직후 온 감시 통지는 폴더 수정 시각이 같으면
 /// 메아리 = 생략 · 실제로 바뀌었으면(수정 시각 다름) 읽는다 · 감시가 읽은 것은 창을 열지 않는다(연속 통지 = 매번) · 0 = 끔.
 #[test]

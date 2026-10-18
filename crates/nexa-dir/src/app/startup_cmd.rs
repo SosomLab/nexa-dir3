@@ -32,6 +32,12 @@ pub(crate) fn is_wait_cmd(id: &str) -> bool {
 
 impl App {
     pub(crate) fn startup_cmd(&mut self, id: &str) {
+        self.startup_cmd_inner(id);
+        // 워커 폴더 열기(10-18 결정 ②)가 걸려 있으면 다음 명령 전에 끝낸다 — 시나리오의 `nav:` → `list.select` 순서가 동기 때와 같다.
+        self.nav_wait(Duration::from_secs(10));
+    }
+
+    fn startup_cmd_inner(&mut self, id: &str) {
         crash::note_command(id);
         // 예약된 도크 갱신(T-177 디바운스)은 기동 명령 앞에서 먼저 흘려보낸다 — 덤프 · 단언이 최신 도크를 본다(결정적).
         if self.docks_due.is_some() {
@@ -510,7 +516,8 @@ impl App {
         if self.docks_due.is_some() {
             self.update_docks();
         }
-        // 미리보기 워커(10-18)가 계산 중이면 결과까지 기다린다(상한 5 s).
+        // 워커 폴더 열기 → 미리보기 워커(10-18)가 계산 중이면 결과까지 기다린다(상한).
+        self.nav_wait(Duration::from_secs(10));
         self.preview_wait(Duration::from_secs(5));
         self.probe_wait(Duration::from_secs(2));
         Some(match target {

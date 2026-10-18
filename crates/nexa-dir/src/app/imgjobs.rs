@@ -255,6 +255,24 @@ impl App {
         }
     }
 
+    /// 워커 폴더 열기(10-18 결정 ②)가 끝날 때까지(덤프 · 기동 명령 순서 보장 · 상한) — 결과가 오면 상태줄까지 맞춘다.
+    pub(crate) fn nav_wait(&mut self, limit: Duration) {
+        let at = Instant::now();
+        while self.panels.iter().any(panel::Panel::nav_pending) && at.elapsed() < limit {
+            let now_ms = self.started.elapsed().as_millis() as u64;
+            let mut inv = Invalidations::default();
+            for p in &mut self.panels {
+                p.tick(now_ms, &mut inv);
+            }
+            if !inv.is_empty() {
+                self.update_status();
+                self.redraw();
+                continue;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     /// 워커 결과를 기다린다(덤프·단언 · T4 결정성 · 상한 안에서) — 창 없는 시험은 동기 경로라 기다릴 것이 없다.
     pub(crate) fn preview_wait(&mut self, limit: Duration) {
         let at = Instant::now();

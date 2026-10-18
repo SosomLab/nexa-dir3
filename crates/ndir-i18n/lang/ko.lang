@@ -259,6 +259,7 @@ status.show = 표시
 status.hide = 감춤
 panel.left = 좌
 panel.right = 우
+list.reading = 폴더 읽는 중…
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제
@@ -532,6 +533,10 @@ pref.sortFoldersFirst = 폴더 우선 정렬
 pref.sortFoldersFirst.desc = 정렬 방향과 무관하게 폴더를 파일보다 앞에 모읍니다. 새 탭의 기본값입니다 — 이미 열린 탭은 도구 모음의 토글로 탭마다 바꿉니다.
 pref.hideEmptyGlyph = 빈 폴더의 펼침 글리프 숨김
 pref.hideEmptyGlyph.desc = 현재 보기(숨김/점 파일 필터)로 보여줄 내용이 없는 폴더는 트리 펼침 글리프를 그리지 않습니다. 보기 옵션 변경으로 내용이 보이면 다시 표시됩니다.
+pref.listAsyncRead = 폴더를 백그라운드에서 읽기
+pref.listAsyncRead.desc = 진입 · 뒤로/앞으로 · 위로 때 폴더 열거를 워커 스레드에서 해 큰 폴더나 네트워크 폴더가 창을 멈추지 않게 합니다. 새 목록이 준비될 때까지 이전 목록이 남습니다. 끄면 종전처럼 UI 스레드에서 읽습니다.
+pref.listAsyncWait = 백그라운드 읽기 문턱(ms)
+pref.listAsyncWait.desc = 워커를 이만큼 기다린 뒤에도 안 끝나면 이전 목록을 보여 주며 "읽는 중…"을 표시합니다. 작은 폴더는 이 안에 끝나 종전처럼 바로 보입니다. 0 = 늘 이전 목록부터.
 pref.viewScope = 보기 옵션 관리 방법
 pref.viewScope.desc = 도구 모음·보기 메뉴의 숨김 파일·Dot 파일·폴더 우선·대소문자 구분 정렬·자연 정렬 토글을 어디까지 함께 적용할지 정합니다. 전체 통일 = 두 패널의 모든 탭 · 좌/우 패널 = 그 패널의 모든 탭 · 탭 = 그 탭만 · 폴더 = 같은 폴더를 보는 탭은 좌우 어디든 함께 바뀌고 폴더마다 기억합니다. 설정 창의 체크박스는 새 탭(기억이 없는 폴더)의 기본값만 정합니다.
 pref.viewScope.global = 전체 통일

@@ -91,6 +91,15 @@ impl App {
                     p.set_nav_up_align(a);
                 }
             }
+            "list.async_read" | "list.async_wait_ms" => {
+                let (on, wait) = (
+                    self.settings.flag("list.async_read"),
+                    self.settings.int("list.async_wait_ms"),
+                );
+                for p in &mut self.panels {
+                    p.set_async_read(on, wait);
+                }
+            }
             "window.always_on_top" => {
                 if let Some(w) = &self.window {
                     w.set_window_level(if self.settings.flag("window.always_on_top") {

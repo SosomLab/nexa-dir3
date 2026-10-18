@@ -927,6 +927,25 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 비동기 폴더 읽기(10-18 결정 ② · 고급): 진입 · 뒤/앞 · 위로/홈의 열거를 워커에서(큰 폴더 · 네트워크가 UI를 멈추지 않음) —
+    // 문턱(ms) 안에 끝나면 그 자리에서 적용(작은 폴더 = 종전과 같은 체감) · 넘으면 옛 목록을 보여 주며 기다린다(경로 바는 새 경로 ·
+    // 상태줄 "읽는 중…"). 끄면 동기(종전). 창이 없는 시험·헤드리스는 늘 동기.
+    e!(
+        "list.async_read",
+        CAT_LIST,
+        "pref.listAsyncRead",
+        "pref.listAsyncRead.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "list.async_wait_ms",
+        CAT_LIST,
+        "pref.listAsyncWait",
+        "pref.listAsyncWait.desc",
+        Int { min: 0, max: 5000 },
+        "150"
+    ),
     e!(
         "list.sort_case_sensitive",
         CAT_LIST,
@@ -2247,6 +2266,8 @@ pub const HIDDEN: &[&str] = &[
     "license.gates",
     "list.view_mode",
     "list.col_width_sync",
+    "list.async_read",
+    "list.async_wait_ms",
     "plugins.disabled",
     "cloud.conns",
 ];

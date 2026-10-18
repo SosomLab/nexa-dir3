@@ -47,6 +47,17 @@ impl History {
         self.pos + 1 < self.entries.len()
     }
 
+    /// 뒤로 갈 자리(이동 없음 · 워커 열기가 끝난 뒤 `back`으로 옮긴다 · 10-18 결정 ②).
+    pub(crate) fn peek_back(&self) -> Option<&Path> {
+        self.can_back()
+            .then(|| self.entries[self.pos - 1].as_path())
+    }
+
+    pub(crate) fn peek_forward(&self) -> Option<&Path> {
+        self.can_forward()
+            .then(|| self.entries[self.pos + 1].as_path())
+    }
+
     pub(crate) fn back(&mut self) -> Option<&Path> {
         if !self.can_back() {
             return None;
