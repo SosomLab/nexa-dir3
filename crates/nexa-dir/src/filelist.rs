@@ -286,11 +286,8 @@ impl TreeSource {
                 for dir in &expanded {
                     let _ = t.expand_path(dir);
                 }
-                for path in &selected {
-                    if let Some(id) = t.index_of_path(path).and_then(|i| t.visible_id(i)) {
-                        t.select(id, ndir_tree::SelectMode::Toggle);
-                    }
-                }
+                // 선택 복원 = 색인 한 번(O(n + k) · 종전 경로마다 선형 검색 · 10-18).
+                let _ = t.select_paths(&selected);
                 self.tree = Some(t);
                 self.error = None;
             }

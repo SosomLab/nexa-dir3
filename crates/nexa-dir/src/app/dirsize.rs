@@ -432,7 +432,7 @@ impl App {
         let live = self.dirsizes.tick(now);
         // 상태 전이는 즉시 · 진행값은 250 ms마다(종전 "재는 중이면 틱마다" = 그리기 → 틱 → 그리기 고리 · 10-08 프레임 계측).
         if self.dirsizes.take_display_due(now) {
-            self.update_docks();
+            self.update_docks_filtered(true); // 정보 도크만(미리보기 도크는 건드리지 않는다 · 10-18)
             self.redraw();
         }
         live

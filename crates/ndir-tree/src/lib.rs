@@ -586,6 +586,28 @@ impl Tree {
         })
     }
 
+    /// 여러 경로를 한 번에 선택(Toggle · 새 트리의 선택 복원용) — 가시 목록 색인을 **한 번** 만들어 O(n + k)(종전 `index_of_path`를
+    /// 경로마다 = O(n·k) · 1만 선택 × 1만 행 = 1억 비교 · 10-18 체감 점검). 비교 규칙은 [`Self::index_of_path`]와 같다. 돌려주는 값 = 선택한 수.
+    pub fn select_paths(&mut self, targets: &[String]) -> usize {
+        if targets.is_empty() {
+            return 0;
+        }
+        let norm = |s: &str| s.trim_end_matches(['\\', '/']).to_ascii_lowercase();
+        let map: std::collections::HashMap<String, NodeId> = self
+            .visible
+            .iter()
+            .map(|&id| (norm(&self.nodes[id as usize].path.to_string_lossy()), id))
+            .collect();
+        let mut n = 0;
+        for t in targets {
+            if let Some(&id) = map.get(&norm(t)) {
+                self.select(id, SelectMode::Toggle);
+                n += 1;
+            }
+        }
+        n
+    }
+
     /// `id`의 펼침 하위(자식과 그 펼친 후손)를 가시 순서(DFS)로 `out`에 모은다.
     fn collect_subtree(&self, id: NodeId, out: &mut Vec<NodeId>) {
         for &c in &self.nodes[id as usize].children {
@@ -997,6 +1019,32 @@ mod tests {
     use super::*;
     use std::fs;
     use std::time::Instant;
+
+    /// `select_paths`(10-18): 가시 경로 여럿을 한 번에 · 없는 경로·끝 구분자·대소문자 차이는 `index_of_path` 규칙 그대로 · 10만 행 × 1만 선택이 1초 안.
+    #[test]
+    fn select_paths_restores_many_in_linear_time() {
+        let mut t = Tree::synthetic(100, 1000);
+        let roots: Vec<NodeId> = (0..t.visible_len())
+            .filter_map(|i| t.visible_id(i))
+            .collect();
+        for id in roots {
+            t.expand(id).unwrap();
+        }
+        let n = t.visible_len();
+        assert!(n >= 100_000, "{n}");
+        let picks: Vec<String> = (0..n)
+            .step_by(10)
+            .filter_map(|i| t.visible_id(i))
+            .filter_map(|id| t.node_path(id))
+            .map(|p| format!("{}/", p.to_string_lossy().to_ascii_uppercase()))
+            .collect();
+        let at = Instant::now();
+        let got = t.select_paths(&picks);
+        assert_eq!(got, picks.len());
+        assert_eq!(t.selection_count(), picks.len());
+        assert!(at.elapsed().as_secs() < 2, "{:?}", at.elapsed());
+        assert_eq!(t.select_paths(&["/nope/none".into()]), 0);
+    }
 
     /// AC5 벤치(NFR-P1/P2, docs/07·29) — 10만 가시 노드에서 트리 연산이 UI 프레임 예산 안인지.
     /// 타이밍 단언은 CI 머신 편차로 불안정하므로 하지 않고(`--ignored`로 수동 측정),

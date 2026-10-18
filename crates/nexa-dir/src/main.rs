@@ -964,6 +964,12 @@ impl App {
     /// 도크 내용(dir2 `update_dock_info`): 단일 정보 = 좌 도크의 원천은 **활성 패널** · 종류 0 정보 · 1 미리보기 · 2 터미널(T-61).
     /// 키 = 종류 + 대상(선택 경로·없으면 현재 폴더) → 같은 대상의 갱신은 스크롤·선택 유지.
     pub(crate) fn update_docks(&mut self) {
+        self.update_docks_filtered(false);
+    }
+
+    /// `info_only` = 정보 도크(종류 0)만 다시 계산(폴더 크기 진행값 250 ms마다 — 종전에는 반대 도크의 미리보기(압축 목록 · 플러그인)까지
+    /// 매번 다시 돌렸다 · 10-18 체감 점검).
+    pub(crate) fn update_docks_filtered(&mut self, info_only: bool) {
         self.docks_due = None;
         let t0 = crate::input::trace_frames().then(Instant::now);
         let single_info =
@@ -989,10 +995,13 @@ impl App {
             if self.docks[i].bounds().h <= 0 {
                 continue;
             }
+            let kind = self.docks[i].active_kind();
+            if info_only && kind != 0 {
+                continue;
+            }
             let src = if single_info { self.active } else { i };
             let selected = self.panels[src].selected_paths();
             let current = self.panels[src].root_path();
-            let kind = self.docks[i].active_kind();
             let (lines, image) = match kind {
                 1 => {
                     let out = dockinfo::preview_content(&selected, &map, &disabled);

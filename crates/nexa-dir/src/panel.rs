@@ -1881,9 +1881,15 @@ impl Panel {
             .collect()
     }
 
-    /// 다시 읽기(각 탭 **자기 보기 옵션 그대로** · 캐럿·스크롤 유지).
+    /// 다시 읽기(활성 탭 **자기 보기 옵션 그대로** · 캐럿·스크롤 유지). 배경 탭은 다시 읽지 않고 **낡음**만 세운다(10-18 체감 점검:
+    /// 감시 통지·파일 작업 뒤마다 모든 탭을 동기 재열거하던 낭비 — 배경 탭은 어차피 전환 때 `stale`로 다시 읽는다 · dir2 X-44 S1).
     pub(crate) fn reopen(&mut self, inv: &mut Invalidations) {
-        for tab in &mut self.tabs {
+        let active = self.active;
+        for (i, tab) in self.tabs.iter_mut().enumerate() {
+            if i != active {
+                tab.stale = true;
+                continue;
+            }
             let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
             tab.rows.source_mut().reload();
             tab.rows.restore_view(caret, sr, sx, inv);
