@@ -2,11 +2,12 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-20 갱신 · Windows PC 세션 · [journal 10-20 §1](journal/2026-10-20.md) · [10-18 §1~§19](journal/2026-10-18.md) — 그 전 10-10 Linux PC 212차 내용은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-20 갱신 · Windows PC 세션 · [journal 10-20 §1~§2](journal/2026-10-20.md) · [10-18 §1~§19](journal/2026-10-18.md) — 그 전 10-10 Linux PC 212차 내용은 아래 항목에 그대로)
 
-- **★ 이번 회차(10-20 · Windows PC · 개발 세션 "개발" cf35bd · 협업 세션 "협업" · [journal 10-20 §1](journal/2026-10-20.md))**:
+- **★ 릴리스 v0.26.0 ✓(10-20 §2)**: 태그 = b31d3cd(주석 · 영어) · 선검증 run 39409180559 ✓ → release run 39409869078 전 잡 ✓ · Release 공개 10:48:41Z · 자산 9 · brew 탭 f1dc8a6 · linux-repo ✓ · **winget PR #456730 · #456731 OPEN** · **choco `nexa-dir`/`.portable` 0.26.0 pushed(검수 대기)** · 0.25.0 = winget MERGED · choco Approved → 전 채널 게시 · 남은 = winget/choco 검수 추적 · 설치본 교체(사용자 확인).
+- **★ 이번 회차(10-20 · Windows PC · 개발 세션 "개발" cf35bd · 협업 세션 "협업" · [journal 10-20 §1~§2](journal/2026-10-20.md))**:
   - **개발 완료**: T-191 메뉴 영역 간 배타 + 닫는 클릭 동작 설정(4d21f6c · NEW-049) — `ui.ctxmenu_exclusive` · `ui.ctxmenu_passthrough`(nexa-sql 같은 키 · 기본 on) · 메뉴 바 풀다운 ↔ 우클릭/상태줄 칸 팝업 배타 · 키 입력은 제외(사용자 결정 · nexa-sql과 다름) · 통과한 우클릭 메뉴가 옛 자리에 뜨던 잠복 결함 수정.
-  - 전수 = gate full **639/0 · selfcheck 23/0 · T4 36/0**(4d21f6c) · CI run 39404112488(4d21f6c) ✓(3-OS · plugins) · 앱 = target\debug(4d21f6c) PID 26816.
+  - 전수 = gate full **639/0 · selfcheck 23/0 · T4 36/0**(b31d3cd · 0.26.0) · CI run 39409162608(b31d3cd) ✓(3-OS · plugins) · 앱 = target\debug(4d21f6c) PID 26816 · 마지막 push = 이 기록 커밋(그 전 b31d3cd · 태그 v0.26.0) · 로컬 main = 원격 main(브랜치 없음).
   - **🖐 실기 대기**: journal 10-20 §1 끝의 4항목(풀다운 열린 채 행 우클릭 · 통과 끔 · 상태줄 칸 재클릭 감춤 · 메뉴 열린 채 Delete) + 10-19 T-190 4건(아래 항목 그대로).
   - **후보**: T-192 `ui.menus_close_on_blur`(다른 창 포커스 = 메뉴 닫기 · 범위 밖으로 남김).
 - **★ 앞 회차(10-18 · Windows PC · 개발 nexa-dir3-62 · 협업 nexa-dir3-2d · 요약 = [journal 10-18 §17](journal/2026-10-18.md))**:
