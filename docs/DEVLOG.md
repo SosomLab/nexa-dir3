@@ -2,6 +2,10 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-10-20
+
+- **T-191 메뉴 영역 간 배타 + 닫는 클릭 동작 설정**(4d21f6c · NEW-049 · `ui.ctxmenu_exclusive`/`ui.ctxmenu_passthrough` 기본 on · 키 입력은 제외 · 통과 우클릭 메뉴 앵커 결함 수정) · gate full 639/0 · T4 36/0 · CI run 39404112488 ✓ · 🖐 실기 대기 → [10-20 §1](journal/2026-10-20.md)
+
 ## 2026-10-18
 
 - **T-190 ① 부분 다시 그리기**(683b9ec · `gfx.partial_redraw` · 부분 paint ≈ 0.9 ms vs 전체 1.8~2.7 ms) → T-190 4건 모두 구현 → [10-18 §19](journal/2026-10-18.md)

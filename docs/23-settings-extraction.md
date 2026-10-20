@@ -163,6 +163,8 @@
 | — | `app/windows.rs` · `wingeom::Memo` | 로그 창 위치/크기 기억 | "" | 숨김(HIDDEN · 자동 저장) | `window.log_pos` · `window.log_size`(NEW-001 · T-92) | ✅ 10-05 §77(f2f2f1d) |
 | 이름 정렬 = 글자 순(file10 < file2) | ndir-tree `cmp_natural` · `app/settings.rs::apply_natural_sort` | 숫자 구간을 값으로 비교할지 | — | 설정(새 탭 기본값 · 탭 소유 · 기본 on · 끄면 dir2 순서 · 토글 `view.natural_sort`는 `list.view_scope` 범위만큼 · 10-08) | `list.sort_natural`(NEW-035) | ✅ 10-05 §47(b54ce4f) · 10-08 §11(7dba73d) 탭 보기 옵션 |
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
+| 탭 메뉴 = 바깥 클릭이 닫고 통과 · 메뉴 바 = 닫고 소비(비대칭 · dir3 종전) | `app/input.rs::{menu_exclusive_step, open_menu_bits, menu_hit_bits, close_menu_bits}` | 메뉴 영역 간 배타 — 열린 메뉴(메뉴 바 풀다운 · 우클릭/상태줄 칸 팝업) 밖 좌/우 클릭 = 닫기 · 새로 열린 메뉴가 있으면 먼저 열린 것 닫기 · 키·글자는 대상 아님(열린 메뉴가 받음) · 끄면 종전 | on | 설정(취향) | `ui.ctxmenu_exclusive`(T-191 · NEW-049 · nexa-sql 같은 키) | ✅ 10-20 §1(4d21f6c) |
+| (위와 같음) | `app/input.rs::menu_exclusive_step`(`stop = !passthrough`) | 메뉴를 닫는 클릭을 바로 진행할지(켬 = 다른 곳 우클릭이면 새 메뉴 즉시 · 끔 = 닫기만, 다시 클릭) | on | 설정(취향 · DEPENDS `ui.ctxmenu_exclusive` on) | `ui.ctxmenu_passthrough`(T-191 · NEW-049) | ✅ 10-20 §1(4d21f6c) |
 | **보조 창·위젯** | | | | | | |
 | 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |
 | 1200 / 700 ms | `license_win.rs:49-50` | 플래시 유지 · 페이드 | — | 고급 | `ui.flash_hold_ms` · `ui.flash_fade_ms` | ☐ |
