@@ -9226,3 +9226,144 @@ fn bulk_rename_opens_second_window_with_one_card() {
     assert_eq!(app.bulk_open_count(), 0, "창 없는 시험 = 열린 창 0");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 메뉴 영역 간 배타(T-191 · 사용자 10-20 · nexa-sql `ui.ctxmenu_exclusive`/`ui.ctxmenu_passthrough` 이식): 풀다운 · 팝업(우클릭 ·
+/// 상태줄 칸)이 서로 배타 · 닫는 클릭을 바로 진행할지(통과) 닫기만 할지는 설정 · 안 클릭은 메뉴 몫 · 꺼지면 종전 경로.
+#[test]
+fn menus_are_exclusive_across_areas_with_passthrough_setting() {
+    let (mut app, dir) = fixture("menuexcl");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let click = |app: &mut App, x: i32, y: i32| {
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    let seg = |app: &App, id: &str| {
+        let r = app.statusbar.seg_rect(id).expect("seg");
+        (r.x + 4, r.y + 4)
+    };
+    let m = app.menubar.bounds();
+    let label = (m.x + 20, m.y + m.h / 2);
+    assert!(
+        app.settings.flag("ui.ctxmenu_exclusive") && app.settings.flag("ui.ctxmenu_passthrough"),
+        "기본 = 둘 다 켬(nexa-sql과 같음)"
+    );
+    // ① 상태줄 cpu 팝업이 열린 채 메뉴 바 라벨 클릭 = 팝업 닫힘(기억도 해제) + 풀다운이 바로 열린다(통과).
+    let cpu = seg(&app, "cpu");
+    click(&mut app, cpu.0, cpu.1);
+    assert!(app.tab_menu.is_open() && app.status_popup.as_deref() == Some("cpu"));
+    assert_eq!(app.open_menu_bits(), super::input::MENU_POPUP);
+    click(&mut app, label.0, label.1);
+    assert!(
+        !app.tab_menu.is_open() && app.status_popup.is_none(),
+        "① 팝업 닫힘"
+    );
+    assert!(app.menubar.is_open(), "① 풀다운이 바로 열린다");
+    // ② 풀다운이 열린 채 상태줄 우클릭 = 풀다운 닫힘 + 상태줄 메뉴가 바로 뜬다(종전 = 우클릭이 풀다운에 삼켜져 아무 일도 없었다).
+    let mem = seg(&app, "mem");
+    app.route(InputEvent::RightDown { x: mem.0, y: mem.1 });
+    assert!(!app.menubar.is_open(), "② 풀다운 닫힘");
+    assert!(app.tab_menu.is_open(), "② 상태줄 메뉴가 바로");
+    assert!(matches!(
+        app.ctx_kind,
+        Some(crate::app::ctxmenu::CtxKind::Aux(_))
+    ));
+    // ③ 열린 메뉴 안 = 그 메뉴 몫(배타 단계는 끼어들지 않는다) · 풀다운은 띠도 제 몫(라벨 전환·토글).
+    let inside = app.tab_menu.bounds();
+    let p_in = Point {
+        x: inside.x + 4,
+        y: inside.y + 4,
+    };
+    assert_eq!(app.menu_hit_bits(p_in), super::input::MENU_POPUP);
+    assert_eq!(
+        app.menu_hit_bits(Point {
+            x: label.0,
+            y: label.1
+        }),
+        0,
+        "닫힌 메뉴 바는 히트가 아니다"
+    );
+    click(&mut app, label.0, label.1);
+    assert!(app.menubar.is_open() && !app.tab_menu.is_open());
+    assert_eq!(
+        app.menu_hit_bits(Point {
+            x: label.0,
+            y: label.1
+        }),
+        super::input::MENU_BAR,
+        "③ 열린 메뉴 바의 띠 = 메뉴 바 몫"
+    );
+    let pop = app.menubar.popup_bounds();
+    assert_eq!(
+        app.menu_hit_bits(Point {
+            x: pop.x + 4,
+            y: pop.y + 4
+        }),
+        super::input::MENU_BAR
+    );
+    // ④ 통과 끔 = 바깥 클릭은 닫기만 · 한 번 더 눌러야 그 자리 동작.
+    let _ = app.settings.set("ui.ctxmenu_passthrough", "off");
+    app.route(InputEvent::RightDown { x: mem.0, y: mem.1 });
+    assert!(
+        !app.menubar.is_open() && !app.tab_menu.is_open(),
+        "④ 닫기만"
+    );
+    app.route(InputEvent::RightDown { x: mem.0, y: mem.1 });
+    assert!(app.tab_menu.is_open(), "④ 두 번째 우클릭에 열린다");
+    click(&mut app, label.0, label.1);
+    assert!(
+        !app.tab_menu.is_open() && !app.menubar.is_open(),
+        "④ 라벨 클릭도 닫기만"
+    );
+    click(&mut app, label.0, label.1);
+    assert!(app.menubar.is_open());
+    click(&mut app, label.0, label.1);
+    assert!(!app.menubar.is_open(), "라벨 재클릭 = 토글(메뉴 바 몫)");
+    // ⑤ 상태줄 칸 팝업도 같은 규칙(통과 끔): 다른 칸 클릭 = 닫기만 → 한 번 더 = 그 칸 팝업 · 같은 칸 재클릭 = 닫힘 → 또 누르면 열림.
+    click(&mut app, cpu.0, cpu.1);
+    assert!(app.tab_menu.is_open() && app.status_popup.as_deref() == Some("cpu"));
+    click(&mut app, mem.0, mem.1);
+    assert!(
+        !app.tab_menu.is_open() && app.status_popup.is_none(),
+        "⑤ 닫기만 + 기억 해제"
+    );
+    click(&mut app, mem.0, mem.1);
+    assert_eq!(
+        app.status_popup.as_deref(),
+        Some("mem"),
+        "⑤ 두 번째 클릭에 그 칸 팝업"
+    );
+    click(&mut app, mem.0, mem.1);
+    assert!(
+        !app.tab_menu.is_open() && app.status_popup.is_none(),
+        "⑤ 같은 칸 = 닫힘"
+    );
+    click(&mut app, mem.0, mem.1);
+    assert_eq!(
+        app.status_popup.as_deref(),
+        Some("mem"),
+        "⑤ 다시 누르면 열림(기억이 막지 않는다)"
+    );
+    app.tab_menu.close();
+    app.status_popup = None;
+    // ⑥ 배타 끔 = 종전 경로: 팝업 밖 클릭은 닫고 흘린다 · 풀다운이 열린 채의 우클릭은 풀다운이 삼킨다(상태줄 메뉴 안 뜸).
+    let _ = app.settings.set("ui.ctxmenu_exclusive", "off");
+    let _ = app.settings.set("ui.ctxmenu_passthrough", "on");
+    click(&mut app, cpu.0, cpu.1);
+    assert!(app.tab_menu.is_open());
+    click(&mut app, label.0, label.1);
+    assert!(
+        !app.tab_menu.is_open() && app.menubar.is_open(),
+        "⑥ 팝업 = 닫고 흘림(종전)"
+    );
+    app.route(InputEvent::RightDown { x: mem.0, y: mem.1 });
+    assert!(!app.tab_menu.is_open(), "⑥ 풀다운이 우클릭을 삼킨다(종전)");
+    let _ = std::fs::remove_dir_all(&dir);
+}

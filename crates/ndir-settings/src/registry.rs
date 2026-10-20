@@ -1213,6 +1213,26 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 메뉴 영역 간 배타(T-191 · 사용자 10-20 · nexa-sql `ui.ctxmenu_exclusive`와 같은 키): 열린 메뉴(메뉴 바 풀다운 · 우클릭/
+    //   상태줄 칸 팝업) **밖**을 좌/우 클릭하면 그 메뉴를 먼저 닫는다 · 키 입력은 대상 아님(열린 메뉴가 받는다 — Delete 같은 키가
+    //   메뉴 뒤 목록으로 새지 않게 · nexa-sql과 다름).
+    e!(
+        "ui.ctxmenu_exclusive",
+        CAT_CTXMENU,
+        "pref.ctxmenuExclusive",
+        "pref.ctxmenuExclusive.desc",
+        Bool,
+        "on"
+    ),
+    // 메뉴를 닫는 클릭에 바로 반응(nexa-sql `ui.ctxmenu_passthrough`): 켬 = 닫고 그 클릭을 그대로 진행 · 끔 = 닫기만(한 번 더).
+    e!(
+        "ui.ctxmenu_passthrough",
+        CAT_CTXMENU,
+        "pref.ctxmenuPassthrough",
+        "pref.ctxmenuPassthrough.desc",
+        Bool,
+        "on"
+    ),
     // 셸 메뉴 선행 구축(dir2 X-61 계승 · T-179 J-a+J-d · 고급): 켜면 선택이 머물 때 미리 구축해 우클릭이 즉시 뜬다 · 기본 끔 =
     // 우클릭 때 구축(자체 항목은 즉시 · 셸 항목은 "불러오는 중" 뒤 채워짐 · 확장이 많은 PC에서 1~3 s) — 실측 10-06: 선택 20회 뒤
     // Private 58 MB ↔ 끄면 13 MB대(셸 확장 DLL 적재 = QueryContextMenu 자체 비용 · 서브메뉴 생략으로는 안 줄었다).
@@ -2145,6 +2165,7 @@ pub const OS_DEFAULTS: &[(&str, &str, &str)] = &[
 
 /// (자식, 부모, 조건) — 부모가 조건을 만족하지 않으면 자식은 설정 화면에서 잠긴다(값은 유지). dir2 PREFS-144~152 · KEY-515.
 pub const DEPENDS: &[(&str, &str, Dep)] = &[
+    ("ui.ctxmenu_passthrough", "ui.ctxmenu_exclusive", Dep::On),
     ("typeahead.scope", "typeahead.enabled", Dep::On),
     ("typeahead.reset_ms", "typeahead.enabled", Dep::On),
     ("typeahead.special", "typeahead.enabled", Dep::On),

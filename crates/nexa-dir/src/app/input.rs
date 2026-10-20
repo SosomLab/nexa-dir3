@@ -608,6 +608,63 @@ impl App {
         }
     }
 
+    /// 열린 메뉴 비트(T-191 · nexa-sql `open_menus` 대응): 메뉴 바 풀다운 · 팝업 메뉴(우클릭 · 탭 · 상태줄 칸 — `tab_menu` 하나).
+    pub(crate) fn open_menu_bits(&self) -> u32 {
+        let mut bits = 0;
+        if self.menubar.is_open() {
+            bits |= MENU_BAR;
+        }
+        if self.tab_menu.is_open() {
+            bits |= MENU_POPUP;
+        }
+        bits
+    }
+
+    /// 점이 든 메뉴 비트 — 메뉴 바는 띠(라벨 전환·토글은 메뉴 바 몫) ∪ 풀다운(하위 포함) · 팝업은 영역(하위 포함).
+    pub(crate) fn menu_hit_bits(&self, p: Point) -> u32 {
+        let mut bits = 0;
+        if self.menubar.is_open()
+            && (self.menubar.bounds().contains(p) || self.menubar.popup_bounds().contains(p))
+        {
+            bits |= MENU_BAR;
+        }
+        if self.tab_menu.is_open() && self.tab_menu.bounds().contains(p) {
+            bits |= MENU_POPUP;
+        }
+        bits
+    }
+
+    /// 비트가 가리키는 메뉴를 닫는다(무효화 포함 · 상태줄 칸 팝업 기억도 지운다).
+    pub(crate) fn close_menu_bits(&mut self, bits: u32, inv: &mut Invalidations) {
+        if bits & MENU_BAR != 0 && self.menubar.is_open() {
+            inv.push(self.menubar.popup_bounds());
+            inv.push(self.menubar.bounds());
+            self.menubar.dismiss();
+        }
+        if bits & MENU_POPUP != 0 && self.tab_menu.is_open() {
+            inv.push(self.tab_menu.bounds());
+            self.tab_menu.close();
+            self.status_popup = None;
+        }
+    }
+
+    /// 영역 간 배타 단계(T-191 · `ui.ctxmenu_exclusive`/`ui.ctxmenu_passthrough`) — 열린 메뉴가 없으면 설정 조회 없이 `None`.
+    fn menu_exclusive_step(&self, ev: &InputEvent) -> Option<MenuStep> {
+        let open = self.open_menu_bits();
+        if open == 0 {
+            return None;
+        }
+        menu_exclusive_step(
+            open,
+            ev,
+            |p| self.menu_hit_bits(p),
+            self.settings.flag("ui.ctxmenu_exclusive"),
+            self.settings.flag("ui.ctxmenu_passthrough"),
+        )
+    }
+
+    /// ★ 메뉴 배타(T-191 · nexa-sql `route`의 fresh 규칙): 사건 전후로 열린 메뉴 비트를 비교해 **새로 열린 메뉴가 있으면 나머지를
+    /// 닫는다**(마지막에 연 것이 이긴다). 바깥 클릭 처리는 `route_inner` 머리의 배타 단계.
     pub(crate) fn route(&mut self, ev: InputEvent) {
         let mut inv = Invalidations::default();
         // 창 안 드래그 중(T-147 Linux/macOS)이면 포인터 · Esc는 드롭 수신부가 먹는다.
@@ -618,7 +675,13 @@ impl App {
         }
         self.slow_click_before(&ev); // 느린 재클릭 = 이름 바꾸기 예약/폐기(선택이 바뀌기 전 상태로 판정)
         let moved = matches!(ev, InputEvent::MouseMove { .. });
+        let before = self.open_menu_bits();
         self.route_inner(ev, &mut inv);
+        let after = self.open_menu_bits();
+        let fresh = after & !before;
+        if fresh != 0 && after != fresh && self.settings.flag("ui.ctxmenu_exclusive") {
+            self.close_menu_bits(after & !fresh, &mut inv);
+        }
         self.drag_out_after(&ev, &mut inv); // 선택된 행을 끌면 OS 드래그 발신(T-147)
         self.after_event(&mut inv, moved);
         // 입력 경로 = 더러워진 사각형만(10-18 결정 ①) · 틱 요청만 있으면 프레임만 예약(사각형 없음 = 그릴 것 없음).
@@ -639,6 +702,16 @@ impl App {
         if self.route_palette(&ev, inv) {
             return;
         }
+        // 포인터 자리는 어떤 사건이 먹기 전에 먼저 기록한다(T-191): 팝업이 열린 동안의 MouseMove는 메뉴가 모달로 먹어 종전에는
+        //   `cursor`가 멈춰 있었고, 그 뒤 통과한 클릭으로 새로 뜨는 메뉴(`open_ctx` 앵커 = `cursor`)가 옛 자리에 열렸다.
+        if let InputEvent::MouseMove { x, y }
+        | InputEvent::MouseDown { x, y, .. }
+        | InputEvent::RightDown { x, y }
+        | InputEvent::MiddleDown { x, y }
+        | InputEvent::DoubleClick { x, y, .. } = ev
+        {
+            self.cursor = (x, y);
+        }
         // 열린 탭 메뉴 = 모달(안 = 고르기 · Esc/바깥 클릭 = 닫기 · 바깥 클릭은 아래로 흘린다 — 팝업 UX 규칙).
         // 상태줄 상세 팝업 토글: 누르기 시작할 때 떠 있던 팝업의 칸을 기억한다(바깥 클릭이 팝업을 닫고 아래로 흘러
         // 같은 칸을 다시 누르게 되는데, 그때 다시 열지 않는다 — 사용자 10-04 "다시 클릭하면 감춤").
@@ -650,6 +723,16 @@ impl App {
                 .status_popup
                 .clone()
                 .filter(|_| self.tab_menu.is_open());
+        }
+        // ★ 영역 간 배타(T-191 · 사용자 10-20 · nexa-sql `ui.ctxmenu_exclusive`): 열린 메뉴(풀다운 · 팝업) **밖**의 좌/우 클릭 =
+        //   그 메뉴를 먼저 닫는다 · 닫은 클릭을 바로 진행할지(`ui.ctxmenu_passthrough` 켬) 닫기만 할지는 설정. 키 입력은 대상이
+        //   아니다(열린 메뉴가 모달로 받는다 — Delete 같은 키가 메뉴 뒤 목록으로 새지 않게 · nexa-sql과 다른 점 · 사용자 10-20).
+        //   꺼져 있으면 종전 경로(풀다운 = 바깥 클릭 삼킴 · 팝업 = 바깥 클릭 흘림).
+        if let Some(step) = self.menu_exclusive_step(&ev) {
+            self.close_menu_bits(step.close, inv);
+            if step.stop {
+                return;
+            }
         }
         if self.tab_menu.is_open() {
             let outside = self.tab_menu.is_outside_click(&ev);
@@ -727,7 +810,6 @@ impl App {
         }
         match ev {
             InputEvent::MouseMove { x, y } => {
-                self.cursor = (x, y);
                 if let Some(i) = self.term_focus {
                     if self.terms[i].mouse_move(x, y) {
                         inv.push(self.docks[i].bounds());
@@ -1200,6 +1282,157 @@ impl App {
         if !inv.is_empty() {
             self.redraw_inv(&mut inv);
         }
+    }
+}
+
+/// 열린 메뉴 비트(T-191): 메뉴 바 풀다운.
+pub(crate) const MENU_BAR: u32 = 1;
+/// 열린 메뉴 비트(T-191): 팝업 메뉴(`tab_menu` — 우클릭 · 탭 · 툴바/상태줄 보조 · 상태줄 칸 상세).
+pub(crate) const MENU_POPUP: u32 = 2;
+
+/// 배타 규칙의 결과: 닫을 메뉴 비트 · 그 사건을 여기서 끝낼지(닫기만 · `passthrough` 끔).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct MenuStep {
+    pub close: u32,
+    pub stop: bool,
+}
+
+/// ★ 순수 판정(T-191 · nexa-sql `ctxmenu_exclusive_step` 이식 · MC/DC): `open` = 열린 메뉴 비트 · 좌/우 MouseDown = 좌표를 안에
+/// 받는 메뉴(`hit`)를 뺀 나머지가 "다른 영역의 메뉴" → 닫는다(`passthrough` 끔이면 그 클릭은 닫기만). **키·글자는 대상이 아니다**
+/// (nexa-sql은 메뉴가 안 쓰는 키로도 닫고 진행하지만, 파일 관리자는 Delete 같은 키가 메뉴 뒤로 새면 위험 — 사용자 10-20 "키 입력은
+/// 제외"). 그 밖(MouseMove · 휠 · 더블클릭 · 가운데) = 아무것도 안 함. 꺼져 있으면 늘 `None`.
+pub(crate) fn menu_exclusive_step(
+    open: u32,
+    ev: &InputEvent,
+    hit: impl FnOnce(Point) -> u32,
+    exclusive: bool,
+    passthrough: bool,
+) -> Option<MenuStep> {
+    if !exclusive || open == 0 {
+        return None;
+    }
+    match *ev {
+        InputEvent::MouseDown { x, y, .. } | InputEvent::RightDown { x, y } => {
+            let foreign = open & !hit(Point { x, y });
+            (foreign != 0).then_some(MenuStep {
+                close: foreign,
+                stop: !passthrough,
+            })
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod menu_exclusive_tests {
+    use super::{menu_exclusive_step as f, MenuStep, MENU_BAR, MENU_POPUP};
+    use nexa_ctl::{InputEvent, Key};
+
+    fn down(x: i32, y: i32) -> InputEvent {
+        InputEvent::MouseDown {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        }
+    }
+
+    /// MC/DC: 켬/끔 · 열린 메뉴 유무 · 안/밖 · 통과 설정 · 우클릭 · 키/글자/이동/휠 = 대상 아님.
+    #[test]
+    fn rules() {
+        let both = MENU_BAR | MENU_POPUP;
+        let hit_none = |_| 0u32;
+        let hit_all = move |_| both;
+        assert_eq!(f(both, &down(1, 1), hit_none, false, true), None, "꺼짐");
+        assert_eq!(
+            f(0, &down(1, 1), hit_none, true, true),
+            None,
+            "열린 메뉴 없음"
+        );
+        assert_eq!(
+            f(both, &down(1, 1), hit_none, true, true),
+            Some(MenuStep {
+                close: both,
+                stop: false
+            }),
+            "밖 클릭 = 전부 닫고 통과"
+        );
+        assert_eq!(
+            f(both, &down(1, 1), hit_none, true, false),
+            Some(MenuStep {
+                close: both,
+                stop: true
+            }),
+            "통과 끔 = 닫기만"
+        );
+        assert_eq!(
+            f(both, &down(1, 1), hit_all, true, true),
+            None,
+            "안 클릭 = 메뉴 몫"
+        );
+        assert_eq!(
+            f(both, &down(1, 1), |_| MENU_BAR, true, true),
+            Some(MenuStep {
+                close: MENU_POPUP,
+                stop: false
+            }),
+            "한 메뉴 안 = 다른 메뉴만 닫는다"
+        );
+        assert_eq!(
+            f(
+                MENU_BAR,
+                &InputEvent::RightDown { x: 1, y: 1 },
+                hit_none,
+                true,
+                false
+            ),
+            Some(MenuStep {
+                close: MENU_BAR,
+                stop: true
+            }),
+            "우클릭도 같은 규칙"
+        );
+        let key = InputEvent::Key {
+            key: Key::Delete,
+            shift: false,
+            primary: false,
+        };
+        assert_eq!(
+            f(both, &key, hit_none, true, true),
+            None,
+            "키 = 대상 아님(메뉴가 받는다)"
+        );
+        assert_eq!(
+            f(
+                both,
+                &InputEvent::Char { c: 'a', now_ms: 0 },
+                hit_none,
+                true,
+                true
+            ),
+            None,
+            "글자 = 대상 아님"
+        );
+        assert_eq!(
+            f(
+                both,
+                &InputEvent::MouseMove { x: 1, y: 1 },
+                hit_none,
+                true,
+                true
+            ),
+            None
+        );
+        assert_eq!(
+            f(
+                both,
+                &InputEvent::Wheel { delta: 120 },
+                hit_none,
+                true,
+                true
+            ),
+            None
+        );
     }
 }
 
