@@ -59,6 +59,18 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Tue Oct 20 2026 Sangyong Bae <kiros33@gmail.com> - 0.26.0-1
+- Responsiveness: folder listing, back/forward, refresh and change-watch reloads run on a worker
+  (the old list stays until the new one is ready) · partial redraw (only changed regions are
+  repainted) · self-change echo suppression for folder watching · trash deletion, drive capacity
+  queries, dock preview, empty-folder probes and icon caching moved off the UI thread · idle
+  memory trim every 300 s with a light/full scope · each change has a setting to switch it off.
+- Menus: the menu bar pull-down, context menus and status bar cell popups are now mutually
+  exclusive; a click outside an open menu closes it first and, by default, also acts right away
+  (new settings "Close menus when another area is used" and "React immediately to the click
+  that closes a menu"). Key presses still go to the open menu.
+- Fixes: result collection race in background workers · empty-folder probe ordering.
+
 * Sat Oct 18 2026 Sangyong Bae <kiros33@gmail.com> - 0.25.0-1
 - Right-button drag and drop like File Explorer: a drop menu with copy, move, create shortcut,
   extract and the shell's own handlers (7-Zip and others; the intersection for multi-selection);
