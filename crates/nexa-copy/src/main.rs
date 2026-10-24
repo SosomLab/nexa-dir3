@@ -6,6 +6,7 @@
 
 mod cli;
 mod ctrlc;
+mod mirror;
 mod verify;
 
 fn main() -> std::process::ExitCode {

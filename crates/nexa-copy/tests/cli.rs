@@ -168,6 +168,92 @@ fn copy_skip_overwrite_move_and_errors() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--mirror`(10-25): dry-run 계획(copy · overwrite · delete 탭 줄) → 실행 = 새것/바뀐 것 복사 + 대상에만 있는 것 영구 삭제 · 재실행 = 할 일 없음 ·
+/// 원본 2개/파일/겹침 = 2.
+#[test]
+fn mirror_makes_destination_identical() {
+    let d = sandbox("mirror");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    make_tree(&src);
+    fs::create_dir_all(dst.join("tree")).expect("mkdir");
+    fs::write(dst.join("tree").join("stale.txt"), b"stale").expect("write");
+    fs::write(dst.join("tree").join("f0.txt"), b"old content").expect("write");
+    let r = run(
+        &[&src.join("tree"), &dst.join("tree")],
+        &["--mirror", "--dry-run"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(
+        r.out
+            .lines()
+            .any(|l| l.starts_with("delete\t") && l.ends_with("stale.txt")),
+        "{}",
+        r.out
+    );
+    assert!(
+        r.out
+            .lines()
+            .any(|l| l.starts_with("overwrite\t") && l.contains("f0.txt")),
+        "{}",
+        r.out
+    );
+    assert!(
+        dst.join("tree").join("stale.txt").is_file(),
+        "dry-run = 그대로"
+    );
+    assert!(r.err.contains("dry run (mirror)"), "{}", r.err);
+    // 안전장치 ②: 지울 것이 있는데 `--yes`가 없으면 목록 + 종료 2 · 아무것도 안 바뀜.
+    let r = run(&[&src.join("tree"), &dst.join("tree")], &["--mirror"], &[]);
+    assert_eq!(r.code, 2, "{}", r.err);
+    assert!(
+        r.err.contains("would delete:") && r.err.contains("re-run with --yes"),
+        "{}",
+        r.err
+    );
+    assert!(
+        dst.join("tree").join("stale.txt").is_file() && !dst.join("tree").join("f1.txt").exists(),
+        "아무것도 안 바뀜"
+    );
+    let r = run(
+        &[&src.join("tree"), &dst.join("tree")],
+        &["--mirror", "--verify", "--yes"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    same_tree(&src.join("tree"), &dst.join("tree"));
+    assert!(
+        !dst.join("tree").join("stale.txt").exists(),
+        "대상에만 있던 것 삭제"
+    );
+    assert!(
+        r.err.contains("deleted:") && r.err.contains("mirror: 41 copied · 1 deleted · 0 failed"),
+        "{}",
+        r.err
+    );
+    assert!(
+        r.err.contains("verified 41 file(s) · 0 mismatch(es)"),
+        "{}",
+        r.err
+    );
+    // 다시 = 할 일 없음(지울 것이 없으면 --yes 불필요).
+    let r = run(&[&src.join("tree"), &dst.join("tree")], &["--mirror"], &[]);
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(r.err.contains("mirror: 0 copied · 0 deleted"), "{}", r.err);
+    // 인자 오류.
+    let r = run(
+        &[&src.join("tree"), &src.join("one.txt"), &dst],
+        &["--mirror"],
+        &[],
+    );
+    assert_eq!(r.code, 2);
+    let r = run(&[&src.join("one.txt"), &dst], &["--mirror"], &[]);
+    assert_eq!(r.code, 2);
+    let r = run(&[&src, &src.join("tree")], &["--mirror"], &[]);
+    assert_eq!(r.code, 2, "겹침");
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// `--include/--exclude`(10-25): 폴더 안은 엔진 계획 단계에서 거르고 · 최상위 원본은 CLI가 걸러 안내한다 · 대소문자 무시 · 제외가 우선.
 #[test]
 fn include_exclude_filters_files_and_top_level_sources() {

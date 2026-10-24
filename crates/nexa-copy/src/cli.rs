@@ -9,6 +9,8 @@
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
 //!   -n, --dry-run        print the plan (one tab-separated line per item on stdout) and change nothing
 //!   --verify             after copying, compare every copied file with its source (size + SHA-256); mismatch = exit 1
+//!   --mirror             make the destination folder identical to the one source folder (copy new/changed · delete extras permanently)
+//!   --yes                confirm permanent deletions for --mirror (without it, deletions are listed and the exit code is 2)
 //!   --include <glob>     copy only files whose name matches (repeatable · folders are always entered)
 //!   --exclude <glob>     skip files and folders whose name matches (repeatable)
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
@@ -45,9 +47,14 @@ Options:
   -n, --dry-run        print the plan and change nothing: one line per item on stdout,
                        tab-separated: action, bytes, source, destination, note
                        (action = copy | move | duplicate | overwrite | skip | noop | error)
+  --mirror             make <destination-folder> identical to the single <source> folder: copy new and changed
+                       files (size + modified time, 2 s tolerance), then permanently delete items that exist
+                       only in the destination (no recycle bin) · works with --dry-run, --include/--exclude, --verify
+                       · refuses a drive root or the user home as destination · deletions need --yes
+  --yes                confirm permanent deletions (--mirror); without it they are only listed and the exit code is 2
   --include <glob>     copy only files whose name matches the glob (* ?, case-insensitive);
-                       repeatable · folders are always entered so matching files inside are found
-  --exclude <glob>     skip files and folders whose name matches (repeatable · wins over --include)
+                       repeatable, or several globs separated by ; · folders are always entered
+  --exclude <glob>     skip files and folders whose name matches (repeatable or ;-separated · wins over --include)
   --verify             after copying, compare each copied file with its source (size + SHA-256);
                        folders are checked recursively · a mismatch is reported and the exit code is 1
                        (ignored with --move: the source is gone)
@@ -73,6 +80,10 @@ pub(crate) struct Options {
     pub verify: bool,
     /// 이름 필터(`--include/--exclude` · 글롭 · 폴더 안과 최상위 원본 모두).
     pub filter: NameFilter,
+    /// 미러(`--mirror` · 원본 폴더 1개 → 대상 폴더를 같게 · 대상에만 있는 것은 영구 삭제).
+    pub mirror: bool,
+    /// 영구 삭제 확인(`--yes` · 미러에서 지울 것이 있을 때 필요).
+    pub yes: bool,
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
 }
@@ -95,6 +106,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut dry_run = false;
     let mut verify = false;
     let mut filter = NameFilter::default();
+    let mut mirror = false;
+    let mut yes = false;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -115,15 +128,24 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "-q" | "--quiet" => quiet = true,
             "-n" | "--dry-run" => dry_run = true,
             "--verify" => verify = true,
+            "--mirror" => mirror = true,
+            "-y" | "--yes" => yes = true,
             "--include" | "--exclude" => {
                 let v = it.next().ok_or_else(|| format!("{a} needs a glob"))?;
-                if v.trim().is_empty() {
+                // `;`로 여러 글롭(앱의 패턴 선택 · 빠른 필터와 같은 습관 · 협업 점검 10-25 — 종전엔 `;`를 글자로 봐 0개 복사).
+                let globs: Vec<String> = v
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|g| !g.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if globs.is_empty() {
                     return Err(format!("{a}: empty glob"));
                 }
                 if a == "--include" {
-                    filter.include.push(v.trim().to_string());
+                    filter.include.extend(globs);
                 } else {
-                    filter.exclude.push(v.trim().to_string());
+                    filter.exclude.extend(globs);
                 }
             }
             "--threads" => {
@@ -157,6 +179,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         dry_run,
         verify,
         filter,
+        mirror,
+        yes,
         sources: paths,
         dest,
     }))
@@ -226,6 +250,9 @@ pub(crate) fn run_with(
             let _ = writeln!(err, "nexa-copy: source not found: {}", p.display());
         }
         return ExitCode::from(2);
+    }
+    if o.mirror {
+        return crate::mirror::run_mirror(o, cancel, out, err);
     }
     if o.dry_run {
         return dry_run(o, out, err);
@@ -589,12 +616,16 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Copy);
-        assert!(!o.overwrite && o.native && !o.quiet && !o.dry_run && !o.verify);
+        assert!(
+            !o.overwrite && o.native && !o.quiet && !o.dry_run && !o.verify && !o.mirror && !o.yes
+        );
         assert!(o.filter.is_empty());
         assert_eq!((o.threads, o.unbuffered_mb), (0, 0));
         assert_eq!(o.sources, vec![PathBuf::from("a"), PathBuf::from("b")]);
         assert_eq!(o.dest, PathBuf::from("dest"));
         let Ok(Parsed::Run(o)) = parse(&a(&[
+            "--yes",
+            "--mirror",
             "--include",
             "*.txt",
             "--exclude",
@@ -617,9 +648,19 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Move);
-        assert!(o.overwrite && !o.native && o.quiet && o.dry_run && o.verify);
+        assert!(o.overwrite && !o.native && o.quiet && o.dry_run && o.verify && o.mirror && o.yes);
         assert_eq!(o.filter.include, vec!["*.txt".to_string()]);
         assert_eq!(o.filter.exclude, vec!["*.tmp".to_string()]);
+        if let Ok(Parsed::Run(o)) = parse(&a(&["--include", "*.txt; *.md;", "a", "b"])) {
+            assert_eq!(
+                o.filter.include,
+                vec!["*.txt".to_string(), "*.md".to_string()],
+                "`;` 분리"
+            );
+        } else {
+            panic!("parse");
+        }
+        assert!(parse(&a(&["--include", " ; ", "a", "b"])).is_err());
         assert!(parse(&a(&["--include", "", "a", "b"])).is_err());
         assert!(parse(&a(&["--exclude"])).is_err());
         assert_eq!((o.threads, o.unbuffered_mb), (4, 64));

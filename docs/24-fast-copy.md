@@ -162,10 +162,17 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   진행 `verifying · n of m`(m = 복사한 크기 × 2 · 250 ms) · 요약 `verified n file(s) · x read · k mismatch(es)[ · s skipped item(s) not verified] in t` ·
   `--move`면 `note: --verify is ignored with --move` 한 줄 · 취소면 `verification skipped` · Ctrl+C = 130(협업 수동 점검 10-25 반영). 시험 `verify_detects_mismatch_missing_and_type` +
   프로세스 시험(`--verify` 41 파일).
-- **필터 ✅ 10-25**(`--include <glob>` · `--exclude <glob>` · 반복 가능 · T-97 "필터" 1차): 엔진 `fastcopy::NameFilter` + `with_filter`(thread_local ·
+- **필터 ✅ 10-25**(`--include <glob>` · `--exclude <glob>` · 반복 가능 · `;`로 여러 개(앱의 패턴 선택/빠른 필터와 같은 습관 — 협업 점검 10-25) · T-97 "필터" 1차): 엔진 `fastcopy::NameFilter` + `with_filter`(thread_local ·
   계획 단계 `plan`에서 거른 항목은 복사도 · 교차 볼륨 이동의 원본 정리도 안 함 = 원본에 남음) · 규칙 = exclude(파일·폴더) 우선 · include는 파일만
   (폴더는 늘 들어감) · 대소문자 무시 · 최상위 원본은 CLI가 걸러 `filtered out:` 안내 · dry-run도 최상위 반영(폴더 안은 실행 때). 한계: 진행
   총량(`size_of`)은 거르기 전 크기라 끝에 100 % 미만일 수 있다 · 미러/차등은 후속.
+- **미러 ✅ 10-25**(`--mirror` · T-97 "미러/차등" CLI 1차 · 엔진 = 앱 폴더 동기화와 같은 `compare::compare` + `plan(LeftToRight · mirror)` +
+  `apply_copies`): 원본 폴더 1개 → 대상 폴더를 같게(크기 + 수정 시각 · 허용 2초 · 재귀) — 새것/바뀐 것 복사 뒤 대상에만 있는 것 **영구 삭제**
+  (휴지통 없음 · `deleted:` 한 줄씩) · **안전장치**(협업 10-25 · robocopy /MIR 사고 유형): ① 대상이 드라이브 루트·사용자 홈·원본과 겹침 = 거부(2)
+  ② 지울 것이 있으면 `--yes` 필요 — 없으면 `would delete:` 목록 + 종료 2(비대화형 CLI라 프롬프트 대신) · 지울 것이 없으면 `--yes` 불필요 ·
+  ③ 휴지통 `--trash`는 후속(CLI는 platform/ 포트 미사용) · `--dry-run` = copy/overwrite/delete 탭 줄 · `--include/--exclude` = 상대 경로 이름으로 거름(거른 것은 지우지도
+  않음) · `--verify` = 복사한 파일 대조 · 원본 2개/파일/겹침 = 2 · 요약 `mirror: a copied · b deleted · c failed · x in t`. 시험 `mirror_plan_and_rows`(T1) ·
+  `mirror_makes_destination_identical`(프로세스). 한계: 내용 비교(`by_content`) 옵션은 후속 · 양방향(`Both`)은 CLI에 없음(앱 동기화 창).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · 미러(T-97 → T-98) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
+  포터블 zip · `release.yml` — 채널 결정) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
   복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).
