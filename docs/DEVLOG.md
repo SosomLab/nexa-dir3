@@ -4,6 +4,8 @@
 
 ## 2026-10-24
 
+- **T-106 2/2 경로 제안 팝업 덤프 어휘**(fd5d2df · nexa-ui 224 `PathBar::suggestions` · T4 path-suggest ✓ · nexa-sql check ✓) · **T-100 값 추출 1차**(f34cf61 · 상수 10개 → 설정 키 · ndir-term `set_max_scrollback`) · Linux 병합 = 통합 완료 확인 → [10-24 §15](journal/2026-10-24.md)
+
 - **Linux PC 동기(§14)** — 원격 20커밋 ff(45d6cf0 · Windows 회차 합류) · 합친 트리 gate full **658/0** · selfcheck 23/0 · T4 36/0 · CI 45d6cf0 ✓ · 병합할 브랜치 없음 → [10-24 §14](journal/2026-10-24.md)
 
 - **회차 마감(Windows PC · §13)** — T-44 잔여 [편집 JSON…](5064a73) · macOS 취소 시험 처방(d22302b · 블록 복제는 중단할 틈이 없다) · **`nexa-copy` CLI 1차**(74f1007 · 별도 실행파일 · docs/24 §7) · gate full GREEN · 실기 대기 묶음 → [10-24 §13](journal/2026-10-24.md)
