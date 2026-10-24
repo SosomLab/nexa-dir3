@@ -62,21 +62,55 @@ static NATIVE: AtomicBool = AtomicBool::new(true);
 static UNBUFFERED_MIN: AtomicU64 = AtomicU64::new(0);
 static THREADS: AtomicUsize = AtomicUsize::new(0);
 
-/// 전송 엔진이 쓸 조절값을 바꾼다(프로세스 전역 — 다음 파일부터 적용).
-pub fn set_tuning(t: Tuning) {
-    NATIVE.store(t.native, Ordering::Relaxed);
-    UNBUFFERED_MIN.store(t.unbuffered_min, Ordering::Relaxed);
-    THREADS.store(t.threads.min(THREADS_MAX), Ordering::Relaxed);
+impl Tuning {
+    /// 범위 안으로(순수): 스레드 수 ≤ [`THREADS_MAX`].
+    #[must_use]
+    pub fn clamped(self) -> Self {
+        Self {
+            threads: self.threads.min(THREADS_MAX),
+            ..self
+        }
+    }
 }
 
-/// 지금의 조절값.
+/// 전송 엔진이 쓸 조절값을 바꾼다(프로세스 전역 — 다음 파일부터 적용 · 범위 안으로).
+pub fn set_tuning(t: Tuning) {
+    let t = t.clamped();
+    NATIVE.store(t.native, Ordering::Relaxed);
+    UNBUFFERED_MIN.store(t.unbuffered_min, Ordering::Relaxed);
+    THREADS.store(t.threads, Ordering::Relaxed);
+}
+
+thread_local! {
+    /// 이 스레드만의 조절값 덮어쓰기([`with_tuning`] · 시험 · `transfer_with`) — 전역을 건드리지 않아 병렬 시험이 서로 보지 않는다.
+    static OVERRIDE: std::cell::Cell<Option<Tuning>> = const { std::cell::Cell::new(None) };
+}
+
+/// 지금의 조절값 — 이 스레드의 덮어쓰기가 있으면 그것 · 아니면 프로세스 전역.
 #[must_use]
 pub fn tuning() -> Tuning {
+    if let Some(t) = OVERRIDE.with(std::cell::Cell::get) {
+        return t;
+    }
     Tuning {
         native: NATIVE.load(Ordering::Relaxed),
         unbuffered_min: UNBUFFERED_MIN.load(Ordering::Relaxed),
         threads: THREADS.load(Ordering::Relaxed),
     }
+}
+
+/// `f`를 도는 동안 **이 스레드에서만** 조절값을 `t`로(끝나면 복원 · 패닉해도 복원). 엔진 시험이 전역 `set_tuning`을 건드려 병렬
+/// 시험과 경합하던 것(macOS CI 10-24 · 협업 지적)의 처방 — 작업 스레드는 부른 쪽이 넘긴 `&Tuning`을 쓰므로 영향이 없다.
+pub fn with_tuning<R>(t: Tuning, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Tuning>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let prev = self.0;
+            OVERRIDE.with(|c| c.set(prev));
+        }
+    }
+    let _restore = Restore(OVERRIDE.with(|c| c.replace(Some(t))));
+    f()
 }
 
 /// 중단 판정(취소 · 다른 작업 스레드의 실패) — 여러 스레드가 함께 본다.
@@ -1077,24 +1111,34 @@ mod tests {
         assert_eq!(thread_count(99, Free, Free, 8), THREADS_MAX);
     }
 
+    /// 범위 판정은 순수(`clamped`) · 덮어쓰기는 **이 스레드에서만**(`with_tuning` — 안에서는 t · 끝나면 복원 · 다른 스레드는 못 본다).
+    /// 전역 `set_tuning`은 건드리지 않는다(병렬 시험 경합 방지 · macOS CI 10-24).
     #[test]
-    fn tuning_round_trip_clamps_threads() {
-        let before = tuning();
-        set_tuning(Tuning {
+    fn tuning_clamps_and_thread_local_override_restores() {
+        let t = Tuning {
             native: false,
             unbuffered_min: 7,
             threads: 999,
-        });
-        let now = tuning();
-        set_tuning(before);
+        };
         assert_eq!(
-            now,
+            t.clamped(),
             Tuning {
                 native: false,
                 unbuffered_min: 7,
                 threads: THREADS_MAX
             }
         );
+        let before = tuning();
+        let seen_inside = with_tuning(t, || {
+            let other = std::thread::spawn(tuning).join().unwrap_or(t);
+            assert_eq!(other, before, "다른 스레드는 덮어쓰기를 못 본다");
+            tuning()
+        });
+        assert_eq!(seen_inside, t);
+        assert_eq!(tuning(), before, "끝나면 복원");
+        let nested = with_tuning(t, || with_tuning(Tuning::default(), tuning));
+        assert_eq!(nested, Tuning::default());
+        assert_eq!(tuning(), before);
     }
 
     /// 파일 1개: 내용 · 보고 합계 = 크기 · **수정 시각 보존** · `overwrite = false`가 있던 대상을 건드리지 않음 — 모든 전략에서 같다.

@@ -506,6 +506,41 @@ pub fn transfer(
     on_event: &mut dyn FnMut(Event),
     cancel: &AtomicBool,
 ) -> Outcome {
+    transfer_with(
+        sources,
+        dest_dir,
+        op,
+        resolve,
+        on_event,
+        cancel,
+        &fastcopy::tuning(),
+    )
+}
+
+/// [`transfer`]와 같되 복사 전략 조절값을 **인자로**(전역 `set_tuning`을 건드리지 않는다 — 시험 · CLI · 병렬 호출). 이 스레드에서
+/// 도는 동안만 `tuning()`이 `t`를 돌려준다([`fastcopy::with_tuning`]).
+pub fn transfer_with(
+    sources: &[PathBuf],
+    dest_dir: &Path,
+    op: Op,
+    resolve: &mut dyn FnMut(&Path) -> Conflict,
+    on_event: &mut dyn FnMut(Event),
+    cancel: &AtomicBool,
+    t: &fastcopy::Tuning,
+) -> Outcome {
+    fastcopy::with_tuning(*t, || {
+        transfer_inner(sources, dest_dir, op, resolve, on_event, cancel)
+    })
+}
+
+fn transfer_inner(
+    sources: &[PathBuf],
+    dest_dir: &Path,
+    op: Op,
+    resolve: &mut dyn FnMut(&Path) -> Conflict,
+    on_event: &mut dyn FnMut(Event),
+    cancel: &AtomicBool,
+) -> Outcome {
     let mut out = Outcome::default();
     let sizes: Vec<u64> = sources.iter().map(|p| size_of(p)).collect();
     let total_bytes: u64 = sizes.iter().sum();
@@ -609,6 +644,13 @@ pub fn transfer(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 취소 계약 시험용 조절값 — 읽고 쓰는 루프(OS 블록 복제는 즉시 끝나 취소할 틈이 없다).
+    const LOOP: fastcopy::Tuning = fastcopy::Tuning {
+        native: false,
+        unbuffered_min: 0,
+        threads: 1,
+    };
     use std::sync::atomic::AtomicBool;
 
     fn fixture(name: &str) -> PathBuf {
@@ -844,9 +886,10 @@ mod tests {
                 .filter(|e| e.file_name().to_string_lossy().contains(".nexa-"))
                 .count()
         };
-        // ① 폴더 덮어쓰기 중 취소 → 옛 폴더 그대로
+        // ① 폴더 덮어쓰기 중 취소 → 옛 폴더 그대로. 취소 계약 시험은 OS 블록 복제(APFS clonefile · reflink — 즉시 끝나 취소 틈이
+        // 없다 · macOS CI 10-24)를 피해 루프 경로를 **인자로**(전역 조절값은 건드리지 않는다).
         let cancel = AtomicBool::new(false);
-        let out = transfer(
+        let out = transfer_with(
             &[a.join("x")],
             &b,
             Op::Copy,
@@ -857,6 +900,7 @@ mod tests {
                 }
             },
             &cancel,
+            &LOOP,
         );
         assert!(out.canceled);
         assert_eq!(
@@ -867,7 +911,7 @@ mod tests {
         assert_eq!(leftovers(&b), 0, "스테이징 잔여 없음");
         // ② 파일 덮어쓰기 중 취소 → 옛 파일 그대로
         let cancel = AtomicBool::new(false);
-        let out = transfer(
+        let out = transfer_with(
             &[a.join("f.bin")],
             &b,
             Op::Copy,
@@ -878,6 +922,7 @@ mod tests {
                 }
             },
             &cancel,
+            &LOOP,
         );
         assert!(out.canceled);
         assert_eq!(fs::read_to_string(b.join("f.bin")).unwrap(), "옛 파일");
@@ -916,14 +961,10 @@ mod tests {
         fs::create_dir_all(&a).unwrap();
         fs::create_dir_all(&b).unwrap();
         // 4MB 청크 2개 이상이 되도록 9MB — 첫 청크 보고에서 취소. 엔진 계약(취소 = `canceled` · 부분 파일 정리) 시험이라 OS 블록 복제
-        // (APFS clonefile · reflink — 즉시 끝나 중단할 틈이 없다 · macOS CI 10-24)를 피해 **루프 경로**로 돌린다(전역 조절값 · 끝에 복원).
+        // (APFS clonefile · reflink — 즉시 끝나 중단할 틈이 없다 · macOS CI 10-24)를 피해 **루프 경로**를 인자로(`transfer_with` · 전역 불변).
         fs::write(a.join("big.bin"), vec![1u8; 9 * 1024 * 1024]).unwrap();
-        fastcopy::set_tuning(fastcopy::Tuning {
-            native: false,
-            ..fastcopy::Tuning::default()
-        });
         let cancel = AtomicBool::new(false);
-        let out = transfer(
+        let out = transfer_with(
             &[a.join("big.bin")],
             &b,
             Op::Copy,
@@ -934,8 +975,8 @@ mod tests {
                 }
             },
             &cancel,
+            &LOOP,
         );
-        fastcopy::set_tuning(fastcopy::Tuning::default());
         assert!(out.canceled);
         assert!(out.transferred.is_empty());
         assert!(!b.join("big.bin").exists(), "부분 파일 정리");

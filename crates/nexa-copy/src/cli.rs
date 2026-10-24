@@ -13,8 +13,8 @@
 //! ```
 //! 진행 · 요약은 stderr(stdout은 비워 둔다 — 파이프 친화) · 영어 고정(패키지/CLI 문구 규칙 · 사용자 10-10).
 
-use ndir_ops::fastcopy::{self, Tuning, THREADS_MAX};
-use ndir_ops::{transfer, Conflict, Event, ItemStatus, Op, Outcome};
+use ndir_ops::fastcopy::{Tuning, THREADS_MAX};
+use ndir_ops::{transfer_with, Conflict, Event, ItemStatus, Op, Outcome};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -155,11 +155,12 @@ pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
         }
         return ExitCode::from(2);
     }
-    fastcopy::set_tuning(Tuning {
+    // 조절값은 인자로(`transfer_with` · 프로세스 전역 `set_tuning`을 쓰지 않는다).
+    let tuning = Tuning {
         native: o.native,
         unbuffered_min: o.unbuffered_mb.saturating_mul(1024 * 1024),
         threads: o.threads,
-    });
+    };
     let cancel = AtomicBool::new(false);
     let mut resolve = |_: &Path| {
         if o.overwrite {
@@ -170,13 +171,14 @@ pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
     };
     let started = Instant::now();
     let mut printer = Printer::new(o.quiet, started);
-    let out = transfer(
+    let out = transfer_with(
         &o.sources,
         &o.dest,
         o.op,
         &mut resolve,
         &mut |ev| printer.event(&ev, err),
         &cancel,
+        &tuning,
     );
     printer.summary(&out, started.elapsed(), err);
     exit_code(&out)
