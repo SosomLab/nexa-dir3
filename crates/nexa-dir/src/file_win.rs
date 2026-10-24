@@ -81,6 +81,14 @@ pub(crate) fn labels() -> PickerLabels {
         menu_copy_path: tr("fdlg.menu.copyPath"),
         menu_copy_name: tr("fdlg.menu.copyName"),
         menu_refresh: tr("fdlg.menu.refresh"),
+        menu_rename: tr("fdlg.menu.rename"),
+        err_rename: tr("fdlg.err.rename"),
+        menu_delete: tr("fdlg.menu.delete"),
+        err_delete: tr("fdlg.err.delete"),
+        perm_delete_ask: tr("fdlg.permDelete.ask"),
+        menu_undo: tr("fdlg.menu.undo"),
+        menu_redo: tr("fdlg.menu.redo"),
+        err_undo: tr("fdlg.err.undo"),
         multi_selected: tr("fdlg.multiSelected"),
     }
 }
