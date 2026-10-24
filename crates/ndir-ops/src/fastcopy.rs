@@ -84,6 +84,75 @@ pub fn set_tuning(t: Tuning) {
 thread_local! {
     /// 이 스레드만의 조절값 덮어쓰기([`with_tuning`] · 시험 · `transfer_with`) — 전역을 건드리지 않아 병렬 시험이 서로 보지 않는다.
     static OVERRIDE: std::cell::Cell<Option<Tuning>> = const { std::cell::Cell::new(None) };
+    /// 이 스레드의 폴더 복사 이름 필터([`with_filter`] · nexa-copy `--include/--exclude` · 10-25) — 계획 단계(호출 스레드)에서만 읽는다.
+    static FILTER: std::cell::RefCell<Option<NameFilter>> = const { std::cell::RefCell::new(None) };
+}
+
+/// 폴더 복사의 **이름 필터**(nexa-copy `--include/--exclude` · T-97 "필터" 1차 · 10-25): 글롭(`*` `?` · 대소문자 무시 · 이름만) 목록.
+/// 규칙 = `exclude`에 맞으면(파일 · 폴더 모두) 건너뜀 · `include`가 비어 있지 않으면 **파일**은 하나에 맞아야 복사(폴더는 늘 들어간다 —
+/// 안의 파일을 고르기 위해) · 둘 다 비면 전부.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NameFilter {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+}
+
+impl NameFilter {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.include.is_empty() && self.exclude.is_empty()
+    }
+
+    /// 이 이름(파일/폴더)을 복사 계획에 넣는가(순수).
+    #[must_use]
+    pub fn allows(&self, name: &str, is_dir: bool) -> bool {
+        let lower = name.to_lowercase();
+        if self.exclude.iter().any(|p| glob_ci(p, &lower)) {
+            return false;
+        }
+        if is_dir || self.include.is_empty() {
+            return true;
+        }
+        self.include.iter().any(|p| glob_ci(p, &lower))
+    }
+}
+
+/// 글롭 전체 일치(`*` = 0개 이상 · `?` = 1개 · 패턴은 소문자로 바꿔 비교 · `name`은 이미 소문자).
+fn glob_ci(pattern: &str, name: &str) -> bool {
+    fn go(p: &[char], s: &[char]) -> bool {
+        match p.first() {
+            None => s.is_empty(),
+            Some('*') => (0..=s.len()).any(|k| go(&p[1..], &s[k..])),
+            Some('?') => !s.is_empty() && go(&p[1..], &s[1..]),
+            Some(c) => s.first() == Some(c) && go(&p[1..], &s[1..]),
+        }
+    }
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let s: Vec<char> = name.chars().collect();
+    go(&p, &s)
+}
+
+/// `f`가 도는 동안 이 스레드의 폴더 복사가 `filter`를 쓴다(끝나면 이전 값으로 · 빈 필터 = 없음과 같다).
+pub fn with_filter<R>(filter: NameFilter, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<NameFilter>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            FILTER.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+    let next = (!filter.is_empty()).then_some(filter);
+    let _restore = Restore(FILTER.with(|c| c.replace(next)));
+    f()
+}
+
+/// 계획 단계의 필터 판정(없으면 전부 허용).
+fn filter_allows(name: &std::ffi::OsStr, is_dir: bool) -> bool {
+    FILTER.with(|c| {
+        c.borrow()
+            .as_ref()
+            .is_none_or(|f| f.allows(&name.to_string_lossy(), is_dir))
+    })
 }
 
 /// 지금의 조절값 — 이 스레드의 덮어쓰기가 있으면 그것 · 아니면 프로세스 전역.
@@ -277,6 +346,12 @@ fn plan(
         let d = dest.join(e.file_name());
         let ft = e.file_type()?;
         let link = crate::is_link(&p);
+        // 이름 필터(`with_filter` · 10-25): 거른 항목은 계획에 없다 = 복사도 · 교차 볼륨 이동의 원본 정리도 안 한다(원본에 남는다).
+        let is_dir_like = (ft.is_dir() && !link)
+            || (link && fs::metadata(&p).map(|m| m.is_dir()).unwrap_or(false));
+        if !filter_allows(&e.file_name(), is_dir_like) {
+            continue;
+        }
         if ft.is_dir() && !link {
             plan(&p, &d, record, stop, jobs, dirs)?;
             if record {
@@ -1107,6 +1182,52 @@ mod tests {
 
     /// 범위 판정은 순수(`clamped`) · 덮어쓰기는 **이 스레드에서만**(`with_tuning` — 안에서는 t · 끝나면 복원 · 다른 스레드는 못 본다).
     /// 전역 `set_tuning`은 건드리지 않는다(병렬 시험 경합 방지 · macOS CI 10-24).
+    /// 이름 필터(10-25): exclude = 파일·폴더 · include = 파일만(폴더는 늘 들어감) · 대소문자 무시 · `with_filter` 범위 · 복사 결과에 반영.
+    #[test]
+    fn name_filter_rules_and_tree_copy_honors_them() {
+        let f = NameFilter {
+            include: vec!["*.txt".into()],
+            exclude: vec!["skip*".into(), "*.tmp".into()],
+        };
+        assert!(f.allows("A.TXT", false) && !f.allows("a.md", false));
+        assert!(f.allows("anydir", true) && !f.allows("skipdir", true));
+        assert!(!f.allows("x.tmp", false) && !f.allows("skip.txt", false));
+        assert!(NameFilter::default().allows("anything", false));
+        assert!(
+            filter_allows(std::ffi::OsStr::new("a.md"), false),
+            "필터 없음 = 전부"
+        );
+        let d = fixture("namefilter");
+        let src = d.join("src");
+        fs::create_dir_all(src.join("keep")).unwrap();
+        fs::create_dir_all(src.join("skipdir")).unwrap();
+        fs::write(src.join("a.txt"), b"a").unwrap();
+        fs::write(src.join("b.md"), b"b").unwrap();
+        fs::write(src.join("c.tmp"), b"c").unwrap();
+        fs::write(src.join("keep").join("d.txt"), b"d").unwrap();
+        fs::write(src.join("keep").join("e.md"), b"e").unwrap();
+        fs::write(src.join("skipdir").join("f.txt"), b"f").unwrap();
+        let dest = d.join("dest");
+        let t = Tuning {
+            native: false,
+            unbuffered_min: 0,
+            threads: 1,
+        };
+        let mut copied = Vec::new();
+        with_filter(f, || {
+            copy_tree(&src, &dest, &mut |_| {}, GO, Some(&mut copied), &t).unwrap();
+        });
+        assert!(dest.join("a.txt").is_file() && dest.join("keep").join("d.txt").is_file());
+        assert!(!dest.join("b.md").exists() && !dest.join("c.tmp").exists());
+        assert!(!dest.join("keep").join("e.md").exists());
+        assert!(!dest.join("skipdir").exists(), "제외 폴더는 통째로");
+        assert!(
+            filter_allows(std::ffi::OsStr::new("b.md"), false),
+            "범위 밖 = 복원"
+        );
+        let _ = fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn tuning_clamps_and_thread_local_override_restores() {
         let t = Tuning {

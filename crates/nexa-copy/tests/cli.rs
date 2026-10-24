@@ -168,6 +168,58 @@ fn copy_skip_overwrite_move_and_errors() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--include/--exclude`(10-25): 폴더 안은 엔진 계획 단계에서 거르고 · 최상위 원본은 CLI가 걸러 안내한다 · 대소문자 무시 · 제외가 우선.
+#[test]
+fn include_exclude_filters_files_and_top_level_sources() {
+    let d = sandbox("filter");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    make_tree(&src); // tree/f0..f39.txt · tree/deep/inner.bin · one.txt
+    fs::write(src.join("tree").join("note.md"), b"md").expect("write");
+    fs::create_dir_all(&dst).expect("mkdir");
+    let r = run(
+        &[&src.join("tree"), &src.join("one.txt"), &dst],
+        &[
+            "--include",
+            "*.TXT",
+            "--exclude",
+            "f1*",
+            "--exclude",
+            "deep",
+        ],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(dst.join("tree").join("f0.txt").is_file() && dst.join("one.txt").is_file());
+    assert!(
+        !dst.join("tree").join("f1.txt").exists() && !dst.join("tree").join("f10.txt").exists(),
+        "exclude f1*"
+    );
+    assert!(
+        !dst.join("tree").join("note.md").exists(),
+        "include = *.txt만"
+    );
+    assert!(
+        !dst.join("tree").join("deep").exists(),
+        "제외 폴더는 통째로"
+    );
+    // 최상위 원본이 걸러지면 안내 + 나머지만.
+    let d2 = d.join("dst2");
+    fs::create_dir_all(&d2).expect("mkdir");
+    let r = run(
+        &[&src.join("one.txt"), &src.join("tree"), &d2],
+        &["--exclude", "one.*"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(
+        r.err.contains("filtered out:") && r.err.contains("one.txt"),
+        "{}",
+        r.err
+    );
+    assert!(!d2.join("one.txt").exists() && d2.join("tree").is_dir());
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// `--dry-run`: stdout = 탭 보고서(항목마다 한 줄) · stderr = 요약 · 종료 0 · 대상 폴더 비어 있음 그대로.
 #[test]
 fn dry_run_prints_plan_and_changes_nothing() {

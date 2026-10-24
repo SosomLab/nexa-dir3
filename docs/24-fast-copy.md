@@ -162,6 +162,10 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   진행 `verifying · n of m`(m = 복사한 크기 × 2 · 250 ms) · 요약 `verified n file(s) · x read · k mismatch(es)[ · s skipped item(s) not verified] in t` ·
   `--move`면 `note: --verify is ignored with --move` 한 줄 · 취소면 `verification skipped` · Ctrl+C = 130(협업 수동 점검 10-25 반영). 시험 `verify_detects_mismatch_missing_and_type` +
   프로세스 시험(`--verify` 41 파일).
+- **필터 ✅ 10-25**(`--include <glob>` · `--exclude <glob>` · 반복 가능 · T-97 "필터" 1차): 엔진 `fastcopy::NameFilter` + `with_filter`(thread_local ·
+  계획 단계 `plan`에서 거른 항목은 복사도 · 교차 볼륨 이동의 원본 정리도 안 함 = 원본에 남음) · 규칙 = exclude(파일·폴더) 우선 · include는 파일만
+  (폴더는 늘 들어감) · 대소문자 무시 · 최상위 원본은 CLI가 걸러 `filtered out:` 안내 · dry-run도 최상위 반영(폴더 안은 실행 때). 한계: 진행
+  총량(`size_of`)은 거르기 전 크기라 끝에 100 % 미만일 수 있다 · 미러/차등은 후속.
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · 필터/미러(T-97 → T-98) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
+  포터블 zip · `release.yml` — 채널 결정) · 미러(T-97 → T-98) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
   복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).

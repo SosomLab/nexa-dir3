@@ -9,6 +9,8 @@
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
 //!   -n, --dry-run        print the plan (one tab-separated line per item on stdout) and change nothing
 //!   --verify             after copying, compare every copied file with its source (size + SHA-256); mismatch = exit 1
+//!   --include <glob>     copy only files whose name matches (repeatable · folders are always entered)
+//!   --exclude <glob>     skip files and folders whose name matches (repeatable)
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
 //! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
@@ -18,7 +20,7 @@
 //! dry-run 보고서(stdout · 탭 구분 · 항목마다 한 줄): `<action>\t<bytes>\t<source>\t<destination>\t<note>` —
 //! action = copy | move | duplicate | overwrite | skip | noop | error · note = `exists`(overwrite/skip) 또는 오류 사유 · 그 밖은 빈칸.
 
-use ndir_ops::fastcopy::{Tuning, THREADS_MAX};
+use ndir_ops::fastcopy::{NameFilter, Tuning, THREADS_MAX};
 use ndir_ops::{
     plan_transfer, transfer_with, Conflict, Event, ItemStatus, Op, Outcome, PlanAction,
 };
@@ -43,6 +45,9 @@ Options:
   -n, --dry-run        print the plan and change nothing: one line per item on stdout,
                        tab-separated: action, bytes, source, destination, note
                        (action = copy | move | duplicate | overwrite | skip | noop | error)
+  --include <glob>     copy only files whose name matches the glob (* ?, case-insensitive);
+                       repeatable · folders are always entered so matching files inside are found
+  --exclude <glob>     skip files and folders whose name matches (repeatable · wins over --include)
   --verify             after copying, compare each copied file with its source (size + SHA-256);
                        folders are checked recursively · a mismatch is reported and the exit code is 1
                        (ignored with --move: the source is gone)
@@ -66,6 +71,8 @@ pub(crate) struct Options {
     pub dry_run: bool,
     /// 복사 뒤 원본↔사본 대조(`--verify` · 크기 + SHA-256 · 이동은 무시).
     pub verify: bool,
+    /// 이름 필터(`--include/--exclude` · 글롭 · 폴더 안과 최상위 원본 모두).
+    pub filter: NameFilter,
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
 }
@@ -87,6 +94,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut quiet = false;
     let mut dry_run = false;
     let mut verify = false;
+    let mut filter = NameFilter::default();
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -107,6 +115,17 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "-q" | "--quiet" => quiet = true,
             "-n" | "--dry-run" => dry_run = true,
             "--verify" => verify = true,
+            "--include" | "--exclude" => {
+                let v = it.next().ok_or_else(|| format!("{a} needs a glob"))?;
+                if v.trim().is_empty() {
+                    return Err(format!("{a}: empty glob"));
+                }
+                if a == "--include" {
+                    filter.include.push(v.trim().to_string());
+                } else {
+                    filter.exclude.push(v.trim().to_string());
+                }
+            }
             "--threads" => {
                 let v = it.next().ok_or("--threads needs a number")?;
                 threads = v
@@ -137,6 +156,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         quiet,
         dry_run,
         verify,
+        filter,
         sources: paths,
         dest,
     }))
@@ -225,15 +245,28 @@ pub(crate) fn run_with(
     };
     let started = Instant::now();
     let mut printer = Printer::new(o.quiet, started);
-    let out = transfer_with(
-        &o.sources,
-        &o.dest,
-        o.op,
-        &mut resolve,
-        &mut |ev| printer.event(&ev, err),
-        cancel,
-        &tuning,
-    );
+    // 이름 필터(`--include/--exclude`): 최상위 원본은 여기서(거른 것은 안내) · 폴더 안은 엔진 계획 단계(`with_filter`).
+    let (sources, dropped): (Vec<PathBuf>, Vec<PathBuf>) = o
+        .sources
+        .iter()
+        .cloned()
+        .partition(|p| o.filter.allows(&ndir_ops::leaf_name(p), p.is_dir()));
+    if !o.quiet {
+        for p in &dropped {
+            let _ = writeln!(err, "filtered out: {}", p.display());
+        }
+    }
+    let out = ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+        transfer_with(
+            &sources,
+            &o.dest,
+            o.op,
+            &mut resolve,
+            &mut |ev| printer.event(&ev, err),
+            cancel,
+            &tuning,
+        )
+    });
     printer.summary(&out, started.elapsed(), err);
     // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1. 이동은 원본이 없어 못 하고(안내 한 줄) ·
     // 취소된 전송은 하지 않는다 · 건너뛴 항목(대상에 이미 있음)은 대조 대상이 아님을 요약에 적는다(협업 점검 10-25 — 조용히 통과로 오해 방지).
@@ -318,7 +351,13 @@ fn dry_run(o: &Options, out: &mut dyn Write, err: &mut dyn Write) -> ExitCode {
             Conflict::Skip
         }
     };
-    let plan = plan_transfer(&o.sources, &o.dest, o.op, &mut resolve);
+    let sources: Vec<PathBuf> = o
+        .sources
+        .iter()
+        .filter(|p| o.filter.allows(&ndir_ops::leaf_name(p), p.is_dir()))
+        .cloned()
+        .collect();
+    let plan = plan_transfer(&sources, &o.dest, o.op, &mut resolve);
     let verb = match o.op {
         Op::Copy => "copy",
         Op::Move => "move",
@@ -551,10 +590,15 @@ mod tests {
         };
         assert_eq!(o.op, Op::Copy);
         assert!(!o.overwrite && o.native && !o.quiet && !o.dry_run && !o.verify);
+        assert!(o.filter.is_empty());
         assert_eq!((o.threads, o.unbuffered_mb), (0, 0));
         assert_eq!(o.sources, vec![PathBuf::from("a"), PathBuf::from("b")]);
         assert_eq!(o.dest, PathBuf::from("dest"));
         let Ok(Parsed::Run(o)) = parse(&a(&[
+            "--include",
+            "*.txt",
+            "--exclude",
+            "*.tmp",
             "--verify",
             "-n",
             "--move",
@@ -574,6 +618,10 @@ mod tests {
         };
         assert_eq!(o.op, Op::Move);
         assert!(o.overwrite && !o.native && o.quiet && o.dry_run && o.verify);
+        assert_eq!(o.filter.include, vec!["*.txt".to_string()]);
+        assert_eq!(o.filter.exclude, vec!["*.tmp".to_string()]);
+        assert!(parse(&a(&["--include", "", "a", "b"])).is_err());
+        assert!(parse(&a(&["--exclude"])).is_err());
         assert_eq!((o.threads, o.unbuffered_mb), (4, 64));
         assert_eq!(o.sources, vec![PathBuf::from("x"), PathBuf::from("-weird")]);
         assert_eq!(o.dest, PathBuf::from("d"));
