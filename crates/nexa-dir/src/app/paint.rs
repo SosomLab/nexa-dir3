@@ -63,13 +63,35 @@ pub(crate) fn frame_plan(
     FramePlan::Partial(out)
 }
 
+/// 메뉴 damage(T-189 ⑥ · 순수): 메뉴는 오버레이로 치지 않고 **이번 프레임 메뉴 사각형 ∪ 지난 프레임 메뉴 사각형**을 더 그린다 —
+/// 열림 · 하위 메뉴 펼침 · hover · 닫힘(지난 자리 지우기)이 모두 덮인다. 빈 사각형은 뺀다.
+pub(crate) fn menu_damage(cur: Rect, prev: Rect) -> Vec<Rect> {
+    [cur, prev].into_iter().filter(|r| !r.is_empty()).collect()
+}
+
 impl App {
+    /// 열린 메뉴가 차지하는 사각형(메뉴 바 띠 ∪ 풀다운(하위 포함) ∪ 팝업 메뉴(하위 포함)) · 없으면 빈 사각형.
+    pub(crate) fn menu_rect(&self) -> Rect {
+        let mut parts = Vec::new();
+        if self.menubar.is_open() {
+            parts.push(self.menubar.bounds());
+            parts.push(self.menubar.popup_bounds());
+        }
+        if self.tab_menu.is_open() {
+            parts.push(self.tab_menu.bounds());
+        }
+        parts
+            .into_iter()
+            .filter(|r| !r.is_empty())
+            .reduce(|a, r| a.union(&r))
+            .unwrap_or(Rect::new(0, 0, 0, 0))
+    }
+
     /// 부분 다시 그리기를 막는 오버레이(10-18 결정 ①): 자기 사각형 밖에 그리거나(툴팁 · 드롭다운 · 경로 제안 · 끌기 고스트)
     /// 창을 덮는 층(플래시 · 토스트 · 팔레트 · 놓을 자리 표식 · 탭 끌기)이 있으면 전체를 그린다.
+    /// 메뉴(풀다운 · 팝업)는 여기 들지 않는다 — [`menu_damage`]로 자기 사각형만(T-189 ⑥).
     pub(crate) fn overlay_active(&self) -> bool {
-        self.menubar.is_open()
-            || self.tab_menu.is_open()
-            || self.palette.is_open()
+        self.palette.is_open()
             || self.palette.is_animating()
             || self.toasts_animating()
             || !self.toasts.is_empty()
@@ -105,8 +127,14 @@ impl App {
         let backend = surface.backend();
         let mut painted = None;
         // 더러워진 영역(10-18 결정 ①) — 꺼내며 비운다 · 계획은 버퍼의 `age`를 본 뒤.
-        let dmg = std::mem::take(&mut *self.damage.borrow_mut());
+        let mut dmg = std::mem::take(&mut *self.damage.borrow_mut());
         let partial_on = self.settings.flag("gfx.partial_redraw");
+        // 메뉴 자리(이번 ∪ 지난 프레임)는 늘 더 그린다(T-189 ⑥ — 종전 = 메뉴가 열려 있으면 전체).
+        let menu_now = self.menu_rect();
+        for r in menu_damage(menu_now, self.menu_rect_prev) {
+            dmg.push(r);
+        }
+        self.menu_rect_prev = menu_now;
         let overlay = partial_on && self.overlay_active();
         let mut mode = String::from("full");
         if let Some(mut buf) = surface.frame(size) {
@@ -308,6 +336,18 @@ mod damage_tests {
             FramePlan::Partial(vec![Rect::new(0, 0, 85, 5)]),
             "상한 넘으면 합집합 하나"
         );
+    }
+
+    /// 메뉴 damage: 이번 ∪ 지난 · 빈 것 제외(열림 = 이번만 · 닫힘 = 지난만 · 둘 다 없음 = 없음).
+    #[test]
+    fn menu_damage_covers_open_and_close() {
+        let z = Rect::new(0, 0, 0, 0);
+        let a = Rect::new(10, 10, 50, 80);
+        let b = Rect::new(10, 10, 120, 80);
+        assert!(menu_damage(z, z).is_empty());
+        assert_eq!(menu_damage(a, z), vec![a], "열림");
+        assert_eq!(menu_damage(z, a), vec![a], "닫힘 = 지난 자리 지우기");
+        assert_eq!(menu_damage(b, a), vec![b, a], "하위 메뉴 펼침");
     }
 
     /// 겹치는 사각형은 합치고 · 빈 사각형은 무시 · `full`은 그대로.

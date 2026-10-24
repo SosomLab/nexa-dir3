@@ -324,6 +324,8 @@ struct App {
     /// 프레임 추적(`NDIR_TRACE_FRAMES=1` · T-176 ④ 입력 지연 계측 · docs/25 §5-4): 다시 그리기를 **요청한** 시각(첫 요청만 · 그린 뒤 비움)
     /// 과 프레임 번호 — `[frame]` 줄의 `wait`(요청 → 그리기 시작) · `paint` · `present` µs.
     frame_req_at: std::cell::Cell<Option<Instant>>,
+    /// 지난 프레임의 메뉴 사각형(T-189 ⑥ · 닫힌 자리 지우기).
+    menu_rect_prev: Rect,
     frame_no: u64,
     /// 다음 프레임의 더러워진 영역(10-18 결정 ① 부분 다시 그리기 · `app::paint::Damage`): `redraw()` = 전체 · `redraw_inv` = 사각형만.
     damage: std::cell::RefCell<app::paint::Damage>,
@@ -754,6 +756,7 @@ impl App {
             startup_blocked_since: Instant::now(),
             ready_fired: false,
             frame_req_at: std::cell::Cell::new(None),
+            menu_rect_prev: Rect::new(0, 0, 0, 0),
             damage: std::cell::RefCell::new(app::paint::Damage::default()),
             frame_no: 0,
             prefs_win: PrefsWin::new(),
