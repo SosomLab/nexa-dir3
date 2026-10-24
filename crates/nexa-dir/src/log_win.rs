@@ -14,7 +14,7 @@ use ndir_i18n::tr;
 use ndir_log::{Columns, LogBuffer, LogEntry, LogFormat, LogKind};
 use nexa_ctl::controls::ctxmenu::{ContextMenu, CtxItem};
 use nexa_ctl::controls::{LabelSide, Switch};
-use nexa_ctl::draw::{draw_tooltip, DrawCtx, FontSlot};
+use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
 use nexa_ctl::theme::{FontPrefs, SlotFont, Theme};
@@ -27,7 +27,6 @@ fn t_(key: &str) -> String {
     tr(key)
 }
 use std::rc::Rc;
-use std::time::Instant;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
@@ -58,7 +57,8 @@ struct LineMeta {
 }
 
 /// 스위치 툴팁까지 머무는 시간(ms).
-const TIP_MS: u128 = 600;
+/// 푸터 스위치 툴팁 지연(ms · nexa-ctl `Tooltip` 229차에 넘긴다).
+const TIP_MS: u64 = 600;
 
 pub(crate) struct LogWin {
     window: Option<Rc<Window>>,
@@ -78,10 +78,8 @@ pub(crate) struct LogWin {
     vis: Vec<usize>,
     /// 우클릭 메뉴(종류·컬럼 토글 · 저장 · 복사 · 지우기).
     menu: ContextMenu,
-    /// 푸터 스위치 위 hover(index · 시작 시각) — 머물면 툴팁.
-    sw_hover: Option<(usize, Instant)>,
-    /// 툴팁을 이미 그렸다(다음 tick에 다시 깨우지 않게).
-    tip_shown: bool,
+    /// 푸터 스위치 툴팁(nexa-ctl `Tooltip` 229차 · UIK-208 · 10-25): 머묾/지연/보임 상태기계 — 종전의 hover 시각 + 보임 깃발 복제를 대체.
+    tip: nexa_ctl::controls::tooltip::Tooltip,
     /// 푸터 스위치 트랙 배율(설정 `log.switch_scale` %).
     switch_mult: f32,
     /// 항목마다 배치(버퍼와 같은 순서 · `None` = 아직 계산 전).
@@ -152,8 +150,12 @@ impl LogWin {
             kinds: Vec::new(),
             vis: Vec::new(),
             menu: ContextMenu::new(),
-            sw_hover: None,
-            tip_shown: false,
+            tip: {
+                let mut t = nexa_ctl::controls::tooltip::Tooltip::new();
+                t.set_delay_ms(TIP_MS);
+                t.set_above(Some(true)); // 푸터 위쪽에(아래는 창 밖)
+                t
+            },
             switch_mult: 0.8,
             meta: VecDeque::new(),
             row_start: Vec::new(),
@@ -500,7 +502,8 @@ impl LogWin {
     /// 스크롤바 페이드 틱 — 다시 그릴 것이 있으면 true.
     pub(crate) fn tick(&mut self, now_ms: u64) -> bool {
         let bars = self.bars.tick(now_ms);
-        bars || self.tooltip_due() || self.drag_edge_scroll()
+        let tip = self.tip.tick(); // 지연이 지나 처음 보이게 되면 true(한 번)
+        bars || tip || self.drag_edge_scroll()
     }
 
     /// 끌기 중 커서가 본문 밖이면 그쪽으로 한 행/한 걸음 스크롤하고 head를 다시 잡는다(사용자 09-16).
@@ -665,17 +668,28 @@ impl LogWin {
         Some((di, st + k.min(en - st)))
     }
 
-    /// 스위치 위에 머문 지 600ms가 됐고 아직 안 그렸다.
-    fn tooltip_due(&self) -> bool {
-        !self.tip_shown
-            && self
-                .sw_hover
-                .is_some_and(|(_, since)| since.elapsed().as_millis() >= TIP_MS)
-    }
-
     /// 호스트의 타이머 유지 조건 — 툴팁을 기다리는 중.
     pub(crate) fn tooltip_pending(&self) -> bool {
-        self.sw_hover.is_some() && !self.tip_shown
+        self.tip.pending()
+    }
+
+    /// 스위치 `i`의 툴팁 글 키.
+    fn switch_tip_key(i: usize) -> &'static str {
+        match i {
+            0 => "log.tip.wrap",
+            1 => "log.tip.sort",
+            2 => "log.tip.scroll",
+            _ => "log.tip.top",
+        }
+    }
+
+    fn switch_bounds(&self, i: usize) -> Rect {
+        match i {
+            0 => self.wrap_switch.bounds(),
+            1 => self.newest_switch.bounds(),
+            2 => self.auto_switch.bounds(),
+            _ => self.top_switch.bounds(),
+        }
     }
 
     fn switch_at(&self, p: Point) -> Option<usize> {
@@ -936,22 +950,11 @@ impl LogWin {
                         self.redraw();
                     }
                 } else if !self.bars_event(&InputEvent::MouseMove { x, y }) {
+                    // 스위치 툴팁(nexa-ctl `Tooltip`): 머문 스위치가 바뀌면 지연을 다시 세고 · 보이던 것이 사라지면 다시 그린다.
                     let over = self.switch_at(Point { x, y });
-                    match (over, self.sw_hover) {
-                        (Some(i), Some((j, _))) if i == j => {}
-                        (Some(i), _) => {
-                            self.sw_hover = Some((i, Instant::now()));
-                            if std::mem::take(&mut self.tip_shown) {
-                                self.redraw();
-                            }
-                        }
-                        (None, Some(_)) => {
-                            self.sw_hover = None;
-                            if std::mem::take(&mut self.tip_shown) {
-                                self.redraw();
-                            }
-                        }
-                        (None, None) => {}
+                    let target = over.map(|i| (self.switch_bounds(i), t_(Self::switch_tip_key(i))));
+                    if self.tip.hover(target) {
+                        self.redraw();
                     }
                     let mut inv = Invalidations::default();
                     let mv = InputEvent::MouseMove { x, y };
@@ -1438,26 +1441,9 @@ impl LogWin {
                 self.view_y(),
                 s,
             );
-            // 스위치 툴팁(600ms 머문 뒤 · 푸터 위쪽에 — 아래는 창 밖).
-            if self.tooltip_due() {
-                if let Some((i, _)) = self.sw_hover {
-                    let (b, msg) = match i {
-                        0 => (self.wrap_switch.bounds(), "log.tip.wrap"),
-                        1 => (self.newest_switch.bounds(), "log.tip.sort"),
-                        2 => (self.auto_switch.bounds(), "log.tip.scroll"),
-                        _ => (self.top_switch.bounds(), "log.tip.top"),
-                    };
-                    let text = t_(msg);
-                    dc.select_font(FontSlot::Status, false);
-                    let lines = text.split('\n').count() as i32;
-                    let tip_h = dc.text_height() * lines + (8.0 * s).round() as i32;
-                    let gap = (6.0 * s).round() as i32;
-                    // draw_tooltip은 anchor 아래 gap에 그린다 → 아래가 푸터 위에 닿는 가짜 anchor.
-                    let anchor = Rect::new(b.x, fy - gap - tip_h - gap - 1, b.w, 1);
-                    draw_tooltip(&mut dc, th, anchor, wi, &text, s);
-                    self.tip_shown = true;
-                }
-            }
+            // 스위치 툴팁(nexa-ctl `Tooltip` 229차 · 600ms 머문 뒤 · 위쪽에 — 아래는 창 밖).
+            dc.select_font(FontSlot::Status, false);
+            self.tip.paint(&mut dc, th, (0, wi), s);
             // 우클릭 메뉴(맨 위 층).
             self.menu.paint(&mut dc, th);
         }

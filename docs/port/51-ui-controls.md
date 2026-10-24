@@ -226,7 +226,7 @@
 | UIK-205 | **MenuBar 확장** — 단축키 열 · 체크/라디오 · `set_checked` · (선택) Alt 니모닉 · 창 밖 클램프 | P0 | `MenuEntry`는 `ComboItem`만(UIK-017 한계) | dir2 `widgets/menubar.rs` GUI-060·063·066 | `UC/pulldown.rs` 수정(하위 호환 유지) |
 | UIK-206 | **Toolbar 확장** — 항목 `checked`(토글 표시) · 폭 넘침 오버플로 | P1 | `ToolItem`에 `checked` 없음(UIK-022) | dir2 `chrome.rs` GUI-074 | `UC/toolbar.rs` 수정 |
 | UIK-207 | **TabBar 확장** — 탭 아이콘(폴더/드라이브) · hover 툴팁(전체 경로) · (선택) MouseDown 전환 옵션 | P1 | 아이콘·툴팁 없음(UIK-020) · 전환 시점이 dir2와 다름 | dir2 `widgets/tabbar.rs` GUI-040~051 | `UC/tabbar.rs` 수정 |
-| UIK-208 | **Tooltip 관리자**(지연 · 위치 접기 · 팝업 층) | P1 | 그리기 함수만 있음(`U/draw.rs:227-240` `draw_tooltip(_in)`) · Toolbar만 자체 툴팁 | dir2 `A/tip.rs`(Win32 팝업 창 — `P/14…:40`) | `nexa-ctl::controls::tooltip` |
+| UIK-208 | **Tooltip 관리자**(지연 · 위치 접기 · 팝업 층) | P1 | 그리기 함수만 있음(`U/draw.rs:227-240` `draw_tooltip(_in)`) · Toolbar만 자체 툴팁 | dir2 `A/tip.rs`(Win32 팝업 창 — `P/14…:40`) | `nexa-ctl::controls::tooltip` — **✅ 10-25 nexa-ui 229 `Tooltip`**(hover/tick/pending/next_wake/dismiss · paint = `draw_tooltip_in_dir`) · dir3 로그 창 적용 |
 | UIK-209 | **Overlay z 스택**(Base→Popup→Modal · 모달 입력 독점) | P1 | 없음(`UDoc/TODO.md` F-2 ☐) — 지금은 컨트롤마다 `paint_popup`을 호스트가 수동 호출 | — | `nexa-ctl::overlay` |
 | UIK-210 | **FolderTree**(지연 로딩 트리: 로딩/오류 노드 · 새로고침 diff · 경로 reveal) | P1 | `TreeView`는 eager(UIK-024) · nexa-dlg 사이드바/`S/project_panel.rs`가 각자 구현 | dir2 폴더 트리(추정 — `P/13…` 확인 필요) | `nexa-ctl::controls::tree` 확장 또는 `nexa-dlg`에서 분리 승격(F-3 잔여 "FileTree 독립 컨트롤") |
 | UIK-211 | **InputEvent 확장** — `DoubleClick` · `MiddleDown` · `alt` 수식키 · 드래그 시작/드롭 어휘 | P0 | 없음(UIK-001 한계) — 소비자마다 400ms 판정 복제 | dir2 `nexa-gui/event.rs` GUI-005(어휘 차이는 그 문서 기준) | `U/event.rs`(기존 변형은 유지하고 **추가만**) |

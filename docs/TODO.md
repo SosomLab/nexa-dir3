@@ -41,7 +41,7 @@
 | T-25 | `nexa-grid` VirtualRows + Column + RowSource + 인라인 이름 바꾸기 + 보기 모드 + 픽셀/고속 스크롤(dir2 rows·columns·typeahead·fastscroll 이식) | P0 | 대 | T-20·21 | UIK-201·216·217 · PANEL · GUI | ✅ G-1 10-03(nexa-ui 105차 · 시험 53) · G-2(`write_cell`·`icon()`·타입어헤드/고속 스크롤 통일)는 M3 소비 시 |
 | T-26 | PathBar(브레드크럼·편집·자동완성 팝업) | P0 | 중 | — | UIK-202 · GUI-090~101 | ✅ 10-03(nexa-ui 106차 `nexa-explorer::PathBar` · dir2 시험 7) |
 | T-27 | InfoDock(종류 스트립 · 텍스트/이미지 · 오버레이 바 · 터미널 슬롯) | P0 | 중 | T-25 | UIK-204 · GUI-110~ | ✅ 10-03(106차 `InfoDock`·`OverlayBars` · dir2 시험 18) |
-| T-28 | Tooltip 관리자 · Overlay z 스택 | P1 | 소 | — | UIK-208·209 | ☐ |
+| T-28 | Tooltip 관리자 · Overlay z 스택 | P1 | 소 | — | UIK-208·209 | 🚧 **UIK-208 Tooltip ✅ 10-25**(nexa-ui 229 `controls::tooltip::Tooltip` · 머묾/지연/보임 상태기계 · dir3 로그 창 스위치 툴팁이 첫 소비자 · 툴바/도크/탭 바 이전은 후속 후보) · UIK-209 Overlay z 스택 ☐(nexa-ui F-2) |
 | T-29 | nexa-dlg: Dialog 프레임 · MessageBox(버튼 N) · Prompt · Progress 창 · 폴더 선택 | P0 | 중 | — | UIK-212·215 · DLG | 🚧 10-03 journal §30(A: 확인/4버튼/마스킹 입력 창 + 영구 삭제·충돌 배선 ✅ · B: 폴더 찾아보기 ✅ journal §36 `file_win` · 진행 창 ✅ journal §46) |
 | T-30 | dir2 전용 소형 컨트롤 대응(fontbox · spin · segmented · ordertree · groupcard · searchbox · iconbutton · menubutton) — 기존 nexa-ctl 대체 또는 추가 · 툴바/런처 아이콘 | P1 | 중 | — | DLG-0xx · GUI-07x | ✅ 10-03(A 툴바 SVG journal §39 · B 런처 exe 아이콘 journal §52 · ordertree = order_win §50 · 나머지 소형 컨트롤 = nexa-ctl 기존으로 대체) |
 | T-31 | DrawCtx `push_clip/pop_clip` · 터미널 셀 텍스트 · italic · 테마 토큰(tab_bar_bg·header_bg·dock_bg·status_bar_bg) · ICO/SVG 디코더 | P1 | 중 | — | UIC-310~317 · RENDER | 🚧 10-03(SVG 래스터 + `draw_image_hint` ✅ nexa-ui 108차 journal §38 · 클립 스택 ✅ 112차 §67 · italic/장식 설정/터미널 굵은 셀 ✅ 113차 §68 · 테마 토큰 = nexa-grid 대체 종결 · ICO ✅ nexa-ui 153차 6a55ef3 — 10-05 §44 정정) |
