@@ -11,7 +11,7 @@
 use crate::platform::PlatformError;
 use crate::*;
 use ndir_ops::history::{CopyBatchOp, MoveBatchOp, OpError, OperationHistory};
-use ndir_ops::{Conflict, Event, ItemStatus, Op, Outcome};
+use ndir_ops::{Conflict, Event, ItemStatus, Op, OpsError, Outcome};
 use nexa_ctl::{SegItem, SegStatus};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -97,6 +97,19 @@ fn materialize(dest: &std::path::Path, src: &platform::TemplateSource) -> std::i
                 .open(dest)?;
             f.write_all(bytes)
         }
+    }
+}
+
+/// 엔진 오류 → 사용자 문구(순수): 엔진 어휘([`OpsError`] · 영어 접두)면 i18n 키(`ops.err.*`) · 그 밖(OS 오류)은 문구 그대로.
+pub(crate) fn ops_err_text(e: &std::io::Error) -> String {
+    let text = e.to_string();
+    match OpsError::of(&text) {
+        Some(k) => {
+            // 꼬리(`: 세부`)는 그대로 덧붙인다.
+            let tail = &text[k.message().len()..];
+            format!("{}{tail}", tr(k.i18n_key()))
+        }
+        None => text,
     }
 }
 
@@ -754,7 +767,7 @@ impl App {
             }
             Err(e) => {
                 self.statusbar
-                    .set_left(&trf("rename.fail", &[&e.to_string()]), &mut inv);
+                    .set_left(&trf("rename.fail", &[&ops_err_text(&e)]), &mut inv);
             }
         }
         self.update_status();

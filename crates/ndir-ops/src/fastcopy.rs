@@ -288,10 +288,7 @@ fn plan(
             // ② 상위 폴더를 가리키는 링크(순환)는 오류로 멈춘다.
             if let (Ok(target), Ok(here)) = (fs::canonicalize(&p), fs::canonicalize(src)) {
                 if here.starts_with(&target) {
-                    return Err(io::Error::other(format!(
-                        "링크가 상위 폴더를 가리켜 복사할 수 없음(순환): {}",
-                        crate::leaf_name(&p)
-                    )));
+                    return Err(crate::OpsError::LinkCycle.io_with(crate::leaf_name(&p)));
                 }
             }
             plan(&p, &d, false, stop, jobs, dirs)?;
@@ -869,10 +866,7 @@ mod os {
             v
         };
         if out.contains(&0) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "경로에 NUL 문자가 있음",
-            ));
+            return Err(crate::OpsError::NulInPath.io());
         }
         out.push(0);
         Ok(out)

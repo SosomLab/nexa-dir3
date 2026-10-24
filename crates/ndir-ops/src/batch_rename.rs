@@ -853,7 +853,7 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
             exists(to)
         }
     };
-    let taken = || "같은 이름이 이미 있음".to_string();
+    let taken = || crate::OpsError::NameTaken.message().to_string();
     let moving: HashSet<String> = list
         .iter()
         .filter(|(f, t)| f != t)
@@ -868,7 +868,10 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
             continue;
         }
         if !exists(from) {
-            out.failed.push((from.clone(), "원본이 없음".into()));
+            out.failed.push((
+                from.clone(),
+                crate::OpsError::SourceMissing.message().into(),
+            ));
         } else if !occupied(from, to) {
             direct.push(i);
         } else if key(from) != key(to) && moving.contains(&key(to)) {

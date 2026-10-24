@@ -10198,3 +10198,20 @@ fn toolbar_reset_restores_default_layout() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 엔진 오류 → 사용자 문구(10-24 협업 점검 "CLI에 한글 리터럴" 처방): 엔진 어휘는 i18n 키로(꼬리 유지) · OS 오류는 그대로.
+#[test]
+fn ops_err_text_maps_engine_vocabulary_to_i18n() {
+    use crate::app::ops::ops_err_text;
+    use ndir_ops::OpsError;
+    assert_eq!(
+        ops_err_text(&OpsError::NameTaken.io()),
+        tr("ops.err.nameTaken")
+    );
+    assert_eq!(
+        ops_err_text(&OpsError::LinkCycle.io_with("up")),
+        format!("{}: up", tr("ops.err.linkCycle"))
+    );
+    let os = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Access is denied");
+    assert_eq!(ops_err_text(&os), "Access is denied");
+}

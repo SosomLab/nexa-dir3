@@ -101,7 +101,7 @@ impl App {
                     }
                     Some(Err(e)) => self
                         .compare_win
-                        .set_error(&trf("cmp.failed", &[&e.to_string()])),
+                        .set_error(&trf("cmp.failed", &[&crate::app::ops::ops_err_text(&e)])),
                     None => self.compare_win.set_error(&tr("cmp.failed")),
                 }
                 let _ = job.by_content;
@@ -142,7 +142,10 @@ impl App {
                     Some(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {
                         (tr("ops.canceled"), true)
                     }
-                    Some(Err(e)) => (trf("cmp.failed", &[&e.to_string()]), true),
+                    Some(Err(e)) => (
+                        trf("cmp.failed", &[&crate::app::ops::ops_err_text(&e)]),
+                        true,
+                    ),
                     None => (tr("cmp.failed"), true),
                 };
                 if self.progress_win.is_active() {

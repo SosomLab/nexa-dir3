@@ -33,6 +33,100 @@ pub enum Conflict {
     Skip,
 }
 
+/// 엔진이 만드는 오류의 **종류와 영어 문구**(라이브러리 규칙 · 프로그램 내부 문구는 영어 · 사용자 10-10 · 협업 점검 10-24 "CLI에 한글
+/// 리터럴"). CLI(`nexa-copy`)는 문구를 그대로 쓰고 · 앱은 [`OpsError::of`]로 종류를 되찾아 i18n 키(`ops.err.*`)로 바꾼다.
+/// 문구 뒤에 `: <경로>` 같은 꼬리가 붙을 수 있으므로 `of`는 접두 일치.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OpsError {
+    /// 폴더를 자기 자신/하위로 이동.
+    IntoSelf,
+    /// 빈 이름 · 구분자가 든 이름.
+    BadName,
+    /// 루트(부모 없음)의 이름 변경.
+    RootRename,
+    /// 같은 이름의 항목이 이미 있음.
+    NameTaken,
+    /// 상위 폴더를 가리키는 링크(순환) — 복사 중단.
+    LinkCycle,
+    /// 경로에 NUL 문자.
+    NulInPath,
+    /// 원본이 없음(일괄 이름 바꾸기).
+    SourceMissing,
+    /// 이동 뒤 원본 폴더를 비울 수 없어 남겨 둠.
+    LeftoverSource,
+}
+
+impl OpsError {
+    pub const ALL: [OpsError; 8] = [
+        OpsError::IntoSelf,
+        OpsError::BadName,
+        OpsError::RootRename,
+        OpsError::NameTaken,
+        OpsError::LinkCycle,
+        OpsError::NulInPath,
+        OpsError::SourceMissing,
+        OpsError::LeftoverSource,
+    ];
+
+    /// 영어 문구(접두 — 뒤에 `: 세부`가 붙을 수 있다).
+    pub const fn message(self) -> &'static str {
+        match self {
+            OpsError::IntoSelf => "cannot move a folder into itself or one of its subfolders",
+            OpsError::BadName => "invalid name",
+            OpsError::RootRename => "cannot rename a root",
+            OpsError::NameTaken => "an item with that name already exists",
+            OpsError::LinkCycle => "link points to a parent folder (cycle), cannot copy",
+            OpsError::NulInPath => "path contains a NUL character",
+            OpsError::SourceMissing => "source does not exist",
+            OpsError::LeftoverSource => {
+                "could not empty the source folder, left in place (some items may not have been copied)"
+            }
+        }
+    }
+
+    /// 앱 i18n 키(`ndir-i18n` `ops.err.*`).
+    pub const fn i18n_key(self) -> &'static str {
+        match self {
+            OpsError::IntoSelf => "ops.err.intoSelf",
+            OpsError::BadName => "ops.err.badName",
+            OpsError::RootRename => "ops.err.rootRename",
+            OpsError::NameTaken => "ops.err.nameTaken",
+            OpsError::LinkCycle => "ops.err.linkCycle",
+            OpsError::NulInPath => "ops.err.nulInPath",
+            OpsError::SourceMissing => "ops.err.sourceMissing",
+            OpsError::LeftoverSource => "ops.err.leftoverSource",
+        }
+    }
+
+    /// 오류 문구(`io::Error::to_string()` 등)에서 종류 되찾기 — 접두 일치 · 모르는 문구 = `None`(OS 오류 등 · 그대로 보여 준다).
+    pub fn of(text: &str) -> Option<OpsError> {
+        OpsError::ALL
+            .into_iter()
+            .find(|k| text.starts_with(k.message()))
+    }
+
+    /// `io::Error`로(종류별 `ErrorKind`).
+    pub fn io(self) -> io::Error {
+        let kind = match self {
+            OpsError::BadName | OpsError::RootRename | OpsError::NulInPath => {
+                io::ErrorKind::InvalidInput
+            }
+            OpsError::NameTaken => io::ErrorKind::AlreadyExists,
+            OpsError::SourceMissing => io::ErrorKind::NotFound,
+            OpsError::IntoSelf | OpsError::LinkCycle | OpsError::LeftoverSource => {
+                io::ErrorKind::Other
+            }
+        };
+        io::Error::new(kind, self.message())
+    }
+
+    /// `io::Error`로 — 문구 뒤에 `: detail`.
+    pub fn io_with(self, detail: impl std::fmt::Display) -> io::Error {
+        let kind = self.io().kind();
+        io::Error::new(kind, format!("{}: {detail}", self.message()))
+    }
+}
+
 /// 전송 결과 — `transferred`의 (원본, 최종 대상) 쌍은 Undo(M3-3) 기록용.
 #[derive(Default, Debug)]
 pub struct Outcome {
@@ -260,7 +354,8 @@ fn remove_empty_dir(dir: &Path) -> io::Result<()> {
         io::Error::new(
             e.kind(),
             format!(
-                "원본 폴더를 비울 수 없어 남겨 둠(복사되지 않은 항목이 있을 수 있음): {}: {e}",
+                "{}: {}: {e}",
+                OpsError::LeftoverSource.message(),
                 leaf_name(dir)
             ),
         )
@@ -382,7 +477,7 @@ pub fn move_onto_with_progress(
 ) -> io::Result<()> {
     let is_dir = src.is_dir();
     if is_dir && is_same_or_sub(src, dest) {
-        return Err(io::Error::other("자기 자신/하위 폴더로는 이동할 수 없음"));
+        return Err(OpsError::IntoSelf.io());
     }
     if same_volume(src, dest) {
         // 옛 대상은 새 대상이 자리를 잡은 뒤에만 사라진다(점검 1차 #1 — 종전은 선삭제 후 rename).
@@ -427,20 +522,15 @@ pub fn delete_permanent(path: &Path) -> io::Result<()> {
 pub fn rename(path: &Path, new_name: &str) -> io::Result<PathBuf> {
     let new_name = new_name.trim();
     if new_name.is_empty() || new_name.contains(['\\', '/']) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "잘못된 이름"));
+        return Err(OpsError::BadName.io());
     }
-    let parent = path
-        .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "루트는 이름변경 불가"))?;
+    let parent = path.parent().ok_or_else(|| OpsError::RootRename.io())?;
     let dest = parent.join(new_name);
     if path_equals(path, &dest) {
         return Ok(path.to_path_buf()); // 동일 이름 = 무동작
     }
     if exists(&dest) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "같은 이름이 이미 있음",
-        ));
+        return Err(OpsError::NameTaken.io());
     }
     fs::rename(path, &dest)?;
     Ok(dest)
@@ -505,8 +595,6 @@ enum Placement {
     /// 다른 폴더 → 자연 경로(`exists`면 충돌 → `resolve`).
     Into { dest: PathBuf, exists: bool },
 }
-
-const INTO_SELF_MSG: &str = "자기 자신/하위 폴더로는 이동할 수 없음";
 
 fn placement(src: &Path, dest_dir: &Path, op: Op) -> Placement {
     let is_dir = src.is_dir();
@@ -588,7 +676,7 @@ pub fn plan_transfer(
             Placement::Duplicate(dest) => (dest, PlanAction::Duplicate),
             Placement::IntoSelf => (
                 dest_dir.join(leaf_name(src)),
-                PlanAction::Error(INTO_SELF_MSG.to_string()),
+                PlanAction::Error(OpsError::IntoSelf.message().to_string()),
             ),
             Placement::Into {
                 dest,
@@ -683,7 +771,7 @@ fn transfer_inner(
             let (dest, overwrite) = match placement(src, dest_dir, op) {
                 Placement::NoOp => return Ok(None), // 제자리 이동 = 무동작(원본 규칙)
                 Placement::Duplicate(dest) => (dest, false), // 같은 폴더 복사 = 순번 복제(" (2)"…)
-                Placement::IntoSelf => return Err(io::Error::other(INTO_SELF_MSG)),
+                Placement::IntoSelf => return Err(OpsError::IntoSelf.io()),
                 Placement::Into { dest, exists } => {
                     let overwrite = exists
                         && match resolve(&dest) {
@@ -763,6 +851,37 @@ mod tests {
     ) -> Outcome {
         let cancel = AtomicBool::new(false);
         transfer(sources, dest, op, resolve, &mut |_| {}, &cancel)
+    }
+
+    /// 엔진 오류 어휘(10-24): 문구는 영어 · `of`는 접두 일치(꼬리 `: 세부` 허용) · 모르는 문구 = None · 종류별 ErrorKind · i18n 키 고유.
+    #[test]
+    fn ops_error_messages_round_trip() {
+        for k in OpsError::ALL {
+            assert_eq!(OpsError::of(k.message()), Some(k));
+            assert_eq!(OpsError::of(&k.io().to_string()), Some(k));
+            assert_eq!(OpsError::of(&k.io_with("x/y").to_string()), Some(k));
+            assert!(k.message().is_ascii(), "영어 문구: {k:?}");
+            assert!(k.i18n_key().starts_with("ops.err."));
+        }
+        let keys: std::collections::HashSet<&str> =
+            OpsError::ALL.iter().map(|k| k.i18n_key()).collect();
+        assert_eq!(keys.len(), OpsError::ALL.len(), "i18n 키 고유");
+        assert_eq!(OpsError::of("Access is denied. (os error 5)"), None);
+        assert_eq!(
+            OpsError::NameTaken.io().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(OpsError::BadName.io().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(OpsError::SourceMissing.io().kind(), io::ErrorKind::NotFound);
+        // rename 오류가 어휘를 쓴다.
+        let d = fixture("opserr");
+        fs::write(d.join("a.txt"), "x").unwrap();
+        fs::write(d.join("b.txt"), "y").unwrap();
+        let e = rename(&d.join("a.txt"), "b.txt").unwrap_err();
+        assert_eq!(OpsError::of(&e.to_string()), Some(OpsError::NameTaken));
+        let e = rename(&d.join("a.txt"), "x/y").unwrap_err();
+        assert_eq!(OpsError::of(&e.to_string()), Some(OpsError::BadName));
+        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

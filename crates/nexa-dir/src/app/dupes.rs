@@ -88,7 +88,7 @@ impl App {
             }
             Some(Err(e)) => self
                 .dupes_win
-                .set_error(&trf("dupes.failed", &[&e.to_string()])),
+                .set_error(&trf("dupes.failed", &[&crate::app::ops::ops_err_text(&e)])),
             None => self.dupes_win.set_error(&tr("dupes.failed")),
         }
         false
