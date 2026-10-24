@@ -165,6 +165,9 @@
 | 350 ms · 70 ms | nexa-ctl `ContextMenu`(nexa-ui 150) | 띠 누르고 있기 반복 시작 지연 · 반복 간격 | — | 상수(컨트롤 내부 · OS 키 반복 감각) | — | — |
 | 탭 메뉴 = 바깥 클릭이 닫고 통과 · 메뉴 바 = 닫고 소비(비대칭 · dir3 종전) | `app/input.rs::{menu_exclusive_step, open_menu_bits, menu_hit_bits, close_menu_bits}` | 메뉴 영역 간 배타 — 열린 메뉴(메뉴 바 풀다운 · 우클릭/상태줄 칸 팝업) 밖 좌/우 클릭 = 닫기 · 새로 열린 메뉴가 있으면 먼저 열린 것 닫기 · 키·글자는 대상 아님(열린 메뉴가 받음) · 끄면 종전 | on | 설정(취향) | `ui.ctxmenu_exclusive`(T-191 · NEW-049 · nexa-sql 같은 키) | ✅ 10-20 §1(4d21f6c) |
 | (위와 같음) | `app/input.rs::menu_exclusive_step`(`stop = !passthrough`) | 메뉴를 닫는 클릭을 바로 진행할지(켬 = 다른 곳 우클릭이면 새 메뉴 즉시 · 끔 = 닫기만, 다시 클릭) | on | 설정(취향 · DEPENDS `ui.ctxmenu_exclusive` on) | `ui.ctxmenu_passthrough`(T-191 · NEW-049) | ✅ 10-20 §1(4d21f6c) |
+| 메뉴 열린 채 다른 창으로 포커스 이동 = 메뉴 남음(dir3 종전) | `app/input.rs::menus_on_blur` · `event_loop` `Focused(false)` | 다른 창으로 포커스가 가면 열린 메뉴(풀다운 · 우클릭/상태줄 칸 팝업) 닫기 | on | 설정(컨텍스트 메뉴) | `ui.menus_close_on_blur`(T-192 · nexa-sql 같은 키) | ✅ 10-24 §1(c49b55d) |
+| 상한 없음(60 ms 디바운스가 계속 밀림 · dir3 종전) | `main.rs::docks_due_at` · `App::docks_first` | 도크 갱신 미루기 최대 지연 — 선택이 계속 바뀌어도 묶음 첫 요청 + 이 시간이면 갱신(0~5000 · 0 = 종전) | 250 ms | 고급(하단 도크) | `dock.max_defer_ms`(T-189 ①) | ✅ 10-24 §1(e84a6b4) |
+| UI 스레드 동기(dir3 종전) | `app/infojobs.rs::InfoProber` · `dockinfo::info_lines_from` | 정보 도크 메타데이터 · 할당 크기 워커 결과를 요청 직후 이 시간까지 기다림(빠른 디스크 = 바로 · 넘으면 이름/경로 먼저 → 틱이 채움) | 30 ms | 고급(하단 도크) | `dock.info_wait_ms`(T-189 ③) | ✅ 10-24 §1(fd1a95d) |
 | **보조 창·위젯** | | | | | | |
 | 2000 ms(300..10000) | `copybtn.rs:15,50` | 복사 완료 표시 복귀 | —(`prefs_win.rs:281` 고정) | 설정 | `ui.copy_feedback_ms` | ☐ |
 | 1200 / 700 ms | `license_win.rs:49-50` | 플래시 유지 · 페이드 | — | 고급 | `ui.flash_hold_ms` · `ui.flash_fade_ms` | ☐ |

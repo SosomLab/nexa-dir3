@@ -2,6 +2,10 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-10-24
+
+- **Linux PC 재개** — nexa-ui 221 `PickerLabels` 필드 추가로 dir3 컴파일 실패 → f5b49ca(i18n 8키 · 파일 창 편집 동작) · **T-192** `ui.menus_close_on_blur`(c49b55d) · **T-189 ①③⑤**(e84a6b4 도크 미루기 상한 `dock.max_defer_ms` · fd1a95d 정보 도크 메타데이터 워커 `dock.info_wait_ms` · dbcbfaf 상태줄 부하 조회 워커) · gate full 634/0 · T4 36/0 → [10-24 §1](journal/2026-10-24.md)
+
 ## 2026-10-20
 
 - **릴리스 v0.26.0**(태그 b31d3cd · run 39409869078 전 잡 ✓ · 자산 9 · brew f1dc8a6 · winget PR #456730 · #456731 · choco 0.26.0 2건 검수 대기 · 선검증 39409180559) · gate full 639/0 · T4 36/0 → [10-20 §2](journal/2026-10-20.md)
