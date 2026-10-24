@@ -76,6 +76,12 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - 시험은 임시 샌드박스 안에서만 · 휴지통/클립보드는 가짜 포트 + opt-in 자가 점검.
 - 비밀(토큰·암호)은 꺼내는 즉시 0으로(`take_secret_text` · nexa-ctl 규약) · 로그/덤프에 쓰지 않음.
 
+### 2-8. 시험 작성 함정(10-24~25 반복 실측)
+
+- **이름 · 키 · 블록 판정은 토큰 일치**로 — `contains("mem")`는 `appmem`에, `contains("ctx.copy_name")`는 `ctx.copy_name_noext`에 걸린다(412dc0a 상태바 보충 규칙 · 440e521 순서 편집 시험). 구분자로 나눈 토큰 비교 또는 `==`.
+- **시험은 프로세스 전역 상태를 단언하지 않는다** — `cargo test`는 같은 프로세스에서 병렬로 돈다. 전역 원자값 · static · 마지막 명령 기록(`crash::last_command`) · 전역 조절값(`fastcopy::set_tuning`) · 로그 마스크(`ndir_log` DETAIL_MASK)를 쓰거나 읽어 단언하면 다른 시험이 끼어든다(T-198 · f36a9ae · 7d89e05 · ecbf93c CI 흔들림). 처방 순서: ① 값을 인자로 넘김(`transfer_with(&Tuning)`) ② 시험 빌드에서만 스레드 지역(feature `test-local-mask` · `with_tuning`) ③ 단언을 이 시험이 만든 결과(보고 본문 · 반환값)로 바꿈 ④ 마지막 수단 = 그 시험군만 Mutex 직렬화.
+- **픽스처 태그는 시험마다 고유**(f34cf61 "extract" 충돌) · **`thread_local!` 앞에 `///` 금지**(unused_doc_comments · 0096e50) · **`DEPENDS` 자식 키는 부모 뒤 등재**(1b7ed98) · **메뉴 항목 추가 = `MENU_SECTIONS` 함께**(T-200 처방 전까지).
+
 ## 3. 이식 절차(한 기능)
 
 1. 원장에서 ID를 고른다(예 `PANEL-031`) → dir2 원본 코드를 **읽는다**(요약 믿지 않음).
