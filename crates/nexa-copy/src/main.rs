@@ -5,6 +5,7 @@
 //! 창 · 설정 파일 · 라이선스 없음(전 기능 무료 · DR-4) · 외부 crate 0. 인자 해석과 실행은 [`cli`](순수 함수 + 시험).
 
 mod cli;
+mod ctrlc;
 
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

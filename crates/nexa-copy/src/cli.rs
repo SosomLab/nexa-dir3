@@ -9,7 +9,7 @@
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
-//! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled
+//! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
 //! ```
 //! 진행 · 요약은 stderr(stdout은 비워 둔다 — 파이프 친화) · 영어 고정(패키지/CLI 문구 규칙 · 사용자 10-10).
 
@@ -37,7 +37,7 @@ Options:
   -h, --help           show this help
   -V, --version        show version
 
-Exit code: 0 done · 1 some items failed · 2 usage error · 130 canceled
+Exit code: 0 done · 1 some items failed · 2 usage error · 130 canceled (Ctrl+C)
 ";
 
 /// 실행 옵션(순수 해석 결과).
@@ -134,12 +134,22 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
             println!("nexa-copy {VERSION}");
             ExitCode::SUCCESS
         }
-        Ok(Parsed::Run(o)) => run(&o, err),
+        Ok(Parsed::Run(o)) => {
+            crate::ctrlc::install(); // Ctrl+C → 취소 깃발(항목/청크 경계에서 멈추고 요약 · 130)
+            run_with(&o, crate::ctrlc::flag(), err)
+        }
     }
 }
 
-/// 실행: 대상 폴더 · 원본 존재 확인 → 전략 조절값 → `transfer`(앱과 같은 길) → 진행(stderr · 100 ms 간격) → 요약 → 종료 코드.
+/// [`run_with`] + 프로세스 취소 깃발 없이(시험 · 내장 호출용 — 취소 없음).
+#[cfg(test)]
 pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
+    run_with(o, &AtomicBool::new(false), err)
+}
+
+/// 실행: 대상 폴더 · 원본 존재 확인 → 전략 조절값 → `transfer`(앱과 같은 길) → 진행(stderr · 100 ms 간격) → 요약 → 종료 코드.
+/// `cancel`이 참이 되면(Ctrl+C) 엔진이 항목/청크 경계에서 멈추고 부분 파일을 정리한다 → 130.
+pub(crate) fn run_with(o: &Options, cancel: &AtomicBool, err: &mut dyn Write) -> ExitCode {
     if !o.dest.is_dir() {
         let _ = writeln!(
             err,
@@ -161,7 +171,6 @@ pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
         unbuffered_min: o.unbuffered_mb.saturating_mul(1024 * 1024),
         threads: o.threads,
     };
-    let cancel = AtomicBool::new(false);
     let mut resolve = |_: &Path| {
         if o.overwrite {
             Conflict::Overwrite
@@ -177,7 +186,7 @@ pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
         o.op,
         &mut resolve,
         &mut |ev| printer.event(&ev, err),
-        &cancel,
+        cancel,
         &tuning,
     );
     printer.summary(&out, started.elapsed(), err);
@@ -518,9 +527,26 @@ mod tests {
         assert!(String::from_utf8_lossy(&err).contains("not found"));
         let bad2 = Options {
             dest: d.join("no-such-dir"),
-            ..o
+            ..o.clone()
         };
         assert_eq!(run(&bad2, &mut Vec::new()), ExitCode::from(2));
+        // 취소 깃발이 이미 서 있으면 아무것도 옮기지 않고 130(Ctrl+C 경로의 종료 코드 · 요약에 canceled).
+        let c = AtomicBool::new(true);
+        let mut err: Vec<u8> = Vec::new();
+        let src2 = d.join("src2");
+        fs::create_dir_all(&src2).expect("mkdir");
+        fs::write(src2.join("z.txt"), b"z").expect("write");
+        let dest2 = d.join("dest2");
+        fs::create_dir_all(&dest2).expect("mkdir");
+        let oc = Options {
+            sources: vec![src2.join("z.txt")],
+            dest: dest2.clone(),
+            quiet: false,
+            ..o.clone()
+        };
+        assert_eq!(run_with(&oc, &c, &mut err), ExitCode::from(130));
+        assert!(!dest2.join("z.txt").exists());
+        assert!(String::from_utf8_lossy(&err).contains("canceled"));
         // 도움말 · 버전 · 사용 오류 종료 코드.
         assert_eq!(
             main_with(&a(&["--help"]), &mut Vec::new()),

@@ -150,5 +150,6 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   `--no-native` · `--unbuffered-mb <n>`(Windows) · `-q` · `-h` · `-V`. 진행 · 요약은 stderr(stdout은 비움 · 파이프 친화) · 영어 고정.
 - **종료 코드**: 0 = 전부 완료 · 1 = 실패 항목 있음 · 2 = 인자/대상 오류 · 130 = 취소.
 - **시험**: `cli::tests`(인자 해석 순수 · 사람이 읽는 수치 · 샌드박스 실행 = 복사 · 건너뜀 · 덮어쓰기 · 이동 · 오류 코드).
-- **남은 것**: Ctrl+C 취소(OS 신호 → `cancel` 원자값 · 외부 crate 없이 Windows `SetConsoleCtrlHandler` / Unix `sigaction`) · 패키지 동봉(MSI/pkg/deb/rpm ·
+- **Ctrl+C 취소 ✅ 10-24**(`ctrlc.rs` · Windows `SetConsoleCtrlHandler` / Unix `signal(SIGINT)` → 프로세스 전역 `cancel` 원자값 → 엔진이 항목/청크(32 MiB) 경계에서 멈추고 부분 파일 정리 → 요약 `canceled` · 130 · `run_with(cancel)` 시험).
+- **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
   포터블 zip · `release.yml` — 채널 결정) · `--dry-run`/필터/검증/미러(T-97 → T-98) · 대화형 충돌(`--ask`).
