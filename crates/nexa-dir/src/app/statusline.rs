@@ -363,7 +363,8 @@ impl App {
         let mut inv = Invalidations::default();
         let segs = self.status_segments();
         if self.statusbar.set_segments(segs, &mut inv) {
-            self.redraw();
+            inv.push(self.statusbar.bounds()); // 상태줄만(T-144)
+            self.redraw_inv(&mut inv);
         }
         self.refresh_status_popup();
         if self.mem_win.is_open() {

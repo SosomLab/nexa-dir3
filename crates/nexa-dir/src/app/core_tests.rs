@@ -9482,3 +9482,28 @@ fn docks_use_selection_head_only() {
     assert!(text.contains("b.txt"), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 상태줄 부하 칸 갱신은 상태줄 사각형만 다시 그린다(T-144 · `gfx.partial_redraw` 위 — 종전 = 창 전체).
+#[test]
+fn status_load_update_damages_statusbar_only() {
+    use std::time::Instant;
+    let (mut app, dir) = fixture("sbdamage");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    *app.damage.borrow_mut() = Default::default();
+    if app.status_load_tick(Instant::now()).is_none() {
+        let _ = std::fs::remove_dir_all(&dir);
+        return; // 부하 칸 없음(구성) — 판정할 것 없음
+    }
+    let d = app.damage.borrow();
+    let sb = app.statusbar.bounds();
+    assert!(!d.full, "전체 요청 아님");
+    assert!(!d.rects.is_empty(), "첫 표본 = 칸이 바뀐다");
+    assert!(
+        d.rects.iter().all(|r| r.intersection(&sb) == *r),
+        "{:?} ⊄ {sb:?}",
+        d.rects
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&dir);
+}
