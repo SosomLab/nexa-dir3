@@ -242,8 +242,9 @@ impl App {
                 PrefsAction::ImportSettings => {
                     self.open_file_window(app::license::FilePurpose::SettingsImport);
                 }
-                PrefsAction::OpenColors(_) | PrefsAction::EditJson => {
-                    // 색 창(dir2에 없음) · JSON 편집(T-44 잔여) — 안내만.
+                PrefsAction::EditJson => self.edit_settings_json(),
+                PrefsAction::OpenColors(_) => {
+                    // 색 창(dir2에 없음) — 안내만.
                     self.toasts
                         .push(toast::ToastKind::Info, tr("pref.title"), tr("cmd.notYet"));
                     self.redraw();

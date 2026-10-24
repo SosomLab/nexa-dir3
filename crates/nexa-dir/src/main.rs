@@ -396,6 +396,9 @@ struct App {
     dlg_pending: Option<(dlg_win::DlgSpec, app::dialogs::DlgReply)>,
     dlg_reply: Option<app::dialogs::DlgReply>,
     open_prefs: bool,
+    /// settings.json 편집 감시(T-44 · nexa-sql `json_watch`): (경로, 마지막 본 수정 시각) — [편집 JSON…] 뒤에만 · 1 s 폴링.
+    json_watch: Option<(PathBuf, Option<std::time::SystemTime>)>,
+    json_next: Instant,
     open_keys: bool,
     /// 탭 우클릭 메뉴(nexa-ctl ContextMenu · 팝업 층 맨 뒤) + 어느 패널·탭의 것인가.
     tab_menu: ContextMenu,
@@ -807,6 +810,8 @@ impl App {
             dlg_pending: None,
             dlg_reply: None,
             open_prefs: false,
+            json_watch: None,
+            json_next: Instant::now(),
             open_keys: false,
             tab_menu: ContextMenu::new(),
             palette: nexa_ctl::Palette::new(app::palette::palette_strings()),

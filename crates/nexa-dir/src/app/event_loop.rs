@@ -302,6 +302,10 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.session_tick(now) {
             next = next.min(t);
         }
+        // settings.json 저장 감시(T-44 · [편집 JSON…] 뒤에만 1 s 폴링 · 바뀐 키만 반영).
+        if let Some(t) = self.json_tick(now) {
+            next = next.min(t);
+        }
         if let Some(t) = self.launcher_icons_tick(now) {
             next = next.min(t);
         }

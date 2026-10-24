@@ -8155,6 +8155,66 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }
 
+/// settings.json 편집(T-44 잔여 · nexa-sql 차용): [편집 JSON…] = 전체 설정을 `settings.json`으로 내보내고 감시 시작(창 없는 시험은
+/// 열기 생략) · 파일을 고쳐 저장하면 1 s 틱이 바뀐 키만 반영(저장 · 상태줄 · 로그) · 안 바뀌면 아무 일 없음 · 깨진 JSON = 오류 안내.
+#[test]
+fn edit_json_exports_and_reloads_changed_keys_on_save() {
+    let (mut app, dir) = fixture("jsonedit");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(app.json_tick(Instant::now()), None, "감시 전 = 깨우지 않음");
+    app.edit_settings_json();
+    let path = app.settings.json_path();
+    let text = std::fs::read_to_string(&path).expect("exported");
+    assert!(
+        text.contains("\"font_size\"") && text.contains("main_size"),
+        "Full 범위"
+    );
+    assert!(app.statusbar.left().contains("settings.json"));
+    let t0 = Instant::now();
+    assert!(app.json_tick(t0).is_some(), "감시 중 = 다음 깨울 시각");
+    let r = app.settings.import_json(&text).expect("json");
+    assert!(r.changed.is_empty(), "왕복 = 바뀐 키 0: {r:?}");
+    // 파일을 고치고 수정 시각을 앞으로 → 틱이 반영.
+    // `font_size`는 여러 분류에 있으니 고유한 키로(`list.show_hidden`).
+    let patched = text.replace("\"show_hidden\": true", "\"show_hidden\": false");
+    assert_ne!(patched, text);
+    std::fs::write(&path, patched).expect("write");
+    let f = std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .expect("open");
+    f.set_modified(std::time::SystemTime::now() + Duration::from_secs(5))
+        .expect("mtime");
+    drop(f);
+    app.json_next = t0;
+    let _ = app.json_tick(t0 + Duration::from_millis(1));
+    assert!(!app.settings.flag("list.show_hidden"));
+    assert!(
+        app.statusbar.left().contains("1 "),
+        "{}",
+        app.statusbar.left()
+    );
+    assert!(app.log_win.export_text().contains("settings.json"));
+    // 같은 수정 시각 = 다시 읽지 않는다.
+    let _ = app.settings.set("list.show_hidden", "on");
+    app.json_next = t0;
+    let _ = app.json_tick(t0 + Duration::from_millis(1));
+    assert!(app.settings.flag("list.show_hidden"));
+    // 깨진 JSON = 오류 안내 · 값 그대로.
+    std::fs::write(&path, "{ broken").expect("write");
+    let f = std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .expect("open");
+    f.set_modified(std::time::SystemTime::now() + Duration::from_secs(10))
+        .expect("mtime");
+    drop(f);
+    app.json_next = t0;
+    let _ = app.json_tick(t0 + Duration::from_millis(1));
+    assert!(app.settings.flag("list.show_hidden"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 설정 내보내기/가져오기(T-195 · NEW-052 · nexa-sql 131차 차용): `settings.export:<파일>` = Portable JSON(창 기하 · 즐겨찾기 제외 ·
 /// `_scope`) · `settings.import:<파일>` = 있는 키만 · 바뀐 키만 반영 + 저장 + 설정 창 갱신 · 모르는 키/틀린 값은 꼬리말 · 상태줄 · 로그 ·
 /// 없는 파일 = 오류 안내(패닉 없음) · 메뉴/명령 표에 `settings.export`/`settings.import`.

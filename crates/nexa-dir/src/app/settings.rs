@@ -602,6 +602,81 @@ impl App {
     }
 }
 
+/// settings.json으로 편집(T-44 · nexa-sql `edit_settings_json`/`json_tick` 차용 · 사용자 09-15 "설정을 JSON으로 편집").
+impl App {
+    /// [편집 JSON…] — 전체 설정을 `settings.json`(설정 파일 옆)으로 내보내고 OS 연결 프로그램으로 연 뒤 저장을 감시한다
+    /// (1 s 폴링 · 바뀐 키만 반영 · 창 없는 시험은 열기만 건너뛴다).
+    pub(crate) fn edit_settings_json(&mut self) {
+        let path = match self.settings.export_json() {
+            Ok(p) => p,
+            Err(e) => {
+                let text = trf(
+                    "settings.fileError",
+                    &[
+                        &self.settings.json_path().display().to_string(),
+                        &e.to_string(),
+                    ],
+                );
+                self.log(ndir_log::LogKind::Error, text.clone());
+                let mut inv = Invalidations::default();
+                self.statusbar.set_left(&text, &mut inv);
+                self.redraw();
+                return;
+            }
+        };
+        let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        self.json_watch = Some((path.clone(), mtime));
+        self.json_next = Instant::now() + Duration::from_millis(JSON_WATCH_MS);
+        let text = trf("settings.jsonOpened", &[&path.display().to_string()]);
+        self.log(ndir_log::LogKind::Info, text.clone());
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&text, &mut inv);
+        if self.window.is_some() {
+            self.open_external(&path);
+        }
+        self.redraw();
+    }
+
+    /// settings.json 저장 감시 틱 — 수정 시각이 바뀌었으면 다시 읽어 바뀐 키만 반영([`Self::apply_settings_json_text`] 한 길) ·
+    /// 감시 중이면 다음 깨울 시각.
+    pub(crate) fn json_tick(&mut self, now: Instant) -> Option<Instant> {
+        let (path, last) = self.json_watch.clone()?;
+        if now < self.json_next {
+            return Some(self.json_next);
+        }
+        self.json_next = now + Duration::from_millis(JSON_WATCH_MS);
+        let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        if mtime.is_some() && mtime != last {
+            self.json_watch = Some((path.clone(), mtime));
+            let shown = path.display().to_string();
+            let (kind, text) = match std::fs::read_to_string(&path) {
+                Ok(text) => match self.apply_settings_json_text(&text) {
+                    Ok((changed, note)) => (
+                        ndir_log::LogKind::Info,
+                        trf("settings.jsonReloaded", &[&changed.to_string(), &note]),
+                    ),
+                    Err(e) => (
+                        ndir_log::LogKind::Error,
+                        trf("settings.fileError", &[&shown, &e]),
+                    ),
+                },
+                Err(e) => (
+                    ndir_log::LogKind::Error,
+                    trf("settings.fileError", &[&shown, &e.to_string()]),
+                ),
+            };
+            self.log(kind, text.clone());
+            let mut inv = Invalidations::default();
+            self.statusbar.set_left(&text, &mut inv);
+            self.redraw();
+        }
+        Some(self.json_next)
+    }
+}
+
+/// settings.json 저장 감시 폴링 간격(ms · nexa-sql과 같음).
+const JSON_WATCH_MS: u64 = 1000;
+
 #[cfg(test)]
 mod tests {
     use super::*;
