@@ -1039,6 +1039,7 @@ fav.remove = Remove current folder from Favorites
 fav.added = Added to Favorites: {0}
 fav.removed = Removed from Favorites: {0}
 fav.empty = (No favorites — press Ctrl+D to add the current folder)
+fav.recentSection = Recent folders
 fav.filter = Favorites (*.txt)
 fav.exported = Favorites exported to {0} ({1} folders)
 fav.imported = Favorites imported from {0}: {1} added · {2} already present

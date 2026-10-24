@@ -165,7 +165,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 - **필터 ✅ 10-25**(`--include <glob>` · `--exclude <glob>` · 반복 가능 · `;`로 여러 개(앱의 패턴 선택/빠른 필터와 같은 습관 — 협업 점검 10-25) · T-97 "필터" 1차): 엔진 `fastcopy::NameFilter` + `with_filter`(thread_local ·
   계획 단계 `plan`에서 거른 항목은 복사도 · 교차 볼륨 이동의 원본 정리도 안 함 = 원본에 남음) · 규칙 = exclude(파일·폴더) 우선 · include는 파일만
   (폴더는 늘 들어감) · 대소문자 무시 · 최상위 원본은 CLI가 걸러 `filtered out:` 안내 · dry-run도 최상위 반영(폴더 안은 실행 때). 한계: 진행
-  총량(`size_of`)은 거르기 전 크기라 끝에 100 % 미만일 수 있다 · 미러/차등은 후속.
+  총량(`size_of`)은 거르기 전 크기라 끝에 100 % 미만일 수 있다 · include가 파일을 하나도 안 고르면 `note: --include matched no files` 경고(10-25).
 - **미러 ✅ 10-25**(`--mirror` · T-97 "미러/차등" CLI 1차 · 엔진 = 앱 폴더 동기화와 같은 `compare::compare` + `plan(LeftToRight · mirror)` +
   `apply_copies`): 원본 폴더 1개 → 대상 폴더를 같게(크기 + 수정 시각 · 허용 2초 · 재귀) — 새것/바뀐 것 복사 뒤 대상에만 있는 것 **영구 삭제**
   (휴지통 없음 · `deleted:` 한 줄씩) · **안전장치**(협업 10-25 · robocopy /MIR 사고 유형): ① 대상이 드라이브 루트·사용자 홈·원본과 겹침 = 거부(2)

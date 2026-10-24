@@ -13,6 +13,8 @@ const SEP: &str = ";;";
 const MAX: usize = 64;
 /// 최근 폴더 최대 수(NEW-056).
 pub(crate) const RECENT_MAX: usize = 20;
+/// 즐겨찾기 팝업에 보이는 최근 폴더 수(T-168 남김).
+pub(crate) const FAV_RECENT_MAX: usize = 5;
 
 /// 즐겨찾기 내보내기 저장 창의 기본 파일 이름(T-196).
 pub(crate) const FAV_EXPORT_NAME: &str = "nexa-dir-favorites.txt";
@@ -162,6 +164,30 @@ impl App {
                 filelist::display_path(p),
                 p.is_dir(),
             ));
+        }
+        // 최근 폴더 구획(T-168 남김 · 10-25): 즐겨찾기도 현재 폴더도 아닌 최근 폴더 최대 5개 — 고르면 이동(`aux.recent:<i>` = 최근 목록 번호).
+        let cur = self.panels[self.active].root_path();
+        let recent: Vec<(usize, PathBuf)> = self
+            .recent_dirs()
+            .into_iter()
+            .enumerate()
+            .filter(|(_, p)| !same_fav(p, &cur) && !list.iter().any(|f| same_fav(f, p)))
+            .take(FAV_RECENT_MAX)
+            .collect();
+        if !recent.is_empty() {
+            items.push(CtxItem::Separator);
+            items.push(CtxItem::maybe(
+                "aux.recent.head",
+                tr("fav.recentSection"),
+                false,
+            ));
+            for (i, p) in &recent {
+                items.push(CtxItem::maybe(
+                    format!("aux.recent:{i}"),
+                    filelist::display_path(p),
+                    p.is_dir(),
+                ));
+            }
         }
         if let Some(has) = self.fav_has_current() {
             items.push(CtxItem::Separator);

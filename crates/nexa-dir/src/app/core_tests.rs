@@ -8602,6 +8602,16 @@ fn favorites_toggle_menu_and_navigate() {
         .filter(|c| matches!(c, CtxItem::Item { id, .. } if id.starts_with("aux.fav:")))
         .count();
     assert_eq!(n, 0);
+    // 최근 폴더 구획(T-168 남김 · 10-25): 즐겨찾기도 현재 폴더(dir)도 아닌 최근 폴더(sub)가 보인다 · 고르면 이동.
+    assert!(
+        app.ctx_items
+            .iter()
+            .any(|c| matches!(c, CtxItem::Item { id, .. } if id.starts_with("aux.recent:"))),
+        "최근 구획"
+    );
+    assert!(app.ctx_items.iter().any(
+        |c| matches!(c, CtxItem::Item { id, enabled, .. } if id == "aux.recent.head" && !enabled)
+    ));
     app.ctx_pick("aux.fav.toggle");
     assert_eq!(app.favorites(), vec![dir.clone()]);
     // 없는 폴더는 회색(고를 수 없음) · 있는 폴더는 활성.

@@ -1039,6 +1039,7 @@ fav.remove = 現在のフォルダーをお気に入りから削除
 fav.added = お気に入りに追加: {0}
 fav.removed = お気に入りから削除: {0}
 fav.empty = (お気に入りなし — Ctrl+D で現在のフォルダーを追加)
+fav.recentSection = 最近のフォルダー
 fav.filter = お気に入り (*.txt)
 fav.exported = お気に入りを {0} にエクスポートしました({1} 個のフォルダー)
 fav.imported = {0} からお気に入りをインポート: {1} 個追加 · {2} 個は既存

@@ -1038,6 +1038,7 @@ fav.remove = 현재 폴더를 즐겨찾기에서 제거
 fav.added = 즐겨찾기에 추가: {0}
 fav.removed = 즐겨찾기에서 제거: {0}
 fav.empty = (즐겨찾기 없음 — Ctrl+D로 현재 폴더를 추가)
+fav.recentSection = 최근 폴더
 fav.filter = 즐겨찾기 (*.txt)
 fav.exported = 즐겨찾기를 {0}에 내보냄({1}개 폴더)
 fav.imported = {0}에서 즐겨찾기 가져옴: {1}개 추가 · {2}개는 이미 있음

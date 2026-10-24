@@ -323,6 +323,16 @@ pub(crate) fn run_with(
         )
     });
     printer.summary(&out, started.elapsed(), err);
+    // `--include`가 파일을 하나도 안 골랐다(옮긴 바이트 0 · 폴더 뼈대만) — 조용히 0으로 끝나면 "복사됐다"로 오해(협업 점검 10-25).
+    if !o.filter.include.is_empty()
+        && !out.transferred.is_empty()
+        && printer.seen.is_none_or(|(d, _)| d == 0)
+    {
+        let _ = writeln!(
+            err,
+            "note: --include matched no files (only folders were created)"
+        );
+    }
     // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1. 이동은 원본이 없어 못 하고(안내 한 줄) ·
     // 취소된 전송은 하지 않는다 · 건너뛴 항목(대상에 이미 있음)은 대조 대상이 아님을 요약에 적는다(협업 점검 10-25 — 조용히 통과로 오해 방지).
     if o.verify && o.op == Op::Move {

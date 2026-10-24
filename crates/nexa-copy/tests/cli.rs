@@ -352,6 +352,16 @@ fn include_exclude_filters_files_and_top_level_sources() {
         !dst.join("tree").join("deep").exists(),
         "제외 폴더는 통째로"
     );
+    // include가 하나도 안 맞으면 경고(폴더 뼈대만 생김).
+    let d3 = d.join("dst3");
+    fs::create_dir_all(&d3).expect("mkdir");
+    let r = run(&[&src.join("tree"), &d3], &["--include", "*.nomatch"], &[]);
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(
+        r.err.contains("note: --include matched no files"),
+        "{}",
+        r.err
+    );
     // 최상위 원본이 걸러지면 안내 + 나머지만.
     let d2 = d.join("dst2");
     fs::create_dir_all(&d2).expect("mkdir");
