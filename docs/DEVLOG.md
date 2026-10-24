@@ -4,6 +4,8 @@
 
 ## 2026-10-24
 
+- **10-24 Linux PC 회차 마감** — dir3 14커밋(T-192 · T-189 ✅ · T-139 · T-144 · T-102 · T-106 1/2 · T-108 1/2 · nexa-ui 221 소비) + nexa-ui 223 · 전수 643/0 · T-131 TODO 정정(selfcheck ctxmenu = 10-18 구현 → 잔여 없음) · 다음 후보 = T-100 · T-106 2/2 · T-108 2/2 → [10-24 §6](journal/2026-10-24.md)
+
 - **T-108 1/2 툴바 배치 초기화**(e4ea8fb · `view.toolbar_reset` · 모양 설정 유지 · 남은 = 플로팅 창) · gate quick(T-139 판정 실증 · CI = 전수) → [10-24 §5](journal/2026-10-24.md)
 
 - **T-102 창 투명도**(a8b3078 · `window.transparency` 0~90 · 3-OS 포트 · 보조 창 17 · 성능 향상 = 0 강제 · 실기 대기) · **T-106 1/2** 하네스 `ui.key` = 실제 키 경로(3926ad6) · **T-142** nexa-ui 시험 한도(a939ba9 · CONSUMER-CHANGES 223 + 221 dir3 칸 정정 1a97634) · gate full 643/0 → [10-24 §4](journal/2026-10-24.md)
