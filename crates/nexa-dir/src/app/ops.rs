@@ -30,6 +30,8 @@ pub(crate) struct TransferShared {
     pub offsets: Mutex<Vec<u64>>,
     /// 워커가 무엇이든 바꿨다 — UI 틱이 진행 창 스냅숏(항목 전체 복제)을 **바뀐 때만** 만든다(10-18).
     pub dirty: AtomicBool,
+    /// 지금 옮기는 항목의 대상 경로(진행 창 "현재 파일" 줄 · T-96 · 10-25) — `ItemStart`마다.
+    pub current_name: Mutex<String>,
 }
 
 /// 충돌 결정(UI → 작업 스레드).
@@ -264,6 +266,7 @@ impl App {
             current: AtomicUsize::new(0),
             offsets: Mutex::new(Vec::new()),
             dirty: AtomicBool::new(false),
+            current_name: Mutex::new(String::new()),
         });
         // 진행 창(dir2 DLG-059: `transfer.close_ms > 0`일 때만).
         if self.settings.int("transfer.close_ms") > 0 {
@@ -328,8 +331,11 @@ impl App {
                                 .collect();
                         }
                     }
-                    Event::ItemStart { index, .. } => {
+                    Event::ItemStart { index, dest } => {
                         sh.current.store(index + 1, Ordering::Relaxed);
+                        if let Ok(mut n) = sh.current_name.lock() {
+                            *n = dest.display().to_string();
+                        }
                         sh.dirty.store(true, Ordering::Relaxed);
                         if let Ok(mut it) = sh.items.lock() {
                             if let Some(i) = it.get_mut(index) {
@@ -414,6 +420,13 @@ impl App {
             job.shared.current.load(Ordering::Relaxed),
             job.count,
         );
+        let name = job
+            .shared
+            .current_name
+            .lock()
+            .map(|n| n.clone())
+            .unwrap_or_default();
+        self.progress_win.set_current_name(&name);
     }
 
     /// 전송 폴링(틱): 진행률 상태줄 · 완료 수거. 반환 = 아직 진행 중.

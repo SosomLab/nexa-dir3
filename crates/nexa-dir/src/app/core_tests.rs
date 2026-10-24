@@ -10382,6 +10382,7 @@ fn statusbar_transfer_segment_shows_only_while_transferring() {
         current: AtomicUsize::new(1),
         offsets: Mutex::new(Vec::new()),
         dirty: AtomicBool::new(false),
+        current_name: Mutex::new("D:/x/a.txt".into()),
     });
     let (_tx, rx) = mpsc::channel();
     app.transfer = Some(TransferJob {
@@ -10404,6 +10405,13 @@ fn statusbar_transfer_segment_shows_only_while_transferring() {
     app.status_click("xfer", false);
     assert!(app.open_progress && app.progress_win.is_active());
     assert!(shared.dirty.load(std::sync::atomic::Ordering::Relaxed));
+    // 다음 틱 = 스냅숏 + 현재 파일 줄(T-96 · 10-25).
+    assert!(app.ops_tick(), "전송 중 = 계속");
+    assert_eq!(app.progress_win.current_name(), "D:/x/a.txt");
+    assert!(
+        !shared.dirty.load(std::sync::atomic::Ordering::Relaxed),
+        "스냅숏 뒤 dirty 내림"
+    );
     // 끝남 → 칸 사라짐.
     app.transfer = None;
     app.update_status();

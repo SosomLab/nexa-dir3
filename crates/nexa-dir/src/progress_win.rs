@@ -36,6 +36,8 @@ pub(crate) struct ProgressWin {
     bar: SegProgress,
     cur: usize,
     count: usize,
+    /// 지금 옮기는 항목(대상 경로 · 가운데 생략 · 비면 줄만 비움 — 풀기 등 다른 작업).
+    current: String,
     btn: Button,
     /// 진행 중 [취소]/X를 눌렀다(1회성 · 호스트가 꺼낸다).
     cancelled: bool,
@@ -54,7 +56,8 @@ pub(crate) struct ProgressWin {
 const CONFLICT_EXTRA_H: f32 = 98.0; // 질문 세 줄(이름 · 대상 폴더 · 안내) + 버튼 줄
 /// 창 안쪽 크기(논리 px · dir2 DLG-059: 폭 400).
 const WIN_W: f32 = 400.0;
-const WIN_H: f32 = 132.0;
+/// 라벨 · 수치 줄 · **현재 파일 줄**(T-96 · 10-25) · 막대 · 버튼.
+const WIN_H: f32 = 150.0;
 /// 충돌 버튼의 답 id(대화상자와 같다): 1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 4 취소.
 const CF_IDS: [i32; 4] = [1, 2, 3, 4];
 const CF_KEYS: [&str; 4] = ["ops.yes", "ops.yesAll", "ops.skip", "ops.cancel"];
@@ -67,6 +70,7 @@ impl ProgressWin {
             scale: 1.0,
             cursor: (0, 0),
             label: String::new(),
+            current: String::new(),
             bar: SegProgress::new(),
             cur: 0,
             count: 0,
@@ -125,6 +129,7 @@ impl ProgressWin {
     /// 새 전송 시작 — 라벨 교체 · 진행 0 · 취소/닫기 상태 초기화.
     pub(crate) fn reset(&mut self, label: &str) {
         self.label = label.to_string();
+        self.current.clear();
         let mut inv = Invalidations::default();
         self.bar.set_items(Vec::new(), &mut inv);
         self.bar.set_totals(0, 0, &mut inv);
@@ -161,6 +166,19 @@ impl ProgressWin {
         if changed {
             self.redraw();
         }
+    }
+
+    /// 현재 파일 줄(T-96 · 10-25) — 바뀐 때만 다시 그린다.
+    pub(crate) fn set_current_name(&mut self, name: &str) {
+        if self.current != name {
+            self.current = name.to_string();
+            self.redraw();
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn current_name(&self) -> &str {
+        &self.current
     }
 
     /// 완료 — 라벨 교체 + [닫기 (N)] 카운트다운 시작(`ms` 뒤 자동 닫힘 · 0 = 바로).
@@ -483,6 +501,12 @@ impl ProgressWin {
                 )
             );
             dc.text(pad, y, clip, &line, th.text_dim);
+            y += th_txt + (2.0 * s).round() as i32;
+            // 현재 파일(T-96): 대상 경로 · 길면 가운데 생략 · 비면 줄만 비운다.
+            if !self.current.is_empty() {
+                let cur = nexa_ctl::draw::ellipsize_middle(&mut dc, &self.current, wi - pad * 2);
+                dc.text(pad, y, clip, &cur, th.text_dim);
+            }
             y += th_txt + (6.0 * s).round() as i32;
             let mut inv = Invalidations::default();
             self.bar.set_scale(s);
