@@ -12,6 +12,9 @@ description = "Nexa Dir 앱 로그 — 시각(밀리초) 첫 컬럼 · 탐색기
 # `devlog` 끄면 상세 로그 게이트가 상수 false → 상세 경로 코드가 릴리스 특수 빌드에서 사라진다.
 default = ["devlog"]
 devlog = []
+# 시험 전용(T-198 · 10-24): 상세 마스크를 **스레드별**로도 둔다 — `set_detail_mask`가 전역 + 호출 스레드 값 둘을 쓰고 `wants`는 자기 스레드 값을
+# 먼저 본다(없으면 전역). `cargo test`의 병렬 시험 스레드가 서로의 마스크를 덮어쓰지 않는다. 릴리스 빌드는 켜지 않는다(nexa-dir dev-dependencies만).
+test-local-mask = []
 
 [lints]
 workspace = true

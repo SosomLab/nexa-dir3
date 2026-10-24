@@ -71,6 +71,8 @@ windows = { version = "0.62", features = [
 [dev-dependencies]
 # 시험 전용 — WAT 텍스트 모듈 조립(격리·브레이커·ABI v2 시험 · dir2 동일 · docs/10 §3).
 wat = "1"
+# 시험 전용 — 로그 상세 마스크를 스레드별로(T-198 · 병렬 시험이 서로의 `set_detail_mask`를 덮어써 흔들리던 것 · 릴리스 빌드 무관).
+ndir-log = { workspace = true, features = ["test-local-mask"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 x11rb = { version = "0.13", default-features = false }

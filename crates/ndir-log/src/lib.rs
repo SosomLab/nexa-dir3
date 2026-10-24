@@ -355,6 +355,23 @@ impl LogLevel {
 /// 분기 1개**만 남고 문자열·시각·할당은 전혀 일어나지 않는다. 쓰기는 설정 변경 때만(`Relaxed`로 충분 — 순서 보장 불필요).
 static DETAIL_MASK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+#[cfg(feature = "test-local-mask")]
+thread_local! {
+    /// 시험 전용 스레드별 마스크(feature `test-local-mask` · T-198): `set_detail_mask`를 부른 스레드는 그 뒤 자기 값만 본다 —
+    /// 병렬 시험이 전역을 서로 덮어써도(`App::new` → `set_detail_mask(0)`) 이 스레드의 단언은 흔들리지 않는다. 값을 쓴 적 없는
+    /// 스레드(작업 스레드)는 전역을 본다 → `cargo test`가 만든 앱 실행 파일도 동작이 같다.
+    static DETAIL_MASK_LOCAL: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+#[inline(always)]
+fn detail_mask_load() -> u64 {
+    #[cfg(feature = "test-local-mask")]
+    if let Some(m) = DETAIL_MASK_LOCAL.with(std::cell::Cell::get) {
+        return m;
+    }
+    DETAIL_MASK.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[inline(always)]
 const fn detail_bit(layer: LogLayer, level: LogLevel) -> u64 {
     1u64 << ((layer as u64) * 4 + (level as u64))
@@ -365,7 +382,7 @@ const fn detail_bit(layer: LogLayer, level: LogLevel) -> u64 {
 pub fn wants(layer: LogLayer, level: LogLevel) -> bool {
     #[cfg(feature = "devlog")]
     {
-        DETAIL_MASK.load(std::sync::atomic::Ordering::Relaxed) & detail_bit(layer, level) != 0
+        detail_mask_load() & detail_bit(layer, level) != 0
     }
     #[cfg(not(feature = "devlog"))]
     {
@@ -375,11 +392,13 @@ pub fn wants(layer: LogLayer, level: LogLevel) -> bool {
 }
 
 pub fn set_detail_mask(mask: u64) {
+    #[cfg(feature = "test-local-mask")]
+    DETAIL_MASK_LOCAL.with(|c| c.set(Some(mask)));
     DETAIL_MASK.store(mask, std::sync::atomic::Ordering::Relaxed);
 }
 
 pub fn detail_mask() -> u64 {
-    DETAIL_MASK.load(std::sync::atomic::Ordering::Relaxed)
+    detail_mask_load()
 }
 
 /// 설정 `log.dev_layers` → 마스크. 문법: `layer[:level+level]`을 쉼표로 · 수준 생략 = timing+progress+trace ·
@@ -996,6 +1015,35 @@ mod tests {
         let e = LogEntry::new(LogKind::Info, "x").at(LogLayer::Vfs, LogLevel::Timing);
         assert_eq!(e.message, "⟨vfs⟩ x");
         assert_eq!(e.level, LogLevel::Timing);
+    }
+
+    /// T-198(feature `test-local-mask`): 다른 스레드가 전역을 0으로 덮어써도 이 스레드가 켠 마스크는 그대로 · 값을 쓴 적 없는
+    /// 스레드는 전역을 본다(작업 스레드 = 앱 동작 동일).
+    #[cfg(feature = "test-local-mask")]
+    #[test]
+    fn detail_mask_is_thread_local_once_written() {
+        let m = parse_detail_layers("shell:trace");
+        set_detail_mask(m);
+        assert!(wants(LogLayer::Shell, LogLevel::Trace));
+        std::thread::spawn(|| {
+            assert_eq!(detail_mask(), detail_mask_global(), "안 쓴 스레드 = 전역");
+            set_detail_mask(0);
+            assert!(!wants(LogLayer::Shell, LogLevel::Trace));
+        })
+        .join()
+        .unwrap();
+        assert!(
+            wants(LogLayer::Shell, LogLevel::Trace),
+            "다른 스레드의 0이 이 스레드를 덮지 않는다"
+        );
+        assert_eq!(detail_mask(), m);
+        assert_eq!(detail_mask_global(), 0, "전역은 마지막 쓰기(0)");
+        set_detail_mask(0);
+    }
+
+    #[cfg(feature = "test-local-mask")]
+    fn detail_mask_global() -> u64 {
+        DETAIL_MASK.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn e() -> LogEntry {
