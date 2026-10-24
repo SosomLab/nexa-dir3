@@ -105,13 +105,20 @@ fn copy_skip_overwrite_move_and_errors() {
         r.err
     );
     assert!(r.err.contains("(100%)"), "마지막 진행 줄: {}", r.err);
-    // 건너뜀(기본) · 옮긴 바이트 0.
+    // 건너뜀(기본) · 옮긴 바이트 0 · `--verify`는 건너뛴 항목을 대조하지 않음을 알린다(협업 점검 10-25).
     fs::write(src.join("one.txt"), b"ONE").expect("write");
-    let r = run(&[&src.join("one.txt"), &dst], &[], &[]);
+    let r = run(&[&src.join("one.txt"), &dst], &["--verify"], &[]);
     assert_eq!(r.code, 0, "{}", r.err);
     assert_eq!(fs::read(dst.join("one.txt")).expect("read"), b"one");
     assert!(
         r.err.contains("1 skipped") && r.err.contains("0 B of"),
+        "{}",
+        r.err
+    );
+    assert!(
+        r.err.contains(
+            "verified 0 file(s) · 0 B read · 0 mismatch(es) · 1 skipped item(s) not verified"
+        ),
         "{}",
         r.err
     );
@@ -120,13 +127,22 @@ fn copy_skip_overwrite_move_and_errors() {
     assert_eq!(r.code, 0, "{}", r.err);
     assert_eq!(fs::read(dst.join("one.txt")).expect("read"), b"ONE");
     assert!(r.err.is_empty(), "quiet: {}", r.err);
-    // 이동.
+    // 이동 · `--verify --move` = 무시 안내 한 줄.
     let moved = d.join("moved");
     fs::create_dir_all(&moved).expect("mkdir");
-    let r = run(&[&src.join("one.txt"), &moved], &["--move"], &[]);
+    let r = run(
+        &[&src.join("one.txt"), &moved],
+        &["--move", "--verify"],
+        &[],
+    );
     assert_eq!(r.code, 0, "{}", r.err);
     assert!(!src.join("one.txt").exists());
     assert_eq!(fs::read(moved.join("one.txt")).expect("read"), b"ONE");
+    assert!(
+        r.err.contains("note: --verify is ignored with --move"),
+        "{}",
+        r.err
+    );
     // 전략 옵션(루프 · 순차) + 검증(`--verify` · 크기 + SHA-256)도 같은 결과.
     let seq = d.join("seq");
     fs::create_dir_all(&seq).expect("mkdir");

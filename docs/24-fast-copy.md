@@ -159,7 +159,8 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 - **Ctrl+C 취소 ✅ 10-24**(`ctrlc.rs` · Windows `SetConsoleCtrlHandler` / Unix `signal(SIGINT)` → 프로세스 전역 `cancel` 원자값 → 엔진이 항목/청크(32 MiB) 경계에서 멈추고 부분 파일 정리 → 요약 `canceled` · 130 · `run_with(cancel)` 시험).
 - **검증 ✅ 10-25**(`--verify` · T-97 "검증" 1차): 전송이 끝난 뒤 (원본, 사본) 쌍마다 크기 + SHA-256(`ndir_ops::hash::hash_file` · 엔진과 같은
   해시) · 폴더는 재귀(원본 기준 · 사본에만 있는 것은 무시) · 불일치/누락/종류 불일치 = `verify failed: …` + 종료 1 · `--move`는 원본이 없어 무시 ·
-  진행 `verifying · n` 250 ms · 요약 `verified n file(s) · x read · k mismatch(es) in t` · Ctrl+C = 130. 시험 `verify_detects_mismatch_missing_and_type` +
+  진행 `verifying · n of m`(m = 복사한 크기 × 2 · 250 ms) · 요약 `verified n file(s) · x read · k mismatch(es)[ · s skipped item(s) not verified] in t` ·
+  `--move`면 `note: --verify is ignored with --move` 한 줄 · 취소면 `verification skipped` · Ctrl+C = 130(협업 수동 점검 10-25 반영). 시험 `verify_detects_mismatch_missing_and_type` +
   프로세스 시험(`--verify` 41 파일).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
   포터블 zip · `release.yml` — 채널 결정) · 필터/미러(T-97 → T-98) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =

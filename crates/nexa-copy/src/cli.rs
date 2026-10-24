@@ -235,31 +235,56 @@ pub(crate) fn run_with(
         &tuning,
     );
     printer.summary(&out, started.elapsed(), err);
-    // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1 · 이동은 원본이 없어 건너뜀.
-    if o.verify && o.op == Op::Copy && !out.transferred.is_empty() && !out.canceled {
+    // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1. 이동은 원본이 없어 못 하고(안내 한 줄) ·
+    // 취소된 전송은 하지 않는다 · 건너뛴 항목(대상에 이미 있음)은 대조 대상이 아님을 요약에 적는다(협업 점검 10-25 — 조용히 통과로 오해 방지).
+    if o.verify && o.op == Op::Move {
+        let _ = writeln!(
+            err,
+            "note: --verify is ignored with --move (the source is gone after a move)"
+        );
+    } else if o.verify && out.canceled {
+        let _ = writeln!(err, "note: verification skipped (canceled)");
+    } else if o.verify {
         let v_started = Instant::now();
+        // 읽을 총량 = 복사한 항목 크기 × 2(원본 + 사본) — "n of m" 진행.
+        let total: u64 = out
+            .transferred
+            .iter()
+            .map(|(s, _)| ndir_ops::size_of(s))
+            .sum::<u64>()
+            .saturating_mul(2);
         let mut read = 0u64;
         let mut last = Instant::now();
         let mut on_bytes = |n: u64| {
             read += n;
             if !o.quiet && last.elapsed() >= Duration::from_millis(250) {
                 last = Instant::now();
-                let _ = write!(err, "\rverifying · {}", human_bytes(read));
+                let _ = write!(
+                    err,
+                    "\rverifying · {} of {}",
+                    human_bytes(read),
+                    human_bytes(total)
+                );
                 let _ = err.flush();
             }
         };
         match crate::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
             Ok(rep) => {
-                if !o.quiet {
+                if !o.quiet && read > 0 {
                     let _ = writeln!(err);
                 }
                 for (p, why) in &rep.failures {
                     let _ = writeln!(err, "verify failed: {}: {why}", p.display());
                 }
                 if !o.quiet {
+                    let skipped = if out.skipped.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" · {} skipped item(s) not verified", out.skipped.len())
+                    };
                     let _ = writeln!(
                         err,
-                        "verified {} file(s) · {} read · {} mismatch(es) in {}",
+                        "verified {} file(s) · {} read · {} mismatch(es){skipped} in {}",
                         rep.files,
                         human_bytes(rep.bytes),
                         rep.failures.len(),
