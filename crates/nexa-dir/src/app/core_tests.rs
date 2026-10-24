@@ -9367,3 +9367,45 @@ fn menus_are_exclusive_across_areas_with_passthrough_setting() {
     assert!(!app.tab_menu.is_open(), "⑥ 풀다운이 우클릭을 삼킨다(종전)");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 다른 창으로 포커스가 가면 열린 메뉴 닫기(T-192 · nexa-sql `ui.menus_close_on_blur`): 기본 켬 = 풀다운 · 상태줄 칸 팝업 모두 닫힘
+/// (칸 팝업 기억도 해제) · 끔 = 열린 채 유지 · 열린 메뉴가 없으면 아무 일도 없다.
+#[test]
+fn menus_close_when_focus_moves_to_another_window() {
+    let (mut app, dir) = fixture("menublur");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let click = |app: &mut App, x: i32, y: i32| {
+        app.route(InputEvent::MouseDown {
+            x,
+            y,
+            shift: false,
+            primary: false,
+        });
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    assert!(app.settings.flag("ui.menus_close_on_blur"), "기본 = 켬");
+    assert!(!app.menus_on_blur(), "열린 메뉴 없음 = 아무 일 없음");
+    let m = app.menubar.bounds();
+    click(&mut app, m.x + 20, m.y + m.h / 2);
+    assert!(app.menubar.is_open());
+    assert!(app.menus_on_blur(), "풀다운 닫음");
+    assert!(!app.menubar.is_open());
+    let r = app.statusbar.seg_rect("cpu").expect("seg");
+    click(&mut app, r.x + 4, r.y + 4);
+    assert!(app.tab_menu.is_open() && app.status_popup.as_deref() == Some("cpu"));
+    assert!(app.menus_on_blur());
+    assert!(
+        !app.tab_menu.is_open() && app.status_popup.is_none(),
+        "팝업 닫힘 + 칸 기억 해제"
+    );
+    // 끔 = 유지.
+    let _ = app.settings.set("ui.menus_close_on_blur", "off");
+    click(&mut app, m.x + 20, m.y + m.h / 2);
+    assert!(app.menubar.is_open());
+    assert!(!app.menus_on_blur());
+    assert!(app.menubar.is_open(), "끔 = 열린 채");
+    let _ = std::fs::remove_dir_all(&dir);
+}

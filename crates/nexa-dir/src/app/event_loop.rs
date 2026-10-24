@@ -402,6 +402,8 @@ impl ApplicationHandler<Wake> for App {
                     if self.xdnd.is_none() {
                         self.dnd_internal_cancel();
                     }
+                    // 다른 창으로 가면 열린 메뉴를 닫는다(T-192 · `ui.menus_close_on_blur` 끔 = 유지) — 아래 `redraw`가 전체를 그린다.
+                    self.menus_on_blur();
                 }
                 if *on {
                     // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.

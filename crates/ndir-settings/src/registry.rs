@@ -1233,6 +1233,16 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 다른 창으로 포커스가 가면 열린 메뉴(풀다운 · 우클릭/상태줄 칸 팝업) 닫기(T-192 · nexa-sql `ui.menus_close_on_blur`와 같은 키 ·
+    //   기본 켬 · 끔 = 돌아올 때까지 열린 채 유지).
+    e!(
+        "ui.menus_close_on_blur",
+        CAT_CTXMENU,
+        "pref.menusCloseOnBlur",
+        "pref.menusCloseOnBlur.desc",
+        Bool,
+        "on"
+    ),
     // 셸 메뉴 선행 구축(dir2 X-61 계승 · T-179 J-a+J-d · 고급): 켜면 선택이 머물 때 미리 구축해 우클릭이 즉시 뜬다 · 기본 끔 =
     // 우클릭 때 구축(자체 항목은 즉시 · 셸 항목은 "불러오는 중" 뒤 채워짐 · 확장이 많은 PC에서 1~3 s) — 실측 10-06: 선택 20회 뒤
     // Private 58 MB ↔ 끄면 13 MB대(셸 확장 DLL 적재 = QueryContextMenu 자체 비용 · 서브메뉴 생략으로는 안 줄었다).

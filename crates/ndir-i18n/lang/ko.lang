@@ -513,6 +513,8 @@ pref.ctxmenuExclusive = 다른 영역을 쓰면 메뉴 닫기
 pref.ctxmenuExclusive.desc = 메뉴(메뉴 바 풀다운, 우클릭 메뉴, 상태줄 칸 팝업)가 열린 채 그 밖을 좌클릭·우클릭하면 열린 메뉴를 먼저 닫습니다. 키 입력은 열린 메뉴가 받습니다. 끄면 메뉴 바는 바깥 클릭을 삼키고, 팝업 메뉴는 바깥 클릭을 그대로 흘립니다.
 pref.ctxmenuPassthrough = 메뉴를 닫는 클릭에 바로 반응
 pref.ctxmenuPassthrough.desc = 켜면 메뉴를 닫은 클릭이 그 자리의 동작(다른 메뉴 열기, 행 선택 등)을 바로 합니다. 끄면 그 클릭은 메뉴를 닫기만 하고, 한 번 더 눌러야 동작합니다.
+pref.menusCloseOnBlur = 다른 창으로 가면 메뉴 닫기
+pref.menusCloseOnBlur.desc = 메뉴(메뉴 바 풀다운, 우클릭 메뉴, 상태줄 칸 팝업)가 열린 채 다른 창으로 포커스가 옮겨 가면 메뉴를 닫습니다. 끄면 돌아올 때까지 열린 채 둡니다.
 pref.hashAlgos = 체크섬 알고리즘
 pref.hashAlgos.desc = 체크섬 창이 계산할 알고리즘입니다(쉼표로 구분: crc32, md5, sha1, sha256, sha512). 파일을 한 번만 읽으며 함께 계산하므로 개수가 늘어도 디스크 읽기는 같습니다. 기본 crc32,md5,sha1,sha256.
 pref.hashAutoLimit = 체크섬 자동 계산 상한(MB, 0 = 항상 수동)

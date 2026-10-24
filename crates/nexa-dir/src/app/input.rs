@@ -648,6 +648,18 @@ impl App {
         }
     }
 
+    /// 다른 창으로 포커스가 갔다(T-192 · nexa-sql `ui.menus_close_on_blur`) — 켜져 있으면 열린 메뉴(풀다운 · 팝업)를 전부 닫는다.
+    /// 닫은 것이 있으면 `true`(호출부가 다시 그린다).
+    pub(crate) fn menus_on_blur(&mut self) -> bool {
+        let bits = self.open_menu_bits();
+        if bits == 0 || !self.settings.flag("ui.menus_close_on_blur") {
+            return false;
+        }
+        let mut inv = Invalidations::default();
+        self.close_menu_bits(bits, &mut inv);
+        true
+    }
+
     /// 영역 간 배타 단계(T-191 · `ui.ctxmenu_exclusive`/`ui.ctxmenu_passthrough`) — 열린 메뉴가 없으면 설정 조회 없이 `None`.
     fn menu_exclusive_step(&self, ev: &InputEvent) -> Option<MenuStep> {
         let open = self.open_menu_bits();

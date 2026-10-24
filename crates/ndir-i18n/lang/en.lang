@@ -516,6 +516,8 @@ pref.ctxmenuExclusive = Close menus when another area is used
 pref.ctxmenuExclusive.desc = While a menu (menu bar pull-down, context menu, status bar cell popup) is open, a left or right click outside it closes the menu first. Key presses still go to the open menu. When off, the menu bar swallows outside clicks and popup menus let them through.
 pref.ctxmenuPassthrough = React immediately to the click that closes a menu
 pref.ctxmenuPassthrough.desc = When on, the click that closes a menu also performs its own action right away (opening another menu, selecting a row, and so on). When off, that click only closes the menu and a second click is needed.
+pref.menusCloseOnBlur = Close menus when another window gets focus
+pref.menusCloseOnBlur.desc = When focus moves to another window while a menu (menu bar pull-down, context menu, status bar cell popup) is open, the menu is closed. When off, the menu stays open until you return.
 pref.hashAlgos = Checksum algorithms
 pref.hashAlgos.desc = Algorithms the checksum window computes (comma-separated: crc32, md5, sha1, sha256, sha512). The file is read once for all of them, so more algorithms do not mean more disk reads. Default crc32,md5,sha1,sha256.
 pref.hashAutoLimit = Checksum auto-calculate limit (MB, 0 = always manual)
