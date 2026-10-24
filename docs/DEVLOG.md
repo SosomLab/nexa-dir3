@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **nexa-copy `--include/--exclude`**(320585b) · **`--mirror`**(8cbeee8 · 루트/홈/겹침 거부 · 삭제는 `--yes` 필요 · `;` 분리) — 협업 점검 발견(`;` 미지원) · 안전장치 제안 반영 · 수동 점검 ✓ → [10-25 §13](journal/2026-10-25.md)
+
 - **CI fonts 단계 보호**(45fdea8 · timeout 8분 + 재시도) · **`--verify` 표시 보완**(5bacd28) · 88ceb01 ubuntu fonts 23분 근거 · 새 ci.yml 첫 run fonts 13초 → [10-25 §12](journal/2026-10-25.md)
 
 - **nexa-copy `--verify` 1차**(f49622a · 크기 + SHA-256 재귀 · 불일치 종료 1 · 이동 검증 = 후보) · 협업 점검 표시 제안 3건 · ubuntu fonts apt 지연 2회째 → ci.yml 처방안 전달 → [10-25 §11](journal/2026-10-25.md)
