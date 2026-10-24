@@ -100,6 +100,9 @@ impl App {
                     p.set_async_read(on, wait);
                 }
             }
+            "window.transparency" => {
+                self.apply_transparency();
+            }
             "window.always_on_top" => {
                 if let Some(w) = &self.window {
                     w.set_window_level(if self.settings.flag("window.always_on_top") {
@@ -129,6 +132,7 @@ impl App {
                 if key == "perf.boost" {
                     // 성능 향상 모드 = 행 · 메뉴 아이콘 · 폴더 크기의 유효값이 바뀐다(`FORCES` · T-130) → 그 적용도 같이.
                     self.apply_icon_switches();
+                    self.apply_transparency(); // 투명도도 0으로 강제(DR-22 · `FORCES`)
                     self.dirsizes.clear();
                     self.git_detail.clear();
                     self.update_docks();
@@ -265,6 +269,23 @@ impl App {
 
     /// 아이콘 스위치 적용 — 두 패널(모든 탭)의 이름 앞 아이콘 · 메뉴(우클릭 · 메뉴 바) 아이콘. 종전에는 성능 향상 모드를 켜도
     /// 아이콘이 그대로였다(모니터링 칸만 껐다 — 사용자 10-05).
+    /// 창 투명도(T-102 · NEW-013) — 유효값(성능 향상 모드 = 0)을 기억하고 메인 창 · 설정 창에 즉시 적용 · 다른 보조 창은 다음에 열 때.
+    /// 돌려주는 값 = 적용한 투명도(%) — 시험은 전역 값 대신 이것을 본다(병렬 시험이 전역을 같이 쓴다).
+    pub(crate) fn apply_transparency(&mut self) -> u8 {
+        let pct = self
+            .settings
+            .int("window.transparency")
+            .clamp(0, platform::OPACITY_MAX_PCT);
+        platform::set_opacity_pct(pct);
+        if let Some(w) = &self.window {
+            let _ = platform::apply_window_opacity(w);
+        }
+        if let Some(w) = self.prefs_win.window() {
+            let _ = platform::apply_window_opacity(w);
+        }
+        pct as u8
+    }
+
     pub(crate) fn apply_icon_switches(&mut self) {
         let (rows, menus) = Self::icon_switches(&self.settings);
         let mut inv = Invalidations::default();

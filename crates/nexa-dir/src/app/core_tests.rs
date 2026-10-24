@@ -9540,3 +9540,36 @@ fn startup_ui_key_uses_real_key_path() {
     assert_eq!(ctl_key_of("nope"), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 창 투명도(T-102 · NEW-013 · DR-22): 설정 → 적용 투명도(새 창도 이 값) · 성능 향상 모드 = 0(`FORCES`) · 상한 90 · 알파 환산.
+/// 전역 값은 병렬 시험이 같이 쓰므로 `apply_transparency`의 반환값으로 판정한다.
+#[test]
+fn window_transparency_follows_setting_and_boost() {
+    use crate::platform::opacity_alpha;
+    let (mut app, dir) = fixture("opacity");
+    assert_eq!(app.settings.int("window.transparency"), 0, "기본 = 불투명");
+    let _ = app.settings.set("window.transparency", "40");
+    assert_eq!(app.apply_transparency(), 40);
+    let _ = app.settings.set("perf.boost", "on");
+    assert_eq!(
+        app.settings.int("window.transparency"),
+        0,
+        "성능 향상 모드 = 0"
+    );
+    assert_eq!(app.apply_transparency(), 0);
+    let _ = app.settings.set("perf.boost", "off");
+    assert_eq!(app.apply_transparency(), 40);
+    let _ = app.settings.set("window.transparency", "0");
+    assert_eq!(app.apply_transparency(), 0);
+    assert_eq!(
+        (
+            opacity_alpha(0),
+            opacity_alpha(50),
+            opacity_alpha(90),
+            opacity_alpha(99)
+        ),
+        (255, 127, 25, 25)
+    );
+    assert_eq!(opacity_alpha(-5), 255);
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -94,6 +94,17 @@ fn ns_window(w: &Window) -> Option<objc2::rc::Retained<objc2_app_kit::NSWindow>>
     }
 }
 
+/// macOS 창 알파(T-102 창 투명도 · `platform::apply_window_opacity`가 부른다) — NSWindow를 못 얻으면 `false`.
+#[cfg(target_os = "macos")]
+pub(crate) fn set_alpha(w: &Window, alpha: f64) -> bool {
+    let Some(nsw) = ns_window(w) else {
+        return false;
+    };
+    // SAFETY: 살아 있는 winit 창의 NSWindow · 메인 스레드 · 0.0~1.0.
+    unsafe { nsw.setAlphaValue(alpha) };
+    true
+}
+
 /// ★ macOS 소유 관계(사용자 09-17 "Windows처럼 모달"): 보조 창을 메인의 **자식 창**으로 — 항상 메인 위 · 메인과 함께 이동/최소화.
 /// Windows는 `owned_by`(오너 HWND)가 같은 일을 창 생성 때 한다 · Linux no-op.
 pub(crate) fn attach_child(owner: &Window, child: &Window) {

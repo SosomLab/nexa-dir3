@@ -40,6 +40,9 @@ impl ApplicationHandler<Wake> for App {
             return;
         };
         let win = Rc::new(win);
+        // 창 투명도(T-102 · 설정 유효값 = 성능 향상 모드면 0) — 이후 보조 창도 생성 때 같은 값.
+        platform::set_opacity_pct(self.settings.int("window.transparency"));
+        let _ = platform::apply_window_opacity(&win);
         self.drop_shared = platform::register_drop_target(&win);
         {
             let mons: Vec<_> = win.available_monitors().collect();

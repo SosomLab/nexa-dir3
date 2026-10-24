@@ -818,6 +818,8 @@ pref.termFollowWt = Match the system terminal
 pref.termFollowWt.desc = Use the font of the OS default terminal in the dock terminal (Windows = font and size of the Windows Terminal default profile; Linux = desktop monospace font, size from the terminal font size below; ignored when not found). Off = use the terminal settings below.
 pref.alwaysOnTop = Always on top
 pref.alwaysOnTop.desc = Keep the main window above other windows (View menu).
+pref.transparency = Window transparency (%)
+pref.transparency.desc = Makes the whole window this transparent (0 = opaque, up to 90). Applies to secondary windows too. Turned off in performance boost mode. Not supported for native Wayland windows on Linux.
 pref.panelMode = Panel mode
 pref.panelMode.desc = Single or dual file panels (View menu / toolbar).
 pref.panelMode.single = Single

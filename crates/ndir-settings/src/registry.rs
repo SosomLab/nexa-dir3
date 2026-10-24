@@ -205,6 +205,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 창 투명도(T-102 · NEW-013 · DR-22): 0~90 % · 창 전체 OS 합성 · 보조 창 포함 · 성능 향상 모드면 0(`FORCES`).
+    e!(
+        "window.transparency",
+        CAT_APPEARANCE,
+        "pref.transparency",
+        "pref.transparency.desc",
+        Int { min: 0, max: 90 },
+        "0"
+    ),
     e!(
         "layout.panel_mode",
         CAT_APPEARANCE,
@@ -2268,6 +2277,8 @@ pub const FORCES: &[(&str, &str, Dep, &str)] = &[
     ("list.row_icons", "perf.boost", Dep::On, "off"),
     ("menu.icons", "perf.boost", Dep::On, "off"),
     ("dock.folder_size", "perf.boost", Dep::On, "off"),
+    // 창 투명도(DR-22 · T-102): 성능 향상 모드 = 불투명.
+    ("window.transparency", "perf.boost", Dep::On, "0"),
     // 플래시 메시지(nexa-sql perf BOOST 차용 · 10-18): 유지 0.3초 · 페이드 0.2초(최소) + 즉시 모드(`FlashStyle::from_settings`).
     ("ui.flash_hold_ms", "perf.boost", Dep::On, "300"),
     ("ui.flash_ms", "perf.boost", Dep::On, "200"),

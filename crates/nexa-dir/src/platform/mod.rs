@@ -2064,3 +2064,98 @@ mod pty_env_tests {
         std::env::remove_var("NDIR_PTY_ENV_PROBE");
     }
 }
+
+// ───────────────────────── 창 투명도(T-102 · NEW-013 · DR-22)
+
+/// 지금 적용할 투명도(%) — 새로 만드는 창도 이 값을 쓴다(호스트가 설정 유효값으로 갱신 · 성능 향상 모드 = 0).
+static OPACITY_PCT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// 투명도 상한(%) — 그 이상은 창이 거의 안 보여 다시 끌 수 없게 된다(DR-22 0~90).
+pub(crate) const OPACITY_MAX_PCT: i64 = 90;
+
+/// 투명도(%) → 불투명도 0~255(순수 · 0 % = 255 · 90 % = 25 · 범위 밖은 클램프).
+pub(crate) fn opacity_alpha(pct: i64) -> u8 {
+    let p = pct.clamp(0, OPACITY_MAX_PCT);
+    (255 - (255 * p + 50) / 100) as u8
+}
+
+/// 투명도(%)를 기억한다 — 이후 [`apply_window_opacity`]가 쓴다.
+pub(crate) fn set_opacity_pct(pct: i64) {
+    let p = pct.clamp(0, OPACITY_MAX_PCT) as u8;
+    OPACITY_PCT.store(p, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 기억된 투명도(%).
+pub(crate) fn opacity_pct() -> u8 {
+    OPACITY_PCT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 창에 기억된 투명도를 적용한다(창 전체 OS 합성) — Windows = 레이어드 창 알파(`WS_EX_LAYERED` + `SetLayeredWindowAttributes`) ·
+/// macOS = `NSWindow alphaValue` · X11(XWayland 포함) = `_NET_WM_WINDOW_OPACITY`(합성 WM이 반영) · Wayland 네이티브 =
+/// `Err(Unsupported)`(호출부는 조용히 넘긴다 — 앱은 기본 X11 창).
+pub(crate) fn apply_window_opacity(w: &winit::window::Window) -> Result<(), PlatformError> {
+    let alpha = opacity_alpha(i64::from(opacity_pct()));
+    #[cfg(windows)]
+    {
+        use ::windows::Win32::Foundation::{COLORREF, HWND};
+        use ::windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW, GWL_EXSTYLE,
+            LWA_ALPHA, WS_EX_LAYERED,
+        };
+        let Some(h) = crate::winfocus::hwnd(w) else {
+            return Err(PlatformError::Unsupported("window opacity"));
+        };
+        let hwnd = HWND(h as *mut core::ffi::c_void);
+        // SAFETY: 살아 있는 winit 창의 HWND · 확장 스타일 읽고 쓰기 · 레이어드 속성은 알파만.
+        unsafe {
+            let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            let layered = WS_EX_LAYERED.0 as isize;
+            if alpha == 255 {
+                // 불투명 = 레이어드를 떼어 종전 그대로(합성 비용 0).
+                if ex & layered != 0 {
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & !layered);
+                }
+                return Ok(());
+            }
+            if ex & layered == 0 {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | layered);
+            }
+            SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA)
+                .map_err(|e| PlatformError::Failed(e.to_string()))
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::winfocus::set_alpha(w, f64::from(alpha) / 255.0)
+            .then_some(())
+            .ok_or(PlatformError::Unsupported("window opacity"))
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let Some(id) = crate::winfocus::x11_window_id(w) else {
+            return Err(PlatformError::Unsupported("window opacity (Wayland)"));
+        };
+        x11_set_opacity(id, alpha).map_err(|e| PlatformError::Failed(e.to_string()))
+    }
+}
+
+/// X11 `_NET_WM_WINDOW_OPACITY`(CARDINAL · 0xFFFFFFFF = 불투명 · 불투명이면 속성을 지운다). 자체 연결 한 번 · 짧게 쓰고 닫는다.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn x11_set_opacity(win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, PropMode};
+    use x11rb::wrapper::ConnectionExt as _;
+    let (conn, _) = x11rb::connect(None)?;
+    let atom = conn
+        .intern_atom(false, b"_NET_WM_WINDOW_OPACITY")?
+        .reply()?
+        .atom;
+    if alpha == 255 {
+        conn.delete_property(win, atom)?;
+    } else {
+        let v = u32::from(alpha) * 0x0101_0101;
+        conn.change_property32(PropMode::REPLACE, win, atom, AtomEnum::CARDINAL, &[v])?;
+    }
+    conn.flush()?;
+    Ok(())
+}

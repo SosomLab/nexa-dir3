@@ -1130,6 +1130,7 @@ impl BulkWin {
         let Ok(win) = el.create_window(attrs) else {
             return;
         };
+        let _ = crate::platform::apply_window_opacity(&win); // 창 투명도(T-102)
         let win = Rc::new(win);
         self.scale = win.scale_factor() as f32;
         self.surface = crate::present::Presenter::new(win.clone()).ok();
