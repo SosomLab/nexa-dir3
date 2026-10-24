@@ -78,6 +78,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "view.dock",
     "view.launcher",
     "view.always_on_top",
+    "view.toolbar_reset",
     "-",
     "view.refresh",
     "view.preview_window",
@@ -167,9 +168,9 @@ pub(crate) fn view_with_submenus(
 pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
     ("menu.file", 0, 9),
     ("menu.edit", 9, 20),
-    ("menu.view", 20, 46),
-    ("menu.go", 46, 57),
-    ("menu.help", 57, usize::MAX),
+    ("menu.view", 20, 47),
+    ("menu.go", 47, 58),
+    ("menu.help", 58, usize::MAX),
 ];
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
@@ -631,6 +632,18 @@ impl App {
     }
 
     /// 설정 토글(on/off) + 저장. 저장 실패는 조용히(다음 종료 때 다시).
+    /// 툴바 배치 초기화(T-108 · nexa-sql `reset_toolbar`) — 블록 순서/표시(`toolbar.layout`)와 그룹 도크 배치(`toolbar.dock_layout`)를
+    /// 기본값으로 되돌리고 다시 만든다. 아이콘 크기 · 간격 같은 모양 설정은 그대로.
+    pub(crate) fn reset_toolbar(&mut self) {
+        let _ = self.settings.reset("toolbar.layout");
+        let _ = self.settings.reset("toolbar.dock_layout");
+        let _ = self.settings.save();
+        self.rebuild_toolbar();
+        self.sync_menu_checks();
+        self.layout();
+        self.redraw();
+    }
+
     fn toggle_flag(&mut self, key: &str) -> bool {
         let on = !self.settings.flag(key);
         let _ = self.settings.set(key, if on { "on" } else { "off" });
@@ -997,6 +1010,7 @@ impl App {
                     self.layout();
                 }
             }
+            "view.toolbar_reset" => self.reset_toolbar(),
             "view.always_on_top" => {
                 let on = self.toggle_flag("window.always_on_top");
                 if let Some(w) = &self.window {
@@ -1116,15 +1130,15 @@ mod tests {
         assert_eq!(MENU_IDS[0], "file.new_tab");
         assert_eq!(MENU_IDS[9], "edit.undo");
         assert_eq!(MENU_IDS[20], "view.mode_tree");
-        assert_eq!(MENU_IDS[45], "view.lang_system");
-        assert!(MENU_IDS[20..46].contains(&"view.preview_window"));
-        assert!(MENU_IDS[20..46].contains(&"view.palette"));
-        assert!(MENU_IDS[20..46].contains(&"view.log"));
-        assert_eq!(MENU_IDS[46], "nav.back");
-        assert_eq!(MENU_IDS[57], "help.about");
-        assert_eq!(MENU_IDS[58], "help.license");
-        assert_eq!(MENU_IDS[59], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 60);
+        assert_eq!(MENU_IDS[46], "view.lang_system");
+        assert!(MENU_IDS[20..47].contains(&"view.preview_window"));
+        assert!(MENU_IDS[20..47].contains(&"view.palette"));
+        assert!(MENU_IDS[20..47].contains(&"view.log"));
+        assert_eq!(MENU_IDS[47], "nav.back");
+        assert_eq!(MENU_IDS[58], "help.about");
+        assert_eq!(MENU_IDS[59], "help.license");
+        assert_eq!(MENU_IDS[60], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 61);
         // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
         for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
             let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);

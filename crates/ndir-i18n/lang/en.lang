@@ -32,6 +32,7 @@ menu.view.dot = Show Dot File or Folder
 menu.view.dock = Bottom Dock
 menu.view.launcher = Quick Launcher Bar
 menu.view.alwaysOnTop = Always on Top
+menu.view.toolbarReset = Reset Toolbar Layout
 menu.view.refresh = Refresh
 menu.view.theme.system = Theme: System
 menu.view.theme.light = Theme: Light

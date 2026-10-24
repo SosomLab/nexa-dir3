@@ -1965,6 +1965,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.view.toolbar_reset",
+        CAT_KEYS,
+        "menu.view.toolbarReset",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.view.refresh",
         CAT_KEYS,
         "menu.view.refresh",

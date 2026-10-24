@@ -32,6 +32,7 @@ menu.view.dot = ドット (.) ファイルまたはフォルダーを表示
 menu.view.dock = 下部ドック
 menu.view.launcher = クイックランチャーバー
 menu.view.alwaysOnTop = 常に手前に表示
+menu.view.toolbarReset = ツールバーの配置をリセット
 menu.view.refresh = 最新の情報に更新
 menu.view.theme.system = テーマ: システム
 menu.view.theme.light = テーマ: ライト

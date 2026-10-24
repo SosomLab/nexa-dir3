@@ -9573,3 +9573,27 @@ fn window_transparency_follows_setting_and_boost() {
     assert_eq!(opacity_alpha(-5), 255);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 툴바 배치 초기화(T-108 · nexa-sql `view.toolbar_reset`): 블록 순서/표시 · 그룹 도크 배치 = 기본값 · 모양 설정(아이콘 크기)은 그대로 ·
+/// 보기 메뉴에 항목.
+#[test]
+fn toolbar_reset_restores_default_layout() {
+    let (mut app, dir) = fixture("tbreset");
+    let def_layout = app.settings.get("toolbar.layout").unwrap_or("").to_string();
+    let _ = app.settings.set("toolbar.layout", "settings,refresh");
+    let _ = app.settings.set("toolbar.dock_layout", "x");
+    let _ = app.settings.set("toolbar.icon_size", "24");
+    app.command("view.toolbar_reset");
+    assert_eq!(app.settings.get("toolbar.layout").unwrap_or(""), def_layout);
+    assert_eq!(app.settings.get("toolbar.dock_layout").unwrap_or(""), "");
+    assert_eq!(
+        app.settings.int("toolbar.icon_size"),
+        24,
+        "모양 설정은 그대로"
+    );
+    assert!(
+        super::menus::MENU_IDS.contains(&"view.toolbar_reset"),
+        "보기 메뉴 항목"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -164,6 +164,8 @@ pub const COMMANDS: &[Command] = &[
     ),
     c!("view.launcher", "menu.view.launcher", "", "", ""),
     c!("view.always_on_top", "menu.view.alwaysOnTop", "", "", ""),
+    // 툴바 배치 초기화(T-108 · nexa-sql `view.toolbar_reset`): 블록 순서/표시 + 그룹 도크 배치를 기본으로.
+    c!("view.toolbar_reset", "menu.view.toolbarReset", "", "", ""),
     c!("view.refresh", "menu.view.refresh", "f5", "cmd+r|f5", "f5"),
     c!("view.theme_system", "menu.view.theme.system", "", "", ""),
     c!("view.theme_light", "menu.view.theme.light", "", "", ""),
