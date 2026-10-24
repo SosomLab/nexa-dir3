@@ -161,6 +161,15 @@ macro_rules! say_err {
 
 /// 도크 갱신 디바운스(ms) — 키 반복(약 30 ms 간격)보다 길고 사람이 멈춤을 느끼기 전(100 ms)보다 짧게(T-177).
 pub(crate) const DOCK_DEBOUNCE_MS: u64 = 60;
+
+/// 도크 갱신 예약 시각(T-189 ① · 순수): 마지막 요청 + 디바운스 — 단 `max_ms` > 0이면 묶음 첫 요청 + `max_ms`를 넘기지 않는다.
+pub(crate) fn docks_due_at(now: Instant, first: Instant, debounce_ms: u64, max_ms: u64) -> Instant {
+    let due = now + Duration::from_millis(debounce_ms);
+    if max_ms == 0 {
+        return due;
+    }
+    due.min(first + Duration::from_millis(max_ms))
+}
 use termview::TermView;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -490,6 +499,8 @@ struct App {
     /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
     /// 않고 이동이 멈춘 뒤 [`DOCK_DEBOUNCE_MS`]에 한 번만(10개를 빠르게 지나가면 마지막 것만 계산한다).
     docks_due: Option<Instant>,
+    /// 지금 미루는 묶음의 첫 요청 시각(T-189 ① · `dock.max_defer_ms` 상한의 기준) — 갱신하면 비운다.
+    docks_first: Option<Instant>,
     /// 도크 사진 디코드 워커(10-18 · `app/imgjobs.rs` — 마우스 선택 체감: UI 스레드 디코드 제거).
     preview_decode: app::imgjobs::PreviewDecoder,
     /// 마지막 상태줄 갱신 때의 키(활성 패널 · 행 수 · 선택 수 · 캐럿 · 탭) — 마우스 이동만으로는 상태줄을 다시 만들지 않는다(10-18).
@@ -828,6 +839,7 @@ impl App {
             trash_job: None,
             dirsizes: app::dirsize::DirSizes::default(),
             docks_due: None,
+            docks_first: None,
             preview_decode: app::imgjobs::PreviewDecoder::new(),
             last_status_key: (usize::MAX, [(0, 0, None, 0, 0); 2]),
             conflict_inline: None,
@@ -992,8 +1004,12 @@ impl App {
 
     /// 도크 갱신을 예약한다 — 연속 이동은 하나로 합쳐지고, 유휴 틱이 [`DOCK_DEBOUNCE_MS`] 뒤에 [`App::update_docks`]를 부른다.
     /// 그 전에는 종전 내용이 그대로 보인다(빈 화면으로 깜빡이지 않는다).
+    /// 단, 쉬지 않고 바뀌어도 첫 요청부터 `dock.max_defer_ms`가 지나면 한 번은 갱신한다(T-189 ① · 도크가 굶지 않게).
     pub(crate) fn schedule_docks(&mut self) {
-        self.docks_due = Some(Instant::now() + Duration::from_millis(DOCK_DEBOUNCE_MS));
+        let now = Instant::now();
+        let first = *self.docks_first.get_or_insert(now);
+        let max = self.settings.int("dock.max_defer_ms").max(0) as u64;
+        self.docks_due = Some(docks_due_at(now, first, DOCK_DEBOUNCE_MS, max));
     }
 
     /// 예약된 도크 갱신이 때가 됐으면 실행한다(유휴 틱) — 돌려주는 값 = 다음에 깨울 시각(예약이 남았을 때).
@@ -1017,6 +1033,7 @@ impl App {
     /// 매번 다시 돌렸다 · 10-18 체감 점검).
     pub(crate) fn update_docks_filtered(&mut self, info_only: bool) {
         self.docks_due = None;
+        self.docks_first = None;
         let t0 = crate::input::trace_frames().then(Instant::now);
         let single_info =
             !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";

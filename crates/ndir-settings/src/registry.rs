@@ -1522,6 +1522,16 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 5000 },
         "250"
     ),
+    // 도크 갱신 미루기 최대 지연(T-189 ① · 10-18 구조 점검): 선택이 쉬지 않고 바뀌어도(마우스 끌기 · 키 반복) 첫 요청부터 이 시간이
+    //   지나면 한 번은 갱신한다 · 0 = 상한 없음(종전 — 멈출 때까지 미룸).
+    e!(
+        "dock.max_defer_ms",
+        CAT_DOCK,
+        "pref.dockMaxDefer",
+        "pref.dockMaxDefer.desc",
+        Int { min: 0, max: 5000 },
+        "250"
+    ),
     e!(
         "layout.dock_height_pct",
         CAT_DOCK,
@@ -2343,6 +2353,7 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
+    "dock.max_defer_ms",
     "log.template",
     "log.switch_scale",
     "log.dev_layers",

@@ -9409,3 +9409,43 @@ fn menus_close_when_focus_moves_to_another_window() {
     assert!(app.menubar.is_open(), "끔 = 열린 채");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 도크 갱신 미루기 최대 지연(T-189 ①): 선택이 쉬지 않고 바뀌어도 묶음 첫 요청 + `dock.max_defer_ms`를 넘겨 미루지 않는다 ·
+/// 갱신하면 묶음이 끝난다 · 0 = 종전(상한 없음).
+#[test]
+fn dock_refresh_defer_is_capped() {
+    use crate::docks_due_at;
+    use std::time::{Duration, Instant};
+    let t = Instant::now();
+    let ms = Duration::from_millis;
+    assert_eq!(
+        docks_due_at(t, t, 60, 250),
+        t + ms(60),
+        "첫 요청 = 디바운스"
+    );
+    assert_eq!(docks_due_at(t + ms(100), t, 60, 250), t + ms(160));
+    assert_eq!(docks_due_at(t + ms(230), t, 60, 250), t + ms(250), "상한");
+    assert_eq!(
+        docks_due_at(t + ms(900), t, 60, 250),
+        t + ms(250),
+        "상한 지남 = 바로"
+    );
+    assert_eq!(
+        docks_due_at(t + ms(900), t, 60, 0),
+        t + ms(960),
+        "0 = 상한 없음"
+    );
+    let (mut app, dir) = fixture("dockcap");
+    assert_eq!(app.settings.int("dock.max_defer_ms"), 250, "기본 250");
+    app.schedule_docks();
+    let first = app.docks_first.expect("묶음 시작");
+    app.schedule_docks();
+    assert_eq!(app.docks_first, Some(first), "묶음 첫 시각 유지");
+    assert!(app.docks_due.expect("예약") <= first + ms(250));
+    app.update_docks();
+    assert!(
+        app.docks_first.is_none() && app.docks_due.is_none(),
+        "갱신 = 묶음 끝"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
