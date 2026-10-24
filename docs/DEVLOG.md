@@ -4,6 +4,8 @@
 
 ## 2026-10-24
 
+- **T-139 게이트 형제 저장소 판정**(abe82c9 · 코드 변경만 full 사유) · **T-144 상태줄 깜빡임 · 부하 칸 = 상태줄 사각형만 다시 그리기**(8dc89b3) · gate full 641/0 · push dbcbfaf..8dc89b3 → [10-24 §3](journal/2026-10-24.md)
+
 - **T-189 ✅**(②④⑥⑦ = 696100c 도크 선택 복제 제거 · 213627a 시각 열 분 단위 캐시 · abc0d3c 메뉴 열린 동안 부분 그리기(실기 필요 · 잔상) · 803e458 폴더 크기 캐시 상한 1024 · 앱 임시 캐시 7일 정리 · 보류 1 = 체크섬 창 metadata) · CI dbcbfaf ✓ → [10-24 §2](journal/2026-10-24.md)
 
 - **Linux PC 재개** — nexa-ui 221 `PickerLabels` 필드 추가로 dir3 컴파일 실패 → f5b49ca(i18n 8키 · 파일 창 편집 동작) · **T-192** `ui.menus_close_on_blur`(c49b55d) · **T-189 ①③⑤**(e84a6b4 도크 미루기 상한 `dock.max_defer_ms` · fd1a95d 정보 도크 메타데이터 워커 `dock.info_wait_ms` · dbcbfaf 상태줄 부하 조회 워커) · gate full 634/0 · T4 36/0 → [10-24 §1](journal/2026-10-24.md)
