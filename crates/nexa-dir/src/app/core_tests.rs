@@ -10510,3 +10510,69 @@ fn recent_folders_record_navigate_and_clear() {
     assert_eq!(n, 1, "비면 안내 1줄");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 빠른 필터(NEW-057 · T-163 추천 4번 · 10-25): Ctrl+F(`list.filter`) = 패널 안 필터 바 켜고 포커스 → 글자 = 이름 부분 일치로 목록 줄임 ·
+/// 탭 상태바 "n / m" · 글자 키는 타입어헤드/입력기 대신 상자로 · Esc = 글 지움 → 다시 Esc = 바 닫힘(목록 복원) · 재열람에도 유지.
+#[test]
+fn quick_filter_bar_narrows_rows_and_restores() {
+    let (mut app, dir) = fixture("qfilter");
+    let _ = app.settings.set("layout.tab_statusbar", "on");
+    app.after_setting_changed("layout.tab_statusbar");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    assert_eq!(app.panels[0].rows().source().len(), 3, "a.txt · b.md · sub");
+    assert!(!app.panels[0].filter_on());
+    assert!(app.typeahead_target(), "평소 = 글자 키는 타입어헤드");
+    let list_h0 = app.panels[0].rows().bounds().h;
+    app.command("list.filter");
+    assert!(app.panels[0].filter_on() && app.panels[0].filter_focused());
+    assert!(!app.typeahead_target(), "상자에 포커스 = 글자 키는 상자로");
+    assert!(
+        app.panels[0].rows().bounds().h < list_h0,
+        "목록이 바 높이만큼 줄어든다"
+    );
+    let mut inv = Invalidations::default();
+    for c in ".t".chars() {
+        app.panels[0].key_event(&InputEvent::Char { c, now_ms: 0 }, &mut inv);
+    }
+    assert_eq!(app.panels[0].filter_text(), ".t");
+    assert_eq!(app.panels[0].rows().source().len(), 1, "a.txt만");
+    assert_eq!(app.panels[0].rows().source().unfiltered_len(), 3);
+    app.update_status();
+    let seg = app.panels[0].status_folder_text();
+    assert!(seg.contains("1 of 3"), "{seg}");
+    // 재열람(F5)에도 유지.
+    app.panels[0].reopen(&mut inv);
+    assert_eq!(
+        app.panels[0].rows().source().len(),
+        1,
+        "재열람에도 필터 유지"
+    );
+    // Enter = 포커스를 목록으로(필터는 유지) · 다시 Ctrl+F = 상자로.
+    app.panels[0].key_event(
+        &InputEvent::Key {
+            key: nexa_ctl::Key::Enter,
+            shift: false,
+            primary: false,
+        },
+        &mut inv,
+    );
+    assert!(app.panels[0].filter_on() && !app.panels[0].filter_focused());
+    assert!(app.typeahead_target());
+    app.command("list.filter");
+    assert!(app.panels[0].filter_focused());
+    // Esc = 글 지움(목록 복원 · 바는 남음) → Esc = 바 닫힘.
+    let esc = InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    };
+    app.panels[0].key_event(&esc, &mut inv);
+    assert_eq!(app.panels[0].rows().source().len(), 3);
+    assert!(app.panels[0].filter_on());
+    app.panels[0].key_event(&esc, &mut inv);
+    assert!(!app.panels[0].filter_on());
+    assert_eq!(app.panels[0].rows().bounds().h, list_h0, "목록 높이 복원");
+    let _ = std::fs::remove_dir_all(&dir);
+}

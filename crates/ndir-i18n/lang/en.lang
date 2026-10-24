@@ -263,6 +263,7 @@ ctx.redoOf = Redo: {0}
 
 # ── Status bar · title ──
 status.itemCount = {0} items
+status.itemCountFiltered = {0} of {1} items (filtered)
 status.selectedCount = {0} selected
 status.tab = Tab {0}/{1}
 status.avg = avg {0}µs
@@ -273,6 +274,7 @@ status.hide = hidden
 panel.left = L
 panel.right = R
 list.reading = Reading folder…
+filter.placeholder = Filter by name (* ? wildcards · ; separates · Esc clears)
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab
@@ -1028,6 +1030,7 @@ cmd.navForward = Forward
 cmd.navUp = Up One Level
 cmd.favorites = Favorites...
 cmd.recent = Recent Folders...
+cmd.filter = Quick Filter
 cmd.favToggle = Add or Remove Current Folder in Favorites
 cmd.favExport = Export Favorites...
 cmd.favImport = Import Favorites...

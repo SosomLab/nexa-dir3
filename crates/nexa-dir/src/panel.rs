@@ -135,6 +135,8 @@ enum Part {
     List,
     /// 탭 상태바(패널 맨 아래).
     Status,
+    /// 빠른 필터 바(경로 바 아래 · 켜져 있을 때만 · NEW-057).
+    Filter,
 }
 
 pub(crate) struct Panel {
@@ -205,6 +207,9 @@ pub(crate) struct Panel {
     pending_status: Option<(String, bool)>,
     /// Git 칸에 덧붙이는 요약(`↑1 ●3` — 호스트가 `git status` 결과로 넣는다 · 빈 글 = 없음).
     git_extra: String,
+    /// 빠른 필터 바(NEW-057 · 10-25): 경로 바 아래 한 줄 입력 상자 · 글 = 활성 탭 원천의 필터(탭별) · 꺼짐 = 높이 0.
+    filter: nexa_ctl::TextBox,
+    filter_on: bool,
 }
 
 /// 탭 상태바 높이(논리 px · 창 상태줄과 같다).
@@ -359,10 +364,15 @@ impl Panel {
         rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
+        let mut filter =
+            nexa_ctl::TextBox::new(ndir_i18n::tr("filter.placeholder")).with_clearable();
+        filter.set_scale(m.scale);
         let mut p = Panel {
             tabbar,
             navbtns: nav_buttons(),
             pathbar: PathBar::new(display_path(path), m.bar_h, m.pad_x),
+            filter,
+            filter_on: false,
             tabs: vec![Tab {
                 rows,
                 nav: History::new(path.to_path_buf()),
@@ -936,7 +946,20 @@ impl Panel {
             ),
             inv,
         );
-        let list_y = bounds.y + tab_h + bar_h;
+        // 빠른 필터 바(NEW-057): 켜져 있으면 경로 바 아래 한 줄(같은 높이) · 목록이 그만큼 내려간다.
+        let filter_h = if self.filter_on {
+            bar_h.min((bounds.bottom() - bounds.y - tab_h - bar_h).max(0))
+        } else {
+            0
+        };
+        {
+            use nexa_ctl::Widget as _;
+            self.filter.set_bounds(
+                Rect::new(bounds.x, bounds.y + tab_h + bar_h, bounds.w, filter_h),
+                inv,
+            );
+        }
+        let list_y = bounds.y + tab_h + bar_h + filter_h;
         // 탭 상태바(켜져 있으면 목록 높이에서 뺀다).
         let status_h = if self.status_on {
             ((TAB_STATUS_H * self.m.scale).round() as i32).min((bounds.bottom() - list_y).max(0))
@@ -973,6 +996,7 @@ impl Panel {
             }
         }
         self.navbtns.set_scale(m.scale);
+        self.filter.set_scale(m.scale);
         self.pathbar.set_metrics(m.bar_h, m.pad_x, inv);
         for tab in &mut self.tabs {
             tab.rows.set_metrics(m.row_h, m.pad_x, m.indent_w, inv);
@@ -1163,6 +1187,11 @@ impl Panel {
         ctx.fill_rect(self.navbtns.bounds(), theme.chrome_bg);
         self.navbtns.paint(ctx, theme);
         self.pathbar.paint(ctx, theme);
+        if self.filter_on {
+            use nexa_ctl::Widget as _;
+            ctx.fill_rect(self.filter.bounds(), theme.chrome_bg);
+            self.filter.paint(ctx, theme);
+        }
         self.rows().paint(ctx, theme);
         if self.status_on {
             self.status.paint(ctx, theme);
@@ -1175,7 +1204,120 @@ impl Panel {
             self.navbtns
                 .set_item_tip(NAV_ASSETS[i].0, &ndir_i18n::tr(key));
         }
+        self.filter
+            .set_placeholder(ndir_i18n::tr("filter.placeholder"));
         self.sync_chrome(inv);
+    }
+
+    // ── 빠른 필터(NEW-057 · 10-25) ──────────────────────────────
+
+    /// 필터 바가 보이는가(시험 · 덤프).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn filter_on(&self) -> bool {
+        self.filter_on
+    }
+
+    /// 필터 입력 상자가 글자 키를 받는 중인가(호스트 = 경로 바 편집과 같은 규칙으로 타입어헤드 · 입력기 경로를 돌린다).
+    pub(crate) fn filter_focused(&self) -> bool {
+        use nexa_ctl::Control as _;
+        self.filter_on && self.filter.is_focused()
+    }
+
+    /// 탭 상태바 폴더 칸 글(시험 · "n / m 항목(필터)").
+    #[cfg(test)]
+    pub(crate) fn status_folder_text(&self) -> String {
+        self.status
+            .segments()
+            .iter()
+            .find(|s| s.id == SEG_FOLDER)
+            .map(|s| s.text.clone())
+            .unwrap_or_default()
+    }
+
+    /// 활성 탭의 필터 글(없으면 빈 글).
+    pub(crate) fn filter_text(&self) -> String {
+        self.rows().source().name_filter().to_string()
+    }
+
+    /// `list.filter`: 꺼져 있으면 켜고 입력 상자에 포커스 · 켜져 있고 포커스가 상자에 있으면 끈다(필터 풀림) · 켜져 있는데 포커스가
+    /// 목록이면 상자로 포커스만.
+    pub(crate) fn toggle_filter(&mut self, inv: &mut Invalidations) {
+        use nexa_ctl::Control as _;
+        if !self.filter_on {
+            self.filter_on = true;
+            self.filter.set_focused(true);
+            let b = self.bounds;
+            self.set_bounds(b, inv);
+            inv.push(self.bounds);
+        } else if self.filter.is_focused() {
+            self.close_filter(inv);
+        } else {
+            self.filter.set_focused(true);
+            inv.push(self.filter_bounds());
+        }
+    }
+
+    /// 필터 바 닫기 = 글 지움 · 필터 풀림 · 목록이 다시 커진다.
+    pub(crate) fn close_filter(&mut self, inv: &mut Invalidations) {
+        use nexa_ctl::Control as _;
+        if !self.filter_on {
+            return;
+        }
+        self.filter.set_text("");
+        self.filter.set_focused(false);
+        self.filter_on = false;
+        self.apply_filter_text(inv);
+        let b = self.bounds;
+        self.set_bounds(b, inv);
+        inv.push(self.bounds);
+    }
+
+    fn filter_bounds(&self) -> Rect {
+        use nexa_ctl::Widget as _;
+        self.filter.bounds()
+    }
+
+    /// 입력 상자의 글 → 활성 탭 원천의 필터(바뀌면 목록 무효화 · 캐럿/스크롤은 그리드가 길이에 맞춘다).
+    fn apply_filter_text(&mut self, inv: &mut Invalidations) {
+        let text = self.filter.text();
+        let rows = self.rows_mut();
+        if rows.source_mut().set_name_filter(&text) {
+            inv.push(rows.bounds());
+            self.sync_status(inv);
+        }
+    }
+
+    /// 필터 바로 가는 키(글자 · 편집 키 · Enter = 목록으로 포커스 · Esc = 글이 있으면 지움 · 없으면 닫기). 처리했으면 `true`.
+    fn filter_key(&mut self, ev: &InputEvent, inv: &mut Invalidations) -> bool {
+        use nexa_ctl::{Control as _, Widget as _};
+        if !self.filter_focused() {
+            return false;
+        }
+        match *ev {
+            InputEvent::Key {
+                key: CtlKey::Escape,
+                ..
+            } => {
+                if self.filter.text().is_empty() {
+                    self.close_filter(inv);
+                } else {
+                    self.filter.set_text("");
+                    inv.push(self.filter_bounds());
+                    self.apply_filter_text(inv);
+                }
+            }
+            InputEvent::Key {
+                key: CtlKey::Enter, ..
+            } => {
+                self.filter.set_focused(false);
+                inv.push(self.filter_bounds());
+            }
+            _ => {
+                self.filter.on_event(ev, inv);
+                self.apply_filter_text(inv);
+            }
+        }
+        true
     }
 
     /// 탭 상태바 켜기/끄기(설정 `layout.tab_statusbar`) — 바뀌면 다시 배치한다.
@@ -1195,10 +1337,16 @@ impl Panel {
         }
         self.ensure_git_info();
         let src = self.rows().source();
-        let mut segs = vec![nexa_ctl::StatusSeg::new(
-            SEG_FOLDER,
-            ndir_i18n::trf("status.itemCount", &[&src.len().to_string()]),
-        )];
+        // 빠른 필터 중이면 "n / m 항목"(협업 제안 10-25 — 빈 목록이 필터 때문임을 알린다).
+        let folder_text = if src.name_filter().is_empty() {
+            ndir_i18n::trf("status.itemCount", &[&src.len().to_string()])
+        } else {
+            ndir_i18n::trf(
+                "status.itemCountFiltered",
+                &[&src.len().to_string(), &src.unfiltered_len().to_string()],
+            )
+        };
+        let mut segs = vec![nexa_ctl::StatusSeg::new(SEG_FOLDER, folder_text)];
         if let Some((_, Some((_, branch)))) = &self.git {
             let mut text = ndir_i18n::trf("tabstatus.git", &[branch]);
             if !self.git_extra.is_empty() {
@@ -1399,6 +1547,12 @@ impl Panel {
             .set_locked(self.tabs.iter().map(|t| t.locked).collect(), inv);
         self.tabbar
             .set_pinned(self.tabs.iter().map(|t| t.pinned).collect(), inv);
+        // 빠른 필터 바 = 활성 탭 원천의 글(탭 전환 · 이동(새 원천 = 빈 글)에 맞춘다).
+        let ft = self.filter_text();
+        if self.filter.text() != ft {
+            self.filter.set_text(&ft);
+            inv.push(self.filter_bounds());
+        }
         let root = self.root_path();
         // 워커가 읽는 중이면 경로 바는 이미 새 위치(결과가 올 때까지 목록만 옛것 · 10-18 결정 ②).
         let shown = self
@@ -2466,6 +2620,8 @@ impl Panel {
             Some(Part::Nav)
         } else if self.pathbar.bounds().contains(p) {
             Some(Part::Path)
+        } else if self.filter_on && self.filter_bounds().contains(p) {
+            Some(Part::Filter)
         } else if self.rows().bounds().contains(p) {
             Some(Part::List)
         } else if self.status_on && self.status.bounds().contains(p) {
@@ -2481,6 +2637,14 @@ impl Panel {
             Part::Nav => self.navbtns.on_event(ev, inv),
             Part::Path => self.pathbar.on_event(ev, inv),
             Part::List => self.tabs[self.active].rows.on_event(ev, inv),
+            Part::Filter => {
+                use nexa_ctl::{Control as _, Widget as _};
+                if matches!(ev, InputEvent::MouseDown { .. }) && !self.filter.is_focused() {
+                    self.filter.set_focused(true);
+                }
+                self.filter.on_event(ev, inv);
+                self.apply_filter_text(inv);
+            }
             Part::Status => {
                 use nexa_ctl::Widget as _;
                 self.status.on_event(ev, inv);
@@ -2518,6 +2682,12 @@ impl Panel {
                 };
                 if part != Part::Path && self.pathbar.is_editing() {
                     self.pathbar.cancel_edit(inv);
+                }
+                // 필터 바 밖 클릭 = 상자 포커스 해제(글과 필터는 그대로 · 바는 열린 채).
+                if part != Part::Filter && self.filter_focused() {
+                    use nexa_ctl::Control as _;
+                    self.filter.set_focused(false);
+                    inv.push(self.filter_bounds());
                 }
                 self.pressed = Some(part);
                 self.send(part, ev, inv);
@@ -2593,6 +2763,9 @@ impl Panel {
 
     /// 키 사건(호스트가 활성 패널에만) — 경로 바 편집 중이면 편집으로 · 아니면 목록(Enter = 활성화).
     pub(crate) fn key_event(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
+        if self.filter_key(ev, inv) {
+            return;
+        }
         if self.pathbar.is_editing() {
             match *ev {
                 // Backspace = `\u{8}` 글자(dir2 EditState 규약 · `edit_char`가 처리).

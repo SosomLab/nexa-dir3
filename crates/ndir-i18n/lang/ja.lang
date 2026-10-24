@@ -263,6 +263,7 @@ ctx.redoOf = やり直し: {0}
 
 # ── Status bar · title ──
 status.itemCount = {0} 個の項目
+status.itemCountFiltered = {1} 個中 {0} 個の項目(フィルター)
 status.selectedCount = {0} 個を選択
 status.tab = タブ {0}/{1}
 status.avg = 平均 {0}µs
@@ -273,6 +274,7 @@ status.hide = 非表示
 panel.left = 左
 panel.right = 右
 list.reading = フォルダーを読み込み中…
+filter.placeholder = 名前でフィルター(* ? ワイルドカード · ; で複数 · Esc で消去)
 
 tab.lock = タブをロック
 tab.unlock = タブのロックを解除
@@ -1028,6 +1030,7 @@ cmd.navForward = 進む
 cmd.navUp = 上のフォルダーへ
 cmd.favorites = お気に入り...
 cmd.recent = 最近のフォルダー...
+cmd.filter = クイックフィルター
 cmd.favToggle = 現在のフォルダーをお気に入りに追加/削除
 cmd.favExport = お気に入りのエクスポート...
 cmd.favImport = お気に入りのインポート...

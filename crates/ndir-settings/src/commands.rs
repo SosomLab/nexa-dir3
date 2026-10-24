@@ -111,6 +111,8 @@ pub const COMMANDS: &[Command] = &[
         "cmd+shift+a",
         "ctrl+shift+a"
     ),
+    // 빠른 필터(dir3 신규 · NEW-057 · 10-25) — 패널 안 필터 바 토글(탐색기 Ctrl+F = 검색 상자 · macOS ⌘F).
+    c!("list.filter", "cmd.filter", "ctrl+f", "cmd+f", "ctrl+f"),
     // 패턴으로 선택/해제(dir3 신규 · NEW-054 · 10-25) — 기본 단축키 없음(탐색기도 없음 · `key.edit.select_pattern`로 지정).
     c!("edit.select_pattern", "menu.edit.selectPattern", "", "", ""),
     c!(

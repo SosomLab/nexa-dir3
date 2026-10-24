@@ -228,6 +228,8 @@ pub(crate) struct TreeSource {
     cut_marks: std::collections::HashSet<PathBuf>,
     /// 크기 열에 보일 폴더 크기(T-166 3차 · 10-25): 경로 → (바이트, 읽지 못한 폴더 있음). 호스트가 보이는 행만큼 넘긴다 · 비면 빈칸.
     dir_sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
+    /// 빠른 필터 글(NEW-057 · 탭 소유 · 재열람에도 유지 · 다른 폴더로 가면 새 원천 = 풀림) — 빈 글 = 끔.
+    name_filter: String,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
     no_icons: bool,
     /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
@@ -257,6 +259,7 @@ impl TreeSource {
             drive_space_asked: false,
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
+            name_filter: String::new(),
             no_icons: false,
             probe_cache: Default::default(),
             probe_inbox: Default::default(),
@@ -369,6 +372,27 @@ impl TreeSource {
         changed
     }
 
+    /// 빠른 필터(NEW-057) 설정 — 바뀌었으면 true(호스트가 목록 무효화). 빈 글 = 끔.
+    pub(crate) fn set_name_filter(&mut self, spec: &str) -> bool {
+        let spec = spec.trim();
+        let changed_text = self.name_filter != spec;
+        self.name_filter = spec.to_string();
+        let changed_tree = self
+            .tree
+            .as_mut()
+            .is_some_and(|t| t.set_name_filter(Some(spec)));
+        changed_text || changed_tree
+    }
+
+    pub(crate) fn name_filter(&self) -> &str {
+        &self.name_filter
+    }
+
+    /// 필터가 없을 때의 행 수("n/m" 표지).
+    pub(crate) fn unfiltered_len(&self) -> usize {
+        self.tree.as_ref().map_or(0, Tree::unfiltered_len)
+    }
+
     /// 크기 열의 폴더 크기 지도 교체(T-166 3차) — 바뀌었으면 true(호스트가 목록 무효화).
     pub(crate) fn set_dir_sizes(
         &mut self,
@@ -468,7 +492,11 @@ impl TreeSource {
         self.probe_gen += 1;
         self.probe_pending.borrow_mut().clear();
         match built.tree {
-            Ok(t) => {
+            Ok(mut t) => {
+                // 빠른 필터(NEW-057)는 재열람해도 그대로.
+                if !self.name_filter.is_empty() {
+                    t.set_name_filter(Some(&self.name_filter));
+                }
                 self.tree = Some(t);
                 self.error = None;
             }

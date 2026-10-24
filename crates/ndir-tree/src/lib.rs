@@ -210,6 +210,32 @@ impl Filter {
     }
 }
 
+/// 빠른 필터 판정(순수 · NEW-057): `;`로 나눈 항 중 하나라도 맞으면 참 · 항에 `*`/`?`가 있으면 글롭 전체 일치 · 없으면 **부분 일치** ·
+/// 대소문자 무시(`spec`은 이미 소문자).
+pub fn name_filter_matches(spec: &str, name: &str) -> bool {
+    let lower = name.to_lowercase();
+    spec.split(';')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .any(|t| {
+            if t.contains(['*', '?']) {
+                let (p, s): (Vec<char>, Vec<char>) = (t.chars().collect(), lower.chars().collect());
+                glob_chars(&p, &s)
+            } else {
+                lower.contains(t)
+            }
+        })
+}
+
+fn glob_chars(p: &[char], s: &[char]) -> bool {
+    match p.first() {
+        None => s.is_empty(),
+        Some('*') => (0..=s.len()).any(|k| glob_chars(&p[1..], &s[k..])),
+        Some('?') => !s.is_empty() && glob_chars(&p[1..], &s[1..]),
+        Some(c) => s.first() == Some(c) && glob_chars(&p[1..], &s[1..]),
+    }
+}
+
 /// 인라인 트리 + 선택 상태. 임의 부모의 노드를 함께 선택할 수 있다(교차 선택).
 #[derive(Debug)]
 pub struct Tree {
@@ -221,6 +247,10 @@ pub struct Tree {
     anchor: Option<NodeId>,
     root_path: PathBuf,
     filter: Filter,
+    /// 빠른 필터(dir3 NEW-057 · 10-25): 이름이 맞는 가시 노드만(각 층에서 · 부모가 숨으면 하위도) · `None` = 끔.
+    name_filter: Option<String>,
+    /// 필터가 없을 때의 가시 행 수("n/m" 표지 · 필터가 없으면 `visible.len()`과 같다).
+    unfiltered_len: usize,
     sort: SortSpec,
 }
 
@@ -262,6 +292,8 @@ impl Tree {
                 show_protected,
             },
             sort: SortSpec::default(),
+            name_filter: None,
+            unfiltered_len: 0,
         };
         let roots = tree.enumerate(&root_path, None, 0)?;
         tree.roots.clone_from(&roots);
@@ -434,19 +466,100 @@ impl Tree {
         self.rebuild_visible();
     }
 
-    /// 현재 펼침 상태를 따라 roots→DFS로 가시 목록을 다시 만든다(정렬 변경 후 호출).
+    /// 현재 펼침 상태를 따라 roots→DFS로 가시 목록을 다시 만든다(정렬 변경 후 호출). 빠른 필터가 있으면 각 층에서 이름이 맞는
+    /// 노드만(부모가 숨으면 하위도 숨는다) · 필터 없는 수는 `unfiltered_len`에.
     fn rebuild_visible(&mut self) {
         let roots = std::mem::take(&mut self.roots); // 빌림 회피 — clone 대신 이동 후 복귀
-        let mut vis = Vec::with_capacity(self.visible.len());
+        let mut all = Vec::with_capacity(self.visible.len());
         for &r in &roots {
-            vis.push(r);
+            all.push(r);
             let n = &self.nodes[r as usize];
             if n.is_dir() && n.expanded {
-                self.collect_subtree(r, &mut vis);
+                self.collect_subtree(r, &mut all);
             }
         }
+        self.unfiltered_len = all.len();
+        let vis = match &self.name_filter {
+            None => all,
+            Some(spec) => {
+                let mut vis = Vec::with_capacity(all.len());
+                for &r in &roots {
+                    if self.passes_filter(spec, r) {
+                        vis.push(r);
+                        let n = &self.nodes[r as usize];
+                        if n.is_dir() && n.expanded {
+                            self.collect_subtree_filtered(spec, r, &mut vis);
+                        }
+                    }
+                }
+                vis
+            }
+        };
         self.roots = roots;
         self.visible = vis;
+    }
+
+    fn passes_filter(&self, spec: &str, id: NodeId) -> bool {
+        self.nodes
+            .get(id as usize)
+            .is_some_and(|n| name_filter_matches(spec, &n.name))
+    }
+
+    fn collect_subtree_filtered(&self, spec: &str, id: NodeId, out: &mut Vec<NodeId>) {
+        for &c in &self.nodes[id as usize].children {
+            if !self.passes_filter(spec, c) {
+                continue;
+            }
+            out.push(c);
+            let cn = &self.nodes[c as usize];
+            if cn.is_dir() && cn.expanded {
+                self.collect_subtree_filtered(spec, c, out);
+            }
+        }
+    }
+
+    /// 빠른 필터(NEW-057) 설정 — 빈 글/`None` = 끔. 바뀌었으면 가시 목록을 다시 만들고 `true`. 선택·펼침 상태는 그대로(숨은 선택은
+    /// 필터를 풀면 다시 보인다 · 숨김 필터와 같은 규칙).
+    pub fn set_name_filter(&mut self, spec: Option<&str>) -> bool {
+        let next = spec
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_lowercase);
+        if next == self.name_filter {
+            return false;
+        }
+        self.name_filter = next;
+        self.rebuild_visible();
+        true
+    }
+
+    /// 지금 필터(소문자 · 없으면 `None`).
+    pub fn name_filter(&self) -> Option<&str> {
+        self.name_filter.as_deref()
+    }
+
+    /// 필터가 없을 때의 가시 행 수(필터가 없으면 `visible_len()`).
+    pub fn unfiltered_len(&self) -> usize {
+        if self.name_filter.is_some() {
+            self.unfiltered_len
+        } else {
+            self.visible.len()
+        }
+    }
+
+    /// 펼침/접힘이 가시 목록을 바꾼 뒤 — 필터가 있으면 전체를 다시 만들고 "전부 바뀜"으로 알린다(부분 범위는 필터 전 기준이라 틀리다).
+    fn refilter_after(&mut self, change: RangeChange) -> RangeChange {
+        if self.name_filter.is_none() {
+            return change;
+        }
+        // 바뀌기 전 길이 = 지금 길이에서 이번 변화를 되돌린 값(펼침 = 넣은 만큼 빼고 · 접힘 = 뺀 만큼 더한다).
+        let before = (self.visible.len() + change.removed).saturating_sub(change.inserted);
+        self.rebuild_visible();
+        RangeChange {
+            start: 0,
+            removed: before,
+            inserted: self.visible.len(),
+        }
     }
 
     // ── 타입어헤드 찾기 (docs/32) ───────────────────────────────
@@ -676,11 +789,11 @@ impl Tree {
         let start = vis + 1;
         let inserted = sub.len();
         self.visible.splice(start..start, sub);
-        Ok(RangeChange {
+        Ok(self.refilter_after(RangeChange {
             start,
             removed: 0,
             inserted,
-        })
+        }))
     }
 
     /// 경로로 지정한 가시 폴더를 펼친다(F18 펼침 복원용, 감사 P3). 경로가 가시 목록에 없거나
@@ -717,11 +830,11 @@ impl Tree {
             }
         }
         self.visible.drain(start..start + count);
-        RangeChange {
+        self.refilter_after(RangeChange {
             start,
             removed: count,
             inserted: 0,
-        }
+        })
     }
 
     /// `id`의 펼침 여부(범위 밖이면 `None`).
@@ -1068,6 +1181,8 @@ impl Tree {
                 show_protected: true,
             },
             sort: SortSpec::default(),
+            name_filter: None,
+            unfiltered_len: 0,
         }
     }
 }
@@ -1212,6 +1327,55 @@ mod tests {
         (0..t.visible_len())
             .map(|i| t.row(i).unwrap().name)
             .collect()
+    }
+
+    /// 빠른 필터(NEW-057): 부분 일치 · 글롭 · `;` · 각 층 적용(부모가 숨으면 하위도) · 펼침/접힘도 필터 유지 · 수(n/m) · 끄면 복원.
+    #[test]
+    fn name_filter_limits_visible_rows_per_level() {
+        let base = make_fixture("namefilter");
+        let mut t = Tree::open(&base).unwrap();
+        let dir_a = t.row(0).unwrap().id;
+        t.expand(dir_a).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+        assert_eq!(
+            names(&t),
+            vec!["dirA", "dirB", "x.txt", "y.txt", "file1.txt"]
+        );
+        assert!(t.set_name_filter(Some("DIR")));
+        assert_eq!(
+            names(&t),
+            vec!["dirA", "dirB"],
+            "부분 일치 · 대소문자 무시 · 각 층"
+        );
+        assert_eq!((t.visible_len(), t.unfiltered_len()), (2, 5));
+        assert!(
+            !t.set_name_filter(Some("dir ")),
+            "같은 필터(정규화) = 변화 없음"
+        );
+        assert!(t.set_name_filter(Some("*.txt")));
+        assert_eq!(
+            names(&t),
+            vec!["file1.txt"],
+            "dirA가 숨으면 그 안의 txt도 안 보인다"
+        );
+        assert!(t.set_name_filter(Some("dir; file?.txt")));
+        assert_eq!(names(&t), vec!["dirA", "dirB", "file1.txt"]);
+        // 접기/펼치기도 필터 유지(전부 바뀜으로 알림).
+        let c = t.collapse(dir_a);
+        assert_eq!(names(&t), vec!["dirA", "file1.txt"]);
+        assert_eq!((c.start, c.removed, c.inserted), (0, 3, 2));
+        let c = t.expand(dir_a).unwrap();
+        assert_eq!(names(&t), vec!["dirA", "dirB", "file1.txt"]);
+        assert_eq!((c.start, c.removed, c.inserted), (0, 2, 3));
+        assert!(t.set_name_filter(Some("")), "빈 글 = 끔");
+        assert_eq!(t.name_filter(), None);
+        assert_eq!(
+            names(&t),
+            vec!["dirA", "dirB", "x.txt", "y.txt", "file1.txt"]
+        );
+        assert_eq!(t.unfiltered_len(), 5);
+        assert!(name_filter_matches("a?c", "ABC") && !name_filter_matches("a?c", "abcd"));
+        assert!(!name_filter_matches(" ; ", "x"));
     }
 
     #[test]

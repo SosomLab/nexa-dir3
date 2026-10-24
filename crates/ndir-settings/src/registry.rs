@@ -1915,6 +1915,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.list.filter",
+        CAT_KEYS,
+        "cmd.filter",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.nav.favorites",
         CAT_KEYS,
         "cmd.favorites",

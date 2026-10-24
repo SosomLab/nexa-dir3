@@ -100,7 +100,7 @@ impl App {
         typeahead_target_of(
             self.dlg.is_open(),
             self.tab_menu.is_open() || self.menubar.is_open(),
-            p.pathbar.is_editing(),
+            p.pathbar.is_editing() || p.filter_focused(), // 빠른 필터 상자 = 편집 필드와 같은 규칙(NEW-057)
             p.rows().is_renaming(),
             self.term_focused().is_some(),
         )
@@ -182,7 +182,7 @@ impl App {
         ime_sink(
             self.palette.is_open(),
             self.dlg.is_open() || self.tab_menu.is_open() || self.menubar.is_open(),
-            p.pathbar.is_editing(),
+            p.pathbar.is_editing() || p.filter_focused(), // 빠른 필터 상자 = 편집 필드(NEW-057)
             p.rows().is_renaming(),
             self.term_focused().is_some(),
         )

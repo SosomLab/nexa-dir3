@@ -262,6 +262,7 @@ ctx.redoOf = 다시 실행: {0}
 
 # ── 상태바 · 타이틀 ──
 status.itemCount = {0}개 항목
+status.itemCountFiltered = {1}개 중 {0}개 항목(필터)
 status.selectedCount = 선택 {0}
 status.tab = 탭 {0}/{1}
 status.avg = 평균 {0}µs
@@ -272,6 +273,7 @@ status.hide = 감춤
 panel.left = 좌
 panel.right = 우
 list.reading = 폴더 읽는 중…
+filter.placeholder = 이름으로 필터(* ? 와일드카드 · ; 로 여러 개 · Esc = 지움)
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제
@@ -1027,6 +1029,7 @@ cmd.navForward = 앞으로
 cmd.navUp = 상위 폴더
 cmd.favorites = 즐겨찾기...
 cmd.recent = 최근 폴더...
+cmd.filter = 빠른 필터
 cmd.favToggle = 현재 폴더를 즐겨찾기에 추가/제거
 cmd.favExport = 즐겨찾기 내보내기...
 cmd.favImport = 즐겨찾기 가져오기...
