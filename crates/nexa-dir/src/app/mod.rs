@@ -38,6 +38,7 @@ mod startup_cmd;
 pub(crate) mod statusline;
 pub(crate) mod term;
 mod toasts;
+mod toolfloat;
 pub(crate) mod watch;
 mod windows;
 

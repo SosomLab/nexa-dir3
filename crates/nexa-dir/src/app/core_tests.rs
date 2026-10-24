@@ -3517,8 +3517,10 @@ fn toolbar_and_launcher_right_click_menus() {
         x: tb.right() - 5,
         y: tb.y + 5,
     });
+    // T-108 2/2: 커서 아래 그룹 "띄우기"(`aux.tbg:<gid>`)가 맨 앞 · 배치 초기화가 순서 편집 뒤.
     assert!(
-        menu(&mut app).contains("aux.tb.order aux.prefs"),
+        menu(&mut app).contains("aux.tbg:")
+            && menu(&mut app).contains("aux.tb.order aux.tb.reset aux.prefs"),
         "{}",
         menu(&mut app)
     );
@@ -8153,6 +8155,76 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_some() && app.hash_win.is_running());
     app.close_checksum();
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
+}
+
+/// 툴바 그룹 띄우기/붙이기(T-108 2/2 · NEW-010 · nexa-sql 차용): 툴바 우클릭 메뉴에 커서 아래 그룹 "띄우기" + 배치 초기화 · 고르면 창 요청만
+/// (창은 이벤트 루프 핸들에서) · 도크 상태가 플로팅이면 배치 설정에 저장 · `dock_group` = 복귀 + 저장 · 창 없이도 상태 기계는 일관.
+#[test]
+fn toolbar_group_float_request_and_dock_back() {
+    let (mut app, dir) = fixture("tbfloat");
+    app.layout_for(1200, 800, 1.0);
+    let gid = app.toolbar.groups()[0].0.clone();
+    let r = app.toolbar.bar(&gid).expect("bar").bounds();
+    app.cursor = (r.x + 2, r.y + 2);
+    app.open_toolbar_menu();
+    let ids: Vec<String> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids[0], format!("aux.tbg:{gid}"), "{ids:?}");
+    assert!(ids.contains(&"aux.tb.reset".to_string()) && ids.contains(&"aux.tb.order".to_string()));
+    app.ctx_pick(&format!("aux.tbg:{gid}"));
+    assert_eq!(
+        app.pending_float.len(),
+        1,
+        "창은 이벤트 루프 핸들에서 — 요청만"
+    );
+    assert_eq!(app.pending_float[0].0, gid);
+    app.open_toolbar_menu();
+    app.ctx_pick(&format!("aux.tbg:{gid}"));
+    assert_eq!(app.pending_float.len(), 1, "같은 그룹 중복 요청 없음");
+    // 도크 상태 기계(창 없이): 플로팅 → 배치 저장(`id@x:y`) · 플로팅 그룹은 도크 메뉴 대상 아님 · 붙이기 → 복귀 + 저장 + 요청 취소.
+    app.toolbar.float(&gid, 50, 60);
+    let _ = app.toolbar.take_actions();
+    app.save_dock_layout();
+    assert!(app.toolbar.is_floating(&gid));
+    let saved = app
+        .settings
+        .get("toolbar.dock_layout")
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        saved.contains(&format!("{gid}@50:60")),
+        "플로팅 좌표 저장: {saved}"
+    );
+    assert_ne!(
+        app.toolbar_group_at(r.x + 2, r.y + 2),
+        Some(gid.clone()),
+        "플로팅 그룹은 도크 메뉴 대상 아님"
+    );
+    app.dock_group(&gid);
+    assert!(!app.toolbar.is_floating(&gid));
+    assert!(app.pending_float.is_empty(), "붙이면 요청도 취소");
+    assert_ne!(app.settings.get("toolbar.dock_layout").unwrap_or(""), saved);
+    // 메뉴 "툴바 배치 초기화" = 플로팅 전부 도크(좌표 없음).
+    app.toolbar.float(&gid, 5, 6);
+    let _ = app.toolbar.take_actions();
+    app.open_toolbar_menu();
+    app.ctx_pick("aux.tb.reset");
+    assert!(!app.toolbar.is_floating(&gid), "초기화 = 전부 도크");
+    assert!(
+        !app.settings
+            .get("toolbar.dock_layout")
+            .unwrap_or("")
+            .contains('@'),
+        "{}",
+        app.settings.get("toolbar.dock_layout").unwrap_or("")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 값 추출 1차(T-100 · DR-19 · docs/23 §2): 종전 코드 상수 10개가 설정 키로 — 감시 간격(통지/폴링 종류는 포트 · 값은 설정) · 행 아이콘

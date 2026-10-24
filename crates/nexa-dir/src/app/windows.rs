@@ -28,6 +28,7 @@ impl App {
 
     /// 사건 처리 중에 쌓인 "창 열기" 요청을 한 번에(명령 · 기동 명령 · 설정 창의 바로가기 전부 같은 펌프).
     pub(crate) fn open_requested_windows(&mut self, el: &ActiveEventLoop) {
+        self.sync_float_windows(el); // 툴바 플로팅 창(요청 · 복원 · 정리 · T-108 2/2)
         if std::mem::take(&mut self.open_prefs) {
             self.prefs_win
                 .set_advanced(self.settings.flag("ui.prefs_advanced"));
@@ -191,6 +192,9 @@ impl App {
 
     /// 보조 창의 사건을 그 창의 처리기로. 처리했으면 `true`(메인 창 처리로 가지 않는다).
     pub(crate) fn aux_window_event(&mut self, id: WindowId, event: &WindowEvent) -> bool {
+        if self.float_window_event(id, event) {
+            return true; // 툴바 플로팅 창(T-108 2/2)
+        }
         if self.prefs_win.is(id) {
             let ui_px = self.font_px("ui.font_size");
             match self.prefs_win.handle(event) {

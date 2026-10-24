@@ -499,21 +499,15 @@ impl App {
         dock
     }
 
-    /// 도크가 알린 일 처리: 배치 변경 = 설정 저장 · 행 수 변경 = 창 재배치 · 떼어 내기 = 도로 붙임(플로팅 창은 후속).
+    /// 도크가 알린 일 처리: 배치 변경 = 설정 저장 · 행 수 변경 = 창 재배치 · 떼어 내기 = 플로팅 창 요청(T-108 2/2 · 창은 후속).
     pub(crate) fn toolbar_actions(&mut self) {
         for a in self.toolbar.take_actions() {
             match a {
-                DockAction::Float { id, .. } => {
-                    self.toolbar.dock(&id);
+                DockAction::Float { id, x, y } => {
+                    self.float_group(&id, Some((x, y)));
                     self.layout();
                 }
-                DockAction::LayoutChanged => {
-                    let v = self.toolbar.layout().serialize();
-                    if self.settings.get("toolbar.dock_layout").unwrap_or("") != v {
-                        let _ = self.settings.set("toolbar.dock_layout", &v);
-                        let _ = self.settings.save();
-                    }
-                }
+                DockAction::LayoutChanged => self.save_dock_layout(),
                 DockAction::Resized => self.layout(),
             }
         }

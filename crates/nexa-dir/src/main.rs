@@ -90,6 +90,7 @@ mod selfcheck;
 mod session;
 mod termview;
 mod theme;
+mod toolfloat;
 pub(crate) use nexa_ctl::controls::toast; // nexa-ui 114차 승격(T-32 · UIK-213) — 앱 사본 삭제
 mod trashop;
 #[allow(dead_code)]
@@ -331,6 +332,9 @@ struct App {
     damage: std::cell::RefCell<app::paint::Damage>,
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
+    /// 툴바 그룹 플로팅 창(T-108 2/2 · 그룹당 1) · 띄우기 요청(창은 이벤트 루프 핸들에서).
+    tool_floats: Vec<toolfloat::ToolFloatWin>,
+    pending_float: Vec<(String, Option<(i32, i32)>)>,
     keys_win: KeysWin,
     /// 자가 점검 창(T-54 · Help ▸ 자가 점검).
     check_win: CheckWin,
@@ -766,6 +770,8 @@ impl App {
             damage: std::cell::RefCell::new(app::paint::Damage::default()),
             frame_no: 0,
             prefs_win: PrefsWin::new(),
+            tool_floats: Vec::new(),
+            pending_float: Vec::new(),
             keys_win: KeysWin::new(),
             check_win: CheckWin::new(),
             open_check: false,

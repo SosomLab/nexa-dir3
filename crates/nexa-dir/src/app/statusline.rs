@@ -820,11 +820,23 @@ impl App {
 
     /// 툴바 우클릭 메뉴(dir2 `show_bar_popup`): 도구 모음 순서… · 설정….
     pub(crate) fn open_toolbar_menu(&mut self) {
-        let items = vec![
-            CtxItem::item("aux.tb.order", format!("{}…", tr("pref.toolbarOrder"))),
-            CtxItem::Separator,
-            CtxItem::item("aux.prefs", tr("menu.file.prefs")),
-        ];
+        let (x, y) = self.cursor;
+        let mut items: Vec<CtxItem> = Vec::new();
+        // 커서 아래 그룹 띄우기(T-108 2/2 · nexa-sql 규약 — 붙이기는 플로팅 창 우클릭/× 로).
+        if let Some(gid) = self.toolbar_group_at(x, y) {
+            let title = self.toolbar.title(&gid).unwrap_or(&gid).to_string();
+            items.push(CtxItem::item(
+                format!("aux.tbg:{gid}"),
+                trf("toolbar.float", &[&title]),
+            ));
+        }
+        items.push(CtxItem::item(
+            "aux.tb.order",
+            format!("{}…", tr("pref.toolbarOrder")),
+        ));
+        items.push(CtxItem::item("aux.tb.reset", tr("menu.view.toolbarReset")));
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("aux.prefs", tr("menu.file.prefs")));
         self.open_ctx(CtxKind::Aux(self.active), items);
     }
 
@@ -951,8 +963,19 @@ impl App {
             }
             return;
         }
+        if let Some(gid) = id.strip_prefix("aux.tbg:") {
+            // 띄우기(창은 이벤트 루프 핸들에서) · 이미 플로팅이면 붙이기.
+            if self.toolbar.is_floating(gid) {
+                self.dock_group(gid);
+            } else {
+                let at = Some(self.cursor);
+                self.float_group(gid, at);
+            }
+            return;
+        }
         match id {
             "aux.tb.order" => self.open_order_editor("toolbar.layout"),
+            "aux.tb.reset" => self.command("view.toolbar_reset"),
             "aux.col.order" => self.open_order_editor("list.col_layout"),
             "aux.prefs" => self.command("file.prefs"),
             "aux.launch.add" => self.ask_launcher_item(None),
