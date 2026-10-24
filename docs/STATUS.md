@@ -2,7 +2,9 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-24 마감 · Windows PC 회차 · [journal 10-24 §7~§13](journal/2026-10-24.md) — 그 전 10-24 Linux PC §1~§6 · 10-20 Windows PC 내용은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-24 마감 · Windows PC 회차 + Linux PC 동기 · [journal 10-24 §7~§14](journal/2026-10-24.md) — 그 전 10-24 Linux PC §1~§6 · 10-20 Windows PC 내용은 아래 항목에 그대로)
+
+- **★ 10-24 Linux PC 동기(§14)**: 두 PC 회차가 main 하나로 합류(45d6cf0 · 브랜치 없음) · Linux 전수 gate full **658/0** · selfcheck 23/0 · T4 36/0 · CI 45d6cf0 ✓ · 세 저장소 로컬 = 원격 · Linux 격리 앱은 e4ea8fb 빌드(Windows 회차 기능 실기는 재빌드 뒤).
 
 - **★ 10-24 Windows PC 회차 마감(§13 · 개발 "개발" 55af5d · 협업 "협업" c4e334)**: 사용자 요청 11커밋 — T-193 열 폭 유형별(b242e28) · T-194 설정 "변경" 보기(394dad1) · T-195 설정 내보내기/가져오기(9de4720) · T-196 즐겨찾기 내보내기/가져오기(af63f73) · T-197 열 폭 저장 경합 ①②③(f6fe763 · 사용자 승인) · T-164 고속 복사 2차 Linux/macOS 네이티브 경로(53cb878 · docs/24 §6 설계 요약 = 사용자 전달 · 수정 지시 대기) · T-44 잔여 [편집 JSON…](5064a73) · `nexa-copy` CLI 1차(74f1007 · docs/24 §7) · 흔들림/CI 처방 3(f607d16 · db92084 · d22302b). 마지막 gate full 전수 GREEN · **CI = 이 push 뒤 협업 확인(macOS check 두 시험)** · 로컬 main = 원격 main.
   - **🖐 실기 대기**: 열 폭(T-193/T-197) · 설정 창 "변경"/내보내기/가져오기/[편집 JSON…] · 즐겨찾기 내보내기/가져오기 · `nexa-copy` 수동 · 10-24 Linux 4건 · 설치본 교체.

@@ -4,6 +4,8 @@
 
 ## 2026-10-24
 
+- **Linux PC 동기(§14)** — 원격 20커밋 ff(45d6cf0 · Windows 회차 합류) · 합친 트리 gate full **658/0** · selfcheck 23/0 · T4 36/0 · CI 45d6cf0 ✓ · 병합할 브랜치 없음 → [10-24 §14](journal/2026-10-24.md)
+
 - **회차 마감(Windows PC · §13)** — T-44 잔여 [편집 JSON…](5064a73) · macOS 취소 시험 처방(d22302b · 블록 복제는 중단할 틈이 없다) · **`nexa-copy` CLI 1차**(74f1007 · 별도 실행파일 · docs/24 §7) · gate full GREEN · 실기 대기 묶음 → [10-24 §13](journal/2026-10-24.md)
 
 - **T-164 고속 복사 2차**(53cb878 · Linux `FICLONE`→`copy_file_range` · macOS `copyfile(ALL|CLONE)` 진행 콜백 · Linux 장치 판정 · docs/24 §6) · 협업 사전 리뷰 4건 반영(의사 파일 0바이트 · 폴백 = 보낸 바이트 0일 때만 · EPERM/EBADF · major 0 = 모름) · gate full GREEN → [10-24 §12](journal/2026-10-24.md)
