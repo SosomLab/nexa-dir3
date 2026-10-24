@@ -22,6 +22,15 @@ HOURS="${NDIR_GATE_FULL_HOURS:-24}"
 CORE='^(crates/(ndir-core|ndir-vfs|ndir-tree|ndir-ops|ndir-term|ndir-license)/|crates/ndir-settings/src/lib\.rs|crates/nexa-dir/src/platform/|crates/nexa-dir/Cargo\.toml|crates/ndir-check/|Cargo\.(toml|lock)|\.github/|scripts/|tests/scenarios/)'
 
 sib() { git -C "../$1" rev-parse HEAD 2>/dev/null || echo none; }
+# 형제 저장소의 **코드**가 기록 뒤로 바뀌었나(T-139 · 문서 커밋만이면 full 사유 아님): 기록 해시 → HEAD 차이 + 작업 트리 변경 중
+# `crates/` · `Cargo.toml|lock`이 있으면 참 · 기록 해시를 모르면(없음 · 다른 PC 기록 · 강제 푸시) 참(보수적).
+SIB_CODE='^(crates/|Cargo\.(toml|lock))'
+sib_code_changed() {
+    local repo="../$1" old="$2"
+    [[ "$old" == "$(sib "$1")" ]] && ! git -C "$repo" diff --name-only HEAD 2>/dev/null | grep -qE "$SIB_CODE" && return 1
+    git -C "$repo" cat-file -e "$old^{commit}" 2>/dev/null || return 0
+    { git -C "$repo" diff --name-only "$old" HEAD; git -C "$repo" diff --name-only HEAD; } 2>/dev/null | grep -qE "$SIB_CODE"
+}
 changed_since() { { git diff --name-only "$1" HEAD 2>/dev/null; git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u; }
 
 WHY=""
@@ -33,8 +42,8 @@ if [[ "$MODE" == auto ]]; then
         AGE=$(( ($(date +%s) - AT) / 3600 ))
         if (( AGE >= HOURS )); then
             MODE=full; WHY="마지막 전수가 ${AGE}시간 전(기준 ${HOURS}시간)"
-        elif [[ "$UI" != "$(sib nexa-ui)" || "$LIC" != "$(sib nexa-license)" ]]; then
-            MODE=full; WHY="형제 저장소(nexa-ui/nexa-license)가 바뀜"
+        elif sib_code_changed nexa-ui "$UI" || sib_code_changed nexa-license "$LIC"; then
+            MODE=full; WHY="형제 저장소(nexa-ui/nexa-license) 코드가 바뀜"
         else
             HIT="$(changed_since "$HASH" | grep -E "$CORE" | head -3 | tr '\n' ' ')"
             if [[ -n "$HIT" ]]; then MODE=full; WHY="핵심 경로 변경: $HIT"; else MODE=quick; WHY="마지막 전수 ${AGE}시간 전 · 핵심 경로 변경 없음"; fi
