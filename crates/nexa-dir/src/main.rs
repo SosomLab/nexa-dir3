@@ -458,6 +458,8 @@ struct App {
     /// 상태줄 부하 칸(app/statusline.rs): 직전 표본 · 지금 부하 · 다음 조회 시각.
     load_prev: Option<(Instant, platform::sysload::SysSample)>,
     load: Option<platform::sysload::SysLoad>,
+    /// 부하 표본 워커(T-189 ⑤).
+    load_sampler: app::statusline::LoadSampler,
     load_next: Instant,
     /// 떠 있는 상태줄 상세 팝업의 칸 id(조회 주기마다 내용을 갱신한다).
     status_popup: Option<String>,
@@ -854,6 +856,7 @@ impl App {
             row_icon_ver: 0,
             launcher_icon_ver: nexa_fs::shell::IconService::global().version(),
             load_prev: None,
+            load_sampler: app::statusline::LoadSampler::new(),
             load: None,
             load_next: Instant::now(),
             status_popup: None,

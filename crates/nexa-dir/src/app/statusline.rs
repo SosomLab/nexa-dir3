@@ -327,31 +327,48 @@ impl App {
         if !self.status_wants_load() {
             return None;
         }
+        // 워커가 잰 표본(T-189 ⑤) — 잰 시각 기준으로 반영.
+        if let Some((at, cur)) = self.load_sampler.poll() {
+            self.apply_load_sample(at, cur);
+        }
         if now >= self.load_next {
             let every = self
                 .settings
                 .int("statusbar.load_interval_ms")
                 .clamp(500, 60_000) as u64;
             self.load_next = now + Duration::from_millis(every);
-            if let Some(cur) = sysload::sample() {
-                let cores = std::thread::available_parallelism().map_or(1, usize::from);
-                self.load = Some(match self.load_prev {
-                    Some((at, prev)) => sysload::load_between(prev, cur, now - at, cores),
-                    None => sysload::load_between(cur, cur, Duration::ZERO, cores),
-                });
-                self.load_prev = Some((now, cur));
-                let mut inv = Invalidations::default();
-                let segs = self.status_segments();
-                if self.statusbar.set_segments(segs, &mut inv) {
-                    self.redraw();
-                }
-                self.refresh_status_popup();
-                if self.mem_win.is_open() {
-                    self.mem_win.redraw(); // 메모리 창도 같은 주기로
-                }
+            if self.window.is_some() {
+                // 조회(Windows PDH/성능 카운터 · Linux /proc · macOS host_statistics)는 워커에서 — UI 스레드는 결과만 받는다.
+                self.load_sampler.request();
+            } else if let Some(cur) = sysload::sample() {
+                self.apply_load_sample(now, cur); // 창 없는 시험 = 종전 동기
             }
         }
+        if self.load_sampler.busy() {
+            return Some(self.load_next.min(now + Duration::from_millis(30)));
+        }
         Some(self.load_next)
+    }
+
+    /// 표본 하나를 반영 — 앞 표본과의 차이로 부하를 계산하고 칸 · 상세 팝업 · 메모리 창을 갱신한다.
+    fn apply_load_sample(&mut self, at: Instant, cur: sysload::SysSample) {
+        let cores = std::thread::available_parallelism().map_or(1, usize::from);
+        self.load = Some(match self.load_prev {
+            Some((prev_at, prev)) => {
+                sysload::load_between(prev, cur, at.saturating_duration_since(prev_at), cores)
+            }
+            None => sysload::load_between(cur, cur, Duration::ZERO, cores),
+        });
+        self.load_prev = Some((at, cur));
+        let mut inv = Invalidations::default();
+        let segs = self.status_segments();
+        if self.statusbar.set_segments(segs, &mut inv) {
+            self.redraw();
+        }
+        self.refresh_status_popup();
+        if self.mem_win.is_open() {
+            self.mem_win.redraw(); // 메모리 창도 같은 주기로
+        }
     }
 
     /// 상태줄 칸 클릭 — 앱 메모리 = 메모리 창 · 라이선스 = 라이선스 창 · 그 밖 = 상세 팝업(우클릭은 호스트가 순서 편집 창).
@@ -1052,5 +1069,98 @@ mod git_refresh_tests {
         assert!(git_periodic_allowed(true, true));
         assert!(!git_periodic_allowed(false, false));
         assert!(git_periodic_allowed(false, true));
+    }
+}
+
+/// 부하 표본 워커(T-189 ⑤ · 10-18 구조 점검 "상태줄 2 s 부하 조회가 UI 스레드"): 첫 요청 때 스레드 1 · 요청마다 `sysload::sample` 1회 ·
+/// 결과(잰 시각, 표본)는 `mpsc` 큐를 유휴 틱이 폴링. 밀린 요청은 하나로 합친다.
+pub(crate) struct LoadSampler {
+    tx: Option<std::sync::mpsc::Sender<()>>,
+    rx: Option<std::sync::mpsc::Receiver<(Instant, Option<sysload::SysSample>)>>,
+    pending: bool,
+}
+
+impl LoadSampler {
+    pub(crate) fn new() -> Self {
+        LoadSampler {
+            tx: None,
+            rx: None,
+            pending: false,
+        }
+    }
+
+    /// 표본 1회를 맡긴다(이미 가 있으면 무시).
+    pub(crate) fn request(&mut self) {
+        if self.pending {
+            return;
+        }
+        if self.tx.is_none() {
+            let (tx, rx_req) = std::sync::mpsc::channel::<()>();
+            let (res_tx, rx) = std::sync::mpsc::channel();
+            let spawned = std::thread::Builder::new()
+                .name("ndir-sysload".into())
+                .spawn(move || {
+                    while rx_req.recv().is_ok() {
+                        while rx_req.try_recv().is_ok() {}
+                        let cur = sysload::sample();
+                        if res_tx.send((Instant::now(), cur)).is_err() {
+                            return;
+                        }
+                    }
+                });
+            if spawned.is_err() {
+                return;
+            }
+            self.tx = Some(tx);
+            self.rx = Some(rx);
+        }
+        if let Some(tx) = &self.tx {
+            self.pending = tx.send(()).is_ok();
+        }
+    }
+
+    /// 끝난 표본(실패한 조회 = 없음).
+    pub(crate) fn poll(&mut self) -> Option<(Instant, sysload::SysSample)> {
+        let rx = self.rx.as_ref()?;
+        let mut last = None;
+        while let Ok((at, cur)) = rx.try_recv() {
+            self.pending = false;
+            if let Some(c) = cur {
+                last = Some((at, c));
+            }
+        }
+        last
+    }
+
+    /// 결과를 기다리는 중인가(이벤트 루프가 짧게 깬다).
+    pub(crate) fn busy(&self) -> bool {
+        self.pending
+    }
+}
+
+#[cfg(test)]
+mod sampler_tests {
+    use super::*;
+
+    /// 요청 → 워커 표본 → poll · 밀린 요청 무시 · busy 전이.
+    #[test]
+    fn sampler_samples_on_worker() {
+        let mut s = LoadSampler::new();
+        assert!(!s.busy() && s.poll().is_none());
+        let before = Instant::now();
+        s.request();
+        s.request(); // 가 있는 동안 = 무시
+        assert!(s.busy());
+        let at = Instant::now();
+        let mut got = None;
+        while got.is_none() && s.busy() && at.elapsed() < Duration::from_secs(10) {
+            got = s.poll();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!s.busy());
+        if sysload::sample().is_some() {
+            let (t, cur) = got.expect("표본");
+            assert!(t >= before && cur.mem_total > 0);
+        }
     }
 }
