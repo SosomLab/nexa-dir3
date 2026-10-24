@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **CI fonts 단계 보호**(45fdea8 · timeout 8분 + 재시도) · **`--verify` 표시 보완**(5bacd28) · 88ceb01 ubuntu fonts 23분 근거 · 새 ci.yml 첫 run fonts 13초 → [10-25 §12](journal/2026-10-25.md)
+
 - **nexa-copy `--verify` 1차**(f49622a · 크기 + SHA-256 재귀 · 불일치 종료 1 · 이동 검증 = 후보) · 협업 점검 표시 제안 3건 · ubuntu fonts apt 지연 2회째 → ci.yml 처방안 전달 → [10-25 §11](journal/2026-10-25.md)
 
 - **T-96 진행 창 현재 파일 줄**(475cffa · 셋째 줄 · 창 높이 150) → [10-25 §10](journal/2026-10-25.md)
