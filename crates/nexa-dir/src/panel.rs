@@ -557,6 +557,41 @@ impl Panel {
         self.rows().source().is_virtual_root()
     }
 
+    /// 실제 폴더 열 폭(key별) = 이 패널의 실제 폴더 기억(기본 열) — 활성 탭이 내 PC여도 실제 폴더 폭을 준다(T-197 저장 1벌 · 동기).
+    /// 기본 열이 아직 없으면(복원 직후 · 배치 전) 활성 탭이 실제 폴더일 때 그 열 · 아니면 빈 목록.
+    pub(crate) fn real_col_widths_by_key(&self) -> Vec<(u32, i32)> {
+        let cols: &[Column] = if !self.base_columns.is_empty() {
+            &self.base_columns
+        } else if !self.active_is_virtual_root() {
+            self.rows().columns()
+        } else {
+            return Vec::new();
+        };
+        cols.iter().map(|c| (c.key, c.width)).collect()
+    }
+
+    /// 내 PC 열 폭 기억(key별 · 비어 있으면 아직 안 바꿈 · T-197).
+    pub(crate) fn drive_widths_by_key(&self) -> Vec<(u32, i32)> {
+        self.drive_widths.clone()
+    }
+
+    /// key별 실제 폴더 폭을 **이 패널의 열 순서**(세션 `colw` 꼴 · 표시 순)로 — 없는 key는 지금 폭(T-197 ① 저장 1벌).
+    pub(crate) fn col_widths_in_layout(&self, widths: &[(u32, i32)]) -> Vec<i32> {
+        let cols: &[Column] = if !self.base_columns.is_empty() {
+            &self.base_columns
+        } else {
+            self.rows().columns()
+        };
+        cols.iter()
+            .map(|c| {
+                widths
+                    .iter()
+                    .find(|(k, _)| *k == c.key)
+                    .map_or(c.width, |(_, w)| *w)
+            })
+            .collect()
+    }
+
     /// 현재 열 레이아웃 문자열(`cols:1[name:1,…]` — 표시 열 = 기본 열 순 · 숨김 열 = 정의 순으로 말미 `:0` · dir2 `panel_col_layout`).
     /// 기본 열(`base_columns`)이 기준이라 가상 최상위(드라이브 열)에서도 사용자 레이아웃이 나온다.
     pub(crate) fn col_layout_str(&self) -> String {

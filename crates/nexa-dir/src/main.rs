@@ -623,6 +623,7 @@ impl App {
         platform: Platform,
     ) -> App {
         let session = session.filter(|s| start.is_none() && !s.is_empty());
+        let session_restored = session.is_some();
         app::fonts::measure_status_col_w(&ui_font, &settings); // 패널(열)을 만들기 전에
         let licensing = Self::licensing_for(start.as_deref());
         let start_dir = start
@@ -924,6 +925,12 @@ impl App {
         app.sync_menu_shortcuts();
         app.sync_menu_checks();
         app.set_active(if dual { active0 } else { 0 });
+        // ★ 복원 뒤 열 폭 재동기(T-197 ② · 사용자 10-24 "제안대로"): 동기가 켜져 있으면 활성 패널 기준으로 반대 패널을 맞춘다
+        // (세션에 두 벌이 달리 남아 있어도 — 그 전 버전 · 동기를 껐다 켠 사이의 흔적) · 꺼져 있으면 각자.
+        if session_restored && app.dual && app.settings.flag("list.col_width_sync") {
+            let a = app.active;
+            app.sync_col_widths_from(a);
+        }
         app.update_status();
         app
     }

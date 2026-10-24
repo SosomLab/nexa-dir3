@@ -2425,6 +2425,103 @@ fn col_width_sync_matches_by_column_key() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 열 폭 저장 경합(T-197 · 사용자 10-24 "제안대로"): ① 동기 켜짐이면 세션은 **활성 패널 기준 1벌**(반대 패널 값이 달라도 덮어 씀 · 실제
+/// 폴더 폭은 반대 패널 열 순서로 · 내 PC 폭 복사 · 활성이 내 PC여도 실제 폴더 폭 1벌) ③ 동기 때 다른 유형 **기억**도 함께(섞지는 않음)
+/// ② 복원 뒤 동기 켜짐이면 활성 패널 기준 재동기 · 꺼져 있으면 각자.
+#[test]
+fn col_width_sync_unifies_session_and_resyncs_after_restore() {
+    let (mut app, dir) = fixture("colrace");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let (name, total) = (filelist::COL_NAME, filelist::COL_TOTAL);
+    let w_of = |app: &App, p: usize| {
+        app.panels[p]
+            .col_widths_by_key()
+            .iter()
+            .find(|(k, _)| *k == name)
+            .map(|(_, w)| *w)
+    };
+    let _ = app.settings.set("list.col_width_sync", "on");
+    app.after_setting_changed("list.col_width_sync");
+    assert!(app.panels[0].set_col_width_user(0, 500, &mut inv));
+    app.sync_col_widths_from(0);
+    assert_eq!(w_of(&app, 1), Some(500));
+    // 반대 패널만 몰래 달라진다(동기를 거치지 않은 길 = 경합의 모형) → 저장은 활성(왼쪽) 기준 1벌.
+    app.panels[1].apply_col_widths_by_key(&[(name, 300)], false, &mut inv);
+    assert_eq!(w_of(&app, 1), Some(300));
+    let s = app.session_snapshot();
+    assert_eq!(s.panels[0].col_widths.first(), Some(&500));
+    assert_eq!(
+        s.panels[1].col_widths.first(),
+        Some(&500),
+        "① 활성 패널 기준 1벌"
+    );
+    // 내 PC 폭도 1벌 · 활성이 내 PC여도 실제 폴더 폭은 1벌 · ③ 다른 유형 기억도 함께.
+    let _ = app.panels[0].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    let total_idx = app.panels[0]
+        .rows()
+        .columns()
+        .iter()
+        .position(|c| c.key == total)
+        .expect("내 PC = 전체 크기 열");
+    assert!(app.panels[0].set_col_width_user(total_idx, 222, &mut inv));
+    app.sync_col_widths_from(0);
+    app.panels[1].apply_col_widths_by_key(&[(total, 333)], true, &mut inv);
+    let s = app.session_snapshot();
+    assert_eq!(s.panels[0].drive_widths[2], 222);
+    assert_eq!(
+        s.panels[1].drive_widths, s.panels[0].drive_widths,
+        "① 내 PC 폭도 1벌"
+    );
+    assert_eq!(
+        s.panels[1].col_widths.first(),
+        Some(&500),
+        "활성이 내 PC여도 실제 폴더 폭 1벌"
+    );
+    app.panels[1].apply_col_widths_by_key(&[(name, 310)], false, &mut inv);
+    app.sync_col_widths_from(0);
+    assert_eq!(
+        w_of(&app, 1),
+        Some(500),
+        "③ 다른 유형 기억도 넘어간다(섞지 않음)"
+    );
+    // ② 복원: 두 패널 모두 실제 폴더 · 세션에 두 벌이 다르게 남아 있어도 동기 켜짐이면 활성(오른쪽) 기준 · 꺼져 있으면 각자.
+    app.panels[0].nav_back(&mut inv);
+    let mut sess = app.session_snapshot();
+    sess.panels[0].col_widths[0] = 480;
+    sess.panels[1].col_widths[0] = 320;
+    sess.active_panel = 1;
+    let font = nexa_font::ui_font(None).expect("font");
+    let settings = Settings::from_text(
+        dir.join("s-on.conf"),
+        "launcher.visible=off\nui.theme=dark\nlist.col_width_sync=on\n",
+    );
+    let app2 = App::new(
+        settings,
+        font.font,
+        None,
+        Some(sess.clone()),
+        Platform::fake(),
+    );
+    assert_eq!(
+        (w_of(&app2, 0), w_of(&app2, 1)),
+        (Some(320), Some(320)),
+        "② 활성(오른쪽) 기준 재동기"
+    );
+    let font = nexa_font::ui_font(None).expect("font");
+    let settings = Settings::from_text(
+        dir.join("s-off.conf"),
+        "launcher.visible=off\nui.theme=dark\nlist.col_width_sync=off\n",
+    );
+    let app3 = App::new(settings, font.font, None, Some(sess), Platform::fake());
+    assert_eq!(
+        (w_of(&app3, 0), w_of(&app3, 1)),
+        (Some(480), Some(320)),
+        "꺼짐 = 각자"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 열 폭 동기 — **폴더 유형별**(사용자 10-24 · T-193): 내 PC(가상 · 드라이브 열)와 실제 폴더는 유형이 달라 서로 동기하지 않고 각자
 /// 폭을 가진다 · 같은 유형끼리(둘 다 내 PC · 둘 다 실제)만 동기 · 내 PC 폭은 세션 `drivew`로 따로 저장되고 `colw`에는 활성 탭이
 /// 내 PC여도 실제 폴더 폭만 실린다(종전엔 드라이브 폭이 `colw`에 실려 복원 때 실제 열로 들어갔다) · 복원 뒤 내 PC 진입이 그 폭을 잇는다.

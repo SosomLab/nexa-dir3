@@ -1264,6 +1264,16 @@ impl App {
         let mut inv = Invalidations::default();
         self.panels[from].apply_col_widths_by_key(&widths, virt, &mut inv);
         self.panels[1 - from].apply_col_widths_by_key(&widths, virt, &mut inv);
+        // 다른 유형의 **기억**도 함께 넘긴다(T-197 ③ · 사용자 10-24 "제안대로"): 실제 폴더 ↔ 내 PC를 섞지는 않는다 — 같은 유형끼리
+        // 두 벌이 늘 같게(저장 1벌 · 복원 재동기의 전제). 아직 안 바꾼 기억(빈 목록)은 넘기지 않는다.
+        let other = if virt {
+            self.panels[from].real_col_widths_by_key()
+        } else {
+            self.panels[from].drive_widths_by_key()
+        };
+        if !other.is_empty() {
+            self.panels[1 - from].apply_col_widths_by_key(&other, !virt, &mut inv);
+        }
         self.redraw();
     }
 

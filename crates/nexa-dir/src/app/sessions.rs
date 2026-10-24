@@ -41,6 +41,19 @@ impl App {
             // 탭별 정렬(T-128) — 전부 기본(이름 오름차순)이면 빈 목록.
             s.panels[i].sort = p.session_sort();
         }
+        // ★ 동기가 켜져 있으면 열 폭은 **활성 패널 기준 1벌**(T-197 ① · 사용자 10-24 "제안대로"): 두 패널이 각자 저장해 복원 뒤 달라
+        // 보이던 경합을 끊는다 — 실제 폴더 폭은 반대 패널의 열 순서에 맞춰 · 내 PC 폭은 그대로 복사 · 활성 패널에 저장할 폭이 없으면
+        // (사용자가 안 바꿈) 반대 패널 것을 둔다.
+        if self.dual && self.settings.flag("list.col_width_sync") {
+            let (a, b) = (self.active, 1 - self.active);
+            let real = self.panels[a].real_col_widths_by_key();
+            if !s.panels[a].col_widths.is_empty() && !real.is_empty() {
+                s.panels[b].col_widths = self.panels[b].col_widths_in_layout(&real);
+            }
+            if !s.panels[a].drive_widths.is_empty() {
+                s.panels[b].drive_widths = s.panels[a].drive_widths.clone();
+            }
+        }
         s
     }
 
