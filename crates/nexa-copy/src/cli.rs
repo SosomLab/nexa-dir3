@@ -4,6 +4,7 @@
 //! nexa-copy [options] <source>... <destination-folder>
 //!   --move               move instead of copy (same-folder move is a no-op, like the app)
 //!   --overwrite          overwrite existing files/folders in the destination (default: skip them)
+//!   --ask                ask on each conflict (stderr prompt · one line from stdin: y/n/a(ll)/s(kip all)/c(ancel))
 //!   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, up to 16
 //!   --no-native          do not use the OS copy path (plain read/write loop everywhere)
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
@@ -41,6 +42,8 @@ Usage: nexa-copy [options] <source>... <destination-folder>
 Options:
   --move               move instead of copy
   --overwrite          overwrite existing items in the destination (default: skip)
+  --ask                ask on each conflict instead: prompt on stderr, answer on stdin —
+                       y = overwrite · n = skip · a = overwrite all · s = skip all · c = cancel (exit 130)
   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, max 16
   --no-native          do not use the OS copy path (plain read/write loop)
   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
@@ -70,6 +73,8 @@ Exit code: 0 done · 1 some items failed (dry run: would fail) · 2 usage error 
 pub(crate) struct Options {
     pub op: Op,
     pub overwrite: bool,
+    /// 충돌마다 묻기(`--ask` · stdin 한 줄 · 정책보다 우선 · dry-run에서는 건너뜀으로 본다).
+    pub ask: bool,
     pub threads: usize,
     pub native: bool,
     pub unbuffered_mb: u64,
@@ -99,6 +104,7 @@ pub(crate) enum Parsed {
 pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut op = Op::Copy;
     let mut overwrite = false;
+    let mut ask = false;
     let mut threads = 0usize;
     let mut native = true;
     let mut unbuffered_mb = 0u64;
@@ -123,6 +129,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--move" => op = Op::Move,
             "--copy" => op = Op::Copy,
             "--overwrite" => overwrite = true,
+            "--ask" => ask = true,
             "--skip" => overwrite = false,
             "--no-native" => native = false,
             "-q" | "--quiet" => quiet = true,
@@ -172,6 +179,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     Ok(Parsed::Run(Options {
         op,
         overwrite,
+        ask,
         threads,
         native,
         unbuffered_mb,
@@ -263,12 +271,32 @@ pub(crate) fn run_with(
         unbuffered_min: o.unbuffered_mb.saturating_mul(1024 * 1024),
         threads: o.threads,
     };
-    let mut resolve = |_: &Path| {
-        if o.overwrite {
-            Conflict::Overwrite
-        } else {
-            Conflict::Skip
+    // 충돌 결정: `--ask` = 항목마다 stderr 프롬프트 + stdin 한 줄(a/s = 남은 전부 · c = 취소 깃발) · 아니면 정책(`--overwrite`/건너뜀).
+    // 프롬프트는 진행 출력(`err`)과 다른 핸들(실제 stderr)로 쓴다 — 같은 전송 호출에 두 클로저가 함께 빌리기 때문.
+    let mut ask_all: Option<Conflict> = None;
+    let mut resolve = |dest: &Path| {
+        if !o.ask {
+            return if o.overwrite {
+                Conflict::Overwrite
+            } else {
+                Conflict::Skip
+            };
         }
+        if let Some(all) = ask_all {
+            return all;
+        }
+        let (choice, all) =
+            ask_conflict(dest, &mut std::io::stderr(), &mut std::io::stdin().lock());
+        if all {
+            ask_all = Some(choice);
+        }
+        if choice == Conflict::Skip
+            && matches!(ask_all, Some(Conflict::Skip))
+            && CANCEL_ASKED.with(|c| c.get())
+        {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        choice
     };
     let started = Instant::now();
     let mut printer = Printer::new(o.quiet, started);
@@ -555,6 +583,38 @@ impl Printer {
     }
 }
 
+thread_local! {
+    /// `--ask`에서 `c`(취소)를 골랐다 — 결정 클로저가 취소 깃발을 세우게(답 읽기와 깃발 세우기를 한 자리에 두지 않은 이유 = 순수 함수 시험).
+    static CANCEL_ASKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// 충돌 프롬프트(순수에 가까움 · 입출력은 인자로): `dest`가 이미 있다 → 한 줄 답. 돌려주는 값 = (결정, 남은 전부에 적용?).
+/// `y` 덮어쓰기 · `n`/빈 줄/EOF/모르는 답 = 건너뜀 · `a` 전부 덮어쓰기 · `s` 전부 건너뜀 · `c` 취소(= 전부 건너뜀 + 취소 표시).
+pub(crate) fn ask_conflict(
+    dest: &Path,
+    prompt: &mut dyn Write,
+    answer: &mut dyn std::io::BufRead,
+) -> (Conflict, bool) {
+    let _ = write!(
+        prompt,
+        "exists: {} — overwrite? [y]es / [n]o / [a]ll / [s]kip all / [c]ancel: ",
+        dest.display()
+    );
+    let _ = prompt.flush();
+    let mut line = String::new();
+    let _ = answer.read_line(&mut line);
+    match line.trim().to_ascii_lowercase().as_str() {
+        "y" | "yes" => (Conflict::Overwrite, false),
+        "a" | "all" => (Conflict::Overwrite, true),
+        "s" | "skip" => (Conflict::Skip, true),
+        "c" | "cancel" => {
+            CANCEL_ASKED.with(|c| c.set(true));
+            (Conflict::Skip, true)
+        }
+        _ => (Conflict::Skip, false),
+    }
+}
+
 /// 백분율(순수 · 총량 0 = 100).
 pub(crate) fn percent(done: u64, total: u64) -> u64 {
     // 반올림(계획 합계에 폴더 자체 크기 등이 섞여 끝에서 99 %로 보이지 않게 · 총량 0 = 100).
@@ -619,11 +679,13 @@ mod tests {
         assert!(
             !o.overwrite && o.native && !o.quiet && !o.dry_run && !o.verify && !o.mirror && !o.yes
         );
+        assert!(!o.ask);
         assert!(o.filter.is_empty());
         assert_eq!((o.threads, o.unbuffered_mb), (0, 0));
         assert_eq!(o.sources, vec![PathBuf::from("a"), PathBuf::from("b")]);
         assert_eq!(o.dest, PathBuf::from("dest"));
         let Ok(Parsed::Run(o)) = parse(&a(&[
+            "--ask",
             "--yes",
             "--mirror",
             "--include",
@@ -648,7 +710,16 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Move);
-        assert!(o.overwrite && !o.native && o.quiet && o.dry_run && o.verify && o.mirror && o.yes);
+        assert!(
+            o.overwrite
+                && !o.native
+                && o.quiet
+                && o.dry_run
+                && o.verify
+                && o.mirror
+                && o.yes
+                && o.ask
+        );
         assert_eq!(o.filter.include, vec!["*.txt".to_string()]);
         assert_eq!(o.filter.exclude, vec!["*.tmp".to_string()]);
         if let Ok(Parsed::Run(o)) = parse(&a(&["--include", "*.txt; *.md;", "a", "b"])) {
@@ -676,6 +747,30 @@ mod tests {
         assert!(parse(&a(&["--bogus", "a", "b"]))
             .unwrap_err()
             .contains("--bogus"));
+    }
+
+    /// `--ask` 프롬프트(순수): 답 → 결정/전부 · 빈 줄·EOF·모르는 답 = 건너뜀 · 대소문자 무시 · 프롬프트에 경로.
+    #[test]
+    fn ask_conflict_maps_answers() {
+        let p = Path::new("x/y.txt");
+        let ask = |ans: &str| {
+            let mut out: Vec<u8> = Vec::new();
+            let mut inp = std::io::Cursor::new(ans.as_bytes().to_vec());
+            let r = ask_conflict(p, &mut out, &mut inp);
+            assert!(String::from_utf8_lossy(&out).contains("exists: x/y.txt"));
+            r
+        };
+        assert_eq!(ask("y\n"), (Conflict::Overwrite, false));
+        assert_eq!(ask("YES\n"), (Conflict::Overwrite, false));
+        assert_eq!(ask("n\n"), (Conflict::Skip, false));
+        assert_eq!(ask("\n"), (Conflict::Skip, false));
+        assert_eq!(ask(""), (Conflict::Skip, false), "EOF = 건너뜀");
+        assert_eq!(ask("a\n"), (Conflict::Overwrite, true));
+        assert_eq!(ask("s\n"), (Conflict::Skip, true));
+        CANCEL_ASKED.with(|c| c.set(false));
+        assert_eq!(ask("c\n"), (Conflict::Skip, true));
+        assert!(CANCEL_ASKED.with(|c| c.get()), "취소 표시");
+        CANCEL_ASKED.with(|c| c.set(false));
     }
 
     #[test]

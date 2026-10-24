@@ -37,6 +37,27 @@ fn run(args: &[&Path], extra: &[&str], env: &[(&str, &str)]) -> Run {
     }
 }
 
+/// stdin에 글을 넣어 실행(`--ask` 프롬프트 답).
+fn run_stdin(args: &[&Path], extra: &[&str], input: &str) -> Run {
+    use std::io::Write as _;
+    let mut c = Command::new(exe());
+    c.args(extra);
+    c.args(args);
+    c.stdin(std::process::Stdio::piped());
+    c.stdout(std::process::Stdio::piped());
+    c.stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().expect("spawn nexa-copy");
+    if let Some(mut si) = child.stdin.take() {
+        let _ = si.write_all(input.as_bytes());
+    }
+    let o = child.wait_with_output().expect("wait");
+    Run {
+        code: o.status.code().unwrap_or(-1),
+        out: String::from_utf8_lossy(&o.stdout).into_owned(),
+        err: String::from_utf8_lossy(&o.stderr).into_owned(),
+    }
+}
+
 fn make_tree(src: &Path) {
     fs::create_dir_all(src.join("tree").join("deep")).expect("mkdir");
     for i in 0..40 {
@@ -165,6 +186,49 @@ fn copy_skip_overwrite_move_and_errors() {
     let r = run(&[&src.join("tree"), &d.join("no-such-dir")], &[], &[]);
     assert_eq!(r.code, 2);
     assert!(r.err.contains("destination is not an existing folder"));
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// `--ask`(10-25): 충돌마다 stderr 프롬프트 + stdin 한 줄 — y 덮어쓰기 · n 건너뜀 · a 전부 덮어쓰기 · c 취소(130) · EOF = 건너뜀.
+#[test]
+fn ask_prompts_on_conflicts_and_honors_answers() {
+    let d = sandbox("ask");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    fs::create_dir_all(&src).expect("mkdir");
+    fs::create_dir_all(&dst).expect("mkdir");
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(src.join(n), format!("new {n}")).expect("write");
+        fs::write(dst.join(n), format!("old {n}")).expect("write");
+    }
+    let srcs = [src.join("a.txt"), src.join("b.txt"), src.join("c.txt")];
+    let args: Vec<&Path> = srcs
+        .iter()
+        .map(PathBuf::as_path)
+        .chain([dst.as_path()])
+        .collect();
+    // y · n · (EOF) → a 덮어씀 · b 그대로 · c 그대로.
+    let r = run_stdin(&args, &["--ask"], "y\nn\n");
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(r.err.matches("overwrite? [y]es").count() == 3, "{}", r.err);
+    assert_eq!(fs::read(dst.join("a.txt")).unwrap(), b"new a.txt");
+    assert_eq!(fs::read(dst.join("b.txt")).unwrap(), b"old b.txt");
+    assert_eq!(fs::read(dst.join("c.txt")).unwrap(), b"old c.txt");
+    assert!(r.err.contains("1 transferred · 2 skipped"), "{}", r.err);
+    // a = 남은 전부 덮어쓰기(프롬프트 1번만).
+    let r = run_stdin(&args, &["--ask"], "a\n");
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert_eq!(r.err.matches("overwrite? [y]es").count(), 1, "{}", r.err);
+    assert_eq!(fs::read(dst.join("c.txt")).unwrap(), b"new c.txt");
+    // c = 취소 → 130 · 이후 항목 손대지 않음.
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(dst.join(n), format!("old {n}")).expect("write");
+    }
+    let r = run_stdin(&args, &["--ask"], "c\n");
+    assert_eq!(r.code, 130, "{}", r.err);
+    assert!(
+        fs::read(dst.join("b.txt")).unwrap() == b"old b.txt"
+            && fs::read(dst.join("c.txt")).unwrap() == b"old c.txt"
+    );
     let _ = fs::remove_dir_all(&d);
 }
 

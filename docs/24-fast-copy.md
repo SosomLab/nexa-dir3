@@ -173,6 +173,10 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   ③ 휴지통 `--trash`는 후속(CLI는 platform/ 포트 미사용) · `--dry-run` = copy/overwrite/delete 탭 줄 · `--include/--exclude` = 상대 경로 이름으로 거름(거른 것은 지우지도
   않음) · `--verify` = 복사한 파일 대조 · 원본 2개/파일/겹침 = 2 · 요약 `mirror: a copied · b deleted · c failed · x in t`. 시험 `mirror_plan_and_rows`(T1) ·
   `mirror_makes_destination_identical`(프로세스). 한계: 내용 비교(`by_content`) 옵션은 후속 · 양방향(`Both`)은 CLI에 없음(앱 동기화 창).
+- **대화형 충돌 ✅ 10-25**(`--ask`): 충돌마다 stderr 프롬프트 `exists: <대상> — overwrite? [y]es / [n]o / [a]ll / [s]kip all / [c]ancel:` +
+  stdin 한 줄 · y/n · a/s = 남은 전부 · c = 취소(130 · 이후 항목 손대지 않음) · 빈 줄/EOF/모르는 답 = 건너뜀 · 정책(`--overwrite`)보다 우선 · dry-run은
+  건너뜀으로 봄 · 프롬프트는 진행 출력과 다른 핸들(실제 stderr). 시험 `ask_conflict_maps_answers`(T1) · `ask_prompts_on_conflicts_and_honors_answers`(프로세스 ·
+  stdin 파이프).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
+  포터블 zip · `release.yml` — 채널 결정) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
   복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).
