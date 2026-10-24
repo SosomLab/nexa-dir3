@@ -10123,6 +10123,7 @@ fn startup_ui_key_uses_real_key_path() {
 fn window_transparency_follows_setting_and_boost() {
     use crate::platform::opacity_alpha;
     let (mut app, dir) = fixture("opacity");
+    app.main_active = true;
     assert_eq!(app.settings.int("window.transparency"), 0, "기본 = 불투명");
     let _ = app.settings.set("window.transparency", "40");
     assert_eq!(app.apply_transparency(), 40);
@@ -10147,6 +10148,30 @@ fn window_transparency_follows_setting_and_boost() {
         (255, 127, 25, 25)
     );
     assert_eq!(opacity_alpha(-5), 255);
+    // 포커스 없을 때 = `window.transparency_blur`(기본 40 · T-199) · 성능 향상 모드 = 0 · 포커스가 돌아오면 포커스 값.
+    assert_eq!(
+        app.settings.int("window.transparency_blur"),
+        40,
+        "기본 = 40"
+    );
+    app.main_active = false;
+    assert_eq!(app.apply_transparency(), 40);
+    let _ = app.settings.set("window.transparency_blur", "55");
+    assert_eq!(app.apply_transparency(), 55);
+    let _ = app.settings.set("perf.boost", "on");
+    assert_eq!(app.apply_transparency(), 0, "성능 향상 모드 = 둘 다 0");
+    let _ = app.settings.set("perf.boost", "off");
+    app.main_active = true;
+    assert_eq!(
+        app.apply_transparency(),
+        0,
+        "포커스 = window.transparency(0)"
+    );
+    assert_eq!(
+        crate::platform::opacity_pct(),
+        0,
+        "새 창 · 보조 창은 포커스 값"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

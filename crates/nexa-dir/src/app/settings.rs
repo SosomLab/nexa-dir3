@@ -100,7 +100,7 @@ impl App {
                     p.set_async_read(on, wait);
                 }
             }
-            "window.transparency" => {
+            "window.transparency" | "window.transparency_blur" => {
                 self.apply_transparency();
             }
             "window.always_on_top" => {
@@ -290,18 +290,25 @@ impl App {
     /// 창 투명도(T-102 · NEW-013) — 유효값(성능 향상 모드 = 0)을 기억하고 메인 창 · 설정 창에 즉시 적용 · 다른 보조 창은 다음에 열 때.
     /// 돌려주는 값 = 적용한 투명도(%) — 시험은 전역 값 대신 이것을 본다(병렬 시험이 전역을 같이 쓴다).
     pub(crate) fn apply_transparency(&mut self) -> u8 {
-        let pct = self
+        let focused = self
             .settings
             .int("window.transparency")
             .clamp(0, platform::OPACITY_MAX_PCT);
-        platform::set_opacity_pct(pct);
+        let blur = self
+            .settings
+            .int("window.transparency_blur")
+            .clamp(0, platform::OPACITY_MAX_PCT);
+        // 포커스별 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40"): 메인 창 = 포커스 여부에 따라 · 새로 만드는 창과 보조 창
+        // = 포커스 값(보조 창을 쓰는 동안 그 창이 흐려지지 않게 — 메인은 그때 포커스를 잃어 blur 값이 된다).
+        platform::set_opacity_pct(focused);
+        let main_pct = if self.main_active { focused } else { blur };
         if let Some(w) = &self.window {
-            let _ = platform::apply_window_opacity(w);
+            let _ = platform::apply_window_opacity_pct(w, main_pct);
         }
         if let Some(w) = self.prefs_win.window() {
             let _ = platform::apply_window_opacity(w);
         }
-        pct as u8
+        main_pct as u8
     }
 
     pub(crate) fn apply_icon_switches(&mut self) {

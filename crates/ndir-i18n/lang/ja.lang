@@ -843,8 +843,10 @@ pref.termFollowWt = システム既定のターミナルに合わせる
 pref.termFollowWt.desc = OS 既定のターミナルのフォントをドックのターミナルに使います（Windows = Windows Terminal の既定プロファイルのフォントとサイズ・Linux = デスクトップの等幅フォント、サイズは下のターミナルフォントサイズ・見つからなければ無視）。オフ = 下のターミナル設定を使用。
 pref.alwaysOnTop = 常に手前に表示
 pref.alwaysOnTop.desc = メインウィンドウを他のウィンドウの手前に保ちます(表示メニュー)。
-pref.transparency = ウィンドウの透明度 (%)
-pref.transparency.desc = ウィンドウ全体をこの割合だけ透明にします(0 = 不透明、最大 90)。補助ウィンドウにも適用されます。パフォーマンス向上モードではオフになります。Linux の Wayland ネイティブウィンドウでは使えません。
+pref.transparency = ウィンドウの透明度 — フォーカスあり (%)
+pref.transparency.desc = メインウィンドウにフォーカスがある間の透明度です(0 = 不透明、最大 90)。補助ウィンドウもこの値を使います。パフォーマンス向上モードではオフになります。
+pref.transparencyBlur = ウィンドウの透明度 — フォーカスなし (%)
+pref.transparencyBlur.desc = 他のウィンドウにフォーカスが移るとメインウィンドウがこの割合だけ透明になります(0 = 不透明、最大 90)。フォーカスが離れた瞬間に適用され、戻ると復元されます。パフォーマンス向上モードではオフになります。
 pref.panelMode = パネルモード
 pref.panelMode.desc = ファイルパネルを1つまたは2つ(表示メニュー・ツールバー)。
 pref.panelMode.single = シングル

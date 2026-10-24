@@ -2094,7 +2094,15 @@ pub(crate) fn opacity_pct() -> u8 {
 /// macOS = `NSWindow alphaValue` · X11(XWayland 포함) = `_NET_WM_WINDOW_OPACITY`(합성 WM이 반영) · Wayland 네이티브 =
 /// `Err(Unsupported)`(호출부는 조용히 넘긴다 — 앱은 기본 X11 창).
 pub(crate) fn apply_window_opacity(w: &winit::window::Window) -> Result<(), PlatformError> {
-    let alpha = opacity_alpha(i64::from(opacity_pct()));
+    apply_window_opacity_pct(w, i64::from(opacity_pct()))
+}
+
+/// 창에 **지정한** 투명도(%)를 적용한다 — 메인 창의 포커스별 값(T-199 · `window.transparency` / `window.transparency_blur`).
+pub(crate) fn apply_window_opacity_pct(
+    w: &winit::window::Window,
+    pct: i64,
+) -> Result<(), PlatformError> {
+    let alpha = opacity_alpha(pct);
     #[cfg(windows)]
     {
         use ::windows::Win32::Foundation::{COLORREF, HWND};
