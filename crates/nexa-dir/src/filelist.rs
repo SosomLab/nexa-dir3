@@ -745,16 +745,49 @@ pub(crate) fn format_iso_utc(unix_secs: i64) -> String {
 /// Unix ms → **현지 시각** `YYYY-MM-DD HH:MM`(파일 목록 · 정보 도크 · 크래시 기록 — 사용자 10-06 "설정 파일을 수정했는데
 /// 날짜가 안 바뀐다" = UTC로 찍혀 9시간 어긋나 보였다). 시간대 · DST는 OS가 그 순간 기준으로 계산한다(`nexa_fs::local_time`).
 /// 0 이하 = 빈 값.
+///
+/// 그리기 핫패스(시각 열 · 행마다 매 프레임)라 **분 단위로 기억**한다(T-189 ④ · 표시가 분까지라 같은 분 = 같은 글자) — OS 시간대 변환
+/// 호출을 줄인다. 상한 [`TIME_CACHE_MAX`]에서 통째로 비우고, 시간대가 바뀌었을 수 있는 때(창 포커스 복귀)는 [`clear_time_cache`].
 pub(crate) fn format_time_local(unix_ms: i64) -> String {
     if unix_ms <= 0 {
         return String::new();
     }
-    let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(unix_ms as u64);
-    let l = nexa_fs::local_time(t);
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}",
-        l.year, l.month, l.day, l.hour, l.min
-    )
+    let minute = unix_ms.div_euclid(60_000);
+    TIME_CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some(s) = c.get(&minute) {
+            return s.clone();
+        }
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(unix_ms as u64);
+        let l = nexa_fs::local_time(t);
+        let s = format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}",
+            l.year, l.month, l.day, l.hour, l.min
+        );
+        if c.len() >= TIME_CACHE_MAX {
+            c.clear();
+        }
+        c.insert(minute, s.clone());
+        s
+    })
+}
+
+/// [`format_time_local`] 기억 상한(분 키 개수).
+pub(crate) const TIME_CACHE_MAX: usize = 4096;
+
+thread_local! {
+    static TIME_CACHE: std::cell::RefCell<std::collections::HashMap<i64, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// 현지 시각 기억 비우기(시간대 · DST 설정이 바뀌었을 수 있을 때 — 창 포커스 복귀).
+pub(crate) fn clear_time_cache() {
+    TIME_CACHE.with(|c| c.borrow_mut().clear());
+}
+
+#[cfg(test)]
+pub(crate) fn time_cache_len() -> usize {
+    TIME_CACHE.with(|c| c.borrow().len())
 }
 
 /// Unix ms → `YYYY-MM-DD HH:MM` **시간대 변환 없이**(값이 이미 현지 벽시계인 경우 — DOS 시각(zip · cab)처럼 시간대가 없는
@@ -1404,6 +1437,26 @@ mod tests {
         }
         assert_eq!(kind_label(FileKind::File, "a.txt"), "TXT");
         assert_eq!(kind_label(FileKind::Symlink, "x"), link);
+    }
+
+    /// 현지 시각 기억(T-189 ④): 같은 분 = 한 칸 · 결과는 기억 없이 계산한 값과 같다 · 비우기 · 상한에서 통째로 비움.
+    #[test]
+    fn local_time_cache_is_per_minute_and_bounded() {
+        clear_time_cache();
+        let base = 1_791_030_896_000i64;
+        let a = format_time_local(base);
+        let b = format_time_local(base + 3_000); // 같은 분
+        assert_eq!(a, b);
+        assert_eq!(time_cache_len(), 1);
+        let c = format_time_local(base + 60_000);
+        assert_eq!(time_cache_len(), 2);
+        clear_time_cache();
+        assert_eq!(format_time_local(base + 60_000), c, "다시 계산해도 같다");
+        for k in 0..(TIME_CACHE_MAX as i64 + 5) {
+            let _ = format_time_local(base + k * 60_000);
+        }
+        assert!(time_cache_len() <= TIME_CACHE_MAX);
+        clear_time_cache();
     }
 
     /// 현지 시각 표시: UTC 서식과의 차이가 그 순간의 OS 시간대 오프셋(분 단위 · DST 포함)과 같다 · 0 = 빈 값.

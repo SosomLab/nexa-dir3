@@ -419,6 +419,8 @@ impl ApplicationHandler<Wake> for App {
                     self.git_refresh_on_focus();
                     // OS 테마가 그 사이 바뀌었을 수 있다(GAP-021 · System 모드만 반응).
                     self.refresh_system_theme();
+                    // 시간대 · DST 설정도 그 사이 바뀌었을 수 있다(T-189 ④ 시각 열 기억).
+                    filelist::clear_time_cache();
                     // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
                     if let Some(n) = platform::wheel_lines() {
                         nexa_ctl::set_wheel_lines(n);
