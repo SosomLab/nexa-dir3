@@ -90,8 +90,53 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 
 | 항목 | 내용 |
 | --- | --- |
-| Linux · macOS 2차 | `copy_file_range`/`FICLONE` · `clonefile`/`fcopyfile` 경로 + 장치 판정(§2 표의 "2차") |
+| Linux · macOS 2차 | ✅ 10-24(T-164 · §6) — Linux `FICLONE` → `copy_file_range` · macOS `copyfile(ALL \| CLONE)` + 진행 콜백 · Linux `queue/rotational` 장치 판정 · macOS 장치 판정은 후속 |
 | 최상위 항목 병렬 | 지금 병렬은 **폴더 안**에만 적용 — 파일 수천 개를 직접 선택해 복사하는 경우는 여전히 차례로(전송 진행 창의 항목 세그먼트 모델과 함께 T-96/T-98에서) |
 | ReFS 블록 복제 직접 호출 | Windows 11 24H2 이전에서의 같은 볼륨 즉시 복사 |
 | 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98 |
 | T6 성능 기준선 | `bench_copy`를 기준선 하네스(T-08)에 편입 |
+
+## 6. 2차 — 크로스플랫폼 설계와 운영체제별 구현 방식(T-164 · 10-24 · 사용자 "설계·개발 + OS별 방식 요약")
+
+### 6-1. 한 모양으로 맞춘 계층
+
+```
+전송 엔진 lib.rs (OS 무관)        ──  항목 순회 · 충돌 · 스테이징 교체 · 교차 볼륨 이동 · 실행 취소 · 취소
+   └ fastcopy.rs 전략 계층 (OS 무관) ──  파일 1개 = copy_file(native?) · 폴더 = plan → 작업 스레드 N개 · 큰 파일 직렬화 · 진행 합산
+        └ fastcopy::os (OS별 1모듈 · cfg)  ──  copy_file(src, dest, overwrite, on_bytes, stop) · unsupported(err) · seek_of(path)
+             Windows  CopyFileExW            Linux  FICLONE → copy_file_range            macOS  copyfile(ALL | CLONE)
+```
+
+- **계약은 셋이 같다**: `copy_file`은 "증분 바이트를 보고하고 · `stop`이 참이면 `Interrupted` · 실패/중단 때 이번에 만든 대상은 남기지
+  않는다 · 수정 시각과 권한을 보존한다". 상위 계층은 어느 OS인지 모른다(DR-5와 같은 포트 모양 · 외부 crate 0 — libc/libSystem/kernel32
+  심벌만 `extern`으로 선언).
+- **폴백 규칙도 같다**: OS 경로가 "지원 안 함"(`unsupported`)으로 끝나면 — 아직 보고한 바이트를 빼고 — 읽고 쓰는 루프(dir2 원형)로
+  다시 한다. 그래서 오래된 커널 · 특수 파일 시스템 · 네트워크 드라이브에서도 결과는 같고 속도만 다르다.
+- **병렬은 OS 위에서**: 폴더 안 파일 작업을 스레드 N개가 나눈다(자동 = 양쪽 장치가 탐색 지연 없음이면 8 · 아니면 4 · 설정 1 ~ 16) ·
+  32 MiB 이상은 한 번에 하나(회전 디스크 보호). 장치 판정 `seek_of`만 OS가 답한다.
+- **설정은 공통 3키**: `transfer.native`(켬) · `transfer.threads`(0 = 자동) · `transfer.unbuffered_mb`(Windows만 의미 · 기본 끔).
+
+### 6-2. 운영체제별 구현
+
+| | Windows(1차 · 10-05) | Linux(2차 · 10-24) | macOS(2차 · 10-24) |
+| --- | --- | --- | --- |
+| 호출 | `CopyFileExW` + 진행 콜백 | ① `ioctl(FICLONE)` ② `copy_file_range` 32 MiB 청크 | `copyfile(COPYFILE_ALL \| COPYFILE_CLONE)` + `COPYFILE_STATE_STATUS_CB` |
+| 같은 볼륨 즉시 복사 | ReFS/Dev Drive 블록 복제(24H2+ 자동) | Btrfs · XFS(reflink) · bcachefs = FICLONE(데이터 이동 없음) | APFS = `clonefile`(쓰기 시 복사) — 복제되면 콜백 없이 끝나므로 합계를 채운다 |
+| 네트워크 | SMB 서버 쪽 복사(`FSCTL_SRV_COPYCHUNK`) 자동 | NFS 4.2 · SMB 3 서버 쪽 복사(`copy_file_range`) | SMB = 커널 복사 |
+| 보존 | 수정 시각 · 속성 · 대체 스트림(호출 안) | 수정 시각 · 권한(복사 뒤 `set_modified`/`set_permissions`) | 수정 시각 · 권한 · 확장 속성 · ACL(`COPYFILE_STAT\|XATTR\|ACL`) |
+| 중단 | 콜백 `PROGRESS_CANCEL` → OS가 대상 삭제 | 청크 사이 `stop` → 대상 삭제 | 콜백 `COPYFILE_QUIT`(ECANCELED) → 대상 삭제 |
+| 폴백 조건(**한 바이트도 안 옮겼을 때만** · 중간 실패는 원 오류) | `ERROR_INVALID_FUNCTION/NOT_SUPPORTED/INVALID_PARAMETER` | 첫 호출 `EPERM/EBADF/EXDEV/EINVAL/ENOSYS/EOPNOTSUPP` 또는 **첫 호출 0 바이트**(procfs/sysfs · 일부 FUSE — std `kernel_copy` 규칙) | `ENOTSUP/EINVAL/EXDEV` · **심볼릭 링크 원본**(CLONE = NOFOLLOW_SRC라 루프로 내용 복사 → 다른 OS와 같은 결과) |
+| 장치 판정 | `IOCTL_STORAGE_QUERY_PROPERTY`(SeekPenalty) · UNC = 없음 | `st_dev` → `/sys/dev/block/<maj>:<min>/queue/rotational`(파티션 = 상위 `../queue`) · major 0(Btrfs/ZFS/overlayfs 익명 장치 · NFS · CIFS · tmpfs · FUSE) = **모름 = 있음**(자동 4 · 네트워크 판정은 `statfs` 후속) | 아직 없음 = 알 수 없음(자동 4) — IOKit 특성 조회는 후속 |
+| 캐시 우회 | `COPY_FILE_NO_BUFFERING`(설정 · 실측 손해라 기본 끔) | `posix_fadvise(SEQUENTIAL)`만(O_DIRECT는 정렬 제약 · 보류) | `F_NOCACHE` 보류 |
+| 덮어쓰기 | `FAIL_IF_EXISTS` 플래그 | `create_new`/`create` | CLONE = EXCL 함의 → 덮어쓰기는 먼저 지움 · 아니면 `AlreadyExists` |
+
+### 6-3. 아직 안 한 것(결정 거리 · 사용자 지시 대기)
+
+| 항목 | 내용 · 왜 미뤘나 |
+| --- | --- |
+| 최상위 항목 병렬 | 지금 병렬은 **폴더 안**에만 — 파일 수천 개를 직접 골라 복사하면 차례로. 엔진 항목 루프(`transfer`)가 항목마다 충돌 질문 · 스테이징 · 실행 취소 기록을 순서대로 하므로, 병렬화는 "질문 없는 항목만 묶어 보내기"(T-96 카드형 진행 창의 항목 세그먼트)와 함께 설계해야 한다. |
+| Windows ReFS 블록 복제 직접 호출 | 24H2 이전에서 같은 볼륨 즉시 복사(`FSCTL_DUPLICATE_EXTENTS_TO_FILE` · 클러스터 정렬 · 무결성 스트림 끔 조건). 이 PC에 ReFS 볼륨이 없어 실측 불가. |
+| macOS 장치 판정 | IOKit `kIOPropertyMediumTypeKey`(Solid State) 조회 → 자동 8. Mac 실기 필요. |
+| 큰 파일 읽기/쓰기 분리(FastCopy 방식) | 서로 다른 물리 디스크 사이에서만 이득 · 구현 큼 · 측정 뒤 결정(T-98). |
+| 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98(NEW-007 ②~⑩). |
+| T6 기준선 | `bench_copy`를 perf-baseline에 편입 · Linux/macOS 실측은 그 PC 세션에서. |

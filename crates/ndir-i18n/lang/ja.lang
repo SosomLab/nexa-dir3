@@ -762,7 +762,7 @@ pref.transferClose.desc = コピー/移動の完了後、進行状況ウィン�
 pref.dndHover = ドラッグホバー切り替え時間 (ms, 200-10000)
 pref.dndHover.desc = ドラッグ中にタブや折りたたまれたフォルダーの上に留まったとき、タブ切り替え・フォルダー展開までの待ち時間 (ミリ秒) です。既定値は 3000ms (3 秒)。
 pref.xferNative = OS の高速コピーを使用
-pref.xferNative.desc = ファイルのコピーに OS のコピー機能 (Windows: CopyFileEx) を使います。更新日時や属性が保持され、対応するディスクではブロック複製やサーバー側コピーでさらに速くなります。オフにすると直接読み書きしてコピーします。
+pref.xferNative.desc = OS のコピー経路を使います: Windows CopyFileEx(ReFS ブロッククローン · SMB サーバー側コピー · 属性保持)· Linux FICLONE/copy_file_range(reflink · カーネル内コピー)· macOS clonefile/copyfile(APFS クローン · 拡張属性)。オフにするとどこでも読み書きループを使います。
 pref.xferThreads = フォルダーコピーの同時実行数 (0 = 自動, 1-16)
 pref.xferThreads.desc = フォルダー内のファイルを同時にいくつコピーするかを指定します。小さなファイルが多いほど効果があります。0 は記憶装置に応じて自動 (SSD・ネットワークは最大 8、それ以外は最大 4)、1 は 1 つずつ順番にコピーします。大きなファイルは常に 1 つずつコピーします。
 pref.xferUnbuffered = キャッシュなしでコピーするサイズ (MB, 0 = 使用しない)

@@ -761,7 +761,7 @@ pref.transferClose.desc = 복사/이동 완료 후 진행 창이 닫히기까지
 pref.dndHover = 드래그 호버 전환 시간(ms, 200~10000)
 pref.dndHover.desc = 드래그 중 탭이나 접힌 폴더 위에 머물렀을 때 탭 전환·폴더 펼침까지 기다리는 시간(밀리초)입니다. 기본 3000ms(3초).
 pref.xferNative = 운영체제의 고속 복사 사용
-pref.xferNative.desc = 파일을 복사할 때 운영체제의 복사 기능(Windows: CopyFileEx)을 씁니다. 수정한 날짜·속성이 보존되고, 지원하는 디스크에서는 블록 복제나 서버 쪽 복사로 더 빠릅니다. 끄면 직접 읽고 쓰는 방식으로 복사합니다.
+pref.xferNative.desc = 운영체제의 복사 경로를 씁니다: Windows CopyFileEx(ReFS 블록 복제 · SMB 서버 쪽 복사 · 속성 보존) · Linux FICLONE/copy_file_range(reflink · 커널 안 복사) · macOS clonefile/copyfile(APFS 복제 · 확장 속성). 끄면 어디서나 읽고 쓰는 루프를 씁니다.
 pref.xferThreads = 폴더 복사 동시 작업 수(0 = 자동, 1~16)
 pref.xferThreads.desc = 폴더 안의 파일을 몇 개씩 동시에 복사할지 정합니다. 작은 파일이 많을수록 효과가 큽니다. 0이면 저장 장치를 보고 자동으로 정하고(SSD·네트워크 최대 8, 그 밖 최대 4), 1이면 하나씩 차례로 복사합니다. 큰 파일은 항상 한 번에 하나만 복사합니다.
 pref.xferUnbuffered = 캐시 없이 복사할 파일 크기(MB, 0 = 사용 안 함)

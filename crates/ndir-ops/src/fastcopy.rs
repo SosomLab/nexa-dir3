@@ -4,8 +4,11 @@
 //! **폴더 안 파일들을 도는 방법**만 이 모듈이 고른다. 엔진의 보장(취소 · 부분 파일 정리 · `copied` 후위 순서)은 바뀌지 않는다.
 //!
 //! - **파일 1개** — Windows = `CopyFileExW`(커널 복사 경로: ReFS/Dev Drive 블록 복제 · SMB 서버 쪽 복사 · 수정 시각 · 속성 · 대체
-//!   스트림 보존 · 큰 파일은 `COPY_FILE_NO_BUFFERING`으로 파일 캐시를 거치지 않는다) · 그 밖(과 Windows에서 끈 경우 · 커널 경로가
-//!   지원하지 않는 파일 시스템) = 읽고 쓰는 루프(dir2 원형) + 수정 시각 · 권한 보존.
+//!   스트림 보존 · 큰 파일은 `COPY_FILE_NO_BUFFERING`으로 파일 캐시를 거치지 않는다) · **Linux** = `ioctl(FICLONE)` 블록 복제
+//!   (Btrfs · XFS reflink · bcachefs · 같은 파일 시스템) → 안 되면 `copy_file_range`(커널 안 복사 · NFS 4.2/SMB 서버 쪽 복사 · 32 MiB
+//!   청크마다 진행 · 중단) · **macOS** = `copyfile(COPYFILE_ALL | COPYFILE_CLONE)`(APFS 같은 볼륨 = `clonefile` 즉시 · 아니면 커널 복사 ·
+//!   확장 속성 · ACL · 수정 시각 보존 · 진행 콜백 · 중단) — 2차 T-164(10-24) · 그 밖(과 끈 경우 · 커널 경로가 지원하지 않는 파일 시스템 ·
+//!   심볼릭 링크 원본) = 읽고 쓰는 루프(dir2 원형) + 수정 시각 · 권한 보존.
 //! - **폴더** — 먼저 한 번 훑어 폴더를 만들고 파일 작업 목록을 모은 뒤, 작업 스레드 여러 개가 나눠 복사한다(작은 파일이 많은 폴더에서
 //!   효과가 크다 — 파일당 비용은 디스크 탐색보다 메타데이터 · 실시간 검사가 지배한다). 스레드 수 자동 = 양쪽이 모두 탐색 지연
 //!   없는 저장 장치(SSD · 네트워크)면 8까지, 아니면 4까지 · **큰 파일은 한 번에 하나만**(회전 디스크에서 헤드가 오가지 않게).
@@ -119,7 +122,7 @@ pub(crate) fn copy_file(
     if stop() {
         return Err(canceled());
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     if t.native {
         let mut sent = 0u64;
         let r = os::copy_file(
@@ -134,29 +137,27 @@ pub(crate) fn copy_file(
             t.unbuffered_min,
         );
         return match r {
-            // 커널 복사 경로가 이 파일 시스템에서 안 된다 → 읽고 쓰는 루프로 다시(이미 보고한 만큼은 다시 보고하지 않는다).
-            Err(e) if os::unsupported(&e) => {
-                let mut skip = sent;
-                copy_file_portable(
-                    src,
-                    dest,
-                    overwrite,
-                    &mut |n| {
-                        let cut = n.min(skip);
-                        skip -= cut;
-                        if n > cut {
-                            on_bytes(n - cut);
-                        }
-                    },
-                    stop,
-                )
+            // 커널 복사 경로가 이 조합에서 안 된다 → 읽고 쓰는 루프로 다시 — **아직 한 바이트도 보고하지 않았을 때만**(중간 실패를
+            // 처음부터 다시 하면 진행 합계가 이중으로 보고된다 · 오류 종류 · errno는 그대로 상위로 · 협업 리뷰 10-24 ②).
+            Err(e) if sent == 0 && os::unsupported(&e) => {
+                copy_file_portable(src, dest, overwrite, on_bytes, stop)
             }
             r => r,
         };
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     let _ = t;
     copy_file_portable(src, dest, overwrite, on_bytes, stop)
+}
+
+/// 루프로 복사한 뒤의 보존(수정 시각 · 권한 — 최선 노력 · 못 해도 복사는 성공이다 · FAT · 네트워크 공유 등).
+#[cfg(target_os = "linux")]
+fn preserve_after_copy(dest: &Path, output: fs::File, meta: &fs::Metadata) {
+    if let Ok(t) = meta.modified() {
+        let _ = output.set_modified(t);
+    }
+    drop(output);
+    let _ = fs::set_permissions(dest, meta.permissions());
 }
 
 /// 읽고 쓰는 루프(dir2 `CopyFileWithProgress` 원형) + 수정 시각 · 권한 보존(dir3 보강 — 종전에는 사본의 수정 시각이 복사한 시각이
@@ -408,12 +409,345 @@ fn copy_jobs_parallel(
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 mod os {
     use super::Seek;
     use std::path::Path;
 
-    /// 저장 장치 판정 — 아직 Windows만 본다(Linux `queue/rotational` · macOS는 다음 차수) → 보수적으로 [`Seek::Costly`](자동 4까지).
+    /// 저장 장치 판정 — 그 밖의 Unix(BSD 등)는 보지 않는다 → 보수적으로 [`Seek::Costly`](자동 4까지).
+    pub(super) fn seek_of(_path: &Path) -> Seek {
+        Seek::Costly
+    }
+}
+
+/// Linux(T-164 · docs/24 §6): ① `ioctl(FICLONE)` = 블록 복제(Btrfs · XFS reflink · bcachefs · 같은 파일 시스템 — 데이터를 옮기지 않고
+/// 즉시) ② `copy_file_range` = 커널 안 복사(사용자 공간 왕복 없음 · NFS 4.2 · SMB 3 서버 쪽 복사 · 5.3+ 교차 파일 시스템) — 32 MiB
+/// 청크마다 진행 보고 · 중단 점검 ③ 둘 다 안 되는 조합(오래된 커널 · 특수 파일 시스템)은 상위가 루프로 다시. 장치 판정은
+/// `/sys/dev/block/<maj>:<min>/queue/rotational`(파티션이면 상위 장치) · 블록 장치가 아닌 것(NFS · CIFS · tmpfs · FUSE = major 0)은 탐색
+/// 지연 없음으로 본다. 외부 crate 0 — libc 심벌만 선언한다.
+#[cfg(target_os = "linux")]
+mod os {
+    use super::{canceled, preserve_after_copy, Seek, Stop};
+    use std::ffi::{c_int, c_uint, c_ulong};
+    use std::fs;
+    use std::io;
+    use std::os::fd::AsRawFd as _;
+    use std::os::linux::fs::MetadataExt as _;
+    use std::path::Path;
+
+    /// `copy_file_range` 한 번에 옮기는 상한 — 이 단위로 진행을 보고하고 중단을 본다.
+    const CHUNK: usize = 32 * 1024 * 1024;
+    /// `FICLONE` = `_IOW(0x94, 9, int)`.
+    const FICLONE: c_ulong = 0x4004_9409;
+    const POSIX_FADV_SEQUENTIAL: c_int = 2;
+    const EPERM: i32 = 1;
+    const EBADF: i32 = 9;
+    const EXDEV: i32 = 18;
+    const EINVAL: i32 = 22;
+    const ENOSYS: i32 = 38;
+    const EOPNOTSUPP: i32 = 95;
+
+    extern "C" {
+        fn copy_file_range(
+            fd_in: c_int,
+            off_in: *mut i64,
+            fd_out: c_int,
+            off_out: *mut i64,
+            len: usize,
+            flags: c_uint,
+        ) -> isize;
+        fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
+        fn posix_fadvise(fd: c_int, offset: i64, len: i64, advice: c_int) -> c_int;
+    }
+
+    /// 파일 하나 — 블록 복제 → 커널 안 복사. 실패 · 중단 시 이번에 만든 대상은 지운다.
+    pub(super) fn copy_file(
+        src: &Path,
+        dest: &Path,
+        overwrite: bool,
+        on_bytes: &mut dyn FnMut(u64),
+        stop: Stop<'_>,
+        _unbuffered_min: u64,
+    ) -> io::Result<()> {
+        let input = fs::File::open(src)?;
+        let meta = input.metadata()?;
+        let len = meta.len();
+        let output = if overwrite {
+            fs::File::create(dest)?
+        } else {
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(dest)?
+        };
+        let run = (|| -> io::Result<()> {
+            // ① 블록 복제 — 같은 파일 시스템 · reflink 지원일 때만 성공(아니면 EXDEV/EOPNOTSUPP/EINVAL — 조용히 ②로).
+            // SAFETY: 두 fd는 열린 파일이고 호출 동안 살아 있다 · FICLONE의 인자는 원본 fd(int) 하나다.
+            if unsafe { ioctl(output.as_raw_fd(), FICLONE, input.as_raw_fd()) } == 0 {
+                on_bytes(len);
+                return Ok(());
+            }
+            // SAFETY: 열린 fd · 범위 0 = 파일 전체 · 조언이라 실패해도 무해.
+            let _ = unsafe { posix_fadvise(input.as_raw_fd(), 0, 0, POSIX_FADV_SEQUENTIAL) };
+            // ② 커널 안 복사 — 파일 오프셋(둘 다 NULL)을 쓴다. 폴백(상위가 루프로 다시)은 **아직 한 바이트도 안 옮겼을 때만**:
+            // 첫 호출이 "지원 안 함"이거나 **0을 돌려주면**(procfs/sysfs 의사 파일 · 일부 FUSE — 그대로 두면 빈 대상이 조용히 성공 ·
+            // std `kernel_copy`와 같은 규칙) `Unsupported` · 중간 실패는 원 오류 그대로(상위는 보낸 바이트가 0일 때만 루프로 — 종류 · errno 보존).
+            let mut written = 0u64;
+            loop {
+                if stop() {
+                    return Err(canceled());
+                }
+                // SAFETY: 두 fd는 열린 파일 · 오프셋 NULL = 파일 위치 사용 · flags 0.
+                let n = unsafe {
+                    copy_file_range(
+                        input.as_raw_fd(),
+                        std::ptr::null_mut(),
+                        output.as_raw_fd(),
+                        std::ptr::null_mut(),
+                        CHUNK,
+                        0,
+                    )
+                };
+                if n < 0 {
+                    return Err(io::Error::last_os_error()); // 종류 · errno 보존(상위가 보낸 바이트 0일 때만 폴백)
+                }
+                if n == 0 {
+                    if written == 0 {
+                        return Err(io::Error::from(io::ErrorKind::Unsupported));
+                    }
+                    return Ok(()); // EOF
+                }
+                written += n as u64;
+                on_bytes(n as u64);
+            }
+        })();
+        if let Err(e) = run {
+            drop(output);
+            let _ = fs::remove_file(dest); // 부분 파일 정리
+            return Err(e);
+        }
+        preserve_after_copy(dest, output, &meta);
+        Ok(())
+    }
+
+    /// 커널 복사 경로가 이 조합에서 지원되지 않는다는 오류인가(→ 읽고 쓰는 루프로 다시) — `EPERM`(컨테이너/snap seccomp 차단) ·
+    /// `EBADF`(일부 파일 종류)도 std 폴백 목록과 같게 포함. 중간 실패의 폴백은 상위가 "보낸 바이트 0"으로 막는다(오류 종류 보존).
+    pub(super) fn unsupported(e: &io::Error) -> bool {
+        e.kind() == io::ErrorKind::Unsupported
+            || matches!(
+                e.raw_os_error(),
+                Some(EPERM | EBADF | EXDEV | EINVAL | ENOSYS | EOPNOTSUPP)
+            )
+    }
+
+    /// 경로가 놓인 저장 장치의 탐색 지연 여부 — `st_dev` → `/sys/dev/block/<maj>:<min>/queue/rotational`(파티션은 상위 장치의
+    /// `../queue`) · 블록 장치가 아니면(major 0: Btrfs/ZFS/overlayfs의 익명 장치 · NFS · CIFS · tmpfs · FUSE) **모르는 것으로**(있음 ·
+    /// 자동 4 — Btrfs가 HDD 위일 수 있어 "모르면 있음" 원칙 · 네트워크 판정은 `statfs f_type` 후속) · 못 읽어도 있음.
+    pub(super) fn seek_of(path: &Path) -> Seek {
+        let meta = fs::metadata(path).or_else(|e| match path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => fs::metadata(p),
+            _ => Err(e),
+        });
+        let Ok(m) = meta else {
+            return Seek::Costly;
+        };
+        let dev = m.st_dev();
+        let major = ((dev >> 32) & 0xffff_f000) | ((dev >> 8) & 0xfff);
+        let minor = ((dev >> 12) & 0xffff_ff00) | (dev & 0xff);
+        if major == 0 {
+            return Seek::Costly;
+        }
+        rotational(major, minor).map_or(
+            Seek::Costly,
+            |rot| {
+                if rot {
+                    Seek::Costly
+                } else {
+                    Seek::Free
+                }
+            },
+        )
+    }
+
+    /// `queue/rotational` 읽기: "0" = 탐색 지연 없음 · "1" = 있음 · 없으면 None(상위가 "있음"으로 둔다).
+    fn rotational(major: u64, minor: u64) -> Option<bool> {
+        let base = format!("/sys/dev/block/{major}:{minor}");
+        for rel in ["queue/rotational", "../queue/rotational"] {
+            if let Ok(s) = fs::read_to_string(format!("{base}/{rel}")) {
+                return match s.trim() {
+                    "0" => Some(false),
+                    "1" => Some(true),
+                    _ => None,
+                };
+            }
+        }
+        None
+    }
+}
+
+/// macOS(T-164 · docs/24 §6): `copyfile(3)` 한 번으로 — `COPYFILE_CLONE`이면 APFS 같은 볼륨은 `clonefile`(즉시 · 쓰기 시 복사) · 아니면
+/// 커널 복사로 떨어진다(`COPYFILE_ALL` = 데이터 + 수정 시각/권한 + 확장 속성 + ACL 보존) · `COPYFILE_STATE_STATUS_CB`로 진행 보고 ·
+/// 중단은 콜백이 `COPYFILE_QUIT`. `COPYFILE_CLONE`은 `NOFOLLOW_SRC`를 함의하므로 **심볼릭 링크 원본은 루프**(다른 OS처럼 내용 복사).
+/// 장치 판정은 아직 보지 않는다(알 수 없음 = 자동 4). 외부 crate 0 — libSystem 심벌만 선언한다.
+#[cfg(target_os = "macos")]
+mod os {
+    use super::{canceled, Seek, Stop};
+    use std::ffi::{c_char, c_int, c_void, CString};
+    use std::fs;
+    use std::io;
+    use std::os::unix::ffi::OsStrExt as _;
+    use std::path::Path;
+
+    type CopyfileState = *mut c_void;
+    /// `COPYFILE_ACL | COPYFILE_STAT | COPYFILE_XATTR | COPYFILE_DATA`.
+    const COPYFILE_ALL: u32 = 0xF;
+    const COPYFILE_CLONE: u32 = 1 << 24;
+    const COPYFILE_STATE_STATUS_CB: u32 = 6;
+    const COPYFILE_STATE_STATUS_CTX: u32 = 7;
+    const COPYFILE_STATE_COPIED: u32 = 8;
+    const COPYFILE_COPY_DATA: c_int = 4;
+    const COPYFILE_PROGRESS: c_int = 4;
+    const COPYFILE_CONTINUE: c_int = 0;
+    const COPYFILE_QUIT: c_int = 2;
+    const EXDEV: i32 = 18;
+    const EINVAL: i32 = 22;
+    const ENOTSUP: i32 = 45;
+    const ECANCELED: i32 = 89;
+
+    type StatusCb = unsafe extern "C" fn(
+        what: c_int,
+        stage: c_int,
+        state: CopyfileState,
+        src: *const c_char,
+        dst: *const c_char,
+        ctx: *mut c_void,
+    ) -> c_int;
+
+    extern "C" {
+        fn copyfile_state_alloc() -> CopyfileState;
+        fn copyfile_state_free(s: CopyfileState) -> c_int;
+        fn copyfile_state_set(s: CopyfileState, flag: u32, src: *const c_void) -> c_int;
+        fn copyfile_state_get(s: CopyfileState, flag: u32, dst: *mut c_void) -> c_int;
+        fn copyfile(
+            from: *const c_char,
+            to: *const c_char,
+            state: CopyfileState,
+            flags: u32,
+        ) -> c_int;
+    }
+
+    struct Ctx<'a> {
+        on_bytes: &'a mut dyn FnMut(u64),
+        stop: Stop<'a>,
+        sent: u64,
+    }
+
+    /// 진행 콜백 — 데이터 복사 진행 단계에서 누적 바이트(`COPYFILE_STATE_COPIED`)의 증분을 보고 · 중단이면 `COPYFILE_QUIT`.
+    unsafe extern "C" fn status(
+        what: c_int,
+        stage: c_int,
+        state: CopyfileState,
+        _src: *const c_char,
+        _dst: *const c_char,
+        ctx: *mut c_void,
+    ) -> c_int {
+        // SAFETY: `ctx`는 `copy_file`이 넘긴 `Ctx`이고 `copyfile` 호출 동안 살아 있다.
+        let ctx = unsafe { &mut *ctx.cast::<Ctx<'_>>() };
+        if what == COPYFILE_COPY_DATA && stage == COPYFILE_PROGRESS {
+            let mut copied: i64 = 0;
+            // SAFETY: `state`는 라이브러리가 넘긴 유효한 상태 · COPIED는 off_t(i64) 하나를 쓴다.
+            if unsafe { copyfile_state_get(state, COPYFILE_STATE_COPIED, (&raw mut copied).cast()) }
+                == 0
+            {
+                let c = u64::try_from(copied).unwrap_or(0);
+                if c > ctx.sent {
+                    (ctx.on_bytes)(c - ctx.sent);
+                    ctx.sent = c;
+                }
+            }
+        }
+        if (ctx.stop)() {
+            COPYFILE_QUIT
+        } else {
+            COPYFILE_CONTINUE
+        }
+    }
+
+    fn cstr(p: &Path) -> io::Result<CString> {
+        CString::new(p.as_os_str().as_bytes())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains NUL"))
+    }
+
+    /// 파일 하나 — `copyfile(ALL | CLONE)`. 실패 · 중단 시 이번에 만든 대상은 지운다 · 심볼릭 링크 원본 = `Unsupported`(상위가 루프로).
+    pub(super) fn copy_file(
+        src: &Path,
+        dest: &Path,
+        overwrite: bool,
+        on_bytes: &mut dyn FnMut(u64),
+        stop: Stop<'_>,
+        _unbuffered_min: u64,
+    ) -> io::Result<()> {
+        let meta = fs::symlink_metadata(src)?;
+        if meta.file_type().is_symlink() {
+            return Err(io::Error::from(io::ErrorKind::Unsupported));
+        }
+        let len = meta.len();
+        // CLONE = EXCL(있는 대상 거부)을 함의한다 → 덮어쓰기는 먼저 지운다 · 아니면 AlreadyExists.
+        if fs::symlink_metadata(dest).is_ok() {
+            if !overwrite {
+                return Err(io::Error::from(io::ErrorKind::AlreadyExists));
+            }
+            fs::remove_file(dest)?;
+        }
+        let (from, to) = (cstr(src)?, cstr(dest)?);
+        let mut ctx = Ctx {
+            on_bytes,
+            stop,
+            sent: 0,
+        };
+        // SAFETY: 상태 객체는 이 함수 안에서만 쓰고 끝에 해제한다 · 콜백/컨텍스트 포인터는 호출 동안 유효하다.
+        let state = unsafe { copyfile_state_alloc() };
+        if state.is_null() {
+            return Err(io::Error::from(io::ErrorKind::Unsupported));
+        }
+        let cb: StatusCb = status;
+        let rc = unsafe {
+            copyfile_state_set(state, COPYFILE_STATE_STATUS_CB, cb as *const c_void);
+            copyfile_state_set(state, COPYFILE_STATE_STATUS_CTX, (&raw mut ctx).cast());
+            copyfile(
+                from.as_ptr(),
+                to.as_ptr(),
+                state,
+                COPYFILE_ALL | COPYFILE_CLONE,
+            )
+        };
+        let err = (rc != 0).then(io::Error::last_os_error);
+        // SAFETY: 위에서 받은 상태 객체를 한 번만 해제한다.
+        unsafe {
+            copyfile_state_free(state);
+        }
+        if let Some(e) = err {
+            let _ = fs::remove_file(dest); // 부분 파일 정리
+            return Err(if e.raw_os_error() == Some(ECANCELED) || stop() {
+                canceled()
+            } else {
+                e
+            });
+        }
+        // 복제로 끝났으면 콜백이 불리지 않는다 → 합계를 채운다.
+        if ctx.sent < len {
+            (ctx.on_bytes)(len - ctx.sent);
+        }
+        Ok(())
+    }
+
+    /// 커널 복사 경로가 지원되지 않는다는 오류인가(→ 읽고 쓰는 루프로 다시).
+    pub(super) fn unsupported(e: &io::Error) -> bool {
+        e.kind() == io::ErrorKind::Unsupported
+            || matches!(e.raw_os_error(), Some(EXDEV | EINVAL | ENOTSUP))
+    }
+
+    /// 장치 판정은 아직 보지 않는다(IOKit 특성 조회는 후속) → 알 수 없음 = [`Seek::Costly`](자동 4까지).
     pub(super) fn seek_of(_path: &Path) -> Seek {
         Seek::Costly
     }
@@ -831,6 +1165,71 @@ mod tests {
             assert!(!dest.exists());
             let _ = fs::remove_dir_all(&d);
         }
+    }
+
+    /// Linux/macOS 네이티브 경로(T-164): 큰 파일(40 MiB · Linux는 32 MiB 청크 2회 이상) 내용 · 보고 합계 = 크기 · 심볼릭 링크 원본은
+    /// **내용**을 복사(링크가 아님 · 다른 OS와 같게) · `overwrite = false`에 있는 대상 = AlreadyExists · `seek_of`는 어떤 경로에도 패닉 없음.
+    #[cfg(unix)]
+    #[test]
+    fn unix_native_copy_large_file_symlink_and_seek() {
+        let d = fixture("unixnative");
+        let src = d.join("big.bin");
+        let data: Vec<u8> = (0..40u32 * 1024 * 1024).map(|i| (i % 253) as u8).collect();
+        fs::write(&src, &data).unwrap();
+        let t = Tuning {
+            native: true,
+            unbuffered_min: 0,
+            threads: 1,
+        };
+        let dest = d.join("copy.bin");
+        let mut sum = 0u64;
+        copy_file(&src, &dest, false, &mut |n| sum += n, GO, &t).unwrap();
+        assert_eq!(sum, data.len() as u64);
+        assert_eq!(fs::read(&dest).unwrap(), data);
+        let e = copy_file(&src, &dest, false, &mut |_| {}, GO, &t).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::AlreadyExists);
+        let link = d.join("link.bin");
+        std::os::unix::fs::symlink(&src, &link).unwrap();
+        let dest2 = d.join("via-link.bin");
+        let mut sum2 = 0u64;
+        copy_file(&link, &dest2, false, &mut |n| sum2 += n, GO, &t).unwrap();
+        assert!(!fs::symlink_metadata(&dest2)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::metadata(&dest2).unwrap().len(), data.len() as u64);
+        assert_eq!(sum2, data.len() as u64);
+        let _ = os::seek_of(&d);
+        let _ = os::seek_of(Path::new("/nonexistent/x/y"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Linux: `copy_file_range`가 처음부터 0을 돌려주는 의사 파일(procfs)은 빈 대상으로 "성공"하지 않고 루프로 떨어져 내용이 복사된다
+    /// (협업 리뷰 ① · std `kernel_copy` 규칙) · 네이티브 경로의 `Unsupported`가 상위 폴백으로 이어진다.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_pseudo_file_falls_back_to_loop() {
+        let d = fixture("procfs");
+        let t = Tuning {
+            native: true,
+            unbuffered_min: 0,
+            threads: 1,
+        };
+        let dest = d.join("status.txt");
+        let mut sum = 0u64;
+        copy_file(
+            Path::new("/proc/self/status"),
+            &dest,
+            false,
+            &mut |n| sum += n,
+            GO,
+            &t,
+        )
+        .unwrap();
+        let got = fs::read_to_string(&dest).unwrap();
+        assert!(got.contains("Pid:"), "{got}");
+        assert_eq!(sum, got.len() as u64);
+        let _ = fs::remove_dir_all(&d);
     }
 
     fn make_tree(root: &Path, dirs: usize, files: usize) -> u64 {
