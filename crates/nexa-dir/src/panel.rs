@@ -14,6 +14,14 @@ use nexa_ctl::theme::Theme;
 use nexa_ctl::{DrawCtx, InputEvent, Invalidations, Key as CtlKey, Widget};
 use nexa_explorer::pathbar::PathBar;
 use nexa_grid::{Column, EditKey, RowSource, ScrollAlign, SelectOp, ViewMode, VirtualRows};
+
+/// 내 PC(드라이브 열) 열 key — 세션 `drivew` 순서(이름 · 종류 · 전체 크기 · 여유 공간 · T-193).
+pub(crate) const DRIVE_KEYS: [u32; 4] = [
+    crate::filelist::COL_NAME,
+    crate::filelist::COL_KIND,
+    crate::filelist::COL_TOTAL,
+    crate::filelist::COL_FREE,
+];
 use std::path::{Path, PathBuf};
 
 /// 네비 버튼 id(= 명령 id · 호스트 `command`와 같은 어휘).
@@ -139,6 +147,9 @@ pub(crate) struct Panel {
     user_cols: bool,
     /// 호스트가 준 기본 열(내 PC 드라이브 열 ↔ 일반 열 전환의 복귀 원본 · dir2 X-17).
     base_columns: Vec<Column>,
+    /// 내 PC(드라이브 열)에서 사용자가 바꾼 열 폭(key별 · 없는 key는 기본 열 폭 상속) — 실제 폴더 폭과 **따로** 산다(사용자 10-24:
+    /// 가상 폴더와 실제 폴더는 유형이 달라 서로 동기하지 않는다 · T-193) · 세션 `drivew`.
+    drive_widths: Vec<(u32, i32)>,
     /// 파일 활성화(실행은 호스트 몫 · 1회성 수거).
     pending_open: Option<PathBuf>,
     /// 탭 우클릭 메뉴 요청(표시는 호스트 · 1회성).
@@ -362,6 +373,7 @@ impl Panel {
             pressed: None,
             user_cols: false,
             base_columns: Vec::new(),
+            drive_widths: Vec::new(),
             pending_open: None,
             pending_tab_menu: None,
             tab_dbl: TabDbl::Close,
@@ -476,9 +488,18 @@ impl Panel {
                 .zip(&ps.col_widths)
                 .filter_map(|(k, w)| crate::order::col_key_id(k).map(|id| (id, *w)))
                 .collect();
-            if !panel.apply_col_widths_by_key(&by_key, &mut inv) {
+            if !panel.apply_col_widths_by_key(&by_key, false, &mut inv) {
                 panel.user_cols = true; // 폭이 기본과 같아도 저장된 폭이 있었다 = 사용자 폭
             }
+        }
+        // 내 PC 열 폭(`drivew` · T-193) — 드라이브 열 순서(이름 · 종류 · 전체 · 여유)로 적혀 있다 · 탭이 아직 없어도 기억만 남긴다.
+        if ps.drive_widths.len() == DRIVE_KEYS.len() {
+            let by_key: Vec<(u32, i32)> = DRIVE_KEYS
+                .iter()
+                .copied()
+                .zip(ps.drive_widths.iter().copied())
+                .collect();
+            panel.apply_col_widths_by_key(&by_key, true, &mut inv);
         }
         panel.session_dirty = false;
         panel.sync_chrome(&mut inv);
@@ -502,7 +523,25 @@ impl Panel {
         if !self.user_cols {
             return Vec::new();
         }
+        // 활성 탭이 내 PC(드라이브 열)면 실제 폴더 폭은 기본 열에서(드라이브 폭은 `drivew`로 따로 — 종전엔 드라이브 폭 4개가
+        // `colw`에 실려 복원 때 실제 폴더 열에 잘못 들어갔다 · 사용자 10-24 "좌우 폭이 다르게 보임"의 원인 하나 · T-193).
+        if self.active_is_virtual_root() && !self.base_columns.is_empty() {
+            return self.base_columns.iter().map(|c| c.width).collect();
+        }
         self.rows().columns().iter().map(|c| c.width).collect()
+    }
+
+    /// 내 PC 열 폭(세션 `drivew` · 이름 · 종류 · 전체 크기 · 여유 공간 순) — 사용자가 내 PC에서 폭을 바꾼 뒤에만(T-193).
+    pub(crate) fn drive_widths_session(&self) -> Vec<i32> {
+        if self.drive_widths.is_empty() {
+            return Vec::new();
+        }
+        self.drive_columns().iter().map(|c| c.width).collect()
+    }
+
+    /// 활성 탭이 가상 최상위(내 PC)인가 — 열 폭 동기의 "폴더 유형"(T-193).
+    pub(crate) fn active_is_virtual_root(&self) -> bool {
+        self.rows().source().is_virtual_root()
     }
 
     /// 현재 열 레이아웃 문자열(`cols:1[name:1,…]` — 표시 열 = 기본 열 순 · 숨김 열 = 정의 순으로 말미 `:0` · dir2 `panel_col_layout`).
@@ -942,13 +981,20 @@ impl Panel {
 
     /// 내 PC 전용 열(이름 · 종류 · 전체 크기 · 여유 공간 — dir2 PANEL-044 · §2-5): 폭은 기본 열 것을 상속.
     fn drive_columns(&self) -> Vec<Column> {
+        // 폭 = 내 PC에서 바꾼 폭(`drive_widths`) → 기본 열(이름 · 종류 상속) → 기본값 순.
         let w_of = |key: u32, fallback: f32| {
-            self.base_columns
+            self.drive_widths
                 .iter()
-                .find(|c| c.key == key)
-                .map_or((fallback * self.m.scale).round() as i32, |c| c.width)
+                .find(|(k, _)| *k == key)
+                .map(|(_, w)| *w)
+                .or_else(|| {
+                    self.base_columns
+                        .iter()
+                        .find(|c| c.key == key)
+                        .map(|c| c.width)
+                })
+                .unwrap_or((fallback * self.m.scale).round() as i32)
         };
-        let s = self.m.scale;
         vec![
             Column::new(
                 crate::filelist::COL_NAME,
@@ -964,14 +1010,14 @@ impl Panel {
             Column::new(
                 crate::filelist::COL_TOTAL,
                 ndir_i18n::tr("col.total"),
-                (110.0 * s).round() as i32,
+                w_of(crate::filelist::COL_TOTAL, 110.0),
             )
             .right_aligned()
             .not_sortable(),
             Column::new(
                 crate::filelist::COL_FREE,
                 ndir_i18n::tr("col.free"),
-                (130.0 * s).round() as i32,
+                w_of(crate::filelist::COL_FREE, 130.0),
             )
             .right_aligned()
             .not_sortable(),
@@ -1544,7 +1590,7 @@ impl Panel {
     }
 
     /// 지금 열 폭을 **열 종류(key)별로**(활성 탭) — 패널 사이 동기는 자리(순서)가 아니라 key로 맞춘다(두 패널의 열 순서 ·
-    /// 표시 열이 다르거나 한쪽이 내 PC(드라이브 열)를 보고 있어도 같은 열끼리만 폭이 옮겨 간다).
+    /// 표시 열이 달라도 같은 열끼리만 폭이 옮겨 간다 · 폴더 유형은 [`Self::apply_col_widths_by_key`]의 `virt`가 가른다).
     pub(crate) fn col_widths_by_key(&self) -> Vec<(u32, i32)> {
         self.rows()
             .columns()
@@ -1553,11 +1599,13 @@ impl Panel {
             .collect()
     }
 
-    /// key별 열 폭을 **이 패널의 모든 탭**에(없는 열은 건너뜀 · 기본 열에도 반영해 새 탭 · 내 PC 열이 그 폭을 잇는다).
-    /// 바뀐 것이 있으면 `true`. 이후 배치가 기본 열로 덮지 않는다.
+    /// key별 열 폭을 **이 패널의 같은 유형 탭 전부**에(없는 열은 건너뜀) — `virt` = 내 PC(드라이브 열) 탭 · 아니면 실제 폴더 탭.
+    /// 실제 폴더면 기본 열에도 반영해 새 탭이 그 폭을 잇고 · 내 PC면 `drive_widths`에 기억해 다음 진입이 잇는다(탭이 없어도).
+    /// 유형이 다른 탭은 건드리지 않는다(사용자 10-24 · T-193). 바뀐 것이 있으면 `true`. 이후 배치가 기본 열로 덮지 않는다.
     pub(crate) fn apply_col_widths_by_key(
         &mut self,
         widths: &[(u32, i32)],
+        virt: bool,
         inv: &mut Invalidations,
     ) -> bool {
         let of = |key: u32, cur: i32| {
@@ -1568,6 +1616,9 @@ impl Panel {
         };
         let mut changed = false;
         for tab in &mut self.tabs {
+            if tab.rows.source().is_virtual_root() != virt {
+                continue;
+            }
             let cur: Vec<i32> = tab.rows.columns().iter().map(|c| c.width).collect();
             let new: Vec<i32> = tab
                 .rows
@@ -1579,6 +1630,28 @@ impl Panel {
                 tab.rows.set_col_widths(&new, inv);
                 changed = true;
             }
+        }
+        if virt {
+            for key in DRIVE_KEYS {
+                let Some(w) = widths.iter().find(|(k, _)| *k == key).map(|(_, w)| *w) else {
+                    continue;
+                };
+                match self.drive_widths.iter_mut().find(|(k, _)| *k == key) {
+                    Some(slot) if slot.1 == w => {}
+                    Some(slot) => {
+                        slot.1 = w;
+                        changed = true;
+                    }
+                    None => {
+                        self.drive_widths.push((key, w));
+                        changed = true;
+                    }
+                }
+            }
+            if changed {
+                self.session_dirty = true;
+            }
+            return changed;
         }
         for c in &mut self.base_columns {
             c.width = of(c.key, c.width).max(c.min_width);

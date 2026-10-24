@@ -1245,9 +1245,10 @@ impl App {
             if self.dual && self.settings.flag("list.col_width_sync") {
                 self.sync_col_widths_from(panel);
             } else {
-                // 같은 패널의 다른 탭 · 기본 열에도(새 탭이 그 폭을 잇는다).
+                // 같은 패널의 같은 유형 다른 탭 · 기본 열(또는 내 PC 폭 기억)에도(새 탭이 그 폭을 잇는다).
                 let widths = self.panels[panel].col_widths_by_key();
-                self.panels[panel].apply_col_widths_by_key(&widths, inv);
+                let virt = self.panels[panel].active_is_virtual_root();
+                self.panels[panel].apply_col_widths_by_key(&widths, virt, inv);
             }
         }
         self.redraw();
@@ -1255,11 +1256,14 @@ impl App {
 
     /// 열 폭 동기 — `from` 패널 활성 탭의 폭을 **열 종류(key)별로** 반대 패널의 모든 탭과 같은 패널의 다른 탭에
     /// (사용자 10-03 점검: 종전 = 자리(순서)로 복사해 열 순서·표시가 다르면 엉뚱한 열에 들어갔고 · 같은 패널의 다른 탭은 그대로였다).
+    /// **폴더 유형별**(사용자 10-24 · T-193): 내 PC(가상 · 드라이브 열)와 실제 폴더는 유형이 달라 서로 동기하지 않는다 — 같은
+    /// 유형의 탭(과 그 유형의 폭 기억)만 따라온다. 한쪽이 내 PC · 다른 쪽이 실제 폴더면 각자 폭을 가진다.
     pub(crate) fn sync_col_widths_from(&mut self, from: usize) {
+        let virt = self.panels[from].active_is_virtual_root();
         let widths = self.panels[from].col_widths_by_key();
         let mut inv = Invalidations::default();
-        self.panels[from].apply_col_widths_by_key(&widths, &mut inv);
-        self.panels[1 - from].apply_col_widths_by_key(&widths, &mut inv);
+        self.panels[from].apply_col_widths_by_key(&widths, virt, &mut inv);
+        self.panels[1 - from].apply_col_widths_by_key(&widths, virt, &mut inv);
         self.redraw();
     }
 

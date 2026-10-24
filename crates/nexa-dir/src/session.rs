@@ -26,6 +26,9 @@ pub(crate) struct PanelSession {
     pub views: Vec<u8>,
     pub col_layout: String,
     pub col_widths: Vec<i32>,
+    /// 내 PC(드라이브 열) 폭 `panel{i}.drivew`(이름 · 종류 · 전체 크기 · 여유 공간 · dir3 신규 T-193 · dir2는 모르는 키 = 무시) —
+    /// 실제 폴더 폭 `colw`와 따로(유형이 달라 동기하지 않는다) · 사용자가 내 PC에서 바꾼 뒤에만.
+    pub drive_widths: Vec<i32>,
     /// 탭별 정렬(`panel{i}.sort` · dir3 신규 T-128 · dir2는 모르는 키 = 무시): `name+,size-` · 전부 기본이면 빈 목록.
     pub sort: Vec<String>,
 }
@@ -110,6 +113,10 @@ impl Session {
                 let ws: Vec<String> = p.col_widths.iter().map(|w| w.to_string()).collect();
                 out.push_str(&format!("panel{i}.colw={}\n", ws.join(",")));
             }
+            if !p.drive_widths.is_empty() {
+                let ws: Vec<String> = p.drive_widths.iter().map(|w| w.to_string()).collect();
+                out.push_str(&format!("panel{i}.drivew={}\n", ws.join(",")));
+            }
         }
         for (path, flags) in &self.dir_views {
             out.push_str(&format!("dirview={flags}|{}\n", path.to_string_lossy()));
@@ -161,6 +168,12 @@ impl Session {
                 "sort" => p.sort = v.split('|').map(str::to_string).collect(),
                 "colw" => {
                     p.col_widths = v
+                        .split(',')
+                        .filter_map(|w| w.trim().parse::<i32>().ok())
+                        .collect();
+                }
+                "drivew" => {
+                    p.drive_widths = v
                         .split(',')
                         .filter_map(|w| w.trim().parse::<i32>().ok())
                         .collect();
@@ -251,6 +264,7 @@ mod tests {
                     modes: vec!["tiles".into(), "tree".into()],
                     views: vec![5, 2],
                     col_widths: vec![320, 64, 96],
+                    drive_widths: vec![300, 100, 120, 140],
                     col_layout: "cols:1[ext:1,name:1,size:0,modified:1,kind:1]".into(),
                     sort: vec!["size-,name+".into(), String::new()],
                 },
@@ -270,6 +284,9 @@ mod tests {
         let text = s.serialize();
         assert!(text.contains("dirview=3|/home/u/src\n") && text.contains("dirview=0|/tmp/a|b\n"));
         assert!(text.contains("panel0.sort=size-,name+|\n") && !text.contains("panel1.sort"));
+        assert!(
+            text.contains("panel0.drivew=300,100,120,140\n") && !text.contains("panel1.drivew")
+        );
         assert!(text.starts_with("# nexa-dir session v1\nactive_panel=1\n"));
         let parsed = Session::parse(&text);
         assert_eq!(parsed, s);

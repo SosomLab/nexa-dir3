@@ -23,7 +23,8 @@ impl App {
                 Vec::new()
             };
             s.panels[i].col_widths = p.col_widths();
-            // 열 순서/표시(T-71) — 기본 그대로면 빈 값(직렬화 생략 왕복).
+            s.panels[i].drive_widths = p.drive_widths_session(); // 내 PC 열 폭은 따로(T-193)
+                                                                 // 열 순서/표시(T-71) — 기본 그대로면 빈 값(직렬화 생략 왕복).
             let layout = p.col_layout_str();
             s.panels[i].col_layout =
                 if layout == crate::order::default_order(crate::order::COLUMN_BLOCKS) {

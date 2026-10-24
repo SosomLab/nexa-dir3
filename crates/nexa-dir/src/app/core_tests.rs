@@ -2380,7 +2380,7 @@ fn col_width_sync_matches_by_column_key() {
     let _ = app.settings.set("list.col_width_sync", "off");
     app.after_setting_changed("list.col_width_sync");
     let right0 = widths(&app, 1);
-    app.panels[0].apply_col_widths_by_key(&[(name, 333), (size, 111)], &mut inv);
+    app.panels[0].apply_col_widths_by_key(&[(name, 333), (size, 111)], false, &mut inv);
     assert_eq!(widths(&app, 1), right0, "꺼짐 = 독립");
     // 오른쪽 열 순서를 바꿔 둔다(크기 열을 맨 앞쪽으로) — 자리로 복사하면 엉뚱한 열에 들어가는 조건.
     app.set_active(1);
@@ -2402,7 +2402,7 @@ fn col_width_sync_matches_by_column_key() {
     );
     // 새 탭과 같은 패널의 다른 탭도 같은 폭.
     app.command("file.new_tab");
-    app.panels[0].apply_col_widths_by_key(&[(name, 400)], &mut inv);
+    app.panels[0].apply_col_widths_by_key(&[(name, 400)], false, &mut inv);
     app.sync_col_widths_from(0);
     app.command("tab.prev");
     assert_eq!(
@@ -2413,7 +2413,7 @@ fn col_width_sync_matches_by_column_key() {
     assert_eq!(w_of(&widths(&app, 1), name), Some(400));
     // 툴바 명령으로 껐다 켜도 같은 규칙(기준 = 활성 패널).
     app.command("view.col_width_sync");
-    app.panels[1].apply_col_widths_by_key(&[(size, 77)], &mut inv);
+    app.panels[1].apply_col_widths_by_key(&[(size, 77)], false, &mut inv);
     assert_eq!(w_of(&widths(&app, 0), size), Some(111));
     app.set_active(1);
     app.command("view.col_width_sync");
@@ -2422,6 +2422,108 @@ fn col_width_sync_matches_by_column_key() {
         Some(77),
         "켜는 순간 활성(오른쪽) 기준"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 열 폭 동기 — **폴더 유형별**(사용자 10-24 · T-193): 내 PC(가상 · 드라이브 열)와 실제 폴더는 유형이 달라 서로 동기하지 않고 각자
+/// 폭을 가진다 · 같은 유형끼리(둘 다 내 PC · 둘 다 실제)만 동기 · 내 PC 폭은 세션 `drivew`로 따로 저장되고 `colw`에는 활성 탭이
+/// 내 PC여도 실제 폴더 폭만 실린다(종전엔 드라이브 폭이 `colw`에 실려 복원 때 실제 열로 들어갔다) · 복원 뒤 내 PC 진입이 그 폭을 잇는다.
+#[test]
+fn col_width_sync_is_per_folder_kind_and_drive_widths_persist() {
+    let (mut app, dir) = fixture("colkind");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let w_of = |app: &App, p: usize, key: u32| {
+        app.panels[p]
+            .col_widths_by_key()
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, w)| *w)
+    };
+    let (name, total) = (filelist::COL_NAME, filelist::COL_TOTAL);
+    let _ = app.settings.set("list.col_width_sync", "on");
+    app.after_setting_changed("list.col_width_sync");
+    // 왼쪽 = 내 PC · 오른쪽 = 실제 폴더(사용자 1번 그림).
+    let _ = app.panels[0].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    assert!(app.panels[0].active_is_virtual_root());
+    let left_name0 = w_of(&app, 0, name).unwrap();
+    // 오른쪽(실제) 이름 폭을 바꿔도 왼쪽(내 PC)은 그대로.
+    assert!(app.panels[1].set_col_width_user(0, 444, &mut inv));
+    app.sync_col_widths_from(1);
+    assert_eq!(
+        w_of(&app, 0, name),
+        Some(left_name0),
+        "유형이 다르면 동기 안 함"
+    );
+    // 왼쪽이 실제 폴더로 돌아오면 같은 유형(실제) 폭 444를 잇는다.
+    app.panels[0].nav_back(&mut inv);
+    assert!(!app.panels[0].active_is_virtual_root());
+    assert_eq!(w_of(&app, 0, name), Some(444), "같은 유형(실제) 폭은 공유");
+    // 왼쪽 내 PC에서 전체 크기 폭을 바꿔도 오른쪽(실제)은 그대로 · 오른쪽이 내 PC로 가면 그 폭을 잇는다.
+    let _ = app.panels[0].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    let total_idx = app.panels[0]
+        .rows()
+        .columns()
+        .iter()
+        .position(|c| c.key == total)
+        .expect("내 PC = 전체 크기 열");
+    assert!(app.panels[0].set_col_width_user(total_idx, 222, &mut inv));
+    app.sync_col_widths_from(0);
+    assert_eq!(w_of(&app, 1, name), Some(444));
+    assert_eq!(
+        w_of(&app, 1, total),
+        None,
+        "실제 폴더에는 전체 크기 열이 없다"
+    );
+    let _ = app.panels[1].navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    assert_eq!(
+        w_of(&app, 1, total),
+        Some(222),
+        "같은 유형(내 PC) 폭은 공유"
+    );
+    // 둘 다 내 PC(사용자 2번 그림): 이름 폭 동기 · 실제 폴더 이름 폭(444)은 새지 않는다.
+    assert!(app.panels[0].set_col_width_user(0, 321, &mut inv));
+    app.sync_col_widths_from(0);
+    assert_eq!(w_of(&app, 1, name), Some(321), "같은 유형 = 동시 조정");
+    app.panels[1].nav_back(&mut inv);
+    assert_eq!(w_of(&app, 1, name), Some(444), "실제 폴더 폭은 그대로");
+    // 세션: 왼쪽(활성 = 내 PC)의 `colw`는 실제 폴더 폭 · `drivew` = 드라이브 열 폭 · 두 패널의 `drivew`는 같다.
+    let s = app.session_snapshot();
+    assert_eq!(
+        s.panels[0].col_widths.first(),
+        Some(&444),
+        "{:?}",
+        s.panels[0].col_widths
+    );
+    assert_eq!(s.panels[0].drive_widths.len(), 4);
+    assert_eq!(
+        (s.panels[0].drive_widths[0], s.panels[0].drive_widths[2]),
+        (321, 222)
+    );
+    assert_eq!(
+        s.panels[1].drive_widths, s.panels[0].drive_widths,
+        "같은 유형 = 같은 폭"
+    );
+    // 복원: `colw`는 실제 폴더에 · `drivew`는 내 PC 진입 때 되살아난다.
+    let ps = crate::session::PanelSession {
+        tabs: vec![dir.clone()],
+        col_widths: s.panels[1].col_widths.clone(),
+        drive_widths: s.panels[0].drive_widths.clone(),
+        ..Default::default()
+    };
+    let mut p = Panel::restore(
+        &ps,
+        &dir,
+        list_opts(&app.settings),
+        panel_metrics(&app.settings, 1.0),
+        columns_for(600, 1.0),
+        all_columns_for(600, 1.0),
+    );
+    p.set_default_columns(columns_for(600, 1.0), all_columns_for(600, 1.0), &mut inv);
+    assert_eq!(p.rows().columns()[0].width, 444, "실제 폴더 폭 복원");
+    let _ = p.navigate_to(PathBuf::from(ndir_vfs::MY_PC), &mut inv);
+    let cols = p.rows().columns();
+    assert_eq!((cols[0].width, cols[2].width), (321, 222), "{cols:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
