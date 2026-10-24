@@ -201,6 +201,8 @@ struct Printer {
     total: u64,
     items: usize,
     line_open: bool,
+    /// 마지막으로 본 진행(누적 옮긴 바이트 · 총량) — 스로틀에 걸려 안 찍힌 줄을 항목 끝에 강제로 · 요약의 옮긴 양.
+    seen: Option<(u64, u64)>,
 }
 
 impl Printer {
@@ -212,6 +214,7 @@ impl Printer {
             total: 0,
             items: 0,
             line_open: false,
+            seen: None,
         }
     }
 
@@ -235,6 +238,7 @@ impl Printer {
                 let _ = writeln!(err, "[{}/{}] {}", index + 1, self.items, dest.display());
             }
             Event::Bytes(p) => {
+                self.seen = Some((p.done_bytes, p.total_bytes));
                 let now = Instant::now();
                 if self
                     .last
@@ -243,18 +247,13 @@ impl Printer {
                     return;
                 }
                 self.last = Some(now);
-                let _ = write!(
-                    err,
-                    "\r  {} / {} ({}%) · {}",
-                    human_bytes(p.done_bytes),
-                    human_bytes(p.total_bytes),
-                    percent(p.done_bytes, p.total_bytes),
-                    rate(p.done_bytes, self.started.elapsed())
-                );
-                let _ = err.flush();
-                self.line_open = true;
+                self.progress_line(p.done_bytes, p.total_bytes, err);
             }
             Event::ItemEnd { index, status } => {
+                // 스로틀에 걸려 마지막 진행(100 %)이 안 찍힌 채 끝나지 않게 한 번 강제로(협업 점검 10-24 ①).
+                if let Some((done, total)) = self.seen.filter(|_| self.line_open) {
+                    self.progress_line(done, total, err);
+                }
                 self.end_line(err);
                 let word = match status {
                     ItemStatus::Done => "done",
@@ -264,6 +263,19 @@ impl Printer {
                 let _ = writeln!(err, "[{}/{}] {word}", index + 1, self.items);
             }
         }
+    }
+
+    fn progress_line(&mut self, done: u64, total: u64, err: &mut dyn Write) {
+        let _ = write!(
+            err,
+            "\r  {} / {} ({}%) · {}",
+            human_bytes(done),
+            human_bytes(total),
+            percent(done, total),
+            rate(done, self.started.elapsed())
+        );
+        let _ = err.flush();
+        self.line_open = true;
     }
 
     fn end_line(&mut self, err: &mut dyn Write) {
@@ -281,13 +293,16 @@ impl Printer {
             return;
         }
         self.end_line(err);
+        // 옮긴 바이트(마지막 진행 누적)와 계획 합계를 구분한다(전부 건너뛰면 0 of N · 협업 점검 10-24 ②).
+        let moved = self.seen.map_or(0, |(d, _)| d);
         let _ = writeln!(
             err,
-            "{} transferred · {} skipped · {} failed{} · {} in {}",
+            "{} transferred · {} skipped · {} failed{} · {} of {} planned in {}",
             out.transferred.len(),
             out.skipped.len(),
             out.errors.len(),
             if out.canceled { " · canceled" } else { "" },
+            human_bytes(moved),
             human_bytes(self.total),
             human_secs(elapsed)
         );
@@ -296,7 +311,12 @@ impl Printer {
 
 /// 백분율(순수 · 총량 0 = 100).
 pub(crate) fn percent(done: u64, total: u64) -> u64 {
-    done.saturating_mul(100).checked_div(total).unwrap_or(100)
+    // 반올림(계획 합계에 폴더 자체 크기 등이 섞여 끝에서 99 %로 보이지 않게 · 총량 0 = 100).
+    done.saturating_mul(100)
+        .saturating_add(total / 2)
+        .checked_div(total)
+        .unwrap_or(100)
+        .min(100)
 }
 
 /// 속도 글(순수): 경과 0이면 "-".
@@ -395,6 +415,8 @@ mod tests {
         assert_eq!(human_bytes(5 * 1024 * 1024), "5.0 MiB");
         assert_eq!(percent(0, 0), 100);
         assert_eq!(percent(1, 4), 25);
+        assert_eq!(percent(199, 200), 100);
+        assert_eq!(percent(1, 200), 1);
         assert_eq!(rate(1024, Duration::ZERO), "-");
         assert_eq!(rate(2048, Duration::from_secs(2)), "1.0 KiB/s");
         assert_eq!(human_secs(Duration::from_millis(1500)), "1.5s");
@@ -446,12 +468,18 @@ mod tests {
             text.contains("2 item(s)") && text.contains("2 transferred"),
             "{text}"
         );
+        assert!(text.contains("(100%)"), "마지막 진행 줄 강제 출력: {text}");
+        assert!(text.contains("68.4 KiB of 68.4 KiB planned"), "{text}");
         // 기본 = 건너뜀(종료 0 · 요약에 skipped) · 덮어쓰기.
         fs::write(src.join("one.txt"), b"ONE").expect("write");
         let mut err: Vec<u8> = Vec::new();
         assert_eq!(run(&o, &mut err), ExitCode::SUCCESS);
         assert_eq!(fs::read(dest.join("one.txt")).expect("read"), b"one");
-        assert!(String::from_utf8_lossy(&err).contains("2 skipped"));
+        let text = String::from_utf8_lossy(&err).into_owned();
+        assert!(
+            text.contains("2 skipped") && text.contains("0 B of 68.4 KiB planned"),
+            "{text}"
+        );
         let ov = Options {
             overwrite: true,
             quiet: true,
