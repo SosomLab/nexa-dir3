@@ -39,9 +39,19 @@ jobs:
         with:
           workspaces: nexa-dir3
       # Linux 러너: 한글 글꼴(nexa-font 실측) — 빌드 자체는 시스템 라이브러리 불요(Wayland/X11 dlopen).
+      # apt 미러 지연으로 이 단계만 19~20분 넘게 걸린 일이 두 번(10-25 · 1b7ed98 · 88ceb01 — 협업 관측) → 상한 8분 + 3회 재시도.
+      # 상한에 걸리면 그 run은 빨강(느려도 통과하던 것보다 엄격) — 재시도가 보완한다. 더 근본(.deb 캐시 · 글꼴 파일 고정 URL)은 반복 시.
       - name: fonts (linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-dejavu-core fonts-noto-core
+        timeout-minutes: 8
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get -o Acquire::Retries=3 update \
+              && sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends fonts-noto-cjk fonts-dejavu-core fonts-noto-core \
+              && exit 0
+            echo "apt attempt $i failed"; sleep 10
+          done
+          exit 1
         working-directory: .
 
       - name: fmt
