@@ -97,6 +97,7 @@ fn ctxm_label(block: &str, item: Option<&str>) -> String {
         (_, Some("new")) => tr("ctx.new"),
         (_, Some("deletePermanent")) => tr("ctx.deletePermanent"),
         (_, Some("copyName")) => tr("ctx.copyName"),
+        (_, Some("copyAs")) => tr("ctx.copyAs"),
         (_, Some("pasteInto")) => tr("ctx.pasteInto"),
         (_, Some("copyTo")) => tr("ctx.copyTo"),
         (_, Some("moveTo")) => tr("ctx.moveTo"),

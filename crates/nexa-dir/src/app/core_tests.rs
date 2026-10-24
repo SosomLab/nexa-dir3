@@ -1751,6 +1751,10 @@ fn copy_path_and_name_follow_dir2_menu_rules() {
     let at = got.iter().position(|i| i == "ctx.copy_path").unwrap();
     assert_eq!(at, 1, "셸 항목 자리 그대로: {got:?}");
     assert_eq!(got[at + 1], "ctx.copy_name", "바로 아래: {got:?}");
+    assert!(
+        got.iter().any(|i| i == "ctx.copy_as"),
+        "다른 형식으로 복사 ▸(NEW-055 · 기본 표시): {got:?}"
+    );
     assert_eq!(
         got.iter()
             .filter(|i| *i == "ctx.copy_path" || *i == "ctx.copy_name")
@@ -4353,20 +4357,30 @@ fn order_editor_applies_toolbar_ctxmenu_and_columns() {
         .select_program(0, nexa_grid::SelectOp::Single, &mut inv);
     app.open_row_menu(0);
     let row = app.dump_of("ctx").unwrap();
+    // 항목 id는 토큰으로 본다(`ctx.copy_name_noext`(NEW-055)가 `ctx.copy_name`을 부분 문자열로 품는다).
+    let has = |dump: &str, id: &str| dump.split([' ', '[', ']', '\n']).any(|t| t == id);
     assert!(
-        row.contains("ctx.copy_name")
-            && row.contains("edit.delete_permanent")
+        has(&row, "ctx.copy_name")
+            && has(&row, "edit.delete_permanent")
             && row.contains("ctx.new["),
         "{row}"
     );
+    assert!(
+        has(&row, "ctx.copy_as") && has(&row, "ctx.copy_path_quoted"),
+        "NEW-055 기본 표시: {row}"
+    );
     app.tab_menu.close();
-    app.order_changed("ctxmenu.layout", "row[pasteInto,copyName:0,new:0]|bg:0");
+    app.order_changed(
+        "ctxmenu.layout",
+        "row[pasteInto,copyName:0,copyAs:0,new:0]|bg:0",
+    );
     app.open_row_menu(0);
     let row = app.dump_of("ctx").unwrap();
     assert!(
-        !row.contains("ctx.copy_name")
+        !has(&row, "ctx.copy_name")
+            && !has(&row, "ctx.copy_as")
             && !row.contains("ctx.new")
-            && row.contains("ctx.paste_into"),
+            && has(&row, "ctx.paste_into"),
         "{row}"
     );
     app.tab_menu.close();

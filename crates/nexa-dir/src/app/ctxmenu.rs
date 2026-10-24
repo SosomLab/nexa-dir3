@@ -528,6 +528,17 @@ impl App {
                 "copyName" if !name_anchored => {
                     items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
                 }
+                // 다른 형식으로 복사 ▸(NEW-055 · 10-25 · T-163 추천 3번): 따옴표 경로 · 슬래시 경로 · 확장자 없는 이름 · 폴더 경로.
+                "copyAs" => items.push(CtxItem::submenu(
+                    "ctx.copy_as",
+                    tr("ctx.copyAs"),
+                    vec![
+                        CtxItem::item("ctx.copy_path_quoted", tr("ctx.copyPathQuoted")),
+                        CtxItem::item("ctx.copy_path_unix", tr("ctx.copyPathUnix")),
+                        CtxItem::item("ctx.copy_name_noext", tr("ctx.copyNameNoExt")),
+                        CtxItem::item("ctx.copy_folder", tr("ctx.copyFolder")),
+                    ],
+                )),
                 "pasteInto" => items.push(CtxItem::maybe(
                     "ctx.paste_into",
                     tr("ctx.pasteInto"),
@@ -945,6 +956,20 @@ impl App {
                     .join("\r\n");
                 let _ = clipboard::write_text(&text);
             }
+            // 다른 형식으로 복사(NEW-055).
+            "ctx.copy_path_quoted"
+            | "ctx.copy_path_unix"
+            | "ctx.copy_name_noext"
+            | "ctx.copy_folder" => {
+                let how = match id {
+                    "ctx.copy_path_quoted" => CopyAs::PathQuoted,
+                    "ctx.copy_path_unix" => CopyAs::PathUnix,
+                    "ctx.copy_name_noext" => CopyAs::NameNoExt,
+                    _ => CopyAs::Folder,
+                };
+                let text = copy_as_text(&self.panels[panel].selected_paths_in_view_order(), how);
+                let _ = clipboard::write_text(&text);
+            }
             "new.folder" | "new.file" => {
                 if let Some(dir) = self.ctx_new_dir.take() {
                     let kind = if id == "new.folder" {
@@ -1083,9 +1108,83 @@ impl App {
     }
 }
 
+/// 경로 복사 변형(NEW-055 · 10-25): 선택을 보이는 순서로 · 한 줄에 하나(`ctx.copy_path`와 같은 줄 끝).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum CopyAs {
+    /// `"C:\\a b\\c.txt"` — 빈칸이 든 경로를 명령줄에 그대로 붙일 수 있게.
+    PathQuoted,
+    /// `C:/a/c.txt` — 구분자를 `/`로(URL · Git Bash · 스크립트).
+    PathUnix,
+    /// `c` — 확장자를 뺀 이름(폴더는 이름 그대로 · 숨김 파일 `.gitignore`는 그대로).
+    NameNoExt,
+    /// 항목이 든 폴더의 경로(같은 폴더는 한 번).
+    Folder,
+}
+
+pub(crate) fn copy_as_text(paths: &[PathBuf], how: CopyAs) -> String {
+    let mut lines: Vec<String> = Vec::with_capacity(paths.len());
+    for p in paths {
+        let line = match how {
+            CopyAs::PathQuoted => format!("\"{}\"", p.display()),
+            CopyAs::PathUnix => p.display().to_string().replace('\\', "/"),
+            CopyAs::NameNoExt => {
+                let n = ndir_ops::leaf_name(p);
+                if p.is_dir() {
+                    n
+                } else {
+                    match n.rsplit_once('.') {
+                        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => {
+                            stem.to_string()
+                        }
+                        _ => n,
+                    }
+                }
+            }
+            CopyAs::Folder => p
+                .parent()
+                .map(|d| d.display().to_string())
+                .unwrap_or_default(),
+        };
+        if how == CopyAs::Folder && lines.contains(&line) {
+            continue;
+        }
+        lines.push(line);
+    }
+    lines.join("\r\n")
+}
+
 #[cfg(test)]
 mod tidy_tests {
     use super::*;
+
+    /// 경로 복사 변형(NEW-055): 따옴표 · 슬래시 · 확장자 없는 이름(폴더 · 점 파일은 그대로) · 폴더 경로(중복 1회) · 보이는 순서 · CRLF.
+    #[test]
+    fn copy_as_text_variants() {
+        let d = std::env::temp_dir().join(format!("ndir-copyas-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("v1.2")).unwrap();
+        std::fs::write(d.join("a.b.txt"), b"x").unwrap();
+        std::fs::write(d.join(".gitignore"), b"x").unwrap();
+        let paths = vec![d.join("a.b.txt"), d.join("v1.2"), d.join(".gitignore")];
+        let q = copy_as_text(&paths, CopyAs::PathQuoted);
+        assert_eq!(q.lines().count(), 3);
+        assert!(q.starts_with('"') && q.contains("\r\n\""), "{q}");
+        assert!(q.lines().all(|l| l.starts_with('"') && l.ends_with('"')));
+        let u = copy_as_text(&paths, CopyAs::PathUnix);
+        assert!(!u.contains('\\') && u.contains("/a.b.txt"), "{u}");
+        assert_eq!(
+            copy_as_text(&paths, CopyAs::NameNoExt),
+            "a.b\r\nv1.2\r\n.gitignore",
+            "마지막 점만 · 폴더 그대로 · 점 파일 그대로"
+        );
+        assert_eq!(
+            copy_as_text(&paths, CopyAs::Folder),
+            d.display().to_string(),
+            "같은 폴더 = 한 줄"
+        );
+        assert_eq!(copy_as_text(&[], CopyAs::PathQuoted), "");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     /// 구분선 정리 · 창 높이에 맞춘 행 수(사용자 10-03 "속성 밑에 빈 구분자 2개 · 하단 메뉴 잘림").
     #[test]
