@@ -1090,6 +1090,14 @@ impl App {
                 _ => None,
             });
         self.dirsize_sync(folder.as_deref());
+        // 크기 열(T-166 3차): 보이는 폴더 행 요청 + 캐시값 반영(결과 도착 · 이동 때 이 길목을 지난다).
+        {
+            let mut col_inv = Invalidations::default();
+            self.dirsize_col_sync(&mut col_inv);
+            if !col_inv.is_empty() {
+                self.redraw_inv(&mut col_inv);
+            }
+        }
         for i in 0..2 {
             if self.docks[i].bounds().h <= 0 {
                 continue;

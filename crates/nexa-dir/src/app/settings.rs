@@ -146,6 +146,12 @@ impl App {
                 self.update_docks();
                 self.redraw();
             }
+            // 크기 열에 폴더 크기(T-166 3차): 켜면 보이는 폴더 행을 바로 요청 · 끄면 지도를 비워 빈칸으로.
+            "list.folder_size_col" => {
+                let mut inv = Invalidations::default();
+                self.dirsize_col_sync(&mut inv);
+                self.redraw();
+            }
             "layout.tab_statusbar" => self.layout(),
             "launcher.items" | "launcher.seed" | "launcher.icon_size" | "launcher.item_gap" => {
                 self.rebuild_launcher();

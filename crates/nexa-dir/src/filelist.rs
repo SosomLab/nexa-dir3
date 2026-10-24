@@ -226,6 +226,8 @@ pub(crate) struct TreeSource {
     drive_space_asked: bool,
     /// 잘라내기 대기 경로(dir2 SHELL-044/X-32 — 그 행은 흐리게 · 호스트가 클립보드와 동기).
     cut_marks: std::collections::HashSet<PathBuf>,
+    /// 크기 열에 보일 폴더 크기(T-166 3차 · 10-25): 경로 → (바이트, 읽지 못한 폴더 있음). 호스트가 보이는 행만큼 넘긴다 · 비면 빈칸.
+    dir_sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
     no_icons: bool,
     /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
@@ -254,6 +256,7 @@ impl TreeSource {
             drive_space: std::collections::HashMap::new(),
             drive_space_asked: false,
             cut_marks: std::collections::HashSet::new(),
+            dir_sizes: std::collections::HashMap::new(),
             no_icons: false,
             probe_cache: Default::default(),
             probe_inbox: Default::default(),
@@ -364,6 +367,18 @@ impl TreeSource {
         let changed = self.no_icons == on;
         self.no_icons = !on;
         changed
+    }
+
+    /// 크기 열의 폴더 크기 지도 교체(T-166 3차) — 바뀌었으면 true(호스트가 목록 무효화).
+    pub(crate) fn set_dir_sizes(
+        &mut self,
+        sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
+    ) -> bool {
+        if self.dir_sizes == sizes {
+            return false;
+        }
+        self.dir_sizes = sizes;
+        true
     }
 
     /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
@@ -950,7 +965,20 @@ impl RowSource for TreeSource {
                 _ => String::new(),
             },
             COL_STATUS => status_label(self.status_of(index)),
-            COL_SIZE if r.kind == FileKind::Dir => String::new(),
+            // 폴더 크기(T-166 3차): 호스트가 넘긴 지도에 있으면 보인다(읽지 못한 폴더가 있었으면 "≥") · 없으면 종전처럼 빈칸.
+            COL_SIZE if r.kind == FileKind::Dir => {
+                if self.dir_sizes.is_empty() {
+                    return String::new();
+                }
+                match self
+                    .row_path(index)
+                    .and_then(|p| self.dir_sizes.get(&p).copied())
+                {
+                    Some((bytes, false)) => format_size(bytes),
+                    Some((bytes, true)) => format!("\u{2265} {}", format_size(bytes)),
+                    None => String::new(),
+                }
+            }
             COL_SIZE => format_size(r.size),
             COL_MODIFIED => format_time_local(r.modified_unix_ms),
             COL_KIND

@@ -579,6 +579,8 @@ pref.sortFoldersFirst = Sort folders first
 pref.sortFoldersFirst.desc = Group folders before files regardless of sort order. This is the default for new tabs; open tabs keep their own value, changed with the toolbar toggle.
 pref.hideEmptyGlyph = Hide expand glyph for empty folders
 pref.hideEmptyGlyph.desc = Hide the tree expand glyph when a folder has nothing to show under the current view (hidden/dot filters). Re-appears when the view options reveal content.
+pref.folderSizeCol = Show folder sizes in the Size column
+pref.folderSizeCol.desc = Measures the folders currently visible in the list in the background and shows their total size in the Size column (≥ marks a folder that could not be read completely). Folders you are looking at in the info pane are measured first. Reads the disk for every listed folder, so it is off by default; requires folder size calculation and is off in performance boost mode.
 pref.listAsyncRead = Read folders in the background
 pref.listAsyncRead.desc = Enumerate the folder on a worker thread when entering, going back/forward or up, so large or network folders do not freeze the window. The previous list stays until the new one is ready. Off = read on the UI thread as before.
 pref.listAsyncWait = Background read threshold (ms)

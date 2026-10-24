@@ -2404,6 +2404,40 @@ impl Panel {
         }
     }
 
+    /// 활성 탭의 **보이는 폴더 행** 경로(T-166 3차 · 크기 열) — 가상 루트(내 PC)는 없음(드라이브 전체를 재지 않는다).
+    pub(crate) fn visible_dir_paths(&self) -> Vec<PathBuf> {
+        let rows = self.rows();
+        let src = rows.source();
+        if ndir_vfs::is_virtual_root(src.path()) {
+            return Vec::new();
+        }
+        let (s, e) = rows.viewport();
+        (s..e)
+            .filter(|&i| src.row_is_dir(i))
+            .filter_map(|i| src.row_path(i))
+            .collect()
+    }
+
+    /// 크기 열의 폴더 크기 지도(T-166 3차): 활성 탭에 넘기고(바뀌면 목록 무효화) · 빈 지도면 모든 탭을 비운다(설정 끔).
+    pub(crate) fn set_dir_sizes(
+        &mut self,
+        sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
+        inv: &mut Invalidations,
+    ) {
+        if sizes.is_empty() {
+            for tab in &mut self.tabs {
+                if tab.rows.source_mut().set_dir_sizes(Default::default()) {
+                    inv.push(tab.rows.bounds());
+                }
+            }
+            return;
+        }
+        let tab = &mut self.tabs[self.active];
+        if tab.rows.source_mut().set_dir_sizes(sizes) {
+            inv.push(tab.rows.bounds());
+        }
+    }
+
     pub(crate) fn set_view_mode(&mut self, mode: ViewMode, inv: &mut Invalidations) {
         self.tabs[self.active].rows.set_view_mode(mode, inv);
     }

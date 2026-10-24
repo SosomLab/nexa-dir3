@@ -230,6 +230,20 @@ impl DirSizes {
         }
     }
 
+    /// 크기 열용 요청(T-166 3차 · 10-25): **뒤쪽** 큐에(도크의 폴더가 앞) · 멈춤 판정 없음 · 이미 알거나 기다리는 경로는 무시 ·
+    /// 큐가 상한이면 넣지 않는다(보이는 폴더가 많아도 큐를 밀어내지 않는다 — 스크롤하면 다시 요청된다).
+    pub(crate) fn request_back(&mut self, path: &Path) {
+        if self.cache.contains_key(path)
+            || self.running.iter().any(|j| j.path == path)
+            || self.queue.iter().any(|p| p == path)
+            || self.queue.len() >= self.tuning.queue_max
+        {
+            return;
+        }
+        self.queue.push_back(path.to_path_buf());
+        self.fill();
+    }
+
     /// 큐 맨 앞에(이미 있으면 앞으로 옮김) · 상한을 넘으면 뒤(가장 오래된 것)부터 버림.
     fn enqueue_front(&mut self, path: PathBuf) {
         self.queue.retain(|p| *p != path);
@@ -457,6 +471,33 @@ impl App {
         self.dirsizes.set_tuning(t);
     }
 
+    /// 크기 열에 폴더 크기를 보이는가 — `list.folder_size_col`(기본 off) × 폴더 크기 계산 자체(`dock.folder_size` · 성능 향상 모드면 off).
+    pub(crate) fn dirsize_col_enabled(&self) -> bool {
+        self.dirsize_enabled() && self.settings.flag("list.folder_size_col")
+    }
+
+    /// 크기 열 동기(T-166 3차 · 10-25): 각 패널의 **보이는 폴더 행**을 뒤쪽 큐로 요청하고(이미 잰 것은 제외) 캐시된 값의 지도를
+    /// 목록 원천에 넘긴다(바뀐 패널의 목록 사각형 = `inv`). 꺼져 있으면 지도를 비운다(열은 빈칸). 그리기 직전(스크롤로 드러난 행)과
+    /// 도크 갱신 길목(결과 도착 · 이동)에서 부른다 — 파일 시스템은 건드리지 않는다(측정은 작업 스레드).
+    pub(crate) fn dirsize_col_sync(&mut self, inv: &mut Invalidations) {
+        let on = self.dirsize_col_enabled();
+        for i in 0..2 {
+            let mut map = std::collections::HashMap::new();
+            if on && (i == 0 || self.dual) {
+                for p in self.panels[i].visible_dir_paths() {
+                    match self.dirsizes.get(&p) {
+                        SizeState::Done(d) => {
+                            map.insert(p, (d.bytes, d.partial));
+                        }
+                        SizeState::Unknown => self.dirsizes.request_back(&p),
+                        SizeState::Running(_) | SizeState::Queued => {}
+                    }
+                }
+            }
+            self.panels[i].set_dir_sizes(map, inv);
+        }
+    }
+
     /// 도크 갱신 길목: 정보 도크가 보여 줄 폴더 1개가 있으면 그 크기를 요청(빠른 이동 중이면 보류) · 없으면 보류만 버림 ·
     /// 설정이 꺼져 있으면 전부 멈춤.
     pub(crate) fn dirsize_sync(&mut self, folder: Option<&Path>) {
@@ -499,6 +540,47 @@ mod tests {
     /// 표시 조절(MC/DC · 10-08 프레임 계측): 전이 = 즉시 · 재는 중 + 첫 표시 = 즉시 · 재는 중 + 250 ms 안 = 아니다 · 재는 중 + 250 ms
     /// 지남 = 예 · 유휴 + 전이 없음 = 아니다. `take_display_due`는 참 뒤 바로 다시 부르면 거짓(보여 줬다로 기록).
     /// 캐시 상한(T-189 ⑦): 넘으면 먼저 넣은 것부터 버림 · 같은 경로 다시 넣기 = 순서 그대로 · 무효화 · 비우기는 순서도.
+    /// `request_back`(T-166 3차): 뒤쪽에 · 중복 없음 · 캐시/진행 중 무시 · 큐가 상한이면 넣지 않음(앞쪽 요청은 밀어낸다).
+    #[test]
+    fn request_back_appends_without_evicting() {
+        let mut d = DirSizes::default();
+        d.set_tuning(Tuning {
+            threads: 1,
+            queue_max: 3,
+            settle_ms: 0,
+        });
+        let p = |n: usize| PathBuf::from(format!("/q/{n}"));
+        d.request_back(&p(0)); // 슬롯 1개를 차지(틱 전까지 진행 중) → 이후 요청은 큐에만
+        assert_eq!(d.running.len(), 1);
+        d.request_back(&p(1));
+        d.request_back(&p(2));
+        d.request_back(&p(1));
+        assert_eq!(
+            d.queue.iter().cloned().collect::<Vec<_>>(),
+            vec![p(1), p(2)],
+            "뒤에 · 중복 없음"
+        );
+        d.request(&p(9), Instant::now()); // 도크 요청 = 앞
+        assert_eq!(d.queue.front(), Some(&p(9)));
+        d.request_back(&p(3)); // 상한 3 = 넣지 않음
+        assert_eq!(d.queue.len(), 3);
+        assert!(!d.queue.contains(&p(3)));
+        assert_eq!(d.get(&p(2)), SizeState::Queued);
+        d.request_back(&p(0)); // 진행 중 = 무시
+        assert_eq!(d.queue.len(), 3);
+        d.remember(
+            p(5),
+            DirSize {
+                bytes: 1,
+                files: 1,
+                dirs: 0,
+                partial: false,
+            },
+        );
+        d.request_back(&p(5)); // 캐시 = 무시
+        assert!(!d.queue.contains(&p(5)));
+    }
+
     #[test]
     fn cache_is_bounded_oldest_first() {
         let mut d = DirSizes::default();

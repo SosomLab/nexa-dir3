@@ -1540,6 +1540,16 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 5000 },
         "250"
     ),
+    // 크기 열에 폴더 크기(dir3 신규 · T-166 3차 · 10-25 · 분류는 목록이지만 DEPENDS 부모 `dock.folder_size` 뒤에 등재): 보이는 폴더 행을 뒤쪽 큐로 재어 크기 열에 — 기본 off(목록마다 디스크를 읽는다) ·
+    //   폴더 크기 계산(`dock.folder_size`)이 켜져 있어야 하고 성능 향상 모드에서는 꺼진다.
+    e!(
+        "list.folder_size_col",
+        CAT_LIST,
+        "pref.folderSizeCol",
+        "pref.folderSizeCol.desc",
+        Bool,
+        "off"
+    ),
     // 도크 갱신 미루기 최대 지연(T-189 ① · 10-18 구조 점검): 선택이 쉬지 않고 바뀌어도(마우스 끌기 · 키 반복) 첫 요청부터 이 시간이
     //   지나면 한 번은 갱신한다 · 0 = 상한 없음(종전 — 멈출 때까지 미룸).
     e!(
@@ -2370,6 +2380,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("statusbar.load_interval_ms", "perf.boost", Dep::Eq("off")),
     // 성능 향상 모드가 켜져 있을 때의 행 아이콘 · 메뉴 아이콘 · 폴더 크기는 잠금이 아니라 **강제 값**(`FORCES` · 유효값 = off).
     ("dock.folder_size_threads", "dock.folder_size", Dep::On),
+    ("list.folder_size_col", "dock.folder_size", Dep::On),
     ("dock.folder_size_queue", "dock.folder_size", Dep::On),
     ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
@@ -2416,6 +2427,7 @@ pub const FORCES: &[(&str, &str, Dep, &str)] = &[
     ("list.row_icons", "perf.boost", Dep::On, "off"),
     ("menu.icons", "perf.boost", Dep::On, "off"),
     ("dock.folder_size", "perf.boost", Dep::On, "off"),
+    ("list.folder_size_col", "perf.boost", Dep::On, "off"),
     // 창 투명도(DR-22 · T-102): 성능 향상 모드 = 불투명.
     ("window.transparency", "perf.boost", Dep::On, "0"),
     ("window.transparency_blur", "perf.boost", Dep::On, "0"),

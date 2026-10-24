@@ -576,6 +576,8 @@ pref.sortFoldersFirst = 폴더 우선 정렬
 pref.sortFoldersFirst.desc = 정렬 방향과 무관하게 폴더를 파일보다 앞에 모읍니다. 새 탭의 기본값입니다 — 이미 열린 탭은 도구 모음의 토글로 탭마다 바꿉니다.
 pref.hideEmptyGlyph = 빈 폴더의 펼침 글리프 숨김
 pref.hideEmptyGlyph.desc = 현재 보기(숨김/점 파일 필터)로 보여줄 내용이 없는 폴더는 트리 펼침 글리프를 그리지 않습니다. 보기 옵션 변경으로 내용이 보이면 다시 표시됩니다.
+pref.folderSizeCol = 크기 열에 폴더 크기 표시
+pref.folderSizeCol.desc = 목록에 지금 보이는 폴더들을 뒤에서 재어 합계를 크기 열에 보입니다(≥ = 끝까지 읽지 못한 폴더). 정보 도크에서 보고 있는 폴더가 먼저 측정됩니다. 목록의 폴더마다 디스크를 읽으므로 기본은 꺼짐이며, 폴더 크기 계산이 켜져 있어야 하고 성능 향상 모드에서는 꺼집니다.
 pref.listAsyncRead = 폴더를 백그라운드에서 읽기
 pref.listAsyncRead.desc = 진입 · 뒤로/앞으로 · 위로 때 폴더 열거를 워커 스레드에서 해 큰 폴더나 네트워크 폴더가 창을 멈추지 않게 합니다. 새 목록이 준비될 때까지 이전 목록이 남습니다. 끄면 종전처럼 UI 스레드에서 읽습니다.
 pref.listAsyncWait = 백그라운드 읽기 문턱(ms)

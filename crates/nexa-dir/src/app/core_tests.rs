@@ -10215,3 +10215,62 @@ fn ops_err_text_maps_engine_vocabulary_to_i18n() {
     let os = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Access is denied");
     assert_eq!(ops_err_text(&os), "Access is denied");
 }
+
+/// 크기 열에 폴더 크기(T-166 3차 · `list.folder_size_col` 기본 off · 10-25): 켜면 보이는 폴더 행이 뒤쪽 큐로 측정되고 끝나면 크기 열에
+/// 합계("2.0 KB") · 파일 행은 그대로 · 끄면 빈칸 · 성능 향상 모드 = 유효값 off.
+#[test]
+fn size_column_shows_folder_sizes_when_enabled() {
+    use crate::filelist::COL_SIZE;
+    use nexa_grid::RowSource;
+    let (mut app, dir) = fixture("dirsizecol");
+    let sub = dir.join("pack");
+    std::fs::create_dir_all(sub.join("inner")).expect("mkdir");
+    std::fs::write(sub.join("a.bin"), vec![0u8; 1500]).expect("write");
+    std::fs::write(sub.join("inner").join("b.bin"), vec![0u8; 548]).expect("write");
+    std::fs::write(dir.join("f.txt"), vec![0u8; 3]).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let row_of = |app: &App, path: &std::path::Path| {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .find(|&i| src.row_path(i).as_deref() == Some(path))
+            .expect("row")
+    };
+    let cell = |app: &App, path: &std::path::Path| {
+        let src = app.panels[0].rows().source();
+        src.cell(row_of(app, path), COL_SIZE)
+    };
+    assert!(!app.settings.flag("list.folder_size_col"), "기본 off");
+    assert!(
+        !app.panels[0].visible_dir_paths().is_empty(),
+        "보이는 폴더 행"
+    );
+    let mut inv = Invalidations::default();
+    app.dirsize_col_sync(&mut inv);
+    assert!(!app.dirsizes.running(), "off = 요청 없음");
+    assert_eq!(cell(&app, &sub), "", "off = 빈칸");
+    // 켬 → 보이는 폴더 행 측정 → 크기 열.
+    let _ = app.settings.set("list.folder_size_col", "on");
+    app.after_setting_changed("list.folder_size_col");
+    assert!(app.dirsizes.running(), "보이는 폴더 행 = 측정 요청");
+    let at = std::time::Instant::now();
+    while app.dirsize_tick() {
+        assert!(at.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let mut inv = Invalidations::default();
+    app.dirsize_col_sync(&mut inv); // 결과 반영(도크 길목과 같은 호출)
+    assert_eq!(cell(&app, &sub), "2.0 KB");
+    assert_eq!(cell(&app, &dir.join("f.txt")), "3 B", "파일 행은 종전대로");
+    // 끔 → 빈칸 · 측정 없음.
+    let _ = app.settings.set("list.folder_size_col", "off");
+    app.after_setting_changed("list.folder_size_col");
+    assert_eq!(cell(&app, &sub), "");
+    // 성능 향상 모드 → 유효값 off(FORCES).
+    let _ = app.settings.set("list.folder_size_col", "on");
+    assert!(app.dirsize_col_enabled());
+    let _ = app.settings.set("perf.boost", "on");
+    assert!(!app.dirsize_col_enabled(), "성능 향상 모드 = off");
+    let _ = std::fs::remove_dir_all(&dir);
+}

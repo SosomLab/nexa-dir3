@@ -227,6 +227,11 @@ impl App {
     pub(crate) fn paint_into(&mut self, dc: &mut dyn DrawCtx, wi: i32, hi: i32, s: f32) {
         let th = self.theme;
         dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
+        // 크기 열의 폴더 크기(T-166 3차): 스크롤로 드러난 행을 그리기 직전에 요청/반영(무효화는 지금 그리는 프레임이 덮는다).
+        if self.dirsize_col_enabled() {
+            let mut col_inv = Invalidations::default();
+            self.dirsize_col_sync(&mut col_inv);
+        }
         // 본문
         self.panels[0].paint(dc, &th);
         if self.dual {
