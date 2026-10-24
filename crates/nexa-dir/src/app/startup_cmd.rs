@@ -756,8 +756,21 @@ impl App {
             .iter()
             .map(|(k, d)| format!("{k}{}", if *d { "-" } else { "+" }))
             .collect();
+        // 경로 제안 팝업(T-106 2/2 · nexa-ui 224 `PathBar::suggestions`): `closed` · `open sel <n|-> items [a, b]`(항목 = 잎 이름).
+        let suggest = match p.pathbar.suggestions() {
+            None => "closed".to_string(),
+            Some((items, sel)) => format!(
+                "open sel {} items [{}]",
+                sel.map_or("-".to_string(), |i| i.to_string()),
+                items
+                    .iter()
+                    .map(|s| ndir_ops::leaf_name(std::path::Path::new(s)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
         format!(
-            "panel{i} path {} tabs {} active {} rows {} selected {} caret {:?} mode {:?} sort [{}] back {} forward {} editing {}\n",
+            "panel{i} path {} tabs {} active {} rows {} selected {} caret {:?} mode {:?} sort [{}] back {} forward {} editing {} suggest {}\n",
             p.root_path().display(),
             p.tab_count(),
             p.active_index(),
@@ -768,7 +781,8 @@ impl App {
             sort.join(","),
             p.can_back(),
             p.can_forward(),
-            p.pathbar.is_editing()
+            p.pathbar.is_editing(),
+            suggest
         )
     }
 

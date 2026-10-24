@@ -1,0 +1,22 @@
+# T4 · GAP-013 경로 자동완성 + CI-106 덤프 어휘(T-106 2/2 · 10-24): 우클릭 = 편집 시작 → 전체 선택 → "<root>/s" 입력 = 하위 폴더 sub 제안 →
+# ↓ = 선택 0 → Esc = 팝업만 닫힘(편집 유지). 제안 항목은 잎 이름으로 덤프된다.
+id: path-suggest
+title: 경로 제안 팝업 덤프 · ↓ 선택 · Esc 닫기
+tree: dir sub
+tree: dir second
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:assert.panel:suggest closed
+cmd: @ready:ui.rclick:@panel0.path
+cmd: @ready:assert.panel:editing true
+cmd: @ready:ui.key:ctrl+a
+cmd: @ready:ui.type:<root>/s
+cmd: @ready:panel.dump:<out>/open.txt
+cmd: @ready:ui.press:down
+cmd: @ready:panel.dump:<out>/down.txt
+cmd: @ready:ui.press:escape
+cmd: @ready:panel.dump:<out>/esc.txt
+cmd: @ready:quit
+check: open.txt: suggest open sel - items [second, sub]
+check: down.txt: suggest open sel 0 items [second, sub]
+check: esc.txt: editing true suggest closed

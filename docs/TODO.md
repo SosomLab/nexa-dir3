@@ -121,7 +121,7 @@
 | T-103 | Linux 첫 실기 확인(사용자) — 쉐브론 크기·모양(✅ 선 쉐브론 §98) · 경로 바 `/` 표시·세그먼트 클릭(nexa-ui 122) · 내 PC 목록(§95 NEW-015 · 용량 열) · Alt+←/→/↑ · Enter · Alt+↓(§93) → 결과로 후속 결정 | P0 | 소 | — | NEW-015 · GAP-008 | 🚧 10-03(쉐브론 ✅ · 나머지 확인 대기) |
 | T-104 | Linux 아이콘 — 런처 바 아이콘(지금 글자 "VS" · "Te") · 파일 행 아이콘(지금 기본 도형) — freedesktop 아이콘 테마 조회(nexa-fs) | P1 | 중 | T-103 | UIX-033 | ✅ 10-03 §97(파일 행 = 아이콘 테마) · §110(런처 바 = .desktop/테마 앱 아이콘 · nexa-ui 128) |
 | T-105 | 경로 바 IME 조합 창 위치(`edit_info` 연결) | P1 | 소 | — | GAP-014 | ✅ 10-05 §11(2cc7c11 · 화면 판정 대기) |
-| T-106 | 하네스: 기동 명령 `ui.key`를 `App::key_chord` 경로로(타이핑·메뉴 통과 규칙까지) · 경로 제안 팝업 덤프 어휘 | P1 | 소 | — | CI-106 | 🚧 1/2 10-24 §4(3926ad6 · `ui.key` = `App::key_chord` + 미처리 키 컨트롤로) · 남음 = 경로 제안 팝업 덤프 어휘 |
+| T-106 | 하네스: 기동 명령 `ui.key`를 `App::key_chord` 경로로(타이핑·메뉴 통과 규칙까지) · 경로 제안 팝업 덤프 어휘 | P1 | 소 | — | CI-106 | ✅ 10-24 §14(1/2 = 3926ad6 `ui.key` 실제 키 경로 · 2/2 = `panel` 덤프 `suggest` 칸 · nexa-ui 224 `PathBar::suggestions` · T3 `panel_dump_reports_path_suggestions` · T4 `path-suggest.scn`) |
 | T-107 | 터미널 2차 — 셸 인자 · 에이전트 env(`NO_COLOR` · `CLAUDE_*`) 차단 · `term.color` vs 사용자 NO_COLOR(결정 대기) · WT 2차(색 구성표 · 커서/여백) | P1 | 중 | — | NEW-012 · DR-21 | ✅ 8ef5a29(10-06 · §85 · PTY 셸에 `NO_COLOR` · `CLAUDECODE` · `CLAUDE_*` 차단 · 시험 `blocklist_rules_and_env_filter` · 10-05 §4 글꼴 크기 통일 716f0b3 포함) |
 | T-108 | 툴바 배치 초기화 명령 · 플로팅 창 | P2 | 소 | — | NEW-010 | 🚧 1/2 10-24 §5(e4ea8fb · `view.toolbar_reset` · 배치 2키만 기본값 · 모양 유지) · 남음 = 플로팅 창 |
 | T-109 | 벡터 쉐브론(글꼴 글리프 대신 그리기 — nexa-grid 추가 · OS 간 모양 통일) | P2 | 소 | T-103 | — | ✅ 10-03 §98(nexa-ui 123 `set_marker_vector` · 아이콘 글꼴 없는 OS만 · 사용자 "해결") |

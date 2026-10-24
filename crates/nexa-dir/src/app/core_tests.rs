@@ -8155,6 +8155,33 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }
 
+/// 경로 제안 팝업 덤프 어휘(T-106 2/2 · CI-106 · nexa-ui 224): `panel` 덤프 `suggest closed` / `open sel <n|-> items [잎 이름…]` — 우클릭으로
+/// 편집 시작 → `ui.key:ctrl+a` → `ui.type:<폴더>/s` = 하위 폴더 `sub` 제안 · `ui.press:down` = 선택 0 · `ui.press:escape` = 닫힘(편집 유지) ·
+/// `assert.panel:` 어휘로도 판정.
+#[test]
+fn panel_dump_reports_path_suggestions() {
+    let (mut app, dir) = fixture("suggestdump");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app
+        .dump_of("panel")
+        .expect("dump")
+        .contains("suggest closed"));
+    app.startup_cmd("ui.rclick:@panel0.path");
+    assert!(app.panels[0].pathbar.is_editing(), "우클릭 = 편집 시작");
+    app.startup_cmd("ui.key:ctrl+a");
+    app.startup_cmd(&format!("ui.type:{}/s", dir.display()));
+    let d = app.dump_of("panel").expect("dump");
+    assert!(d.contains("suggest open sel - items [sub]"), "{d}");
+    assert!(app.assert_dump("panel", "suggest open"));
+    app.startup_cmd("ui.press:down");
+    let d = app.dump_of("panel").expect("dump");
+    assert!(d.contains("suggest open sel 0 items [sub]"), "{d}");
+    app.startup_cmd("ui.press:escape");
+    let d = app.dump_of("panel").expect("dump");
+    assert!(d.contains("editing true suggest closed"), "{d}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// settings.json 편집(T-44 잔여 · nexa-sql 차용): [편집 JSON…] = 전체 설정을 `settings.json`으로 내보내고 감시 시작(창 없는 시험은
 /// 열기 생략) · 파일을 고쳐 저장하면 1 s 틱이 바뀐 키만 반영(저장 · 상태줄 · 로그) · 안 바뀌면 아무 일 없음 · 깨진 JSON = 오류 안내.
 #[test]
