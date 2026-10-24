@@ -27,14 +27,21 @@ pub(crate) fn mirror_plan(
             filter.allows(name, is_dir)
         });
     }
-    Ok(compare::plan(
-        &entries,
-        src,
-        dst,
-        Direction::LeftToRight,
-        true,
-        None,
-    ))
+    let mut plan = compare::plan(&entries, src, dst, Direction::LeftToRight, true, None);
+    // 표시용 구분자 정리(협업 점검 10-25 `dst\\sub/gone.log`): compare의 상대 경로는 `/` — OS 구분자로 다시 조립한다(동작은 같다).
+    for (a, b, _) in &mut plan.copies {
+        *a = normalize_sep(a);
+        *b = normalize_sep(b);
+    }
+    for d in &mut plan.deletes {
+        *d = normalize_sep(d);
+    }
+    Ok(plan)
+}
+
+/// 경로의 구분자를 이 OS 것으로(`components()` 재조립 · 순수).
+fn normalize_sep(p: &Path) -> PathBuf {
+    p.components().collect()
 }
 
 /// 사용자 홈(환경 변수 · 없으면 None).
@@ -316,6 +323,16 @@ mod tests {
         assert_eq!(acts.iter().filter(|a| **a == "overwrite").count(), 1);
         assert_eq!(acts.iter().filter(|a| **a == "delete").count(), 1);
         assert!(rows.iter().any(|r| r.ends_with("extra.tmp")));
+        let sep = std::path::MAIN_SEPARATOR;
+        assert!(
+            plan.copies.iter().all(|(a, b, _)| {
+                let (a, b) = (a.to_string_lossy(), b.to_string_lossy());
+                !a.contains(if sep == '/' { '\\' } else { '/' })
+                    && !b.contains(if sep == '/' { '\\' } else { '/' })
+            }),
+            "구분자 섞임 없음: {:?}",
+            plan.copies
+        );
         let f = NameFilter {
             include: vec![],
             exclude: vec!["*.log".into(), "*.tmp".into()],
