@@ -1022,6 +1022,9 @@ pref.rangeClamped = Because of “{0}”, the allowed range is now {1}..{2} — 
 pref.value.on = On
 pref.value.off = Off
 pref.advancedHidden = {0} advanced setting(s) hidden — turn on Advanced
+pref.changedOnly = Changed
+pref.noChanged = No settings differ from their defaults
+pref.hiddenChanged = {0} changed setting(s) are in categories not shown here
 keys.title = Shortcuts
 keys.hint = Select a command and press Assign, then press the key combination.\nEsc cancels · Clear = no shortcut · Reset = platform defaults.
 keys.btn.assign = Assign

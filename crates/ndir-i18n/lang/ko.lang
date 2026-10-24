@@ -1021,6 +1021,9 @@ pref.rangeClamped = ‘{0}’ 때문에 지금 허용 범위는 {1}..{2} — 적
 pref.value.on = 켬
 pref.value.off = 끔
 pref.advancedHidden = 고급 설정 {0}개 숨김 — 고급을 켜세요
+pref.changedOnly = 변경
+pref.noChanged = 기본값과 다른 설정이 없습니다
+pref.hiddenChanged = 변경된 설정 {0}개는 이 창에 없는 분류입니다
 keys.title = 단축키
 keys.hint = 명령을 고르고 [지정]을 누른 뒤 키 조합을 누르세요.\nEsc = 취소 · 비우기 = 단축키 없음 · 초기화 = 플랫폼 기본.
 keys.btn.assign = 지정

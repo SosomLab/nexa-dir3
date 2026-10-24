@@ -112,6 +112,13 @@ impl App {
             self.prefs_win.select_category(cat);
             return;
         }
+        // 설정 창 "변경" 보기 켜기/끄기(`prefs.filter:changed|all` · T-194 · nexa-sql 같은 어휘) — 자체 시험용.
+        if let Some(mode) = id.strip_prefix("prefs.filter:") {
+            self.open_prefs = true;
+            self.refresh_prefs();
+            self.prefs_win.set_changed_only(mode.trim() == "changed");
+            return;
+        }
         // OS 파일 열기 흉내(T3/T4 · nexa-sys `open_files::simulate` → 바로 펌프 · 10-18): `os.open:<경로>`.
         if let Some(spec) = id.strip_prefix("os.open:") {
             nexa_sys::open_files::simulate([std::path::PathBuf::from(spec.trim())]);
@@ -564,10 +571,11 @@ impl App {
                 self.statusbar.right()
             ),
             "prefs" => format!(
-                "open {} keys {:?}\nplugins {:?}\n",
+                "open {} keys {:?}\nplugins {:?}\nchanged_only {}\n",
                 self.prefs_win.is_open(),
                 self.prefs_win.shown_keys(),
-                self.prefs_win.plugin_states()
+                self.prefs_win.plugin_states(),
+                self.prefs_win.changed_only()
             ),
             "term" => self.term_dump(),
             "check" => self.check_win.table(),

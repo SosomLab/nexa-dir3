@@ -183,6 +183,12 @@ pub(crate) struct PrefsWin {
     notes: std::collections::HashMap<String, String>,
     vtree: Vec<(&'static str, Vec<&'static str>)>,
     advanced: Switch,
+    /// "변경" 보기 스위치(nexa-sql 10-11 · 사용자 10-24): 켜면 기본값과 다른 설정만 — 트리 선택과 무관하게 전부 · 고급 여부 무관.
+    changed: Switch,
+    /// "변경" 보기를 **켜는 순간**의 바뀐 키 집합(고정) — 값을 고치는 동안 카드가 사라지지 않는다(nexa-sql과 같은 규약) · `None` = 꺼짐.
+    changed_keys: Option<std::collections::HashSet<&'static str>>,
+    /// 카드 목록 위 안내 한 줄(고급 숨김 수 · 변경 없음 · 숨은 분류의 변경 수).
+    note: Option<String>,
     json_btn: Button,
     close_btn: Button,
     cards: Vec<Card>,
@@ -301,6 +307,8 @@ impl PrefsWin {
         self.search.set_text(&query);
         let adv = self.advanced.is_on();
         self.advanced = Switch::new(tr("pref.advanced"), adv).with_label_side(LabelSide::Right);
+        let chg = self.changed.is_on();
+        self.changed = Switch::new(tr("pref.changedOnly"), chg).with_label_side(LabelSide::Right);
         self.json_btn.set_label(tr("pref.btn.json"));
         self.close_btn.set_label(tr("pref.btn.close"));
         self.plugin_install.set_label(tr("pref.plugins.install"));
@@ -358,6 +366,9 @@ impl PrefsWin {
             search: TextBox::new(tr("pref.search.placeholder")).with_clearable(),
             tree: TreeView::new(model),
             advanced: Switch::new(tr("pref.advanced"), false).with_label_side(LabelSide::Right),
+            changed: Switch::new(tr("pref.changedOnly"), false).with_label_side(LabelSide::Right),
+            changed_keys: None,
+            note: None,
             json_btn: Button::new(tr("pref.btn.json")),
             close_btn: Button::new(tr("pref.btn.close")),
             cards: Vec::new(),
@@ -581,9 +592,11 @@ impl PrefsWin {
             .and_then(|c| c.lock_reason.clone())
     }
 
-    /// 지금 선택/검색에 맞는 카드 목록을 만든다.
+    /// 지금 선택/검색에 맞는 카드 목록을 만든다 — "변경" 보기가 켜져 있으면 바뀐 키만(검색어가 있으면 그 안에서 · 없으면 전 분류).
     fn rebuild_cards(&mut self) {
         let adv = self.advanced.is_on();
+        let changed_on = self.changed_keys.is_some();
+        let in_set = |key: &str| self.changed_keys.as_ref().is_some_and(|k| k.contains(key));
         let q = self.query.trim().to_lowercase();
         let mut chosen: Vec<Snap> = Vec::new();
         let mut adv_hidden = 0usize;
@@ -605,10 +618,25 @@ impl PrefsWin {
                     continue; // 내부 전용 — 검색에도 안 나온다
                 }
                 if hay.contains(&q) {
-                    if !adv && ndir_settings::is_advanced(sn.entry.key) {
-                        adv_hidden += 1;
-                        continue;
+                    match card_pass(
+                        changed_on,
+                        in_set(sn.entry.key),
+                        adv,
+                        ndir_settings::is_advanced(sn.entry.key),
+                    ) {
+                        Pass::Show => chosen.push(sn.clone()),
+                        Pass::HiddenAdvanced => adv_hidden += 1,
+                        Pass::HiddenUnchanged => {}
                     }
+                }
+            }
+        } else if changed_on {
+            // "변경" = 트리 선택과 무관하게 전부(바뀐 것만 · 분류 머리글로 묶인다 · 고급 여부 무관 · nexa-sql 10-11).
+            for sn in &self.snap {
+                if self.hidden.contains(&sn.entry.cat) || ndir_settings::is_internal(sn.entry.key) {
+                    continue;
+                }
+                if in_set(sn.entry.key) {
                     chosen.push(sn.clone());
                 }
             }
@@ -635,7 +663,30 @@ impl PrefsWin {
         }
         chosen.sort_by_key(|s| ndir_settings::display_order(s.entry.key));
         self.adv_hidden = adv_hidden;
-        let show_cat = !q.is_empty() || self.sel.1.is_none();
+        // 안내 한 줄: 변경 켬 = 없음 안내 / 창에 카드가 없는 숨은 키(숨긴 분류 · 내부)의 변경 수 · 변경 꺼짐 = 고급 숨김 수.
+        self.note = if changed_on {
+            let hidden_changed = self
+                .snap
+                .iter()
+                .filter(|sn| {
+                    sn.modified
+                        && (self.hidden.contains(&sn.entry.cat)
+                            || ndir_settings::is_internal(sn.entry.key))
+                })
+                .count();
+            if chosen.is_empty() {
+                Some(tr("pref.noChanged"))
+            } else if hidden_changed > 0 {
+                Some(trf("pref.hiddenChanged", &[&hidden_changed.to_string()]))
+            } else {
+                None
+            }
+        } else if adv_hidden > 0 {
+            Some(trf("pref.advancedHidden", &[&adv_hidden.to_string()]))
+        } else {
+            None
+        };
+        let show_cat = !q.is_empty() || self.sel.1.is_none() || changed_on;
         let dyn_choices = &self.dyn_choices;
         self.cards = chosen
             .into_iter()
@@ -867,6 +918,31 @@ impl PrefsWin {
         self.layout();
     }
 
+    /// ★ "변경" 보기 켜기/끄기(nexa-sql 10-11 · 사용자 10-24): 켜는 순간의 바뀐 키 집합을 고정하고 카드를 다시 만든다
+    /// (기동 명령 `prefs.filter:changed|all`도 이 길).
+    pub(crate) fn set_changed_only(&mut self, on: bool) {
+        self.changed.set_on(on);
+        self.changed_keys = on.then(|| {
+            self.snap
+                .iter()
+                .filter(|sn| sn.modified)
+                .map(|sn| sn.entry.key)
+                .collect()
+        });
+        self.rebuild_cards();
+    }
+
+    /// "변경" 보기가 켜져 있는가(덤프 · 시험).
+    pub(crate) fn changed_only(&self) -> bool {
+        self.changed_keys.is_some()
+    }
+
+    /// 카드 목록 위 안내 한 줄(시험 · 덤프).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn note(&self) -> Option<&str> {
+        self.note.as_deref()
+    }
+
     /// "고급" 스위치 상태(설정 `ui.prefs_advanced`) — 열기 전에 호스트가 넣는다.
     pub(crate) fn set_advanced(&mut self, on: bool) {
         if self.advanced.is_on() != on {
@@ -929,6 +1005,9 @@ impl PrefsWin {
         self.surface = None;
         self.window = None;
         self.cards.clear();
+        // "변경" 보기는 창마다(켜는 순간 집합을 고정하므로 닫으면 푼다 · 다음에 열면 기본 보기).
+        self.changed.set_on(false);
+        self.changed_keys = None;
     }
 
     pub(crate) fn set_memo(&mut self, m: crate::wingeom::Memo) {
@@ -969,6 +1048,11 @@ impl PrefsWin {
         self.advanced.set_scale(s);
         self.advanced
             .set_bounds(Rect::new(pad, by, self.s(160.0), bottom_h), &mut inv);
+        self.changed.set_scale(s);
+        self.changed.set_bounds(
+            Rect::new(pad + self.s(172.0), by, self.s(120.0), bottom_h),
+            &mut inv,
+        );
         self.json_btn.set_scale(s);
         self.json_btn.set_bounds(
             Rect::new(
@@ -1332,6 +1416,9 @@ impl PrefsWin {
         if route(self.advanced.bounds(), false) {
             self.advanced.on_event(&ie, &mut inv);
         }
+        if route(self.changed.bounds(), false) {
+            self.changed.on_event(&ie, &mut inv);
+        }
         if route(self.close_btn.bounds(), self.close_btn.is_focused())
             || matches!(ie, InputEvent::MouseMove { .. })
         {
@@ -1355,6 +1442,12 @@ impl PrefsWin {
                 key: "ui.prefs_advanced".into(),
                 value: if self.advanced.is_on() { "on" } else { "off" }.into(),
             };
+        }
+        if self.changed.take_toggled().is_some() {
+            let on = self.changed.is_on();
+            self.set_changed_only(on);
+            self.redraw();
+            return PrefsAction::None;
         }
         if self.close_btn.take_clicked() {
             self.close();
@@ -1672,7 +1765,7 @@ impl PrefsWin {
             let text_w = card_w - inner_pad * 2 - (120.0 * s).round() as i32;
             let mut y = list.y + gap - self.scroll;
             let note_y = y;
-            if self.adv_hidden > 0 {
+            if self.note.is_some() {
                 y += th_txt + gap;
             }
             let mut inv = Invalidations::default();
@@ -1899,16 +1992,10 @@ impl PrefsWin {
                 dc.fill_rect_alpha(Rect::new(cx - 1, sr.y, 3, sr.h), th.accent, a.max(0.15));
             }
             dc.fill_rect(list, th.window_bg);
-            if self.adv_hidden > 0 {
+            if let Some(note) = &self.note {
                 let nr = Rect::new(list.x, note_y, card_w, th_txt).intersection(&list);
                 if nr.h > 0 {
-                    dc.text(
-                        list.x + inner_pad,
-                        note_y,
-                        nr,
-                        &trf("pref.advancedHidden", &[&self.adv_hidden.to_string()]),
-                        th.text_dim,
-                    );
+                    dc.text(list.x + inner_pad, note_y, nr, note, th.text_dim);
                 }
             }
             let now = std::time::Instant::now();
@@ -2067,13 +2154,22 @@ impl PrefsWin {
             {
                 let b = self.advanced.bounds();
                 let w = self.advanced.wanted_width(&mut dc) + (8.0 * s).round() as i32;
+                let mut inv = Invalidations::default();
                 if w != b.w {
-                    let mut inv = Invalidations::default();
                     self.advanced
                         .set_bounds(Rect::new(b.x, b.y, w, b.h), &mut inv);
                 }
+                // "변경" 스위치는 고급 스위치 바로 오른쪽(라벨 폭에 맞춤 · 둘 다 아래 줄 왼쪽).
+                let cb = self.changed.bounds();
+                let cx = b.x + w + (12.0 * s).round() as i32;
+                let cw = self.changed.wanted_width(&mut dc) + (8.0 * s).round() as i32;
+                if cx != cb.x || cw != cb.w {
+                    self.changed
+                        .set_bounds(Rect::new(cx, cb.y, cw, cb.h), &mut inv);
+                }
             }
             self.advanced.paint(&mut dc, th);
+            self.changed.paint(&mut dc, th);
             self.close_btn.paint(&mut dc, th);
             self.json_btn.paint(&mut dc, th);
             for c in &self.cards {
@@ -2094,9 +2190,101 @@ impl PrefsWin {
     }
 }
 
+/// 카드 표시 판정(순수 · MC/DC · nexa-sql `card_pass`): "변경" 켬 = 바뀐 키만(고급 무관) · 꺼짐 = 고급은 Advanced가 켜져 있을 때만.
+#[derive(Debug, PartialEq, Eq)]
+enum Pass {
+    Show,
+    HiddenAdvanced,
+    HiddenUnchanged,
+}
+
+fn card_pass(changed_on: bool, in_changed_set: bool, adv_on: bool, is_adv: bool) -> Pass {
+    if changed_on {
+        if in_changed_set {
+            Pass::Show
+        } else {
+            Pass::HiddenUnchanged
+        }
+    } else if is_adv && !adv_on {
+        Pass::HiddenAdvanced
+    } else {
+        Pass::Show
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// "변경" 보기 판정(사용자 10-24 · nexa-sql 10-11) — 조건 4의 독립 영향 쌍.
+    #[test]
+    fn card_pass_changed_only_ignores_advanced() {
+        // 변경 켬: 집합 안 = 표시(고급이고 Advanced 꺼져 있어도) · 집합 밖 = 숨김.
+        assert_eq!(card_pass(true, true, false, true), Pass::Show);
+        assert_eq!(card_pass(true, false, false, true), Pass::HiddenUnchanged);
+        assert_eq!(card_pass(true, false, true, false), Pass::HiddenUnchanged);
+        // 변경 꺼짐: 고급은 Advanced를 따른다 · 일반은 늘 표시.
+        assert_eq!(card_pass(false, false, false, true), Pass::HiddenAdvanced);
+        assert_eq!(card_pass(false, false, true, true), Pass::Show);
+        assert_eq!(card_pass(false, false, false, false), Pass::Show);
+        // 변경 켬/꺼짐만 다른 쌍(집합 밖 · 일반 키): 켬 = 숨김 · 꺼짐 = 표시.
+        assert_eq!(card_pass(true, false, true, false), Pass::HiddenUnchanged);
+        assert_eq!(card_pass(false, false, true, false), Pass::Show);
+    }
+
+    /// "변경" 보기(T-194): 켜면 분류 선택과 무관하게 기본값과 다른 키만(고급 키도 Advanced 꺼진 채 보임) · 켜는 순간 집합 고정(그 뒤
+    /// 기본값으로 돌려도 카드는 남는다) · 바뀐 것이 없으면 안내 · 숨은 분류(비노출)의 변경은 수로만 · 검색어와 결합 · 끄면 분류 보기 복귀 ·
+    /// 닫으면 풀린다.
+    #[test]
+    fn changed_only_view_lists_modified_keys_across_categories() {
+        let mut s = settings(
+            "chg",
+            "ui.font_size=18
+scroll.fast=off
+statusbar.load_interval_ms=3000
+nav.favorites=D:/x
+",
+        );
+        let mut w = PrefsWin::new();
+        w.refresh(&s);
+        w.select_category("pref.cat.keys");
+        assert!(!w.changed_only());
+        w.set_changed_only(true);
+        assert!(w.changed_only());
+        let keys = w.shown_keys();
+        assert!(keys.contains(&"ui.font_size"), "{keys:?}");
+        assert!(keys.contains(&"scroll.fast"), "{keys:?}");
+        assert!(
+            keys.contains(&"statusbar.load_interval_ms"),
+            "고급 키도 Advanced 꺼진 채 보인다: {keys:?}"
+        );
+        assert!(
+            keys.contains(&"nav.favorites"),
+            "비노출(HIDDEN = 고급 자동 포함)도 변경 보기에서는 보인다(nexa-sql 같은 규약): {keys:?}"
+        );
+        assert_eq!(keys.len(), 4, "{keys:?}");
+        assert_eq!(w.note(), None);
+        // 집합 고정: 켠 뒤 기본값으로 돌려도 카드는 남는다(값만 갱신).
+        s.reset("ui.font_size").expect("reset");
+        w.refresh(&s);
+        assert!(w.shown_keys().contains(&"ui.font_size"));
+        // 검색어와 결합 = 집합 안에서만.
+        w.preset_query("scroll");
+        assert_eq!(w.shown_keys(), vec!["scroll.fast"]);
+        w.preset_query("");
+        // 끄면 분류 보기(키 분류)로 복귀.
+        w.set_changed_only(false);
+        assert!(w.shown_keys().iter().all(|k| k.starts_with("key.")));
+        // 바뀐 것이 없으면 안내 한 줄.
+        let s2 = settings("chg-none", "");
+        w.refresh(&s2);
+        w.set_changed_only(true);
+        assert!(w.shown_keys().is_empty());
+        assert_eq!(w.note(), Some(tr("pref.noChanged").as_str()));
+        // 닫으면 풀린다.
+        w.close();
+        assert!(!w.changed_only());
+    }
 
     /// 언어 전환(T-134): 설정 창의 고정 요소(버튼 · 스위치 · 검색 칸)를 다시 만들되 상태(고급 스위치 · 검색어)는 지킨다.
     #[test]

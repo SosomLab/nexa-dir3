@@ -1022,6 +1022,9 @@ pref.rangeClamped = 「{0}」のため、今の許容範囲は {1}..{2} — 入�
 pref.value.on = オン
 pref.value.off = オフ
 pref.advancedHidden = 詳細設定 {0} 件は非表示 — 詳細をオンにしてください
+pref.changedOnly = 変更
+pref.noChanged = 既定値と異なる設定はありません
+pref.hiddenChanged = 変更された設定 {0} 件はこのウィンドウにない分類です
 keys.title = ショートカット
 keys.hint = コマンドを選び [割り当て] を押してからキーを押してください。\nEsc = 取消 · クリア = なし · 初期化 = 既定。
 keys.btn.assign = 割り当て
