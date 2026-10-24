@@ -127,16 +127,21 @@ fn copy_skip_overwrite_move_and_errors() {
     assert_eq!(r.code, 0, "{}", r.err);
     assert!(!src.join("one.txt").exists());
     assert_eq!(fs::read(moved.join("one.txt")).expect("read"), b"ONE");
-    // 전략 옵션(루프 · 순차)도 같은 결과.
+    // 전략 옵션(루프 · 순차) + 검증(`--verify` · 크기 + SHA-256)도 같은 결과.
     let seq = d.join("seq");
     fs::create_dir_all(&seq).expect("mkdir");
     let r = run(
         &[&src.join("tree"), &seq],
-        &["--no-native", "--threads", "1"],
+        &["--no-native", "--threads", "1", "--verify"],
         &[],
     );
     assert_eq!(r.code, 0, "{}", r.err);
     same_tree(&src.join("tree"), &seq.join("tree"));
+    assert!(
+        r.err.contains("verified 41 file(s)") && r.err.contains("0 mismatch(es)"),
+        "{}",
+        r.err
+    );
     // 오류 = 2.
     let r = run(&[&src.join("nope"), &dst], &[], &[]);
     assert_eq!(r.code, 2);

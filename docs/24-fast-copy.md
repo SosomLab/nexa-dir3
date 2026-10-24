@@ -157,5 +157,10 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 - **시험**: `cli::tests`(인자 해석 순수 · 사람이 읽는 수치 · 샌드박스 실행 = 복사 · 건너뜀 · 덮어쓰기 · 이동 · 오류 코드).
 - **프로세스 시험(T4급 · 10-24 사용자 "테스트 자동화")**: `crates/nexa-copy/tests/cli.rs` = 실제 실행 파일을 띄워 도움말/버전/인자 오류 · 복사(내용 대조 · 100 % 줄) · 건너뜀(0 B of) · `--overwrite -q` · `--move` · `--no-native --threads 1` · 없는 원본/대상 2 · **취소**(512 MiB 희소 파일 + 루프 경로 + `NEXA_COPY_CANCEL_AFTER_MS=20` 시험 훅 = Ctrl+C 대역 → 130 · `canceled` · 부분 파일 없음 · 원본 그대로) — `cargo test -p nexa-copy`로 3-OS CI에서 돈다.
 - **Ctrl+C 취소 ✅ 10-24**(`ctrlc.rs` · Windows `SetConsoleCtrlHandler` / Unix `signal(SIGINT)` → 프로세스 전역 `cancel` 원자값 → 엔진이 항목/청크(32 MiB) 경계에서 멈추고 부분 파일 정리 → 요약 `canceled` · 130 · `run_with(cancel)` 시험).
+- **검증 ✅ 10-25**(`--verify` · T-97 "검증" 1차): 전송이 끝난 뒤 (원본, 사본) 쌍마다 크기 + SHA-256(`ndir_ops::hash::hash_file` · 엔진과 같은
+  해시) · 폴더는 재귀(원본 기준 · 사본에만 있는 것은 무시) · 불일치/누락/종류 불일치 = `verify failed: …` + 종료 1 · `--move`는 원본이 없어 무시 ·
+  진행 `verifying · n` 250 ms · 요약 `verified n file(s) · x read · k mismatch(es) in t` · Ctrl+C = 130. 시험 `verify_detects_mismatch_missing_and_type` +
+  프로세스 시험(`--verify` 41 파일).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · 필터/검증/미러(T-97 → T-98) · 대화형 충돌(`--ask`).
+  포터블 zip · `release.yml` — 채널 결정) · 필터/미러(T-97 → T-98) · 대화형 충돌(`--ask`) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
+  복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).

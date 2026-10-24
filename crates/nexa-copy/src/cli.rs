@@ -8,6 +8,7 @@
 //!   --no-native          do not use the OS copy path (plain read/write loop everywhere)
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
 //!   -n, --dry-run        print the plan (one tab-separated line per item on stdout) and change nothing
+//!   --verify             after copying, compare every copied file with its source (size + SHA-256); mismatch = exit 1
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
 //! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
@@ -42,6 +43,9 @@ Options:
   -n, --dry-run        print the plan and change nothing: one line per item on stdout,
                        tab-separated: action, bytes, source, destination, note
                        (action = copy | move | duplicate | overwrite | skip | noop | error)
+  --verify             after copying, compare each copied file with its source (size + SHA-256);
+                       folders are checked recursively · a mismatch is reported and the exit code is 1
+                       (ignored with --move: the source is gone)
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
@@ -60,6 +64,8 @@ pub(crate) struct Options {
     pub quiet: bool,
     /// 계획만 보고하고 바꾸지 않는다(`--dry-run`).
     pub dry_run: bool,
+    /// 복사 뒤 원본↔사본 대조(`--verify` · 크기 + SHA-256 · 이동은 무시).
+    pub verify: bool,
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
 }
@@ -80,6 +86,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut unbuffered_mb = 0u64;
     let mut quiet = false;
     let mut dry_run = false;
+    let mut verify = false;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -99,6 +106,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--no-native" => native = false,
             "-q" | "--quiet" => quiet = true,
             "-n" | "--dry-run" => dry_run = true,
+            "--verify" => verify = true,
             "--threads" => {
                 let v = it.next().ok_or("--threads needs a number")?;
                 threads = v
@@ -128,6 +136,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         unbuffered_mb,
         quiet,
         dry_run,
+        verify,
         sources: paths,
         dest,
     }))
@@ -226,6 +235,51 @@ pub(crate) fn run_with(
         &tuning,
     );
     printer.summary(&out, started.elapsed(), err);
+    // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1 · 이동은 원본이 없어 건너뜀.
+    if o.verify && o.op == Op::Copy && !out.transferred.is_empty() && !out.canceled {
+        let v_started = Instant::now();
+        let mut read = 0u64;
+        let mut last = Instant::now();
+        let mut on_bytes = |n: u64| {
+            read += n;
+            if !o.quiet && last.elapsed() >= Duration::from_millis(250) {
+                last = Instant::now();
+                let _ = write!(err, "\rverifying · {}", human_bytes(read));
+                let _ = err.flush();
+            }
+        };
+        match crate::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
+            Ok(rep) => {
+                if !o.quiet {
+                    let _ = writeln!(err);
+                }
+                for (p, why) in &rep.failures {
+                    let _ = writeln!(err, "verify failed: {}: {why}", p.display());
+                }
+                if !o.quiet {
+                    let _ = writeln!(
+                        err,
+                        "verified {} file(s) · {} read · {} mismatch(es) in {}",
+                        rep.files,
+                        human_bytes(rep.bytes),
+                        rep.failures.len(),
+                        human_secs(v_started.elapsed())
+                    );
+                }
+                if !rep.ok() {
+                    return ExitCode::from(1);
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                let _ = writeln!(err, "\nverify canceled");
+                return ExitCode::from(130);
+            }
+            Err(e) => {
+                let _ = writeln!(err, "\nverify error: {e}");
+                return ExitCode::from(1);
+            }
+        }
+    }
     exit_code(&out)
 }
 
@@ -471,11 +525,12 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Copy);
-        assert!(!o.overwrite && o.native && !o.quiet && !o.dry_run);
+        assert!(!o.overwrite && o.native && !o.quiet && !o.dry_run && !o.verify);
         assert_eq!((o.threads, o.unbuffered_mb), (0, 0));
         assert_eq!(o.sources, vec![PathBuf::from("a"), PathBuf::from("b")]);
         assert_eq!(o.dest, PathBuf::from("dest"));
         let Ok(Parsed::Run(o)) = parse(&a(&[
+            "--verify",
             "-n",
             "--move",
             "x",
@@ -493,7 +548,7 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Move);
-        assert!(o.overwrite && !o.native && o.quiet && o.dry_run);
+        assert!(o.overwrite && !o.native && o.quiet && o.dry_run && o.verify);
         assert_eq!((o.threads, o.unbuffered_mb), (4, 64));
         assert_eq!(o.sources, vec![PathBuf::from("x"), PathBuf::from("-weird")]);
         assert_eq!(o.dest, PathBuf::from("d"));
