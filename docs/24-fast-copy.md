@@ -147,10 +147,15 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   엔진은 앱과 **같은 길**(`ndir_ops::transfer` + `fastcopy` 전략 계층)이라 같은 폴더 규칙 · 충돌 정책 · 스테이징 교체 · 교차 볼륨 이동 ·
   항목별 실패 격리 · OS 복사 경로 · 작은 파일 병렬이 그대로다.
 - **사용**: `nexa-copy [options] <source>... <destination-folder>` — `--move` · `--overwrite`(기본 = 건너뜀) · `--threads <n>`(0 = 자동) ·
-  `--no-native` · `--unbuffered-mb <n>`(Windows) · `-q` · `-h` · `-V`. 진행 · 요약은 stderr(stdout은 비움 · 파이프 친화) · 영어 고정.
+  `--no-native` · `--unbuffered-mb <n>`(Windows) · `-n`/`--dry-run` · `-q` · `-h` · `-V`. 진행 · 요약은 stderr(stdout은 비움 · 파이프 친화) · 영어 고정.
+- **dry-run ✅ 10-24**(T-97 "dry-run 보고서" 1차): 엔진에 `plan_transfer`(`ndir-ops`) — `transfer`와 **같은 판정 함수 `placement`**(같은 폴더
+  규칙 · 자기/하위 이동 · 자연 경로 충돌 → `resolve`)로 항목마다 자리 · 결정(`PlanAction` = Transfer · Duplicate · Overwrite · Skip · NoOp · Error) ·
+  크기(폴더 = 재귀 합) · `total_bytes`/`active_bytes`를 돌려주고 파일 시스템은 바꾸지 않는다(앱의 진행 창 미리보기 T-96에서도 쓸 수 있다).
+  CLI는 stdout에 탭 구분 한 줄/항목(`action · bytes · source · destination · note` · note = `exists` 또는 오류 사유) · 요약은 stderr ·
+  종료 0(실행하면 실패할 항목 있으면 1). 한계: 같은 이름 원본 여럿의 순번 복제는 둘째 이후 번호가 실행 때 정해진다.
 - **종료 코드**: 0 = 전부 완료 · 1 = 실패 항목 있음 · 2 = 인자/대상 오류 · 130 = 취소.
 - **시험**: `cli::tests`(인자 해석 순수 · 사람이 읽는 수치 · 샌드박스 실행 = 복사 · 건너뜀 · 덮어쓰기 · 이동 · 오류 코드).
 - **프로세스 시험(T4급 · 10-24 사용자 "테스트 자동화")**: `crates/nexa-copy/tests/cli.rs` = 실제 실행 파일을 띄워 도움말/버전/인자 오류 · 복사(내용 대조 · 100 % 줄) · 건너뜀(0 B of) · `--overwrite -q` · `--move` · `--no-native --threads 1` · 없는 원본/대상 2 · **취소**(512 MiB 희소 파일 + 루프 경로 + `NEXA_COPY_CANCEL_AFTER_MS=20` 시험 훅 = Ctrl+C 대역 → 130 · `canceled` · 부분 파일 없음 · 원본 그대로) — `cargo test -p nexa-copy`로 3-OS CI에서 돈다.
 - **Ctrl+C 취소 ✅ 10-24**(`ctrlc.rs` · Windows `SetConsoleCtrlHandler` / Unix `signal(SIGINT)` → 프로세스 전역 `cancel` 원자값 → 엔진이 항목/청크(32 MiB) 경계에서 멈추고 부분 파일 정리 → 요약 `canceled` · 130 · `run_with(cancel)` 시험).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · `--dry-run`/필터/검증/미러(T-97 → T-98) · 대화형 충돌(`--ask`).
+  포터블 zip · `release.yml` — 채널 결정) · 필터/검증/미러(T-97 → T-98) · 대화형 충돌(`--ask`).

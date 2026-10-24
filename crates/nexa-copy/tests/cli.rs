@@ -147,6 +147,39 @@ fn copy_skip_overwrite_move_and_errors() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--dry-run`: stdout = 탭 보고서(항목마다 한 줄) · stderr = 요약 · 종료 0 · 대상 폴더 비어 있음 그대로.
+#[test]
+fn dry_run_prints_plan_and_changes_nothing() {
+    let d = sandbox("dry");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    make_tree(&src);
+    fs::create_dir_all(&dst).expect("mkdir");
+    let r = run(
+        &[&src.join("tree"), &src.join("one.txt"), &dst],
+        &["-n"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    let rows: Vec<Vec<&str>> = r.out.lines().map(|l| l.split('\t').collect()).collect();
+    assert_eq!(rows.len(), 2, "{}", r.out);
+    assert_eq!(rows[0][0], "copy");
+    assert_eq!(
+        rows[0][1], "315500",
+        "폴더 = 재귀 합(10 × 350 B + 30 × 400 B + 300 000 B)"
+    );
+    assert_eq!(rows[1][..2].to_vec(), vec!["copy", "3"]);
+    assert!(
+        r.err.contains("dry run: 2 to copy") && r.err.contains("nothing changed"),
+        "{}",
+        r.err
+    );
+    assert!(
+        fs::read_dir(&dst).expect("read_dir").next().is_none(),
+        "대상 비어 있음"
+    );
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// 취소(Ctrl+C 대역 = `NEXA_COPY_CANCEL_AFTER_MS`): 큰 파일을 루프 경로로 복사하다 멈춤 → 종료 130 · 요약 `canceled` · 부분 파일 없음 · 원본 그대로.
 #[test]
 fn cancel_mid_copy_cleans_partial_and_exits_130() {

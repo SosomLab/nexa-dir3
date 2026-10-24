@@ -7,14 +7,20 @@
 //!   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, up to 16
 //!   --no-native          do not use the OS copy path (plain read/write loop everywhere)
 //!   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
+//!   -n, --dry-run        print the plan (one tab-separated line per item on stdout) and change nothing
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
 //! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
 //! ```
-//! 진행 · 요약은 stderr(stdout은 비워 둔다 — 파이프 친화) · 영어 고정(패키지/CLI 문구 규칙 · 사용자 10-10).
+//! 진행 · 요약은 stderr(stdout은 비워 둔다 — 파이프 친화 · dry-run 보고서만 stdout) · 영어 고정(패키지/CLI 문구 규칙 · 사용자 10-10).
+//!
+//! dry-run 보고서(stdout · 탭 구분 · 항목마다 한 줄): `<action>\t<bytes>\t<source>\t<destination>\t<note>` —
+//! action = copy | move | duplicate | overwrite | skip | noop | error · note = `exists`(overwrite/skip) 또는 오류 사유 · 그 밖은 빈칸.
 
 use ndir_ops::fastcopy::{Tuning, THREADS_MAX};
-use ndir_ops::{transfer_with, Conflict, Event, ItemStatus, Op, Outcome};
+use ndir_ops::{
+    plan_transfer, transfer_with, Conflict, Event, ItemStatus, Op, Outcome, PlanAction,
+};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -33,11 +39,14 @@ Options:
   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, max 16
   --no-native          do not use the OS copy path (plain read/write loop)
   --unbuffered-mb <n>  Windows only: copy files of at least n MiB without the file cache (0 = off)
+  -n, --dry-run        print the plan and change nothing: one line per item on stdout,
+                       tab-separated: action, bytes, source, destination, note
+                       (action = copy | move | duplicate | overwrite | skip | noop | error)
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
 
-Exit code: 0 done · 1 some items failed · 2 usage error · 130 canceled (Ctrl+C)
+Exit code: 0 done · 1 some items failed (dry run: would fail) · 2 usage error · 130 canceled (Ctrl+C)
 ";
 
 /// 실행 옵션(순수 해석 결과).
@@ -49,6 +58,8 @@ pub(crate) struct Options {
     pub native: bool,
     pub unbuffered_mb: u64,
     pub quiet: bool,
+    /// 계획만 보고하고 바꾸지 않는다(`--dry-run`).
+    pub dry_run: bool,
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
 }
@@ -68,6 +79,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut native = true;
     let mut unbuffered_mb = 0u64;
     let mut quiet = false;
+    let mut dry_run = false;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -86,6 +98,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--skip" => overwrite = false,
             "--no-native" => native = false,
             "-q" | "--quiet" => quiet = true,
+            "-n" | "--dry-run" => dry_run = true,
             "--threads" => {
                 let v = it.next().ok_or("--threads needs a number")?;
                 threads = v
@@ -114,6 +127,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         native,
         unbuffered_mb,
         quiet,
+        dry_run,
         sources: paths,
         dest,
     }))
@@ -148,20 +162,27 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
                     flag.store(true, std::sync::atomic::Ordering::Relaxed);
                 });
             }
-            run_with(&o, crate::ctrlc::flag(), err)
+            let stdout = std::io::stdout();
+            let mut out = stdout.lock();
+            run_with(&o, crate::ctrlc::flag(), &mut out, err)
         }
     }
 }
 
-/// [`run_with`] + 프로세스 취소 깃발 없이(시험 · 내장 호출용 — 취소 없음).
+/// [`run_with`] + 프로세스 취소 깃발 없이 · stdout 버림(시험 · 내장 호출용 — 취소 없음).
 #[cfg(test)]
 pub(crate) fn run(o: &Options, err: &mut dyn Write) -> ExitCode {
-    run_with(o, &AtomicBool::new(false), err)
+    run_with(o, &AtomicBool::new(false), &mut std::io::sink(), err)
 }
 
 /// 실행: 대상 폴더 · 원본 존재 확인 → 전략 조절값 → `transfer`(앱과 같은 길) → 진행(stderr · 100 ms 간격) → 요약 → 종료 코드.
-/// `cancel`이 참이 되면(Ctrl+C) 엔진이 항목/청크 경계에서 멈추고 부분 파일을 정리한다 → 130.
-pub(crate) fn run_with(o: &Options, cancel: &AtomicBool, err: &mut dyn Write) -> ExitCode {
+/// `cancel`이 참이 되면(Ctrl+C) 엔진이 항목/청크 경계에서 멈추고 부분 파일을 정리한다 → 130. `--dry-run`이면 [`dry_run`](보고서 = `out`).
+pub(crate) fn run_with(
+    o: &Options,
+    cancel: &AtomicBool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> ExitCode {
     if !o.dest.is_dir() {
         let _ = writeln!(
             err,
@@ -176,6 +197,9 @@ pub(crate) fn run_with(o: &Options, cancel: &AtomicBool, err: &mut dyn Write) ->
             let _ = writeln!(err, "nexa-copy: source not found: {}", p.display());
         }
         return ExitCode::from(2);
+    }
+    if o.dry_run {
+        return dry_run(o, out, err);
     }
     // 조절값은 인자로(`transfer_with` · 프로세스 전역 `set_tuning`을 쓰지 않는다).
     let tuning = Tuning {
@@ -203,6 +227,60 @@ pub(crate) fn run_with(o: &Options, cancel: &AtomicBool, err: &mut dyn Write) ->
     );
     printer.summary(&out, started.elapsed(), err);
     exit_code(&out)
+}
+
+/// dry-run(10-24 · T-97 "dry-run 보고서"): 엔진의 `plan_transfer`(실행과 같은 판정)로 항목마다 한 줄을 stdout에 — 탭 구분
+/// `action · bytes · source · destination · note` · 요약은 stderr(quiet면 생략) · 파일 시스템 불변 · 종료 0(실행하면 실패할 항목이 있으면 1).
+fn dry_run(o: &Options, out: &mut dyn Write, err: &mut dyn Write) -> ExitCode {
+    let mut resolve = |_: &Path| {
+        if o.overwrite {
+            Conflict::Overwrite
+        } else {
+            Conflict::Skip
+        }
+    };
+    let plan = plan_transfer(&o.sources, &o.dest, o.op, &mut resolve);
+    let verb = match o.op {
+        Op::Copy => "copy",
+        Op::Move => "move",
+    };
+    let (mut active, mut skipped, mut failing) = (0usize, 0usize, 0usize);
+    for it in &plan.items {
+        let (action, note): (&str, &str) = match &it.action {
+            PlanAction::Transfer => (verb, ""),
+            PlanAction::Duplicate => ("duplicate", ""),
+            PlanAction::Overwrite => ("overwrite", "exists"),
+            PlanAction::Skip => ("skip", "exists"),
+            PlanAction::NoOp => ("noop", "same folder"),
+            PlanAction::Error(why) => ("error", why.as_str()),
+        };
+        match &it.action {
+            PlanAction::Error(_) => failing += 1,
+            PlanAction::Skip | PlanAction::NoOp => skipped += 1,
+            _ => active += 1,
+        }
+        let _ = writeln!(
+            out,
+            "{action}\t{}\t{}\t{}\t{note}",
+            it.bytes,
+            it.src.display(),
+            it.dest.display()
+        );
+    }
+    let _ = out.flush();
+    if !o.quiet {
+        let _ = writeln!(
+            err,
+            "dry run: {active} to {verb} · {skipped} skipped · {failing} would fail · {} of {} planned · nothing changed",
+            human_bytes(plan.active_bytes),
+            human_bytes(plan.total_bytes)
+        );
+    }
+    if failing == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
 }
 
 /// 종료 코드(순수): 취소 130 · 실패 항목 있음 1 · 그 밖 0(건너뜀은 실패가 아니다 — 정책대로 한 것).
@@ -393,11 +471,12 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Copy);
-        assert!(!o.overwrite && o.native && !o.quiet);
+        assert!(!o.overwrite && o.native && !o.quiet && !o.dry_run);
         assert_eq!((o.threads, o.unbuffered_mb), (0, 0));
         assert_eq!(o.sources, vec![PathBuf::from("a"), PathBuf::from("b")]);
         assert_eq!(o.dest, PathBuf::from("dest"));
         let Ok(Parsed::Run(o)) = parse(&a(&[
+            "-n",
             "--move",
             "x",
             "--overwrite",
@@ -414,7 +493,7 @@ mod tests {
             panic!()
         };
         assert_eq!(o.op, Op::Move);
-        assert!(o.overwrite && !o.native && o.quiet);
+        assert!(o.overwrite && !o.native && o.quiet && o.dry_run);
         assert_eq!((o.threads, o.unbuffered_mb), (4, 64));
         assert_eq!(o.sources, vec![PathBuf::from("x"), PathBuf::from("-weird")]);
         assert_eq!(o.dest, PathBuf::from("d"));
@@ -451,6 +530,87 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).expect("mkdir");
         d
+    }
+
+    /// `--dry-run`(10-24): stdout 탭 줄(action · bytes · src · dest · note) · 충돌 = skip/overwrite · 같은 폴더 = duplicate/noop ·
+    /// 자기/하위 이동 = error → 종료 1 · 요약은 stderr · quiet면 없음 · **파일 시스템 불변**.
+    #[test]
+    fn dry_run_reports_plan_and_changes_nothing() {
+        let d = sandbox("dry");
+        let src = d.join("src");
+        fs::create_dir_all(src.join("tree")).expect("mkdir");
+        fs::write(src.join("tree").join("x.txt"), b"xx").expect("write");
+        fs::write(src.join("one.txt"), b"one").expect("write");
+        let dest = d.join("dest");
+        fs::create_dir_all(&dest).expect("mkdir");
+        fs::write(dest.join("one.txt"), b"OLD").expect("write");
+        let base = |extra: &[&str]| {
+            let mut v: Vec<&str> = extra.to_vec();
+            v.push("--dry-run");
+            let (t, o, dd) = (
+                src.join("tree").to_string_lossy().into_owned(),
+                src.join("one.txt").to_string_lossy().into_owned(),
+                dest.to_string_lossy().into_owned(),
+            );
+            let mut args = a(&v);
+            args.extend([t, o, dd]);
+            match parse(&args) {
+                Ok(Parsed::Run(o)) => o,
+                other => panic!("{other:?}"),
+            }
+        };
+        let (mut out, mut err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        let o = base(&[]);
+        assert_eq!(
+            run_with(&o, &AtomicBool::new(false), &mut out, &mut err),
+            ExitCode::SUCCESS
+        );
+        let text = String::from_utf8(out).expect("utf8");
+        let lines: Vec<Vec<&str>> = text.lines().map(|l| l.split('\t').collect()).collect();
+        assert_eq!(lines.len(), 2, "{text}");
+        assert_eq!(&lines[0][..2], &["copy", "2"], "폴더 = 재귀 합");
+        assert_eq!(lines[0][3], dest.join("tree").to_string_lossy());
+        assert_eq!(&lines[1][..2], &["skip", "3"]);
+        assert_eq!(lines[1][4], "exists");
+        let summary = String::from_utf8(err).expect("utf8");
+        assert!(
+            summary.contains("1 to copy · 1 skipped · 0 would fail · 2 B of 5 B planned"),
+            "{summary}"
+        );
+        assert!(!dest.join("tree").exists(), "dry-run은 복사하지 않는다");
+        assert_eq!(fs::read(dest.join("one.txt")).expect("read"), b"OLD");
+        // 덮어쓰기 + 이동 + quiet.
+        let (mut out, mut err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        let o = base(&["--overwrite", "--move", "-q"]);
+        assert_eq!(
+            run_with(&o, &AtomicBool::new(false), &mut out, &mut err),
+            ExitCode::SUCCESS
+        );
+        let text = String::from_utf8(out).expect("utf8");
+        assert!(
+            text.starts_with("move\t2\t") && text.contains("\noverwrite\t3\t"),
+            "{text}"
+        );
+        assert!(err.is_empty(), "quiet = 요약 없음");
+        assert!(
+            src.join("tree").exists() && src.join("one.txt").exists(),
+            "이동 안 함"
+        );
+        // 자기 하위로 이동 = error → 1.
+        let o = Options {
+            op: Op::Move,
+            sources: vec![src.clone()],
+            dest: src.join("tree"),
+            dry_run: true,
+            ..o.clone()
+        };
+        let (mut out, mut err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        assert_eq!(
+            run_with(&o, &AtomicBool::new(false), &mut out, &mut err),
+            ExitCode::from(1)
+        );
+        assert!(String::from_utf8_lossy(&out).starts_with("error\t"));
+        let _ = fs::remove_dir_all(&d);
     }
 
     /// 실행(샌드박스): 폴더 + 파일 복사 → 내용 같음 · 두 번째는 건너뜀(기본) · `--overwrite`면 덮어씀 · `--move`는 원본이 사라짐 ·
@@ -556,7 +716,10 @@ mod tests {
             quiet: false,
             ..o.clone()
         };
-        assert_eq!(run_with(&oc, &c, &mut err), ExitCode::from(130));
+        assert_eq!(
+            run_with(&oc, &c, &mut std::io::sink(), &mut err),
+            ExitCode::from(130)
+        );
         assert!(!dest2.join("z.txt").exists());
         assert!(String::from_utf8_lossy(&err).contains("canceled"));
         // 도움말 · 버전 · 사용 오류 종료 코드.

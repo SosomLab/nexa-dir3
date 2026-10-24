@@ -493,6 +493,129 @@ pub enum Event<'a> {
     ItemEnd { index: usize, status: ItemStatus },
 }
 
+/// 항목 하나의 **자리 판정**(docs/33 같은 폴더 규칙 · 자기/하위 이동 금지 · 자연 경로 충돌) — [`transfer`]와 [`plan_transfer`]가
+/// 이 한 함수로 판정해 미리보기(dry-run)와 실행이 어긋나지 않는다. 파일 시스템은 존재 여부만 읽는다.
+enum Placement {
+    /// 같은 폴더 이동 = 무동작.
+    NoOp,
+    /// 같은 폴더 복사 = 순번 복제 자리(" (2)"…).
+    Duplicate(PathBuf),
+    /// 자기 자신/하위 폴더로의 폴더 이동 — 실행하면 오류.
+    IntoSelf,
+    /// 다른 폴더 → 자연 경로(`exists`면 충돌 → `resolve`).
+    Into { dest: PathBuf, exists: bool },
+}
+
+const INTO_SELF_MSG: &str = "자기 자신/하위 폴더로는 이동할 수 없음";
+
+fn placement(src: &Path, dest_dir: &Path, op: Op) -> Placement {
+    let is_dir = src.is_dir();
+    let same_folder = src
+        .parent()
+        .is_some_and(|parent| path_equals(parent, dest_dir));
+    if same_folder {
+        return match op {
+            Op::Move => Placement::NoOp,
+            Op::Copy => Placement::Duplicate(unique_dest(dest_dir, &leaf_name(src), is_dir)),
+        };
+    }
+    if is_dir && op == Op::Move && is_same_or_sub(src, dest_dir) {
+        return Placement::IntoSelf;
+    }
+    let dest = dest_dir.join(leaf_name(src));
+    let exists = exists(&dest);
+    Placement::Into { dest, exists }
+}
+
+/// 계획 항목의 결정(dry-run 보고서 · T-97 · 10-24).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum PlanAction {
+    /// 새 자리로 복사/이동(충돌 없음).
+    Transfer,
+    /// 같은 폴더 복사 = 순번 복제.
+    Duplicate,
+    /// 대상에 이미 있음 → `resolve` = 덮어쓰기.
+    Overwrite,
+    /// 대상에 이미 있음 → `resolve` = 건너뜀.
+    Skip,
+    /// 같은 폴더 이동 = 무동작.
+    NoOp,
+    /// 실행하면 실패할 항목(자기/하위 폴더 이동) — 사유.
+    Error(String),
+}
+
+impl PlanAction {
+    /// 실제로 바이트를 옮기는 결정인가(계획의 `active_bytes`).
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            PlanAction::Transfer | PlanAction::Duplicate | PlanAction::Overwrite
+        )
+    }
+}
+
+/// 계획 항목 — 원본 · 최종 자리 · 크기(폴더 = 재귀 합) · 결정.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PlanItem {
+    pub src: PathBuf,
+    pub dest: PathBuf,
+    pub bytes: u64,
+    pub action: PlanAction,
+}
+
+/// 전송 계획(dry-run) — `total_bytes` = 전 항목 합 · `active_bytes` = 실제로 옮길 양.
+#[derive(Default, Debug)]
+pub struct TransferPlan {
+    pub items: Vec<PlanItem>,
+    pub total_bytes: u64,
+    pub active_bytes: u64,
+}
+
+/// **전송 미리보기**(dry-run · T-97 "dry-run 보고서" · 10-24): [`transfer`]와 같은 판정([`placement`])으로 항목마다 자리 · 결정 ·
+/// 크기를 돌려주고 **파일 시스템은 바꾸지 않는다**. 충돌은 똑같이 `resolve`로 묻는다(정책 호출자 = 상수 · 대화형 호출자는 미리보기에서도
+/// 물을 수 있다). 한계: 같은 이름의 원본 여럿이 같은 폴더로 순번 복제되는 경우 둘째 이후의 번호는 실행 때 정해진다.
+pub fn plan_transfer(
+    sources: &[PathBuf],
+    dest_dir: &Path,
+    op: Op,
+    resolve: &mut dyn FnMut(&Path) -> Conflict,
+) -> TransferPlan {
+    let mut plan = TransferPlan::default();
+    for src in sources {
+        let bytes = size_of(src);
+        let (dest, action) = match placement(src, dest_dir, op) {
+            Placement::NoOp => (src.clone(), PlanAction::NoOp),
+            Placement::Duplicate(dest) => (dest, PlanAction::Duplicate),
+            Placement::IntoSelf => (
+                dest_dir.join(leaf_name(src)),
+                PlanAction::Error(INTO_SELF_MSG.to_string()),
+            ),
+            Placement::Into {
+                dest,
+                exists: false,
+            } => (dest, PlanAction::Transfer),
+            Placement::Into { dest, exists: true } => {
+                let action = match resolve(&dest) {
+                    Conflict::Overwrite => PlanAction::Overwrite,
+                    Conflict::Skip => PlanAction::Skip,
+                };
+                (dest, action)
+            }
+        };
+        plan.total_bytes += bytes;
+        if action.is_active() {
+            plan.active_bytes += bytes;
+        }
+        plan.items.push(PlanItem {
+            src: src.clone(),
+            dest,
+            bytes,
+            action,
+        });
+    }
+    plan
+}
+
 /// **전송 단일 경로**(원본 TransferPathsInto 이식) — 모든 복사/이동 진입점이 이 함수로 수렴.
 ///
 /// 보장(docs/33): 같은 폴더 규칙(이동=무동작·복사=순번 복제) · 다른 폴더 충돌은 `resolve`로
@@ -555,56 +678,24 @@ fn transfer_inner(
             out.canceled = true;
             break;
         }
-        let is_dir = src.is_dir();
-        let same_folder = src
-            .parent()
-            .is_some_and(|parent| path_equals(parent, dest_dir));
-
         let result: io::Result<Option<PathBuf>> = (|| {
-            if same_folder {
-                return match op {
-                    Op::Move => Ok(None), // 제자리 이동 = 무동작(원본 규칙)
-                    Op::Copy => {
-                        // 같은 폴더 복사 = 순번 복제(" (2)"…)
-                        let dest = unique_dest(dest_dir, &leaf_name(src), is_dir);
-                        on_event(Event::ItemStart {
-                            index: i,
-                            dest: &dest,
-                        });
-                        copy_onto_with_progress(
-                            src,
-                            &dest,
-                            false,
-                            &mut |d| {
-                                done += d;
-                                on_event(Event::Bytes(Progress {
-                                    done_bytes: done,
-                                    total_bytes,
-                                    item_index: i,
-                                    item_count,
-                                }));
-                            },
-                            cancel,
-                        )?;
-                        Ok(Some(dest))
-                    }
-                };
-            }
-            if is_dir && op == Op::Move && is_same_or_sub(src, dest_dir) {
-                return Err(io::Error::other("자기 자신/하위 폴더로는 이동할 수 없음"));
-            }
-            let natural = dest_dir.join(leaf_name(src));
-            let overwrite = if exists(&natural) {
-                match resolve(&natural) {
-                    Conflict::Skip => return Ok(None),
-                    Conflict::Overwrite => true,
+            // 자리 판정은 `placement`(dry-run `plan_transfer`와 같은 함수 · 10-24).
+            let (dest, overwrite) = match placement(src, dest_dir, op) {
+                Placement::NoOp => return Ok(None), // 제자리 이동 = 무동작(원본 규칙)
+                Placement::Duplicate(dest) => (dest, false), // 같은 폴더 복사 = 순번 복제(" (2)"…)
+                Placement::IntoSelf => return Err(io::Error::other(INTO_SELF_MSG)),
+                Placement::Into { dest, exists } => {
+                    let overwrite = exists
+                        && match resolve(&dest) {
+                            Conflict::Skip => return Ok(None),
+                            Conflict::Overwrite => true,
+                        };
+                    (dest, overwrite)
                 }
-            } else {
-                false
             };
             on_event(Event::ItemStart {
                 index: i,
-                dest: &natural,
+                dest: &dest,
             });
             let mut bytes = |d: u64| {
                 done += d;
@@ -616,10 +707,10 @@ fn transfer_inner(
                 }));
             };
             match op {
-                Op::Copy => copy_onto_with_progress(src, &natural, overwrite, &mut bytes, cancel)?,
-                Op::Move => move_onto_with_progress(src, &natural, overwrite, &mut bytes, cancel)?,
+                Op::Copy => copy_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)?,
+                Op::Move => move_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)?,
             }
-            Ok(Some(natural))
+            Ok(Some(dest))
         })();
 
         let status = match &result {
@@ -715,6 +806,60 @@ mod tests {
             "같은 폴더 복사 = 순번 복제"
         );
         assert_eq!(fs::read_to_string(d.join("f (2).txt")).unwrap(), "내용");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// dry-run(`plan_transfer` · 10-24): 실행과 같은 판정(충돌 → resolve · 같은 폴더 · 자기/하위 이동) · 크기 합 · 파일 시스템 불변 ·
+    /// 실제 `transfer` 결과와 자리가 일치한다.
+    #[test]
+    fn plan_transfer_mirrors_transfer_decisions_without_touching() {
+        let d = fixture("plan");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(a.join("sub")).unwrap();
+        fs::create_dir(&b).unwrap();
+        fs::write(a.join("f.txt"), "1").unwrap();
+        fs::write(a.join("sub/g.txt"), "22").unwrap();
+        fs::write(b.join("f.txt"), "old").unwrap();
+        let srcs = vec![a.join("f.txt"), a.join("sub")];
+
+        let p = plan_transfer(&srcs, &b, Op::Copy, &mut |_| Conflict::Skip);
+        assert_eq!(p.items.len(), 2);
+        assert_eq!(
+            (&p.items[0].action, &p.items[0].dest, p.items[0].bytes),
+            (&PlanAction::Skip, &b.join("f.txt"), 1)
+        );
+        assert_eq!(
+            (&p.items[1].action, &p.items[1].dest, p.items[1].bytes),
+            (&PlanAction::Transfer, &b.join("sub"), 2)
+        );
+        assert_eq!((p.total_bytes, p.active_bytes), (3, 2));
+        let p2 = plan_transfer(&srcs, &b, Op::Copy, &mut |_| Conflict::Overwrite);
+        assert_eq!(p2.items[0].action, PlanAction::Overwrite);
+        assert_eq!(p2.active_bytes, 3);
+        // 같은 폴더: 복사 = 순번 복제 · 이동 = 무동작 · 자기/하위 이동 = 오류.
+        let same = plan_transfer(&srcs[..1], &a, Op::Copy, &mut no_conflict);
+        assert_eq!(
+            (&same.items[0].action, &same.items[0].dest),
+            (&PlanAction::Duplicate, &a.join("f (2).txt"))
+        );
+        let noop = plan_transfer(&srcs[..1], &a, Op::Move, &mut no_conflict);
+        assert_eq!(noop.items[0].action, PlanAction::NoOp);
+        assert_eq!(noop.active_bytes, 0);
+        let into_self = plan_transfer(
+            std::slice::from_ref(&a),
+            &a.join("sub"),
+            Op::Move,
+            &mut no_conflict,
+        );
+        assert!(matches!(into_self.items[0].action, PlanAction::Error(_)));
+        assert!(!into_self.items[0].action.is_active());
+        // 아무것도 바뀌지 않았다.
+        assert!(!b.join("sub").exists() && !a.join("f (2).txt").exists());
+        assert_eq!(fs::read_to_string(b.join("f.txt")).unwrap(), "old");
+        // 실행 결과와 일치.
+        let out = run(&srcs, &b, Op::Copy, &mut |_| Conflict::Skip);
+        assert_eq!(out.skipped, vec![a.join("f.txt")]);
+        assert_eq!(out.transferred, vec![(a.join("sub"), b.join("sub"))]);
         fs::remove_dir_all(&d).unwrap();
     }
 
