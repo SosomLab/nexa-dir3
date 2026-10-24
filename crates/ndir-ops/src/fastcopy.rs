@@ -1149,17 +1149,27 @@ mod tests {
             let dest = d.join("out.bin");
             let hit = AtomicBool::new(false);
             let stop = || hit.load(Ordering::Relaxed);
-            let e = copy_file(
+            match copy_file(
                 &src,
                 &dest,
                 false,
                 &mut |_| hit.store(true, Ordering::Relaxed),
                 &stop,
                 t,
-            )
-            .unwrap_err();
-            assert_eq!(e.kind(), io::ErrorKind::Interrupted, "{t:?}");
-            assert!(!dest.exists(), "부분 파일 정리 {t:?}");
+            ) {
+                Err(e) => {
+                    assert_eq!(e.kind(), io::ErrorKind::Interrupted, "{t:?}");
+                    assert!(!dest.exists(), "부분 파일 정리 {t:?}");
+                }
+                // 블록 복제(APFS clonefile · Linux reflink)는 **즉시** 끝나 중단할 틈이 없다 — 그때는 완전한 사본이어야 한다
+                // (macOS CI 10-24 · 합계 보고는 성공 뒤라 첫 보고 때 이미 끝난 상태).
+                Ok(()) => {
+                    assert!(t.native, "루프 경로는 중단된다 {t:?}");
+                    assert_eq!(fs::metadata(&dest).unwrap().len(), 24 * 1024 * 1024);
+                    fs::remove_file(&dest).unwrap();
+                }
+            }
+            assert!(hit.load(Ordering::Relaxed));
             let e = copy_file(&src, &dest, false, &mut |_| {}, &stop, t).unwrap_err();
             assert_eq!(e.kind(), io::ErrorKind::Interrupted);
             assert!(!dest.exists());

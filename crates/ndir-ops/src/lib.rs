@@ -915,8 +915,13 @@ mod tests {
         let (a, b) = (d.join("a"), d.join("b"));
         fs::create_dir_all(&a).unwrap();
         fs::create_dir_all(&b).unwrap();
-        // 4MB 청크 2개 이상이 되도록 9MB — 첫 청크 보고에서 취소
+        // 4MB 청크 2개 이상이 되도록 9MB — 첫 청크 보고에서 취소. 엔진 계약(취소 = `canceled` · 부분 파일 정리) 시험이라 OS 블록 복제
+        // (APFS clonefile · reflink — 즉시 끝나 중단할 틈이 없다 · macOS CI 10-24)를 피해 **루프 경로**로 돌린다(전역 조절값 · 끝에 복원).
         fs::write(a.join("big.bin"), vec![1u8; 9 * 1024 * 1024]).unwrap();
+        fastcopy::set_tuning(fastcopy::Tuning {
+            native: false,
+            ..fastcopy::Tuning::default()
+        });
         let cancel = AtomicBool::new(false);
         let out = transfer(
             &[a.join("big.bin")],
@@ -930,6 +935,7 @@ mod tests {
             },
             &cancel,
         );
+        fastcopy::set_tuning(fastcopy::Tuning::default());
         assert!(out.canceled);
         assert!(out.transferred.is_empty());
         assert!(!b.join("big.bin").exists(), "부분 파일 정리");
