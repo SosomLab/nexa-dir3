@@ -38,6 +38,7 @@ Keep the sibling repositories next to this one: `../nexa-ui` and `../nexa-licens
 cargo build --workspace
 cargo run -p nexa-dir -- --smoke        # start without a window (startup check)
 cargo run -p nexa-dir -- --selfcheck    # self-check (doctor); in a Windows console use `ndir --selfcheck`
+cargo run -p nexa-copy -- --help        # nexa-copy: fast copy/move CLI on the same transfer engine (OS copy paths, parallel small files)
 scripts/check-3os.sh                    # 3-OS cross check before push
 ```
 

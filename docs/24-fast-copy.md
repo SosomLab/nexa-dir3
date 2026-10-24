@@ -140,3 +140,15 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 | 큰 파일 읽기/쓰기 분리(FastCopy 방식) | 서로 다른 물리 디스크 사이에서만 이득 · 구현 큼 · 측정 뒤 결정(T-98). |
 | 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98(NEW-007 ②~⑩). |
 | T6 기준선 | `bench_copy`를 perf-baseline에 편입 · Linux/macOS 실측은 그 PC 세션에서. |
+
+## 7. 명령행 실행파일 `nexa-copy`(1차 · 10-24 · 사용자 "별도 실행파일로 제공해서 cli로")
+
+- **자리**: `crates/nexa-copy`(bin · 의존 = ndir-ops뿐 · 창 · 설정 파일 · 라이선스 없음 · 외부 crate 0) — NEW-007 제공 형태 "bin `nexa-copy`".
+  엔진은 앱과 **같은 길**(`ndir_ops::transfer` + `fastcopy` 전략 계층)이라 같은 폴더 규칙 · 충돌 정책 · 스테이징 교체 · 교차 볼륨 이동 ·
+  항목별 실패 격리 · OS 복사 경로 · 작은 파일 병렬이 그대로다.
+- **사용**: `nexa-copy [options] <source>... <destination-folder>` — `--move` · `--overwrite`(기본 = 건너뜀) · `--threads <n>`(0 = 자동) ·
+  `--no-native` · `--unbuffered-mb <n>`(Windows) · `-q` · `-h` · `-V`. 진행 · 요약은 stderr(stdout은 비움 · 파이프 친화) · 영어 고정.
+- **종료 코드**: 0 = 전부 완료 · 1 = 실패 항목 있음 · 2 = 인자/대상 오류 · 130 = 취소.
+- **시험**: `cli::tests`(인자 해석 순수 · 사람이 읽는 수치 · 샌드박스 실행 = 복사 · 건너뜀 · 덮어쓰기 · 이동 · 오류 코드).
+- **남은 것**: Ctrl+C 취소(OS 신호 → `cancel` 원자값 · 외부 crate 없이 Windows `SetConsoleCtrlHandler` / Unix `sigaction`) · 패키지 동봉(MSI/pkg/deb/rpm ·
+  포터블 zip · `release.yml` — 채널 결정) · `--dry-run`/필터/검증/미러(T-97 → T-98) · 대화형 충돌(`--ask`).

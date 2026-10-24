@@ -14,6 +14,7 @@
 cargo build --workspace                 # Debug(의존 크레이트는 opt-level 2)
 cargo build --release -p nexa-dir       # 배포 프로필(lto fat · panic abort · strip)
 cargo run -p nexa-dir -- --version      # 버전 = 루트 Cargo.toml 하나
+cargo run -p nexa-copy -- --help        # 고속 복사 CLI(별도 실행파일 · 같은 전송 엔진 · docs/24 §7)
 ```
 
 ### 2-1. 동봉 플러그인(.wasm) 빌드

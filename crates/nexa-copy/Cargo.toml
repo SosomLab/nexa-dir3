@@ -1,0 +1,20 @@
+[package]
+name = "nexa-copy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Nexa Copy — fast file copy/move command line built on the Nexa Dir transfer engine (OS copy paths, parallel small files, progress, conflict policy)"
+
+[[bin]]
+name = "nexa-copy"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ndir-ops = { workspace = true }
