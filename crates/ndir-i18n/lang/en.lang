@@ -478,6 +478,8 @@ pref.folderSizeSettle = Folder size: settle time (ms)
 pref.folderSizeSettle.desc = When moving quickly through folders with the keyboard or scrolling, a request that comes sooner than this after the previous selection is not queued; only the last folder is measured once you stop (no work is created for folders you passed). 0 = always immediately.
 pref.dockMaxDefer = Maximum dock update delay (ms)
 pref.dockMaxDefer.desc = While the selection keeps changing (drag selection, key repeat) dock updates wait until it settles, but once this much time has passed since the first change the docks update anyway. 0 = no limit (wait until it settles).
+pref.dockInfoWait = Info dock wait (ms)
+pref.dockInfoWait.desc = The info dock reads file details (size, dates, size on disk) in the background. If that finishes within this time they appear immediately; otherwise the name and path appear first and the rest is filled in (no freeze on slow drives).
 pref.toolbarSize = Toolbar icon size
 pref.toolbarSize.desc = Size of the top toolbar icons. Applied immediately.
 pref.toolbarSize.16 = 16 (small)

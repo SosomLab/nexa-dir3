@@ -441,6 +441,11 @@ pub(crate) trait Disk {
     fn size_on_disk(&self, _path: &Path) -> Option<u64> {
         None
     }
+    /// [`Disk::size_on_disk`]를 **다른 스레드에서** 부를 수 있는 함수(T-189 ③ 정보 도크 워커) — 상태 없는 OS 구현만 `Some`.
+    /// `None`(기본 · 가짜) = 호출부가 UI 스레드에서 `size_on_disk`를 부른다(종전).
+    fn size_on_disk_fn(&self) -> Option<fn(&Path) -> Option<u64>> {
+        None
+    }
 }
 
 // ───────────────────────── 드롭 수신(자체 수신부 — Windows `windrop` · 다른 OS는 winit 기본 수신 + 포인터 조회)

@@ -268,6 +268,10 @@ const DROPEFFECT_MOVE: u32 = 2;
 pub(super) struct NativeDisk;
 
 impl Disk for NativeDisk {
+    fn size_on_disk_fn(&self) -> Option<fn(&Path) -> Option<u64>> {
+        Some(|p| NativeDisk.size_on_disk(p))
+    }
+
     fn size_on_disk(&self, path: &Path) -> Option<u64> {
         // 네트워크 경로(`\\server\share`)는 묻지 않는다 — 볼륨 조회가 네트워크 왕복이라 UI 스레드를 멈춘다(dir2 fileinfo.rs:83).
         let text = path.as_os_str().to_string_lossy();

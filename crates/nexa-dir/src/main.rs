@@ -503,6 +503,8 @@ struct App {
     docks_first: Option<Instant>,
     /// 도크 사진 디코드 워커(10-18 · `app/imgjobs.rs` — 마우스 선택 체감: UI 스레드 디코드 제거).
     preview_decode: app::imgjobs::PreviewDecoder,
+    /// 정보 도크 메타데이터 워커(T-189 ③).
+    info_probe: app::infojobs::InfoProber,
     /// 마지막 상태줄 갱신 때의 키(활성 패널 · 행 수 · 선택 수 · 캐럿 · 탭) — 마우스 이동만으로는 상태줄을 다시 만들지 않는다(10-18).
     last_status_key: app::input::StatusKey,
     /// 진행 창 안에서 묻고 있는 덮어쓰기 질문의 회신 통로(워커가 기다린다 · app/dialogs.rs `conflict_ask`).
@@ -841,6 +843,7 @@ impl App {
             docks_due: None,
             docks_first: None,
             preview_decode: app::imgjobs::PreviewDecoder::new(),
+            info_probe: app::infojobs::InfoProber::new(),
             last_status_key: (usize::MAX, [(0, 0, None, 0, 0); 2]),
             conflict_inline: None,
             history: ndir_ops::history::OperationHistory::default(),
@@ -1106,17 +1109,29 @@ impl App {
                 }
                 2 => (Vec::new(), None), // 터미널 = 호스트가 내용 영역을 직접 그린다(paint_terms)
                 _ => {
+                    // 선택 1개의 메타데이터 · 할당 크기는 워커에서(T-189 ③ · 느린 드라이브에서 행 이동마다 멈춤) — 창 없는 시험 = 동기.
+                    let probe = match selected.as_slice() {
+                        [one] => self.info_probe_for(i, one),
+                        _ => None,
+                    };
                     let disk = &*self.platform.disk;
                     let sizes = &self.dirsizes;
-                    (
-                        dockinfo::info_lines(
+                    let lines = match &probe {
+                        Some(pr) => dockinfo::info_lines_from(
+                            &selected,
+                            &current,
+                            &|_| pr.basic.clone(),
+                            &|p| pr.on_disk.unwrap_or_else(|| disk.size_on_disk(p)),
+                            &|p| app::dirsize::size_lines(sizes.get(p)),
+                        ),
+                        None => dockinfo::info_lines(
                             &selected,
                             &current,
                             &|p| disk.size_on_disk(p),
                             &|p| app::dirsize::size_lines(sizes.get(p)),
                         ),
-                        None,
-                    )
+                    };
+                    (lines, None)
                 }
             };
             let subject = selected.first().map_or_else(

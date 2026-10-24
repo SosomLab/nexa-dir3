@@ -1532,6 +1532,16 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 5000 },
         "250"
     ),
+    // 정보 도크 메타데이터 워커를 그 자리에서 기다리는 시간(T-189 ③): 이 안에 오면 종전처럼 바로 보이고 · 넘으면 이름 · 경로 줄 먼저 ·
+    //   결과가 오면 채운다(느린 드라이브에서 UI가 멈추지 않게).
+    e!(
+        "dock.info_wait_ms",
+        CAT_DOCK,
+        "pref.dockInfoWait",
+        "pref.dockInfoWait.desc",
+        Int { min: 0, max: 1000 },
+        "30"
+    ),
     e!(
         "layout.dock_height_pct",
         CAT_DOCK,
@@ -2354,6 +2364,7 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
     "dock.max_defer_ms",
+    "dock.info_wait_ms",
     "log.template",
     "log.switch_scale",
     "log.dev_layers",

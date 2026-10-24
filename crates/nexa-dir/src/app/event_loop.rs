@@ -262,6 +262,13 @@ impl ApplicationHandler<Wake> for App {
         if self.preview_decode.busy() {
             next = next.min(now + Duration::from_millis(30));
         }
+        // 정보 도크 메타데이터 워커(T-189 ③) — 같은 꼴.
+        if self.info_probe_tick() {
+            self.redraw();
+        }
+        if self.info_probe.busy() {
+            next = next.min(now + Duration::from_millis(30));
+        }
         // 휴지통 워커(10-18) — 끝나면 결과 반영 · 기다리는 동안 50 ms.
         if self.trash_tick() {
             self.redraw();

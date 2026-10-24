@@ -88,6 +88,17 @@ pub(crate) fn info_lines(
     on_disk: &dyn Fn(&Path) -> Option<u64>,
     dir_size: &dyn Fn(&Path) -> Vec<String>,
 ) -> Vec<String> {
+    info_lines_from(selected, current, &basic, on_disk, dir_size)
+}
+
+/// [`info_lines`]의 몸 — 메타데이터 조회(`basic_of`)를 바깥에서 준다(T-189 ③ · 워커가 미리 잰 값을 쓰려고).
+pub(crate) fn info_lines_from(
+    selected: &[PathBuf],
+    current: &Path,
+    basic_of: &dyn Fn(&Path) -> Option<Basic>,
+    on_disk: &dyn Fn(&Path) -> Option<u64>,
+    dir_size: &dyn Fn(&Path) -> Vec<String>,
+) -> Vec<String> {
     match selected {
         // 가상 최상위는 내부 표식(`::PC::`)이 아니라 경로 바와 같은 표시명으로(10-03 캡처 검토에서 적발).
         [] => {
@@ -98,7 +109,7 @@ pub(crate) fn info_lines(
             };
             vec![trf("info.currentFolder", &[&shown])]
         }
-        [one] => match basic(one) {
+        [one] => match basic_of(one) {
             Some(b) => {
                 let name = one
                     .file_name()
