@@ -169,22 +169,40 @@ pub(crate) fn view_with_submenus(
     out
 }
 
-/// 메뉴 구획(메뉴 라벨 키 · `MENU_IDS` 시작 · 끝) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다.
-pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
-    ("menu.file", 0, 11),
-    ("menu.edit", 11, 23),
-    ("menu.view", 23, 50),
-    ("menu.go", 50, 63),
-    ("menu.help", 63, usize::MAX),
+/// 메뉴 구획(메뉴 라벨 키 · **구획 첫 명령 id**) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다. 10-25 구조 처방(협업 제안):
+/// 종전 `(시작, 끝)` 인덱스 표는 항목을 하나 넣을 때마다 뒤 구획 전부와 시험 인덱스가 밀렸다(10-24~25에 4회) → 첫 명령 id로 적고
+/// 경계는 [`section_bounds`]가 `MENU_IDS`에서 찾는다. 항목 추가 = `MENU_IDS` 한 줄.
+pub(crate) const MENU_SECTIONS: [(&str, &str); 5] = [
+    ("menu.file", "file.new_tab"),
+    ("menu.edit", "edit.undo"),
+    ("menu.view", "view.mode_tree"),
+    ("menu.go", "nav.back"),
+    ("menu.help", "help.about"),
 ];
+
+/// 구획 `i`의 `MENU_IDS` 범위 `[시작, 끝)`(순수) — 끝 = 다음 구획의 시작 · 마지막 구획 = 표 끝. 시작 id가 표에 없으면(정의 오류) 빈 범위.
+pub(crate) fn section_bounds(i: usize) -> (usize, usize) {
+    let start_of = |k: usize| {
+        MENU_SECTIONS
+            .get(k)
+            .and_then(|(_, first)| MENU_IDS.iter().position(|m| m == first))
+    };
+    let Some(s) = start_of(i) else {
+        return (0, 0);
+    };
+    let e = start_of(i + 1).unwrap_or(MENU_IDS.len());
+    (s, e.max(s))
+}
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
 pub(crate) fn menu_of(id: &str) -> Option<&'static str> {
     let idx = MENU_IDS.iter().position(|m| *m == id)?;
-    MENU_SECTIONS
-        .iter()
-        .find(|(_, s, e)| (*s..*e).contains(&idx))
-        .map(|(m, _, _)| *m)
+    (0..MENU_SECTIONS.len())
+        .find(|&i| {
+            let (s, e) = section_bounds(i);
+            (s..e).contains(&idx)
+        })
+        .map(|i| MENU_SECTIONS[i].0)
 }
 
 /// 잠긴 항목 안내 글(순수 · dir2 `del.lockedMsg`): 개수 + 이름 목록(최대 10줄 · 넘으면 "…외 n개").
@@ -215,8 +233,8 @@ impl App {
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
         let home = ndir_settings::config_dir().unwrap_or_else(std::env::temp_dir);
         let sec = |i: usize| {
-            let (_, s, e) = MENU_SECTIONS[i];
-            &MENU_IDS[s..e.min(MENU_IDS.len())]
+            let (s, e) = section_bounds(i);
+            &MENU_IDS[s..e]
         };
         // 테마 · 언어는 **하위 메뉴**(사용자 10-06 — 1레벨에 "테마: 시스템 · 라이트 · 다크 · 언어: …"가 길게 늘어섰다).
         // 명령 id · 체크(라디오) 동기화는 그대로(id 기반) · 라벨만 짧은 꼴(`menu.sub.*`).
@@ -1145,28 +1163,45 @@ mod tests {
         for id in MENU_IDS.iter().filter(|id| **id != "-") {
             assert!(COMMANDS.iter().any(|c| c.id == *id), "{id} not in COMMANDS");
         }
-        assert_eq!(MENU_IDS[0], "file.new_tab");
-        assert_eq!(MENU_IDS[7], "settings.export");
-        assert_eq!(MENU_IDS[8], "settings.import");
-        assert_eq!(MENU_IDS[11], "edit.undo");
-        assert_eq!(MENU_IDS[20], "edit.select_pattern"); // NEW-054(10-25) — 편집 구획 끝(21 = 구분선 · 22 = 일괄 이름 바꾸기)
-        assert_eq!(MENU_IDS[23], "view.mode_tree");
-        assert_eq!(MENU_IDS[49], "view.lang_system");
-        assert!(MENU_IDS[23..50].contains(&"view.preview_window"));
-        assert!(MENU_IDS[23..50].contains(&"view.palette"));
-        assert!(MENU_IDS[23..50].contains(&"view.log"));
-        assert_eq!(MENU_IDS[50], "nav.back");
-        assert_eq!(MENU_IDS[56], "nav.fav_export");
-        assert_eq!(MENU_IDS[63], "help.about");
-        assert_eq!(MENU_IDS[64], "help.license");
-        assert_eq!(MENU_IDS[65], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 66);
-        // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
-        for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
-            let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);
-            assert_eq!(next.unwrap_or(usize::MAX), *e, "구획 {i} 경계");
-            assert_ne!(MENU_IDS[*s], "-", "구획 {i} 시작은 구분선이 아니다");
+        // 구획 = 첫 명령 id로(10-25 · 인덱스 고정 시험 제거): 시작 id가 표에 있고 · 구획이 순서대로 · 서로 겹치지 않고 · 전부 덮는다.
+        let mut prev_end = 0;
+        for (i, (label, first)) in MENU_SECTIONS.iter().enumerate() {
+            let (s, e) = section_bounds(i);
+            assert_eq!(MENU_IDS[s], *first, "구획 {label} 시작");
+            assert_eq!(s, prev_end, "구획 {label}은 앞 구획 바로 뒤");
+            assert!(e > s, "구획 {label} 비어 있지 않음");
+            assert_ne!(MENU_IDS[e - 1], "-", "구획 {label} 끝은 구분선이 아니다");
+            prev_end = e;
         }
+        assert_eq!(prev_end, MENU_IDS.len(), "마지막 구획 = 표 끝");
+        // 소속(id 기반).
+        for (id, menu) in [
+            ("file.new_tab", "menu.file"),
+            ("settings.export", "menu.file"),
+            ("file.exit", "menu.file"),
+            ("edit.undo", "menu.edit"),
+            ("edit.select_pattern", "menu.edit"),
+            ("edit.bulk_rename", "menu.edit"),
+            ("view.mode_tree", "menu.view"),
+            ("view.preview_window", "menu.view"),
+            ("view.palette", "menu.view"),
+            ("view.log", "menu.view"),
+            ("view.lang_system", "menu.view"),
+            ("nav.back", "menu.go"),
+            ("nav.fav_export", "menu.go"),
+            ("help.about", "menu.help"),
+            ("help.license", "menu.help"),
+            ("help.selfcheck", "menu.help"),
+        ] {
+            assert_eq!(menu_of(id), Some(menu), "{id}");
+        }
+        assert_eq!(
+            menu_of("-"),
+            Some("menu.file"),
+            "구분선도 자리로는 첫 구획(종전 동작 그대로)"
+        );
+        assert_eq!(menu_of("list.context_menu"), None);
+        assert_eq!(section_bounds(99), (0, 0), "없는 구획 = 빈 범위");
     }
 
     /// 테마 · 언어 하위 메뉴(사용자 10-06): View 1레벨에는 테마/언어 항목이 없고 하위 메뉴 2개에 들어 있다 · 구분선이 겹치지 않는다 ·
