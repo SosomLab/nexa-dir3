@@ -187,6 +187,12 @@ impl App {
                 }
             }
             let t1 = tracing.then(Instant::now);
+            if let Some(path) = self.capture_path.take() {
+                // 프레임 캡처(`capture:<파일>` · 10-24): 머리 "NDIRCAP <w> <h>" 한 줄 + 픽셀 u32(XRGB · little-endian) — 변환은 밖에서.
+                let mut out = format!("NDIRCAP {wi} {hi}\n").into_bytes();
+                out.extend(buf.iter().flat_map(|px| px.to_le_bytes()));
+                let _ = std::fs::write(&path, out);
+            }
             match &rects {
                 None => {
                     let _ = buf.present();

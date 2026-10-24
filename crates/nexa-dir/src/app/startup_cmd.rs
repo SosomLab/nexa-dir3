@@ -68,6 +68,7 @@ impl App {
         // 단언 · 종료는 관찰이라 제외(덤프 직전에 트림이 미뤄지면 안 된다).
         let observe = id.contains(".dump:")
             || id.starts_with("dump:")
+            || id.starts_with("capture:")
             || id.starts_with("assert.")
             || id == "quit"
             || id == "app.exit";
@@ -83,6 +84,13 @@ impl App {
         }
         if let Some(path) = id.strip_prefix("dump:") {
             let _ = std::fs::write(path, self.dump_of("all").unwrap_or_default());
+            return;
+        }
+        // 프레임 캡처(`capture:<파일>` · 10-24 자체 검수): 다음 그리기(전체)의 픽셀을 파일로 — 스크린샷 검수용.
+        if let Some(path) = id.strip_prefix("capture:") {
+            self.capture_path = Some(PathBuf::from(path.trim()));
+            self.damage.borrow_mut().full = true;
+            self.redraw();
             return;
         }
         if let Some((target, expr)) = id.strip_prefix("assert.").and_then(|r| r.split_once(':')) {

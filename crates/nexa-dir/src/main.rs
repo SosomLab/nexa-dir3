@@ -402,6 +402,8 @@ struct App {
     dlg_pending: Option<(dlg_win::DlgSpec, app::dialogs::DlgReply)>,
     dlg_reply: Option<app::dialogs::DlgReply>,
     open_prefs: bool,
+    /// 자체 시험용 프레임 캡처(`capture:<파일>` · 10-24): 다음 그리기의 픽셀을 이 파일에(머리 `NDIRCAP w h` + u32 XRGB LE).
+    capture_path: Option<PathBuf>,
     /// settings.json 편집 감시(T-44 · nexa-sql `json_watch`): (경로, 마지막 본 수정 시각) — [편집 JSON…] 뒤에만 · 1 s 폴링.
     json_watch: Option<(PathBuf, Option<std::time::SystemTime>)>,
     json_next: Instant,
@@ -821,6 +823,7 @@ impl App {
             dlg_pending: None,
             dlg_reply: None,
             open_prefs: false,
+            capture_path: None,
             json_watch: None,
             json_next: Instant::now(),
             open_keys: false,

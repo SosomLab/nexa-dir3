@@ -74,6 +74,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | `NDIR_TERM_TRACE` | `<파일>` — 터미널 PTY에서 읽은 **원시 바이트**를 그 파일에 덧붙인다(conhost가 보내는 이스케이프·커서 이동·글자 폭 진단 · §81). `term.dump` 끝에는 PTY에 마지막으로 준 크기 `pty CxR`가 찍힌다 |
 | `NDIR_FAKE_CLIPBOARD` | `1`(빈 값·`0` = 꺼짐) — 텍스트·파일 클립보드를 **프로세스 안 가짜**로 쓴다(OS 클립보드를 읽지도 쓰지도 않음 · §88). `ndir-check`가 모든 T4 시나리오 프로세스에 항상 넣는다 · 검토용 격리 캡처 실행에도 넣는다 · **사용자 인스턴스에는 넣지 않는다** |
 | 덤프 어휘 | `layout` · `panel` · `list` · `tree` · `tabs` · `status` · `menu` · `ops` · `term` · `preview` · `prefs` · `plugin` · `license` · `log` — 컨트롤·패널마다 `dump()` 하나가 구현 요건 |
+| `capture:<파일>` | 다음 그리기(전체)의 **픽셀**을 파일로(머리 `NDIRCAP <w> <h>` 한 줄 + u32 XRGB little-endian) — 스크린샷 검수용(10-24 · 툴바 자리 틀 아래 선). 변환 = 밖에서(파이썬 `zlib`로 PNG · 세션 scratchpad `cap2png.py`) · `ui.down/move/up` 조합으로 드래그 중 화면을 찍는다 |
 
 ## 6. 자가 점검(`--selfcheck`) 항목
 
