@@ -63,6 +63,12 @@ pub(crate) fn frame_plan(
     FramePlan::Partial(out)
 }
 
+/// 오버레이 프레임 판정(순수): 지금 오버레이가 있거나 **지난 프레임에 있었으면** 전체를 그린다 — 자기 사각형 밖에 그리는 층
+/// (툴팁 · 드롭다운 · 토스트 …)이 사라진 자리를 damage가 모르기 때문(사용자 10-24 툴팁 잔상).
+pub(crate) fn overlay_frame(now: bool, prev: bool) -> bool {
+    now || prev
+}
+
 /// 메뉴 damage(T-189 ⑥ · 순수): 메뉴는 오버레이로 치지 않고 **이번 프레임 메뉴 사각형 ∪ 지난 프레임 메뉴 사각형**을 더 그린다 —
 /// 열림 · 하위 메뉴 펼침 · hover · 닫힘(지난 자리 지우기)이 모두 덮인다. 빈 사각형은 뺀다.
 pub(crate) fn menu_damage(cur: Rect, prev: Rect) -> Vec<Rect> {
@@ -135,7 +141,11 @@ impl App {
             dmg.push(r);
         }
         self.menu_rect_prev = menu_now;
-        let overlay = partial_on && self.overlay_active();
+        // 오버레이가 **사라진 첫 프레임**도 전체(사용자 10-24: 툴팁이 지나간 자리의 테두리 잔상 — 툴팁은 자기 사각형 밖에 그려
+        // damage에 없다 · 메뉴는 `menu_damage`가 지난 자리를 안다).
+        let overlay_now = self.overlay_active();
+        let overlay = partial_on && overlay_frame(overlay_now, self.overlay_prev);
+        self.overlay_prev = overlay_now;
         let mut mode = String::from("full");
         if let Some(mut buf) = surface.frame(size) {
             let plan = frame_plan(
@@ -336,6 +346,18 @@ mod damage_tests {
             FramePlan::Partial(vec![Rect::new(0, 0, 85, 5)]),
             "상한 넘으면 합집합 하나"
         );
+    }
+
+    /// 오버레이 프레임: 있음 · 사라진 첫 프레임 = 전체 · 둘 다 없음 = 부분 가능(사용자 10-24 툴팁 잔상).
+    #[test]
+    fn overlay_frame_includes_the_frame_after_it_disappears() {
+        assert!(overlay_frame(true, false), "나타남");
+        assert!(overlay_frame(true, true), "유지");
+        assert!(
+            overlay_frame(false, true),
+            "사라진 첫 프레임 = 지난 자리 지우기"
+        );
+        assert!(!overlay_frame(false, false), "없음 = 부분 다시 그리기");
     }
 
     /// 메뉴 damage: 이번 ∪ 지난 · 빈 것 제외(열림 = 이번만 · 닫힘 = 지난만 · 둘 다 없음 = 없음).

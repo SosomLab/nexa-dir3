@@ -327,6 +327,8 @@ struct App {
     frame_req_at: std::cell::Cell<Option<Instant>>,
     /// 지난 프레임의 메뉴 사각형(T-189 ⑥ · 닫힌 자리 지우기).
     menu_rect_prev: Rect,
+    /// 지난 프레임에 오버레이(툴팁 · 토스트 …)가 있었나 — 사라진 첫 프레임을 전체로(사용자 10-24 툴팁 잔상).
+    overlay_prev: bool,
     frame_no: u64,
     /// 다음 프레임의 더러워진 영역(10-18 결정 ① 부분 다시 그리기 · `app::paint::Damage`): `redraw()` = 전체 · `redraw_inv` = 사각형만.
     damage: std::cell::RefCell<app::paint::Damage>,
@@ -767,6 +769,7 @@ impl App {
             ready_fired: false,
             frame_req_at: std::cell::Cell::new(None),
             menu_rect_prev: Rect::new(0, 0, 0, 0),
+            overlay_prev: false,
             damage: std::cell::RefCell::new(app::paint::Damage::default()),
             frame_no: 0,
             prefs_win: PrefsWin::new(),
