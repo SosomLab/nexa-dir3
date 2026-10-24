@@ -1551,6 +1551,96 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 1000 },
         "30"
     ),
+    // ★ 값 추출 1차(T-100 · DR-19 · docs/23 §2): 종전 코드 상수 → 설정 키(고급 = Advanced 토글 · 성능 향상 모드가 덮을 대상 NEW-008).
+    e!(
+        "watch.poll_ms",
+        CAT_WATCH,
+        "pref.watchPoll",
+        "pref.watchPoll.desc",
+        Int {
+            min: 250,
+            max: 60000
+        },
+        "1000"
+    ),
+    e!(
+        "watch.notify_ms",
+        CAT_WATCH,
+        "pref.watchNotify",
+        "pref.watchNotify.desc",
+        Int { min: 50, max: 5000 },
+        "250"
+    ),
+    e!(
+        "list.icon_poll_ms",
+        CAT_LIST,
+        "pref.listIconPoll",
+        "pref.listIconPoll.desc",
+        Int { min: 50, max: 2000 },
+        "150"
+    ),
+    e!(
+        "list.icon_cache_max",
+        CAT_LIST,
+        "pref.listIconCacheMax",
+        "pref.listIconCacheMax.desc",
+        Int { min: 64, max: 8192 },
+        "512"
+    ),
+    e!(
+        "term.scrollback",
+        CAT_TERMINAL,
+        "pref.termScrollback",
+        "pref.termScrollback.desc",
+        Int {
+            min: 100,
+            max: 100_000
+        },
+        "800"
+    ),
+    e!(
+        "ui.frame_ms",
+        CAT_APPEARANCE,
+        "pref.frameMs",
+        "pref.frameMs.desc",
+        Int { min: 4, max: 100 },
+        "16"
+    ),
+    e!(
+        "ui.toast_ms",
+        CAT_APPEARANCE,
+        "pref.toastMs",
+        "pref.toastMs.desc",
+        Int {
+            min: 500,
+            max: 30000
+        },
+        "3000"
+    ),
+    e!(
+        "ui.toast_alpha",
+        CAT_APPEARANCE,
+        "pref.toastAlpha",
+        "pref.toastAlpha.desc",
+        Int { min: 10, max: 100 },
+        "85"
+    ),
+    e!(
+        "preview.text_lines",
+        CAT_DOCK,
+        "pref.previewTextLines",
+        "pref.previewTextLines.desc",
+        Int { min: 20, max: 5000 },
+        "200"
+    ),
+    e!(
+        "preview.text_read_kb",
+        CAT_DOCK,
+        "pref.previewTextReadKb",
+        "pref.previewTextReadKb.desc",
+        Int { min: 1, max: 4096 },
+        "16"
+    ),
     e!(
         "layout.dock_height_pct",
         CAT_DOCK,
@@ -2416,6 +2506,13 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_settle_ms",
     "dock.max_defer_ms",
     "dock.info_wait_ms",
+    // 값 추출 1차(T-100): 폴링 · 캐시 · 프레임 · 읽기 상한은 고급(스크롤백 · 토스트 · 미리보기 줄 수는 일반).
+    "watch.poll_ms",
+    "watch.notify_ms",
+    "list.icon_poll_ms",
+    "list.icon_cache_max",
+    "ui.frame_ms",
+    "preview.text_read_kb",
     "log.template",
     "log.switch_scale",
     "log.dev_layers",

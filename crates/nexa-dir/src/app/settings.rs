@@ -209,6 +209,24 @@ impl App {
                     .to_string();
                 self.apply_col_layout_str(&v);
             }
+            // 값 추출 1차(T-100 · docs/23 §2): 읽을 때 반영되는 키는 다음 틱/그리기를 당기고 · 캐시/상한은 즉시 넣는다.
+            "watch.poll_ms" | "watch.notify_ms" => {
+                self.watch_next = Instant::now(); // 다음 틱이 새 간격으로 예약
+            }
+            "list.icon_poll_ms" | "ui.frame_ms" | "term.scrollback" => {
+                self.redraw(); // 다음 틱 · 그리기가 설정을 읽는다
+            }
+            "list.icon_cache_max" | "preview.text_lines" | "preview.text_read_kb" => {
+                self.apply_runtime_tuning();
+                self.update_docks(); // 미리보기 상한이 바뀌면 지금 미리보기도 다시
+            }
+            "ui.toast_ms" | "ui.toast_alpha" => {
+                let (ms, alpha) = Self::toast_tuning(&self.settings);
+                self.toasts.configure(ms, alpha);
+                for t in &mut self.panel_toasts {
+                    t.configure(ms, alpha);
+                }
+            }
             "list.col_width_sync" => {
                 self.sync_menu_checks();
                 // 설정 창에서 켜도 툴바·메뉴로 켤 때와 같이 즉시 맞춘다(기준 = 활성 패널 · 종전 = 체크만 바뀌었다).
@@ -303,6 +321,27 @@ impl App {
     /// 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` → 전송 엔진의 복사 전략(다음 파일부터 적용).
     pub(crate) fn apply_transfer_tuning(&self) {
         ndir_ops::fastcopy::set_tuning(Self::transfer_tuning(&self.settings));
+    }
+
+    /// 토스트 표시 시간 · 불투명도(순수 · `ui.toast_ms` · `ui.toast_alpha` · T-100).
+    pub(crate) fn toast_tuning(s: &Settings) -> (i64, i64) {
+        (
+            s.int("ui.toast_ms").clamp(500, 30_000),
+            s.int("ui.toast_alpha").clamp(10, 100),
+        )
+    }
+
+    /// 값 추출 1차(T-100)의 즉시 반영분: 행 아이콘 캐시 상한 · 텍스트 미리보기 상한(바이트 · 줄). 기동 때와 설정 변경 때.
+    pub(crate) fn apply_runtime_tuning(&self) {
+        app::row_icons::set_icon_cache_max(
+            usize::try_from(self.settings.int("list.icon_cache_max")).unwrap_or(512),
+        );
+        crate::preview::set_text_caps(
+            usize::try_from(self.settings.int("preview.text_read_kb"))
+                .unwrap_or(16)
+                .saturating_mul(1024),
+            usize::try_from(self.settings.int("preview.text_lines")).unwrap_or(200),
+        );
     }
 
     /// 설정 → 복사 전략(순수).

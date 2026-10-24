@@ -43,8 +43,23 @@ const IMAGE_EXTS: [&str; 9] = [
     "png", "jpg", "jpeg", "bmp", "gif", "ico", "tif", "tiff", "webp",
 ];
 
+/// 텍스트 미리보기 상한 기본값(바이트 · 줄) — 실제 값은 설정 `preview.text_read_kb` · `preview.text_lines`([`set_text_caps`] · T-100).
 const TEXT_READ_CAP: usize = 16 * 1024;
 const TEXT_LINE_CAP: usize = 200;
+
+thread_local! {
+    static TEXT_CAPS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((TEXT_READ_CAP, TEXT_LINE_CAP)) };
+}
+
+/// 텍스트 미리보기 상한을 설정값으로(읽기 바이트 · 줄 수 · UI 스레드 · T-100).
+pub(crate) fn set_text_caps(read_bytes: usize, lines: usize) {
+    TEXT_CAPS.with(|c| c.set((read_bytes.max(512), lines.max(1))));
+}
+
+/// 지금 상한(시험 · 덤프).
+pub(crate) fn text_caps() -> (usize, usize) {
+    TEXT_CAPS.with(std::cell::Cell::get)
+}
 
 /// 상한까지 읽어 (내용, 이진 여부) — 공급자·호스트 API 공용. `Err` = 열기 실패.
 pub(crate) fn read_text(path: &Path, cap: usize) -> Result<(String, bool), ()> {
@@ -234,7 +249,8 @@ impl PreviewProvider for BuiltinText {
         &self.exts // 빈 목록 = 폴백 전용
     }
     fn preview(&self, path: &Path) -> PreviewDoc {
-        let Ok((text, binary)) = read_text(path, TEXT_READ_CAP) else {
+        let (read_cap, line_cap) = text_caps();
+        let Ok((text, binary)) = read_text(path, read_cap) else {
             return PreviewDoc::Lines(vec![tr("preview.fail")]);
         };
         if text.is_empty() {
@@ -245,7 +261,7 @@ impl PreviewProvider for BuiltinText {
         }
         PreviewDoc::Lines(
             text.lines()
-                .take(TEXT_LINE_CAP)
+                .take(line_cap)
                 .map(|l| l.replace('\t', "    "))
                 .collect(),
         )

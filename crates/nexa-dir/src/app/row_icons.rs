@@ -22,9 +22,27 @@ use nexa_fs::shell::{IconKey, IconService, Lookup};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
-const ICON_POLL_MS: u64 = 150;
-/// 캐시 상한(dir2 `CAPACITY 256`의 여유분 — 셸 아이콘 캐시는 넘으면 가장 오래 안 쓴 절반을 버린다 · 테마 이미지는 통째로).
+/// 캐시 상한 기본값(dir2 `CAPACITY 256`의 여유분 — 셸 아이콘 캐시는 넘으면 가장 오래 안 쓴 절반을 버린다 · 테마 이미지는 통째로).
+/// 실제 상한은 설정 `list.icon_cache_max`([`set_icon_cache_max`] · T-100) · 폴링 간격은 `list.icon_poll_ms`.
 const CACHE_MAX: usize = 512;
+
+thread_local! {
+    static CACHE_CAP: Cell<usize> = const { Cell::new(CACHE_MAX) };
+}
+
+/// 캐시 상한을 설정값으로(앱 기동 · 설정 변경 — UI 스레드의 캐시만 · T-100).
+pub(crate) fn set_icon_cache_max(n: usize) {
+    CACHE_CAP.with(|c| c.set(n.max(16)));
+}
+
+fn cache_cap() -> usize {
+    CACHE_CAP.with(Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn cache_cap_for_test() -> usize {
+    cache_cap()
+}
 
 /// 셸 아이콘 캐시(스레드 로컬): 키 → (이미지, 마지막 사용 틱). `tick`은 조회마다 1씩 올라 LRU 축출의 기준이 된다.
 #[derive(Default)]
@@ -44,7 +62,7 @@ impl IconCache {
     }
 
     fn insert(&mut self, key: &str, img: Rc<nexa_gfx::IconImage>) {
-        if self.map.len() >= CACHE_MAX {
+        if self.map.len() >= cache_cap() {
             self.evict_half();
         }
         self.tick += 1;
@@ -252,7 +270,7 @@ fn theme_icon(key: &str, hint: &str, size: i32) -> Option<Rc<nexa_gfx::IconImage
     let file = nexa_fs::icontheme::icon_file(path, is_dir, size.max(1) as u32)?;
     THEME_IMAGES.with(|c| {
         let mut c = c.borrow_mut();
-        if c.len() > CACHE_MAX {
+        if c.len() > cache_cap() {
             c.clear();
         }
         c.entry(file)
@@ -399,7 +417,11 @@ impl App {
             PENDING.with(|p| p.set(false)); // 다음 그리기가 아직 조회 중인 것이 있으면 다시 켠다
             self.redraw();
         }
-        Some(now + Duration::from_millis(ICON_POLL_MS))
+        Some(
+            now + Duration::from_millis(
+                self.settings.int("list.icon_poll_ms").clamp(50, 2000) as u64
+            ),
+        )
     }
 }
 

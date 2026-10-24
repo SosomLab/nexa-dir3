@@ -62,6 +62,8 @@ pub(crate) struct TermStyle {
     /// 줄 바꿈 = 가시 폭이 열 수 · 아니면 `cols` 고정 + 가로 스크롤.
     pub wrap: bool,
     pub cols: usize,
+    /// 스크롤백 줄 상한(설정 `term.scrollback` · T-100) — 그릴 때 화면에 반영한다.
+    pub scrollback: usize,
     /// 줄(칸) 높이 지정(px) — Windows Terminal 따라가기: 그 글꼴의 줄 높이(어센트+디센트+줄 간격). `None` = 종전 규칙.
     pub cell_h: Option<i32>,
 }
@@ -73,6 +75,7 @@ impl Default for TermStyle {
             font_delta: 0.0,
             wrap: true,
             cols: 240,
+            scrollback: ndir_term::MAX_SCROLLBACK,
         }
     }
 }
@@ -604,6 +607,9 @@ impl TermView {
         row_h: i32,
         style: &TermStyle,
     ) {
+        if self.screen.max_scrollback() != style.scrollback {
+            self.screen.set_max_scrollback(style.scrollback); // 설정 `term.scrollback`(T-100) — 그릴 때 반영
+        }
         let (cols, rows, cell_w, cell_h) = Self::grid_dims(dc, rc, row_h, style);
         let argb = |c: u32| Color::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8);
         dc.fill_rect(rc, argb(pal.bg));
@@ -884,6 +890,7 @@ mod tests {
             wrap: false,
             cols: 120,
             cell_h: None,
+            scrollback: ndir_term::MAX_SCROLLBACK,
         };
         let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
         let th = Theme::dark();

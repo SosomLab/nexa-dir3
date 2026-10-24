@@ -48,7 +48,8 @@ pub const DEFAULT_FG: u32 = 0x0000_0000;
 pub const DEFAULT_BG: u32 = 0x0000_0001;
 /// ANSI 16색 태그(알파 바이트 0x01) — 하위 바이트가 인덱스.
 pub const ANSI_TAG: u32 = 0x0100_0000;
-const MAX_SCROLLBACK: usize = 800;
+/// 스크롤백 줄 상한 기본값 — 실제 상한은 [`VtScreen::set_max_scrollback`](앱 설정 `term.scrollback` · T-100).
+pub const MAX_SCROLLBACK: usize = 800;
 
 /// 터미널 색 팔레트 — 기본 전경/배경 + ANSI 16색(0xFFRRGGBB). 앱 테마(다크/라이트)가 고른다.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -574,6 +575,8 @@ pub struct VtScreen {
     rows: usize,
     screen: Vec<Vec<TermCell>>,
     scrollback: Vec<Vec<TermCell>>,
+    /// 스크롤백 줄 상한([`Self::set_max_scrollback`] · 기본 [`MAX_SCROLLBACK`]).
+    max_scrollback: usize,
     cx: usize,
     cy: usize,
     saved_cx: usize,
@@ -605,6 +608,7 @@ impl VtScreen {
             rows: 0,
             screen: Vec::new(),
             scrollback: Vec::new(),
+            max_scrollback: MAX_SCROLLBACK,
             cx: 0,
             cy: 0,
             saved_cx: 0,
@@ -648,6 +652,19 @@ impl VtScreen {
 
     pub fn scrollback_count(&self) -> usize {
         self.scrollback.len()
+    }
+
+    /// 스크롤백 줄 상한을 바꾼다(최소 1 · 줄이면 오래된 줄부터 즉시 버린다 · 늘리면 새 출력부터 더 보관 · T-100).
+    pub fn set_max_scrollback(&mut self, n: usize) {
+        self.max_scrollback = n.max(1);
+        if self.scrollback.len() > self.max_scrollback {
+            let excess = self.scrollback.len() - self.max_scrollback;
+            self.scrollback.drain(0..excess);
+        }
+    }
+
+    pub fn max_scrollback(&self) -> usize {
+        self.max_scrollback
     }
 
     /// 마우스 추적 모드(X-5 — TUI가 DECSET으로 켬): `(모드 1000/1002/1003, SGR 인코딩)`.
@@ -981,8 +998,8 @@ impl VtScreen {
             // top 줄을 빼내 빈 줄로 바꾼 뒤 아래로 회전 — 결과: 영역이 한 줄 위로
             self.screen[self.top..=self.bottom].rotate_left(1);
         }
-        if full && self.scrollback.len() > MAX_SCROLLBACK {
-            let excess = self.scrollback.len() - MAX_SCROLLBACK;
+        if full && self.scrollback.len() > self.max_scrollback {
+            let excess = self.scrollback.len() - self.max_scrollback;
             self.scrollback.drain(0..excess);
         }
     }
@@ -1874,5 +1891,24 @@ mod tests {
         assert!(
             row[0].italic && row[1].italic && !row[2].italic && row[3].italic && !row[4].italic
         );
+    }
+
+    /// 스크롤백 상한 설정(T-100): 줄이면 즉시 오래된 줄부터 버리고 · 늘리면 그 상한까지 보관 · 기본 = `MAX_SCROLLBACK`.
+    #[test]
+    fn scrollback_limit_follows_setting() {
+        let mut s = VtScreen::new(10, 2);
+        assert_eq!(s.max_scrollback(), MAX_SCROLLBACK);
+        for i in 0..50 {
+            s.feed(&format!("line{i}\r\n"));
+        }
+        assert!(s.scrollback_count() >= 40, "{}", s.scrollback_count());
+        s.set_max_scrollback(5);
+        assert_eq!(s.scrollback_count(), 5);
+        for i in 0..20 {
+            s.feed(&format!("more{i}\r\n"));
+        }
+        assert_eq!(s.scrollback_count(), 5, "상한 유지");
+        s.set_max_scrollback(0);
+        assert_eq!(s.max_scrollback(), 1, "최소 1");
     }
 }

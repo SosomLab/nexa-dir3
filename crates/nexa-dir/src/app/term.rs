@@ -101,6 +101,7 @@ impl App {
             },
             wrap: self.settings.flag("term.wrap"),
             cols: self.settings.int("term.cols").clamp(80, 1000) as usize,
+            scrollback: self.settings.int("term.scrollback").clamp(100, 100_000) as usize,
         }
     }
 

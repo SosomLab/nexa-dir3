@@ -8155,6 +8155,60 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }
 
+/// 값 추출 1차(T-100 · DR-19 · docs/23 §2): 종전 코드 상수 10개가 설정 키로 — 감시 간격(통지/폴링 종류는 포트 · 값은 설정) · 행 아이콘
+/// 폴링/캐시 상한 · 터미널 스크롤백 · 프레임 간격 · 토스트 시간/불투명도 · 미리보기 읽기/줄 상한. 바꾸면 즉시(또는 다음 틱/그리기) 반영.
+#[test]
+fn extracted_runtime_values_follow_settings() {
+    let (mut app, dir) = fixture("extractvals");
+    app.layout_for(1200, 800, 1.0);
+    // 감시: 가짜 포트 = 폴링(1000) → `watch.poll_ms`.
+    let _ = app.settings.set("watch.poll_ms", "2500");
+    app.after_setting_changed("watch.poll_ms");
+    let now = Instant::now();
+    let next = app.watch_tick(now);
+    assert_eq!(next.duration_since(now).as_millis(), 2500);
+    // 행 아이콘 폴링 · 캐시 상한.
+    let _ = app.settings.set("list.icon_poll_ms", "400");
+    let _ = app.settings.set("list.icon_cache_max", "128");
+    app.after_setting_changed("list.icon_cache_max");
+    assert_eq!(app::row_icons::cache_cap_for_test(), 128);
+    // 미리보기 상한.
+    let _ = app.settings.set("preview.text_lines", "33");
+    let _ = app.settings.set("preview.text_read_kb", "2");
+    app.after_setting_changed("preview.text_lines");
+    assert_eq!(crate::preview::text_caps(), (2048, 33));
+    // 터미널 스크롤백 = 스타일로.
+    let _ = app.settings.set("term.scrollback", "1234");
+    assert_eq!(app.term_style().scrollback, 1234);
+    // 토스트 · 프레임 = 순수 계산/클램프.
+    assert!(
+        app.settings.set("ui.toast_ms", "100").is_err(),
+        "범위 밖 = 거부"
+    );
+    let _ = app.settings.set("ui.toast_ms", "700");
+    let _ = app.settings.set("ui.toast_alpha", "50");
+    assert_eq!(App::toast_tuning(&app.settings), (700, 50));
+    app.after_setting_changed("ui.toast_ms");
+    let _ = app.settings.set("ui.frame_ms", "33");
+    assert_eq!(app.settings.int("ui.frame_ms"), 33);
+    // 모든 추출 키가 레지스트리에 있고 기본값이 종전 상수와 같다.
+    for (k, v) in [
+        ("watch.poll_ms", "1000"),
+        ("watch.notify_ms", "250"),
+        ("list.icon_poll_ms", "150"),
+        ("list.icon_cache_max", "512"),
+        ("term.scrollback", "800"),
+        ("ui.frame_ms", "16"),
+        ("ui.toast_ms", "3000"),
+        ("ui.toast_alpha", "85"),
+        ("preview.text_lines", "200"),
+        ("preview.text_read_kb", "16"),
+    ] {
+        assert_eq!(ndir_settings::entry(k).map(|e| e.default), Some(v), "{k}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 경로 제안 팝업 덤프 어휘(T-106 2/2 · CI-106 · nexa-ui 224): `panel` 덤프 `suggest closed` / `open sel <n|-> items [잎 이름…]` — 우클릭으로
 /// 편집 시작 → `ui.key:ctrl+a` → `ui.type:<폴더>/s` = 하위 폴더 `sub` 제안 · `ui.press:down` = 선택 0 · `ui.press:escape` = 닫힘(편집 유지) ·
 /// `assert.panel:` 어휘로도 판정.

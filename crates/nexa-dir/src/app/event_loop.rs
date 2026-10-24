@@ -243,7 +243,8 @@ impl ApplicationHandler<Wake> for App {
                 .into_iter()
                 .any(|k| self.split_of(k).is_animating() || self.split_of(k).is_dragging());
         let mut next = if live {
-            now + Duration::from_millis(16)
+            // 애니메이션 프레임 간격 = 설정 `ui.frame_ms`(T-100 · 기본 16 ≈ 60 fps).
+            now + Duration::from_millis(self.settings.int("ui.frame_ms").clamp(4, 100) as u64)
         } else {
             now + Duration::from_secs(3600)
         };

@@ -78,7 +78,16 @@ impl App {
         if now < self.watch_next {
             return self.watch_next;
         }
-        self.watch_next = now + Duration::from_millis(self.platform.watcher.poll_interval_ms());
+        // 포트가 말하는 간격은 **종류**만 본다(OS 통지 = 1000 미만 · 폴링 폴백 = 1000) — 실제 값은 설정(T-100 값 추출 1차 ·
+        // `watch.notify_ms` / `watch.poll_ms` · docs/23).
+        let port_ms = self.platform.watcher.poll_interval_ms();
+        let key = if port_ms < 1000 {
+            "watch.notify_ms"
+        } else {
+            "watch.poll_ms"
+        };
+        let ms = self.settings.int(key).clamp(50, 60_000) as u64;
+        self.watch_next = now + Duration::from_millis(ms);
         self.drives_tick(now);
         self.watch_sync();
         // 미뤄 둔 변경(편집·전송 중이던 것)을 이번 변경과 합친다.

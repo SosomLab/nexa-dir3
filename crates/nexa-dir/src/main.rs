@@ -640,11 +640,13 @@ impl App {
         let dual = settings.get("layout.panel_mode").unwrap_or("dual") == "dual";
         let m = panel_metrics(&settings, 1.0);
         let mut inv = Invalidations::default();
+        // 토스트 표시 시간 · 불투명도 = 설정 `ui.toast_ms` · `ui.toast_alpha`(T-100 값 추출 1차 · 종전 3000 · 85 고정).
+        let (toast_ms, toast_alpha) = App::toast_tuning(&settings);
         let mut toasts = toast::Toasts::new();
-        toasts.configure(3000, 85);
+        toasts.configure(toast_ms, toast_alpha);
         let mut panel_toasts = [toast::Toasts::new(), toast::Toasts::new()];
         for t in &mut panel_toasts {
-            t.configure(3000, 85);
+            t.configure(toast_ms, toast_alpha);
         }
         // 도구 모음 = dir2 28px 셀 / 아이콘 20(08-11 사용자 확정).
         // 런처 시드/마이그레이션(dir2 WINA-054): 첫 실행 = OS별 시드 · 구버전 = 누락분 추가 · 결과는 설정에 저장.
@@ -919,6 +921,7 @@ impl App {
         app.apply_window_sizes();
         app.apply_log_settings();
         app.apply_dirsize_tuning();
+        app.apply_runtime_tuning(); // 값 추출 1차(T-100): 아이콘 캐시 상한 · 미리보기 읽기 상한(토스트 · 프레임 · 감시 · 스크롤백은 읽을 때)
         app.log_plugin_notes();
         if app.settings.flag("log.open_at_start") {
             app.open_log = true;
