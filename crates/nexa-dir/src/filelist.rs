@@ -673,6 +673,16 @@ impl TreeSource {
         self.tree.as_ref().map_or(0, Tree::selection_count)
     }
 
+    /// 선택 수와 첫 경로(삽입 순서) — 도크 갱신용(T-189 ② · 선택 전체 경로 복제 없이).
+    pub(crate) fn selection_head(&self) -> (usize, Option<PathBuf>) {
+        self.tree.as_ref().map_or((0, None), |t| {
+            (
+                t.selection_count(),
+                t.selected_path(0).map(Path::to_path_buf),
+            )
+        })
+    }
+
     /// 상태줄 요약 — `status.itemCount` / `status.selectedCount`.
     pub(crate) fn status_text(&self) -> String {
         if let Some(e) = &self.error {

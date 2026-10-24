@@ -9449,3 +9449,36 @@ fn dock_refresh_defer_is_capped() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 도크는 선택 수와 첫 경로만 쓴다(T-189 ② · 선택 전체 복제 없음): 여럿 = "n개 선택" · 1개 = 그 파일 정보 · `selection_head` 값.
+#[test]
+fn docks_use_selection_head_only() {
+    let (mut app, dir) = fixture("dockhead");
+    let names = ["a.txt", "b.txt", "c.txt"];
+    for n in names {
+        std::fs::write(dir.join(n), n).expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let paths: Vec<PathBuf> = names.iter().map(|n| dir.join(n)).collect();
+    app.panels[0].select_paths(&paths, &mut inv);
+    let (count, first) = app.panels[0].selection_head();
+    assert_eq!(count, 3);
+    assert!(first.is_some_and(|p| paths.contains(&p)));
+    app.update_docks();
+    let mut inv2 = Invalidations::default();
+    app.docks[0].select_all_text(&mut inv2);
+    let text = app.docks[0].selected_text().unwrap_or_default();
+    assert!(
+        text.contains(&ndir_i18n::trf("info.selected", &["3"])),
+        "{text}"
+    );
+    app.panels[0].select_path(&paths[1], &mut inv);
+    assert_eq!(app.panels[0].selection_head(), (1, Some(paths[1].clone())));
+    app.update_docks();
+    app.docks[0].select_all_text(&mut inv2);
+    let text = app.docks[0].selected_text().unwrap_or_default();
+    assert!(text.contains("b.txt"), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

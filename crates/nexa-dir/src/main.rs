@@ -1055,8 +1055,8 @@ impl App {
         let folder: Option<PathBuf> = (0..2)
             .filter(|&i| self.docks[i].bounds().h > 0 && self.docks[i].active_kind() == 0)
             .map(|i| if single_info { self.active } else { i })
-            .find_map(|src| match self.panels[src].selected_paths().as_slice() {
-                [one] if one.is_dir() => Some(one.clone()),
+            .find_map(|src| match self.panels[src].selection_head() {
+                (1, Some(one)) if one.is_dir() => Some(one),
                 _ => None,
             });
         self.dirsize_sync(folder.as_deref());
@@ -1069,7 +1069,14 @@ impl App {
                 continue;
             }
             let src = if single_info { self.active } else { i };
-            let selected = self.panels[src].selected_paths();
+            // 선택 전체를 복제하지 않는다(T-189 ② · 수만 개 선택에서 이동마다 O(n)) — 도크가 쓰는 것은 선택 수와 첫 경로뿐:
+            // 1개 = 그 경로 · 여럿 = "n개 선택"(미리보기 없음) · 없음 = 현재 폴더.
+            let (count, first) = self.panels[src].selection_head();
+            let selected: Vec<PathBuf> = if count == 1 {
+                first.clone().into_iter().collect()
+            } else {
+                Vec::new()
+            };
             let current = self.panels[src].root_path();
             let (lines, image) = match kind {
                 1 => {
@@ -1120,6 +1127,7 @@ impl App {
                     let disk = &*self.platform.disk;
                     let sizes = &self.dirsizes;
                     let lines = match &probe {
+                        _ if count > 1 => vec![trf("info.selected", &[&count.to_string()])],
                         Some(pr) => dockinfo::info_lines_from(
                             &selected,
                             &current,
@@ -1137,11 +1145,11 @@ impl App {
                     (lines, None)
                 }
             };
-            let subject = selected.first().map_or_else(
+            let subject = first.as_ref().map_or_else(
                 || current.display().to_string(),
                 |p| p.display().to_string(),
             );
-            let key = format!("{kind}|{}|{subject}", selected.len());
+            let key = format!("{kind}|{count}|{subject}");
             self.docks[i].set_content(&key, lines, &mut inv);
             self.docks[i].set_image(image, &mut inv);
             self.docks[i].set_popout(kind == 1, &mut inv);

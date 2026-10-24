@@ -597,6 +597,11 @@ impl Panel {
         self.rows().source().selected_paths()
     }
 
+    /// 선택 수와 첫 경로(T-189 ② · 도크 갱신은 이것만 쓴다).
+    pub(crate) fn selection_head(&self) -> (usize, Option<PathBuf>) {
+        self.rows().source().selection_head()
+    }
+
     /// 선택 반전(`edit.select_invert`) — 활성 탭의 보이는 행.
     pub(crate) fn invert_selection(&mut self, inv: &mut Invalidations) {
         let rows = self.rows_mut();
