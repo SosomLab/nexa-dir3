@@ -1805,6 +1805,22 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.nav.fav_export",
+        CAT_KEYS,
+        "cmd.favExport",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
+        "key.nav.fav_import",
+        CAT_KEYS,
+        "cmd.favImport",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.edit.bulk_rename",
         CAT_KEYS,
         "menu.edit.bulkRename",

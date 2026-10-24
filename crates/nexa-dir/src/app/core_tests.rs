@@ -8133,6 +8133,90 @@ fn settings_export_and_import_round_trip() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 즐겨찾기 내보내기/가져오기(T-196 · NEW-053): `fav.export:<파일>` = 한 줄 한 폴더(주석 머리) · `fav.import:<파일>` = 없던 폴더만 뒤에
+/// 덧붙임(주석 · 빈 줄 · 중복 무시 · 지우지 않음) · 상태줄/로그 · 없는 파일 = 오류 안내 · 팝업 끝 [내보내기…][가져오기…] · 이동 메뉴 명령 2개.
+#[test]
+fn favorites_export_and_import_merge() {
+    let (mut app, dir) = fixture("favio");
+    let sub = dir.join("sub");
+    let other = dir.join("other");
+    std::fs::create_dir_all(&other).expect("mkdir");
+    let _ = app.settings.set(
+        "nav.favorites",
+        &format!("{};;{}", dir.display(), sub.display()),
+    );
+    let file = dir.join("favs.txt");
+    app.startup_cmd(&format!("fav.export:{}", file.display()));
+    let text = std::fs::read_to_string(&file).expect("exported");
+    let lines: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    assert_eq!(
+        lines,
+        vec![dir.display().to_string(), sub.display().to_string()]
+    );
+    assert!(
+        app.statusbar.left().contains("favs.txt"),
+        "{}",
+        app.statusbar.left()
+    );
+    // 가져오기 = 없던 것만 덧붙인다(중복 1 · 추가 1) · 기존 유지 · 저장.
+    let _ = app
+        .settings
+        .set("nav.favorites", &dir.display().to_string());
+    std::fs::write(
+        &file,
+        format!(
+            "# c\n\n{}\n{}\n{}\n",
+            sub.display(),
+            dir.display(),
+            other.display()
+        ),
+    )
+    .expect("write");
+    app.startup_cmd(&format!("fav.import:{}", file.display()));
+    assert_eq!(app.favorites(), vec![dir.clone(), sub, other]);
+    let status = app.statusbar.left().to_string();
+    assert!(
+        status.contains("favs.txt") && status.contains('2') && status.contains('1'),
+        "{status}"
+    );
+    assert!(app.log_win.export_text().contains("favs.txt"));
+    app.startup_cmd(&format!("fav.import:{}", dir.join("none.txt").display()));
+    assert!(app.statusbar.left().contains("none.txt"));
+    assert_eq!(app.favorites().len(), 3, "오류 = 목록 그대로");
+    // 팝업 끝 항목 · 이동 메뉴 명령 · 파일 창 용도.
+    app.command("nav.favorites");
+    let ids: Vec<String> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        &ids[ids.len() - 2..],
+        ["aux.fav.export", "aux.fav.import"],
+        "{ids:?}"
+    );
+    app.ctx_pick("aux.fav.export");
+    assert!(matches!(
+        app.file_purpose,
+        Some(app::license::FilePurpose::FavExport)
+    ));
+    let (mode, _, filters, name) = app.file_window_spec();
+    assert_eq!(mode, nexa_dlg::PickerMode::Save);
+    assert!(!filters.is_empty());
+    assert_eq!(name.as_deref(), Some(app::favorites::FAV_EXPORT_NAME));
+    app.file_purpose = None;
+    assert_eq!(app::menus::menu_of("nav.fav_import"), Some("menu.go"));
+    app.command("nav.fav_import");
+    assert!(matches!(
+        app.file_purpose,
+        Some(app::license::FilePurpose::FavImport)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 폴더 즐겨찾기(T-168): Ctrl+D = 현재 폴더 넣기/빼기(설정 `nav.favorites`) · Ctrl+B = 목록 팝업(`aux.fav:<n>` · 끝에 추가/제거) ·
 /// 항목 고르기 = 그 폴더로 이동 · 내 PC(가상 최상위)는 대상이 아니다.
 #[test]
@@ -8160,7 +8244,12 @@ fn favorites_toggle_menu_and_navigate() {
         .collect();
     assert_eq!(
         ids,
-        vec!["aux.fav:0".to_string(), "aux.fav.toggle".to_string()],
+        vec![
+            "aux.fav:0".to_string(),
+            "aux.fav.toggle".to_string(),
+            "aux.fav.export".to_string(),
+            "aux.fav.import".to_string()
+        ],
         "{ids:?}"
     );
     // 고르면 즐겨찾기 폴더로 이동.

@@ -98,6 +98,8 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "-",
     "nav.favorites",
     "nav.fav_toggle",
+    "nav.fav_export",
+    "nav.fav_import",
     "-",
     "tab.next",
     "tab.prev",
@@ -171,8 +173,8 @@ pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
     ("menu.file", 0, 11),
     ("menu.edit", 11, 22),
     ("menu.view", 22, 49),
-    ("menu.go", 49, 60),
-    ("menu.help", 60, usize::MAX),
+    ("menu.go", 49, 62),
+    ("menu.help", 62, usize::MAX),
 ];
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
@@ -976,6 +978,12 @@ impl App {
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "nav.favorites" => self.open_favorites_menu(),
             "nav.fav_toggle" => self.fav_toggle(),
+            "nav.fav_export" => {
+                self.open_file_window(app::license::FilePurpose::FavExport);
+            }
+            "nav.fav_import" => {
+                self.open_file_window(app::license::FilePurpose::FavImport);
+            }
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
             "edit.select_invert" => self.panels[a].invert_selection(&mut inv),
             "edit.delete" => self.delete_to_trash(),
@@ -1145,10 +1153,11 @@ mod tests {
         assert!(MENU_IDS[22..49].contains(&"view.palette"));
         assert!(MENU_IDS[22..49].contains(&"view.log"));
         assert_eq!(MENU_IDS[49], "nav.back");
-        assert_eq!(MENU_IDS[60], "help.about");
-        assert_eq!(MENU_IDS[61], "help.license");
-        assert_eq!(MENU_IDS[62], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 63);
+        assert_eq!(MENU_IDS[55], "nav.fav_export");
+        assert_eq!(MENU_IDS[62], "help.about");
+        assert_eq!(MENU_IDS[63], "help.license");
+        assert_eq!(MENU_IDS[64], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 65);
         // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
         for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
             let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);

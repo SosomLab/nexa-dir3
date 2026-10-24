@@ -30,6 +30,9 @@ pub(crate) enum FilePurpose {
     /// 설정 내보내기(저장 창 · Portable 범위 · T-195) / 가져오기(열기 창).
     SettingsExport,
     SettingsImport,
+    /// 즐겨찾기 내보내기(저장 창 · 한 줄 = 폴더 · T-196) / 가져오기(열기 창 · 없던 것만 덧붙임).
+    FavExport,
+    FavImport,
 }
 
 impl App {
@@ -266,6 +269,9 @@ impl App {
         let (mode, start, filters) = self.file_window_spec3();
         let name = match &self.file_purpose {
             Some(FilePurpose::SettingsExport) => Some(SETTINGS_EXPORT_NAME.to_string()),
+            Some(FilePurpose::FavExport) => {
+                Some(crate::app::favorites::FAV_EXPORT_NAME.to_string())
+            }
             _ => None,
         };
         (mode, start, filters, name)
@@ -296,6 +302,16 @@ impl App {
                 PickerMode::Open,
                 Some(self.term_cwd(0)),
                 file_win::settings_filters(),
+            ),
+            Some(FilePurpose::FavExport) => (
+                PickerMode::Save,
+                Some(self.term_cwd(0)),
+                file_win::favorites_filters(),
+            ),
+            Some(FilePurpose::FavImport) => (
+                PickerMode::Open,
+                Some(self.term_cwd(0)),
+                file_win::favorites_filters(),
             ),
             // 대상 폴더 고르기 = 반대 패널 폴더에서 시작(듀얼 패널 관례 · 같은 패널이면 현재 폴더).
             Some(FilePurpose::CopyTo(_) | FilePurpose::MoveTo(_)) => (
@@ -342,6 +358,8 @@ impl App {
             }
             Some(FilePurpose::SettingsExport) => self.settings_export_to(&path),
             Some(FilePurpose::SettingsImport) => self.settings_import_from(&path),
+            Some(FilePurpose::FavExport) => self.fav_export_to(&path),
+            Some(FilePurpose::FavImport) => self.fav_import_from(&path),
             None => {}
         }
     }

@@ -109,6 +109,14 @@ pub(crate) fn license_filters() -> Vec<FileFilter> {
     ]
 }
 
+/// 즐겨찾기 내보내기/가져오기 파일 창 필터(T-196): `*.txt` + 전체.
+pub(crate) fn favorites_filters() -> Vec<FileFilter> {
+    vec![
+        FileFilter::new(tr("fav.filter"), &["txt"]),
+        FileFilter::new(tr("fdlg.filter.all"), &[]),
+    ]
+}
+
 /// 설정 내보내기/가져오기 파일 창 필터(T-195): `*.json` + 전체.
 pub(crate) fn settings_filters() -> Vec<FileFilter> {
     vec![

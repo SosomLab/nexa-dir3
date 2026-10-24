@@ -231,6 +231,9 @@ pub const COMMANDS: &[Command] = &[
         "cmd+d",
         "ctrl+d"
     ),
+    // 즐겨찾기 내보내기/가져오기(T-196 · 파일 = 한 줄 한 폴더).
+    c!("nav.fav_export", "cmd.favExport", "", "", ""),
+    c!("nav.fav_import", "cmd.favImport", "", "", ""),
     c!(
         "nav.activate",
         "cmd.activate",

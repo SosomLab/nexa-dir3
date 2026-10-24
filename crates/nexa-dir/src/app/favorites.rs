@@ -12,6 +12,59 @@ use std::path::Path;
 const SEP: &str = ";;";
 const MAX: usize = 64;
 
+/// 즐겨찾기 내보내기 저장 창의 기본 파일 이름(T-196).
+pub(crate) const FAV_EXPORT_NAME: &str = "nexa-dir-favorites.txt";
+
+/// 즐겨찾기 파일(T-196 · 사용자 10-24): UTF-8 글 · **한 줄 = 폴더 1개** · `#` 줄 = 주석 · 빈 줄 무시 — 다른 PC로 옮기거나 손으로 고칠 수
+/// 있게 설정 `nav.favorites`(`;;` 연결)와 다른 꼴을 쓴다.
+pub(crate) fn encode_fav_file(list: &[PathBuf]) -> String {
+    let mut out = String::from(
+        "# Nexa Dir favorites - one folder per line (lines starting with # are ignored)\n",
+    );
+    for p in list {
+        out.push_str(&p.display().to_string());
+        out.push('\n');
+    }
+    out
+}
+
+/// 즐겨찾기 파일 → 폴더 목록(순수 · 주석/빈 줄 제거 · 중복 제거 · 최대 64).
+pub(crate) fn parse_fav_file(text: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for raw in text.lines() {
+        let s = raw.trim().trim_start_matches('\u{feff}');
+        if s.is_empty() || s.starts_with('#') {
+            continue;
+        }
+        let p = PathBuf::from(s);
+        if !out.iter().any(|q| same_fav(q, &p)) {
+            out.push(p);
+        }
+        if out.len() >= MAX {
+            break;
+        }
+    }
+    out
+}
+
+/// 가져오기 병합(순수): 지금 목록 뒤에 **없던 폴더만** 덧붙인다(순서 유지 · 상한 64) → (새 목록, 추가 수, 이미 있던 수).
+pub(crate) fn merge_favs(cur: &[PathBuf], incoming: &[PathBuf]) -> (Vec<PathBuf>, usize, usize) {
+    let mut out: Vec<PathBuf> = cur.to_vec();
+    let (mut added, mut dup) = (0usize, 0usize);
+    for p in incoming {
+        if out.iter().any(|q| same_fav(q, p)) {
+            dup += 1;
+            continue;
+        }
+        if out.len() >= MAX {
+            break;
+        }
+        out.push(p.clone());
+        added += 1;
+    }
+    (out, added, dup)
+}
+
 /// 설정 값 → 폴더 목록(순수 · 빈 항목 제거 · 중복 제거 · 최대 64).
 pub(crate) fn parse_favs(text: &str) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
@@ -115,6 +168,10 @@ impl App {
                 tr(if has { "fav.remove" } else { "fav.add" }),
             ));
         }
+        // 내보내기/가져오기(T-196) — 팝업 끝(이동 메뉴 · 팔레트에도 같은 명령).
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::item("aux.fav.export", tr("cmd.favExport")));
+        items.push(CtxItem::item("aux.fav.import", tr("cmd.favImport")));
         let r = self.panels[self.active].pathbar.bounds();
         self.ctx_anchor_next = Some((r.x, r.bottom()));
         self.open_ctx(CtxKind::Aux(self.active), items);
@@ -140,7 +197,64 @@ impl App {
             self.fav_toggle();
             return true;
         }
+        if id == "aux.fav.export" {
+            self.open_file_window(crate::app::license::FilePurpose::FavExport);
+            return true;
+        }
+        if id == "aux.fav.import" {
+            self.open_file_window(crate::app::license::FilePurpose::FavImport);
+            return true;
+        }
         false
+    }
+
+    /// ★ 즐겨찾기를 파일로(T-196 · 한 줄 = 폴더 1개) — 상태줄 · 로그.
+    pub(crate) fn fav_export_to(&mut self, path: &Path) {
+        let list = self.favorites();
+        let shown = path.display().to_string();
+        let (kind, text) = match std::fs::write(path, encode_fav_file(&list)) {
+            Ok(()) => (
+                ndir_log::LogKind::Info,
+                trf("fav.exported", &[&shown, &list.len().to_string()]),
+            ),
+            Err(e) => (
+                ndir_log::LogKind::Error,
+                trf("fav.fileError", &[&shown, &e.to_string()]),
+            ),
+        };
+        self.log(kind, text.clone());
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&text, &mut inv);
+        self.redraw();
+    }
+
+    /// ★ 파일에서 즐겨찾기 가져오기 — 지금 목록 뒤에 없던 폴더만 덧붙인다(지우지 않는다 · 상한 64) — 상태줄 · 로그.
+    pub(crate) fn fav_import_from(&mut self, path: &Path) {
+        let shown = path.display().to_string();
+        let (kind, text) = match std::fs::read_to_string(path) {
+            Ok(text) => {
+                let incoming = parse_fav_file(&text);
+                let (merged, added, dup) = merge_favs(&self.favorites(), &incoming);
+                if added > 0 {
+                    self.save_favorites(&merged);
+                }
+                (
+                    ndir_log::LogKind::Info,
+                    trf(
+                        "fav.imported",
+                        &[&shown, &added.to_string(), &dup.to_string()],
+                    ),
+                )
+            }
+            Err(e) => (
+                ndir_log::LogKind::Error,
+                trf("fav.fileError", &[&shown, &e.to_string()]),
+            ),
+        };
+        self.log(kind, text.clone());
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&text, &mut inv);
+        self.redraw();
     }
 }
 
@@ -161,5 +275,37 @@ mod tests {
             .collect::<Vec<_>>()
             .join(SEP);
         assert_eq!(parse_favs(&many).len(), MAX);
+    }
+
+    /// 즐겨찾기 파일(T-196): 한 줄 = 폴더 · 주석/빈 줄/BOM 무시 · 중복 제거 · 왕복 · 병합은 없던 것만 덧붙이고 상한을 지킨다.
+    #[test]
+    fn fav_file_round_trip_and_merge() {
+        let list = vec![PathBuf::from("D:/a"), PathBuf::from("D:/b c")];
+        let text = encode_fav_file(&list);
+        assert!(text.starts_with('#') && text.contains("D:/b c\n"));
+        assert_eq!(parse_fav_file(&text), list);
+        let parsed = parse_fav_file("\u{feff}# x\n\n  D:/a  \nD:/a/\nD:/c\n");
+        assert_eq!(
+            parsed,
+            if cfg!(windows) {
+                vec![PathBuf::from("D:/a"), PathBuf::from("D:/c")]
+            } else {
+                vec![
+                    PathBuf::from("D:/a"),
+                    PathBuf::from("D:/a/"),
+                    PathBuf::from("D:/c"),
+                ]
+            }
+        );
+        let (merged, added, dup) =
+            merge_favs(&list, &[PathBuf::from("D:/a"), PathBuf::from("D:/z")]);
+        assert_eq!((added, dup), (1, 1));
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[2], PathBuf::from("D:/z"));
+        let full: Vec<PathBuf> = (0..MAX)
+            .map(|i| PathBuf::from(format!("D:/f{i}")))
+            .collect();
+        let (m2, added, _) = merge_favs(&full, &[PathBuf::from("D:/more")]);
+        assert_eq!((m2.len(), added), (MAX, 0), "상한 64");
     }
 }

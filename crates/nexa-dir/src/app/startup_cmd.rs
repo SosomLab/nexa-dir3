@@ -109,6 +109,15 @@ impl App {
             self.settings_import_from(std::path::Path::new(path.trim()));
             return;
         }
+        // 즐겨찾기 내보내기/가져오기(`fav.export:<파일>` · `fav.import:<파일>` · T-196).
+        if let Some(path) = id.strip_prefix("fav.export:") {
+            self.fav_export_to(std::path::Path::new(path.trim()));
+            return;
+        }
+        if let Some(path) = id.strip_prefix("fav.import:") {
+            self.fav_import_from(std::path::Path::new(path.trim()));
+            return;
+        }
         if let Some(q) = id.strip_prefix("prefs.search:") {
             self.open_prefs = true;
             self.refresh_prefs();
