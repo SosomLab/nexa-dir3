@@ -4,6 +4,8 @@
 
 ## 2026-10-24
 
+- **nexa-copy dry-run 1차**(a7d0772 · `plan_transfer` = 실행과 같은 자리 판정 · `-n` 탭 줄 보고) · 협업 점검 = 엔진 한글 리터럴 오류 문구가 영어 CLI에 노출(처방 대기) → [10-24 §24](journal/2026-10-24.md)
+
 - **T-198 ✅ 로그 상세 마스크 전역 경합 처방**(0096e50 · ndir-log `test-local-mask` · dev-dependencies만 · 릴리스 불변) · gate full 674/0 · T4 37/0 → [10-24 §23](journal/2026-10-24.md)
 
 - **nexa-copy 사용자 실기 ✓**(수동 실행 + Ctrl+C) · cad1208 프로세스 시험 3건 · CI d4205ae ✓ → [10-24 §22](journal/2026-10-24.md)
