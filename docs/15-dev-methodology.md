@@ -48,6 +48,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 4. 미지원은 **조용히 넘기지 않는다**: `Err(Unsupported("…"))` → 상태줄/토스트 한 번 + 로그. 메뉴 항목은 비활성(숨기지 않음 — 배치 유지).
 5. 교차 clippy(`check-3os.sh`)를 push 전에 — `cfg` 모듈 경로 실수는 다른 OS에서만 드러난다. `allow(dead_code)` 무조건 금지 · OS별은 `cfg_attr` + 이유.
 6. OS별 차이 원장 = [port/19](port/19-dir2-shell-integration.md)(셸·클립보드·DnD·휴지통·감시) · [port/18](port/18-dir2-terminal.md)(PTY·셸) · [port/40 §3](port/40-sql-app-skeleton.md)(창·입력·IME·클립보드) — 새 분기를 만들면 해당 문서 표에 한 줄.
+7. **시험의 `cfg!(windows)`(OS별 기대값) 분기는 push 전에 다른 OS 쪽 의미를 제품 코드와 대조한다** — 개발 PC gate는 호스트 OS 시험만 실행하고 다른 두 OS는 clippy뿐이라, 틀린 비호스트 기대값은 CI에서야 드러난다(10-24 af63f73 T-196 `fav_file_round_trip_and_merge`: `same_fav`는 끝 구분자 차이를 모든 OS에서 같게 보는데 unix 기대값이 "다르다"로 적혀 ubuntu·macOS 빨강 → db92084 정정). 대조 근거(어느 함수가 OS별로 갈리는지)를 시험 주석에 한 줄.
 
 ### 2-4. 설정 · i18n 규칙(DR-3 · DR-14)
 
@@ -88,6 +89,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - **Git Bash heredoc이 백슬래시·따옴표를 망가뜨린다**(`\\n` → 실제 개행): 인라인 `python3 - <<EOF`·`perl -pi` 코드 패치는 "치환 2건"이라 보고하면서 파일은 그대로인 유령 현상이 난다(10-03 `.lang` 결함 수정에서 3회 헛돎). → 패치는 **스크립트 파일**(스크래치패드 `.py`)로 쓰고 바이너리 모드로 읽고 쓴 뒤 `grep -c`/`od -c`로 검증.
 - **python 패치 스크립트의 `newline` 인자 오류는 파일을 먼저 비운다**(10-03 `filelist.rs` 0바이트 사고): 치환·assert가 전부 끝난 뒤 임시 파일에 쓰고 `os.replace` · `newline="\n"`(백슬래시 하나) · 사고 시 `git checkout -- <파일>`.
 - 실행 중인 exe가 링크를 막는다 → 내가 띄운 `target/` 아래 `nexa-dir.exe`는 종료하고 진행.
+- 두 세션(개발 · 협업)이 한 작업 트리를 쓸 때 실기 앱은 **커밋 그대로** 빌드한다 — 메인 트리엔 다음 기능의 미커밋 변경이 섞여 있어 `target/debug`는 혼합본이다 → 협업은 형제 worktree(`../nexa-dir3-wt-collab` · detached · 별도 target · 형제 `../nexa-ui` 경로 그대로)에서 빌드하고 exe 사본(scratchpad)을 띄운다(링크 잠금도 피함 · 10-24).
 - Git Bash에서 `target\x` 같은 백슬래시 경로 인자는 `targetx`가 된다 → 슬래시로.
 - `autocrlf`: `.gitattributes`가 텍스트를 LF로 고정 · `.sh`는 체크아웃도 LF.
 
