@@ -566,7 +566,18 @@ impl App {
             "menu.edit.copy"
         });
         let a = self.active;
-        self.toast_panel(a, kind, title, parts.join(" · "));
+        // 완료 토스트 → 실행 취소(T-96 · NEW-006): 되돌릴 것이 있으면(히스토리에 넣었음) 카드를 누르면 `edit.undo`.
+        if out.transferred.is_empty() {
+            self.toast_panel(a, kind, title, parts.join(" · "));
+        } else {
+            self.toast_panel_action(
+                a,
+                kind,
+                format!("{title} \u{2014} {}", tr("ops.undoHint")),
+                parts.join(" · "),
+                "edit.undo",
+            );
+        }
         self.statusbar.set_left(&parts.join(" · "), &mut inv);
         self.update_status();
         self.redraw();

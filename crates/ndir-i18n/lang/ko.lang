@@ -617,6 +617,7 @@ pref.align.top = 상단
 pref.align.center = 중단
 pref.align.bottom = 하단
 ops.doneClosing = 완료 — 잠시 후 닫힙니다
+ops.undoHint = 누르면 실행 취소
 pref.cat.tabs = 탭
 pref.tabDblclick = 탭 더블클릭 동작
 pref.tabDblclick.desc = 탭을 더블클릭했을 때의 동작입니다. 옵션은 추후 추가됩니다.

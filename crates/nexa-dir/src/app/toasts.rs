@@ -26,6 +26,28 @@ impl App {
         self.redraw();
     }
 
+    /// 패널 범위 토스트 + 누르면 실행할 명령(T-96 · NEW-006 "완료 토스트 → 실행 취소"): 카드를 누르면 `action`(명령 id)이
+    /// [`Self::toast_take_action`]으로 거둬져 실행된다.
+    pub(crate) fn toast_panel_action(
+        &mut self,
+        panel: usize,
+        kind: toast::ToastKind,
+        title: impl Into<String>,
+        body: impl Into<String>,
+        action: &str,
+    ) {
+        self.panel_toasts[panel.min(1)].push_action(kind, title, body, action);
+        self.redraw();
+    }
+
+    /// 눌린 카드의 명령 id(전역 → 패널 순 · 1회성).
+    pub(crate) fn toast_take_action(&mut self) -> Option<String> {
+        self.toasts
+            .take_action()
+            .or_else(|| self.panel_toasts[0].take_action())
+            .or_else(|| self.panel_toasts[1].take_action())
+    }
+
     pub(crate) fn toasts_tick(&mut self, now: Instant) -> bool {
         let g = self.toasts.tick(now);
         let a = self.panel_toasts[0].tick(now);

@@ -1109,6 +1109,18 @@ fn copy_cut_paste_undo_through_ops() {
         "복사 = 원본 유지"
     );
     assert!(app.history().can_undo());
+    // 완료 토스트(패널 0) = 누르면 실행 취소(T-96 · 10-25): 카드 클릭 → 명령 `edit.undo` 거둠.
+    assert_eq!(app.panel_toasts[0].len(), 1, "완료 토스트");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let tr_ = app.panel_toasts[0].rects().next().expect("toast rect");
+    assert!(tr_.w > 0 && tr_.h > 0);
+    assert!(app.toasts_click(Point {
+        x: tr_.x + tr_.w / 2,
+        y: tr_.y + tr_.h / 2
+    }));
+    assert_eq!(app.toast_take_action().as_deref(), Some("edit.undo"));
+    assert!(app.panel_toasts[0].is_empty(), "누른 카드는 닫힘");
     // undo(복사) = 사본을 휴지통 포트로(가짜 = 로그만).
     app.command("edit.undo");
     let log = app.platform.log.clone().expect("fake log");

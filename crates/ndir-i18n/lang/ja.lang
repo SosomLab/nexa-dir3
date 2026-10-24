@@ -620,6 +620,7 @@ pref.align.top = 上
 pref.align.center = 中央
 pref.align.bottom = 下
 ops.doneClosing = 完了 — まもなく閉じます
+ops.undoHint = クリックで元に戻す
 pref.cat.tabs = タブ
 pref.tabDblclick = タブのダブルクリック動作
 pref.tabDblclick.desc = タブをダブルクリックしたときの動作です。オプションは今後追加されます。

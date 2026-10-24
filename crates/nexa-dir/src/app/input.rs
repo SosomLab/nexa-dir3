@@ -1088,7 +1088,7 @@ impl App {
                 self.ctx_menu_action(&id);
             }
         }
-        if let Some(id) = self.toasts.take_action() {
+        if let Some(id) = self.toast_take_action() {
             self.command(&id);
         }
         // 선택 수·탭이 바뀌면 상태줄 — 마우스 이동만으로는 건너뛴다(10-18: 이동마다 상태줄·탭 상태바·메뉴 체크·git 동기를
