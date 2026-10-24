@@ -266,10 +266,18 @@ impl App {
             dc.fill_rect(self.launcherbar.bounds(), th.chrome_bg);
             self.launcherbar.paint(dc, &th);
         }
-        dc.fill_rect(
-            Rect::new(0, self.toolbar.bounds().bottom() - 1, wi, 1),
-            th.border,
-        );
+        // 툴바 아래 구분선 — 드래그 중 자리 표시 틀(강조 · 도크 바닥 줄)이 덮이지 않게 그 폭은 비운다(사용자 10-24 · nexa-ui 227).
+        let sep_y = self.toolbar.bounds().bottom() - 1;
+        match self.toolbar.placeholder_rect() {
+            Some(p) if p.w > 0 => {
+                dc.fill_rect(Rect::new(0, sep_y, p.x.max(0), 1), th.border);
+                dc.fill_rect(
+                    Rect::new(p.right(), sep_y, (wi - p.right()).max(0), 1),
+                    th.border,
+                );
+            }
+            _ => dc.fill_rect(Rect::new(0, sep_y, wi, 1), th.border),
+        }
         dc.fill_rect(self.menubar.bounds(), th.chrome_bg);
         // 상태줄
         let sb = self.statusbar.bounds();
