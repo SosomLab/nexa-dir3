@@ -2,7 +2,9 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-24 마감 · Windows PC 회차 + Linux PC 동기 · [journal 10-24 §7~§14](journal/2026-10-24.md) — 그 전 10-24 Linux PC §1~§6 · 10-20 Windows PC 내용은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-24 · Windows PC 회차 계속 · [journal 10-24 §15~§20](journal/2026-10-24.md) — 그 전 §7~§14 마감 · Linux PC §1~§6 · 10-20 내용은 아래 항목에 그대로)
+
+- **★ 10-24 Windows PC 회차 계속(§15~§20 · 개발 55af5d · 협업 c4e334)**: fd5d2df T-106 2/2(경로 제안 덤프 · nexa-ui 224) · f34cf61 T-100 값 추출 1차(10키) · 7293954 nexa-copy Ctrl+C · 82503d0 T-108 2/2 툴바 그룹 플로팅 창(T-108 ✅) · 472721d 툴팁 잔상 · a192d07 떼어 내기 = 놓을 때만 플로팅(nexa-ui 226) · cc7115b + 45c4fb5 자리 틀 아래 선(nexa-ui 227 · 228 · 프레임 캡처 `capture:` + `scripts/cap2png.py` 3e5fdd2) · **CI 전부 ✓(마지막 3e5fdd2)** · nexa-ui = efe3df8(224 · 226 · 228 nexa-sql 컴파일·시험 ✓) · **앱** = 협업 격리 45c4fb5 + nexa-ui 228 PID 6312(worktree 빌드 · `home-1024`) · 설치본 PID 11528(10-22). **✅ 사용자 실기 확인(10-24 §20)**: T-193 · T-194 · T-195 · T-196 · T-197 · T-108 2/2(플로팅 창 · 복원 · 붙이기 · 초기화) · 툴팁 잔상 · 떼어 내기 미리보기/자리 틀 네 변(nexa-ui 226/228) · T-44 [편집 JSON…] · T-100 새 키 10개 즉시 반영. **남은 실기** = nexa-copy 수동/Ctrl+C · 10-24 Linux 회차 4건(T-192 · T-189 ⑥ · T-102 · T-108 1/2 → 1/2는 배치 초기화 ✓로 사실상 확인) · 10-22 설치본 교체. **다음 개발** = 창 투명도 2가지(`window.transparency` 포커스 0 · `window.transparency_blur` 비포커스 40) → 후보 T-164 잔여 · T-198 · nexa-copy 패키지(채널 결정 = 사용자).
 
 - **★ 10-24 Linux PC 동기(§14)**: 두 PC 회차가 main 하나로 합류(45d6cf0 · 브랜치 없음) · Linux 전수 gate full **658/0** · selfcheck 23/0 · T4 36/0 · CI 45d6cf0 ✓ · 세 저장소 로컬 = 원격 · Linux 격리 앱은 e4ea8fb 빌드(Windows 회차 기능 실기는 재빌드 뒤).
 
