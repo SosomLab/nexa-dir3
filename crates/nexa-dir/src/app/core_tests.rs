@@ -10361,3 +10361,46 @@ fn statusbar_transfer_segment_shows_only_while_transferring() {
     assert!(!crate::app::statusline::is_monitor_item("xfer"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 패턴으로 선택/해제(NEW-054 · T-163 · 10-25): 편집 ▸ 패턴으로 선택… → 입력 대화상자(선택 · 선택 해제 · 취소) · `;` 구분 글롭 ·
+/// 대소문자 무시 · 선택에 더하기/빼기(나머지 선택 유지) · 상태줄 수 · 마지막 패턴 기억 · 취소 = 변화 없음.
+#[test]
+fn select_by_pattern_adds_and_removes_matching_rows() {
+    let (mut app, dir) = fixture("selpat");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let count = |app: &App| app.panels[0].rows().source().selection_count();
+    app.command("edit.select_pattern");
+    let dump = app.dlg_dump();
+    assert!(
+        dump.starts_with("pending") && dump.contains("Select by Pattern"),
+        "{dump}"
+    );
+    app.dlg_type("*.TXT");
+    app.dlg_pick(1);
+    assert_eq!(count(&app), 1, "a.txt");
+    assert!(app.statusbar.left().contains("1 item(s) added"));
+    // 더하기 = 기존 선택 유지 · 여러 패턴.
+    app.command("edit.select_pattern");
+    assert_eq!(
+        app.sel_pattern_last, "*.TXT",
+        "마지막 패턴 기억 = 다음 대화상자 초기값"
+    );
+    assert!(app.dlg_dump().contains("| input"), "입력란 있는 대화상자");
+    app.dlg_type("*.md; sub");
+    app.dlg_pick(1);
+    assert_eq!(count(&app), 3, "a.txt + b.md + sub");
+    // 빼기.
+    app.command("edit.select_pattern");
+    app.dlg_type("a*");
+    app.dlg_pick(2);
+    assert_eq!(count(&app), 2);
+    assert!(app.statusbar.left().contains("1 item(s) removed"));
+    // 취소 = 그대로.
+    app.command("edit.select_pattern");
+    app.dlg_type("*");
+    app.dlg_pick(0);
+    assert_eq!(count(&app), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -651,6 +651,14 @@ impl TreeSource {
         }
     }
 
+    /// 패턴 선택/해제(NEW-054) — 보이는 행 중 이름이 패턴(`;` 구분 글롭 · 대소문자 무시)에 맞는 것을 더하거나 뺀다 · 바뀐 수.
+    pub(crate) fn select_pattern(&mut self, spec: &str, select: bool) -> usize {
+        match self.tree.as_mut() {
+            Some(t) => t.select_visible_where(&|n| crate::pathexpand::glob_any_ci(spec, n), select),
+            None => 0,
+        }
+    }
+
     pub(crate) fn selected_paths(&self) -> Vec<PathBuf> {
         self.tree
             .as_ref()

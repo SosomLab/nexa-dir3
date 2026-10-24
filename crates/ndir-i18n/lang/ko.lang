@@ -22,6 +22,7 @@ menu.edit.paste = 붙여넣기
 menu.edit.delete = 삭제
 menu.edit.selectAll = 전체 선택
 menu.edit.selectInvert = 선택 반전
+menu.edit.selectPattern = 패턴으로 선택…
 menu.view = 보기
 menu.view.modeTree = 트리 보기
 menu.view.modeFlat = 플랫 보기
@@ -1096,6 +1097,13 @@ clip.cut = {0}개 항목 잘라냄
 clip.empty = 클립보드에 파일이 없습니다
 dlg.ok = 확인
 dlg.cancel = 취소
+sel.patternTitle = 패턴으로 선택
+sel.patternText = 이름이 패턴 중 하나에 맞는 항목(* 와 ? · 여러 개는 ; 로 구분 · 대소문자 무시)
+sel.pattern = 패턴
+sel.select = 선택
+sel.deselect = 선택 해제
+sel.patternSelected = {0}개 항목을 선택에 더했습니다
+sel.patternDeselected = {0}개 항목을 선택에서 뺐습니다
 
 # ── 라이선스(T-80 · LIC-159) · About 추가 줄 · 파일/폴더 고르기 창 ──
 menu.help.license = 라이선스

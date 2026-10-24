@@ -1898,6 +1898,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.edit.select_pattern",
+        CAT_KEYS,
+        "menu.edit.selectPattern",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.nav.favorites",
         CAT_KEYS,
         "cmd.favorites",

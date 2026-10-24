@@ -348,6 +348,8 @@ struct App {
     /// 전송 진행 창(T-70 · `transfer.close_ms > 0`일 때만) + 열기 깃발.
     progress_win: ProgressWin,
     open_progress: bool,
+    /// 마지막에 쓴 선택 패턴(NEW-054 · 대화상자 초기값).
+    sel_pattern_last: String,
     /// 일괄 이름 변경 창(T-71) + 열기 깃발 + 저장 대기 프리셋 본문.
     bulk_win: BulkWin,
     /// 함께 열린 다른 일괄 이름 변경 창들(사용자 10-18 "중복 띄우기") — 이벤트가 온 창을 `bulk_win` 자리로 바꿔 넣고 다룬다.
@@ -784,6 +786,7 @@ impl App {
             open_preview: false,
             progress_win: ProgressWin::new(),
             open_progress: false,
+            sel_pattern_last: String::new(),
             bulk_win: BulkWin::new(),
             bulk_others: Vec::new(),
             open_bulk: false,

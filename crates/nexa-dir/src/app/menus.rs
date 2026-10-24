@@ -63,6 +63,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "-",
     "edit.select_all",
     "edit.select_invert",
+    "edit.select_pattern",
     "-",
     "edit.bulk_rename",
     "view.mode_tree",
@@ -171,10 +172,10 @@ pub(crate) fn view_with_submenus(
 /// 메뉴 구획(메뉴 라벨 키 · `MENU_IDS` 시작 · 끝) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다.
 pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
     ("menu.file", 0, 11),
-    ("menu.edit", 11, 22),
-    ("menu.view", 22, 49),
-    ("menu.go", 49, 62),
-    ("menu.help", 62, usize::MAX),
+    ("menu.edit", 11, 23),
+    ("menu.view", 23, 50),
+    ("menu.go", 50, 63),
+    ("menu.help", 63, usize::MAX),
 ];
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
@@ -986,6 +987,7 @@ impl App {
             }
             "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
             "edit.select_invert" => self.panels[a].invert_selection(&mut inv),
+            "edit.select_pattern" => self.select_pattern_ask(),
             "edit.delete" => self.delete_to_trash(),
             "edit.delete_permanent" => self.delete_permanent_ask(),
             "edit.copy" => self.clip_write(false),
@@ -1147,17 +1149,18 @@ mod tests {
         assert_eq!(MENU_IDS[7], "settings.export");
         assert_eq!(MENU_IDS[8], "settings.import");
         assert_eq!(MENU_IDS[11], "edit.undo");
-        assert_eq!(MENU_IDS[22], "view.mode_tree");
-        assert_eq!(MENU_IDS[48], "view.lang_system");
-        assert!(MENU_IDS[22..49].contains(&"view.preview_window"));
-        assert!(MENU_IDS[22..49].contains(&"view.palette"));
-        assert!(MENU_IDS[22..49].contains(&"view.log"));
-        assert_eq!(MENU_IDS[49], "nav.back");
-        assert_eq!(MENU_IDS[55], "nav.fav_export");
-        assert_eq!(MENU_IDS[62], "help.about");
-        assert_eq!(MENU_IDS[63], "help.license");
-        assert_eq!(MENU_IDS[64], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 65);
+        assert_eq!(MENU_IDS[20], "edit.select_pattern"); // NEW-054(10-25) — 편집 구획 끝(21 = 구분선 · 22 = 일괄 이름 바꾸기)
+        assert_eq!(MENU_IDS[23], "view.mode_tree");
+        assert_eq!(MENU_IDS[49], "view.lang_system");
+        assert!(MENU_IDS[23..50].contains(&"view.preview_window"));
+        assert!(MENU_IDS[23..50].contains(&"view.palette"));
+        assert!(MENU_IDS[23..50].contains(&"view.log"));
+        assert_eq!(MENU_IDS[50], "nav.back");
+        assert_eq!(MENU_IDS[56], "nav.fav_export");
+        assert_eq!(MENU_IDS[63], "help.about");
+        assert_eq!(MENU_IDS[64], "help.license");
+        assert_eq!(MENU_IDS[65], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 66);
         // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
         for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
             let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);

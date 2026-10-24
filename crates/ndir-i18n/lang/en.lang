@@ -23,6 +23,7 @@ menu.edit.paste = Paste
 menu.edit.delete = Delete
 menu.edit.selectAll = Select All
 menu.edit.selectInvert = Invert Selection
+menu.edit.selectPattern = Select by Pattern…
 menu.view = View
 menu.view.modeTree = Tree View
 menu.view.modeFlat = Flat View
@@ -1097,6 +1098,13 @@ clip.cut = {0} item(s) cut
 clip.empty = Clipboard has no files
 dlg.ok = OK
 dlg.cancel = Cancel
+sel.patternTitle = Select by Pattern
+sel.patternText = Items whose name matches any of the patterns (* and ?, separate with ;, case-insensitive)
+sel.pattern = Pattern
+sel.select = Select
+sel.deselect = Deselect
+sel.patternSelected = {0} item(s) added to the selection
+sel.patternDeselected = {0} item(s) removed from the selection
 
 # ── 라이선스(T-80 · LIC-159) · About 추가 줄 · 파일/폴더 고르기 창 ──
 menu.help.license = License

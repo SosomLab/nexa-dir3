@@ -263,6 +263,18 @@ fn strip_pattern(value: &str, pattern: &str, suffix: bool, longest: bool) -> Str
     value.to_string()
 }
 
+/// 선택 패턴(NEW-054 · 10-25): `;`로 나눈 글롭 여러 개 중 하나라도 이름 전체에 맞으면 참 · 대소문자 무시 · 패턴이 없으면 거짓.
+pub(crate) fn glob_any_ci(spec: &str, name: &str) -> bool {
+    let n: Vec<char> = name.to_lowercase().chars().collect();
+    spec.split(';')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .any(|p| {
+            let pc: Vec<char> = p.to_lowercase().chars().collect();
+            glob(&pc, &n)
+        })
+}
+
 /// 셸 글롭(`*` = 아무 글자 0개 이상 · `?` = 한 글자 · 나머지는 그대로) — 전체 일치.
 fn glob(p: &[char], s: &[char]) -> bool {
     match p.first() {
@@ -542,6 +554,18 @@ pub(crate) fn expand_native(input: &str, pwd: Option<&Path>) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// 선택 패턴(NEW-054): `;` 구분 여러 글롭 · 대소문자 무시 · 전체 일치 · 빈 패턴 = 거짓.
+    #[test]
+    fn glob_any_ci_matches_any_pattern_case_insensitively() {
+        use super::glob_any_ci;
+        assert!(glob_any_ci("*.TXT; a?.md", "readme.txt"));
+        assert!(glob_any_ci("*.txt; a?.md", "ab.MD"));
+        assert!(!glob_any_ci("*.txt; a?.md", "abc.md"), "`?` = 한 글자");
+        assert!(!glob_any_ci("read", "readme.txt"), "전체 일치");
+        assert!(glob_any_ci("sub", "sub"));
+        assert!(!glob_any_ci("", "x") && !glob_any_ci(" ; ", "x"));
+    }
+
     use super::*;
 
     fn env(name: &str) -> Option<String> {

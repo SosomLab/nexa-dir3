@@ -815,6 +815,33 @@ impl Tree {
         }
     }
 
+    /// 패턴 선택/해제(dir3 신규 · NEW-054 · 10-25): 보이는 노드 중 `pred(이름)`이 참인 것을 `select`면 선택에 **더하고** 아니면
+    /// 선택에서 **뺀다**(나머지 선택은 그대로 · 보이는 순서 · anchor 유지). 돌려주는 값 = 바뀐 노드 수.
+    pub fn select_visible_where(&mut self, pred: &dyn Fn(&str) -> bool, select: bool) -> usize {
+        let hits: Vec<NodeId> = self
+            .visible
+            .iter()
+            .copied()
+            .filter(|&id| {
+                self.nodes
+                    .get(id as usize)
+                    .is_some_and(|n| pred(n.name.as_str()))
+            })
+            .collect();
+        let mut changed = 0usize;
+        for id in hits {
+            let had = self.sel_set.contains(&id);
+            if select && !had {
+                self.add_sel(id);
+                changed += 1;
+            } else if !select && had {
+                self.remove_sel(id);
+                changed += 1;
+            }
+        }
+        changed
+    }
+
     /// 선택 해제(anchor는 유지).
     pub fn clear_selection(&mut self) {
         self.sel_order.clear();

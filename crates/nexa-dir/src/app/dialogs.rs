@@ -2,7 +2,7 @@
 //! 소비자: 영구 삭제 확인(`edit.delete_permanent`) · 전송 충돌 4버튼(작업 스레드 요청 → UI 결정 → 채널 회신) · 압축 암호(T-62 B).
 
 use crate::app::ops::ConflictChoice;
-use crate::dlg_win::{DlgAction, DlgSpec};
+use crate::dlg_win::{DlgAction, DlgInput, DlgSpec};
 use crate::*;
 use std::sync::mpsc;
 
@@ -29,6 +29,8 @@ pub(crate) enum DlgReply {
     LauncherItem(Option<usize>),
     /// 이름을 NFC로 변환(10-18): 1 = 폴더 안까지 · 2 = 선택한 것만 · 그 외 취소.
     NfcConvert(Vec<PathBuf>),
+    /// 패턴으로 선택(NEW-054 · 10-25): 1 = 선택에 더함 · 2 = 선택에서 뺌 · 그 외 취소 — 입력 = `;` 구분 글롭.
+    SelectPattern,
 }
 
 /// 덮어쓰기 질문 글 — 이름 + **대상 폴더**(사용자 10-05 "대상 폴더 식별이 되지 않아": 종전에는 이름만 있어 어느 폴더에
@@ -132,6 +134,24 @@ impl App {
                 2 => self.nfc_convert(paths, false),
                 _ => {}
             },
+            DlgReply::SelectPattern => {
+                if matches!(id, 1 | 2) {
+                    let spec = text.unwrap_or_default();
+                    self.sel_pattern_last = spec.clone();
+                    let mut inv = Invalidations::default();
+                    let a = self.active;
+                    let n = self.panels[a].select_pattern(&spec, id == 1, &mut inv);
+                    let key = if id == 1 {
+                        "sel.patternSelected"
+                    } else {
+                        "sel.patternDeselected"
+                    };
+                    // 상태줄 갱신(선택 수 · 탭 상태바) **뒤에** 안내 문구(갱신이 왼쪽 글을 덮어쓴다).
+                    self.update_status();
+                    self.statusbar
+                        .set_left(&trf(key, &[&n.to_string()]), &mut inv);
+                }
+            }
             DlgReply::LauncherItem(at) => {
                 if id == 1 {
                     self.launcher_item_entered(at, text.as_deref().unwrap_or(""));
@@ -148,6 +168,30 @@ impl App {
             }
         }
         self.redraw();
+    }
+
+    /// `edit.select_pattern`(NEW-054): 패턴 입력 대화상자 — [선택] = 맞는 행을 선택에 더함 · [선택 해제] = 뺌 · 마지막 패턴을 기억.
+    pub(crate) fn select_pattern_ask(&mut self) {
+        let spec = DlgSpec {
+            title: tr("sel.patternTitle"),
+            text: tr("sel.patternText"),
+            buttons: vec![
+                (1, tr("sel.select")),
+                (2, tr("sel.deselect")),
+                (0, tr("dlg.cancel")),
+            ],
+            default: 1,
+            cancel: 0,
+            input: Some(DlgInput {
+                label: tr("sel.pattern"),
+                masked: false,
+                initial: self.sel_pattern_last.clone(),
+                placeholder: "*.txt; *.md".into(),
+            }),
+            delay: None,
+            arm: None,
+        };
+        self.ask(spec, DlgReply::SelectPattern);
     }
 
     /// `edit.delete_permanent` — 확인 뒤 `ndir_ops::delete_permanent`(휴지통 경유 없음 · undo 없음).

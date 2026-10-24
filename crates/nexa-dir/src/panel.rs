@@ -701,6 +701,21 @@ impl Panel {
         self.rows().source().selected_paths_in_view_order()
     }
 
+    /// 패턴 선택/해제(`edit.select_pattern` · NEW-054) — 활성 탭의 보이는 행 · 바뀐 행 수.
+    pub(crate) fn select_pattern(
+        &mut self,
+        spec: &str,
+        select: bool,
+        inv: &mut Invalidations,
+    ) -> usize {
+        let rows = self.rows_mut();
+        let n = rows.source_mut().select_pattern(spec, select);
+        if n > 0 {
+            inv.push(rows.bounds());
+        }
+        n
+    }
+
     pub(crate) fn root_path(&self) -> PathBuf {
         self.rows().source().path().to_path_buf()
     }

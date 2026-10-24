@@ -111,6 +111,8 @@ pub const COMMANDS: &[Command] = &[
         "cmd+shift+a",
         "ctrl+shift+a"
     ),
+    // 패턴으로 선택/해제(dir3 신규 · NEW-054 · 10-25) — 기본 단축키 없음(탐색기도 없음 · `key.edit.select_pattern`로 지정).
+    c!("edit.select_pattern", "menu.edit.selectPattern", "", "", ""),
     c!(
         "edit.bulk_rename",
         "menu.edit.bulkRename",
