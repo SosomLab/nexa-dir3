@@ -15,6 +15,19 @@ use nexa_ctl::{DrawCtx, InputEvent, Invalidations, Key as CtlKey, Widget};
 use nexa_explorer::pathbar::PathBar;
 use nexa_grid::{Column, EditKey, RowSource, ScrollAlign, SelectOp, ViewMode, VirtualRows};
 
+/// 워커 결과를 문턱(ms) 안에서만 기다린다 — **문턱 0 = 기다리지 않는다**(설명문 "0 = 늘 옛 목록 먼저" 그대로 · 종전엔
+/// `recv_timeout(0)`이라 빠른 러너(macOS CI 10-24 · `async_navigation_applies_on_tick` 397/1)에서 워커가 그 순간 이미 끝나 있으면
+/// 즉석 적용돼 `pending`이 안 생겼다 — 결과는 다음 틱이 끼운다).
+fn recv_within<T>(
+    rx: &std::sync::mpsc::Receiver<T>,
+    wait_ms: u64,
+) -> Result<T, std::sync::mpsc::RecvTimeoutError> {
+    if wait_ms == 0 {
+        return Err(std::sync::mpsc::RecvTimeoutError::Timeout);
+    }
+    rx.recv_timeout(std::time::Duration::from_millis(wait_ms))
+}
+
 /// 내 PC(드라이브 열) 열 key — 세션 `drivew` 순서(이름 · 종류 · 전체 크기 · 여유 공간 · T-193).
 pub(crate) const DRIVE_KEYS: [u32; 4] = [
     crate::filelist::COL_NAME,
@@ -1818,7 +1831,7 @@ impl Panel {
             return None;
         }
         let rx = TreeSource::open_async(path.clone(), opts);
-        match rx.recv_timeout(std::time::Duration::from_millis(self.async_wait_ms)) {
+        match recv_within(&rx, self.async_wait_ms) {
             Ok(src) => {
                 if let Some(e) = src.error() {
                     let why = e.to_string();
@@ -2277,7 +2290,7 @@ impl Panel {
             return;
         }
         let rx = tab.rows.source().reload_async();
-        match rx.recv_timeout(std::time::Duration::from_millis(wait_ms)) {
+        match recv_within(&rx, wait_ms) {
             Ok(built) => self.apply_reload(i, built, from_watch, inv),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 let src = tab.rows.source();
