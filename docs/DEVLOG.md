@@ -4,6 +4,10 @@
 
 ## 2026-10-24
 
+- **T-164 고속 복사 2차**(53cb878 · Linux `FICLONE`→`copy_file_range` · macOS `copyfile(ALL|CLONE)` 진행 콜백 · Linux 장치 판정 · docs/24 §6) · 협업 사전 리뷰 4건 반영(의사 파일 0바이트 · 폴백 = 보낸 바이트 0일 때만 · EPERM/EBADF · major 0 = 모름) · gate full GREEN → [10-24 §12](journal/2026-10-24.md)
+
+- **T-197 열 폭 저장 경합**(f6fe763 · 동기 켜짐 = 활성 패널 기준 1벌 · 복원 뒤 재동기) · CI ✓ → [10-24 §11](journal/2026-10-24.md)
+
 - **T-196 즐겨찾기 내보내기/가져오기**(af63f73 · NEW-053 · 한 줄 한 폴더 · 없던 것만 덧붙임) · CI 빨강 2건 처방 = macOS 비동기 시험 흔들림(f607d16 · 문턱 0 = 바로 pending) · T-196 시험 unix 기대값(db92084 → 3-OS ✓) · 교훈 docs/15 §2-3 7번 · 열 폭 저장 경합 사용자 승인 → T-197 → [10-24 §10](journal/2026-10-24.md)
 
 - **T-195 설정 내보내기/가져오기**(9de4720 · NEW-052 · nexa-sql 131차 Portable 범위 · 파일 메뉴 · 설정 창 버튼 · `settings.export:`/`import:`) → [10-24 §9](journal/2026-10-24.md)
