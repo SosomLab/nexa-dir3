@@ -297,6 +297,15 @@ pub const REGISTRY: &[Entry] = &[
         Text,
         ""
     ),
+    // 최근 폴더(dir3 신규 · NEW-056) — `;;` 구분 · 최대 20 · 이동할 때 자동 기록(HIDDEN · 이 PC의 흔적 = STATE).
+    e!(
+        "nav.recent",
+        CAT_APPEARANCE,
+        "pref.recent",
+        "pref.recent.desc",
+        Text,
+        ""
+    ),
     e!(
         "ui.prefs_advanced",
         CAT_APPEARANCE,
@@ -1914,6 +1923,14 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.nav.recent",
+        CAT_KEYS,
+        "cmd.recent",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.nav.fav_toggle",
         CAT_KEYS,
         "cmd.favToggle",
@@ -2485,6 +2502,7 @@ pub const HIDDEN: &[&str] = &[
     "launcher.seed",
     "launcher.items",
     "nav.favorites",
+    "nav.recent",
     "ui.prefs_advanced",
     "toolbar.dock_layout",
     "ui.dblclick_ms",

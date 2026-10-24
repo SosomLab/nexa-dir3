@@ -350,6 +350,8 @@ struct App {
     open_progress: bool,
     /// 마지막에 쓴 선택 패턴(NEW-054 · 대화상자 초기값).
     sel_pattern_last: String,
+    /// 패널별 마지막으로 기록한 현재 폴더(NEW-056 최근 폴더 — 바뀐 때만 기록).
+    recent_last: [Option<PathBuf>; 2],
     /// 일괄 이름 변경 창(T-71) + 열기 깃발 + 저장 대기 프리셋 본문.
     bulk_win: BulkWin,
     /// 함께 열린 다른 일괄 이름 변경 창들(사용자 10-18 "중복 띄우기") — 이벤트가 온 창을 `bulk_win` 자리로 바꿔 넣고 다룬다.
@@ -791,6 +793,7 @@ impl App {
             progress_win: ProgressWin::new(),
             open_progress: false,
             sel_pattern_last: String::new(),
+            recent_last: [None, None],
             bulk_win: BulkWin::new(),
             bulk_others: Vec::new(),
             open_bulk: false,
@@ -1017,6 +1020,8 @@ impl App {
                 p.fill_drive_space(disk, &mut inv);
             }
         }
+        // 최근 폴더(NEW-056): 패널의 현재 폴더가 바뀐 때만 기록(상태 갱신 길목 = 모든 이동이 지나는 자리).
+        self.recent_record();
         // 세션 더러움 수거 길목(dir2 PREFS-051: update_status가 양 패널 플래그를 거둔다).
         self.session_collect_dirty(Instant::now());
         let p = &self.panels[self.active];

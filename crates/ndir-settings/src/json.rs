@@ -374,6 +374,7 @@ pub const STATE_KEYS: &[&str] = &[
     "window.log_pos",
     "launcher.seed",
     "nav.favorites",
+    "nav.recent",
     "cloud.conns",
     "ui.prefs_advanced",
 ];

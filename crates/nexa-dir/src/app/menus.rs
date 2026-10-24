@@ -101,6 +101,7 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "nav.fav_toggle",
     "nav.fav_export",
     "nav.fav_import",
+    "nav.recent",
     "-",
     "tab.next",
     "tab.prev",
@@ -996,6 +997,7 @@ impl App {
             "nav.up" => self.panels[a].nav_up(&mut inv),
             "nav.home" => self.panels[a].nav_home(&mut inv),
             "nav.favorites" => self.open_favorites_menu(),
+            "nav.recent" => self.open_recent_menu(),
             "nav.fav_toggle" => self.fav_toggle(),
             "nav.fav_export" => {
                 self.open_file_window(app::license::FilePurpose::FavExport);

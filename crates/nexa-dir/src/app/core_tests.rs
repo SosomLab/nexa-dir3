@@ -10455,3 +10455,58 @@ fn select_by_pattern_adds_and_removes_matching_rows() {
     assert_eq!(count(&app), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 최근 폴더(NEW-056 · T-163 추천 7번 · 10-25): 상태 갱신 길목에서 패널의 현재 폴더가 바뀐 때만 기록(새것 앞 · 중복은 앞으로 · 내 PC 제외) ·
+/// 이동 ▸ 최근 폴더… = 팝업(현재 폴더 제외 · 끝 = 지우기) · 고르면 이동 · 지우기 · 설정 `nav.recent`(HIDDEN · STATE).
+#[test]
+fn recent_folders_record_navigate_and_clear() {
+    let (mut app, dir) = fixture("recent");
+    let sub = dir.join("sub");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    assert_eq!(app.recent_dirs(), vec![dir.clone()], "처음 폴더 기록");
+    let mut inv = Invalidations::default();
+    assert!(app.panels[0].navigate_to(sub.clone(), &mut inv).is_none());
+    app.update_status();
+    app.update_status(); // 같은 폴더 = 다시 기록 안 함
+    assert_eq!(app.recent_dirs(), vec![sub.clone(), dir.clone()]);
+    assert!(
+        ndir_settings::json::portable_key("nav.favorites")
+            == ndir_settings::json::portable_key("nav.recent"),
+        "즐겨찾기와 같은 STATE 취급"
+    );
+    // 팝업: 현재 폴더(sub)는 빼고 dir만 · 지우기.
+    app.command("nav.recent");
+    assert!(app.tab_menu.is_open());
+    let ids: Vec<String> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["aux.recent:1".to_string(), "aux.recent.clear".to_string()],
+        "{ids:?}"
+    );
+    app.ctx_pick("aux.recent:1");
+    assert_eq!(app.panels[0].root_path(), dir);
+    assert_eq!(
+        app.recent_dirs(),
+        vec![dir.clone(), sub],
+        "되돌아간 폴더가 앞으로"
+    );
+    app.command("nav.recent");
+    app.ctx_pick("aux.recent.clear");
+    assert!(app.recent_dirs().is_empty()); // 상태줄 문구는 메뉴 닫힘 뒤 갱신이 덮는다 — 값만 본다
+    app.command("nav.recent");
+    let n = app
+        .ctx_items
+        .iter()
+        .filter(|c| matches!(c, CtxItem::Item { id, .. } if id == "aux.recent.none"))
+        .count();
+    assert_eq!(n, 1, "비면 안내 1줄");
+    let _ = std::fs::remove_dir_all(&dir);
+}

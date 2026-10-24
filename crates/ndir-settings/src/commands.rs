@@ -226,6 +226,8 @@ pub const COMMANDS: &[Command] = &[
         "cmd+b",
         "ctrl+b"
     ),
+    // 최근 폴더(dir3 신규 · NEW-056 · 10-25) — 경로 바 아래 팝업 · 기본 단축키 없음(`key.nav.recent`).
+    c!("nav.recent", "cmd.recent", "", "", ""),
     c!(
         "nav.fav_toggle",
         "cmd.favToggle",

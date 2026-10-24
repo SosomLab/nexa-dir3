@@ -11,6 +11,8 @@ use std::path::Path;
 
 const SEP: &str = ";;";
 const MAX: usize = 64;
+/// 최근 폴더 최대 수(NEW-056).
+pub(crate) const RECENT_MAX: usize = 20;
 
 /// 즐겨찾기 내보내기 저장 창의 기본 파일 이름(T-196).
 pub(crate) const FAV_EXPORT_NAME: &str = "nexa-dir-favorites.txt";
@@ -203,6 +205,91 @@ impl App {
         }
         if id == "aux.fav.import" {
             self.open_file_window(crate::app::license::FilePurpose::FavImport);
+            return true;
+        }
+        false
+    }
+
+    // ── 최근 폴더(NEW-056 · 10-25 · T-163 추천 7번) — 저장 꼴은 즐겨찾기와 같다(`;;` · 설정 `nav.recent` · HIDDEN · STATE) ──
+
+    pub(crate) fn recent_dirs(&self) -> Vec<PathBuf> {
+        parse_favs(self.settings.get("nav.recent").unwrap_or(""))
+    }
+
+    /// 패널의 현재 폴더가 바뀌었으면 맨 앞에 기록(중복은 앞으로 · 최대 [`RECENT_MAX`] · 가상 최상위 제외) — 상태 갱신 길목에서 부른다.
+    pub(crate) fn recent_record(&mut self) {
+        let n = if self.dual { 2 } else { 1 };
+        for i in 0..n {
+            let root = self.panels[i].root_path();
+            if self.recent_last[i].as_deref() == Some(root.as_path()) {
+                continue;
+            }
+            self.recent_last[i] = Some(root.clone());
+            if ndir_vfs::is_virtual_root(&root) {
+                continue;
+            }
+            let mut list = self.recent_dirs();
+            list.retain(|p| !same_fav(p, &root));
+            list.insert(0, root);
+            list.truncate(RECENT_MAX);
+            // 메모리에만(파일 저장은 종료/다른 저장 길목) — 이동마다 설정 파일을 쓰면 그 폴더를 보는 감시·재열람 시험이 흔들린다(10-25).
+            let _ = self.settings.set("nav.recent", &encode_favs(&list));
+        }
+    }
+
+    /// `nav.recent` — 경로 바 아래에 최근 폴더 팝업(활성 패널의 현재 폴더는 빼고 · 끝 = 지우기).
+    pub(crate) fn open_recent_menu(&mut self) {
+        let cur = self.panels[self.active].root_path();
+        let list: Vec<(usize, PathBuf)> = self
+            .recent_dirs()
+            .into_iter()
+            .enumerate()
+            .filter(|(_, p)| !same_fav(p, &cur))
+            .collect();
+        let mut items: Vec<CtxItem> = Vec::new();
+        if list.is_empty() {
+            items.push(CtxItem::maybe("aux.recent.none", tr("recent.empty"), false));
+        }
+        for (i, p) in &list {
+            items.push(CtxItem::maybe(
+                format!("aux.recent:{i}"),
+                filelist::display_path(p),
+                p.is_dir(),
+            ));
+        }
+        items.push(CtxItem::Separator);
+        items.push(CtxItem::maybe(
+            "aux.recent.clear",
+            tr("recent.clear"),
+            !self.recent_dirs().is_empty(),
+        ));
+        let r = self.panels[self.active].pathbar.bounds();
+        self.ctx_anchor_next = Some((r.x, r.bottom()));
+        self.open_ctx(CtxKind::Aux(self.active), items);
+    }
+
+    /// 보조 메뉴의 최근 폴더 항목 처리 — 처리했으면 `true`.
+    pub(crate) fn recent_menu_action(&mut self, panel: usize, id: &str) -> bool {
+        if let Some(i) = id
+            .strip_prefix("aux.recent:")
+            .and_then(|n| n.parse::<usize>().ok())
+        {
+            if let Some(p) = self.recent_dirs().get(i).cloned() {
+                let mut inv = Invalidations::default();
+                if let Some(why) = self.panels[panel].navigate_to(p, &mut inv) {
+                    self.statusbar.set_left(&why, &mut inv);
+                }
+                self.update_status();
+                self.redraw();
+            }
+            return true;
+        }
+        if id == "aux.recent.clear" {
+            let _ = self.settings.set("nav.recent", "");
+            let _ = self.settings.save();
+            let mut inv = Invalidations::default();
+            self.statusbar.set_left(&tr("recent.cleared"), &mut inv);
+            self.redraw();
             return true;
         }
         false
