@@ -8693,6 +8693,42 @@ fn extract_archive_into_named_folder() {
         std::fs::read(dir.join("pack").join("a.txt")).expect("read"),
         b"hello"
     );
+    // 여러 개 차례로(10-25 · T-187 한계 해소): 큐 · 번호 n/m · 둘 다 풀림 · 끝나면 큐/번호 초기화 · 메뉴 = 2개 선택도 하위 메뉴.
+    let (t2, t3) = (dir.join("two.tar"), dir.join("three.tar"));
+    std::fs::write(&t2, &tar).expect("write");
+    std::fs::write(&t3, &tar).expect("write");
+    app.start_extract_many(&[t2.clone(), t3.clone()], false);
+    assert!(app.extract_job.is_some());
+    assert_eq!(app.extract_queue.len(), 1);
+    assert_eq!(app.extract_seq, (1, 2));
+    assert!(
+        app.statusbar.left().contains("(1/2)"),
+        "{}",
+        app.statusbar.left()
+    );
+    let at = std::time::Instant::now();
+    while app.extract_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(dir.join("two").join("a.txt").is_file() && dir.join("three").join("a.txt").is_file());
+    assert!(app.extract_queue.is_empty() && app.extract_seq == (0, 0));
+    let items = app.row_menu_items(&[t2.clone(), t3], Some(&[]));
+    assert!(
+        items
+            .iter()
+            .any(|c| matches!(c, CtxItem::Item { id, children, .. } if id == "ctx.extract" && children.len() == 2)),
+        "압축 파일 여러 개 = 하위 메뉴"
+    );
+    let items = app.row_menu_items(&[t2, dir.join("a.txt")], Some(&[]));
+    assert!(
+        !items
+            .iter()
+            .any(|c| matches!(c, CtxItem::Item { id, .. } if id == "ctx.extract")),
+        "압축 파일이 아닌 것이 섞이면 없음"
+    );
+    app.start_extract_many(&[], false);
+    assert!(app.extract_job.is_none(), "빈 목록 = 무동작");
     // 순수 요약.
     let rep = ndir_vfs::archive::extract::Report {
         files: 2,

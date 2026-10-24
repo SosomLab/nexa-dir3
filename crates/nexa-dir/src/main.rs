@@ -387,6 +387,10 @@ struct App {
     hash_job: Option<app::checksum::HashJob>,
     /// 압축 풀기 작업(T-169 · 전송과 같은 슬롯).
     extract_job: Option<app::extract::ExtractJob>,
+    /// 차례를 기다리는 압축 파일(경로 · 여기에?) — 여러 개 풀기(10-25 · T-187 한계 해소).
+    extract_queue: Vec<(PathBuf, bool)>,
+    /// 여러 개 풀기의 (지금 번호 · 전체) — 1개짜리면 (0, 0).
+    extract_seq: (usize, usize),
     /// 중복 파일 찾기(T-170 · dupes_win.rs) · 열기 요청 · 진행 중인 검색(슬롯 1개).
     dupes_win: dupes_win::DupesWin,
     open_dupes: bool,
@@ -811,6 +815,8 @@ impl App {
             open_hash: false,
             hash_job: None,
             extract_job: None,
+            extract_queue: Vec::new(),
+            extract_seq: (0, 0),
             dupes_win: dupes_win::DupesWin::new(),
             open_dupes: false,
             dup_job: None,

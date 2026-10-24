@@ -92,6 +92,27 @@ impl App {
         self.start_extract_to(archive, &dest);
     }
 
+    /// 여러 압축 파일을 **차례로**(10-25 · T-187 "풀기 = 아카이브 1개만" 해소): 첫 것을 시작하고 나머지는 큐에 — 하나가 끝나면
+    /// [`Self::extract_tick`]이 다음을 시작한다(같은 슬롯 · 진행 창 라벨 "n/m") · 취소하면 남은 것도 멈춘다. 빈 목록 = 무동작.
+    pub(crate) fn start_extract_many(&mut self, archives: &[PathBuf], here: bool) {
+        let Some((first, rest)) = archives.split_first() else {
+            return;
+        };
+        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
+            let mut inv = Invalidations::default();
+            self.statusbar.set_left(&tr("ops.busy"), &mut inv);
+            self.redraw();
+            return;
+        }
+        self.extract_queue = rest.iter().map(|p| (p.clone(), here)).collect();
+        self.extract_seq = if archives.len() > 1 {
+            (1, archives.len())
+        } else {
+            (0, 0)
+        };
+        self.start_extract(first, here);
+    }
+
     /// 지정 폴더로 풀기(우클릭 드래그 드롭 메뉴 "여기에 풀기" = 놓은 폴더 · 10-18).
     pub(crate) fn start_extract_to(&mut self, archive: &Path, dest: &Path) {
         if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
@@ -120,7 +141,17 @@ impl App {
             }
             sh.finished.store(true, Ordering::Release); // 결과를 넣은 뒤(Release) — 수거는 Acquire(10-18)
         });
-        let label = trf("extract.label", &[&ndir_ops::leaf_name(archive)]);
+        let label = match self.extract_seq {
+            (i, n) if n > 1 => trf(
+                "extract.labelSeq",
+                &[
+                    &ndir_ops::leaf_name(archive),
+                    &i.to_string(),
+                    &n.to_string(),
+                ],
+            ),
+            _ => trf("extract.label", &[&ndir_ops::leaf_name(archive)]),
+        };
         if self.settings.int("transfer.close_ms") > 0 {
             self.progress_win.reset(&label);
             self.progress_win.update(0, total.max(1), Vec::new(), 1, 1);
@@ -154,6 +185,7 @@ impl App {
         let job = self.extract_job.take().expect("checked above");
         self.mem_after_job();
         let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
+        let canceled = matches!(&result, Some(Ok(rep)) if rep.canceled);
         let (text, warn) = match result {
             Some(Ok(rep)) => {
                 let warn = rep.canceled
@@ -164,6 +196,10 @@ impl App {
             Some(Err(e)) => (trf("extract.failed", &[&format!("{e:?}")]), true),
             None => (tr("extract.failed"), true),
         };
+        // 취소 = 남은 것도 멈춘다(여러 개 풀기).
+        if canceled {
+            self.extract_queue.clear();
+        }
         if self.progress_win.is_active() {
             let ms = self.settings.int("transfer.close_ms").max(0) as u64;
             let now = self.started.elapsed().as_millis() as u64;
@@ -194,6 +230,14 @@ impl App {
         self.statusbar.set_left(&text, &mut inv);
         self.update_status();
         self.redraw();
+        // 다음 압축 파일(여러 개 풀기 · 10-25): 같은 슬롯에서 바로 시작 — 아직 진행 중(true).
+        if !self.extract_queue.is_empty() {
+            let (next, here) = self.extract_queue.remove(0);
+            self.extract_seq.0 += 1;
+            self.start_extract(&next, here);
+            return self.extract_job.is_some();
+        }
+        self.extract_seq = (0, 0);
         false
     }
 }

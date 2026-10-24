@@ -569,19 +569,30 @@ impl App {
         }) {
             items.push(CtxItem::item("ctx.nfc", tr("ctx.nfc")));
         }
-        // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일 1개일 때 — 여기에 / "<이름>" 폴더에.
-        if let [one] = sel {
-            if one.is_file() && app::extract::extract_ext_ok(one) {
-                let folder = ndir_ops::leaf_name(&app::extract::extract_dest(one, false));
-                items.push(CtxItem::submenu(
-                    "ctx.extract",
-                    tr("ctx.extract"),
-                    vec![
-                        CtxItem::item("ctx.extract_here", tr("ctx.extractHere")),
-                        CtxItem::item("ctx.extract_to", trf("ctx.extractTo", &[&folder])),
-                    ],
-                ));
-            }
+        // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일만 골랐을 때 — 여기에 / "<이름>" 폴더에 · 여러 개면 각자 폴더에
+        // 차례로(10-25 · T-187 한계 해소).
+        if !sel.is_empty()
+            && sel
+                .iter()
+                .all(|p| p.is_file() && app::extract::extract_ext_ok(p))
+        {
+            let to = match sel {
+                [one] => trf(
+                    "ctx.extractTo",
+                    &[&ndir_ops::leaf_name(&app::extract::extract_dest(
+                        one, false,
+                    ))],
+                ),
+                _ => trf("ctx.extractToEach", &[&sel.len().to_string()]),
+            };
+            items.push(CtxItem::submenu(
+                "ctx.extract",
+                tr("ctx.extract"),
+                vec![
+                    CtxItem::item("ctx.extract_here", tr("ctx.extractHere")),
+                    CtxItem::item("ctx.extract_to", to),
+                ],
+            ));
         }
         // 새로 만들기 ▸(SHELL-008 · dir2 CLSID_NewMenu 호스팅 → 자체 서브메뉴): 단일 선택일 때만 · 대상 = 폴더 항목 자신 / 파일 항목 부모 ·
         // 자식 = 폴더 · 텍스트 문서(템플릿에 txt가 없을 때) · OS/사용자 템플릿.
@@ -943,9 +954,12 @@ impl App {
                 }
             }
             "ctx.extract_here" | "ctx.extract_to" => {
-                if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
-                    self.start_extract(&p, id == "ctx.extract_here");
-                }
+                let archives: Vec<PathBuf> = self.panels[panel]
+                    .selected_paths_in_view_order()
+                    .into_iter()
+                    .filter(|p| app::extract::extract_ext_ok(p))
+                    .collect();
+                self.start_extract_many(&archives, id == "ctx.extract_here");
             }
             "ctx.copy_name" => {
                 let text = self.panels[panel]
