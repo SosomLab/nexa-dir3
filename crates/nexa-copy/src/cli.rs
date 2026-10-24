@@ -136,6 +136,18 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
         }
         Ok(Parsed::Run(o)) => {
             crate::ctrlc::install(); // Ctrl+C → 취소 깃발(항목/청크 경계에서 멈추고 요약 · 130)
+                                     // 시험 훅(통합 시험 `tests/cli.rs` · 10-24): `NEXA_COPY_CANCEL_AFTER_MS=<ms>` = 그 뒤 같은 취소 깃발을 세운다(Ctrl+C 대역 ·
+                                     // 콘솔 신호를 OS마다 흉내 내지 않는다). 평소엔 변수 없음 = 비용 0.
+            if let Some(ms) = std::env::var("NEXA_COPY_CANCEL_AFTER_MS")
+                .ok()
+                .and_then(|v| v.trim().parse::<u64>().ok())
+            {
+                let flag = crate::ctrlc::flag();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(ms));
+                    flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                });
+            }
             run_with(&o, crate::ctrlc::flag(), err)
         }
     }
