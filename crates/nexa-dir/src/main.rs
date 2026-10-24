@@ -352,6 +352,8 @@ struct App {
     sel_pattern_last: String,
     /// 패널별 마지막으로 기록한 현재 폴더(NEW-056 최근 폴더 — 바뀐 때만 기록).
     recent_last: [Option<PathBuf>; 2],
+    /// 수동 "폴더 크기 계산"(T-166)이 기다리는 폴더들 — 전부 캐시되면 토스트 1장.
+    dirsize_manual: Vec<PathBuf>,
     /// 일괄 이름 변경 창(T-71) + 열기 깃발 + 저장 대기 프리셋 본문.
     bulk_win: BulkWin,
     /// 함께 열린 다른 일괄 이름 변경 창들(사용자 10-18 "중복 띄우기") — 이벤트가 온 창을 `bulk_win` 자리로 바꿔 넣고 다룬다.
@@ -794,6 +796,7 @@ impl App {
             open_progress: false,
             sel_pattern_last: String::new(),
             recent_last: [None, None],
+            dirsize_manual: Vec::new(),
             bulk_win: BulkWin::new(),
             bulk_others: Vec::new(),
             open_bulk: false,

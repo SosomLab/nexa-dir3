@@ -512,10 +512,79 @@ impl App {
         }
     }
 
+    /// 수동 "폴더 크기 계산"(T-166 · 우클릭 `ctx.folder_size` · 10-25): 고른 폴더들을 큐 뒤쪽으로 요청하고 전부 끝나면 토스트 1장
+    /// (폴더별 크기 최대 5줄 + 합계) · 이미 캐시된 것은 바로 셈 · 크기 열 설정이 켜져 있으면 열에도 나타난다.
+    pub(crate) fn dirsize_manual_request(&mut self, dirs: Vec<PathBuf>) {
+        if dirs.is_empty() || !self.dirsize_enabled() {
+            return;
+        }
+        for d in &dirs {
+            if ndir_vfs::is_virtual_root(d) {
+                continue;
+            }
+            self.dirsizes.request_back(d);
+        }
+        self.dirsize_manual = dirs;
+        let mut inv = Invalidations::default();
+        self.statusbar
+            .set_left(&tr("dirsize.manualStarted"), &mut inv);
+        self.dirsize_manual_check();
+        self.redraw();
+    }
+
+    /// 수동 요청이 전부 끝났으면 토스트 — 끝났으면 `true`.
+    fn dirsize_manual_check(&mut self) -> bool {
+        if self.dirsize_manual.is_empty() {
+            return false;
+        }
+        let states: Vec<(PathBuf, Option<DirSize>)> = self
+            .dirsize_manual
+            .iter()
+            .map(|p| {
+                let done = match self.dirsizes.get(p) {
+                    SizeState::Done(d) => Some(d),
+                    _ => None,
+                };
+                (p.clone(), done)
+            })
+            .collect();
+        if states.iter().any(|(_, s)| s.is_none()) {
+            return false;
+        }
+        self.dirsize_manual.clear();
+        let mut lines: Vec<String> = Vec::new();
+        let mut total = 0u64;
+        for (p, s) in &states {
+            let s = s.as_ref().expect("checked");
+            total += s.bytes;
+            if lines.len() < 5 {
+                lines.push(format!(
+                    "{} — {}{}",
+                    ndir_ops::leaf_name(p),
+                    filelist::format_size(s.bytes),
+                    if s.partial { " \u{2265}" } else { "" }
+                ));
+            }
+        }
+        if states.len() > 5 {
+            lines.push(trf("del.listMore", &[&(states.len() - 5).to_string()]));
+        }
+        let title = trf(
+            "dirsize.manualDone",
+            &[&states.len().to_string(), &filelist::format_size(total)],
+        );
+        let a = self.active;
+        self.toast_panel(a, toast::ToastKind::Info, title, lines.join(" · "));
+        true
+    }
+
     /// 폴링(`OPS_POLL_MS`) — 할 일이 있으면 도크의 상태(대기 · 진행값 · 결과)를 갱신하고 `true`.
     pub(crate) fn dirsize_tick(&mut self) -> bool {
         let now = Instant::now();
         let live = self.dirsizes.tick(now);
+        if self.dirsize_manual_check() {
+            self.redraw();
+        }
         // 상태 전이는 즉시 · 진행값은 250 ms마다(종전 "재는 중이면 틱마다" = 그리기 → 틱 → 그리기 고리 · 10-08 프레임 계측).
         if self.dirsizes.take_display_due(now) {
             self.update_docks_filtered(true); // 정보 도크만(미리보기 도크는 건드리지 않는다 · 10-18)

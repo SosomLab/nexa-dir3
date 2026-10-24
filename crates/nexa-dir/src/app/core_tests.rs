@@ -10594,3 +10594,47 @@ fn quick_filter_bar_narrows_rows_and_restores() {
     assert_eq!(app.panels[0].rows().bounds().h, list_h0, "목록 높이 복원");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 수동 "폴더 크기 계산"(T-166 · 10-25): 우클릭 항목은 선택에 폴더가 있을 때만 활성 · 실행 = 큐 뒤쪽 요청 → 끝나면 토스트 1장(개수 · 합계) ·
+/// 캐시에 들어감 · 설정이 꺼져 있으면 항목 비활성.
+#[test]
+fn manual_folder_size_command_queues_and_toasts() {
+    let (mut app, dir) = fixture("dirsizecmd");
+    let sub = dir.join("sub");
+    std::fs::write(sub.join("big.bin"), vec![0u8; 4096]).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let items = app.row_menu_items(&[dir.join("a.txt")], Some(&[]));
+    assert!(
+        items.iter().any(|c| matches!(c, CtxItem::Item { id, enabled, .. } if id == "ctx.folder_size" && !enabled)),
+        "파일만 = 비활성"
+    );
+    let items = app.row_menu_items(std::slice::from_ref(&sub), Some(&[]));
+    assert!(
+        items.iter().any(|c| matches!(c, CtxItem::Item { id, enabled, .. } if id == "ctx.folder_size" && *enabled)),
+        "폴더 = 활성"
+    );
+    assert!(app.panel_toasts[0].is_empty());
+    app.dirsize_manual_request(vec![sub.clone()]);
+    assert!(app.dirsizes.running(), "요청됨");
+    let at = std::time::Instant::now();
+    while app.dirsize_tick() {
+        assert!(at.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.dirsize_tick();
+    assert_eq!(app.panel_toasts[0].len(), 1, "끝나면 토스트 1장");
+    assert_eq!(
+        app.dirsizes.cached(&sub).map(|d| d.bytes),
+        Some(4096 + 9),
+        "sub/inner.rs 9 B + big.bin"
+    );
+    // 설정 끔 = 항목 비활성.
+    let _ = app.settings.set("dock.folder_size", "off");
+    let items = app.row_menu_items(&[sub], Some(&[]));
+    assert!(items.iter().any(
+        |c| matches!(c, CtxItem::Item { id, enabled, .. } if id == "ctx.folder_size" && !enabled)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}

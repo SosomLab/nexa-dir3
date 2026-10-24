@@ -528,6 +528,15 @@ impl App {
                 "copyName" if !name_anchored => {
                     items.push(CtxItem::item("ctx.copy_name", tr("ctx.copyName")));
                 }
+                // 폴더 크기 계산(T-166 수동 명령 · 10-25): 선택에 폴더가 있을 때 — 작업 큐 뒤쪽으로 재고 끝나면 토스트(합계 · 폴더별).
+                "folderSize" => {
+                    let dirs = sel.iter().filter(|p| p.is_dir()).count();
+                    items.push(CtxItem::maybe(
+                        "ctx.folder_size",
+                        tr("ctx.folderSize"),
+                        dirs > 0 && self.dirsize_enabled(),
+                    ));
+                }
                 // 다른 형식으로 복사 ▸(NEW-055 · 10-25 · T-163 추천 3번): 따옴표 경로 · 슬래시 경로 · 확장자 없는 이름 · 폴더 경로.
                 "copyAs" => items.push(CtxItem::submenu(
                     "ctx.copy_as",
@@ -969,6 +978,14 @@ impl App {
                     .collect::<Vec<_>>()
                     .join("\r\n");
                 let _ = clipboard::write_text(&text);
+            }
+            "ctx.folder_size" => {
+                let dirs: Vec<PathBuf> = self.panels[panel]
+                    .selected_paths_in_view_order()
+                    .into_iter()
+                    .filter(|p| p.is_dir())
+                    .collect();
+                self.dirsize_manual_request(dirs);
             }
             // 다른 형식으로 복사(NEW-055).
             "ctx.copy_path_quoted"
