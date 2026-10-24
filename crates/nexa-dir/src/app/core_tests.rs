@@ -10274,3 +10274,78 @@ fn size_column_shows_folder_sizes_when_enabled() {
     assert!(!app.dirsize_col_enabled(), "성능 향상 모드 = off");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 상태바 전송 진행 칸(T-96 · NEW-006 · 10-25): 전송이 없으면 칸이 없다 · 전송 중 = "T nn%"(탭 칸 뒤) · 클릭 = 진행 창 띄우기
+/// (창 없이 돌던 전송이면 새로 준비) · 끝나면 사라진다 · 순서 편집기 라벨.
+#[test]
+fn statusbar_transfer_segment_shows_only_while_transferring() {
+    use crate::app::ops::{TransferJob, TransferShared};
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
+    use std::sync::{mpsc, Arc, Mutex};
+    let (mut app, dir) = fixture("xferseg");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let ids = |app: &App| -> Vec<String> {
+        app.statusbar
+            .segments()
+            .iter()
+            .map(|s| s.id.clone())
+            .collect()
+    };
+    let text = |app: &App| -> String {
+        app.statusbar
+            .segments()
+            .iter()
+            .find(|s| s.id == "xfer")
+            .map(|s| {
+                s.parts
+                    .iter()
+                    .map(|p| p.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .unwrap_or_default()
+    };
+    assert!(
+        !ids(&app).iter().any(|i| i == "xfer"),
+        "전송 없음 = 칸 없음"
+    );
+    let shared = Arc::new(TransferShared {
+        cancel: AtomicBool::new(false),
+        done: AtomicU64::new(42),
+        total: AtomicU64::new(100),
+        outcome: Mutex::new(None),
+        items: Mutex::new(Vec::new()),
+        current: AtomicUsize::new(1),
+        offsets: Mutex::new(Vec::new()),
+        dirty: AtomicBool::new(false),
+    });
+    let (_tx, rx) = mpsc::channel();
+    app.transfer = Some(TransferJob {
+        shared: Arc::clone(&shared),
+        conflict_rx: rx,
+        op: ndir_ops::Op::Copy,
+        cut: false,
+        count: 1,
+    });
+    app.update_status();
+    let v = ids(&app);
+    assert_eq!(
+        v.iter().position(|i| i == "xfer"),
+        Some(1),
+        "탭 칸 뒤: {v:?}"
+    );
+    assert_eq!(text(&app), "T 42%");
+    // 클릭 = 진행 창(창 없이 돌던 전송 → reset + 열기 요청 · 스냅숏 다시 채움 표시).
+    assert!(!app.progress_win.is_active());
+    app.status_click("xfer", false);
+    assert!(app.open_progress && app.progress_win.is_active());
+    assert!(shared.dirty.load(std::sync::atomic::Ordering::Relaxed));
+    // 끝남 → 칸 사라짐.
+    app.transfer = None;
+    app.update_status();
+    assert!(!ids(&app).iter().any(|i| i == "xfer"));
+    // 순서 편집기 라벨 · 성능 향상 모드에서도 남는 칸(모니터 아님).
+    assert!(!crate::app::statusline::is_monitor_item("xfer"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

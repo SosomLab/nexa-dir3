@@ -63,6 +63,8 @@ pub(crate) const COLUMN_BLOCKS: OrderDefs = &[(
 /// 시스템 / 디스크 = 쓰기 · 읽기 / 네트워크 = 다운로드 · 업로드 — 블록 = 칸 하나 · 자식 = 그 칸 안에 보일 값(순서 · 표시).
 pub(crate) const STATUSBAR_BLOCKS: OrderDefs = &[
     ("tab", &[]),
+    // 전송 진행 칸(T-96 · NEW-006 · 10-25): 전송 중에만 보인다(없으면 칸 자체가 빠짐) · 클릭 = 진행 창.
+    ("xfer", &[]),
     ("cpu", &[]),
     ("mem", &[]),
     ("disk", &["read", "write"]),

@@ -472,8 +472,10 @@ impl App {
                 let mut inv = Invalidations::default();
                 self.statusbar
                     .set_left(&trf("ops.progress", &[&pct]), &mut inv);
-                // 퍼센트 글이 바뀐 틱만 창을 다시 그린다(종전 = 100 ms마다 무조건 · 10-18).
+                // 퍼센트 글이 바뀐 틱만 창을 다시 그린다(종전 = 100 ms마다 무조건 · 10-18) — 그때 진행 칸(T-96)도.
                 if !inv.is_empty() {
+                    let segs = self.status_segments();
+                    self.statusbar.set_segments(segs, &mut inv);
                     self.redraw();
                 }
                 true

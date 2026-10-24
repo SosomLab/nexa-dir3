@@ -65,6 +65,7 @@ fn col_label(_block: &str, item: Option<&str>) -> String {
 fn status_label(block: &str, item: Option<&str>) -> String {
     match (block, item) {
         ("tab", _) => tr("pref.sbo.tab"),
+        ("xfer", _) => tr("pref.sbo.xfer"),
         ("cpu", _) => tr("pref.sbo.cpu"),
         ("license", _) => tr("pref.sbo.license"),
         ("mem", _) => tr("pref.sbo.mem.system"),

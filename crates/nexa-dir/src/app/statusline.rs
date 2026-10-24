@@ -81,16 +81,29 @@ pub(crate) fn git_stale(age_s: u64, refresh_s: u64) -> bool {
 pub(crate) fn status_items_of(value: &str) -> Vec<StatusBlock> {
     let defs = crate::order::STATUSBAR_BLOCKS;
     let mut blocks = crate::order::parse_order_with(defs, value);
-    // 저장값에 없던 새 칸은 맨 뒤에 보충된다 — 앱 메모리 칸이 생기기 전에 저장한 값이면 그 칸을 **라이선스 앞**으로 옮긴다
-    // (맨 오른쪽 = 앱 메모리 · 라이선스 순 — 사용자 10-04).
-    if !value.is_empty() && !value.contains("appmem") {
-        if let (Some(a), Some(l)) = (
-            blocks.iter().position(|b| b.0 == "appmem"),
-            blocks.iter().position(|b| b.0 == "license"),
-        ) {
-            if a > l {
-                let app = blocks.remove(a);
-                blocks.insert(l, app);
+    // 저장값에 없던 새 칸은 맨 뒤에 보충된다 — 저장한 뒤 생긴 칸은 **정의상 앞 형제 뒤**로 옮긴다(앱 메모리 = 라이선스 앞 ·
+    // 사용자 10-04 · 전송 진행 칸 = 탭 뒤 · 10-25 일반화). 사용자가 적어 둔 순서는 건드리지 않는다.
+    if !value.is_empty() {
+        // 저장값에 적힌 블록 이름(토큰 머리 — `appmem`에 `mem`이 들어 있는 식의 부분 일치를 피한다).
+        let named: Vec<&str> = value
+            .split('|')
+            .map(|tok| tok.trim().split(['[', ':']).next().unwrap_or("").trim())
+            .collect();
+        for (di, (name, _)) in defs.iter().enumerate() {
+            if named.contains(name) {
+                continue;
+            }
+            let Some(cur) = blocks.iter().position(|b| b.0 == *name) else {
+                continue;
+            };
+            let want = defs[..di]
+                .iter()
+                .rev()
+                .find_map(|(prev, _)| blocks.iter().position(|b| b.0 == *prev).map(|p| p + 1))
+                .unwrap_or(0);
+            if want < cur {
+                let b = blocks.remove(cur);
+                blocks.insert(want, b);
             }
         }
     }
@@ -233,7 +246,28 @@ impl App {
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
             .filter(|(id, _)| !(boost && is_monitor_item(id)))
+            // 전송 진행 칸(T-96)은 전송 중에만.
+            .filter(|(id, _)| *id != "xfer" || self.transfer.is_some())
             .map(|(id, kids)| match id {
+                // 전송 진행(T-96 · NEW-006): "T 42%" — 폭 견본 100% · 누르면 진행 창(`status_click`).
+                "xfer" => {
+                    let pct = self.transfer.as_ref().map_or(0, |job| {
+                        let (done, total) = (
+                            job.shared.done.load(Ordering::Relaxed),
+                            job.shared.total.load(Ordering::Relaxed),
+                        );
+                        (done.min(total) * 100).checked_div(total).unwrap_or(0)
+                    });
+                    StatusSeg::with_parts(
+                        id,
+                        vec![
+                            part(tr("status.abbr.xfer")),
+                            part(format!("{pct}%"))
+                                .color(self.theme.accent)
+                                .hints(vec!["100%".into()]),
+                        ],
+                    )
+                }
                 "tab" => {
                     let p = &self.panels[self.active];
                     StatusSeg::with_parts(
@@ -384,6 +418,18 @@ impl App {
         }
         match id {
             "license" => self.command("help.license"),
+            // 전송 진행 칸(T-96): 진행 창을 띄운다(이미 떠 있으면 그대로 · 창 없이 돌던 전송(`transfer.close_ms` 0)이면 새로 준비).
+            "xfer" => {
+                if self.transfer.is_some() && !self.progress_win.is_open() {
+                    if !self.progress_win.is_active() {
+                        self.progress_win.reset(&tr("ops.progressLabel"));
+                        if let Some(job) = &self.transfer {
+                            job.shared.dirty.store(true, Ordering::Relaxed); // 다음 틱에 스냅숏을 다시 채운다
+                        }
+                    }
+                    self.open_progress = true;
+                }
+            }
             // 메모리 창(모덜리스 · 열려 있으면 닫기 토글 — 라이선스 창과 같은 규칙).
             "appmem" => {
                 if self.mem_win.is_open() {
@@ -1031,6 +1077,7 @@ mod tests {
             ids(""),
             [
                 "tab",
+                "xfer",
                 "cpu",
                 "mem",
                 "disk[read,write]",
@@ -1040,17 +1087,19 @@ mod tests {
             ],
             "빈 값 = 기본(전부)"
         );
+        // 적힌 순서 · 숨김 제외 · 항목을 전부 끈 칸은 빠짐 · 빠진 칸은 정의상 앞 형제 뒤에 보충(tab = 맨 앞 · xfer = tab 뒤 ·
+        // mem = 적혀 있던 cpu(숨김) 뒤 = appmem 앞 · `appmem`의 부분 문자열 `mem`에 속지 않는다).
         assert_eq!(
             ids("license:1|net:1[download:1,upload:0]|disk:0[read:1]|cpu:0|appmem:1"),
-            ["license", "net[download]", "appmem", "tab", "mem"],
-            "적힌 순서 · 숨김 제외 · 항목을 전부 끈 칸은 빠짐 · 빠진 칸은 정의 순으로 보충"
+            ["tab", "xfer", "license", "net[download]", "mem", "appmem"],
         );
         // 옛 형식(9a8ed19 — mem[app,system] · appmem 없음)으로 저장된 값: 없어진 항목은 버리고 · 사용자 순서는 지키고 ·
-        // 새 칸(appmem)은 정의상 앞 형제(net) 뒤 = 라이선스 앞에 보충된다.
+        // 새 칸은 정의상 앞 형제 뒤 = appmem은 라이선스 앞 · xfer는 탭 뒤에 보충된다.
         assert_eq!(
             ids("tab:1|cpu:1|mem:1[app:1,system:1]|disk:1[write:1,read:1]|net:1[download:1,upload:1]|license:1"),
             [
                 "tab",
+                "xfer",
                 "cpu",
                 "mem",
                 "disk[write,read]",
