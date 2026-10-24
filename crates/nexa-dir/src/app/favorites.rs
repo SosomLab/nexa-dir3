@@ -284,19 +284,9 @@ mod tests {
         let text = encode_fav_file(&list);
         assert!(text.starts_with('#') && text.contains("D:/b c\n"));
         assert_eq!(parse_fav_file(&text), list);
+        // 끝 구분자 차이는 모든 OS에서 같은 폴더(`same_fav` · 대소문자만 Windows 한정) → "D:/a/"는 unix에서도 중복.
         let parsed = parse_fav_file("\u{feff}# x\n\n  D:/a  \nD:/a/\nD:/c\n");
-        assert_eq!(
-            parsed,
-            if cfg!(windows) {
-                vec![PathBuf::from("D:/a"), PathBuf::from("D:/c")]
-            } else {
-                vec![
-                    PathBuf::from("D:/a"),
-                    PathBuf::from("D:/a/"),
-                    PathBuf::from("D:/c"),
-                ]
-            }
-        );
+        assert_eq!(parsed, vec![PathBuf::from("D:/a"), PathBuf::from("D:/c")]);
         let (merged, added, dup) =
             merge_favs(&list, &[PathBuf::from("D:/a"), PathBuf::from("D:/z")]);
         assert_eq!((added, dup), (1, 1));
