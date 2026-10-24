@@ -148,7 +148,7 @@ impl App {
             self.license_win.open(el, theme, over, owner.as_deref());
         }
         if std::mem::take(&mut self.open_file) && self.window.is_some() {
-            let (mode, start, filters) = self.file_window_spec();
+            let (mode, start, filters, default_name) = self.file_window_spec();
             let over = self.main_rect();
             let theme = theme::window_theme(self.settings.theme_mode());
             // 라이선스 창이 열려 있으면 그 위에(닫히면 그 창으로 포커스가 돌아온다).
@@ -161,6 +161,7 @@ impl App {
                 mode,
                 start.as_deref(),
                 filters,
+                default_name.as_deref(),
             );
         }
         if self.window.is_some() && !self.dlg.is_open() {
@@ -234,6 +235,12 @@ impl App {
                 PrefsAction::RemovePlugin(id) => self.plugin_remove(&id),
                 PrefsAction::BrowseFolder { key, .. } => {
                     self.open_file_window(app::license::FilePurpose::Setting(key));
+                }
+                PrefsAction::ExportSettings => {
+                    self.open_file_window(app::license::FilePurpose::SettingsExport);
+                }
+                PrefsAction::ImportSettings => {
+                    self.open_file_window(app::license::FilePurpose::SettingsImport);
                 }
                 PrefsAction::OpenColors(_) | PrefsAction::EditJson => {
                     // 색 창(dir2에 없음) · JSON 편집(T-44 잔여) — 안내만.

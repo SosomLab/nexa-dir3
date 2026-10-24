@@ -27,6 +27,9 @@ pub(crate) enum FilePurpose {
     CopyTo(Vec<PathBuf>),
     /// 우클릭 "이동 대상 폴더…"(T-131 P2).
     MoveTo(Vec<PathBuf>),
+    /// 설정 내보내기(저장 창 · Portable 범위 · T-195) / 가져오기(열기 창).
+    SettingsExport,
+    SettingsImport,
 }
 
 impl App {
@@ -251,10 +254,24 @@ impl App {
         self.open_file = true;
     }
 
-    /// 파일 창 사양(용도 → 모드 · 시작 폴더 · 필터).
+    /// 파일 창 사양(용도 → 모드 · 시작 폴더 · 필터 · 저장 창 기본 이름).
     pub(crate) fn file_window_spec(
         &self,
-    ) -> (PickerMode, Option<PathBuf>, Vec<nexa_dlg::FileFilter>) {
+    ) -> (
+        PickerMode,
+        Option<PathBuf>,
+        Vec<nexa_dlg::FileFilter>,
+        Option<String>,
+    ) {
+        let (mode, start, filters) = self.file_window_spec3();
+        let name = match &self.file_purpose {
+            Some(FilePurpose::SettingsExport) => Some(SETTINGS_EXPORT_NAME.to_string()),
+            _ => None,
+        };
+        (mode, start, filters, name)
+    }
+
+    fn file_window_spec3(&self) -> (PickerMode, Option<PathBuf>, Vec<nexa_dlg::FileFilter>) {
         match &self.file_purpose {
             Some(FilePurpose::Setting(key)) => (
                 PickerMode::Folder,
@@ -270,6 +287,16 @@ impl App {
                 file_win::plugin_filters(),
             ),
             Some(FilePurpose::LogExport) => (PickerMode::Save, Some(self.term_cwd(0)), Vec::new()),
+            Some(FilePurpose::SettingsExport) => (
+                PickerMode::Save,
+                Some(self.term_cwd(0)),
+                file_win::settings_filters(),
+            ),
+            Some(FilePurpose::SettingsImport) => (
+                PickerMode::Open,
+                Some(self.term_cwd(0)),
+                file_win::settings_filters(),
+            ),
             // 대상 폴더 고르기 = 반대 패널 폴더에서 시작(듀얼 패널 관례 · 같은 패널이면 현재 폴더).
             Some(FilePurpose::CopyTo(_) | FilePurpose::MoveTo(_)) => (
                 PickerMode::Folder,
@@ -313,7 +340,12 @@ impl App {
             Some(FilePurpose::MoveTo(paths)) => {
                 self.start_transfer(paths, path, ndir_ops::Op::Move, false);
             }
+            Some(FilePurpose::SettingsExport) => self.settings_export_to(&path),
+            Some(FilePurpose::SettingsImport) => self.settings_import_from(&path),
             None => {}
         }
     }
 }
+
+/// 설정 내보내기 저장 창의 기본 파일 이름(T-195 · nexa-sql `nexa-sql-settings.json`과 같은 꼴).
+pub(crate) const SETTINGS_EXPORT_NAME: &str = "nexa-dir-settings.json";

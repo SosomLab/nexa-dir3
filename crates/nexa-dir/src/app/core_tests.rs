@@ -1967,7 +1967,7 @@ fn license_view_about_install_rejects_garbage() {
         .contains("note=warn:No license file to remove"));
     // 파일 창 사양.
     app.open_file_window(app::license::FilePurpose::License);
-    let (mode, _, filters) = app.file_window_spec();
+    let (mode, _, filters, _) = app.file_window_spec();
     assert!(app.open_file && mode == nexa_dlg::PickerMode::Open && filters.len() == 2);
     // 폴더형 설정 키는 아직 없다(prefs_win `is_folder_key` = false) — Text 키로 저장 경로만 검증.
     app.open_file_window(app::license::FilePurpose::Setting("launcher.items".into()));
@@ -8058,6 +8058,81 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
 }
 
+/// 설정 내보내기/가져오기(T-195 · NEW-052 · nexa-sql 131차 차용): `settings.export:<파일>` = Portable JSON(창 기하 · 즐겨찾기 제외 ·
+/// `_scope`) · `settings.import:<파일>` = 있는 키만 · 바뀐 키만 반영 + 저장 + 설정 창 갱신 · 모르는 키/틀린 값은 꼬리말 · 상태줄 · 로그 ·
+/// 없는 파일 = 오류 안내(패닉 없음) · 메뉴/명령 표에 `settings.export`/`settings.import`.
+#[test]
+fn settings_export_and_import_round_trip() {
+    let (mut app, dir) = fixture("setio");
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("ui.font_size", "18");
+    let _ = app.settings.set("window.main_size", "800x600");
+    let _ = app.settings.set("nav.favorites", "D:/favtest");
+    let file = dir.join("exported").join("s.json");
+    app.startup_cmd(&format!("settings.export:{}", file.display()));
+    let text = std::fs::read_to_string(&file).expect("exported");
+    assert!(
+        text.contains("\"_scope\"") && text.contains("\"font_size\": 18"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("main_size") && !text.contains("favtest"),
+        "Portable = 이 PC 흔적 제외"
+    );
+    assert!(
+        app.statusbar.left().contains("s.json"),
+        "{}",
+        app.statusbar.left()
+    );
+    // 값을 바꾼 뒤 가져오기 = 바뀐 키만 되돌린다 · 저장 · 모르는 키 꼬리말.
+    let _ = app.settings.set("ui.font_size", "12");
+    let patched = text.replace("\"_scope\"", "\"zzz\": {\"nope\": 1},\n  \"_scope\"");
+    std::fs::write(&file, patched).expect("write");
+    app.startup_cmd(&format!("settings.import:{}", file.display()));
+    assert_eq!(app.settings.int("ui.font_size"), 18);
+    let status = app.statusbar.left().to_string();
+    assert!(
+        status.contains("1") && status.contains("zzz.nope"),
+        "{status}"
+    );
+    assert!(
+        std::fs::read_to_string(dir.join("settings.conf"))
+            .unwrap_or_default()
+            .contains("ui.font_size=18"),
+        "가져온 값은 저장된다"
+    );
+    assert!(app.log_win.export_text().contains("s.json"));
+    // 없는 파일 · 깨진 JSON = 오류 안내.
+    app.startup_cmd(&format!(
+        "settings.import:{}",
+        dir.join("missing.json").display()
+    ));
+    assert!(app.statusbar.left().contains("missing.json"));
+    std::fs::write(&file, "{ broken").expect("write");
+    app.startup_cmd(&format!("settings.import:{}", file.display()));
+    assert_eq!(
+        app.settings.int("ui.font_size"),
+        18,
+        "깨진 JSON은 아무것도 바꾸지 않는다"
+    );
+    // 메뉴 · 명령: 파일 메뉴에 두 항목 · 명령 = 파일 창 요청(용도).
+    assert_eq!(app::menus::menu_of("settings.export"), Some("menu.file"));
+    app.command("settings.import");
+    assert!(matches!(
+        app.file_purpose,
+        Some(app::license::FilePurpose::SettingsImport)
+    ));
+    let (mode, _, filters, name) = app.file_window_spec();
+    assert_eq!(mode, nexa_dlg::PickerMode::Open);
+    assert!(!filters.is_empty() && name.is_none());
+    app.file_purpose = None;
+    app.command("settings.export");
+    let (mode, _, _, name) = app.file_window_spec();
+    assert_eq!(mode, nexa_dlg::PickerMode::Save);
+    assert_eq!(name.as_deref(), Some(app::license::SETTINGS_EXPORT_NAME));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 폴더 즐겨찾기(T-168): Ctrl+D = 현재 폴더 넣기/빼기(설정 `nav.favorites`) · Ctrl+B = 목록 팝업(`aux.fav:<n>` · 끝에 추가/제거) ·
 /// 항목 고르기 = 그 폴더로 이동 · 내 PC(가상 최상위)는 대상이 아니다.
 #[test]
@@ -8764,7 +8839,7 @@ fn copy_to_and_move_to_pick_folder_then_transfer() {
         matches!(app.file_purpose, Some(FilePurpose::CopyTo(ref p)) if p.as_slice() == std::slice::from_ref(&a))
     );
     assert!(app.open_file);
-    let (mode, start, _) = app.file_window_spec();
+    let (mode, start, _, _) = app.file_window_spec();
     assert_eq!(mode, nexa_dlg::PickerMode::Folder);
     assert_eq!(start, Some(app.panels[1].root_path()));
     app.open_file = false;

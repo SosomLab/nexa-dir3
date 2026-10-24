@@ -109,6 +109,14 @@ pub(crate) fn license_filters() -> Vec<FileFilter> {
     ]
 }
 
+/// 설정 내보내기/가져오기 파일 창 필터(T-195): `*.json` + 전체.
+pub(crate) fn settings_filters() -> Vec<FileFilter> {
+    vec![
+        FileFilter::new(tr("settings.filter"), &["json"]),
+        FileFilter::new(tr("fdlg.filter.all"), &[]),
+    ]
+}
+
 impl FileWin {
     pub(crate) fn new() -> Self {
         FileWin {
@@ -155,6 +163,7 @@ impl FileWin {
         mode: PickerMode,
         start: Option<&Path>,
         filters: Vec<FileFilter>,
+        default_name: Option<&str>,
     ) {
         if let Some(w) = &self.window {
             w.focus_window();
@@ -169,6 +178,9 @@ impl FileWin {
         let mut picker = FilePicker::new(mode, start, filters, labels());
         picker.set_multi(false);
         picker.set_show_dot(true);
+        if let Some(name) = default_name {
+            picker.set_default_name(name); // 저장 창 기본 파일 이름(설정 내보내기 등 · T-195)
+        }
         self.picker = Some(picker);
         let (lw, lh) = (900.0, 580.0);
         let title = match mode {

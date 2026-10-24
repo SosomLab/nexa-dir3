@@ -28,7 +28,9 @@ pub mod migrate;
 mod registry;
 
 pub use commands::{command, preset_default, repeatable, setting_key, Command, Preset, COMMANDS};
-pub use json::{to_json, Import as JsonImport, Json};
+pub use json::{
+    portable_key, to_json, to_json_scoped, ExportScope, Import as JsonImport, Json, STATE_KEYS,
+};
 pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
     ADVANCED, CATEGORY_TREE, CONSTRAINTS, DEPENDS, EXTENSION_CATEGORIES, FORCES, HIDDEN, INFO_KEYS,

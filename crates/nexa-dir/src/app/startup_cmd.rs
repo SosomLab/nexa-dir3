@@ -100,6 +100,15 @@ impl App {
             self.exit_requested = true;
             return;
         }
+        // 설정 내보내기/가져오기 = 파일 창 없이 같은 길(`settings.export:<파일>` · `settings.import:<파일>` · T-195 · T3/T4).
+        if let Some(path) = id.strip_prefix("settings.export:") {
+            self.settings_export_to(std::path::Path::new(path.trim()));
+            return;
+        }
+        if let Some(path) = id.strip_prefix("settings.import:") {
+            self.settings_import_from(std::path::Path::new(path.trim()));
+            return;
+        }
         if let Some(q) = id.strip_prefix("prefs.search:") {
             self.open_prefs = true;
             self.refresh_prefs();

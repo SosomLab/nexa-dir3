@@ -1709,6 +1709,22 @@ pub const REGISTRY: &[Entry] = &[
         ""
     ),
     e!(
+        "key.settings.export",
+        CAT_KEYS,
+        "menu.file.settingsExport",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
+        "key.settings.import",
+        CAT_KEYS,
+        "menu.file.settingsImport",
+        "pref.key.desc",
+        Text,
+        ""
+    ),
+    e!(
         "key.file.exit",
         CAT_KEYS,
         "menu.file.exit",

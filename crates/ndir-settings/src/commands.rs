@@ -72,6 +72,9 @@ pub const COMMANDS: &[Command] = &[
     ),
     c!("file.new_file", "menu.file.newFile", "", "", ""),
     c!("file.prefs", "menu.file.prefs", "ctrl+,", "cmd+,", "ctrl+,"),
+    // 설정 내보내기/가져오기(dir3 신규 · T-195 · nexa-sql `settings.export`/`settings.import`와 같은 id).
+    c!("settings.export", "menu.file.settingsExport", "", "", ""),
+    c!("settings.import", "menu.file.settingsImport", "", "", ""),
     c!("file.exit", "menu.file.exit", "", "cmd+q", ""),
     // ── 편집(CMD-007~013 · 목록 키 CMD-303~309 · F2)
     c!(

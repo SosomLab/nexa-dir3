@@ -50,6 +50,8 @@ pub(crate) const MENU_IDS: &[&str] = &[
     "file.new_file",
     "-",
     "file.prefs",
+    "settings.export",
+    "settings.import",
     "-",
     "file.exit",
     "edit.undo",
@@ -166,11 +168,11 @@ pub(crate) fn view_with_submenus(
 
 /// 메뉴 구획(메뉴 라벨 키 · `MENU_IDS` 시작 · 끝) — 메뉴바와 명령 팔레트("메뉴: 항목")가 같은 표를 쓴다.
 pub(crate) const MENU_SECTIONS: [(&str, usize, usize); 5] = [
-    ("menu.file", 0, 9),
-    ("menu.edit", 9, 20),
-    ("menu.view", 20, 47),
-    ("menu.go", 47, 58),
-    ("menu.help", 58, usize::MAX),
+    ("menu.file", 0, 11),
+    ("menu.edit", 11, 22),
+    ("menu.view", 22, 49),
+    ("menu.go", 49, 60),
+    ("menu.help", 60, usize::MAX),
 ];
 
 /// 명령이 속한 메뉴의 라벨 키(순수 · 메뉴에 없으면 `None`).
@@ -954,6 +956,12 @@ impl App {
             "edit.rename" => self.begin_rename(),
             "edit.bulk_rename" => self.open_bulk_rename(),
             "file.prefs" => self.open_prefs = true,
+            "settings.export" => {
+                self.open_file_window(app::license::FilePurpose::SettingsExport);
+            }
+            "settings.import" => {
+                self.open_file_window(app::license::FilePurpose::SettingsImport);
+            }
             "keys.window" => self.open_keys = true,
             "file.new_tab" => self.panels[a].new_tab(&mut inv),
             "file.close_tab" => {
@@ -1128,17 +1136,19 @@ mod tests {
             assert!(COMMANDS.iter().any(|c| c.id == *id), "{id} not in COMMANDS");
         }
         assert_eq!(MENU_IDS[0], "file.new_tab");
-        assert_eq!(MENU_IDS[9], "edit.undo");
-        assert_eq!(MENU_IDS[20], "view.mode_tree");
-        assert_eq!(MENU_IDS[46], "view.lang_system");
-        assert!(MENU_IDS[20..47].contains(&"view.preview_window"));
-        assert!(MENU_IDS[20..47].contains(&"view.palette"));
-        assert!(MENU_IDS[20..47].contains(&"view.log"));
-        assert_eq!(MENU_IDS[47], "nav.back");
-        assert_eq!(MENU_IDS[58], "help.about");
-        assert_eq!(MENU_IDS[59], "help.license");
-        assert_eq!(MENU_IDS[60], "help.selfcheck");
-        assert_eq!(MENU_IDS.len(), 61);
+        assert_eq!(MENU_IDS[7], "settings.export");
+        assert_eq!(MENU_IDS[8], "settings.import");
+        assert_eq!(MENU_IDS[11], "edit.undo");
+        assert_eq!(MENU_IDS[22], "view.mode_tree");
+        assert_eq!(MENU_IDS[48], "view.lang_system");
+        assert!(MENU_IDS[22..49].contains(&"view.preview_window"));
+        assert!(MENU_IDS[22..49].contains(&"view.palette"));
+        assert!(MENU_IDS[22..49].contains(&"view.log"));
+        assert_eq!(MENU_IDS[49], "nav.back");
+        assert_eq!(MENU_IDS[60], "help.about");
+        assert_eq!(MENU_IDS[61], "help.license");
+        assert_eq!(MENU_IDS[62], "help.selfcheck");
+        assert_eq!(MENU_IDS.len(), 63);
         // 구획 표 = 같은 경계(메뉴바 · 팔레트 "메뉴: 항목"의 단일 원천).
         for (i, (_, s, e)) in MENU_SECTIONS.iter().enumerate() {
             let next = MENU_SECTIONS.get(i + 1).map(|n| n.1);

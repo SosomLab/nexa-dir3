@@ -517,6 +517,91 @@ impl App {
     }
 }
 
+/// 설정 내보내기/가져오기(T-195 · NEW-052 · nexa-sql 131차 `app/settings.rs` 차용 · 사용자 10-24).
+impl App {
+    /// ★ 설정을 파일로(Portable 범위 = 창 기하 · 즐겨찾기 · 이 PC 흔적 제외 · `ndir_settings::STATE_KEYS`) — 상태줄 · 로그.
+    pub(crate) fn settings_export_to(&mut self, path: &std::path::Path) {
+        let n = ndir_settings::REGISTRY
+            .iter()
+            .filter(|e| !ndir_settings::is_internal(e.key) && ndir_settings::portable_key(e.key))
+            .count();
+        let shown = path.display().to_string();
+        let (kind, text) = match self
+            .settings
+            .export_json_to(path, ndir_settings::ExportScope::Portable)
+        {
+            Ok(()) => (
+                ndir_log::LogKind::Info,
+                trf("settings.exported", &[&shown, &n.to_string()]),
+            ),
+            Err(e) => (
+                ndir_log::LogKind::Error,
+                trf("settings.fileError", &[&shown, &e.to_string()]),
+            ),
+        };
+        self.log(kind, text.clone());
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&text, &mut inv);
+        self.redraw();
+    }
+
+    /// ★ 파일에서 설정 가져오기 — 있는 키만 · 바뀐 키만 반영([`Self::apply_settings_json_text`] 한 길) — 상태줄 · 로그.
+    pub(crate) fn settings_import_from(&mut self, path: &std::path::Path) {
+        let shown = path.display().to_string();
+        let (kind, text) = match std::fs::read_to_string(path) {
+            Ok(text) => match self.apply_settings_json_text(&text) {
+                Ok((changed, note)) => (
+                    ndir_log::LogKind::Info,
+                    trf("settings.imported", &[&shown, &changed.to_string(), &note]),
+                ),
+                Err(e) => (
+                    ndir_log::LogKind::Error,
+                    trf("settings.fileError", &[&shown, &e]),
+                ),
+            },
+            Err(e) => (
+                ndir_log::LogKind::Error,
+                trf("settings.fileError", &[&shown, &e.to_string()]),
+            ),
+        };
+        self.log(kind, text.clone());
+        let mut inv = Invalidations::default();
+        self.statusbar.set_left(&text, &mut inv);
+        self.redraw();
+    }
+
+    /// ★ JSON 글을 설정에 적용하는 한 길(파일 가져오기 · 기동 명령 `settings.import:`): 있는 키만 · 바뀐 키만 `after_setting_changed` ·
+    /// 저장 · 설정 창 갱신. 반환 = (바뀐 키 수, 꼬리말 = 모르는 키 · 틀린 값 · 다시 시작 필요) · JSON 자체가 틀리면 `Err(사유)`.
+    pub(crate) fn apply_settings_json_text(
+        &mut self,
+        text: &str,
+    ) -> Result<(usize, String), String> {
+        let r = self.settings.import_json(text)?;
+        let _ = self.settings.save();
+        let mut restart = false;
+        for k in &r.changed {
+            if !self.apply_setting(k) {
+                restart = true;
+            }
+            self.after_setting_changed(k);
+        }
+        let mut note = String::new();
+        if !r.unknown.is_empty() {
+            note.push_str(&trf("settings.unknownKeys", &[&r.unknown.join(", ")]));
+        }
+        if !r.invalid.is_empty() {
+            let keys: Vec<&str> = r.invalid.iter().map(|(k, _)| k.as_str()).collect();
+            note.push_str(&trf("settings.invalidKeys", &[&keys.join(", ")]));
+        }
+        if restart {
+            note.push_str(" · ");
+            note.push_str(&tr("pref.needsRestart"));
+        }
+        self.refresh_prefs();
+        Ok((r.changed.len(), note))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

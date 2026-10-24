@@ -356,8 +356,52 @@ fn write_node(out: &mut String, node: &Node, depth: usize) {
 
 /// 전체 설정을 객체 계층 JSON으로(현재 값 · 기본값 포함 · 키 사전순 · 2칸 들여쓰기).
 #[must_use]
+/// ★ 내보내기 범위(T-195 · nexa-sql 131차 `ExportScope` 차용 · 사용자 10-24 "설정 내보내기/가져오기"): `Full` = 레지스트리 전부
+/// (settings.json 편집 뷰 · 종전) · `Portable` = 다른 PC/설치본으로 옮길 것만 — **창 기하 · 이 PC의 흔적([`STATE_KEYS`]) · 정보 키**를 뺀다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportScope {
+    Full,
+    Portable,
+}
+
+/// 이 PC·이 설치본의 흔적이라 옮기지 않는 키(창 위치/크기 · 즐겨찾기(따로 내보낸다) · 런처 씨앗 · 클라우드 접속 · 설정 창 상태).
+pub const STATE_KEYS: &[&str] = &[
+    "window.main_size",
+    "window.main_pos",
+    "window.prefs_size",
+    "window.prefs_pos",
+    "window.log_size",
+    "window.log_pos",
+    "launcher.seed",
+    "nav.favorites",
+    "cloud.conns",
+    "ui.prefs_advanced",
+];
+
+/// 키가 `Portable` 내보내기에 들어가는가(순수).
+#[must_use]
+pub fn portable_key(key: &str) -> bool {
+    !crate::is_info(key) && !STATE_KEYS.contains(&key)
+}
+
 pub fn to_json(s: &Settings) -> String {
+    to_json_scoped(s, ExportScope::Full)
+}
+
+/// 범위를 지정한 JSON(`_scope` 안내 포함 · `_`로 시작하는 키는 가져올 때 무시된다).
+pub fn to_json_scoped(s: &Settings, scope: ExportScope) -> String {
     let mut root = Node::default();
+    if scope == ExportScope::Portable {
+        root.kids.insert(
+            "_scope".into(),
+            Node {
+                leaf: Some(escape(
+                    "portable - window geometry, favorites and machine-local state are not included",
+                )),
+                kids: BTreeMap::new(),
+            },
+        );
+    }
     root.kids.insert(
         "_comment".into(),
         Node {
@@ -370,6 +414,9 @@ pub fn to_json(s: &Settings) -> String {
     for e in REGISTRY {
         if crate::is_internal(e.key) {
             continue; // 내부 전용 — 내보내지 않는다
+        }
+        if scope == ExportScope::Portable && !portable_key(e.key) {
+            continue;
         }
         let v = s.get(e.key).unwrap_or(e.default);
         let mut cur = &mut root;
@@ -456,11 +503,22 @@ impl Settings {
     /// 현재 설정을 `settings.json`으로 써 낸다(경로 반환).
     pub fn export_json(&self) -> std::io::Result<std::path::PathBuf> {
         let p = self.json_path();
-        if let Some(d) = p.parent() {
-            std::fs::create_dir_all(d)?;
-        }
-        std::fs::write(&p, to_json(self))?;
+        self.export_json_to(&p, ExportScope::Full)?;
         Ok(p)
+    }
+
+    /// 설정을 지정한 파일로(범위 = [`ExportScope`] · 부모 폴더 생성 · T-195).
+    pub fn export_json_to(
+        &self,
+        path: &std::path::Path,
+        scope: ExportScope,
+    ) -> std::io::Result<()> {
+        if let Some(d) = path.parent() {
+            if !d.as_os_str().is_empty() {
+                std::fs::create_dir_all(d)?;
+            }
+        }
+        std::fs::write(path, to_json_scoped(self, scope))
     }
 }
 
@@ -510,5 +568,44 @@ mod tests {
         );
         assert_eq!(s.int("ui.font_size"), 18);
         assert_eq!(s.get("ui.theme"), Some("light"));
+    }
+
+    /// 내보내기 범위(T-195): Portable = 창 기하 · 즐겨찾기 · 런처 씨앗 등 이 PC 흔적을 뺀다 · `_scope` 안내 · 가져올 때 `_` 키는 무시 ·
+    /// Full은 종전과 같다(전부).
+    #[test]
+    fn portable_export_skips_state_keys_and_round_trips() {
+        let mut s = fresh();
+        s.set("window.main_size", "800x600").unwrap();
+        s.set("nav.favorites", "D:/favtest").unwrap();
+        s.set("ui.font_size", "18").unwrap();
+        let text = to_json_scoped(&s, ExportScope::Portable);
+        assert!(text.contains("\"_scope\""));
+        assert!(text.contains("\"font_size\": 18"));
+        assert!(!text.contains("main_size"), "{text}");
+        assert!(!text.contains("favtest"), "{text}");
+        let full = to_json_scoped(&s, ExportScope::Full);
+        assert!(full.contains("main_size") && full.contains("favtest"));
+        assert_eq!(full, to_json(&s));
+        for k in STATE_KEYS {
+            assert!(crate::entry(k).is_some(), "{k} not in REGISTRY");
+            assert!(!portable_key(k));
+        }
+        assert!(portable_key("ui.font_size"));
+        // 다른 설정에 가져오기 = 바뀐 키만 · `_scope`/`_comment`는 무시.
+        let mut t = fresh();
+        let r = t.import_json(&text).unwrap();
+        assert_eq!(r.changed, vec!["ui.font_size"]);
+        assert!(r.unknown.is_empty(), "{r:?}");
+        assert_ne!(
+            t.get("window.main_size"),
+            Some("800x600"),
+            "Portable에 없던 키는 그대로"
+        );
+        let dir = std::env::temp_dir().join(format!("ndir-json-exp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let p = dir.join("sub").join("s.json");
+        s.export_json_to(&p, ExportScope::Portable).unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), text);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
