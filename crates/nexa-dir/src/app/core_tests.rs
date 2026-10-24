@@ -9507,3 +9507,36 @@ fn status_load_update_damages_statusbar_only() {
     drop(d);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 기동 명령 `ui.key:`는 실제 키 경로(`key_chord`)를 밟는다(T-106): 키맵 명령(Ctrl+A · F2) · 이름 바꾸기 중 글자 = 편집으로 통과 ·
+/// 처리 안 된 이름 키 = 컨트롤로(Esc = 취소) · `ctl_key_of` 표.
+#[test]
+fn startup_ui_key_uses_real_key_path() {
+    use super::startup_cmd::ctl_key_of;
+    let (mut app, dir) = fixture("uikey");
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        std::fs::write(dir.join(n), n).expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let all = app.panels[0].rows().source().len();
+    app.startup_cmd("ui.key:ctrl+a");
+    assert_eq!(
+        app.panels[0].selection_head().0,
+        all,
+        "Ctrl+A = 키맵 명령(전체 선택)"
+    );
+    app.startup_cmd("list.select:0");
+    app.startup_cmd("ui.key:f2");
+    assert!(app.panels[0].rows().is_renaming(), "F2 = 이름 바꾸기");
+    app.startup_cmd("ui.key:ctrl+a"); // 편집 중 = 상자 안 전체 선택(목록 전체 선택으로 새지 않음)
+    app.startup_cmd("ui.key:z");
+    assert!(app.panels[0].rows().is_renaming(), "글자 = 편집으로 통과");
+    app.startup_cmd("ui.key:escape");
+    assert!(!app.panels[0].rows().is_renaming(), "Esc = 컨트롤로 → 취소");
+    assert!(dir.join("a.txt").is_file() && !dir.join("z").exists());
+    assert_eq!(ctl_key_of("esc"), Some(nexa_ctl::Key::Escape));
+    assert_eq!(ctl_key_of("nope"), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}

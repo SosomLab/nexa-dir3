@@ -14,6 +14,26 @@ use crate::*;
 /// 단언 실패 종료 코드.
 pub(crate) const EXIT_ASSERT: u8 = 3;
 
+/// 키 이름(`ui.press:` · 조합 표기의 키 부분) → 컨트롤 키(T-106 · `escape`/`esc` 둘 다) · 모르면 `None`.
+pub(crate) fn ctl_key_of(name: &str) -> Option<nexa_ctl::Key> {
+    use nexa_ctl::Key as K;
+    Some(match name {
+        "enter" => K::Enter,
+        "escape" | "esc" => K::Escape,
+        "up" => K::Up,
+        "down" => K::Down,
+        "left" => K::Left,
+        "right" => K::Right,
+        "home" => K::Home,
+        "end" => K::End,
+        "pageup" => K::PageUp,
+        "pagedown" => K::PageDown,
+        "delete" => K::Delete,
+        "space" => K::Space,
+        _ => return None,
+    })
+}
+
 /// 결정적 대기 명령인가(`<대상>.wait` — 뒤 `@ready` 명령을 보류한다 · [`App::startup_wait_busy`]가 해제 조건).
 pub(crate) fn is_wait_cmd(id: &str) -> bool {
     matches!(
@@ -157,10 +177,25 @@ impl App {
             .strip_prefix("key:")
             .or_else(|| id.strip_prefix("ui.key:"))
         {
-            if let Some(ch) = Chord::parse(code) {
-                if let Some(cmd) = self.keymap.lookup(&ch) {
-                    self.command(cmd);
-                }
+            // 실제 키 경로(T-106): 키맵 · 두 단계 조합 · 타이핑 통과(경로 바 편집 · 이름 바꾸기 · 터미널) · 열린 메뉴 규칙까지
+            // `key_chord` 그대로 — 처리하지 않은 키는 창 사건 경로처럼 컨트롤로 흘린다(글자 = Char · 이름 키 = Key).
+            let Some(ch) = Chord::parse(code) else {
+                eprintln!("[startup] bad chord: {code}");
+                return;
+            };
+            if self.key_chord(ch.clone(), false) {
+                return;
+            }
+            let mut it = ch.key.chars();
+            if let (Some(c), None, false, false) = (it.next(), it.next(), ch.primary, ch.alt) {
+                let c = if ch.shift { c.to_ascii_uppercase() } else { c };
+                self.route(InputEvent::Char { c, now_ms: 0 });
+            } else if let Some(key) = ctl_key_of(&ch.key) {
+                self.route(InputEvent::Key {
+                    key,
+                    shift: ch.shift,
+                    primary: ch.primary,
+                });
             }
             return;
         }
@@ -282,24 +317,9 @@ impl App {
             return;
         }
         if let Some(name) = id.strip_prefix("ui.press:") {
-            use nexa_ctl::Key as K;
-            let key = match name.trim() {
-                "enter" => K::Enter,
-                "escape" | "esc" => K::Escape,
-                "up" => K::Up,
-                "down" => K::Down,
-                "left" => K::Left,
-                "right" => K::Right,
-                "home" => K::Home,
-                "end" => K::End,
-                "pageup" => K::PageUp,
-                "pagedown" => K::PageDown,
-                "delete" => K::Delete,
-                "space" => K::Space,
-                other => {
-                    eprintln!("[startup] unknown key: {other}");
-                    return;
-                }
+            let Some(key) = ctl_key_of(name.trim()) else {
+                eprintln!("[startup] unknown key: {}", name.trim());
+                return;
             };
             self.route(InputEvent::Key {
                 key,
