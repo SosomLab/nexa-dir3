@@ -90,6 +90,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - **python 패치 스크립트의 `newline` 인자 오류는 파일을 먼저 비운다**(10-03 `filelist.rs` 0바이트 사고): 치환·assert가 전부 끝난 뒤 임시 파일에 쓰고 `os.replace` · `newline="\n"`(백슬래시 하나) · 사고 시 `git checkout -- <파일>`.
 - 실행 중인 exe가 링크를 막는다 → 내가 띄운 `target/` 아래 `nexa-dir.exe`는 종료하고 진행.
 - 두 세션(개발 · 협업)이 한 작업 트리를 쓸 때 실기 앱은 **커밋 그대로** 빌드한다 — 메인 트리엔 다음 기능의 미커밋 변경이 섞여 있어 `target/debug`는 혼합본이다 → 협업은 형제 worktree(`../nexa-dir3-wt-collab` · detached · 별도 target · 형제 `../nexa-ui` 경로 그대로)에서 빌드하고 exe 사본(scratchpad)을 띄운다(링크 잠금도 피함 · 10-24).
+- **두 세션이 한 작업 트리를 쓸 때 파일 소유(10-25 합의)**: docs/TODO.md · docs/22 · docs/port/90은 **개발이 기능 커밋에 함께** 바꾼다 — 협업이 넣을 행(등재 · ✅ 갱신)은 문구를 개발에 보내 다음 기능 커밋에 포함. 협업 단독 커밋 = journal · DEVLOG · STATUS · docs/15 · nexa-ui CONSUMER-CHANGES. 급히 개발 소유 파일을 바꿔야 하면 "지금 <파일> 씁니다" 선통지 → 상대 "OK"(저장 안 함) 뒤. 어느 쪽이든 공유 트리에서는 **쓰기 직후 `git diff <파일>`이 제 변경뿐인지 확인한 뒤** `git add <파일>`(10-25 1fcd1ea: 확인 직후 상대가 저장한 행이 섞여 push된 사고) · `pull --rebase --autostash`는 상대의 편집 중 파일을 건드리므로 쓰지 않는다.
 - Git Bash에서 `target\x` 같은 백슬래시 경로 인자는 `targetx`가 된다 → 슬래시로.
 - `autocrlf`: `.gitattributes`가 텍스트를 LF로 고정 · `.sh`는 체크아웃도 LF.
 
