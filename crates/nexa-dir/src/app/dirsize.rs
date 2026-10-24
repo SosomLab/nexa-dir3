@@ -84,6 +84,9 @@ impl Default for Tuning {
     }
 }
 
+/// 폴더 크기 캐시 상한(T-189 ⑦ · 항목 수) — 아이콘 캐시(512 · 36d7057)처럼 상수.
+pub(crate) const CACHE_MAX: usize = 1024;
+
 /// 폴더 크기 상태(App 필드 하나).
 #[derive(Debug, Default)]
 pub(crate) struct DirSizes {
@@ -92,6 +95,8 @@ pub(crate) struct DirSizes {
     /// 차례를 기다리는 경로(앞 = 다음 차례).
     queue: VecDeque<PathBuf>,
     cache: HashMap<PathBuf, DirSize>,
+    /// 캐시에 넣은 순서(T-189 ⑦ · [`CACHE_MAX`]를 넘으면 오래된 것부터 버린다).
+    order: VecDeque<PathBuf>,
     /// 빠른 이동 중 보류한 마지막 요청(경로 · 시각) — settle이 지나면 큐에 넣는다.
     pending: Option<(PathBuf, Instant)>,
     /// 마지막 요청 시각(빠른 이동 판정).
@@ -272,7 +277,7 @@ impl DirSizes {
         self.running = still;
         for j in done {
             if !j.shared.cancel.load(Ordering::Relaxed) {
-                self.cache.insert(j.path, j.shared.snapshot());
+                self.remember(j.path, j.shared.snapshot());
             }
         }
         if let Some((p, at)) = &self.pending {
@@ -338,10 +343,27 @@ impl DirSizes {
         SizeState::Unknown
     }
 
+    /// 캐시에 넣는다 — [`CACHE_MAX`]를 넘으면 가장 먼저 넣은 것부터 버린다(T-189 ⑦ · 종전 = 작업 전까지 상한 없음).
+    fn remember(&mut self, path: PathBuf, d: DirSize) {
+        if self.cache.insert(path.clone(), d).is_none() {
+            self.order.push_back(path);
+        }
+        while self.cache.len() > CACHE_MAX {
+            match self.order.pop_front() {
+                Some(old) => {
+                    self.cache.remove(&old);
+                }
+                None => break,
+            }
+        }
+    }
+
     /// 바뀐 폴더들에 닿는 캐시 항목 · 큐 항목 · 보류를 버리고, 닿는 작업은 취소한다(다음 도크 갱신이 다시 요청한다).
     pub(crate) fn invalidate(&mut self, changed: &[PathBuf]) {
         let hit = |p: &Path| changed.iter().any(|c| stale(p, c));
         self.cache.retain(|k, _| !hit(k));
+        let cache = &self.cache;
+        self.order.retain(|p| cache.contains_key(p));
         self.queue.retain(|p| !hit(p));
         if self.pending.as_ref().is_some_and(|(p, _)| hit(p)) {
             self.pending = None;
@@ -360,6 +382,7 @@ impl DirSizes {
     /// 전부 버린다(전송 · 삭제 · 이름 변경 뒤 · 설정 끔 — 어디가 바뀌었는지 일일이 따지지 않는다).
     pub(crate) fn clear(&mut self) {
         self.cache.clear();
+        self.order.clear();
         self.queue.clear();
         self.pending = None;
         for j in self.running.drain(..) {
@@ -475,6 +498,32 @@ mod tests {
 
     /// 표시 조절(MC/DC · 10-08 프레임 계측): 전이 = 즉시 · 재는 중 + 첫 표시 = 즉시 · 재는 중 + 250 ms 안 = 아니다 · 재는 중 + 250 ms
     /// 지남 = 예 · 유휴 + 전이 없음 = 아니다. `take_display_due`는 참 뒤 바로 다시 부르면 거짓(보여 줬다로 기록).
+    /// 캐시 상한(T-189 ⑦): 넘으면 먼저 넣은 것부터 버림 · 같은 경로 다시 넣기 = 순서 그대로 · 무효화 · 비우기는 순서도.
+    #[test]
+    fn cache_is_bounded_oldest_first() {
+        let mut d = DirSizes::default();
+        let v = DirSize {
+            bytes: 1,
+            files: 1,
+            dirs: 0,
+            partial: false,
+        };
+        let p = |n: usize| PathBuf::from(format!("/x/{n}"));
+        for n in 0..CACHE_MAX + 3 {
+            d.remember(p(n), v);
+        }
+        assert_eq!(d.cache.len(), CACHE_MAX);
+        assert!(!d.cache.contains_key(&p(0)) && !d.cache.contains_key(&p(2)));
+        assert!(d.cache.contains_key(&p(3)) && d.cache.contains_key(&p(CACHE_MAX + 2)));
+        d.remember(p(5), v); // 다시 넣기 = 순서 항목 늘지 않음
+        assert_eq!(d.order.len(), CACHE_MAX);
+        d.invalidate(&[p(5)]);
+        assert!(!d.cache.contains_key(&p(5)));
+        assert_eq!(d.order.len(), d.cache.len());
+        d.clear();
+        assert!(d.order.is_empty() && d.cache.is_empty());
+    }
+
     #[test]
     fn display_is_throttled_while_measuring_and_immediate_on_transition() {
         let t0 = Instant::now();

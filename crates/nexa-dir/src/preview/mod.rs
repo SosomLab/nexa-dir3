@@ -140,6 +140,64 @@ pub(crate) fn render_svg_impl(svg: &str) -> Option<String> {
     Some(path.to_string_lossy().into_owned())
 }
 
+/// 앱이 만든 임시 캐시 폴더(T-189 ⑦): SVG 렌더 BMP(`nexa-preview`) · Quick Look 썸네일(`nexa-dir-ql` · macOS). 둘 다 이 앱만 쓰는
+/// 고정 이름이고 지워도 다음에 다시 만든다.
+pub(crate) fn temp_cache_dirs() -> [PathBuf; 2] {
+    [
+        std::env::temp_dir().join("nexa-preview"),
+        quicklook::cache_root(),
+    ]
+}
+
+/// 임시 캐시에서 이만큼 안 바뀐 파일은 버린다(T-189 ⑦ · 종전 = 영영 쌓였다).
+pub(crate) const TEMP_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+
+/// `dir` 아래(하위 폴더 포함)에서 수정 시각이 `now - max_age`보다 오래된 파일을 지우고, 비게 된 하위 폴더도 지운다(`dir` 자체는 남김).
+/// 돌려주는 값 = 지운 파일 수. 읽기 · 지우기 실패는 건너뛴다.
+pub(crate) fn prune_old(
+    dir: &Path,
+    max_age: std::time::Duration,
+    now: std::time::SystemTime,
+) -> usize {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut n = 0;
+    for e in rd.flatten() {
+        let Ok(ft) = e.file_type() else {
+            continue;
+        };
+        let p = e.path();
+        if ft.is_dir() {
+            n += prune_old(&p, max_age, now);
+            let _ = std::fs::remove_dir(&p); // 비었을 때만 지워진다
+        } else if ft.is_file() {
+            let old = e
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| now.duration_since(t).ok())
+                .is_some_and(|age| age > max_age);
+            if old && std::fs::remove_file(&p).is_ok() {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+/// 기동 때 한 번 — 임시 캐시 정리를 워커로(UI를 막지 않는다).
+pub(crate) fn prune_temp_caches_async() {
+    let _ = std::thread::Builder::new()
+        .name("ndir-tmp-prune".into())
+        .spawn(|| {
+            let now = std::time::SystemTime::now();
+            for d in temp_cache_dirs() {
+                prune_old(&d, TEMP_MAX_AGE, now);
+            }
+        });
+}
+
 /// RGBA → 32bpp top-down BMP(BGRA · 알파 255 · nexa-gfx `image::decode`가 읽는 형식).
 pub(crate) fn bmp_bytes(img: &nexa_gfx::IconImage) -> Vec<u8> {
     let (w, h) = (img.w as i32, img.h as i32);
@@ -490,6 +548,28 @@ mod tests {
                 .is_none(),
             "상한"
         );
+    }
+
+    /// 임시 캐시 정리(T-189 ⑦ · 샌드박스): 오래된 파일만 · 하위 폴더 포함 · 빈 하위 폴더 제거 · 루트는 남김.
+    #[test]
+    fn prune_old_removes_only_stale_files() {
+        let root = std::env::temp_dir().join(format!("ndir_prune_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("a.bmp"), b"a").unwrap();
+        std::fs::write(root.join("sub/b.png"), b"b").unwrap();
+        let day = std::time::Duration::from_secs(24 * 3600);
+        let now = std::time::SystemTime::now();
+        assert_eq!(prune_old(&root, day, now), 0, "새 파일은 남김");
+        assert_eq!(prune_old(&root, day, now + day * 2), 2, "이틀 뒤 = 둘 다");
+        assert!(
+            root.exists() && !root.join("sub").exists(),
+            "빈 하위 폴더 제거 · 루트 유지"
+        );
+        assert_eq!(prune_old(&root.join("nope"), day, now), 0);
+        let [a, b] = temp_cache_dirs();
+        assert!(a.ends_with("nexa-preview") && b.ends_with("nexa-dir-ql"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     fn tmp(name: &str, bytes: &[u8]) -> PathBuf {

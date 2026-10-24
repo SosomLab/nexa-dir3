@@ -54,7 +54,7 @@ pub(crate) fn thumb_path(cache_root: &Path, path: &Path, mtime_ms: u64) -> PathB
         .join(format!("{name}.png"))
 }
 
-fn cache_root() -> PathBuf {
+pub(crate) fn cache_root() -> PathBuf {
     std::env::temp_dir().join("nexa-dir-ql")
 }
 
