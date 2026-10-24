@@ -84,10 +84,12 @@ mod tests {
 
     #[test]
     fn report_has_version_os_and_last_command() {
+        // `last_command()`는 프로세스 전역 — 병렬 시험이 끼어들 수 있어 보고 본문 검사는 글자 그대로 넘긴다(10-25).
         note_command("view.hidden");
+        assert!(!last_command().is_empty());
         let r = report(
             "panicked at src/x.rs:1:1:\nboom",
-            &last_command(),
+            "view.hidden",
             1_791_030_896,
         );
         assert!(r.starts_with(&format!("nexa-dir {} crash\n", env!("CARGO_PKG_VERSION"))));

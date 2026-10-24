@@ -1018,7 +1018,8 @@ mod tests {
     }
 
     /// T-198(feature `test-local-mask`): 다른 스레드가 전역을 0으로 덮어써도 이 스레드가 켠 마스크는 그대로 · 값을 쓴 적 없는
-    /// 스레드는 전역을 본다(작업 스레드 = 앱 동작 동일).
+    /// 스레드는 전역을 본다(작업 스레드 = 앱 동작 동일). **전역의 값 자체는 단언하지 않는다**(같은 크레이트의 다른 시험이 병렬로
+    /// 전역을 쓴다 — CI 10-25 ubuntu 흔들림 · 협업 분석).
     #[cfg(feature = "test-local-mask")]
     #[test]
     fn detail_mask_is_thread_local_once_written() {
@@ -1026,7 +1027,9 @@ mod tests {
         set_detail_mask(m);
         assert!(wants(LogLayer::Shell, LogLevel::Trace));
         std::thread::spawn(|| {
-            assert_eq!(detail_mask(), detail_mask_global(), "안 쓴 스레드 = 전역");
+            // 안 쓴 스레드 = 전역: 두 읽기 사이에 다른 시험이 전역을 바꿀 수 있으므로 같은 값이 한 번이라도 나오면 통과.
+            let same_once = (0..1000).any(|_| detail_mask() == detail_mask_global());
+            assert!(same_once, "안 쓴 스레드는 전역을 본다");
             set_detail_mask(0);
             assert!(!wants(LogLayer::Shell, LogLevel::Trace));
         })
@@ -1036,8 +1039,7 @@ mod tests {
             wants(LogLayer::Shell, LogLevel::Trace),
             "다른 스레드의 0이 이 스레드를 덮지 않는다"
         );
-        assert_eq!(detail_mask(), m);
-        assert_eq!(detail_mask_global(), 0, "전역은 마지막 쓰기(0)");
+        assert_eq!(detail_mask(), m, "이 스레드 값 = 자기 쓰기");
         set_detail_mask(0);
     }
 
