@@ -645,6 +645,9 @@ impl RowSource for PvSource {
 
 const W: f32 = 880.0;
 const H: f32 = 620.0;
+/// 최소 크기(카드 열 + 그리드 세 열 + 버튼 줄이 겹치지 않는 하한).
+const MIN_W: f32 = 640.0;
+const MIN_H: f32 = 420.0;
 const PAD: f32 = 10.0;
 const CARD_W: f32 = 320.0;
 const ROW_H: f32 = 28.0;
@@ -1221,7 +1224,9 @@ impl BulkWin {
         let mut attrs = Window::default_attributes()
             .with_title(format!("{} — {}", crate::APP_TITLE, tr("bulk.title")))
             .with_theme(theme)
-            .with_resizable(false)
+            // 크기 조절 허용(T-162 남김 · 10-25 · 다른 보조 창과 동일): 카드 열은 고정 폭 · 그리드가 남은 폭을 쓴다(`layout` = inner_size 기준).
+            .with_resizable(true)
+            .with_min_inner_size(winit::dpi::LogicalSize::new(MIN_W, MIN_H))
             .with_inner_size(winit::dpi::LogicalSize::new(W, H));
         if let Some((x, y, w, h)) = over {
             let cx = x + (w as i32 - W as i32) / 2;
