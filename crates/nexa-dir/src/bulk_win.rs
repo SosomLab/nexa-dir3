@@ -524,6 +524,31 @@ impl Card {
     fn buttons(&mut self) -> [&mut Button; 2] {
         [&mut self.add, &mut self.del]
     }
+
+    /// Tab 순회용 — 종류별 **보이는 입력칸**을 배치 순서(행 위→아래 · 왼→오)로(T-162 남김 · 10-25). 종류 기준이라 창 없는 시험에서도
+    /// 결정적(`bounds`는 창이 있어야 생긴다).
+    fn tab_boxes(&mut self) -> Vec<&mut TextBox> {
+        match self.kind_value().as_str() {
+            "replace" | "replacerx" => vec![&mut self.find, &mut self.with],
+            "insert" => vec![&mut self.offset, &mut self.text],
+            "number" => vec![
+                &mut self.offset,
+                &mut self.start,
+                &mut self.prefix,
+                &mut self.step,
+                &mut self.suffix,
+            ],
+            "date" => vec![
+                &mut self.offset,
+                &mut self.prefix,
+                &mut self.suffix,
+                &mut self.fmt,
+            ],
+            "move" => vec![&mut self.mv_start, &mut self.mv_len],
+            "ext" => vec![&mut self.ext_from, &mut self.ext_to],
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// 미리보기 행(그리드 소스).
@@ -1746,6 +1771,41 @@ impl BulkWin {
         self.redraw();
     }
 
+    /// Tab / Shift+Tab = 입력칸 순회(T-162 남김 · 10-25): 카드 순서 · 카드 안 배치 순서 · 끝 ↔ 처음 순환 · 포커스가 없으면 첫 칸
+    /// (Shift = 마지막 칸) · 새 칸이 카드 열 밖이면 보이도록 스크롤. 입력칸이 없으면 `false`.
+    pub(crate) fn focus_step(&mut self, forward: bool) -> bool {
+        let target_bounds = {
+            let mut all: Vec<&mut TextBox> = Vec::new();
+            for c in &mut self.cards {
+                all.extend(c.tab_boxes());
+            }
+            if all.is_empty() {
+                return false;
+            }
+            let n = all.len();
+            let cur = all.iter().position(|tb| tb.is_focused());
+            let next = match (cur, forward) {
+                (Some(i), true) => (i + 1) % n,
+                (Some(i), false) => (i + n - 1) % n,
+                (None, true) => 0,
+                (None, false) => n - 1,
+            };
+            for (i, tb) in all.iter_mut().enumerate() {
+                tb.set_focused(i == next);
+            }
+            all[next].bounds()
+        };
+        if target_bounds.h > 0 {
+            let cr = self.cards_rect;
+            if target_bounds.y < cr.y {
+                self.apply_scroll(self.scroll - (cr.y - target_bounds.y));
+            } else if target_bounds.bottom() > cr.bottom() {
+                self.apply_scroll(self.scroll + (target_bounds.bottom() - cr.bottom()));
+            }
+        }
+        true
+    }
+
     fn focused_box(&mut self) -> Option<&mut TextBox> {
         for c in &mut self.cards {
             for tb in c.boxes() {
@@ -1910,6 +1970,15 @@ impl BulkWin {
                 {
                     if self.can_rename {
                         return BulkAction::Rename(self.result());
+                    }
+                    return BulkAction::None;
+                }
+                // Tab / Shift+Tab = 입력칸 순회(T-162 · 10-25 — 열린 콤보가 있으면 그대로).
+                if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Tab))
+                    && self.open_combo().is_none()
+                {
+                    if self.focus_step(!self.shift) {
+                        self.redraw();
                     }
                     return BulkAction::None;
                 }
@@ -2736,6 +2805,26 @@ mod tests {
             w.dump()
         );
         w.load_ops(&ops); // 뒤 단언(연번 미리보기 · 카드 드래그)은 원래 ops로.
+                          // Tab 순회(T-162 · 10-25): number 카드 = offset·start·prefix·step·suffix(5) · case 카드 = 없음 → 5칸 순환 · Shift = 역방향.
+        assert!(w.focus_step(true));
+        assert!(w.cards[0].offset.is_focused(), "포커스 없음 → 첫 칸");
+        for _ in 0..4 {
+            w.focus_step(true);
+        }
+        assert!(w.cards[0].suffix.is_focused());
+        w.focus_step(true);
+        assert!(w.cards[0].offset.is_focused(), "끝 → 처음");
+        w.focus_step(false);
+        assert!(w.cards[0].suffix.is_focused(), "Shift+Tab = 역방향");
+        assert_eq!(
+            w.cards
+                .iter_mut()
+                .flat_map(|c| c.tab_boxes())
+                .filter(|tb| tb.is_focused())
+                .count(),
+            1,
+            "포커스는 하나만"
+        );
         assert!(
             w.dump().contains("photo_a.jpg → [0005]photo_a.JPG"),
             "{}",
