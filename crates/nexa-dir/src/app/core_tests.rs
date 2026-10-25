@@ -6703,6 +6703,30 @@ fn dock_goto_sends_cd_to_terminal() {
     let flat: String = app.term_dump().replace(['\n', '\r'], "");
     assert!(flat.contains("cd \""), "{flat}");
     assert!(flat.contains("sub\""), "대상 = 패널의 현재 폴더: {flat}");
+    assert!(!flat.contains("cd /d"), "cmd가 아니면 /d 없음: {flat}");
+    // cmd.exe는 `/d`(드라이브 전환) — 라벨이 번역돼 있어도 **프로그램 이름**으로 판정(T-134 · 10-25).
+    app.platform
+        .log
+        .clone()
+        .expect("fake log")
+        .borrow_mut()
+        .shells = vec![crate::platform::ShellSpec {
+        program: std::path::PathBuf::from("C:/Windows/System32/cmd.exe"),
+        args: vec![],
+        label: "Eingabeaufforderung".into(),
+    }];
+    let shell = app.term_shell();
+    assert_eq!(
+        shell.as_ref().map(|s| s.label.as_str()),
+        Some("Eingabeaufforderung")
+    );
+    let cwd = dir.join("sub");
+    assert!(app.terms[0].start(&app.platform, shell, &cwd, 80, 24));
+    assert!(app.terms[0].shell_is_cmd);
+    app.term_goto(0, &mut inv);
+    app.term_tick(100);
+    let flat: String = app.term_dump().replace(['\n', '\r'], "");
+    assert!(flat.contains("cd /d \""), "cmd = /d: {flat}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

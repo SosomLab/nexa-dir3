@@ -153,8 +153,10 @@ pub(crate) struct TermView {
     grid: (Rect, i32, i32, usize),
     pub(crate) caret_on: bool,
     blink_at: u64,
-    /// 시작한 셸 라벨(cd 구문 선택 — cmd는 `/d`).
+    /// 시작한 셸 라벨(상태 글 "시작 중…").
     pub(crate) shell_label: String,
+    /// 셸이 cmd.exe인가(cd `/d` 구문) — 라벨 글이 아닌 **프로그램 이름**으로 판정(T-134 · 10-25: 라벨은 번역·WT commandline에 따라 달라진다).
+    pub(crate) shell_is_cmd: bool,
     pub(crate) cwd: PathBuf,
 }
 
@@ -193,6 +195,7 @@ impl TermView {
             caret_on: true,
             blink_at: 0,
             shell_label: String::new(),
+            shell_is_cmd: false,
             cwd: PathBuf::new(),
         }
     }
@@ -263,6 +266,10 @@ impl TermView {
                 self.view_off = 0;
                 self.view_x = 0;
                 self.sel = None;
+                self.shell_is_cmd = shell
+                    .program
+                    .file_stem()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("cmd"));
                 self.shell_label = shell.label;
                 self.cwd = cwd.to_path_buf();
                 true

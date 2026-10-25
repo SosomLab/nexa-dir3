@@ -377,11 +377,8 @@ impl App {
         let dir = self.term_cwd(i);
         let t = &mut self.terms[i];
         if t.alive() {
-            let flag = if t.shell_label == "Command Prompt" {
-                "/d "
-            } else {
-                ""
-            };
+            // cmd.exe만 `/d`(드라이브 전환) — 프로그램 이름으로 판정(T-134 · 종전 라벨 "Command Prompt" 비교는 번역·WT 라벨에 깨졌다).
+            let flag = if t.shell_is_cmd { "/d " } else { "" };
             t.write(&format!("cd {flag}\"{}\"\r", dir.display()));
             t.view_off = 0;
         } else {
