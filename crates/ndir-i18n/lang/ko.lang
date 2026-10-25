@@ -131,6 +131,7 @@ ops.done = 전송 {0}
 ops.skipped = 건너뜀 {0}
 ops.errors = 실패 {0}
 ops.busy = 전송 진행 중 — 끝난 뒤 다시 시도하세요
+open.failed = ‘{0}’을(를) 열 수 없음 — 시스템 핸들러가 코드 {1}(으)로 끝났습니다
 ops.canceled = 취소됨
 ops.overwriteTitle = 덮어쓰기 확인
 ops.overwrite = '{0}'이(가) 대상 폴더에 이미 있습니다. 덮어쓸까요?\n대상 폴더: {1}\n(아니오=이 항목 건너뜀 · 취소=전체 중단)
@@ -277,10 +278,10 @@ status.hide = 감춤
 panel.left = 좌
 panel.right = 우
 list.reading = 폴더 읽는 중…
-filter.placeholder = 이름으로 필터(공백으로 나눈 낱말 전부 포함 · * ? 와일드카드 · ; = 또는 · Esc = 지움)
-filter.tip.case = 대소문자 구분
-filter.tip.word = 단어 단위
-filter.tip.regex = 정규식 사용
+filter.placeholder = 이름으로 필터(공백 낱말 전부 포함 · * ? = 이름 전체 패턴, 토글 켜면 꺼짐 · ; = 또는 · Esc = 지움)
+filter.tip.case = 대소문자 구분(와일드카드 꺼짐)
+filter.tip.word = 단어 단위(와일드카드 꺼짐)
+filter.tip.regex = 정규식 사용(* ?는 와일드카드가 아니라 정규식)
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제
@@ -606,6 +607,8 @@ pref.hashAlgos = 체크섬 알고리즘
 pref.hashAlgos.desc = 체크섬 창이 계산할 알고리즘입니다(쉼표로 구분: crc32, md5, sha1, sha256, sha512). 파일을 한 번만 읽으며 함께 계산하므로 개수가 늘어도 디스크 읽기는 같습니다. 기본 crc32,md5,sha1,sha256.
 pref.hashAutoLimit = 체크섬 자동 계산 상한(MB, 0 = 항상 수동)
 pref.hashAutoLimit.desc = 선택한 파일들의 합계가 이 크기 이하일 때만 체크섬 창이 자동으로 계산을 시작합니다. 넘으면 [계산] 버튼을 눌러야 시작하고, 0이면 항상 버튼으로 시작합니다. 계산은 낮은 우선순위의 별도 스레드에서 한 번에 하나만 돕니다.
+pref.openExecDirect = 실행 파일 직접 실행(Linux)
+pref.openExecDirect.desc = 켜면 더블클릭한 파일이 실행 비트가 있는 ELF 바이너리일 때 xdg-open에 넘기지 않고 그 폴더를 작업 폴더로 바로 실행합니다. 스크립트는 종전처럼 엽니다. 시스템 핸들러가 실패하면 종료 코드를 안내합니다.
 pref.dupesRecursive = 중복 찾기: 하위 폴더 포함
 pref.dupesRecursive.desc = 고른 폴더의 하위 폴더까지 찾습니다. 중복 파일 창 바닥의 체크박스가 이 값을 바꾸고 다시 찾습니다.
 pref.dupesMode = 중복 찾기: 같음 기준

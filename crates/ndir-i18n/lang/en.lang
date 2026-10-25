@@ -132,6 +132,7 @@ ops.done = transferred {0}
 ops.skipped = {0} skipped
 ops.errors = {0} failed
 ops.busy = A transfer is in progress — try again when it finishes
+open.failed = Could not open “{0}” — the system handler exited with code {1}
 ops.canceled = canceled
 ops.overwriteTitle = Confirm Overwrite
 ops.overwrite = '{0}' already exists in the destination. Overwrite?\nDestination: {1}\n(No = skip this item · Cancel = stop all)
@@ -278,10 +279,10 @@ status.hide = hidden
 panel.left = L
 panel.right = R
 list.reading = Reading folder…
-filter.placeholder = Filter by name (all words must match · * ? wildcards · ; = or · Esc clears)
-filter.tip.case = Match Case
-filter.tip.word = Match Whole Word
-filter.tip.regex = Use Regular Expression
+filter.placeholder = Filter by name (all words must match · * ? = whole-name pattern, off when a toggle is on · ; = or · Esc clears)
+filter.tip.case = Match Case (wildcards off)
+filter.tip.word = Match Whole Word (wildcards off)
+filter.tip.regex = Use Regular Expression (* ? are regex here, not wildcards)
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab
@@ -609,6 +610,8 @@ pref.hashAlgos = Checksum algorithms
 pref.hashAlgos.desc = Algorithms the checksum window computes (comma-separated: crc32, md5, sha1, sha256, sha512). The file is read once for all of them, so more algorithms do not mean more disk reads. Default crc32,md5,sha1,sha256.
 pref.hashAutoLimit = Checksum auto-calculate limit (MB, 0 = always manual)
 pref.hashAutoLimit.desc = The checksum window starts calculating automatically only when the selected files total at most this size. Above it you press Calculate; 0 means always manual. Calculation runs one job at a time on a low-priority thread.
+pref.openExecDirect = Run executable files directly (Linux)
+pref.openExecDirect.desc = When on, double-clicking a file with the execute bit that is an ELF binary runs it directly (working folder = its folder) instead of handing it to xdg-open. Scripts are still opened the normal way. If the system handler fails, a message shows its exit code.
 pref.dupesRecursive = Duplicate finder: include subfolders
 pref.dupesRecursive.desc = Search inside subfolders of the chosen folders. The checkbox at the bottom of the duplicate window changes this and searches again.
 pref.dupesMode = Duplicate finder: match by

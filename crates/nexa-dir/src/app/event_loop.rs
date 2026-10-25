@@ -150,6 +150,7 @@ impl ApplicationHandler<Wake> for App {
             | self.hash_tick()
             | self.extract_tick()
             | self.zip_tick()
+            | self.open_fail_tick()
             | self.dupes_tick()
             | self.compare_tick();
         // 다른 프로그램에서 끌어오는 동안 · 놓은 직후: OS에서 포인터 자리 · 수식키를 읽어 반영한다(winit은 드래그 중 그 사건을

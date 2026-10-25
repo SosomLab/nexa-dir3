@@ -1361,6 +1361,15 @@ pub const REGISTRY: &[Entry] = &[
         },
         "512"
     ),
+    // 실행 파일 직접 실행(DR-32 ② · 10-26 · Linux): 켜면 더블클릭한 실행 비트 + ELF 파일을 xdg-open 대신 그 폴더에서 바로 실행. 기본 off.
+    e!(
+        "open.exec_direct",
+        CAT_CTXMENU,
+        "pref.openExecDirect",
+        "pref.openExecDirect.desc",
+        Bool,
+        "off"
+    ),
     // 중복 찾기 옵션(T-170 · 10-26): 창 바닥의 체크박스/콤보가 바꾸고 다시 찾는다 · 다음 검색의 기본값.
     e!(
         "dupes.recursive",

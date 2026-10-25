@@ -1297,6 +1297,103 @@ fn shell_from_names(names: &[(&str, &[&str], &str)]) -> Vec<ShellSpec> {
         .collect()
 }
 
+/// 직접 실행 판정(순수 · DR-32 ② · 10-26 · 사용자 "ELF 바이너리만"): 실행 비트(`mode & 0o111`) **그리고** ELF 매직(`\x7fELF`). 스크립트(`#!`)는 아니다 —
+/// 눈에 안 보이는 실행을 막는다(종전대로 xdg-open → 보통 편집기).
+#[must_use]
+pub(crate) fn is_elf_executable(mode: u32, head: &[u8]) -> bool {
+    mode & 0o111 != 0 && head.len() >= 4 && head[..4] == [0x7f, b'E', b'L', b'F']
+}
+
+/// 이 파일을 직접 실행할 후보인가(Unix · 메타데이터 + 첫 4바이트). 다른 OS = false.
+pub(crate) fn exec_direct_candidate(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::io::Read as _;
+        use std::os::unix::fs::PermissionsExt as _;
+        let Ok(md) = std::fs::metadata(path) else {
+            return false;
+        };
+        if !md.is_file() {
+            return false;
+        }
+        let mut head = [0u8; 4];
+        let n = std::fs::File::open(path)
+            .and_then(|mut f| f.read(&mut head))
+            .unwrap_or(0);
+        is_elf_executable(md.permissions().mode(), &head[..n])
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// 실행 파일을 **그 폴더를 작업 폴더로** 떼어 실행(Unix · 설정 `open.exec_direct`). 다른 OS = `Unsupported`.
+pub(crate) fn exec_direct(path: &Path) -> Result<(), PlatformError> {
+    #[cfg(unix)]
+    {
+        std::process::Command::new(path)
+            .current_dir(path.parent().unwrap_or(Path::new(".")))
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| PlatformError::Failed(format!("{}: {e}", path.display())))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Err(PlatformError::Unsupported("exec"))
+    }
+}
+
+/// 명령 열기(`xdg-open` 등)의 **뒤늦은 실패**(DR-32 ② · 10-26): 핸들러가 없거나 거부하면 프로세스가 0이 아닌 코드로 끝난다 — spawn은 성공이라
+/// 종전엔 아무 안내가 없었다. 감시 스레드가 최대 3초 기다려 코드를 적고 호스트가 틱에서 거둬 토스트로 알린다(UI 스레드는 막지 않는다).
+static OPEN_FAILURES: std::sync::Mutex<Vec<(PathBuf, i32)>> = std::sync::Mutex::new(Vec::new());
+static OPEN_WATCHERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// 거둔 실패 목록(경로 · 종료 코드) — 호스트 틱.
+pub(crate) fn take_open_failures() -> Vec<(PathBuf, i32)> {
+    OPEN_FAILURES
+        .lock()
+        .map(|mut v| std::mem::take(&mut *v))
+        .unwrap_or_default()
+}
+
+/// 감시 중인 열기 프로세스가 있는가(호스트가 틱을 이어 간다).
+pub(crate) fn open_watch_active() -> bool {
+    OPEN_WATCHERS.load(std::sync::atomic::Ordering::Relaxed) > 0
+}
+
+/// 떼어 실행한 자식을 3초까지 지켜본다(스레드) — 0이 아닌 코드로 끝나면 실패 목록에.
+fn watch_open_child(mut child: std::process::Child, path: PathBuf) {
+    use std::sync::atomic::Ordering;
+    OPEN_WATCHERS.fetch_add(1, Ordering::Relaxed);
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    let code = st.code().unwrap_or(-1);
+                    if code != 0 {
+                        if let Ok(mut v) = OPEN_FAILURES.lock() {
+                            v.push((path, code));
+                        }
+                    }
+                    break;
+                }
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                _ => break, // 3초 넘게 살아 있음 = 앱이 떴다(정상) · 오류 = 포기
+            }
+        }
+        OPEN_WATCHERS.fetch_sub(1, Ordering::Relaxed);
+    });
+}
+
 /// 프로세스 실행으로 "열기"/"보기"를 하는 공용 열기(각 OS가 명령 이름만 준다).
 struct CommandOpener {
     open: Vec<String>,
@@ -1345,9 +1442,11 @@ impl CommandOpener {
         cmd.stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
-        cmd.spawn()
-            .map(|_| ())
-            .map_err(|e| PlatformError::Failed(format!("{prog}: {e}")))
+        let child = cmd
+            .spawn()
+            .map_err(|e| PlatformError::Failed(format!("{prog}: {e}")))?;
+        watch_open_child(child, path.to_path_buf()); // 뒤늦은 실패(종료 코드) 통지
+        Ok(())
     }
 }
 

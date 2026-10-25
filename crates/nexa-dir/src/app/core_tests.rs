@@ -11536,3 +11536,27 @@ fn checksum_save_and_verify_round_trip() {
     app.close_checksum();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Linux 실행 파일 직접 실행 판정(DR-32 ② · 10-26 · MC/DC): 실행 비트 ∧ ELF 매직 둘 다여야 · 스크립트(`#!`)·실행 비트 없는 ELF·짧은 머리 = 아니다 ·
+/// 설정 기본 off · Windows에서는 후보 판정이 늘 false(xdg-open 경로 불변).
+#[test]
+fn exec_direct_only_for_elf_with_exec_bit() {
+    use crate::platform::{exec_direct_candidate, is_elf_executable};
+    let elf = b"\x7fELF\x02\x01\x01";
+    assert!(is_elf_executable(0o755, elf));
+    assert!(is_elf_executable(0o100, elf), "실행 비트 하나라도");
+    assert!(!is_elf_executable(0o644, elf), "실행 비트 없음");
+    assert!(
+        !is_elf_executable(0o755, b"#!/bin/sh\n"),
+        "스크립트는 아니다"
+    );
+    assert!(!is_elf_executable(0o755, b"\x7fEL"), "머리가 짧다");
+    assert!(!is_elf_executable(0o755, b"MZ\x90\x00"), "PE는 아니다");
+    let (app, dir) = fixture("execdirect");
+    assert!(!app.settings.flag("open.exec_direct"), "기본 off");
+    assert!(
+        !exec_direct_candidate(&dir.join("a.txt")),
+        "글 파일(Windows에서는 늘 false)"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

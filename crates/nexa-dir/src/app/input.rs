@@ -1148,11 +1148,38 @@ impl App {
                 return;
             }
         }
+        // Linux 실행 파일(DR-32 ② · 10-26): 설정 `open.exec_direct`(기본 off)가 켜져 있고 실행 비트 + ELF면 **직접 실행**(작업 폴더 = 그 폴더) ·
+        // 아니면 종전 xdg-open(실패는 `open_fail_tick`이 종료 코드로 알린다).
+        if self.settings.flag("open.exec_direct") && platform::exec_direct_candidate(path) {
+            if let Err(e) = platform::exec_direct(path) {
+                let a = self.active;
+                self.toast_panel(a, toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());
+            }
+            self.redraw();
+            return;
+        }
         if let Err(e) = self.platform.opener.open(path) {
             let a = self.active;
             self.toast_panel(a, toast::ToastKind::Warn, tr("cmd.activate"), e.to_string());
         }
         self.redraw();
+    }
+
+    /// 명령 열기의 뒤늦은 실패(xdg-open 종료 코드 ≠ 0 · DR-32 ②) → 토스트. 돌려주는 값 = 감시 중(틱 유지).
+    pub(crate) fn open_fail_tick(&mut self) -> bool {
+        for (p, code) in platform::take_open_failures() {
+            let a = self.active;
+            self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("cmd.activate"),
+                trf(
+                    "open.failed",
+                    &[&ndir_ops::leaf_name(&p), &code.to_string()],
+                ),
+            );
+        }
+        platform::open_watch_active()
     }
 
     /// 탭 우클릭 메뉴(dir2 TAB-MENU 07-20 순서: 잠금 · 고정 · 복제 · 새 탭 · 닫기 + 패널 간 이동).
