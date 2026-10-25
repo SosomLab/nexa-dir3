@@ -11272,3 +11272,72 @@ fn builtin_zip_compresses_selection_when_no_external_archiver() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 드롭 메뉴 셸 확장 항목 = 비동기(DR-31 ⑳ⓐ · 10-25): 고르면 `invoke_async`로 넘기고 바로 돌아온다(창은 계속 그려짐) · `Invoked` 사건이 오면
+/// 재열람 + 토스트 · 실패 = 거부 토스트. 비동기를 못 하는 포트(기본 false)는 종전 동기 `invoke_drop`.
+#[test]
+fn drop_menu_shell_item_runs_async_and_finishes_on_event() {
+    use crate::platform::{
+        ContextMenuProvider, MenuEvent, MenuTarget, PlatformError, ShellMenuItem,
+    };
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::rc::Rc;
+    #[derive(Default)]
+    struct Shared {
+        invoked: Vec<(String, MenuTarget)>,
+        events: VecDeque<MenuEvent>,
+    }
+    struct AsyncMenu(Rc<RefCell<Shared>>);
+    impl ContextMenuProvider for AsyncMenu {
+        fn items(&self, _p: &[PathBuf]) -> Result<Vec<ShellMenuItem>, PlatformError> {
+            Ok(Vec::new())
+        }
+        fn invoke(&self, _id: &str, _p: &[PathBuf]) -> Result<(), PlatformError> {
+            panic!("동기 invoke를 부르면 안 된다");
+        }
+        fn invoke_drop(
+            &self,
+            _id: &str,
+            _d: &std::path::Path,
+            _p: &[PathBuf],
+        ) -> Result<(), PlatformError> {
+            panic!("비동기 포트에서 동기 invoke_drop을 부르면 안 된다(실행 중 창 미갱신의 원인)");
+        }
+        fn invoke_async(&self, id: &str, t: &MenuTarget) -> bool {
+            let mut s = self.0.borrow_mut();
+            s.invoked.push((id.to_string(), t.clone()));
+            s.events.push_back(MenuEvent::Invoked {
+                target: t.clone(),
+                result: Ok(None),
+            });
+            true
+        }
+        fn poll(&self) -> Option<MenuEvent> {
+            self.0.borrow_mut().events.pop_front()
+        }
+        fn busy(&self) -> bool {
+            !self.0.borrow().events.is_empty()
+        }
+    }
+    let (mut app, dir) = fixture("dropasync");
+    app.layout_for(1200, 800, 1.0);
+    let shared = Rc::new(RefCell::new(Shared::default()));
+    app.platform.ctxmenu = Box::new(AsyncMenu(shared.clone()));
+    let src = dir.join("a.txt");
+    let dest = dir.join("sub");
+    app.dnd_menu = Some((vec![src], (300, 300), dest.clone()));
+    app.drop_menu_action("shell:7zip.extract");
+    assert_eq!(shared.borrow().invoked.len(), 1, "비동기로 넘김");
+    assert!(
+        matches!(&shared.borrow().invoked[0].1, MenuTarget::Drop { dest: d, paths } if *d == dest && paths.len() == 1)
+    );
+    assert!(
+        app.drop_async.is_some(),
+        "결과를 기다리는 중(창은 그려진다)"
+    );
+    // 사건 도착 → 뒤처리.
+    let _ = app.ctx_shell_tick(Instant::now());
+    assert!(app.drop_async.is_none(), "사건으로 끝남");
+    let _ = std::fs::remove_dir_all(&dir);
+}

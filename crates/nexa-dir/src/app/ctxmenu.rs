@@ -782,7 +782,17 @@ impl App {
                         .take()
                         .unwrap_or(self.active)
                         .min(self.panels.len().saturating_sub(1));
-                    self.ctx_invoked(panel, result);
+                    // 드롭 메뉴 셸 항목(DR-31 ⑳ⓐ)이면 드롭 뒤처리(재열람 + "셸이 처리" 토스트) · 실패 = 거부 토스트.
+                    if let Some((p, n, dest)) = self.drop_async.take() {
+                        match result {
+                            Ok(_) => self.after_shell_drop(p, platform::DropVerb::Other, n, &dest),
+                            Err(e) => {
+                                self.toast_panel(p, toast::ToastKind::Warn, tr("dnd.rejected"), e)
+                            }
+                        }
+                    } else {
+                        self.ctx_invoked(panel, result);
+                    }
                     self.redraw();
                 }
             }

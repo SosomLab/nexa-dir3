@@ -449,6 +449,8 @@ struct App {
     ctx_anchor_next: Option<(i32, i32)>,
     /// 비동기 셸 실행을 건 패널(`Invoked` 통지 처리용).
     ctx_invoke_panel: Option<usize>,
+    /// 드롭 메뉴 셸 확장 항목을 비동기로 실행 중(DR-31 ⑳ⓐ · 10-25): (패널 · 항목 수 · 놓은 폴더) — `Invoked` 사건이 오면 `after_shell_drop`.
+    drop_async: Option<(usize, usize, PathBuf)>,
     /// 지금 행 메뉴를 Shift+우클릭(확장 동사)으로 열었는가 — 실행 때 같은 대상을 쓴다.
     ctx_extended: bool,
     /// 창에 마지막으로 알린 IME 조합 창 자리(편집 중이 아니면 `None`) — 바뀔 때만 OS에 알린다.
@@ -868,6 +870,7 @@ impl App {
             ctx_anchor: (0, 0),
             ctx_anchor_next: None,
             ctx_invoke_panel: None,
+            drop_async: None,
             ctx_extended: false,
             ime_last: None,
             ctx_dwell_target: None,

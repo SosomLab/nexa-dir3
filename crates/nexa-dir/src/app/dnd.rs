@@ -960,17 +960,33 @@ impl App {
                 }
             }
             "dnd.cancel" => {}
-            other => match self.platform.ctxmenu.invoke_drop(other, &dest, &paths) {
-                Ok(()) => {
-                    self.after_shell_drop(panel, platform::DropVerb::Other, paths.len(), &dest)
+            other => {
+                // 셸 확장 항목(7-Zip 등 DragDropHandlers)은 **메뉴 스레드에서 비동기**(DR-31 ⑳ⓐ · 10-25): 종전 `invoke_drop`은 UI 스레드가
+                // 끝날 때까지 기다려 압축이 도는 동안 창이 멈춰 보였다("실행 중 창 미갱신"). 결과는 `MenuEvent::Invoked`로 받아 `after_shell_drop`.
+                let target = platform::MenuTarget::Drop {
+                    dest: dest.clone(),
+                    paths: paths.clone(),
+                };
+                if self.platform.ctxmenu.invoke_async(other, &target) {
+                    self.drop_async = Some((panel, paths.len(), dest.clone()));
+                    self.ctx_invoke_panel = Some(panel);
+                } else {
+                    match self.platform.ctxmenu.invoke_drop(other, &dest, &paths) {
+                        Ok(()) => self.after_shell_drop(
+                            panel,
+                            platform::DropVerb::Other,
+                            paths.len(),
+                            &dest,
+                        ),
+                        Err(e) => self.toast_panel(
+                            panel,
+                            toast::ToastKind::Warn,
+                            tr("dnd.rejected"),
+                            e.to_string(),
+                        ),
+                    }
                 }
-                Err(e) => self.toast_panel(
-                    panel,
-                    toast::ToastKind::Warn,
-                    tr("dnd.rejected"),
-                    e.to_string(),
-                ),
-            },
+            }
         }
     }
 
