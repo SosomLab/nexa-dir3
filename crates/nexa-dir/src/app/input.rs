@@ -956,7 +956,8 @@ impl App {
                         }
                         return;
                     }
-                    let lines = self.terms[i].wheel.add(delta, nexa_ctl::wheel_lines());
+                    // 스크롤백 = 노치 × 고속 스크롤 배수(T-61 · 파일 목록과 같은 `scroll.fast` 설정 · 10-25).
+                    let lines = self.terms[i].wheel_step(delta);
                     if lines != 0 && self.terms[i].scroll_view(lines) {
                         inv.push(self.docks[i].bounds());
                     }

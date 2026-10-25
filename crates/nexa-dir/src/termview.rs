@@ -129,6 +129,9 @@ pub(crate) struct TermView {
     pub(crate) wheel: nexa_ctl::WheelAccum,
     pub(crate) hwheel: nexa_ctl::WheelAccum,
     pub(crate) tui_wheel: nexa_ctl::WheelAccum,
+    /// 스크롤백 휠 가속기(T-61 고속 스크롤 · 10-25): 파일 목록과 같은 설정(`scroll.fast*` → nexa-ctl 전역 `FastScroll`) — 같은 방향
+    /// 연속 노치가 `step`번 쌓일 때마다 배수 +1(상한 `max`) · 방향이 바뀌거나 `window_ms`가 지나면 1. HUD는 없다(도크 안 작은 영역).
+    accel: nexa_ctl::ScrollAccel,
     /// PTY에 마지막으로 알린 크기(열, 행) — 화면 버퍼 크기와 다르면 줄바꿈이 어긋난다(진단용 · `term` 덤프에).
     pub(crate) pty_size: (usize, usize),
     /// 읽을 출력이 남았다(시간 예산으로 끊음) — 호스트가 곧바로 다시 펌프한다.
@@ -179,6 +182,7 @@ impl TermView {
             wheel: nexa_ctl::WheelAccum::default(),
             hwheel: nexa_ctl::WheelAccum::default(),
             tui_wheel: nexa_ctl::WheelAccum::default(),
+            accel: nexa_ctl::ScrollAccel::default(),
             pty_size: (0, 0),
             backlog: false,
             got_output: false,
@@ -520,6 +524,32 @@ impl TermView {
                 self.sel = None;
             }
         }
+    }
+
+    /// 휠 delta → 이번에 움직일 스크롤백 줄 수(T-61 고속 스크롤 · 10-25): 노치 환산(`wheel_lines`) × 가속 배수(설정 `scroll.fast` ·
+    /// 같은 방향 연속). 0 = 아직 노치가 안 찼다. `now`/`cfg`를 밖에서 주는 순수 판 — 호출부는 [`Self::wheel_step`].
+    pub(crate) fn wheel_step_at(
+        &mut self,
+        delta: i32,
+        lines_per_notch: i32,
+        now: std::time::Instant,
+        cfg: &nexa_ctl::FastScroll,
+    ) -> i32 {
+        let lines = self.wheel.add(delta, lines_per_notch);
+        if lines == 0 {
+            return 0;
+        }
+        lines * self.accel.factor_at(lines.signum(), now, cfg)
+    }
+
+    /// [`Self::wheel_step_at`] — 지금 시각 · 전역 설정(nexa-ctl `fast_scroll()` · 시스템 휠 줄 수).
+    pub(crate) fn wheel_step(&mut self, delta: i32) -> i32 {
+        self.wheel_step_at(
+            delta,
+            nexa_ctl::wheel_lines(),
+            std::time::Instant::now(),
+            &nexa_ctl::fast_scroll(),
+        )
     }
 
     /// 스크롤백 보기 이동(양수 = 위로). 바뀌면 true.
@@ -1144,5 +1174,39 @@ mod tests {
         let (x, y) = at(2, 2);
         assert!(t.select_word_at(x, y));
         assert_eq!(t.selected_text().as_deref(), Some("보고서"));
+    }
+
+    /// 고속 스크롤(T-61 · 10-25): 설정 꺼짐 = 노치당 줄 수 그대로 · 켜짐 = 같은 방향 연속 노치 `step`마다 배수 +1(상한 `max`) ·
+    /// 방향 전환 = 1부터 · 창(`window_ms`) 밖 = 1부터 · 분수 delta는 노치가 찰 때까지 0.
+    #[test]
+    fn wheel_fast_scroll_multiplies_consecutive_notches() {
+        use std::time::{Duration, Instant};
+        let mut tv = TermView::new();
+        let t0 = Instant::now();
+        let off = nexa_ctl::FastScroll::default(); // enabled = false
+        assert_eq!(tv.wheel_step_at(120, 3, t0, &off), 3);
+        assert_eq!(tv.wheel_step_at(120, 3, t0, &off), 3, "꺼짐 = 늘 3");
+        let on = nexa_ctl::FastScroll {
+            enabled: true,
+            step: 2,
+            max: 3,
+            window_ms: 160,
+            ..nexa_ctl::FastScroll::default()
+        };
+        let mut tv = TermView::new();
+        let mut t = t0;
+        let mut got = Vec::new();
+        for _ in 0..7 {
+            got.push(tv.wheel_step_at(120, 3, t, &on));
+            t += Duration::from_millis(50);
+        }
+        assert_eq!(got, vec![3, 3, 6, 6, 9, 9, 9], "step 2 · max 3");
+        assert_eq!(tv.wheel_step_at(-120, 3, t, &on), -3, "방향 전환 = 1배");
+        t += Duration::from_millis(1000);
+        assert_eq!(tv.wheel_step_at(-120, 3, t, &on), -3, "창 밖 = 1배");
+        // 분수 delta: 누적기가 이월 손실 없이 환산 — 두 조각의 합 = 한 노치(가속 꺼서 배수 1).
+        let a = tv.wheel_step_at(-40, 3, t, &off);
+        let b = tv.wheel_step_at(-80, 3, t, &off);
+        assert_eq!(a + b, -3, "분수 누적 합 = 노치 1 ({a} + {b})");
     }
 }
