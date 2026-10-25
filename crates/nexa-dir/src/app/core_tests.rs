@@ -10739,6 +10739,25 @@ fn watch_covers_git_dir_of_shown_repo() {
         reloads,
         "`.git` 변경 = 재열람 없음"
     );
+    // worktree식 `.git` 파일(`gitdir: <경로>`): 감시 대상 = 그 gitdir(HEAD/index가 거기 있다 · 협업 검토 10-25).
+    let wt = dir.join("wt");
+    let gd = dir.join("gitdirs").join("w1");
+    std::fs::create_dir_all(&gd).expect("mkdir");
+    std::fs::create_dir_all(&wt).expect("mkdir");
+    std::fs::write(gd.join("HEAD"), "ref: refs/heads/wt-branch\n").expect("write");
+    std::fs::write(wt.join(".git"), format!("gitdir: {}\n", gd.display())).expect("write");
+    let _ = app.panels[0].navigate_to(wt, &mut inv);
+    app.update_status();
+    tick(&mut app);
+    assert!(
+        log.borrow().watched.contains(&gd),
+        "worktree gitdir 감시: {:?}",
+        log.borrow().watched
+    );
+    assert_eq!(
+        app.panels[0].git_info().map(|(_, b)| b),
+        Some("wt-branch".to_string())
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

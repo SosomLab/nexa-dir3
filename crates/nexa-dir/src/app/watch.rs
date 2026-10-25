@@ -71,11 +71,13 @@ impl App {
             }
             // 보이는 저장소의 `.git`(T-95 HEAD/index 감시 · 10-25): 다른 앱의 checkout · commit · add가 `.git/HEAD` · `index`를 바꾸면 그 폴더
             // 자체는 바뀌지 않아 종전엔 감시가 못 봤다 → `.git`을 함께 본다(변경은 `is_git_internal`로 걸러 요약 무효화만 · 재열람 아님).
+            // worktree · 서브모듈은 `.git`이 **파일**(`gitdir: …`)이고 HEAD/index는 그 gitdir 안에 있다 → `dirinfo::git_dir`(협업 검토 10-25).
             if self.git_enabled {
                 if let Some((repo, _)) = p.git_info_fresh() {
-                    let g = repo.join(".git");
-                    if g.is_dir() && !dirs.contains(&g) {
-                        dirs.push(g);
+                    if let Some(g) = crate::dirinfo::git_dir(&repo) {
+                        if g.is_dir() && !dirs.contains(&g) {
+                            dirs.push(g);
+                        }
                     }
                 }
             }
