@@ -956,7 +956,14 @@ impl App {
                         }
                         return;
                     }
-                    // 스크롤백 = 노치 × 고속 스크롤 배수(T-61 · 파일 목록과 같은 `scroll.fast` 설정 · 10-25).
+                    // 정밀 터치패드(노치 미만 delta) = **픽셀** 스크롤(DR-31 ⑲ · nexa-grid 10-02와 같은 규칙) · 노치 휠 = 줄 × 고속 스크롤 배수(T-61).
+                    if delta.abs() < nexa_ctl::event::WHEEL_DELTA {
+                        let px = self.terms[i].wheel_px_step(delta, nexa_ctl::wheel_lines());
+                        if px != 0 && self.terms[i].scroll_px(px) {
+                            inv.push(self.docks[i].bounds());
+                        }
+                        return;
+                    }
                     let lines = self.terms[i].wheel_step(delta);
                     if lines != 0 && self.terms[i].scroll_view(lines) {
                         inv.push(self.docks[i].bounds());

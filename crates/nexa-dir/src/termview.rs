@@ -147,6 +147,10 @@ pub(crate) struct TermView {
     pub(crate) failed: bool,
     /// 스크롤백 보기 오프셋(0 = 하단 라이브).
     pub(crate) view_off: usize,
+    /// 픽셀 스크롤 잔여(DR-31 ⑲ · 10-25): `view_off` 위 줄이 **아래로** 이만큼(px · 0..cell_h) 내려와 보인다 = 윗줄 일부가 보임. 노치 휠·키 스크롤은 0으로 스냅.
+    view_px: i32,
+    /// 트랙패드(노치 미만 delta) 누적기 — 노치 하나 = `wheel_lines × cell_h` px.
+    wheel_px: nexa_ctl::WheelAccum,
     /// 가로 보기 오프셋(열 — 고정 열 모드).
     pub(crate) view_x: usize,
     /// 마우스 선택(절대 라인, 열): (앵커, 끝).
@@ -192,6 +196,8 @@ impl TermView {
             exited: false,
             failed: false,
             view_off: 0,
+            view_px: 0,
+            wheel_px: nexa_ctl::WheelAccum::default(),
             view_x: 0,
             sel: None,
             drag: false,
@@ -268,6 +274,7 @@ impl TermView {
                 self.exited = false;
                 self.failed = false;
                 self.view_off = 0;
+                self.view_px = 0;
                 self.view_x = 0;
                 self.sel = None;
                 self.shell_is_cmd = shell
@@ -410,10 +417,14 @@ impl TermView {
     pub(crate) fn cell_at(&self, x: i32, y: i32) -> (usize, usize) {
         let (rc, cw, ch, _) = self.grid;
         let col = ((x - rc.x - 2) / cw.max(1)).max(0) as usize + self.view_x;
-        let row = ((y - rc.y - 1) / ch.max(1)).max(0) as usize;
         let sb = self.screen.scrollback_count();
         let top = sb - self.view_off.min(sb);
-        let line = (top + row).min(self.screen.line_count().saturating_sub(1));
+        // 픽셀 잔여(view_px)만큼 윗줄이 내려와 있다 → 그만큼 되돌려 줄을 센다(윗줄 일부 = 줄 top-1).
+        let (extra, shift) = self.px_shift(ch.max(1), top);
+        let row = ((y - rc.y - 1 + shift) / ch.max(1)).max(0) as usize;
+        let line = (top + row)
+            .saturating_sub(extra)
+            .min(self.screen.line_count().saturating_sub(1));
         (line, col.min(self.screen.cols().saturating_sub(1)))
     }
 
@@ -552,10 +563,52 @@ impl TermView {
         )
     }
 
-    /// 스크롤백 보기 이동(양수 = 위로). 바뀌면 true.
+    /// 픽셀 잔여 → (한 줄 더 그릴지, 위로 올릴 px): `view_px`가 있고 윗줄이 있을 때만.
+    fn px_shift(&self, cell_h: i32, top: usize) -> (usize, i32) {
+        if self.view_px > 0 && top > 0 && cell_h > 0 {
+            (1, cell_h - self.view_px.min(cell_h))
+        } else {
+            (0, 0)
+        }
+    }
+
+    /// 픽셀 단위 스크롤(DR-31 ⑲ · 트랙패드 · 양수 = 위로): `view_off × cell_h + view_px`를 한 좌표로 보고 옮긴 뒤 다시 줄·잔여로. 바뀌면 true.
+    pub(crate) fn scroll_px(&mut self, dy: i32) -> bool {
+        let ch = i64::from(self.grid.2.max(1));
+        let max = self.screen.scrollback_count() as i64 * ch;
+        let pos = (self.view_off as i64 * ch + i64::from(self.view_px)).min(max);
+        let next = (pos + i64::from(dy)).clamp(0, max);
+        let (off, px) = ((next / ch) as usize, (next % ch) as i32);
+        if off != self.view_off || px != self.view_px {
+            self.view_off = off;
+            self.view_px = px;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 트랙패드 delta(노치 미만) → 이번에 옮길 px(노치 하나 = `lines_per_notch × cell_h` · 분수 누적).
+    pub(crate) fn wheel_px_step(&mut self, delta: i32, lines_per_notch: i32) -> i32 {
+        self.wheel_px
+            .add(delta, lines_per_notch.max(1) * self.grid.2.max(1))
+    }
+
+    /// 픽셀 잔여(시험).
+    #[cfg(test)]
+    pub(crate) fn view_px(&self) -> i32 {
+        self.view_px
+    }
+
+    /// 스크롤백 보기 이동(양수 = 위로). 바뀌면 true. 줄 단위 이동은 픽셀 잔여를 0으로 스냅한다.
     pub(crate) fn scroll_view(&mut self, lines: i32) -> bool {
         let max = self.screen.scrollback_count();
         let next = (self.view_off as i64 + lines as i64).clamp(0, max as i64) as usize;
+        if self.view_px != 0 {
+            self.view_px = 0;
+            self.view_off = next;
+            return true;
+        }
         if next != self.view_off {
             self.view_off = next;
             true
@@ -671,6 +724,8 @@ impl TermView {
         let sb = self.screen.scrollback_count();
         let view = self.view_off.min(sb);
         let top = sb - view;
+        // 픽셀 스크롤(DR-31 ⑲): 윗줄 일부가 보이면 한 줄을 더 그리고 전체를 `shift`만큼 올린다(잘림은 clip이 맡는다).
+        let (extra, shift) = self.px_shift(cell_h, top);
         let sel = self.sel_norm();
         let in_sel = |line: usize, col: usize| match sel {
             Some(((sl, sc), (el, ec))) => {
@@ -685,13 +740,18 @@ impl TermView {
         let (ar, ag, ab) = theme.accent.rgb();
         let accent = 0xFF00_0000 | (u32::from(ar) << 16) | (u32::from(ag) << 8) | u32::from(ab);
         let mut cur_bold = (false, false); // (굵게, 기울임) — grid_dims가 보통 Mono를 골라 뒀다
-        for r in 0..rows {
-            let y = rc.y + 1 + r as i32 * cell_h;
-            let row_h = cell_h.min(rc.bottom() - y);
+        for r in 0..rows + extra {
+            let y = rc.y + 1 + r as i32 * cell_h - shift;
+            // 보이는 띠 = [y_vis, y_vis + row_h) — 윗줄 일부는 위가 잘리고 맨 아래 줄은 아래가 잘린다.
+            let y_vis = y.max(rc.y + 1);
+            let row_h = (y + cell_h).min(rc.bottom()) - y_vis;
             if row_h <= 0 {
-                break;
+                if y >= rc.bottom() {
+                    break;
+                }
+                continue;
             }
-            let abs = top + r;
+            let abs = top + r - extra;
             if abs >= self.screen.line_count() {
                 break;
             }
@@ -731,7 +791,7 @@ impl TermView {
                 let x = rc.x + 2 + (start - c0) as i32 * cell_w;
                 let clip = Rect::new(
                     x,
-                    y,
+                    y_vis,
                     ((c - start) as i32 * cell_w).min(rc.right() - x),
                     row_h,
                 );
@@ -757,7 +817,7 @@ impl TermView {
                         n.ch == '\0' || ((is_icon_glyph(ch) || is_wide_symbol(ch)) && n.ch == ' ')
                     });
                     let cx = rc.x + 2 + (i - c0) as i32 * cell_w;
-                    let cclip = Rect::new(cx, y, if wide { 2 } else { 1 } * cell_w, row_h);
+                    let cclip = Rect::new(cx, y_vis, if wide { 2 } else { 1 } * cell_w, row_h);
                     let mut buf = [0u8; 4];
                     dc.text(cx, y, cclip, ch.encode_utf8(&mut buf), fgc);
                 }
@@ -1178,6 +1238,49 @@ mod tests {
 
     /// 고속 스크롤(T-61 · 10-25): 설정 꺼짐 = 노치당 줄 수 그대로 · 켜짐 = 같은 방향 연속 노치 `step`마다 배수 +1(상한 `max`) ·
     /// 방향 전환 = 1부터 · 창(`window_ms`) 밖 = 1부터 · 분수 delta는 노치가 찰 때까지 0.
+    /// 픽셀 스크롤(DR-31 ⑲ · 10-25): 트랙패드 delta는 px로 누적되어 줄+잔여로 · 윗줄 일부가 그려짐(줄 수 +1 · 위로 올림) · 노치 휠 = 스냅 · 끝은 클램프.
+    #[test]
+    fn trackpad_pixel_scroll_accumulates_and_snaps() {
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        let shell = p.shell.default_shell();
+        assert!(t.start(&p, shell, Path::new("."), 40, 5));
+        let style = TermStyle::default();
+        let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
+        let th = Theme::dark();
+        let rc = Rect::new(0, 0, 300, 100);
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), false, 20, &style);
+        for i in 0..30 {
+            t.screen.feed(&format!("L{i}\r\n"));
+        }
+        let ch = t.grid.2.max(1);
+        assert!(t.screen.scrollback_count() >= 3 && ch > 1);
+        // 노치 미만 delta 누적: 노치 하나 = 3줄 × ch px → delta 40 = 노치 1/3 = 1줄 px.
+        let px = t.wheel_px_step(40, 3);
+        assert_eq!(px, ch, "delta 40 = 1/3 노치 = 3줄의 1/3 = 1줄 px");
+        assert!(t.scroll_px(ch / 2));
+        assert_eq!((t.view_off, t.view_px()), (0, ch / 2), "반 줄 = 잔여");
+        let (extra, shift) = t.px_shift(ch, t.screen.scrollback_count());
+        assert_eq!(
+            (extra, shift),
+            (1, ch - ch / 2),
+            "윗줄 일부를 한 줄 더 그리고 그만큼 올린다"
+        );
+        assert!(t.scroll_px(ch));
+        assert_eq!((t.view_off, t.view_px()), (1, ch / 2));
+        assert!(t.scroll_view(1), "노치/키 = 줄 단위 · 잔여 스냅");
+        assert_eq!((t.view_off, t.view_px()), (2, 0));
+        assert!(t.scroll_px(-100_000));
+        assert_eq!((t.view_off, t.view_px()), (0, 0), "아래 끝 클램프");
+        let max = t.screen.scrollback_count();
+        assert!(t.scroll_px(100_000));
+        assert_eq!((t.view_off, t.view_px()), (max, 0), "위 끝 클램프");
+        let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
+        t.scroll_px(-(ch / 2));
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), false, 20, &style);
+        assert!(rec.strings().count() > 0, "그려진다(잘림은 clip)");
+    }
+
     #[test]
     fn wheel_fast_scroll_multiplies_consecutive_notches() {
         use std::time::{Duration, Instant};
