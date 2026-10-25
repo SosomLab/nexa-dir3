@@ -4,6 +4,8 @@
 
 ## 2026-10-26
 
+- **마감 정리**(사용자 지시 · nexa-ui 235 + 26b5f3f · CI ✓ · 전수 725/0 · T4 38/0 · STATUS/MILESTONES/TODO/CLAUDE.md 최신화 · 사용자 선택지 = 초성 전용 규칙) → [10-26 §2](journal/2026-10-26.md)
+
 - **빠른 필터 검색창 = nexa-ui 235 SearchBox 한 컨트롤 · 판정 = nexa-sql과 동일**(26b5f3f · 공백 낱말 전부 포함 · 한글 자모 연속 · 빠짐 = 부분열 퍼지 · 초성만 입력) · CONSUMER-CHANGES 235 d26dcbf → [10-26 §1](journal/2026-10-26.md)
 
 ## 2026-10-25
