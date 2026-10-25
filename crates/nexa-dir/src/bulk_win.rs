@@ -687,6 +687,23 @@ const COL_BEFORE: u32 = 1;
 const COL_AFTER: u32 = 2;
 const COL_APPLY: u32 = 3;
 
+/// 이전/이후 이름의 **바뀐 구간**(순수 · T-162 "바뀐 부분 강조" · 10-26): 공통 앞부분과 공통 뒷부분(글자 단위 · 겹치지 않게)을 뺀 나머지 —
+/// `(이전에서 빠진 구간, 이후에서 들어온 구간)` 글자 번호 `start..end`. 같은 이름 = 둘 다 빈 구간.
+pub(crate) fn diff_ranges(before: &str, after: &str) -> ((usize, usize), (usize, usize)) {
+    let a: Vec<char> = before.chars().collect();
+    let b: Vec<char> = after.chars().collect();
+    let pre = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let max_suf = a.len().min(b.len()) - pre;
+    let suf = a
+        .iter()
+        .rev()
+        .zip(b.iter().rev())
+        .take(max_suf)
+        .take_while(|(x, y)| x == y)
+        .count();
+    ((pre, a.len() - suf), (pre, b.len() - suf))
+}
+
 fn conflict_text(c: Conflict) -> String {
     match c {
         Conflict::None => String::new(),
@@ -734,6 +751,23 @@ impl RowSource for PvSource {
                 }
             }
             _ => String::new(),
+        }
+    }
+    /// 바뀐 부분 강조(T-162 남김 · 10-26 · nexa-grid 236차): 바뀌는 행의 이전 열 = 빠지는 구간 · 이후 열 = 들어오는 구간(충돌 표시 "⚠ " 2글자만큼 밀림) ·
+    /// 바뀌지 않은 행 · 빈 구간 = 없음.
+    fn cell_emphasis(&self, index: usize, key: u32) -> Option<(usize, usize)> {
+        let r = &self.rows[index];
+        if !r.changed {
+            return None;
+        }
+        let ((b0, b1), (a0, a1)) = diff_ranges(&r.before, &r.after);
+        match key {
+            COL_BEFORE if b0 < b1 => Some((b0, b1)),
+            COL_AFTER if a0 < a1 => {
+                let off = if r.conflict != Conflict::None { 2 } else { 0 };
+                Some((a0 + off, a1 + off))
+            }
+            _ => None,
         }
     }
     /// 충돌 행 바탕 색(T-162 남김 · 10-25 · nexa-grid `RowMark` 230차): 적용 대상이면서 충돌이면 경고 색조 · 뺀 행(`✗`)은 색 없음(충돌 계산에서
@@ -2868,6 +2902,33 @@ impl BulkWin {
 
 #[cfg(test)]
 mod tests {
+    /// 바뀐 구간(순수 · T-162 "바뀐 부분 강조"): 앞뒤 공통을 뺀 나머지 · 삽입(이전 빈 구간) · 삭제(이후 빈 구간) · 같은 이름 = 둘 다 빈 구간 · 반복 글자 겹침 방지.
+    #[test]
+    fn diff_ranges_mark_changed_span() {
+        assert_eq!(
+            super::diff_ranges("IMG_001.jpg", "IMG_0001.jpg"),
+            ((6, 6), (6, 7)),
+            "삽입"
+        );
+        assert_eq!(
+            super::diff_ranges("report draft.md", "report.md"),
+            ((6, 12), (6, 6)),
+            "삭제"
+        );
+        assert_eq!(super::diff_ranges("a.txt", "b.txt"), ((0, 1), (0, 1)));
+        assert_eq!(super::diff_ranges("same", "same"), ((4, 4), (4, 4)));
+        assert_eq!(
+            super::diff_ranges("aaa", "aa"),
+            ((2, 3), (2, 2)),
+            "반복 글자는 앞을 먼저 맞추고 뒤는 겹치지 않게"
+        );
+        assert_eq!(
+            super::diff_ranges("한글.txt", "한글 사본.txt"),
+            ((2, 2), (2, 5)),
+            "글자 단위"
+        );
+    }
+
     use super::*;
 
     fn en() {
