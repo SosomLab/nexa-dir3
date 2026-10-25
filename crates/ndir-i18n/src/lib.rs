@@ -329,6 +329,37 @@ mod tests {
         }
     }
 
+    /// 같은 뜻 중복 키(DR-31 ⑱ · 10-25 · 문맥별 키는 유지): en 값이 같은 **짧은 버튼 라벨**(Cancel · Close · OK · Paste · Copy · Delete · Rename · Open)은
+    /// ko/ja 번역도 서로 같아야 한다 — 한 곳만 다르게 고치는 실수를 적발한다(문맥상 달라야 하면 이 목록에서 빼고 사유를 적는다).
+    #[test]
+    fn same_meaning_button_labels_translate_consistently() {
+        let en = parse(BUILTIN_EN);
+        let watch = [
+            "Cancel", "Close", "OK", "Paste", "Copy", "Delete", "Rename", "Open",
+        ];
+        for (code, text) in [("ko", BUILTIN_KO), ("ja", BUILTIN_JA)] {
+            let l = parse(text);
+            for w in watch {
+                let keys: Vec<&String> = en
+                    .strings
+                    .iter()
+                    .filter(|(_, v)| v.as_str() == w)
+                    .map(|(k, _)| k)
+                    .collect();
+                let mut vals: Vec<&str> = keys
+                    .iter()
+                    .filter_map(|k| l.strings.get(*k).map(String::as_str))
+                    .collect();
+                vals.sort_unstable();
+                vals.dedup();
+                assert!(
+                    vals.len() <= 1,
+                    "{code}: en \"{w}\" 키들의 번역이 갈림 {keys:?} → {vals:?}"
+                );
+            }
+        }
+    }
+
     /// 원장 전수(T-90 · docs/port/31 §2-6 KEY-1001~1498): dir2 i18n 키 **전부**가 세 언어 내장 카탈로그에 있다(자원 유지 — CLAUDE.md §1).
     /// 원장 표 행 = `| KEY-NNNN | `키` | en | ko | 비고 |`.
     #[test]

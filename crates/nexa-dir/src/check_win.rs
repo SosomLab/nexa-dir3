@@ -509,7 +509,7 @@ impl CheckWin {
                     Verdict::Skip => th.text_dim,
                 };
                 dc.text(x0, ty, clip, r.verdict.as_str(), vc);
-                dc.text(x0 + cols[0], ty, clip, r.group, th.text_dim);
+                dc.text(x0 + cols[0], ty, clip, &group_label(r.group), th.text_dim);
                 dc.text(x0 + cols[0] + cols[1], ty, clip, &r.name, th.text);
                 dc.text(
                     x0 + cols[0] + cols[1] + cols[2],
@@ -531,6 +531,18 @@ impl CheckWin {
             }
         }
         let _ = buf.present();
+    }
+}
+
+/// 그룹 열의 글(DR-31 ⑰ · 10-25): 그룹 id(`fs` · `trash` …)는 CLI 보고서와 같은 영어 그대로 두고 **창에서만** i18n 이름(`check.grp.<id>`)으로 ·
+/// 키가 없으면 id 그대로.
+fn group_label(id: &str) -> String {
+    let key = format!("check.grp.{id}");
+    let t = tr(&key);
+    if t == key {
+        id.to_string()
+    } else {
+        t
     }
 }
 
@@ -601,5 +613,16 @@ mod tests {
         }
         assert!(!w.is_running() && w.rows_len() >= 1, "{}", w.table());
         assert!(w.table().contains("PASS env"), "{}", w.table());
+    }
+
+    /// 그룹 열 i18n(DR-31 ⑰): 알려진 그룹 = 번역 글(키가 아님) · 모르는 id = 그대로 · 항목 이름은 손대지 않는다.
+    #[test]
+    fn group_label_translates_known_ids_only() {
+        for g in crate::selfcheck::GROUPS {
+            let t = group_label(g);
+            assert!(!t.starts_with("check.grp."), "{g}: {t}");
+            assert_ne!(t, "", "{g}");
+        }
+        assert_eq!(group_label("no-such-group"), "no-such-group");
     }
 }
