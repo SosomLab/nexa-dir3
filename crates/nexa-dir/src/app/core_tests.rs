@@ -10973,3 +10973,37 @@ fn sort_marks_are_triangles_and_click_adds_setting() {
     assert!(!app.panels[0].rows().sort_click_adds() && !crate::panel::sort_click_adds_default());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `ui.text_*`(GAP-015 · DR-31 ⑤ · 10-25): 바꾸면 nexa-gfx 전역이 바로 바뀐다(종전 = 읽는 곳 없음 · 재시작 목록) · 범위 클램프 · 재시작 목록에 없음.
+#[test]
+fn text_raster_settings_apply_immediately() {
+    let (mut app, dir) = fixture("textraster");
+    for k in [
+        "ui.text_gdi",
+        "ui.text_hint",
+        "ui.text_snap",
+        "ui.text_weight",
+        "ui.text_contrast",
+    ] {
+        assert!(!crate::app::settings::NEEDS_RESTART.contains(&k), "{k}");
+    }
+    let _ = app.settings.set("ui.text_weight", "40");
+    assert!(app.apply_setting("ui.text_weight"));
+    assert!((nexa_gfx::text::text_weight() - 0.4).abs() < 1e-6);
+    let _ = app.settings.set("ui.text_contrast", "300");
+    app.after_setting_changed("ui.text_contrast");
+    assert!(
+        (nexa_gfx::text::text_contrast() - 3.0).abs() < 1e-6,
+        "상한 3.0"
+    );
+    let _ = app.settings.set("ui.text_hint", "off");
+    app.after_setting_changed("ui.text_hint");
+    assert!(!nexa_gfx::text::text_hint());
+    // 기본값으로 되돌림(전역 — 다른 그리기 시험에 영향 없게).
+    for k in ["ui.text_weight", "ui.text_contrast", "ui.text_hint"] {
+        let _ = app.settings.reset(k);
+        app.after_setting_changed(k);
+    }
+    assert!((nexa_gfx::text::text_weight() - 0.25).abs() < 1e-6 && nexa_gfx::text::text_hint());
+    let _ = std::fs::remove_dir_all(&dir);
+}

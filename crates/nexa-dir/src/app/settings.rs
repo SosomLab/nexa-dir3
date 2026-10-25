@@ -13,11 +13,6 @@ pub(crate) const NEEDS_RESTART: &[&str] = &[
     "list.font_face",
     "statusbar.font_face",
     "ui.dialog_font_face",
-    "ui.text_gdi",
-    "ui.text_hint",
-    "ui.text_snap",
-    "ui.text_weight",
-    "ui.text_contrast",
 ];
 
 impl App {
@@ -207,6 +202,8 @@ impl App {
                 self.apply_transfer_tuning();
             }
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
+            // 글자 래스터(GAP-015 · DR-31 ⑤ · 10-25): 종전엔 레지스트리에만 있고 읽는 곳이 없어 바꿔도 효과가 없었다 → 즉시 반영.
+            k if k.starts_with("ui.text_") => self.apply_text_raster(),
             "list.sort_click_adds" => self.apply_sort_click_setting(),
             "list.col_layout" => {
                 let v = self
@@ -389,6 +386,26 @@ impl App {
             backspace: s.flag("typeahead.backspace"),
             hud_pos: panel::hud_pos_index(s.get("typeahead.hud_pos").unwrap_or("bottom_left")),
         }
+    }
+
+    /// `ui.text_*`(글자 래스터 · GAP-015 · DR-31 ⑤) → nexa-gfx 전역 + 전체 다시 그리기. 글리프 캐시 키에 감마·힌트·굵기·GDI가 들어 있어
+    /// 캐시를 비울 필요가 없다(스냅은 배치만 바꾼다).
+    pub(crate) fn apply_text_raster(&mut self) {
+        Self::apply_text_raster_of(&self.settings);
+        self.damage.borrow_mut().full = true;
+        self.redraw();
+    }
+
+    /// 설정 → nexa-gfx 전역(기동(main) · 변경 때 같은 길 · 순수 입력): `weight` %/100(0.0~0.6 · nexa-sql 25 % = 0.25) · `contrast` %/100(0.5~3.0).
+    /// 값은 유효값(`flag`/`int` = 성능 향상 모드 `BOOST` 반영).
+    pub(crate) fn apply_text_raster_of(s: &Settings) {
+        nexa_gfx::text::set_text_gdi(s.flag("ui.text_gdi"));
+        nexa_gfx::text::set_text_hint(s.flag("ui.text_hint"));
+        nexa_gfx::text::set_text_snap(s.flag("ui.text_snap"));
+        nexa_gfx::text::set_text_weight((s.int("ui.text_weight") as f32 / 100.0).clamp(0.0, 0.6));
+        nexa_gfx::text::set_text_contrast(
+            (s.int("ui.text_contrast") as f32 / 100.0).clamp(0.5, 3.0),
+        );
     }
 
     /// `list.sort_click_adds`(T-128 · DR-31 ⑦) → 열린 탭 전부 + 새 탭 기본값.
