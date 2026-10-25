@@ -213,6 +213,10 @@ pub(crate) struct Panel {
     filter_on: bool,
     /// 토글이 바뀌었다(호스트가 설정 `list.filter_*`에 적는다).
     filter_opts_changed: bool,
+    /// 새 탭·새 원천이 이어받는 토글(설정 기본값 · App이 `set_filter_opts`로 준다 · 종전 프로세스 전역 `filelist::FILTER_OPTS_DEFAULT`는 10-26 제거 · docs/15 §2-8).
+    filter_defaults: ndir_ops::namefilter::FilterOpts,
+    /// 새 그리드의 Shift 없는 헤더 클릭 = 정렬 추가(설정 `list.sort_click_adds` · App이 `set_sort_click_adds`로 준다 · 종전 전역 제거).
+    sort_click_adds: bool,
 }
 
 /// 탭 상태바 높이(논리 px · 창 상태줄과 같다).
@@ -368,7 +372,6 @@ impl Panel {
         rows.set_columns(columns, &mut inv);
         rows.set_sort_mark_trailing(true, &mut inv); // 정렬 표시 = 칸 오른쪽 끝(nexa-sql 모양 · 사용자 10-03)
         rows.set_sort_mark_vector(true, &mut inv); // ▲/▼ = 삼각형 도형(T-128 · DR-31 ⑥ · nexa-ui 231)
-        rows.set_sort_click_adds(sort_click_adds_default()); // Shift 없는 클릭 추가(설정 `list.sort_click_adds` · DR-31 ⑦)
         rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
@@ -435,11 +438,12 @@ impl Panel {
             git: None,
             pending_status: None,
             filter_opts_changed: false,
+            filter_defaults: ndir_ops::namefilter::FilterOpts::default(),
+            sort_click_adds: false,
             git_extra: String::new(),
         };
         p.set_metrics(m, &mut inv);
         p.sync_chrome(&mut inv);
-        p.set_filter_opts(crate::filelist::filter_opts_default(), &mut inv); // 검색창 토글 = 설정 기본값(10-25)
         p
     }
 
@@ -1321,6 +1325,7 @@ impl Panel {
         inv: &mut Invalidations,
     ) {
         use nexa_ctl::SearchToggle as T;
+        self.filter_defaults = opts;
         self.filter.set_checked(T::Case, opts.case);
         self.filter.set_checked(T::Word, opts.word);
         self.filter.set_checked(T::Regex, opts.regex);
@@ -1687,7 +1692,8 @@ impl Panel {
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
         rows.set_sort_mark_vector(true, inv);
-        rows.set_sort_click_adds(sort_click_adds_default());
+        rows.set_sort_click_adds(self.sort_click_adds);
+        rows.source_mut().set_filter_opts(self.filter_defaults); // 토글 이어받기(10-26 · 전역 없음)
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.rows().view_mode(), inv);
@@ -1829,7 +1835,8 @@ impl Panel {
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
         rows.set_sort_mark_vector(true, inv);
-        rows.set_sort_click_adds(sort_click_adds_default());
+        rows.set_sort_click_adds(self.sort_click_adds);
+        rows.source_mut().set_filter_opts(self.filter_defaults); // 토글 이어받기(10-26 · 전역 없음)
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
@@ -2176,6 +2183,8 @@ impl Panel {
         select: Option<PathBuf>,
         inv: &mut Invalidations,
     ) {
+        let mut src = src;
+        src.set_filter_opts(self.filter_defaults); // 새 원천도 이 패널의 토글을 이어받는다(10-26 · 전역 없음)
         let tab = &mut self.tabs[i];
         tab.reloading = None; // 진입 결과가 최신 — 걸려 있던 재열람은 버린다
         match kind {
@@ -2359,6 +2368,7 @@ impl Panel {
 
     /// Shift 없는 헤더 클릭 = 정렬 추가(설정 `list.sort_click_adds` · T-128 · DR-31 ⑦) — 열린 탭 전부에 즉시.
     pub(crate) fn set_sort_click_adds(&mut self, on: bool) {
+        self.sort_click_adds = on;
         for tab in &mut self.tabs {
             tab.rows.set_sort_click_adds(on);
         }
@@ -3045,17 +3055,6 @@ impl Panel {
             self.session_dirty = true;
         }
     }
-}
-
-/// 새 그리드가 읽는 `list.sort_click_adds` 값(설정 → [`set_sort_click_adds_default`] · 탭/패널 생성 시 적용 · 열린 탭은 [`Panel::set_sort_click_adds`]).
-static SORT_CLICK_ADDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub(crate) fn set_sort_click_adds_default(on: bool) {
-    SORT_CLICK_ADDS.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub(crate) fn sort_click_adds_default() -> bool {
-    SORT_CLICK_ADDS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 #[cfg(test)]

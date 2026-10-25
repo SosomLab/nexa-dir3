@@ -231,23 +231,6 @@ pub(crate) struct ReloadBuilt {
     mtime: Option<std::time::SystemTime>,
 }
 
-/// 빠른 필터 토글의 기본값(설정 `list.filter_case/word/regex` → [`set_filter_opts_default`] · 새 탭 원천 · 새 패널 버튼이 읽는다 · 10-25 검색창).
-static FILTER_OPTS_DEFAULT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
-
-pub(crate) fn set_filter_opts_default(o: ndir_ops::namefilter::FilterOpts) {
-    let bits = u8::from(o.case) | (u8::from(o.word) << 1) | (u8::from(o.regex) << 2);
-    FILTER_OPTS_DEFAULT.store(bits, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub(crate) fn filter_opts_default() -> ndir_ops::namefilter::FilterOpts {
-    let b = FILTER_OPTS_DEFAULT.load(std::sync::atomic::Ordering::Relaxed);
-    ndir_ops::namefilter::FilterOpts {
-        case: b & 1 != 0,
-        word: b & 2 != 0,
-        regex: b & 4 != 0,
-    }
-}
-
 /// 한 패널의 행 공급자.
 #[derive(Debug)]
 pub(crate) struct TreeSource {
@@ -304,7 +287,7 @@ impl TreeSource {
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
             name_filter: String::new(),
-            filter_opts: filter_opts_default(),
+            filter_opts: ndir_ops::namefilter::FilterOpts::default(), // 패널이 자기 토글을 넣는다(`Panel::apply_nav` · 전역 없음 · 10-26)
             filter_err: false,
             find_scope: FindScope::VisibleStream,
             no_icons: false,

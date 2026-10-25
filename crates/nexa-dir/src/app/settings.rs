@@ -476,7 +476,6 @@ impl App {
     /// 빠른 필터 토글(`list.filter_case/word/regex` · 10-25 검색창) → 모든 패널(버튼 색 + 탭 원천 다시 걸름) + 새 탭/패널 기본값.
     pub(crate) fn apply_filter_opts_setting(&mut self) {
         let o = Self::filter_opts_of(&self.settings);
-        crate::filelist::set_filter_opts_default(o);
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.set_filter_opts(o, &mut inv);
@@ -508,7 +507,6 @@ impl App {
     /// `list.sort_click_adds`(T-128 · DR-31 ⑦) → 열린 탭 전부 + 새 탭 기본값.
     pub(crate) fn apply_sort_click_setting(&mut self) {
         let on = self.settings.flag("list.sort_click_adds");
-        crate::panel::set_sort_click_adds_default(on);
         for p in &mut self.panels {
             p.set_sort_click_adds(on);
         }

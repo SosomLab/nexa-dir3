@@ -11004,10 +11004,14 @@ fn sort_marks_are_triangles_and_click_adds_setting() {
     let _ = app.settings.set("list.sort_click_adds", "on");
     app.after_setting_changed("list.sort_click_adds");
     assert!(app.panels[0].rows().sort_click_adds());
-    assert!(crate::panel::sort_click_adds_default(), "새 탭 기본값도");
+    app.command("file.new_tab");
+    assert!(
+        app.panels[0].rows().sort_click_adds(),
+        "새 탭도(패널 필드 · 전역 없음 · 10-26)"
+    );
     let _ = app.settings.set("list.sort_click_adds", "off");
     app.after_setting_changed("list.sort_click_adds");
-    assert!(!app.panels[0].rows().sort_click_adds() && !crate::panel::sort_click_adds_default());
+    assert!(!app.panels[0].rows().sort_click_adds());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -11190,9 +11194,14 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
     // 설정 → 패널 · 새 탭 기본값.
     let _ = app.settings.set("list.filter_word", "on");
     app.after_setting_changed("list.filter_word");
-    // 새 탭 기본값(`filelist::filter_opts_default`)은 프로세스 전역이라 단언하지 않는다(docs/15 §2-8 · 병렬 시험의 App::new가 덮는다 ·
-    // macOS CI 0530a99 적발) — 설정과 이 패널의 값만 본다.
+    // 새 탭 기본값 = 패널 필드(10-26 · 종전 프로세스 전역이 macOS CI 0530a99에서 병렬 시험과 섞여 흔들렸다 · docs/15 §2-8) — 새 탭도 이어받는다.
     assert!(app.settings.flag("list.filter_word") && app.panels[0].filter_opts().word);
+    app.command("file.new_tab");
+    assert!(
+        app.panels[0].rows().source().filter_opts().word,
+        "새 탭 원천도 토글을 이어받는다"
+    );
+    app.command("file.close_tab");
     assert!(
         !app.panels[0].filter_opts().regex,
         "설정 기준(regex off)으로 맞춰진다"
