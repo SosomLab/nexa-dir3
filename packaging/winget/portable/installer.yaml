@@ -11,8 +11,11 @@ NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: nexa-dir.exe
     PortableCommandAlias: nexa-dir
+  - RelativeFilePath: nexa-copy.exe
+    PortableCommandAlias: nexa-copy
 Commands:
   - nexa-dir
+  - nexa-copy
 UpgradeBehavior: install
 ReleaseDate: "@DATE@"
 Installers:

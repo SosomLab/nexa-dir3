@@ -27,7 +27,7 @@ done
 OUT="$OUT_ROOT/macos"
 APP="$OUT/$APP_NAME.app"
 CARGO="$(cargo_bin)"
-BINS=(nexa-dir)
+BINS=(nexa-dir nexa-copy) # nexa-copy = CLI 복사 도구(DR-31 ① 전 채널 동봉 · Contents/MacOS · pkg postinstall이 /usr/local/bin 링크)
 
 step "빌드 (release · $TARGETS)"
 BUILT=()
@@ -36,7 +36,7 @@ for T in $TARGETS; do
         if ! rustup target list --installed 2>/dev/null | grep -q "^$T\$"; then
             note "타깃 std 없음: $T (rustup target add $T) — 건너뜀"; continue
         fi
-        "$CARGO" build --release --locked -p nexa-dir --target "$T"
+        "$CARGO" build --release --locked -p nexa-dir -p nexa-copy --target "$T"
     fi
     if [ -x "$ROOT/target/$T/release/nexa-dir" ]; then
         BUILT+=("$T"); note "✓ $T"

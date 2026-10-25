@@ -132,15 +132,17 @@ jobs:
           deb=$(ls target/packaging/linux/*.deb)
           sudo dpkg -i "$deb"
           nexa-dir --version | tee /dev/stderr | grep -q "^nexa-dir $NDIR_VERSION\$"
+          nexa-copy --version | tee /dev/stderr | grep -q "^nexa-copy $NDIR_VERSION\$"
           nexa-dir --smoke
           test -f /usr/share/applications/nexa-dir.desktop
           test -d /usr/share/nexa-dir/plugins
           sudo dpkg -r nexa-dir
           # `! cmd`는 set -e를 타지 않는다 — 부정은 test 안에서.
-          test ! -e /usr/bin/nexa-dir; test ! -e /usr/share/nexa-dir
+          test ! -e /usr/bin/nexa-dir; test ! -e /usr/bin/nexa-copy; test ! -e /usr/share/nexa-dir
           # rpm은 ubuntu에 설치할 수 없다 — 목록·서명 검사만(rpm 계열 실기는 docs/port/90 실기표).
           rpm=$(ls target/packaging/linux/*.rpm)
           rpm -qpl "$rpm" | grep -q '^/usr/bin/nexa-dir$'
+          rpm -qpl "$rpm" | grep -q '^/usr/bin/nexa-copy$'
           rpm -K --nosignature "$rpm"
 
       # ── macOS: Universal 2 .app → pkg + dmg ──
@@ -175,11 +177,13 @@ jobs:
           sudo installer -pkg "$pkg" -target / -verbose
           test -L /usr/local/bin/nexa-dir
           /usr/local/bin/nexa-dir --version | tee /dev/stderr | grep -q "^nexa-dir $NDIR_VERSION\$"
+          test -L /usr/local/bin/nexa-copy
+          /usr/local/bin/nexa-copy --version | tee /dev/stderr | grep -q "^nexa-copy $NDIR_VERSION\$"
           "/Applications/Nexa Dir.app/Contents/MacOS/nexa-dir" --smoke
           pkgutil --pkg-info com.sosomlab.nexa-dir
           sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"
           # `! cmd`는 set -e를 타지 않는다 — 부정은 test 안에서 / if로.
-          test ! -e "/Applications/Nexa Dir.app"; test ! -e /usr/local/bin/nexa-dir
+          test ! -e "/Applications/Nexa Dir.app"; test ! -e /usr/local/bin/nexa-dir; test ! -e /usr/local/bin/nexa-copy
           if pkgutil --pkg-info com.sosomlab.nexa-dir >/dev/null 2>&1; then echo "::error::pkg 영수증이 남았다"; exit 1; fi
 
       # ── Windows: MSI(WiX v4) ──
@@ -217,6 +221,9 @@ jobs:
           # ★ 콘솔 보조 ndir.exe(T-178)는 콘솔 프로그램이라 **직접 캡처**가 돼야 한다(이 결함의 회귀 시험 · 10-05 §70 2차 실패).
           $v2 = (& (Join-Path $dir "ndir.exe") --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $v2 -ne "nexa-dir $env:NDIR_VERSION") { throw "ndir --version 캡처 불일치: '$v2' (exit $LASTEXITCODE)" }
+          # nexa-copy.exe(CLI 복사 도구 · 전 채널 동봉 · DR-31 ①) — 콘솔 프로그램이라 직접 캡처.
+          $v3 = (& (Join-Path $dir "nexa-copy.exe") --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $v3 -ne "nexa-copy $env:NDIR_VERSION") { throw "nexa-copy --version 불일치: '$v3' (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir "plugins\markdown.wasm"))) { throw "동봉 플러그인 누락" }
           (Get-ItemProperty 'HKLM:\SOFTWARE\SosomLab\Nexa Dir').InstallDir
           $p = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
@@ -292,6 +299,8 @@ jobs:
           | Linux x86_64 (deb) | \`nexa-dir_${VERSION}_amd64.deb\` | \`sudo dpkg -i\` or \`sudo apt install ./…deb\` |
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
           | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | Unzip and run \`nexa-dir.exe\` (settings go to a \`data\` folder next to the exe if present, otherwise %APPDATA%\\\\nexa-dir); in a console (PowerShell) use \`ndir.exe\`, e.g. \`ndir --selfcheck\` |
+
+          Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` \`--mirror\` \`--dry-run\` \`--include/--exclude\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
 
           Verify downloads with \`sha256sums.txt\`. Uninstall: Windows Apps & features · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\` / \`dnf remove nexa-dir\`.
           User data (settings, sessions, favorites, rename presets) lives in the settings folder and is kept on uninstall. Settings from 0.22.0 and earlier (nexa-dir2) are imported once on first start.

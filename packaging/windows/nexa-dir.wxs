@@ -80,6 +80,8 @@
         </File>
         <!-- 콘솔 보조 ndir.exe(T-178): 셸이 끝까지 기다리는 CLI 경로(본체에 인자 전달). XML 주석에는 겹친 하이픈을 쓰지 않는다(WIX0104 · 10-08 v0.23.2 1차 실패). -->
         <File Id="NdirExe" Source="$(var.Staging)\ndir.exe" />
+        <!-- nexa-copy.exe: command-line copy/move tool on the same transfer engine (bundled in every channel, DR-31 1, 10-25). -->
+        <File Id="NexaCopyExe" Source="$(var.Staging)\nexa-copy.exe" />
       </Component>
       <Component Id="Docs" Guid="3EA7048D-1375-4387-8636-F9BED6F72FF9">
         <File Source="$(var.Staging)\LICENSE.md" KeyPath="yes" />
@@ -118,7 +120,7 @@
     <Feature Id="Main" Title="Nexa Dir" Description="Nexa Dir (nexa-dir.exe) and bundled plugins" Level="1" AllowAbsent="no" AllowAdvertise="no" Display="expand">
       <ComponentGroupRef Id="MainFiles" />
       <ComponentGroupRef Id="PluginsFiles" />
-      <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'ndir --selfcheck' (console helper) and 'nexa-dir' work in any console." Level="1" AllowAdvertise="no">
+      <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'ndir --selfcheck' (console helper), 'nexa-dir' and 'nexa-copy' (command-line copy/move) work in any console." Level="1" AllowAdvertise="no">
         <ComponentGroupRef Id="PathEnvFiles" />
       </Feature>
     </Feature>

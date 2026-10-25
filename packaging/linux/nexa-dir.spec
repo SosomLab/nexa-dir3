@@ -47,6 +47,7 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 
 %files
 %{_bindir}/nexa-dir
+%{_bindir}/nexa-copy
 %{_datadir}/applications/nexa-dir.desktop
 %{_datadir}/icons/hicolor/*/apps/nexa-dir.png
 %dir %{_datadir}/nexa-dir

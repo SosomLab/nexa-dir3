@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-# Portable - unzip into the package folder; Chocolatey creates a shim for nexa-dir.exe (no install footprint).
+# Portable - unzip into the package folder; Chocolatey creates shims for nexa-dir.exe and nexa-copy.exe (no install footprint).
 $toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 Install-ChocolateyZipPackage `

@@ -15,6 +15,9 @@ PURGE=0; [ "${1:-}" = "--purge" ] && PURGE=1
 
 # 사용자에게 보이는 메시지는 영어(게시물 언어 규칙 · docs/16 §5-6 · 사용자 10-10).
 if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$APP/Contents/MacOS/nexa-dir" ]; then rm -f "$LINK"; echo "removed: $LINK"; fi
+# nexa-copy link (bundled CLI copy tool)
+LINK2="/usr/local/bin/nexa-copy"
+if [ -L "$LINK2" ] && [ "$(readlink "$LINK2")" = "$APP/Contents/MacOS/nexa-copy" ]; then rm -f "$LINK2"; echo "removed: $LINK2"; fi
 [ -d "$APP" ] && { rm -rf "$APP"; echo "removed: $APP"; }
 pkgutil --pkgs 2>/dev/null | grep -q "^$PKG_ID\$" && { pkgutil --forget "$PKG_ID" >/dev/null && echo "receipt forgotten: $PKG_ID"; }
 

@@ -31,16 +31,17 @@ BIN="$ROOT/target/$TARGET/release"
 step "빌드 (release · $TARGET)"
 if [ "$SKIP_BUILD" = 0 ]; then
     if [ -n "${NDIR_ZIGBUILD:-}" ]; then
-        "$(cargo_bin)" zigbuild --release --locked -p nexa-dir --target "${TARGET}.2.17"
+        "$(cargo_bin)" zigbuild --release --locked -p nexa-dir -p nexa-copy --target "${TARGET}.2.17"
     else
-        "$(cargo_bin)" build --release --locked -p nexa-dir --target "$TARGET"
+        "$(cargo_bin)" build --release --locked -p nexa-dir -p nexa-copy --target "$TARGET"
     fi
 fi
-[ -x "$BIN/nexa-dir" ] || die "산출물 없음: $BIN"
+[ -x "$BIN/nexa-dir" ] && [ -x "$BIN/nexa-copy" ] || die "산출물 없음: $BIN (nexa-dir · nexa-copy)"
 
 step "스테이징(FHS) → $PKG"
 mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" "$PKG/usr/share/applications" "$PKG/usr/share/doc/nexa-dir" "$PKG/usr/share/nexa-dir"
 install -m 0755 "$BIN/nexa-dir" "$PKG/usr/bin/nexa-dir"
+install -m 0755 "$BIN/nexa-copy" "$PKG/usr/bin/nexa-copy" # CLI 복사 도구(DR-31 ① 전 채널 동봉)
 install -m 0644 "$ROOT/packaging/linux/nexa-dir.desktop" "$PKG/usr/share/applications/nexa-dir.desktop"
 for n in 16 24 32 48 64 128 256 512; do
     d="$PKG/usr/share/icons/hicolor/${n}x${n}/apps"; mkdir -p "$d"
@@ -71,5 +72,5 @@ note "$(basename "$FINAL") $(du -h "$FINAL" | cut -f1) · sha256 $(sha256_of "$F
 
 step "검증(설치 없이)"
 dpkg-deb --info "$FINAL" | sed -n '1,6p' | sed 's/^/    /'
-dpkg-deb --contents "$FINAL" | grep -E 'usr/bin/nexa-dir$|nexa-dir.desktop$|256x256/apps/nexa-dir.png$|plugins/.*wasm$' | awk '{print "    " $NF}'
+dpkg-deb --contents "$FINAL" | grep -E 'usr/bin/nexa-dir$|usr/bin/nexa-copy$|nexa-dir.desktop$|256x256/apps/nexa-dir.png$|plugins/.*wasm$' | awk '{print "    " $NF}'
 echo "DEB=$FINAL"

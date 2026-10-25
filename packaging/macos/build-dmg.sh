@@ -26,6 +26,7 @@ Nexa Dir $VERSION
 1) Drag "Nexa Dir" into the Applications folder.
 2) To use nexa-dir from a terminal (e.g. --selfcheck), add a link (the pkg installer does this for you):
    sudo ln -sfn "/Applications/Nexa Dir.app/Contents/MacOS/nexa-dir" /usr/local/bin/nexa-dir
+   sudo ln -sfn "/Applications/Nexa Dir.app/Contents/MacOS/nexa-copy" /usr/local/bin/nexa-copy   # command-line copy/move tool
 3) If the unsigned build refuses to start (Gatekeeper):
    xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"
 Uninstall: sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"
