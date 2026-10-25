@@ -10845,3 +10845,40 @@ fn memory_window_command_and_dump() {
     assert!(d.contains("mem.grp.render "), "{d}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 도구 모음 툴팁(T-150 남김 "툴팁" · 10-25): 버튼 위에 머물면 바로 보이고(nexa-ctl 규약 · 지연 없음) 글 = 그 명령의 i18n 라벨
+/// (`menu.view.modeTree` · 키가 아닌 번역 글) · 목록으로 벗어나면 사라진다 · 처음(머문 항목 없음)엔 없음.
+#[test]
+fn toolbar_tooltip_shows_item_label_on_hover_and_hides_on_leave() {
+    let (mut app, dir) = fixture("tbtip");
+    app.layout_for(1200, 800, 1.0);
+    assert!(!app.toolbar.tooltip_visible(), "머문 항목 없음 = 툴팁 없음");
+    let r = app
+        .toolbar
+        .item_rect("view.mode_tree")
+        .expect("도구 모음 항목");
+    app.route(InputEvent::MouseMove {
+        x: r.x + r.w / 2,
+        y: r.y + r.h / 2,
+    });
+    assert!(app.toolbar.tooltip_visible(), "머묾 = 툴팁");
+    let tip = app
+        .toolbar
+        .all_items()
+        .iter()
+        .find(|i| i.id == "view.mode_tree")
+        .map(|i| i.tip.clone())
+        .unwrap_or_default();
+    assert_eq!(tip, ndir_i18n::tr("menu.view.modeTree"));
+    assert!(
+        !tip.is_empty() && tip != "menu.view.modeTree",
+        "라벨은 번역된 글: {tip:?}"
+    );
+    let lb = app.panels[0].bounds();
+    app.route(InputEvent::MouseMove {
+        x: lb.x + lb.w / 2,
+        y: lb.y + lb.h / 2,
+    });
+    assert!(!app.toolbar.tooltip_visible(), "벗어남 = 사라짐");
+    let _ = std::fs::remove_dir_all(&dir);
+}
