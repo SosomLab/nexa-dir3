@@ -177,6 +177,36 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 
 ## 8. 실행 기록
 
+### 8-5. 2026-10-26 새벽 · 밤 작업 마감 점검(bf28437 · Windows PC · release)
+
+**성능 기준선 비교**(`perf-baseline.sh --baseline target/perf/baseline.json` · 기준 = 10-08 46aa5ff · 회귀선 기동/fs/그룹 +20 % · exe +5 %)
+
+| 항목 | 이번 | 기준선 | Δ |
+| --- | --- | --- | --- |
+| 기동 `--smoke` 중앙값(5회) | 836 ms | 1,737 | −51.9 % |
+| `--selfcheck --ci --only fs` | 117 ms | 132 | −11.4 % |
+| selfcheck `ctxmenu` | 677 ms | 1,614 | −58.1 % |
+| selfcheck `license` | 45 ms | 65 | −30.8 % |
+| selfcheck `fs` | 33 ms | 34 | −2.9 % |
+| exe 크기(release) | 7,044,608 B | 6,785,536 | +3.8 % |
+
+→ **회귀 0건**. 기동이 반으로 준 것은 10-18~10-25 체감 개선(T-189/T-190 · 지연 로딩 · 아이콘 캐시)과 10-25 메모리 축소의 누적 — 같은 PC 수치라 비교 가능 · 다음 기준선 저장(`--save-baseline`)은 태그 때.
+
+**코드 건강**(`code-health.py --baseline target/code-health/baseline.json` · 기준 = 10-08 · 수치는 후보)
+
+| 항목 | 이번 | 기준선 | 읽기 |
+| --- | --- | --- | --- |
+| 줄 수 | dir3 115,248 · nexa-ui 78,135 · license 4,631 | 86,975 · 69,519 · 4,431 | 18일 동안 +33 %(기능 묶음 다수) |
+| 무조건 `allow` | 21 | 18 | +3 — 10-25~26 `font_set`/`area_fonts`/`filter_opts` 보류 표식 → 소비처 생기면 제거 |
+| 참조 0 `pub` | 47 | 47 | 변동 없음 |
+| 안 쓰는 번역 키 | 94 | 78 | +16 — 조립 키·기동 명령 라벨 포함 후보 · T-134에서 사람이 가름 |
+| 안 쓰는 설정 키 | 1 | 3 | −2 |
+| 3,000줄 넘는 파일 | 7 | 4 | +3(panel.rs · core_tests.rs · registry.rs 등) — 분할은 후속 |
+| 150줄 넘는 함수 | 63 | 49 | +14 |
+| 중복 블록 그룹 | 37 | 24 | +13 — 창 모듈(hash/dupes/compare_win)의 이벤트 분배 공통화 후보 |
+
+→ 결함 신호 없음 · **정리 후보 묶음**(파일 분할 · 창 이벤트 분배 공통화 · 번역 키 청소)은 TODO T-139/T-134 아래 후속으로.
+
 ### 8-4. 2026-10-26 · 복사 벤치(T-164 · DR-31 ② 측정 자료 · Windows PC · `bench_copy` release · seek = Costly)
 
 | 대상 | 전략 | ms |
