@@ -6,7 +6,9 @@
 //! - **정규식** 켬: 조각 = 정규식(`regex-lite`) · 대소문자 끔이면 `(?i)` · 단어 켬이면 `\b…\b` · 컴파일 실패 = [`compile`] `Err`(호출자가 틀을 붉게).
 //! - 정규식 끔 · 조각에 `*`/`?`가 있으면 **글롭**(전체 일치 · 대소문자는 토글대로).
 //! - 정규식 끔 · **단어** 켬: 조각이 낱말 경계(글자·숫자·`_` 아닌 곳) 사이에 통째로 들어 있으면.
-//! - 그 밖(기본): **Fuzzy** = 조각의 글자가 이름에 **순서대로** 나타나면(`rprt` → `report` · 대소문자는 토글대로).
+//! - 그 밖(기본): **퍼지(Fuzzy)** = 조각의 글자가 이름에 **순서대로** 나타나면(`rprt` → `report` · 대소문자는 토글대로). **한글은 자모열**
+//!   (nexa-sql `nsql-core/src/hangul.rs` 규칙 이식 · 협업 검토 10-25): 음절을 타자 순서 자모(초·중·종 · 겹모음/겹받침은 둘)로 펴서 비교하므로
+//!   조합 중 글자(`보ㄱ`)나 초성(`ㅂㄱㅅ`)도 `보고서`에 맞는다.
 
 use regex_lite::Regex;
 
@@ -74,7 +76,7 @@ pub fn compile(spec: &str, opts: FilterOpts) -> Result<Option<NameMatcher>, Stri
             } else if opts.word {
                 Rule::Word(chars)
             } else {
-                Rule::Fuzzy(chars)
+                Rule::Fuzzy(hangul::decompose_chars(&chars))
             }
         };
         rules.push(rule);
@@ -104,11 +106,100 @@ impl NameMatcher {
     pub fn matches(&self, name: &str) -> bool {
         let folded: Vec<char> = fold(name, self.case).collect();
         self.rules.iter().any(|r| match r {
-            Rule::Fuzzy(p) => fuzzy(p, &folded),
+            Rule::Fuzzy(p) => fuzzy(p, &hangul::decompose_chars(&folded)),
             Rule::Word(p) => whole_word(p, &folded),
             Rule::Glob(p) => glob(p, &folded),
             Rule::Rx(rx) => rx.is_match(name),
         })
+    }
+}
+
+/// 한글 자모열(출처 nexa-sql `crates/nsql-core/src/hangul.rs` · 의존 0): 음절 → 타자 순서 자모(초·중·종 · 겹모음·겹받침은 둘) · 호환 겹자모도 둘 ·
+/// 그 밖은 그대로. 퍼지 비교 양쪽(패턴 · 이름)에 같이 적용한다.
+pub mod hangul {
+    const CHO: [char; 19] = [
+        'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ',
+        'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
+    ];
+    const JUNG: [char; 21] = [
+        'ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ',
+        'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ',
+    ];
+    const JONG: [char; 27] = [
+        'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ',
+        'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
+    ];
+    const JUNG_SPLIT: [(char, char, char); 7] = [
+        ('ㅘ', 'ㅗ', 'ㅏ'),
+        ('ㅙ', 'ㅗ', 'ㅐ'),
+        ('ㅚ', 'ㅗ', 'ㅣ'),
+        ('ㅝ', 'ㅜ', 'ㅓ'),
+        ('ㅞ', 'ㅜ', 'ㅔ'),
+        ('ㅟ', 'ㅜ', 'ㅣ'),
+        ('ㅢ', 'ㅡ', 'ㅣ'),
+    ];
+    const JONG_SPLIT: [(char, char, char); 11] = [
+        ('ㄳ', 'ㄱ', 'ㅅ'),
+        ('ㄵ', 'ㄴ', 'ㅈ'),
+        ('ㄶ', 'ㄴ', 'ㅎ'),
+        ('ㄺ', 'ㄹ', 'ㄱ'),
+        ('ㄻ', 'ㄹ', 'ㅁ'),
+        ('ㄼ', 'ㄹ', 'ㅂ'),
+        ('ㄽ', 'ㄹ', 'ㅅ'),
+        ('ㄾ', 'ㄹ', 'ㅌ'),
+        ('ㄿ', 'ㄹ', 'ㅍ'),
+        ('ㅀ', 'ㄹ', 'ㅎ'),
+        ('ㅄ', 'ㅂ', 'ㅅ'),
+    ];
+
+    fn split2(table: &[(char, char, char)], c: char) -> Option<(char, char)> {
+        table
+            .iter()
+            .find(|&&(z, _, _)| z == c)
+            .map(|&(_, a, b)| (a, b))
+    }
+
+    /// 완성 음절(가~힣)인가.
+    #[must_use]
+    pub fn is_syllable(c: char) -> bool {
+        ('\u{AC00}'..='\u{D7A3}').contains(&c)
+    }
+
+    /// 글자 하나 → 자모열(한글 아니면 그대로).
+    pub fn decompose_into(c: char, out: &mut Vec<char>) {
+        if is_syllable(c) {
+            let s = c as u32 - 0xAC00;
+            let (ci, vi, ti) = (
+                (s / 588) as usize,
+                ((s % 588) / 28) as usize,
+                (s % 28) as usize,
+            );
+            out.push(CHO[ci]);
+            match split2(&JUNG_SPLIT, JUNG[vi]) {
+                Some((a, b)) => out.extend([a, b]),
+                None => out.push(JUNG[vi]),
+            }
+            if ti > 0 {
+                match split2(&JONG_SPLIT, JONG[ti - 1]) {
+                    Some((a, b)) => out.extend([a, b]),
+                    None => out.push(JONG[ti - 1]),
+                }
+            }
+        } else if let Some((a, b)) = split2(&JUNG_SPLIT, c).or_else(|| split2(&JONG_SPLIT, c)) {
+            out.extend([a, b]);
+        } else {
+            out.push(c);
+        }
+    }
+
+    /// 글자 배열 → 자모열(한글이 없으면 그대로 복사).
+    #[must_use]
+    pub fn decompose_chars(s: &[char]) -> Vec<char> {
+        let mut out = Vec::with_capacity(s.len() * 2);
+        for &c in s {
+            decompose_into(c, &mut out);
+        }
+        out
     }
 }
 
@@ -168,6 +259,20 @@ mod tests {
             m("한글", false, false, false).matches("나의 한 글.txt"),
             "부분열(사이에 글자)"
         );
+        // 한글 자모열(nexa-sql 규칙 · 협업 검토 10-25): 초성 · 조합 중 글자 · 겹받침 타자 순서.
+        let ko = |q: &str| m(q, false, false, false);
+        assert!(ko("ㅂㄱㅅ").matches("보고서.txt"), "초성");
+        assert!(ko("보ㄱ").matches("보고서.txt"), "조합 중 글자(보 + ㄱ)");
+        assert!(
+            ko("보곳").matches("보고서.txt"),
+            "받침 ㅅ = 다음 글자 초성과 같은 자모열"
+        );
+        assert!(
+            ko("달").matches("닭.txt") && !ko("닭").matches("달.txt"),
+            "겹받침 = ㄹ,ㄱ 순서"
+        );
+        assert!(!ko("ㄷㄱ").matches("보고서.txt"));
+        assert!(hangul::decompose_chars(&['과', 'ㅄ']) == vec!['ㄱ', 'ㅗ', 'ㅏ', 'ㅂ', 'ㅅ']);
         let c = m("Rep", true, false, false);
         assert!(c.matches("Report") && !c.matches("report"));
         let or = m("abc; xyz", false, false, false);

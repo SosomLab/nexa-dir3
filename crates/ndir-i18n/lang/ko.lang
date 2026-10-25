@@ -277,7 +277,7 @@ status.hide = 감춤
 panel.left = 좌
 panel.right = 우
 list.reading = 폴더 읽는 중…
-filter.placeholder = 이름으로 필터(흐릿한 일치 · * ? 와일드카드 · ; 로 여러 개 · Esc = 지움)
+filter.placeholder = 이름으로 필터(퍼지 · * ? 와일드카드 · ; 로 여러 개 · Esc = 지움)
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제
@@ -632,7 +632,7 @@ pref.sortClickAdds.desc = 여러 열로 정렬 중일 때 다른 헤더를 클�
 pref.filterCase = 필터: 대소문자 구분
 pref.filterCase.desc = 빠른 필터 토글 Aa — 글자의 대소문자를 구분해 비교합니다. 끄면 무시합니다.
 pref.filterWord = 필터: 단어 단위
-pref.filterWord.desc = 빠른 필터 토글 ab — 글이 낱말로 통째로 들어 있어야 합니다(양옆이 글자·숫자·_면 안 됨). 끄면 흐릿한 일치: 글자가 순서대로 나타나면 됩니다(rprt → report).
+pref.filterWord.desc = 빠른 필터 토글 ab — 글이 낱말로 통째로 들어 있어야 합니다(양옆이 글자·숫자·_면 안 됨). 끄면 퍼지: 글자가 순서대로 나타나면 됩니다(rprt → report).
 pref.filterRegex = 필터: 정규식
 pref.filterRegex.desc = 빠른 필터 토글 .* — 글을 정규식(regex-lite 문법)으로 해석합니다. 잘못된 식은 틀이 붉어지고 아무것도 맞지 않습니다. 끄면 글자 그대로(* ? 와일드카드).
 pref.navUpAlign = 위로 이동 시 선택 위치
