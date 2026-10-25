@@ -23,7 +23,8 @@ const T_COUNT: u32 = 28;
 const S_COUNT: u32 = L_COUNT * V_COUNT * T_COUNT;
 
 /// (글자, 결합 기호) → 미리 조합된 글자. ASCII 글자 × 결합 기호(U+0300~036F) 중 NFC가 글자 1개가 되는 쌍 **전부**(2단계 포함 ·
-/// 예 `a`+`̂`→`â`, `â`+`́`→`ấ`) = 624쌍 · 유니코드 NFC 표에서 생성(scratch `gen_nfc_latin.py` · 10-25). (글자, 기호) 정렬 → 이진 탐색.
+/// 예 `a`+`̂`→`â`, `â`+`́`→`ấ`) = 624쌍 · 생성 규칙 = 밑글자 A~Z·a~z(기호 `=` 등 제외) × U+0300~036F 전부 · `NFC(밑글자+기호)`가 정확히 1글자 ·
+/// 1단계 결과에 같은 규칙 1회 더(2단계 · 더 깊은 단계 없음) · Python `unicodedata` 13.0(scratch `gen_nfc_latin.py` · 10-25). (글자, 기호) 정렬 → 이진 탐색.
 /// 없는 조합 = None(그대로 둔다).
 fn latin(base: char, mark: char) -> Option<char> {
     LATIN

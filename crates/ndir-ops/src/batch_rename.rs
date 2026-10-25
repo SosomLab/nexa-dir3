@@ -153,6 +153,8 @@ pub struct NumberSpec {
     /// 연번을 감싸는 텍스트(PF Prefix/Suffix — `PRE{n}SUF` 한 덩어리로 삽입).
     pub prefix: String,
     pub suffix: String,
+    /// 폴더마다 다시 시작(T-162 · 10-25): 같은 `RenameInput::group`(부모 폴더) 안에서만 센다 · 꺼짐 = 목록 전체 한 줄.
+    pub per_folder: bool,
 }
 
 /// 날짜 원천(PF Add Date Type).
@@ -232,6 +234,8 @@ pub struct RenameInput {
     /// 수정/생성 시각(unix ms — 미상 0 = Date 결과 빈 문자열로 격리).
     pub modified_ms: i64,
     pub created_ms: i64,
+    /// 연번 묶음 열쇠(부모 폴더 경로 · `NumberSpec::per_folder`일 때만 쓴다 · 빈 값 = 전체 하나).
+    pub group: String,
 }
 
 impl RenameInput {
@@ -242,7 +246,14 @@ impl RenameInput {
             is_dir,
             modified_ms: 0,
             created_ms: 0,
+            group: String::new(),
         }
+    }
+
+    /// 묶음 열쇠를 바꾼 사본(시험 · 폴더별 연번).
+    pub fn in_group(mut self, group: &str) -> RenameInput {
+        self.group = group.into();
+        self
     }
 }
 
@@ -614,7 +625,7 @@ fn apply(
     stem: &mut String,
     ext: &mut String,
     item: &RenameInput,
-    idx: usize,
+    idx: (usize, usize),
     tz_min: i32,
 ) {
     let is_dir = item.is_dir;
@@ -645,7 +656,8 @@ fn apply(
             scoped(stem, ext, *scope, is_dir, |s| insert_at(s, *at, text))
         }
         RenameOp::Number { scope, spec } => {
-            let val = spec.start + spec.step * idx as i64;
+            let i = if spec.per_folder { idx.1 } else { idx.0 };
+            let val = spec.start + spec.step * i as i64;
             let num = if val < 0 {
                 format!("-{:0width$}", -val, width = spec.pad.max(1))
             } else {
@@ -702,18 +714,22 @@ fn apply(
     }
 }
 
-/// 미리보기(v2) — 파이프라인 순차 적용 결과. 연번은 목록 순서(호출자 정렬 책임).
+/// 미리보기(v2) — 파이프라인 순차 적용 결과. 연번은 목록 순서(호출자 정렬 책임) · `per_folder`면 같은 `group` 안의 순서.
 /// `tz_min` = 날짜 표기 TZ 오프셋(분 — 앱의 fmt_datetime과 동일 값 전달).
 pub fn preview(items: &[RenameInput], ops: &[RenameOp], tz_min: i32) -> Vec<String> {
+    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     items
         .iter()
         .enumerate()
         .map(|(idx, item)| {
+            let gidx = seen.entry(item.group.as_str()).or_insert(0);
+            let pair = (idx, *gidx);
+            *gidx += 1;
             let (stem, ext) = split_stem(&item.name, item.is_dir);
             let mut s = stem.to_string();
             let mut e = ext.to_string();
             for op in ops {
-                apply(op, &mut s, &mut e, item, idx, tz_min);
+                apply(op, &mut s, &mut e, item, pair, tz_min);
             }
             format!("{}{}", s.trim(), e)
         })
@@ -1029,14 +1045,15 @@ pub fn serialize_ops(ops: &[RenameOp]) -> String {
                 at_fields(*at)
             ),
             RenameOp::Number { scope, spec } => format!(
-                "op=number|scope={}|start={}|step={}|pad={}|{}|pre={}|suf={}",
+                "op=number|scope={}|start={}|step={}|pad={}|{}|pre={}|suf={}|pf={}",
                 scope.as_str(),
                 spec.start,
                 spec.step,
                 spec.pad,
                 at_fields(spec.at),
                 esc(&spec.prefix),
-                esc(&spec.suffix)
+                esc(&spec.suffix),
+                u8::from(spec.per_folder)
             ),
             RenameOp::Date { scope, spec } => format!(
                 "op=date|scope={}|kind={}|fmt={}|{}|pre={}|suf={}",
@@ -1123,6 +1140,7 @@ pub fn parse_ops(text: &str) -> Vec<RenameOp> {
                     at: at(),
                     prefix: get("pre").unwrap_or_default(),
                     suffix: get("suf").unwrap_or_default(),
+                    per_folder: get("pf").is_some_and(|v| v == "1"),
                 },
             },
             "date" => RenameOp::Date {
@@ -1191,6 +1209,7 @@ mod tests {
             is_dir: false,
             modified_ms: 0,
             created_ms: 0,
+            group: String::new(),
         }];
         assert_eq!(
             preview(&inputs, &ops, 0),
@@ -1221,6 +1240,7 @@ mod tests {
                     at: InsertAt::edge(false),
                     prefix: String::new(),
                     suffix: String::new(),
+                    per_folder: false,
                 },
             },
             RenameOp::Move {
@@ -1334,6 +1354,7 @@ mod tests {
                     offset: 0,
                     from_end: false,
                 },
+                per_folder: false,
             },
         };
         assert_eq!(pv(&files(&["a.txt"]), &[num]), vec!["a07_.txt"]);
@@ -1364,6 +1385,66 @@ mod tests {
         );
     }
 
+    /// 폴더마다 다시 시작(T-162 · 10-25): 같은 group 안에서만 센다 · 꺼짐 = 전체 한 줄 · 프리셋 `pf=1` 왕복 · 옛 프리셋(pf 없음) = 꺼짐.
+    #[test]
+    fn number_restarts_per_folder() {
+        let spec = NumberSpec {
+            start: 1,
+            step: 1,
+            pad: 2,
+            at: InsertAt::edge(true),
+            prefix: "_".into(),
+            suffix: String::new(),
+            per_folder: true,
+        };
+        let items = [
+            RenameInput::plain("a.txt", false).in_group("/x"),
+            RenameInput::plain("b.txt", false).in_group("/x"),
+            RenameInput::plain("c.txt", false).in_group("/y"),
+            RenameInput::plain("d.txt", false).in_group("/x"),
+        ];
+        let on = vec![RenameOp::Number {
+            scope: Scope::Name,
+            spec: spec.clone(),
+        }];
+        assert_eq!(
+            preview(&items, &on, 0),
+            vec!["a_01.txt", "b_02.txt", "c_01.txt", "d_03.txt"],
+            "폴더마다"
+        );
+        let off = vec![RenameOp::Number {
+            scope: Scope::Name,
+            spec: NumberSpec {
+                per_folder: false,
+                ..spec
+            },
+        }];
+        assert_eq!(
+            preview(&items, &off, 0),
+            vec!["a_01.txt", "b_02.txt", "c_03.txt", "d_04.txt"],
+            "전체 한 줄"
+        );
+        let text = serialize_ops(&on);
+        assert!(text.contains("|pf=1"), "{text}");
+        assert_eq!(parse_ops(&text), on, "왕복");
+        assert_eq!(
+            parse_ops("op=number|start=1|step=1|pad=3|pos=suffix\n"),
+            vec![RenameOp::Number {
+                scope: Scope::Name,
+                spec: NumberSpec {
+                    start: 1,
+                    step: 1,
+                    pad: 3,
+                    at: InsertAt::edge(true),
+                    prefix: String::new(),
+                    suffix: String::new(),
+                    per_folder: false,
+                },
+            }],
+            "옛 프리셋 = 꺼짐"
+        );
+    }
+
     #[test]
     fn number_with_wrapping_and_position() {
         // PF 예제 재현: Position 2(앞) · start 3 · step 3 · pad 2 · PRE/SUF 감싸기
@@ -1379,6 +1460,7 @@ mod tests {
                 },
                 prefix: "PRE".into(),
                 suffix: "SUF".into(),
+                per_folder: false,
             },
         }];
         let out = pv(&files(&["a.md", "sublime.md"]), &ops);
@@ -1553,6 +1635,7 @@ mod tests {
                     at: InsertAt::edge(true),
                     prefix: "P|".into(),
                     suffix: "S".into(),
+                    per_folder: false,
                 },
             },
             RenameOp::Date {

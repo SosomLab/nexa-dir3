@@ -159,6 +159,8 @@ struct Card {
     step: TextBox,
     prefix: TextBox,
     suffix: TextBox,
+    /// 연번 "폴더마다 다시 시작"(T-162 · 10-25).
+    per_folder: Checkbox,
     date_kind: Combo,
     fmt: TextBox,
     rect: Rect,
@@ -198,6 +200,7 @@ impl Card {
             step,
             prefix: TextBox::new(""),
             suffix: TextBox::new(""),
+            per_folder: Checkbox::new(tr("bulk.perFolder"), false),
             date_kind: combo_of(&DATES, 0),
             fmt,
             rect: Rect::default(),
@@ -215,7 +218,7 @@ impl Card {
             "replacerx" => 3,
             "insert" => 2,
             "case" => 1,
-            "number" => 4,
+            "number" => 5,
             "date" => 4,
             _ => 0,
         }
@@ -307,6 +310,7 @@ impl Card {
                     at: self.at(),
                     prefix: self.prefix.text(),
                     suffix: self.suffix.text(),
+                    per_folder: self.per_folder.is_checked(),
                 },
             }),
             "date" => {
@@ -390,6 +394,7 @@ impl Card {
                 c.pad.select_value(&spec.pad.clamp(1, 6).to_string());
                 c.prefix.set_text(&spec.prefix);
                 c.suffix.set_text(&spec.suffix);
+                c.per_folder.set_checked(spec.per_folder);
                 set_at(&mut c, &spec.at);
                 c
             }
@@ -930,6 +935,7 @@ impl BulkWin {
                 is_dir: it.is_dir,
                 modified_ms: it.modified_ms,
                 created_ms: it.created_ms,
+                group: it.parent.to_string_lossy().into_owned(),
             })
             .collect();
         let news = if self.error.is_none() {
@@ -1253,6 +1259,7 @@ impl BulkWin {
                 tb.set_bounds(Rect::default(), &mut inv);
             }
             c.match_case.set_bounds(Rect::default(), &mut inv);
+            c.per_folder.set_bounds(Rect::default(), &mut inv);
             let rows = 2 + c.body_rows();
             let ch = inner_pad * 2 + rows as i32 * row_h;
             c.rect = Rect::new(cr.x, y, cw, ch);
@@ -1336,6 +1343,9 @@ impl BulkWin {
                     place(&mut c.step, field_x, half, ry);
                     c.suffix.set_scale(s);
                     place(&mut c.suffix, field_x + half + gap, half, ry);
+                    ry += row_h;
+                    c.per_folder.set_scale(s);
+                    place(&mut c.per_folder, field_x, field_w, ry);
                 }
                 "date" => {
                     c.date_kind.set_scale(s);
@@ -1383,6 +1393,7 @@ impl BulkWin {
             .position(|c| c.rect.h > 0 && c.rect.contains(p))?;
         let c = &mut self.cards[i];
         let mut hit = c.match_case.bounds().h > 0 && c.match_case.bounds().contains(p);
+        hit |= c.per_folder.bounds().h > 0 && c.per_folder.bounds().contains(p);
         hit |= c.buttons().iter().any(|b| b.bounds().contains(p));
         hit |= c
             .combos()
@@ -1932,6 +1943,7 @@ impl BulkWin {
                             tb.on_event(&cmv, &mut inv);
                         }
                         c.match_case.on_event(&cmv, &mut inv);
+                        c.per_folder.on_event(&cmv, &mut inv);
                     }
                     self.presets_btn.on_event(&mv, &mut inv);
                     self.btn_cancel.on_event(&mv, &mut inv);
@@ -2105,6 +2117,10 @@ impl BulkWin {
                         c.match_case.on_event(&e, &mut inv);
                     }
                     let _ = c.match_case.take_toggled();
+                    if up || (in_cards && c.per_folder.bounds().contains(p)) {
+                        c.per_folder.on_event(&e, &mut inv);
+                    }
+                    let _ = c.per_folder.take_toggled();
                 }
                 if up || self.presets_btn.bounds().contains(p) {
                     self.presets_btn.on_event(&e, &mut inv);
@@ -2225,6 +2241,7 @@ impl BulkWin {
                         "bulk.lbl.pos",
                         "bulk.lbl.start",
                         "bulk.lbl.step",
+                        "bulk.lbl.perFolder",
                     ],
                     "date" => vec![
                         "bulk.lbl.type",
@@ -2277,6 +2294,9 @@ impl BulkWin {
                 }
                 if c.match_case.bounds().h > 0 {
                     c.match_case.paint(&mut dc, th);
+                }
+                if c.per_folder.bounds().h > 0 {
+                    c.per_folder.paint(&mut dc, th);
                 }
             }
             // 카드 영역 위/아래 바깥은 창 배경으로 덮는다(스크롤 잘림).
@@ -2499,6 +2519,7 @@ mod tests {
                     },
                     prefix: "[".into(),
                     suffix: "]".into(),
+                    per_folder: true, // 카드 체크박스 왕복(T-162 · 10-25)
                 },
             },
             RenameOp::Case {
