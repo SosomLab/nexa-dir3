@@ -867,6 +867,11 @@ pub fn apply_renames(list: &[(PathBuf, PathBuf)]) -> ApplyOutcome {
         if from == to {
             continue;
         }
+        // 새 이름 검사(T-162 · 예약 이름 · 길이 · 금지 문자 — 이름 바꾸기와 같은 규칙) — 실패는 항목별 격리.
+        if let Err(e) = crate::validate_name(&crate::leaf_name(to)) {
+            out.failed.push((from.clone(), e.message().to_string()));
+            continue;
+        }
         if !exists(from) {
             out.failed.push((
                 from.clone(),

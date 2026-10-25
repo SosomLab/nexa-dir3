@@ -54,10 +54,14 @@ pub enum OpsError {
     SourceMissing,
     /// 이동 뒤 원본 폴더를 비울 수 없어 남겨 둠.
     LeftoverSource,
+    /// Windows 예약 이름(CON · PRN · AUX · NUL · COM1-9 · LPT1-9) 또는 끝이 빈칸/점(T-162 · 10-25).
+    ReservedName,
+    /// 이름이 너무 길다(255자 초과).
+    NameTooLong,
 }
 
 impl OpsError {
-    pub const ALL: [OpsError; 8] = [
+    pub const ALL: [OpsError; 10] = [
         OpsError::IntoSelf,
         OpsError::BadName,
         OpsError::RootRename,
@@ -66,6 +70,8 @@ impl OpsError {
         OpsError::NulInPath,
         OpsError::SourceMissing,
         OpsError::LeftoverSource,
+        OpsError::ReservedName,
+        OpsError::NameTooLong,
     ];
 
     /// 영어 문구(접두 — 뒤에 `: 세부`가 붙을 수 있다).
@@ -81,6 +87,10 @@ impl OpsError {
             OpsError::LeftoverSource => {
                 "could not empty the source folder, left in place (some items may not have been copied)"
             }
+            OpsError::ReservedName => {
+                "name is reserved on Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9) or ends with a space or period"
+            }
+            OpsError::NameTooLong => "name is too long (255 characters max)",
         }
     }
 
@@ -95,6 +105,8 @@ impl OpsError {
             OpsError::NulInPath => "ops.err.nulInPath",
             OpsError::SourceMissing => "ops.err.sourceMissing",
             OpsError::LeftoverSource => "ops.err.leftoverSource",
+            OpsError::ReservedName => "ops.err.reservedName",
+            OpsError::NameTooLong => "ops.err.nameTooLong",
         }
     }
 
@@ -108,9 +120,11 @@ impl OpsError {
     /// `io::Error`로(종류별 `ErrorKind`).
     pub fn io(self) -> io::Error {
         let kind = match self {
-            OpsError::BadName | OpsError::RootRename | OpsError::NulInPath => {
-                io::ErrorKind::InvalidInput
-            }
+            OpsError::BadName
+            | OpsError::RootRename
+            | OpsError::NulInPath
+            | OpsError::ReservedName
+            | OpsError::NameTooLong => io::ErrorKind::InvalidInput,
             OpsError::NameTaken => io::ErrorKind::AlreadyExists,
             OpsError::SourceMissing => io::ErrorKind::NotFound,
             OpsError::IntoSelf | OpsError::LinkCycle | OpsError::LeftoverSource => {
@@ -135,6 +149,55 @@ pub struct Outcome {
     /// 개별 격리된 실패(항목, 사유) — 한 항목의 실패가 배치를 중단하지 않는다.
     pub errors: Vec<(PathBuf, String)>,
     pub canceled: bool,
+}
+
+/// 새 이름 검사(이 OS 규칙 · T-162 · 10-25) — 이름 바꾸기 · 일괄 이름 변경 · 새 항목이 같은 함수를 쓴다.
+pub fn validate_name(name: &str) -> Result<(), OpsError> {
+    validate_name_for(name, cfg!(windows))
+}
+
+/// 새 이름 검사(순수 · OS 규칙을 인자로 — MC/DC 시험):
+/// - 공통: 빈 이름 · `.`/`..` · 구분자(`/` `\`) · NUL = `BadName` · 255자 초과 = `NameTooLong`.
+/// - Windows: `< > : " | ? *`와 제어 문자 = `BadName` · 끝이 빈칸/점 · 예약 이름(CON PRN AUX NUL COM1-9 LPT1-9 · 확장자 무관 · 대소문자 무관) =
+///   `ReservedName`(탐색기는 만들 수 없고 만들어지면 지우기도 어렵다).
+pub fn validate_name_for(name: &str, windows: bool) -> Result<(), OpsError> {
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
+        return Err(OpsError::BadName);
+    }
+    if name.chars().count() > 255 {
+        return Err(OpsError::NameTooLong);
+    }
+    if !windows {
+        return Ok(());
+    }
+    if name
+        .chars()
+        .any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') || (c as u32) < 0x20)
+    {
+        return Err(OpsError::BadName);
+    }
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err(OpsError::ReservedName);
+    }
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    let upper = stem.to_ascii_uppercase();
+    // COM/LPT 뒤 한 글자 = 1~9 또는 위 첨자 ¹ ² ³(Windows 문서 · 협업 검토 10-25) — COM0 · COM10은 예약 아님.
+    let dev_digit = |rest: &str| {
+        let mut it = rest.chars();
+        matches!(
+            (it.next(), it.next()),
+            (Some(c), None) if matches!(c, '1'..='9' | '\u{b9}' | '\u{b2}' | '\u{b3}')
+        )
+    };
+    let reserved = matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(dev_digit);
+    if reserved {
+        return Err(OpsError::ReservedName);
+    }
+    Ok(())
 }
 
 /// 경로 끝 구분자를 제거한 잎(파일/폴더) 이름.
@@ -521,9 +584,7 @@ pub fn delete_permanent(path: &Path) -> io::Result<()> {
 /// 규칙: 공백 트림·빈 이름/구분자 포함 = 오류·동일 이름 = 무동작·기존 이름과 충돌 = 오류.
 pub fn rename(path: &Path, new_name: &str) -> io::Result<PathBuf> {
     let new_name = new_name.trim();
-    if new_name.is_empty() || new_name.contains(['\\', '/']) {
-        return Err(OpsError::BadName.io());
-    }
+    validate_name(new_name).map_err(OpsError::io)?;
     let parent = path.parent().ok_or_else(|| OpsError::RootRename.io())?;
     let dest = parent.join(new_name);
     if path_equals(path, &dest) {
@@ -851,6 +912,76 @@ mod tests {
     ) -> Outcome {
         let cancel = AtomicBool::new(false);
         transfer(sources, dest, op, resolve, &mut |_| {}, &cancel)
+    }
+
+    /// 이름 검사(T-162 · MC/DC · Windows 규칙 on/off): 공통 거부(빈 · `.` · 구분자 · NUL · 255자 초과) · Windows만(금지 문자 · 끝 빈칸/점 · 예약 이름
+    /// 대소문자/확장자 무관 · COM0는 예약 아님) · Unix는 `CON`도 허용 · 유니코드 255자는 통과.
+    #[test]
+    fn validate_name_rules_per_os() {
+        for win in [true, false] {
+            assert_eq!(validate_name_for("", win), Err(OpsError::BadName));
+            assert_eq!(validate_name_for(".", win), Err(OpsError::BadName));
+            assert_eq!(validate_name_for("..", win), Err(OpsError::BadName));
+            assert_eq!(validate_name_for("a/b", win), Err(OpsError::BadName));
+            assert_eq!(validate_name_for("a\\b", win), Err(OpsError::BadName));
+            assert_eq!(validate_name_for("a\0b", win), Err(OpsError::BadName));
+            assert_eq!(
+                validate_name_for(&"가".repeat(256), win),
+                Err(OpsError::NameTooLong)
+            );
+            assert_eq!(validate_name_for(&"가".repeat(255), win), Ok(()));
+            assert_eq!(validate_name_for("normal.txt", win), Ok(()));
+            assert_eq!(validate_name_for(".gitignore", win), Ok(()));
+        }
+        // Windows 규칙.
+        for bad in ["a:b", "a<b", "a>b", "a\"b", "a|b", "a?b", "a*b", "a\u{7}b"] {
+            assert_eq!(
+                validate_name_for(bad, true),
+                Err(OpsError::BadName),
+                "{bad}"
+            );
+            assert_eq!(validate_name_for(bad, false), Ok(()), "{bad}");
+        }
+        for res in [
+            "CON",
+            "con.txt",
+            "Prn",
+            "AUX.log.bak",
+            "NUL",
+            "COM1",
+            "lpt9.txt",
+            "trailing ",
+            "dot.",
+            "CON .txt",
+            "nul.tar.gz",
+            "COM\u{b9}",
+            "lpt\u{b3}.log",
+        ] {
+            assert_eq!(
+                validate_name_for(res, true),
+                Err(OpsError::ReservedName),
+                "{res}"
+            );
+            assert_eq!(validate_name_for(res, false), Ok(()), "{res}");
+        }
+        for ok in ["COM0", "COM10", "CONSOLE", "lpt", "a.b.c", "x ", "x."] {
+            let r = validate_name_for(ok, true);
+            if ok.ends_with(' ') || ok.ends_with('.') {
+                assert_eq!(r, Err(OpsError::ReservedName), "{ok}");
+            } else {
+                assert_eq!(r, Ok(()), "{ok}");
+            }
+        }
+        // rename이 같은 규칙.
+        let d = fixture("valname");
+        fs::write(d.join("a.txt"), "x").unwrap();
+        let e = rename(&d.join("a.txt"), "..").unwrap_err();
+        assert_eq!(OpsError::of(&e.to_string()), Some(OpsError::BadName));
+        if cfg!(windows) {
+            let e = rename(&d.join("a.txt"), "con").unwrap_err();
+            assert_eq!(OpsError::of(&e.to_string()), Some(OpsError::ReservedName));
+        }
+        fs::remove_dir_all(&d).unwrap();
     }
 
     /// 엔진 오류 어휘(10-24): 문구는 영어 · `of`는 접두 일치(꼬리 `: 세부` 허용) · 모르는 문구 = None · 종류별 ErrorKind · i18n 키 고유.
