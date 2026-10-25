@@ -4,6 +4,8 @@
 
 ## 2026-10-26
 
+- **아침 마감 정리**(사용자 지시 · 밤 커밋 15 + nexa-ui 2 표 · 전수 737/0 · CI ✓ · perf 회귀 0 · main = origin · 병합할 브랜치 없음 · MILESTONES/TODO/CLAUDE.md 최신화) → [10-26 §10](journal/2026-10-26.md)
+
 - **밤 작업 ⓔ~ⓗ + 처방 2건**(f88f81a 전역 2개 → Panel 필드 · dd20de4 CI fonts 시도별 timeout · 3055e67 Unix 좀비 회수 · 5144d97 `compare.by_content`/`compare.mirror_delete` · edd1d44 미러 처방 · 5c9f688 DEFLATE 동적 허프먼 · d23d59d `compare.sync`/`trash.wait` 기동 명령 · bf28437 일괄 이름 바꾸기 바뀐 부분 강조 · nexa-ui 236) · 협업 검토 = 미러 결함 2건(중첩 삭제 목록 재현 · Windows 휴지통 워커 경쟁) → 처방 · **Windows 미러 실기 ✓**(휴지통 정확히 2개 · 잔상 없음) · DEFLATE 2차 독립 검증 ✓(zlib -6 대비 +2~3 %) · perf 기준선 회귀 0(기동 −52 %) · 코드 건강 결함 신호 없음 → [10-26 §9](journal/2026-10-26.md)
 
 - **밤 작업 ⓓ Linux 실행 파일 직접 실행 `open.exec_direct`(기본 off · ELF만 · 스크립트는 xdg-open) · xdg-open 실패 토스트 · 와일드카드 안내**(880bb9c · DR-32 ①②) · 협업 검토 = Unix 좀비 2곳 → [10-26 §8](journal/2026-10-26.md)
