@@ -356,6 +356,7 @@ cmp.nothing = Nothing to copy
 cmp.syncLabel = Synchronizing: {0} copies
 cmp.syncDone = Synchronized — {0} copied
 cmp.syncPartial = Synchronized — {0} copied · {1} failed
+cmp.mirrorTrashed = {0} moved to Trash (mirror)
 dupes.title = Duplicate files
 dupes.scanning = Scanning… {0} files · {1} candidates · {2} read
 dupes.summary = {0} groups · {1} duplicates · {2} reclaimable
@@ -610,6 +611,10 @@ pref.hashAlgos = Checksum algorithms
 pref.hashAlgos.desc = Algorithms the checksum window computes (comma-separated: crc32, md5, sha1, sha256, sha512). The file is read once for all of them, so more algorithms do not mean more disk reads. Default crc32,md5,sha1,sha256.
 pref.hashAutoLimit = Checksum auto-calculate limit (MB, 0 = always manual)
 pref.hashAutoLimit.desc = The checksum window starts calculating automatically only when the selected files total at most this size. Above it you press Calculate; 0 means always manual. Calculation runs one job at a time on a low-priority thread.
+pref.cmpByContent = Folder comparison: compare contents by default
+pref.cmpByContent.desc = When on, “Compare folders” starts by comparing file contents (slower) instead of size and time. The window's “Compare contents” button still works either way.
+pref.cmpMirrorDelete = Synchronize: mirror (remove extras)
+pref.cmpMirrorDelete.desc = When on, one-way synchronization also moves files that exist only on the target side to the Trash after the copies finish (restore from the Trash to undo). Off = copy only. “Newer wins” never deletes.
 pref.openExecDirect = Run executable files directly (Linux)
 pref.openExecDirect.desc = When on, double-clicking a file with the execute bit that is an ELF binary runs it directly (working folder = its folder) instead of handing it to xdg-open. Scripts are still opened the normal way. If the system handler fails, a message shows its exit code.
 pref.dupesRecursive = Duplicate finder: include subfolders

@@ -413,6 +413,11 @@ impl CompareWin {
     }
 
     /// 비교 결과 전체(호스트가 계획을 세울 때).
+    /// 지금 창의 비교 기준(내용 비교였는가) — 동기화 뒤 재비교가 같은 기준으로.
+    pub(crate) fn by_content(&self) -> bool {
+        self.by_content
+    }
+
     pub(crate) fn entries(&self) -> Option<Vec<CmpEntry>> {
         self.rows.as_ref().map(|r| r.source().all.clone())
     }

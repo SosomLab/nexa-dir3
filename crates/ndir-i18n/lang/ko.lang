@@ -355,6 +355,7 @@ cmp.nothing = 복사할 것이 없습니다
 cmp.syncLabel = 동기화: {0}개 복사
 cmp.syncDone = 동기화 완료 — {0}개 복사
 cmp.syncPartial = 동기화 — {0}개 복사 · {1}개 실패
+cmp.mirrorTrashed = {0}개 휴지통으로(미러)
 dupes.title = 중복 파일
 dupes.scanning = 훑는 중… 파일 {0}개 · 후보 {1}개 · 읽음 {2}
 dupes.summary = 묶음 {0}개 · 중복 {1}개 · 되찾을 수 있음 {2}
@@ -607,6 +608,10 @@ pref.hashAlgos = 체크섬 알고리즘
 pref.hashAlgos.desc = 체크섬 창이 계산할 알고리즘입니다(쉼표로 구분: crc32, md5, sha1, sha256, sha512). 파일을 한 번만 읽으며 함께 계산하므로 개수가 늘어도 디스크 읽기는 같습니다. 기본 crc32,md5,sha1,sha256.
 pref.hashAutoLimit = 체크섬 자동 계산 상한(MB, 0 = 항상 수동)
 pref.hashAutoLimit.desc = 선택한 파일들의 합계가 이 크기 이하일 때만 체크섬 창이 자동으로 계산을 시작합니다. 넘으면 [계산] 버튼을 눌러야 시작하고, 0이면 항상 버튼으로 시작합니다. 계산은 낮은 우선순위의 별도 스레드에서 한 번에 하나만 돕니다.
+pref.cmpByContent = 폴더 비교: 기본으로 내용 비교
+pref.cmpByContent.desc = 켜면 “폴더 비교”가 크기·시각 대신 파일 내용을 비교해 시작합니다(느림). 창의 [내용 비교] 버튼은 어느 쪽이든 그대로 쓸 수 있습니다.
+pref.cmpMirrorDelete = 동기화: 미러(대상에만 있는 것 제거)
+pref.cmpMirrorDelete.desc = 켜면 한 방향 동기화가 복사를 끝낸 뒤 대상에만 있는 파일을 휴지통으로 보냅니다(되돌리기 = 휴지통 복원). 끄면 복사만 합니다. “새로운 쪽 우선”은 삭제하지 않습니다.
 pref.openExecDirect = 실행 파일 직접 실행(Linux)
 pref.openExecDirect.desc = 켜면 더블클릭한 파일이 실행 비트가 있는 ELF 바이너리일 때 xdg-open에 넘기지 않고 그 폴더를 작업 폴더로 바로 실행합니다. 스크립트는 종전처럼 엽니다. 시스템 핸들러가 실패하면 종료 코드를 안내합니다.
 pref.dupesRecursive = 중복 찾기: 하위 폴더 포함

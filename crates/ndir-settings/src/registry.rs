@@ -1361,6 +1361,23 @@ pub const REGISTRY: &[Entry] = &[
         },
         "512"
     ),
+    // 폴더 비교(T-171 · 10-26): 기본 기준(내용 비교) · 동기화 미러 삭제(T-172 · 대상에만 있는 것을 휴지통으로 · 기본 off — 실행 취소는 휴지통 복원).
+    e!(
+        "compare.by_content",
+        CAT_CTXMENU,
+        "pref.cmpByContent",
+        "pref.cmpByContent.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "compare.mirror_delete",
+        CAT_CTXMENU,
+        "pref.cmpMirrorDelete",
+        "pref.cmpMirrorDelete.desc",
+        Bool,
+        "off"
+    ),
     // 실행 파일 직접 실행(DR-32 ② · 10-26 · Linux): 켜면 더블클릭한 실행 비트 + ELF 파일을 xdg-open 대신 그 폴더에서 바로 실행. 기본 off.
     e!(
         "open.exec_direct",

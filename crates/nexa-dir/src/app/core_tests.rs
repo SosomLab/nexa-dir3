@@ -8909,6 +8909,47 @@ fn compare_two_folders_and_sync_left_to_right() {
         "{}",
         app.compare_win.status()
     );
+    // 미러 삭제(T-172 · 10-26 · 설정 `compare.mirror_delete` 기본 off): 오른쪽에만 있는 파일 → 꺼져 있으면 그대로 · 켜면 계획의 삭제 목록에 실려 복사 뒤 휴지통(fake 플랫폼).
+    std::fs::write(r.join("extra.txt"), b"R only").expect("write");
+    std::fs::write(l.join("new.txt"), b"L new").expect("write");
+    let rescan = |app: &mut App| {
+        app.start_compare(&l, &r, false);
+        let at = std::time::Instant::now();
+        while app.compare_tick() {
+            assert!(at.elapsed().as_secs() < 30);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    };
+    rescan(&mut app);
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    assert!(
+        app.sync_job.as_ref().is_some_and(|j| j.deletes.is_empty()),
+        "기본 off = 삭제 없음"
+    );
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        r.join("extra.txt").exists(),
+        "꺼져 있으면 대상에만 있는 것은 남는다"
+    );
+    let _ = app.settings.set("compare.mirror_delete", "on");
+    std::fs::write(l.join("new2.txt"), b"L new2").expect("write");
+    rescan(&mut app);
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    assert_eq!(
+        app.sync_job.as_ref().map(|j| j.deletes.clone()),
+        Some(vec![r.join("extra.txt")]),
+        "켜면 대상에만 있는 것이 삭제 목록에"
+    );
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    // (fake 플랫폼의 휴지통은 파일을 지우지 않는다 — 실제 삭제는 삭제 목록 + `trash_checked` 호출로 보증 · 실기 = 휴지통 복원 가능)
     app.close_compare();
     assert!(app.cmp_job.is_none());
 }

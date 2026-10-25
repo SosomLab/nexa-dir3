@@ -39,6 +39,8 @@ pub(crate) struct SyncShared {
 pub(crate) struct SyncJob {
     shared: Arc<SyncShared>,
     count: usize,
+    /// 미러 삭제(설정 `compare.mirror_delete` · T-172 · 10-26): 복사가 끝나면 휴지통으로 보낼 "대상에만 있는 것".
+    pub(crate) deletes: Vec<PathBuf>,
 }
 
 impl App {
@@ -78,7 +80,8 @@ impl App {
         if ndir_vfs::is_virtual_root(&left) || ndir_vfs::is_virtual_root(&right) {
             return;
         }
-        self.start_compare(&left, &right, false);
+        let by_content = self.settings.flag("compare.by_content"); // 기준 기본값(T-171 · 10-26)
+        self.start_compare(&left, &right, by_content);
     }
 
     /// 폴링 — 비교 진행/완료 + 동기화 진행/완료. 돌려주는 값 = 어느 쪽이든 진행 중.
@@ -125,7 +128,7 @@ impl App {
                 let job = self.sync_job.take().expect("checked above");
                 self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
-                let (text, warn) = match result {
+                let (mut text, warn) = match result {
                     Some(Ok(failed)) if failed.is_empty() => {
                         (trf("cmp.syncDone", &[&job.count.to_string()]), false)
                     }
@@ -148,6 +151,13 @@ impl App {
                     ),
                     None => (tr("cmp.failed"), true),
                 };
+                // 미러 삭제 = 복사가 전부 성공한 뒤에만(실패·취소면 건드리지 않는다).
+                if !warn && !job.deletes.is_empty() {
+                    let n = job.deletes.len();
+                    self.trash_checked(job.deletes);
+                    text.push_str(" · ");
+                    text.push_str(&trf("cmp.mirrorTrashed", &[&n.to_string()]));
+                }
                 if self.progress_win.is_active() {
                     let ms = self.settings.int("transfer.close_ms").max(0) as u64;
                     let now = self.started.elapsed().as_millis() as u64;
@@ -176,7 +186,8 @@ impl App {
                         self.compare_win.left.clone(),
                         self.compare_win.right.clone(),
                     );
-                    self.start_compare(&l, &r, false);
+                    let bc = self.compare_win.by_content();
+                    self.start_compare(&l, &r, bc);
                 }
                 self.redraw();
             } else {
@@ -202,8 +213,23 @@ impl App {
             self.compare_win.right.clone(),
         );
         let only_ref = (!only.is_empty()).then_some(only.as_slice());
-        let plan = cmpx::plan(&entries, &l, &r, dir, false, only_ref);
+        // 미러 삭제(T-172 · 설정 `compare.mirror_delete` · 기본 off): 한 방향일 때 대상에만 있는 것 = 휴지통(복사가 끝난 뒤 · 실행 취소 = 복원).
+        let mirror = self.settings.flag("compare.mirror_delete") && dir != Direction::Both;
+        let mut plan = cmpx::plan(&entries, &l, &r, dir, mirror, only_ref);
         if plan.copies.is_empty() {
+            if !plan.deletes.is_empty() {
+                let n = plan.deletes.len();
+                self.trash_checked(plan.deletes);
+                let mut inv = Invalidations::default();
+                let text = trf("cmp.mirrorTrashed", &[&n.to_string()]);
+                self.statusbar.set_left(&text, &mut inv);
+                self.toasts
+                    .push(toast::ToastKind::Info, tr("cmp.title"), text);
+                let bc = self.compare_win.by_content();
+                self.start_compare(&l, &r, bc);
+                self.redraw();
+                return;
+            }
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("cmp.nothing"), &mut inv);
             self.redraw();
@@ -213,6 +239,7 @@ impl App {
         shared.total.store(plan.bytes, Ordering::Relaxed);
         let sh = Arc::clone(&shared);
         let count = plan.copies.len();
+        let deletes = std::mem::take(&mut plan.deletes); // 복사 뒤 호스트가 휴지통으로(워커는 복사만)
         std::thread::spawn(move || {
             let res = cmpx::apply_copies(
                 &plan,
@@ -240,7 +267,11 @@ impl App {
         }
         let mut inv = Invalidations::default();
         self.statusbar.set_left(&label, &mut inv);
-        self.sync_job = Some(SyncJob { shared, count });
+        self.sync_job = Some(SyncJob {
+            shared,
+            count,
+            deletes,
+        });
         self.redraw();
     }
 
