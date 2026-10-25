@@ -819,6 +819,22 @@ impl BulkWin {
         true
     }
 
+    /// 적용 열 **헤더** 클릭 = 전체 토글(DLG-080 · dir2 bulkrename.rs:1937-1961 · 10-25): 바뀐 행 중 하나라도 켜져 있으면 전부 끔 ·
+    /// 아니면 전부 켬. 안 바뀐 행(`=`)은 건드리지 않는다. 바뀐 행이 없으면 `false`.
+    fn toggle_all(&mut self) -> bool {
+        let src = self.rows.source_mut();
+        let any_on = src.rows.iter().any(|r| r.changed && r.apply);
+        let mut touched = false;
+        for r in src.rows.iter_mut().filter(|r| r.changed) {
+            r.apply = !any_on;
+            touched = true;
+        }
+        if touched {
+            self.recompute(false);
+        }
+        touched
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn items_len(&self) -> usize {
         self.items.len()
@@ -2172,6 +2188,15 @@ impl BulkWin {
                             active: false,
                         });
                     }
+                    // 적용 열 헤더 클릭 = 전체 토글(DLG-080 · 10-25) — 그리드의 정렬 순환보다 먼저 가로챈다.
+                    if self.grid_rect.contains(p)
+                        && x >= self.apply_column_x()
+                        && self.rows.header_area(x, y)
+                    {
+                        self.toggle_all();
+                        self.redraw();
+                        return BulkAction::None;
+                    }
                     // 적용 열 클릭 = 그 행 토글(DLG-080).
                     if self.grid_rect.contains(p) && x >= self.apply_column_x() {
                         if let Some(row) = self.rows.row_at(x, y) {
@@ -2579,6 +2604,21 @@ mod tests {
         w.recompute(false);
         assert_eq!(w.count, 1);
         assert!(w.dump().contains("photo_a.jpg → img_a.jpg skip"));
+        // 헤더 전체 토글(DLG-080 · 10-25): 하나라도 켜져 있으면 전부 끔(건수 0) · 다시 = 전부 켬(2) · 안 바뀐 행은 그대로.
+        assert!(w.toggle_all());
+        assert_eq!(w.count, 0);
+        assert!(
+            w.rows
+                .source()
+                .rows
+                .iter()
+                .filter(|r| r.changed)
+                .all(|r| !r.apply),
+            "{}",
+            w.dump()
+        );
+        assert!(w.toggle_all());
+        assert_eq!(w.count, 2);
         // 중복 충돌: 전체 교체 → 둘 다 "same" → Duplicate · 기존 파일 존재 → Exists(뺀 행은 충돌 계산에서 빠지므로 다시 넣는다).
         w.rows.source_mut().rows[0].apply = true;
         w.card_mut(0).mode.select_value("entire");
