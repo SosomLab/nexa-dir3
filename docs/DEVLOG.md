@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **메모리 창 기동 명령 · 덤프**(d9214e2 · `view.memory` · `memwin` 덤프 · T4 memory-window · T-93 남김 ✅) · CI 62301c3/a809110 ✓ → [10-25 §24](journal/2026-10-25.md)
+
 - **일괄 이름 바꾸기 창 묶음**(4d16d9b Move/ChangeExt 카드 · fa7beae 적용 열 전체 토글 · db12cda 크기 조절 · 62301c3 충돌 행 경고색 · a809110 Tab 순회) · nexa-ui 230 `RowSource::row_mark`(CONSUMER-CHANGES dbd7c6e) → [10-25 §23](journal/2026-10-25.md)
 
 - **NFC ccc 정렬 + UAX #15 차단 규칙**(0e94d1f · §20 협업 지적 처방 · Python NFC 대조 7경우) · CI 91985b0/3b80b9d ✓ → [10-25 §22](journal/2026-10-25.md)
