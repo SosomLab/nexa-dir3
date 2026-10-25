@@ -278,7 +278,7 @@ status.hide = hidden
 panel.left = L
 panel.right = R
 list.reading = Reading folder…
-filter.placeholder = Filter by name (* ? wildcards · ; separates · Esc clears)
+filter.placeholder = Filter by name (fuzzy · * ? wildcards · ; separates · Esc clears)
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab
@@ -632,6 +632,12 @@ pref.sortNatural = Sort numbers by value (natural sort)
 pref.sortNatural.desc = When sorting by name or extension, compare runs of digits as numbers — file2 comes before file10 (the same order as the system file manager). When off, names are sorted character by character (file10 before file2). Like the other view options, each tab holds its own value; the toolbar and View menu toggle applies as far as the view option scope setting says, and this setting is the default for new tabs.
 pref.sortClickAdds = Header click adds a sort column
 pref.sortClickAdds.desc = When several columns are sorted, clicking another header adds it as the next sort key (Nexa Dir 2 behavior). When off, a plain click sorts by that column alone and Shift+click adds (like Explorer and Nexa SQL).
+pref.filterCase = Filter: match case
+pref.filterCase.desc = Quick filter toggle Aa — compare letters case-sensitively. Off = ignore case.
+pref.filterWord = Filter: whole word
+pref.filterWord.desc = Quick filter toggle ab — the text must appear as a whole word (letters, digits and _ on either side break the match). Off = fuzzy: the letters only need to appear in order (rprt matches report).
+pref.filterRegex = Filter: regular expression
+pref.filterRegex.desc = Quick filter toggle .* — the text is a regular expression (regex-lite syntax). Invalid patterns show a red frame and match nothing. Off = plain text with * ? wildcards.
 pref.navUpAlign = Selection position after Go Up
 pref.navUpAlign.desc = Where the left folder is placed in the view after Alt+Up.
 pref.align.top = Top

@@ -230,6 +230,9 @@ impl App {
             // 글자 래스터(GAP-015 · DR-31 ⑤ · 10-25): 종전엔 레지스트리에만 있고 읽는 곳이 없어 바꿔도 효과가 없었다 → 즉시 반영.
             k if k.starts_with("ui.text_") => self.apply_text_raster(),
             "list.sort_click_adds" => self.apply_sort_click_setting(),
+            "list.filter_case" | "list.filter_word" | "list.filter_regex" => {
+                self.apply_filter_opts_setting();
+            }
             "list.col_layout" => {
                 let v = self
                     .settings
@@ -435,6 +438,38 @@ impl App {
         nexa_gfx::text::set_text_snap(t.snap);
         nexa_gfx::text::set_text_weight(t.weight);
         nexa_gfx::text::set_text_contrast(t.contrast);
+    }
+
+    /// 빠른 필터 토글(`list.filter_case/word/regex` · 10-25 검색창) → 모든 패널(버튼 색 + 탭 원천 다시 걸름) + 새 탭/패널 기본값.
+    pub(crate) fn apply_filter_opts_setting(&mut self) {
+        let o = Self::filter_opts_of(&self.settings);
+        crate::filelist::set_filter_opts_default(o);
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.set_filter_opts(o, &mut inv);
+        }
+        self.redraw();
+    }
+
+    /// 설정 → 토글 셋(순수).
+    pub(crate) fn filter_opts_of(s: &Settings) -> ndir_ops::namefilter::FilterOpts {
+        ndir_ops::namefilter::FilterOpts {
+            case: s.flag("list.filter_case"),
+            word: s.flag("list.filter_word"),
+            regex: s.flag("list.filter_regex"),
+        }
+    }
+
+    /// 바의 토글을 눌렀다 → 설정에 적고(영속) 다른 패널·새 탭 기본값에도(10-25).
+    pub(crate) fn persist_filter_opts(&mut self, o: ndir_ops::namefilter::FilterOpts) {
+        for (k, v) in [
+            ("list.filter_case", o.case),
+            ("list.filter_word", o.word),
+            ("list.filter_regex", o.regex),
+        ] {
+            let _ = self.settings.set(k, if v { "on" } else { "off" });
+        }
+        self.apply_filter_opts_setting();
     }
 
     /// `list.sort_click_adds`(T-128 · DR-31 ⑦) → 열린 탭 전부 + 새 탭 기본값.

@@ -11056,3 +11056,132 @@ fn typeahead_scope_setting_reaches_tree_source() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 빠른 필터 검색창(사용자 10-25 · nexa-sql 꼴): 기본 = Fuzzy(순서대로 · 대소문자 무시) · 토글 단어/대소문자/정규식 · 정규식 오류 = 붉은 틀 + 0행 ·
+/// 혜성꼬리(입력 뒤 BusyRing Running→Done · 빈 글 = Idle) · 설정 `list.filter_*` ↔ 토글 양방향(설정 → 패널 · 토글 → 설정 영속 + 새 탭 기본값).
+#[test]
+fn quick_filter_search_box_fuzzy_toggles_and_busy() {
+    use crate::filelist::filter_opts_default;
+    use ndir_ops::namefilter::FilterOpts;
+    use nexa_ctl::controls::busy::BusyState;
+    let (mut app, dir) = fixture("qsearch");
+    for n in ["report.pdf", "Catalog.log", "log.txt", "r_p_r_t.md"] {
+        std::fs::write(dir.join(n), b"x").expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let names = |app: &App| -> Vec<String> {
+        let src = app.panels[0].rows().source();
+        (0..src.len()).map(|i| src.row(i).text).collect()
+    };
+    app.panels[0].toggle_filter(&mut inv);
+    assert_eq!(app.panels[0].filter_busy_state(), BusyState::Idle);
+    for c in "rprt".chars() {
+        app.route(InputEvent::Char { c, now_ms: 1_000 });
+    }
+    let v = names(&app);
+    assert!(
+        v.contains(&"report.pdf".to_string()) && v.contains(&"r_p_r_t.md".to_string()),
+        "fuzzy: {v:?}"
+    );
+    assert!(!v.contains(&"Catalog.log".to_string()), "{v:?}");
+    assert_ne!(
+        app.panels[0].filter_busy_state(),
+        BusyState::Idle,
+        "입력 = 혜성(Running/Done)"
+    );
+    // 단어 토글: "log" = 낱말로 통째(Catalog.log는 '.log' 낱말 · log.txt도) · "cat"은 fuzzy면 Catalog, 단어면 없음.
+    app.panels[0].set_filter_opts(
+        FilterOpts {
+            word: true,
+            ..FilterOpts::default()
+        },
+        &mut inv,
+    );
+    app.panels[0].close_filter(&mut inv);
+    app.panels[0].toggle_filter(&mut inv);
+    for c in "cat".chars() {
+        app.route(InputEvent::Char { c, now_ms: 2_000 });
+    }
+    assert!(
+        names(&app).is_empty(),
+        "단어 = 'cat' 통째 없음: {:?}",
+        names(&app)
+    );
+    app.panels[0].set_filter_opts(FilterOpts::default(), &mut inv);
+    assert_eq!(
+        names(&app),
+        vec!["Catalog.log".to_string()],
+        "fuzzy로 되돌림"
+    );
+    // 대소문자: "Cat" 켬 = Catalog만 · "cat" 켬 = 없음.
+    app.panels[0].set_filter_opts(
+        FilterOpts {
+            case: true,
+            ..FilterOpts::default()
+        },
+        &mut inv,
+    );
+    assert!(names(&app).is_empty(), "대소문자 구분: {:?}", names(&app));
+    // 정규식: 오류 = 붉은 틀(filter_err) + 0행 · 바른 식 = 맞는 것.
+    app.panels[0].set_filter_opts(
+        FilterOpts {
+            regex: true,
+            ..FilterOpts::default()
+        },
+        &mut inv,
+    );
+    app.panels[0].close_filter(&mut inv);
+    app.panels[0].toggle_filter(&mut inv);
+    app.route(InputEvent::Char {
+        c: '(',
+        now_ms: 3_000,
+    });
+    assert!(
+        app.panels[0].rows().source().filter_err() && names(&app).is_empty(),
+        "정규식 오류"
+    );
+    app.panels[0].close_filter(&mut inv);
+    app.panels[0].toggle_filter(&mut inv);
+    for c in "^c.*log$".chars() {
+        app.route(InputEvent::Char { c, now_ms: 4_000 });
+    }
+    assert!(!app.panels[0].rows().source().filter_err());
+    assert_eq!(
+        names(&app),
+        vec!["Catalog.log".to_string()],
+        "(?i) 정규식: {:?}",
+        names(&app)
+    );
+    // 설정 → 패널 · 새 탭 기본값.
+    let _ = app.settings.set("list.filter_word", "on");
+    app.after_setting_changed("list.filter_word");
+    assert!(app.panels[0].filter_opts().word && filter_opts_default().word);
+    assert!(
+        !app.panels[0].filter_opts().regex,
+        "설정 기준(regex off)으로 맞춰진다"
+    );
+    // 토글 → 설정 영속(App 경로).
+    app.persist_filter_opts(FilterOpts {
+        case: true,
+        word: false,
+        regex: false,
+    });
+    assert!(app.settings.flag("list.filter_case") && !app.settings.flag("list.filter_word"));
+    assert_eq!(
+        app.panels[0].filter_opts(),
+        FilterOpts {
+            case: true,
+            word: false,
+            regex: false
+        }
+    );
+    app.panels[0].close_filter(&mut inv);
+    assert_eq!(
+        app.panels[0].filter_busy_state(),
+        BusyState::Idle,
+        "닫기(빈 글) = Idle"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

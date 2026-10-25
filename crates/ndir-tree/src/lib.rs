@@ -236,6 +236,18 @@ fn glob_chars(p: &[char], s: &[char]) -> bool {
     }
 }
 
+/// 호스트가 주는 이름 판정기(빠른 필터 · 10-25).
+pub type NameMatcherFn = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
+/// `Debug`를 위한 판정기 상자(클로저는 Debug가 없다).
+struct MatcherBox(NameMatcherFn);
+
+impl std::fmt::Debug for MatcherBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("NameMatcherFn")
+    }
+}
+
 /// 인라인 트리 + 선택 상태. 임의 부모의 노드를 함께 선택할 수 있다(교차 선택).
 #[derive(Debug)]
 pub struct Tree {
@@ -248,7 +260,10 @@ pub struct Tree {
     root_path: PathBuf,
     filter: Filter,
     /// 빠른 필터(dir3 NEW-057 · 10-25): 이름이 맞는 가시 노드만(각 층에서 · 부모가 숨으면 하위도) · `None` = 끔.
+    /// 글(소문자 · 바뀜 판정 열쇠). 판정은 [`Self::name_matcher`]가 있으면 그것 · 없으면 [`name_filter_matches`](부분 문자열 · 글롭).
     name_filter: Option<String>,
+    /// 호스트가 준 판정기(10-25 검색창: Fuzzy · 대소문자 · 단어 · 정규식 — regex 의존은 호스트 쪽 · [`Self::set_name_matcher`]).
+    name_matcher: Option<MatcherBox>,
     /// 필터가 없을 때의 가시 행 수("n/m" 표지 · 필터가 없으면 `visible.len()`과 같다).
     unfiltered_len: usize,
     sort: SortSpec,
@@ -293,6 +308,7 @@ impl Tree {
             },
             sort: SortSpec::default(),
             name_filter: None,
+            name_matcher: None,
             unfiltered_len: 0,
         };
         let roots = tree.enumerate(&root_path, None, 0)?;
@@ -502,7 +518,10 @@ impl Tree {
     fn passes_filter(&self, spec: &str, id: NodeId) -> bool {
         self.nodes
             .get(id as usize)
-            .is_some_and(|n| name_filter_matches(spec, &n.name))
+            .is_some_and(|n| match &self.name_matcher {
+                Some(m) => (m.0)(&n.name),
+                None => name_filter_matches(spec, &n.name),
+            })
     }
 
     fn collect_subtree_filtered(&self, spec: &str, id: NodeId, out: &mut Vec<NodeId>) {
@@ -521,14 +540,25 @@ impl Tree {
     /// 빠른 필터(NEW-057) 설정 — 빈 글/`None` = 끔. 바뀌었으면 가시 목록을 다시 만들고 `true`. 선택·펼침 상태는 그대로(숨은 선택은
     /// 필터를 풀면 다시 보인다 · 숨김 필터와 같은 규칙).
     pub fn set_name_filter(&mut self, spec: Option<&str>) -> bool {
-        let next = spec
+        self.set_name_matcher(spec, None)
+    }
+
+    /// 빠른 필터 + **호스트 판정기**(10-25 검색창): `key` = 글(+ 옵션 표기 · 바뀜 판정 열쇠 · 빈 값 = 끔) · `matcher` = 이름 판정(없으면
+    /// 종전 부분 문자열/글롭). 열쇠가 같으면 아무것도 안 한다(판정기는 열쇠에 따라 결정적이라 가정).
+    pub fn set_name_matcher(&mut self, key: Option<&str>, matcher: Option<NameMatcherFn>) -> bool {
+        let next = key
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_lowercase);
-        if next == self.name_filter {
+        if next == self.name_filter && matcher.is_some() == self.name_matcher.is_some() {
             return false;
         }
         self.name_filter = next;
+        self.name_matcher = if self.name_filter.is_some() {
+            matcher.map(MatcherBox)
+        } else {
+            None
+        };
         self.rebuild_visible();
         true
     }
@@ -1182,6 +1212,7 @@ impl Tree {
             },
             sort: SortSpec::default(),
             name_filter: None,
+            name_matcher: None,
             unfiltered_len: 0,
         }
     }
@@ -1376,6 +1407,33 @@ mod tests {
         assert_eq!(t.unfiltered_len(), 5);
         assert!(name_filter_matches("a?c", "ABC") && !name_filter_matches("a?c", "abcd"));
         assert!(!name_filter_matches(" ; ", "x"));
+    }
+
+    /// 호스트 판정기(10-25 검색창): 판정기가 가시성을 정한다(글은 열쇠일 뿐) · 같은 열쇠 = 무변경 · 빈 열쇠 = 끔(판정기도 버림).
+    #[test]
+    fn host_name_matcher_decides_visibility() {
+        let base = make_fixture("matcher");
+        let mut t = Tree::open(&base).unwrap();
+        let dir_a = t.row(0).unwrap().id;
+        t.expand(dir_a).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+        let all = names(&t);
+        // 판정기 = 'x'로 시작하는 것(+ 부모 dirA · 글은 열쇠일 뿐 — 부분 문자열 규칙이면 "zzz"는 안 맞아야 한다).
+        let has_x: NameMatcherFn = std::sync::Arc::new(|n: &str| n.starts_with('x') || n == "dirA");
+        assert!(t.set_name_matcher(Some("zzz"), Some(has_x.clone())));
+        assert_eq!(
+            names(&t),
+            vec!["dirA", "x.txt"],
+            "판정기가 정한다(열쇠 글과 무관)"
+        );
+        assert!(
+            !t.set_name_matcher(Some("zzz"), Some(has_x)),
+            "같은 열쇠 = 무변경"
+        );
+        assert!(t.set_name_matcher(Some("none"), Some(std::sync::Arc::new(|_: &str| false))));
+        assert_eq!(t.visible_len(), 0, "아무것도 안 맞음");
+        assert!(t.set_name_matcher(None, None));
+        assert_eq!(names(&t), all, "끔 = 전부");
     }
 
     #[test]

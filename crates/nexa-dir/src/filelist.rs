@@ -231,6 +231,23 @@ pub(crate) struct ReloadBuilt {
     mtime: Option<std::time::SystemTime>,
 }
 
+/// 빠른 필터 토글의 기본값(설정 `list.filter_case/word/regex` → [`set_filter_opts_default`] · 새 탭 원천 · 새 패널 버튼이 읽는다 · 10-25 검색창).
+static FILTER_OPTS_DEFAULT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub(crate) fn set_filter_opts_default(o: ndir_ops::namefilter::FilterOpts) {
+    let bits = u8::from(o.case) | (u8::from(o.word) << 1) | (u8::from(o.regex) << 2);
+    FILTER_OPTS_DEFAULT.store(bits, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn filter_opts_default() -> ndir_ops::namefilter::FilterOpts {
+    let b = FILTER_OPTS_DEFAULT.load(std::sync::atomic::Ordering::Relaxed);
+    ndir_ops::namefilter::FilterOpts {
+        case: b & 1 != 0,
+        word: b & 2 != 0,
+        regex: b & 4 != 0,
+    }
+}
+
 /// 한 패널의 행 공급자.
 #[derive(Debug)]
 pub(crate) struct TreeSource {
@@ -251,6 +268,10 @@ pub(crate) struct TreeSource {
     dir_sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
     /// 빠른 필터 글(NEW-057 · 탭 소유 · 재열람에도 유지 · 다른 폴더로 가면 새 원천 = 풀림) — 빈 글 = 끔.
     name_filter: String,
+    /// 빠른 필터 토글(대소문자 · 단어 · 정규식 · 10-25 검색창) — 판정기는 ndir-ops `namefilter`.
+    filter_opts: ndir_ops::namefilter::FilterOpts,
+    /// 정규식 오류(틀을 붉게 · 아무것도 안 맞음).
+    filter_err: bool,
     /// 타입어헤드 찾기 범위(설정 `typeahead.scope` · GAP-015 · 10-25 — 종전엔 늘 가시 스트림).
     find_scope: FindScope,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
@@ -283,6 +304,8 @@ impl TreeSource {
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
             name_filter: String::new(),
+            filter_opts: filter_opts_default(),
+            filter_err: false,
             find_scope: FindScope::VisibleStream,
             no_icons: false,
             probe_cache: Default::default(),
@@ -396,7 +419,6 @@ impl TreeSource {
         changed
     }
 
-    /// 빠른 필터(NEW-057) 설정 — 바뀌었으면 true(호스트가 목록 무효화). 빈 글 = 끔.
     /// 타입어헤드 찾기 범위(설정 `typeahead.scope`).
     pub(crate) fn set_find_scope(&mut self, scope: FindScope) {
         self.find_scope = scope;
@@ -407,15 +429,61 @@ impl TreeSource {
         self.find_scope
     }
 
+    /// 빠른 필터(NEW-057 · 10-25 검색창) 설정 — 바뀌었으면 true(호스트가 목록 무효화). 빈 글 = 끔. 판정 = ndir-ops `namefilter`
+    /// (토글 없음 = **Fuzzy** · 글롭 · 대소문자 · 단어 · 정규식) · 정규식 오류 = `filter_err` + 아무것도 안 맞음.
     pub(crate) fn set_name_filter(&mut self, spec: &str) -> bool {
         let spec = spec.trim();
         let changed_text = self.name_filter != spec;
         self.name_filter = spec.to_string();
-        let changed_tree = self
-            .tree
-            .as_mut()
-            .is_some_and(|t| t.set_name_filter(Some(spec)));
+        let changed_tree = self.apply_matcher();
         changed_text || changed_tree
+    }
+
+    /// 토글 셋(대소문자 · 단어 · 정규식) — 바뀌었으면 다시 걸러 true.
+    pub(crate) fn set_filter_opts(&mut self, opts: ndir_ops::namefilter::FilterOpts) -> bool {
+        if self.filter_opts == opts {
+            return false;
+        }
+        self.filter_opts = opts;
+        self.apply_matcher()
+    }
+
+    #[allow(dead_code)] // 호스트는 패널 버튼이 들고 있다 · 원천 쪽은 덤프/시험용
+    pub(crate) fn filter_opts(&self) -> ndir_ops::namefilter::FilterOpts {
+        self.filter_opts
+    }
+
+    /// 정규식 오류 중인가(필터 틀 붉게).
+    pub(crate) fn filter_err(&self) -> bool {
+        self.filter_err
+    }
+
+    fn apply_matcher(&mut self) -> bool {
+        let Some(tree) = self.tree.as_mut() else {
+            return false;
+        };
+        if self.name_filter.is_empty() {
+            self.filter_err = false;
+            return tree.set_name_matcher(None, None);
+        }
+        let key = format!("{}\u{1}{}", self.name_filter, self.filter_opts.tag());
+        match ndir_ops::namefilter::compile(&self.name_filter, self.filter_opts) {
+            Ok(Some(m)) => {
+                self.filter_err = false;
+                tree.set_name_matcher(
+                    Some(&key),
+                    Some(std::sync::Arc::new(move |n: &str| m.matches(n))),
+                )
+            }
+            Ok(None) => {
+                self.filter_err = false;
+                tree.set_name_matcher(None, None)
+            }
+            Err(_) => {
+                self.filter_err = true;
+                tree.set_name_matcher(Some(&key), Some(std::sync::Arc::new(|_: &str| false)))
+            }
+        }
     }
 
     pub(crate) fn name_filter(&self) -> &str {

@@ -1060,6 +1060,11 @@ impl App {
                 self.open_tab_menu(i, t);
                 inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
             }
+            // 빠른 필터 토글(Aa · ab · .*)을 눌렀다 → 설정에 적고 다른 패널에도(10-25 검색창).
+            if self.panels[i].take_filter_opts_changed() {
+                let o = self.panels[i].filter_opts();
+                self.persist_filter_opts(o);
+            }
             // 컬럼 순서(GAP-016): 끌어 바꾼 순서를 같은 패널의 모든 탭에 · 동기화가 켜져 있으면 반대 패널에도(세션에는 패널
             // 더러움으로 저장된다).
             if self.panels[i].take_col_order_changed() {

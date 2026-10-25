@@ -1010,6 +1010,31 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 빠른 필터 검색창 토글(사용자 10-25 · nexa-sql 찾기 막대 꼴 Aa · ab · .*) — 바에서 누르면 여기에 적힌다(영속).
+    e!(
+        "list.filter_case",
+        CAT_LIST,
+        "pref.filterCase",
+        "pref.filterCase.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "list.filter_word",
+        CAT_LIST,
+        "pref.filterWord",
+        "pref.filterWord.desc",
+        Bool,
+        "off"
+    ),
+    e!(
+        "list.filter_regex",
+        CAT_LIST,
+        "pref.filterRegex",
+        "pref.filterRegex.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "list.view_scope",
         CAT_LIST,
