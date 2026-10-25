@@ -10906,3 +10906,32 @@ fn toolbar_tooltip_shows_item_label_on_hover_and_hides_on_leave() {
     assert!(!app.toolbar.tooltip_visible(), "벗어남 = 사라짐");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 설정 카드 허용값 오류(T-134 "허용값 문구" · 10-25): 글자/범위 밖 입력 → 오류 줄 = i18n 안내(`pref.err.allowed`) + 엔진 허용값 원문("0..90") ·
+/// 바뀐 값은 보고되지 않음 · 바른 값 = 오류 사라짐 + Changed.
+#[test]
+fn prefs_card_invalid_value_shows_translated_allowed_hint() {
+    let (mut app, dir) = fixture("prefserr");
+    app.prefs_win.refresh(&app.settings);
+    assert!(app.prefs_win.card_type_text("window.transparency", "abc"));
+    assert_eq!(
+        app.prefs_win.collect_changes(),
+        crate::prefs_win::PrefsAction::None
+    );
+    let err = app
+        .prefs_win
+        .card_error("window.transparency")
+        .expect("오류 줄");
+    assert_eq!(err, ndir_i18n::trf("pref.err.allowed", &["0..90"]));
+    assert!(err.contains("0..90") && !err.starts_with("0..90"), "{err}");
+    assert!(app.prefs_win.card_type_text("window.transparency", "25"));
+    assert_eq!(
+        app.prefs_win.collect_changes(),
+        crate::prefs_win::PrefsAction::Changed {
+            key: "window.transparency".into(),
+            value: "25".into()
+        }
+    );
+    assert!(app.prefs_win.card_error("window.transparency").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}

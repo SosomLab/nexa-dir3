@@ -586,6 +586,34 @@ impl PrefsWin {
             .map(|c| c.value.clone())
     }
 
+    /// 카드 입력칸에 글을 **타이핑**한 것처럼 넣는다(시험 — 전체 선택 뒤 글자 입력 · `take_changed`가 보고하게). 입력칸 카드가 아니면 `false`.
+    #[cfg(test)]
+    pub(crate) fn card_type_text(&mut self, key: &str, text: &str) -> bool {
+        let Some(c) = self.cards.iter_mut().find(|c| c.entry.key == key) else {
+            return false;
+        };
+        let CardCtl::Text(tb) = &mut c.ctl else {
+            return false;
+        };
+        let mut inv = Invalidations::default();
+        tb.set_focused(true); // 입력칸은 포커스가 있을 때만 글자를 받는다
+        tb.on_event(&InputEvent::SelectAll, &mut inv);
+        for ch in text.chars() {
+            tb.on_event(&InputEvent::Char { c: ch, now_ms: 0 }, &mut inv);
+        }
+        tb.set_focused(false);
+        true
+    }
+
+    /// 카드 오류 줄(시험).
+    #[cfg(test)]
+    pub(crate) fn card_error(&self, key: &str) -> Option<String> {
+        self.cards
+            .iter()
+            .find(|c| c.entry.key == key)
+            .and_then(|c| c.error.clone())
+    }
+
     /// 범위 결합 덧줄(시험).
     #[cfg(test)]
     pub(crate) fn range_note(&self, key: &str) -> Option<String> {
@@ -1755,7 +1783,11 @@ impl PrefsWin {
                             c.error = None;
                             return PrefsAction::Changed { key, value: v };
                         }
-                        c.error = Some(ndir_settings::allowed(c.entry.kind));
+                        // 허용값은 엔진 원문(`0..90` · `8..72px | Npt`) — 안내 문구만 i18n(T-134 "허용값 문구" · 10-25).
+                        c.error = Some(trf(
+                            "pref.err.allowed",
+                            &[&ndir_settings::allowed(c.entry.kind)],
+                        ));
                     }
                 }
             }
