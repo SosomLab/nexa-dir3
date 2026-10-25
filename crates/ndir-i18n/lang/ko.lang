@@ -277,7 +277,10 @@ status.hide = 감춤
 panel.left = 좌
 panel.right = 우
 list.reading = 폴더 읽는 중…
-filter.placeholder = 이름으로 필터(퍼지 · * ? 와일드카드 · ; 로 여러 개 · Esc = 지움)
+filter.placeholder = 이름으로 필터(공백으로 나눈 낱말 전부 포함 · * ? 와일드카드 · ; = 또는 · Esc = 지움)
+filter.tip.case = 대소문자 구분
+filter.tip.word = 단어 단위
+filter.tip.regex = 정규식 사용
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제

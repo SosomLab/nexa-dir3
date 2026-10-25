@@ -208,10 +208,9 @@ pub(crate) struct Panel {
     /// Git 칸에 덧붙이는 요약(`↑1 ●3` — 호스트가 `git status` 결과로 넣는다 · 빈 글 = 없음).
     git_extra: String,
     /// 빠른 필터 바(NEW-057 · 10-25): 경로 바 아래 한 줄 입력 상자 · 글 = 활성 탭 원천의 필터(탭별) · 꺼짐 = 높이 0.
-    filter: nexa_ctl::TextBox,
+    /// 10-26: nexa-ui 235 `SearchBox` = 텍스트박스 + 틀 안쪽 토글 Aa·ab·.* 한 컨트롤(nexa-sql filterbar 꼴 · 혜성 = 틀 둘레 · 오류 = 틀 danger).
+    filter: nexa_ctl::SearchBox,
     filter_on: bool,
-    /// 검색창 토글(10-25 · nexa-sql 꼴): [대소문자 Aa · 단어 ab · 정규식 .*] — 켜진 것은 강조색(`ButtonTone::Accent`).
-    filter_btns: [nexa_ctl::Button; 3],
     /// 토글이 바뀌었다(호스트가 설정 `list.filter_*`에 적는다).
     filter_opts_changed: bool,
 }
@@ -373,14 +372,13 @@ impl Panel {
         rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
-        let mut filter =
-            nexa_ctl::TextBox::new(ndir_i18n::tr("filter.placeholder")).with_clearable();
-        filter.set_scale(m.scale);
-        let filter_btns = [
-            nexa_ctl::Button::new("Aa"),
-            nexa_ctl::Button::new("ab"),
-            nexa_ctl::Button::new(".*"),
-        ];
+        let mut filter = nexa_ctl::SearchBox::new(ndir_i18n::tr("filter.placeholder"));
+        filter.set_tips(
+            ndir_i18n::tr("filter.tip.case"),
+            ndir_i18n::tr("filter.tip.word"),
+            ndir_i18n::tr("filter.tip.regex"),
+        );
+        nexa_ctl::Control::set_scale(&mut filter, m.scale);
         let mut p = Panel {
             tabbar,
             navbtns: nav_buttons(),
@@ -436,7 +434,6 @@ impl Panel {
             status_on: false,
             git: None,
             pending_status: None,
-            filter_btns,
             filter_opts_changed: false,
             git_extra: String::new(),
         };
@@ -972,24 +969,9 @@ impl Panel {
         {
             use nexa_ctl::Widget as _;
             let fy = bounds.y + tab_h + bar_h;
-            // 토글 3개(정사각 · 바 높이 − 4) = 오른쪽 · 상자 = 나머지(10-25 검색창 · nexa-sql filterbar 배치).
-            let tg = (filter_h - 4).max(0);
-            let gap = (2.0 * self.m.scale).round() as i32;
-            let side = if filter_h > 0 {
-                3 * (tg + gap) + gap
-            } else {
-                0
-            };
-            self.filter.set_bounds(
-                Rect::new(bounds.x, fy, (bounds.w - side).max(0), filter_h),
-                inv,
-            );
-            let mut tx = bounds.right() - gap - tg;
-            for b in self.filter_btns.iter_mut().rev() {
-                b.set_scale(self.m.scale);
-                b.set_bounds(Rect::new(tx, fy + (filter_h - tg) / 2, tg, tg), inv);
-                tx -= tg + gap;
-            }
+            // 검색창 한 컨트롤(토글은 틀 안쪽 — nexa-ui 235 SearchBox가 배치 · 10-26).
+            self.filter
+                .set_bounds(Rect::new(bounds.x, fy, bounds.w, filter_h), inv);
         }
         let list_y = bounds.y + tab_h + bar_h + filter_h;
         // 탭 상태바(켜져 있으면 목록 높이에서 뺀다).
@@ -1222,14 +1204,8 @@ impl Panel {
         if self.filter_on {
             use nexa_ctl::Widget as _;
             ctx.fill_rect(self.filter_bar_rect(), theme.chrome_bg);
+            // 정규식 오류 = 틀 테두리 danger(`SearchBox::set_error` · 거를 때마다 `sync_filter_error`가 맞춘다).
             self.filter.paint(ctx, theme);
-            // 정규식 오류 = 틀을 붉게(nexa-sql 규약).
-            if self.rows().source().filter_err() {
-                ctx.stroke_round_rect(self.filter.bounds(), 4, theme.danger, 1.0);
-            }
-            for b in &self.filter_btns {
-                b.paint(ctx, theme);
-            }
         }
         self.rows().paint(ctx, theme);
         if self.status_on {
@@ -1245,6 +1221,11 @@ impl Panel {
         }
         self.filter
             .set_placeholder(ndir_i18n::tr("filter.placeholder"));
+        self.filter.set_tips(
+            ndir_i18n::tr("filter.tip.case"),
+            ndir_i18n::tr("filter.tip.word"),
+            ndir_i18n::tr("filter.tip.regex"),
+        );
         self.sync_chrome(inv);
     }
 
@@ -1320,24 +1301,16 @@ impl Panel {
     /// 필터 바 전체(상자 + 토글) — 영역 판정 · 바탕.
     fn filter_bar_rect(&self) -> Rect {
         use nexa_ctl::Widget as _;
-        let b = self.filter.bounds();
-        let right = self
-            .filter_btns
-            .iter()
-            .map(|t| t.bounds().right())
-            .max()
-            .unwrap_or(b.right())
-            .max(b.right());
-        Rect::new(b.x, b.y, right - b.x, b.h)
+        self.filter.bounds()
     }
 
     /// 토글 셋(대소문자 · 단어 · 정규식) — 버튼 색(켜짐 = 강조)으로 들고 있다.
     pub(crate) fn filter_opts(&self) -> ndir_ops::namefilter::FilterOpts {
-        let on = |i: usize| self.filter_btns[i].tone() == nexa_ctl::controls::ButtonTone::Accent;
+        use nexa_ctl::SearchToggle as T;
         ndir_ops::namefilter::FilterOpts {
-            case: on(0),
-            word: on(1),
-            regex: on(2),
+            case: self.filter.is_on(T::Case),
+            word: self.filter.is_on(T::Word),
+            regex: self.filter.is_on(T::Regex),
         }
     }
 
@@ -1347,18 +1320,16 @@ impl Panel {
         opts: ndir_ops::namefilter::FilterOpts,
         inv: &mut Invalidations,
     ) {
-        for (i, on) in [opts.case, opts.word, opts.regex].into_iter().enumerate() {
-            self.filter_btns[i].set_tone(if on {
-                nexa_ctl::controls::ButtonTone::Accent
-            } else {
-                nexa_ctl::controls::ButtonTone::Default
-            });
-        }
+        use nexa_ctl::SearchToggle as T;
+        self.filter.set_checked(T::Case, opts.case);
+        self.filter.set_checked(T::Word, opts.word);
+        self.filter.set_checked(T::Regex, opts.regex);
         for tab in &mut self.tabs {
             if tab.rows.source_mut().set_filter_opts(opts) {
                 inv.push(tab.rows.bounds());
             }
         }
+        self.sync_filter_error();
         inv.push(self.filter_bar_rect());
     }
 
@@ -1386,6 +1357,13 @@ impl Panel {
             self.sync_status(inv);
             self.flash_filter_busy(); // 혜성꼬리(10-25 검색창)
         }
+        self.sync_filter_error();
+    }
+
+    /// 활성 탭 원천의 정규식 오류 → 검색창 틀 danger(nexa-sql 규약 · 10-26).
+    fn sync_filter_error(&mut self) {
+        let err = self.rows().source().filter_err();
+        self.filter.set_error(err);
     }
 
     /// 필터 상자 진행 표시 상태(시험).
@@ -1396,7 +1374,7 @@ impl Panel {
 
     /// 필터 바로 가는 키(글자 · 편집 키 · Enter = 목록으로 포커스 · Esc = 글이 있으면 지움 · 없으면 닫기). 처리했으면 `true`.
     fn filter_key(&mut self, ev: &InputEvent, inv: &mut Invalidations) -> bool {
-        use nexa_ctl::{Control as _, Widget as _};
+        use nexa_ctl::Control as _;
         if !self.filter_focused() {
             return false;
         }
@@ -1420,7 +1398,7 @@ impl Panel {
                 inv.push(self.filter_bounds());
             }
             _ => {
-                self.filter.on_event(ev, inv);
+                let _ = self.filter.handle(ev, inv);
                 self.apply_filter_text(inv);
             }
         }
@@ -1570,6 +1548,10 @@ impl Panel {
 
     pub(crate) fn paint_popups(&self, ctx: &mut dyn DrawCtx, theme: &Theme) {
         self.navbtns.paint_tooltip(ctx, theme);
+        if self.filter_on {
+            // 검색창 편집 메뉴 + 토글 툴팁(10-26).
+            self.filter.paint_popup(ctx, theme);
+        }
         let mut a = nexa_grid::Adapt(ctx);
         self.pathbar.paint_suggest(&mut a, theme);
     }
@@ -1582,17 +1564,11 @@ impl Panel {
         self.tabs[self.active].rows.tick(now_ms, inv);
         // 필터 상자(혜성꼬리 · 호버) + 토글 버튼(호버 페이드) — 움직이는 동안 프레임을 이어 간다(10-25 검색창).
         if self.filter_on {
-            use nexa_ctl::Widget as _;
             if self.filter.tick(now_ms) {
                 inv.push(self.filter_bar_rect());
             }
-            if self.filter.busy_ring().animating() {
+            if self.filter.wants_tick() {
                 inv.request_tick();
-            }
-            for b in &mut self.filter_btns {
-                if b.tick(now_ms) {
-                    inv.push(b.bounds());
-                }
             }
         }
         // 빈 폴더 프로브 결과(워커 · 10-18) — 바뀐 마커만큼 목록을 다시 그린다.
@@ -2792,42 +2768,19 @@ impl Panel {
             Part::Path => self.pathbar.on_event(ev, inv),
             Part::List => self.tabs[self.active].rows.on_event(ev, inv),
             Part::Filter => {
-                use nexa_ctl::{Control as _, Widget as _};
-                // 토글(뗄 때 동작 · DR-27)은 Button이 처리 · 눌린 토글을 뒤집고 다시 걸러 혜성 · 나머지 사건은 상자로.
-                let mut clicked: Option<usize> = None;
-                for (i, b) in self.filter_btns.iter_mut().enumerate() {
-                    b.on_event(ev, inv);
-                    if b.take_clicked() {
-                        clicked = Some(i);
+                use nexa_ctl::SearchEvent;
+                // 토글(뗄 때 · DR-27) · 상자 포커스 · 글자는 SearchBox가 가른다(nexa-ui 235 · 10-26) — 토글 = 다시 걸러 혜성 + 설정에 적기 ·
+                // 글 = 다시 거름.
+                match self.filter.handle(ev, inv) {
+                    SearchEvent::Toggled(_) => {
+                        let o = self.filter_opts();
+                        self.set_filter_opts(o, inv);
+                        self.filter_opts_changed = true;
+                        self.flash_filter_busy();
                     }
+                    SearchEvent::Changed => self.apply_filter_text(inv),
+                    SearchEvent::None | SearchEvent::Consumed => {}
                 }
-                if let Some(i) = clicked {
-                    let mut o = self.filter_opts();
-                    match i {
-                        0 => o.case = !o.case,
-                        1 => o.word = !o.word,
-                        _ => o.regex = !o.regex,
-                    }
-                    self.set_filter_opts(o, inv);
-                    self.filter_opts_changed = true;
-                    self.flash_filter_busy();
-                    return;
-                }
-                let on_btn = match *ev {
-                    InputEvent::MouseDown { x, y, .. } | InputEvent::MouseUp { x, y } => self
-                        .filter_btns
-                        .iter()
-                        .any(|b| b.bounds().contains(Point { x, y })),
-                    _ => false,
-                };
-                if on_btn {
-                    return;
-                }
-                if matches!(ev, InputEvent::MouseDown { .. }) && !self.filter.is_focused() {
-                    self.filter.set_focused(true);
-                }
-                self.filter.on_event(ev, inv);
-                self.apply_filter_text(inv);
             }
             Part::Status => {
                 use nexa_ctl::Widget as _;

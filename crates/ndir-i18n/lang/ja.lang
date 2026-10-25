@@ -278,7 +278,10 @@ status.hide = 非表示
 panel.left = 左
 panel.right = 右
 list.reading = フォルダーを読み込み中…
-filter.placeholder = 名前でフィルター(あいまい一致 · * ? ワイルドカード · ; で複数 · Esc で消去)
+filter.placeholder = 名前でフィルター(空白区切りの語をすべて含む · * ? ワイルドカード · ; = または · Esc で消去)
+filter.tip.case = 大文字と小文字を区別
+filter.tip.word = 単語単位
+filter.tip.regex = 正規表現を使用
 
 tab.lock = タブをロック
 tab.unlock = タブのロックを解除

@@ -278,7 +278,10 @@ status.hide = hidden
 panel.left = L
 panel.right = R
 list.reading = Reading folder…
-filter.placeholder = Filter by name (fuzzy · * ? wildcards · ; separates · Esc clears)
+filter.placeholder = Filter by name (all words must match · * ? wildcards · ; = or · Esc clears)
+filter.tip.case = Match Case
+filter.tip.word = Match Whole Word
+filter.tip.regex = Use Regular Expression
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab

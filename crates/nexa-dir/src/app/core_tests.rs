@@ -11077,15 +11077,12 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
     };
     app.panels[0].toggle_filter(&mut inv);
     assert_eq!(app.panels[0].filter_busy_state(), BusyState::Idle);
-    for c in "rprt".chars() {
+    // 기본 판정 = nexa-sql(10-26): 공백 낱말 전부 포함(순서 무관) · 글자 부분열 퍼지("rprt")는 아니다.
+    for c in "pdf rep".chars() {
         app.route(InputEvent::Char { c, now_ms: 1_000 });
     }
     let v = names(&app);
-    assert!(
-        v.contains(&"report.pdf".to_string()) && v.contains(&"r_p_r_t.md".to_string()),
-        "fuzzy: {v:?}"
-    );
-    assert!(!v.contains(&"Catalog.log".to_string()), "{v:?}");
+    assert_eq!(v, vec!["report.pdf".to_string()], "낱말 전부 포함: {v:?}");
     assert_ne!(
         app.panels[0].filter_busy_state(),
         BusyState::Idle,

@@ -1,18 +1,18 @@
-//! 빠른 필터 이름 판정기(사용자 10-25 "nexa-sql 방식의 대소문자/단어/정규식 설정이 들어간 검색창 · 그냥 검색 = Fuzzy"): 패널 필터 바가
-//! 글과 토글 셋으로 [`NameMatcher`]를 만들어 ndir-tree에 넣는다(ndir-tree는 regex 의존이 없어 판정기만 받는다 · DR-8 regex-lite = ops).
+//! 빠른 필터 이름 판정기(사용자 10-25 "nexa-sql 방식의 대소문자/단어/정규식 설정이 들어간 검색창" · **10-26 판정 규칙 = nexa-sql과 동일**
+//! (사용자 "퍼지 개념이 nexa-sql과 다르다 — `log 18`이 nexa-sql에서는 검색되던 대상을 포함하지 않는다")): 패널 검색창이 글과 토글 셋으로
+//! [`NameMatcher`]를 만들어 ndir-tree에 넣는다(ndir-tree는 regex 의존이 없어 판정기만 받는다 · DR-8 regex-lite = ops).
 //!
-//! 규칙(nexa-sql `filterbar`/`rx::compile` 계승 + dir2 글롭):
-//! - 글을 `;`로 나눈 조각 중 **하나라도** 맞으면 통과(OR · 종전 NEW-057 그대로) · 빈 글 = 판정기 없음(호출자가 끔).
-//! - **정규식** 켬: 조각 = 정규식(`regex-lite`) · 대소문자 끔이면 `(?i)` · 단어 켬이면 `\b…\b` · 컴파일 실패 = [`compile`] `Err`(호출자가 틀을 붉게).
-//! - 정규식 끔 · 조각에 `*`/`?`가 있으면 **글롭**(전체 일치 · 대소문자는 토글대로).
-//! - 정규식 끔 · **단어** 켬: 조각이 낱말 경계(글자·숫자·`_` 아닌 곳) 사이에 통째로 들어 있으면.
-//! - 그 밖(기본): **퍼지(Fuzzy)** = 조각의 글자가 이름에 **순서대로** 나타나면(`rprt` → `report` · 대소문자는 토글대로). **한글은 자모열**
-//!   (nexa-sql `nsql-core/src/hangul.rs` 규칙 이식 · 협업 검토 10-25): 음절을 타자 순서 자모(초·중·종 · 겹모음/겹받침은 둘)로 펴서 비교하므로
-//!   조합 중 글자(`보ㄱ`)나 초성(`ㅂㄱㅅ`)도 `보고서`에 맞는다.
+//! 규칙(nexa-sql `filterbar::Matcher` + `rx::compile` 그대로 · dir2 유산 = `;` OR · 글롭 낱말):
+//! - 토글 **전부 꺼짐**(기본): 글을 **공백으로 나눈 낱말 전부가 이름에 포함**되면(순서 무관 · 대소문자 무시) — `lib 18` → `libndir_i18n.d` ✓
+//!   (`lib` ⊂ · `18` ⊂ `i18n`) · `rprt` → `report` ✗(글자 부분열 퍼지가 아니다). 낱말에 `*`/`?`가 있으면 그 낱말은 **글롭**(이름 전체 일치 · dir2).
+//!   **한글 낱말은 자모열**(nsql-core `hangul` 규칙): 음절을 타자 순서 자모로 펴서 **글자 경계에서 시작해 이어지는** 자모열이 들어 있으면 —
+//!   `보ㄱ` · `ㅂ` · `보고` → `보고서` ✓ · `ㅂㄱ` ✗(ㅂ 다음은 ㅗ). `;`로 나눈 조각은 **OR**(NEW-057 유산 · nexa-sql에는 없음).
+//! - 토글 **하나라도 켜짐**: 글 **전체**(공백 포함 · `;` 특별 취급 없음)가 정규식 하나 — 정규식 끔 = 글자 그대로(`regex_lite::escape`) ·
+//!   단어 = `\b(?:…)\b` · 대소문자 끔 = `(?i)`. 컴파일 실패 = [`compile`] `Err`(호출자가 틀을 붉게 · 0행).
 
 use regex_lite::Regex;
 
-/// 토글 셋(필터 바의 Aa · ab · .*).
+/// 토글 셋(검색창의 Aa · ab · .*).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FilterOpts {
     pub case: bool,
@@ -37,81 +37,116 @@ impl FilterOpts {
     }
 }
 
+/// 낱말 하나(소문자).
+#[derive(Debug, Clone)]
+enum Word {
+    /// 글자 그대로 포함.
+    Text(Vec<char>),
+    /// 한글 = 자모열(글자 경계에서 시작해 이어짐).
+    Jamo(Vec<char>),
+    /// `*`/`?` = 이름 전체 글롭(dir2).
+    Glob(Vec<char>),
+}
+
 #[derive(Debug, Clone)]
 enum Rule {
-    Fuzzy(Vec<char>),
-    Word(Vec<char>),
-    Glob(Vec<char>),
+    /// 공백 낱말 전부 포함(`;` 조각 하나).
+    Words(Vec<Word>),
+    /// 토글이 하나라도 켜졌을 때 글 전체.
     Rx(Regex),
 }
 
-/// 컴파일된 판정기(토큰 OR). 빈 글이면 만들지 않는다.
+/// 컴파일된 판정기. 빈 글이면 만들지 않는다.
 #[derive(Debug, Clone)]
 pub struct NameMatcher {
     rules: Vec<Rule>,
-    case: bool,
 }
 
-/// 글 + 토글 → 판정기. `Ok(None)` = 빈 글(필터 끔) · `Err(msg)` = 정규식 오류(첫 조각의 오류 글).
+fn is_compat_jamo(c: char) -> bool {
+    ('\u{3131}'..='\u{318E}').contains(&c)
+}
+
+fn lower_chars(s: &str) -> Vec<char> {
+    s.chars().flat_map(char::to_lowercase).collect()
+}
+
+/// 글 + 토글 → 판정기. `Ok(None)` = 빈 글(필터 끔) · `Err(msg)` = 정규식 오류.
 pub fn compile(spec: &str, opts: FilterOpts) -> Result<Option<NameMatcher>, String> {
-    let mut rules = Vec::new();
-    for tok in spec.split(';').map(str::trim).filter(|t| !t.is_empty()) {
-        let rule = if opts.regex {
-            let mut pat = String::new();
-            if !opts.case {
-                pat.push_str("(?i)");
-            }
-            if opts.word {
-                pat.push_str(r"\b(?:");
-                pat.push_str(tok);
-                pat.push_str(r")\b");
-            } else {
-                pat.push_str(tok);
-            }
-            Rule::Rx(Regex::new(&pat).map_err(|e| e.to_string())?)
+    let text = spec.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if opts.case || opts.word || opts.regex {
+        // nexa-sql `rx::compile`: 글 전체가 패턴 하나.
+        let body = if opts.regex {
+            text.to_string()
         } else {
-            let chars: Vec<char> = fold(tok, opts.case).collect();
-            if tok.contains(['*', '?']) {
-                Rule::Glob(chars)
-            } else if opts.word {
-                Rule::Word(chars)
-            } else {
-                Rule::Fuzzy(hangul::decompose_chars(&chars))
-            }
+            regex_lite::escape(text)
         };
-        rules.push(rule);
+        let body = if opts.word {
+            format!(r"\b(?:{body})\b")
+        } else {
+            body
+        };
+        let full = if opts.case {
+            body
+        } else {
+            format!("(?i){body}")
+        };
+        let rx = Regex::new(&full).map_err(|e| e.to_string())?;
+        return Ok(Some(NameMatcher {
+            rules: vec![Rule::Rx(rx)],
+        }));
+    }
+    let mut rules = Vec::new();
+    for group in text.split(';') {
+        let words: Vec<Word> = group
+            .split_whitespace()
+            .map(|w| {
+                let lower = lower_chars(w);
+                if w.contains(['*', '?']) {
+                    Word::Glob(lower)
+                } else if lower
+                    .iter()
+                    .any(|&c| hangul::is_syllable(c) || is_compat_jamo(c))
+                {
+                    Word::Jamo(hangul::decompose_chars(&lower))
+                } else {
+                    Word::Text(lower)
+                }
+            })
+            .collect();
+        if !words.is_empty() {
+            rules.push(Rule::Words(words));
+        }
     }
     if rules.is_empty() {
         return Ok(None);
     }
-    Ok(Some(NameMatcher {
-        rules,
-        case: opts.case,
-    }))
-}
-
-fn fold(s: &str, case: bool) -> impl Iterator<Item = char> + '_ {
-    s.chars().flat_map(move |c| {
-        if case {
-            vec![c]
-        } else {
-            c.to_lowercase().collect()
-        }
-    })
+    Ok(Some(NameMatcher { rules }))
 }
 
 impl NameMatcher {
-    /// 이름이 조각 중 하나에 맞는가.
+    /// 이름이 조각 중 하나에 맞는가(조각 = 낱말 전부 포함 · 토글이 켜졌으면 정규식).
     #[must_use]
     pub fn matches(&self, name: &str) -> bool {
-        let folded: Vec<char> = fold(name, self.case).collect();
         self.rules.iter().any(|r| match r {
-            Rule::Fuzzy(p) => fuzzy(p, &hangul::decompose_chars(&folded)),
-            Rule::Word(p) => whole_word(p, &folded),
-            Rule::Glob(p) => glob(p, &folded),
             Rule::Rx(rx) => rx.is_match(name),
+            Rule::Words(ws) => {
+                let lower = lower_chars(name);
+                ws.iter().all(|w| match w {
+                    Word::Text(t) => contains_seq(&lower, t),
+                    Word::Glob(g) => glob(g, &lower),
+                    Word::Jamo(q) => hangul::contains_jamo(&lower, q),
+                })
+            }
         })
     }
+}
+
+/// 글자열 포함(빈 패턴 = 참).
+fn contains_seq(h: &[char], n: &[char]) -> bool {
+    n.is_empty() || h.windows(n.len()).any(|w| w == n)
 }
 
 /// 한글 자모열(출처 nexa-sql `crates/nsql-core/src/hangul.rs` · 의존 0): 음절 → 타자 순서 자모(초·중·종 · 겹모음·겹받침은 둘) · 호환 겹자모도 둘 ·
@@ -201,33 +236,26 @@ pub mod hangul {
         }
         out
     }
-}
 
-/// 순서대로 나타나면(부분열) — 빈 패턴 = 참.
-fn fuzzy(p: &[char], s: &[char]) -> bool {
-    let mut i = 0;
-    for &c in s {
-        if i < p.len() && p[i] == c {
-            i += 1;
+    /// `hay`(이미 소문자화한 글자열)에 자모열 `q`(이미 [`decompose_chars`]한 질의)가 **글자 경계에서 시작해 이어지는** 구간으로 들어 있는가
+    /// (nsql-core `hangul::find_jamo` 규칙 · 10-26).
+    pub fn contains_jamo(hay: &[char], q: &[char]) -> bool {
+        if q.is_empty() {
+            return true;
         }
+        let mut jam: Vec<char> = Vec::with_capacity(hay.len() * 2);
+        let mut origin: Vec<usize> = Vec::with_capacity(hay.len() * 2);
+        for (i, &c) in hay.iter().enumerate() {
+            let n0 = jam.len();
+            decompose_into(c, &mut jam);
+            origin.extend(std::iter::repeat_n(i, jam.len() - n0));
+        }
+        let n = q.len();
+        if n > jam.len() {
+            return false;
+        }
+        (0..=jam.len() - n).any(|j| (j == 0 || origin[j] != origin[j - 1]) && jam[j..j + n] == *q)
     }
-    i == p.len()
-}
-
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
-}
-
-/// 낱말 경계 사이에 통째로(연속) 들어 있으면.
-fn whole_word(p: &[char], s: &[char]) -> bool {
-    if p.is_empty() || p.len() > s.len() {
-        return p.is_empty();
-    }
-    (0..=s.len() - p.len()).any(|at| {
-        s[at..at + p.len()] == *p
-            && (at == 0 || !is_word_char(s[at - 1]))
-            && (at + p.len() == s.len() || !is_word_char(s[at + p.len()]))
-    })
 }
 
 /// 글롭(`*` = 0개 이상 · `?` = 1개) 전체 일치.
@@ -250,66 +278,104 @@ mod tests {
             .expect("non-empty")
     }
 
-    /// Fuzzy 기본(순서대로 · 대소문자 무시) · 대소문자 켬 · `;` OR · 빈 글 = None.
-    #[test]
-    fn fuzzy_default_and_case_toggle() {
-        let f = m("rprt", false, false, false);
-        assert!(f.matches("report.pdf") && f.matches("RePoRt") && !f.matches("trpr"));
-        assert!(
-            m("한글", false, false, false).matches("나의 한 글.txt"),
-            "부분열(사이에 글자)"
-        );
-        // 한글 자모열(nexa-sql 규칙 · 협업 검토 10-25): 초성 · 조합 중 글자 · 겹받침 타자 순서.
-        let ko = |q: &str| m(q, false, false, false);
-        assert!(ko("ㅂㄱㅅ").matches("보고서.txt"), "초성");
-        assert!(ko("보ㄱ").matches("보고서.txt"), "조합 중 글자(보 + ㄱ)");
-        assert!(
-            ko("보곳").matches("보고서.txt"),
-            "받침 ㅅ = 다음 글자 초성과 같은 자모열"
-        );
-        assert!(
-            ko("달").matches("닭.txt") && !ko("닭").matches("달.txt"),
-            "겹받침 = ㄹ,ㄱ 순서"
-        );
-        assert!(!ko("ㄷㄱ").matches("보고서.txt"));
-        assert!(hangul::decompose_chars(&['과', 'ㅄ']) == vec!['ㄱ', 'ㅗ', 'ㅏ', 'ㅂ', 'ㅅ']);
-        let c = m("Rep", true, false, false);
-        assert!(c.matches("Report") && !c.matches("report"));
-        let or = m("abc; xyz", false, false, false);
-        assert!(or.matches("a-b-c") && or.matches("XYZ") && !or.matches("ab"));
-        assert!(
-            compile("  ;  ", FilterOpts::default()).unwrap().is_none(),
-            "빈 글 = 없음"
-        );
+    fn plain(spec: &str) -> NameMatcher {
+        m(spec, false, false, false)
     }
 
-    /// 단어: 낱말 경계 사이 통째(fuzzy 아님) · 대소문자 토글.
+    /// 기본(토글 전부 끔) = nexa-sql: 공백 낱말 **전부 포함** · 순서 무관 · 대소문자 무시 · 부분열 퍼지 아님 · 글롭 낱말 · `;` OR · 빈 글 = None.
     #[test]
-    fn whole_word_mode() {
-        let w = m("log", false, true, false);
-        assert!(w.matches("app.log") && !w.matches("log_2024") && w.matches("my log file"));
-        assert!(!w.matches("catalog.txt"), "부분 문자열은 안 됨");
-        assert!(!w.matches("lg"), "fuzzy 아님");
-        let wc = m("Log", true, true, false);
-        assert!(wc.matches("Log.txt") && !wc.matches("log.txt"));
-    }
-
-    /// 글롭(정규식 끔 · `*`/`?` 있으면 전체 일치) · 정규식(대소문자 `(?i)` · 단어 `\b`) · 오류 = Err.
-    #[test]
-    fn glob_and_regex_modes() {
-        let g = m("*.txt; img_??.png", false, false, false);
+    fn words_all_contained_like_nexa_sql() {
+        let f = plain("lib 18");
+        assert!(
+            f.matches("libndir_i18n.d"),
+            "사용자 예 10-26: lib ⊂ · 18 ⊂ i18n"
+        );
+        assert!(f.matches("18-lib.txt"), "순서 무관");
+        assert!(
+            !f.matches("libndir.d") && !f.matches("i18n.d"),
+            "낱말 하나 빠지면 ✗"
+        );
+        let l = plain("log 18");
+        assert!(l.matches("log_2024-10-18.txt") && !l.matches("log.txt"));
+        assert!(plain("REPORT").matches("report.pdf"), "대소문자 무시");
+        assert!(
+            !plain("rprt").matches("report.pdf"),
+            "글자 부분열 퍼지가 아니다(nexa-sql)"
+        );
+        assert!(plain("  rep   pdf ").matches("report.pdf"), "공백 여럿");
+        // 글롭 낱말(dir2) · `;` OR.
+        let g = plain("*.txt; img_??.png");
         assert!(
             g.matches("A.TXT")
                 && g.matches("img_01.png")
                 && !g.matches("img_1.png")
                 && !g.matches("a.txt.bak")
         );
+        let gm = plain("*.md 2024");
+        assert!(gm.matches("2024 노트.md") && !gm.matches("2024.txt"));
+        // 우선순위(협업 검토 10-26): `a b;c` = (a AND b) OR c.
+        let mix = plain("a b;c");
+        assert!(mix.matches("b-a.txt") && mix.matches("c.txt") && !mix.matches("a.txt"));
+        assert!(
+            compile("  ;  ", FilterOpts::default()).unwrap().is_none(),
+            "빈 글 = 없음"
+        );
+    }
+
+    /// 한글 낱말 = 자모열(nsql-core `hangul::contains_jamo`): 글자 경계에서 시작해 **이어지는** 자모열 · 조합 중 글자 · 초성 하나 · 겹받침 순서.
+    #[test]
+    fn hangul_words_match_contiguous_jamo_from_char_boundary() {
+        let ko = plain;
+        assert!(ko("보ㄱ").matches("보고서.txt"), "조합 중 글자(보 + ㄱ)");
+        assert!(ko("ㅂ").matches("보고서.txt"), "초성 하나");
+        assert!(ko("보고").matches("보고서.txt") && ko("고서").matches("보고서.txt"));
+        assert!(
+            !ko("ㅂㄱ").matches("보고서.txt"),
+            "nexa-sql: 자모가 이어져야 한다(ㅂ 다음은 ㅗ) — 초성 모음 검색이 아니다"
+        );
+        assert!(!ko("ㅗㄱ").matches("보고서.txt"), "글자 경계에서 시작");
+        assert!(
+            !ko("ㅂㄱㅅ").matches("보고서.txt"),
+            "초성만 입력 검색은 nexa-sql에도 없다(10-25 부분열 퍼지 때는 맞았음 · 10-26 사용자 'nexa-sql과 같게')"
+        );
+        assert!(
+            ko("달").matches("닭.txt") && !ko("닭").matches("달.txt"),
+            "겹받침 = ㄹ,ㄱ"
+        );
+        assert!(
+            ko("한 글").matches("나의 한 글.txt") && ko("글 한").matches("나의 한 글.txt"),
+            "낱말 둘 · 순서 무관"
+        );
+        assert!(ko("한글 txt").matches("한글.TXT"), "한글 + 라틴 섞임");
+    }
+
+    /// 토글이 하나라도 켜지면 글 **전체**가 정규식 하나(nexa-sql `rx::compile`): 글자 그대로(escape) · `\b` · `(?i)` · 오류 = Err · tag.
+    #[test]
+    fn options_make_whole_text_one_regex() {
+        let c = m("Rep", true, false, false);
+        assert!(c.matches("Report") && !c.matches("report"));
+        let c2 = m("log 18", true, false, false);
+        assert!(
+            c2.matches("log 18.txt") && !c2.matches("log_18.txt"),
+            "켜지면 글 전체가 글자 그대로(공백 포함)"
+        );
+        let lit = m("a.b", true, false, false);
+        assert!(
+            lit.matches("a.b") && !lit.matches("axb"),
+            "정규식 끔 = escape"
+        );
+        let w = m("log", false, true, false);
+        assert!(w.matches("app.log") && !w.matches("log_2024") && w.matches("my log file"));
+        assert!(!w.matches("catalog.txt") && !w.matches("lg"));
+        let wc = m("Log", true, true, false);
+        assert!(wc.matches("Log.txt") && !wc.matches("log.txt"));
         let r = m(r"^\d{4}-\d{2}", false, false, true);
         assert!(r.matches("2024-10 보고서.md") && !r.matches("x2024-10"));
-        let ri = m("REPORT", false, false, true);
-        assert!(ri.matches("report.pdf"), "(?i)");
-        let rc = m("REPORT", true, false, true);
-        assert!(!rc.matches("report.pdf"));
+        assert!(
+            m("REPORT", false, false, true).matches("report.pdf"),
+            "(?i)"
+        );
+        assert!(!m("REPORT", true, false, true).matches("report.pdf"));
         let rw = m("log", false, true, true);
         assert!(rw.matches("app.log") && !rw.matches("catalog"), "단어 경계");
         assert!(
