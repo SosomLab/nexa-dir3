@@ -1,4 +1,5 @@
-//! zip **쓰기**(DR-31 ⑳ⓑ · 10-25 · "Linux 압축하기 없음" — 외부 아카이버가 없어도 폴더/파일을 zip으로): 저장(store) 방식만(외부 crate 0 · DR-8) ·
+//! zip **쓰기**(DR-31 ⑳ⓑ · 10-25 · "Linux 압축하기 없음" — 외부 아카이버가 없어도 폴더/파일을 zip으로): **DEFLATE**(자체 구현 [`super::deflate`] · 10-26 DR-32 ⑦ ·
+//! 이미 압축된 형식(zip·7z·png·jpg·mp4 …)은 store · 눌러서 store보다 크면 store로 되돌림(≤ 32 MiB · 그보다 크면 조각 블록 스트리밍) · 외부 crate 0 · DR-8) ·
 //! CRC-32 · UTF-8 이름 깃발(0x800) · 항목마다 **데이터 서술자**(깃발 비트 3 — 파일을 한 번만 읽는다) · 폴더는 재귀(`dir/` 항목 포함) ·
 //! ZIP64 없음(파일 하나 또는 전체가 4 GiB를 넘으면 **쓰기 전에** `fits_zip32`로 판정해 파일을 만들지 않고 `too_big`에 적는다 — 부분 zip을 남기지
 //! 않는다 · 협업 검토 10-25 ③) · 취소 = 항목 경계.
@@ -8,6 +9,7 @@ use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use super::deflate;
 use super::extract::crc32_update;
 
 /// 쓰기 결과.
@@ -15,8 +17,10 @@ use super::extract::crc32_update;
 pub struct WriteReport {
     pub files: u64,
     pub dirs: u64,
-    /// 원본 바이트(= 저장 바이트 · 압축 없음).
+    /// 원본 바이트.
     pub bytes: u64,
+    /// 쓴 데이터 바이트(압축 뒤 · 머리/서술자 제외).
+    pub compressed: u64,
     /// 4 GiB 이상이라 건너뛴 항목.
     pub too_big: Vec<PathBuf>,
     /// 항목별 실패(경로 · 사유).
@@ -32,11 +36,34 @@ const FLAG_DESC: u16 = 1 << 3;
 const FLAG_UTF8: u16 = 1 << 11;
 const VERSION: u16 = 20;
 const LIMIT: u64 = u32::MAX as u64;
+/// 이 크기까지는 통째로 눌러 보고 store보다 크면 store로 되돌린다 · 넘으면 조각 블록 스트리밍(되돌림 없음).
+const IN_MEMORY: u64 = 32 * 1024 * 1024;
+
+/// 이미 압축된 형식(확장자 · 소문자) — DEFLATE해도 줄지 않아 store(7-Zip·탐색기 관례 · DR-32 ⑦).
+const STORE_EXTS: &[&str] = &[
+    "zip", "7z", "rar", "gz", "tgz", "bz2", "xz", "zst", "lz4", "lzma", "cab", "jar", "apk",
+    "docx", "xlsx", "pptx", "odt", "ods", "odp", "png", "jpg", "jpeg", "gif", "webp", "avif",
+    "heic", "heif", "mp3", "aac", "ogg", "opus", "flac", "m4a", "mp4", "m4v", "mkv", "mov", "avi",
+    "webm", "wmv", "pdf", "woff", "woff2",
+];
+
+/// 이 이름의 항목을 DEFLATE할까(순수): 이미 압축된 형식은 store.
+#[must_use]
+pub fn deflate_wanted(name: &str) -> bool {
+    let ext = name
+        .rsplit('/')
+        .next()
+        .and_then(|n| n.rsplit_once('.'))
+        .map(|(_, e)| e.to_ascii_lowercase());
+    !ext.is_some_and(|e| STORE_EXTS.contains(&e.as_str()))
+}
 
 struct Central {
     name: Vec<u8>,
     crc: u32,
     size: u32,
+    csize: u32,
+    method: u16,
     is_dir: bool,
     local_off: u32,
     dos_time: u16,
@@ -111,11 +138,11 @@ fn dos_datetime(meta: &std::fs::Metadata) -> (u16, u16) {
 }
 
 /// `name` = zip 안 경로(`/` 구분 · 폴더는 끝에 `/`).
-fn local_header(out: &mut Vec<u8>, name: &[u8], is_dir: bool, dt: (u16, u16)) {
+fn local_header(out: &mut Vec<u8>, name: &[u8], is_dir: bool, dt: (u16, u16), method: u16) {
     w32(out, SIG_LOCAL);
     w16(out, VERSION);
     w16(out, FLAG_UTF8 | if is_dir { 0 } else { FLAG_DESC });
-    w16(out, 0); // store
+    w16(out, method); // 0 = store · 8 = deflate
     w16(out, dt.0);
     w16(out, dt.1);
     w32(out, 0); // crc(서술자)
@@ -242,69 +269,119 @@ pub fn write_zip(
         };
         let dt = dos_datetime(&meta);
         let nb = name.as_bytes().to_vec();
-        let mut head = Vec::with_capacity(30 + nb.len());
-        local_header(&mut head, &nb, is_dir, dt);
-        file.write_all(&head)?;
         let local_off = offset as u32;
-        offset += head.len() as u64;
-        // CRC-32 = 시작 0xFFFF_FFFF · 끝에 반전(`crc32_update` 규약 · 폴더 항목은 0).
-        let (mut crc, mut size) = (0u32, 0u64);
         if is_dir {
+            let mut head = Vec::with_capacity(30 + nb.len());
+            local_header(&mut head, &nb, true, dt, 0);
+            file.write_all(&head)?;
+            offset += head.len() as u64;
             rep.dirs += 1;
-        } else {
-            crc = 0xFFFF_FFFF;
-            let mut f = match std::fs::File::open(&path) {
-                Ok(f) => f,
-                Err(e) => {
-                    rep.errors.push((path.clone(), e.to_string()));
-                    // 머리만 쓰인 항목 = 크기 0으로 마감(읽는 쪽이 빈 파일로 본다).
-                    let mut desc = Vec::with_capacity(16);
-                    w32(&mut desc, SIG_DESC);
-                    w32(&mut desc, 0);
-                    w32(&mut desc, 0);
-                    w32(&mut desc, 0);
-                    file.write_all(&desc)?;
-                    offset += desc.len() as u64;
-                    central.push(Central {
-                        name: nb,
-                        crc: 0,
-                        size: 0,
-                        is_dir: false,
-                        local_off,
-                        dos_time: dt.0,
-                        dos_date: dt.1,
-                    });
-                    continue;
-                }
+            central.push(Central {
+                name: nb,
+                crc: 0,
+                size: 0,
+                csize: 0,
+                method: 0,
+                is_dir: true,
+                local_off,
+                dos_time: dt.0,
+                dos_date: dt.1,
+            });
+            continue;
+        }
+        let mut f = match std::fs::File::open(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                rep.errors.push((path.clone(), e.to_string()));
+                continue; // 머리를 쓰기 전이라 항목 자체를 뺀다
+            }
+        };
+        let size = meta.len();
+        // 방식(DR-32 ⑦): 이미 압축된 형식은 store · 나머지 DEFLATE — ≤ IN_MEMORY는 통째로 눌러 보고 store보다 크면 store로 되돌림 ·
+        // 큰 파일은 조각마다 블록으로 흘려 쓴다(되돌림 없음 · 비압축 자료가 커지는 최악 +13 %를 감안해 LIMIT·8/9까지만).
+        let want_deflate = deflate_wanted(&name);
+        let mut head = Vec::with_capacity(30 + nb.len());
+        let (crc, csize, method) = if want_deflate && size <= IN_MEMORY {
+            let mut data = Vec::with_capacity(size as usize);
+            f.read_to_end(&mut data)?;
+            let crc = !crc32_update(0xFFFF_FFFF, &data);
+            let comp = deflate::deflate(&data);
+            let (body, method): (&[u8], u16) = if comp.len() < data.len() {
+                (&comp, 8)
+            } else {
+                (&data, 0)
             };
+            local_header(&mut head, &nb, false, dt, method);
+            file.write_all(&head)?;
+            offset += head.len() as u64;
+            file.write_all(body)?;
+            offset += body.len() as u64;
+            done += data.len() as u64;
+            on_bytes(done);
+            (crc, body.len() as u64, method)
+        } else {
+            let method: u16 = if want_deflate && size <= LIMIT / 9 * 8 {
+                8
+            } else {
+                0
+            };
+            local_header(&mut head, &nb, false, dt, method);
+            file.write_all(&head)?;
+            offset += head.len() as u64;
+            let mut crc = 0xFFFF_FFFFu32;
+            let mut csize = 0u64;
+            let mut d = deflate::Deflater::new();
             loop {
+                if cancel.load(Ordering::Relaxed) {
+                    rep.canceled = true;
+                    break;
+                }
                 let n = f.read(&mut buf)?;
                 if n == 0 {
                     break;
                 }
                 crc = crc32_update(crc, &buf[..n]);
-                size += n as u64;
-                file.write_all(&buf[..n])?;
                 done += n as u64;
                 on_bytes(done);
+                if method == 8 {
+                    d.block(&buf[..n], false);
+                    let out = d.take();
+                    file.write_all(&out)?;
+                    csize += out.len() as u64;
+                } else {
+                    file.write_all(&buf[..n])?;
+                    csize += n as u64;
+                }
             }
-            offset += size;
-            crc = !crc;
-            let mut desc = Vec::with_capacity(16);
-            w32(&mut desc, SIG_DESC);
-            w32(&mut desc, crc);
-            w32(&mut desc, size as u32);
-            w32(&mut desc, size as u32);
-            file.write_all(&desc)?;
-            offset += desc.len() as u64;
-            rep.files += 1;
-            rep.bytes += size;
-        }
+            if rep.canceled {
+                break;
+            }
+            if method == 8 {
+                d.block(&[], true);
+                let out = d.finish();
+                file.write_all(&out)?;
+                csize += out.len() as u64;
+            }
+            offset += csize;
+            (!crc, csize, method)
+        };
+        let mut desc = Vec::with_capacity(16);
+        w32(&mut desc, SIG_DESC);
+        w32(&mut desc, crc);
+        w32(&mut desc, csize as u32);
+        w32(&mut desc, size as u32);
+        file.write_all(&desc)?;
+        offset += desc.len() as u64;
+        rep.files += 1;
+        rep.bytes += size;
+        rep.compressed += csize;
         central.push(Central {
             name: nb,
             crc,
             size: size as u32,
-            is_dir,
+            csize: csize as u32,
+            method,
+            is_dir: false,
             local_off,
             dos_time: dt.0,
             dos_date: dt.1,
@@ -323,11 +400,11 @@ pub fn write_zip(
         w16(&mut cd, VERSION); // made by
         w16(&mut cd, VERSION); // needed
         w16(&mut cd, FLAG_UTF8 | if c.is_dir { 0 } else { FLAG_DESC });
-        w16(&mut cd, 0);
+        w16(&mut cd, c.method);
         w16(&mut cd, c.dos_time);
         w16(&mut cd, c.dos_date);
         w32(&mut cd, c.crc);
-        w32(&mut cd, c.size);
+        w32(&mut cd, c.csize);
         w32(&mut cd, c.size);
         w16(&mut cd, c.name.len() as u16);
         w16(&mut cd, 0);
@@ -379,6 +456,7 @@ mod tests {
         std::fs::write(src.join("보고서/a.txt"), b"hello zip").unwrap();
         std::fs::write(src.join("보고서/깊은/b.bin"), vec![7u8; 70_000]).unwrap();
         std::fs::write(src.join("top.md"), b"# top").unwrap();
+        std::fs::write(src.join("보고서/pic.png"), vec![7u8; 20_000]).unwrap(); // 이미 압축된 형식 = store(줄여도)
         let dest = base.join("out.zip");
         let mut last = 0;
         let rep = write_zip(
@@ -388,17 +466,51 @@ mod tests {
             &AtomicBool::new(false),
         )
         .unwrap();
-        assert_eq!((rep.files, rep.dirs), (3, 3), "{rep:?}");
-        assert_eq!(rep.bytes, 9 + 70_000 + 5);
+        assert_eq!((rep.files, rep.dirs), (4, 3), "{rep:?}");
+        assert_eq!(rep.bytes, 9 + 70_000 + 5 + 20_000);
+        assert!(
+            rep.compressed < 20_000 + 1_000,
+            "b.bin 70,000(7 반복)은 수백 바이트로 · png 20,000은 store 그대로: {rep:?}"
+        );
+        // 중앙 디렉터리의 방식: b.bin = 8(deflate) · pic.png = 0(store) · a.txt(9바이트) = store(눌러도 안 줆).
+        let bytes = std::fs::read(&dest).unwrap();
+        let mut methods = std::collections::HashMap::new();
+        let mut i = 0;
+        while i + 46 <= bytes.len() {
+            if u32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]])
+                == SIG_CENTRAL
+            {
+                let method = u16::from_le_bytes([bytes[i + 10], bytes[i + 11]]);
+                let nlen = u16::from_le_bytes([bytes[i + 28], bytes[i + 29]]) as usize;
+                let name = String::from_utf8_lossy(&bytes[i + 46..i + 46 + nlen]).into_owned();
+                methods.insert(name, method);
+                i += 46 + nlen;
+            } else {
+                i += 1;
+            }
+        }
+        assert_eq!(methods.get("보고서/깊은/b.bin"), Some(&8), "{methods:?}");
+        assert_eq!(methods.get("보고서/pic.png"), Some(&0), "{methods:?}");
+        assert_eq!(methods.get("top.md"), Some(&0), "작아서 안 줆 → store");
+        assert!(
+            deflate_wanted("a/b.TXT")
+                && !deflate_wanted("x.ZIP")
+                && !deflate_wanted("v.mp4")
+                && deflate_wanted("noext")
+        );
         assert_eq!(last, rep.bytes, "진행 = 누적 바이트");
         assert!(rep.errors.is_empty() && rep.too_big.is_empty() && !rep.canceled);
         let out = base.join("unz");
         let r = super::super::extract::extract(&dest, &out, &mut |_| {}, &AtomicBool::new(false))
             .unwrap();
-        assert_eq!(r.files, 3, "{r:?}");
+        assert_eq!(r.files, 4, "{r:?}");
         assert_eq!(
             std::fs::read(out.join("보고서/a.txt")).unwrap(),
             b"hello zip"
+        );
+        assert_eq!(
+            std::fs::read(out.join("보고서/pic.png")).unwrap(),
+            vec![7u8; 20_000]
         );
         assert_eq!(
             std::fs::read(out.join("보고서/깊은/b.bin")).unwrap().len(),
@@ -422,8 +534,8 @@ mod tests {
         }
         assert_eq!(
             (n_local, n_central),
-            (6, 6),
-            "항목 6개(파일 3 · 폴더 3) 머리 각각"
+            (7, 7),
+            "항목 7개(파일 4 · 폴더 3) 머리 각각"
         );
         // 취소 = 부분 파일 제거.
         let dest2 = base.join("canceled.zip");

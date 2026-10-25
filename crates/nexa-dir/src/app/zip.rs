@@ -1,7 +1,7 @@
 //! App — 내장 zip 압축(DR-31 ⑳ⓑ · 10-25 · T-187 "Linux 압축하기 없음"): 우클릭 "압축"(Linux `xdg.compress`)이 외부 아카이버
-//! (file-roller · ark · xarchiver …)가 없는 기기에서도 동작하도록 `ndir_vfs::archive::zipwrite`(store · 외부 crate 0)로 직접 쓴다.
+//! (file-roller · ark · xarchiver …)가 없는 기기에서도 동작하도록 `ndir_vfs::archive::zipwrite`(DEFLATE · 외부 crate 0)로 직접 쓴다.
 //! 구조는 압축 풀기(`extract.rs`)와 같다: 작업 스레드 1개 · 전송과 같은 슬롯 · 진행 = 전송 진행 창 재사용 · 취소 = 진행 창 ·
-//! 끝 = 토스트 + 상태줄 + 재열람 + 새 zip 선택. **store(무압축)** — 메뉴 이름이 "압축"이므로 라벨·토스트에 명시(협업 검토 ②) · DEFLATE = 후속 후보. 대상 이름 = 하나면 그 이름(확장자 제외) · 여럿이면 부모 폴더 이름 · 충돌 = " (2)".
+//! 끝 = 토스트 + 상태줄 + 재열람 + 새 zip 선택. **DEFLATE**(10-26 · DR-32 ⑦ · 자체 구현 `archive::deflate` · 이미 압축된 형식은 store · 토스트에 명시). 대상 이름 = 하나면 그 이름(확장자 제외) · 여럿이면 부모 폴더 이름 · 충돌 = " (2)".
 
 use crate::*;
 use ndir_vfs::archive::zipwrite::{self as zw, WriteReport};
