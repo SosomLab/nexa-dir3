@@ -90,6 +90,8 @@ enum Data {
         packed: u64,
         method: u16,
         encrypted: bool,
+        /// 중앙 디렉터리의 CRC-32(0 = 없음 → 검증 생략 · 자체 zip 쓰기도 0을 적는다).
+        crc: u32,
     },
     /// 원본(또는 풀어 둔 메모리) 안의 구간.
     Range { off: u64, len: u64 },
@@ -283,6 +285,7 @@ fn write_item(
         .open(target)
         .map_err(io)?;
     let mut written = 0u64;
+    let mut crc = 0xFFFF_FFFFu32; // 쓴 바이트의 CRC-32(zip 검증 · T-169 · 10-25)
     let mut put = |out: &mut std::fs::File, data: &[u8]| -> Result<(), ArchiveError> {
         for chunk in data.chunks(1 << 20) {
             if cancel.load(Ordering::Relaxed) {
@@ -290,6 +293,7 @@ fn write_item(
             }
             out.write_all(chunk).map_err(io)?;
             written += chunk.len() as u64;
+            crc = crc32_update(crc, chunk);
             on_bytes(chunk.len() as u64);
         }
         Ok(())
@@ -311,6 +315,7 @@ fn write_item(
             packed,
             method,
             encrypted,
+            crc: want,
         } => {
             if *encrypted {
                 return Err(ArchiveError::NeedsCodec("ZIP".into(), "암호".into()));
@@ -348,6 +353,15 @@ fn write_item(
                     ))
                 }
             }
+            // CRC-32 검증(T-169 "CRC 검증" · 10-25): 중앙 디렉터리 값이 있으면(0이 아니면) 쓴 바이트와 대조 — 다르면 그 항목만 실패 · 깨진 파일은 지운다.
+            let got = !crc;
+            if *want != 0 && got != *want {
+                drop(out);
+                let _ = std::fs::remove_file(target);
+                return Err(ArchiveError::Corrupt(format!(
+                    "CRC mismatch (expected {want:08x}, got {got:08x})"
+                )));
+            }
         }
         Data::Unsupported => return Err(ArchiveError::NeedsCodec("".into(), "".into())),
     }
@@ -360,6 +374,41 @@ fn write_item(
         }
     }
     Ok(written)
+}
+
+/// CRC-32(IEEE · zip/gzip) 표 — 컴파일 때 만든다.
+const CRC32_TABLE: [u32; 256] = {
+    let mut t = [0u32; 256];
+    let mut i = 0;
+    while i < 256 {
+        let mut c = i as u32;
+        let mut k = 0;
+        while k < 8 {
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
+            k += 1;
+        }
+        t[i] = c;
+        i += 1;
+    }
+    t
+};
+
+/// CRC-32 누적(시작값 `0xFFFF_FFFF` · 끝에 `!crc`).
+pub(crate) fn crc32_update(mut crc: u32, data: &[u8]) -> u32 {
+    for &b in data {
+        crc = CRC32_TABLE[((crc ^ u32::from(b)) & 0xFF) as usize] ^ (crc >> 8);
+    }
+    crc
+}
+
+/// 바이트 전체의 CRC-32(시험 · zip 조립).
+#[cfg(test)]
+pub(crate) fn crc32(data: &[u8]) -> u32 {
+    !crc32_update(0xFFFF_FFFF, data)
 }
 
 // ── zip ──────────────────────────────────────────────────────────────────────
@@ -443,6 +492,7 @@ fn zip_items(src: &dyn ReadAt) -> Result<Vec<Item>, ArchiveError> {
                 packed,
                 method,
                 encrypted: flags & 0x0001 != 0,
+                crc: u32le(&cd, p + 16).unwrap_or(0),
             },
         });
         p += 46 + nlen + xlen + clen;
@@ -925,6 +975,42 @@ mod tests {
         assert!(inflate(&DYN_FOX[..20]).is_err(), "잘린 입력");
     }
 
+    /// CRC-32(T-169): 표준값("123456789" = cbf43926) · 누적 = 통째 · 저장 항목의 바이트가 깨지면 그 항목만 실패 + 파일 제거 · CRC 0 = 검증 생략.
+    #[test]
+    fn zip_crc_mismatch_is_reported_and_file_removed() {
+        assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+        assert_eq!(crc32(b""), 0);
+        let a = crc32_update(0xFFFF_FFFF, b"1234");
+        assert_eq!(!crc32_update(a, b"56789"), 0xCBF4_3926, "누적 = 통째");
+        let d = fixture("crc");
+        let good = b"hello crc";
+        let mut bytes = build_zip(&[("ok.txt", good, None, 0), ("bad.txt", b"payload!", None, 0)]);
+        // 둘째 항목(저장)의 payload 첫 바이트를 깨뜨린다: 첫 항목 = 30 + 6 + 9 · 둘째 로컬 헤더 30 + 7("bad.txt").
+        let second_data = 30 + "ok.txt".len() + good.len() + 30 + "bad.txt".len();
+        bytes[second_data] ^= 0xFF;
+        let zp = d.join("a.zip");
+        std::fs::write(&zp, &bytes).unwrap();
+        let out = d.join("out");
+        let rep = extract(&zp, &out, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+        assert_eq!(std::fs::read(out.join("ok.txt")).unwrap(), good);
+        assert!(!out.join("bad.txt").exists(), "깨진 파일은 남기지 않는다");
+        assert_eq!(rep.errors.len(), 1, "{:?}", rep.errors);
+        assert!(rep.errors[0].1.contains("CRC mismatch"), "{:?}", rep.errors);
+        // CRC 0 = 검증 생략(자체 zip 쓰기 · 옛 도구).
+        let mut zero = build_zip(&[("z.txt", b"zzz", None, 0)]);
+        for i in 0..zero.len() - 3 {
+            if zero[i..i + 4] == crc32(b"zzz").to_le_bytes() {
+                zero[i..i + 4].copy_from_slice(&[0, 0, 0, 0]);
+            }
+        }
+        let zp0 = d.join("zero.zip");
+        std::fs::write(&zp0, &zero).unwrap();
+        let out0 = d.join("out0");
+        let rep = extract(&zp0, &out0, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+        assert!(rep.errors.is_empty() && out0.join("z.txt").is_file());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     fn fixture(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("ndir-extract-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
@@ -946,7 +1032,7 @@ mod tests {
             out.extend_from_slice(&[20, 0, 0x00, 0x08]); // 버전 · 플래그(UTF-8)
             out.extend_from_slice(&method.to_le_bytes());
             out.extend_from_slice(&[0, 0, 0x21, 0x58]); // 시각 · 날짜(2024-01-01)
-            out.extend_from_slice(&0u32.to_le_bytes()); // crc
+            out.extend_from_slice(&crc32(data).to_le_bytes()); // crc(실제 값 · 검증 대상)
             out.extend_from_slice(&(body.len() as u32).to_le_bytes());
             out.extend_from_slice(&(data.len() as u32).to_le_bytes());
             out.extend_from_slice(&(name.len() as u16).to_le_bytes());
@@ -957,7 +1043,7 @@ mod tests {
             cd.extend_from_slice(&[20, 0, 20, 0, 0x00, 0x08]);
             cd.extend_from_slice(&method.to_le_bytes());
             cd.extend_from_slice(&[0, 0, 0x21, 0x58]);
-            cd.extend_from_slice(&0u32.to_le_bytes());
+            cd.extend_from_slice(&crc32(data).to_le_bytes());
             cd.extend_from_slice(&(body.len() as u32).to_le_bytes());
             cd.extend_from_slice(&(data.len() as u32).to_le_bytes());
             cd.extend_from_slice(&(name.len() as u16).to_le_bytes());

@@ -191,6 +191,10 @@ impl App {
                 let warn = rep.canceled
                     || rep.unsupported + rep.suspicious + rep.skipped_existing > 0
                     || !rep.errors.is_empty();
+                // 항목별 실패(CRC 불일치 · 쓰기 실패)는 로그 창에 이름 · 사유를 남긴다(요약은 개수만 · 협업 검토 10-25).
+                for (p, why) in &rep.errors {
+                    self.log_with(ndir_log::LogKind::Error, format!("{p}: {why}"), None, None);
+                }
                 (extract_summary(&rep), warn)
             }
             Some(Err(e)) => (trf("extract.failed", &[&format!("{e:?}")]), true),
