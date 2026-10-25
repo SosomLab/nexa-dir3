@@ -22,7 +22,7 @@ use nexa_ctl::{
     Key as CtlKey, TextBox, Widget,
 };
 use nexa_gfx::{Font, Surface};
-use nexa_grid::{Column, Marker, RowItem, RowSource, SelectOp, VirtualRows};
+use nexa_grid::{Column, Marker, RowItem, RowMark, RowSource, SelectOp, VirtualRows};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use winit::event::{ElementState, Ime, MouseButton, WindowEvent};
@@ -598,6 +598,16 @@ impl RowSource for PvSource {
                 }
             }
             _ => String::new(),
+        }
+    }
+    /// 충돌 행 바탕 색(T-162 남김 · 10-25 · nexa-grid `RowMark` 230차): 적용 대상이면서 충돌이면 경고 색조 · 뺀 행(`✗`)은 색 없음(충돌 계산에서
+    /// 빠진다) · 바뀌지 않은 행도 없음.
+    fn row_mark(&self, index: usize) -> RowMark {
+        let r = &self.rows[index];
+        if r.changed && r.apply && r.conflict != Conflict::None {
+            RowMark::Warn
+        } else {
+            RowMark::None
         }
     }
     /// 정렬(DLG-081): 이전/이후 기준 대소문자 무시 · 안정 · 다중 키 · 빈 사양 = 선택 순서. 여는 탭의 자연 정렬이 켜져 있으면
@@ -2630,6 +2640,29 @@ mod tests {
         w.card_mut(0).with.set_text("same");
         w.recompute(false);
         assert!(w.dump().contains("⚠duplicate"), "{}", w.dump());
+        // 충돌 행 바탕 색(T-162 · 10-25): 충돌 + 적용 행 = Warn · 안 바뀐 행(note.txt) = None · 뺀 행 = None.
+        {
+            let src = w.rows.source();
+            let i_a = src
+                .rows
+                .iter()
+                .position(|r| r.before == "photo_a.jpg")
+                .unwrap();
+            let i_n = src
+                .rows
+                .iter()
+                .position(|r| r.before == "note.txt")
+                .unwrap();
+            assert_eq!(src.row_mark(i_a), RowMark::Warn);
+            assert_eq!(src.row_mark(i_n), RowMark::None);
+        }
+        w.rows.source_mut().rows[0].apply = false;
+        assert_eq!(
+            w.rows.source().row_mark(0),
+            RowMark::None,
+            "뺀 행 = 색 없음"
+        );
+        w.rows.source_mut().rows[0].apply = true;
         assert!(
             !w.btn_rename.base().enabled,
             "바꿀 수 있는 행이 없음 = 비활성"
