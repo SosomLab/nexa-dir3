@@ -1001,6 +1001,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 다중 정렬 클릭 규칙(T-128 · DR-31 ⑦ · 10-25): 기본 = 단순 클릭은 그 열 하나로(nexa-sql · 탐색기) · 켜면 dir2처럼 Shift 없이도 추가.
+    e!(
+        "list.sort_click_adds",
+        CAT_LIST,
+        "pref.sortClickAdds",
+        "pref.sortClickAdds.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "list.view_scope",
         CAT_LIST,

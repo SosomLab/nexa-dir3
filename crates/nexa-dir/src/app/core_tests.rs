@@ -10945,3 +10945,30 @@ fn prefs_card_invalid_value_shows_translated_allowed_hint() {
     assert!(app.prefs_win.card_error("window.transparency").is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-128(DR-31 ⑥⑦ · 10-25): 패널 그리드 정렬 표시 = 삼각형(`fill_triangle` 기록 · 글자 ▲ 없음) · `list.sort_click_adds` 기본 off → 켜면 열린
+/// 탭 전부 + 새 탭 기본값에 반영 · 끄면 되돌림.
+#[test]
+fn sort_marks_are_triangles_and_click_adds_setting() {
+    let (mut app, dir) = fixture("sortmark");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let k0 = app.panels[0].rows().columns()[0].key;
+    app.panels[0].rows_mut().set_sort(&[(k0, false)], &mut inv);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert!(!rec.triangles.is_empty(), "정렬 표시 = 삼각형");
+    assert!(!rec.drew_text("▲"), "글자 화살표 없음");
+    assert!(
+        !app.panels[0].rows().sort_click_adds(),
+        "기본 = 단순 클릭 리셋"
+    );
+    let _ = app.settings.set("list.sort_click_adds", "on");
+    app.after_setting_changed("list.sort_click_adds");
+    assert!(app.panels[0].rows().sort_click_adds());
+    assert!(crate::panel::sort_click_adds_default(), "새 탭 기본값도");
+    let _ = app.settings.set("list.sort_click_adds", "off");
+    app.after_setting_changed("list.sort_click_adds");
+    assert!(!app.panels[0].rows().sort_click_adds() && !crate::panel::sort_click_adds_default());
+    let _ = std::fs::remove_dir_all(&dir);
+}

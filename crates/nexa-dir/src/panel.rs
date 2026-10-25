@@ -361,6 +361,8 @@ impl Panel {
         let mut rows = VirtualRows::new(TreeSource::open(path, opts), m.row_h, m.pad_x, m.indent_w);
         rows.set_columns(columns, &mut inv);
         rows.set_sort_mark_trailing(true, &mut inv); // 정렬 표시 = 칸 오른쪽 끝(nexa-sql 모양 · 사용자 10-03)
+        rows.set_sort_mark_vector(true, &mut inv); // ▲/▼ = 삼각형 도형(T-128 · DR-31 ⑥ · nexa-ui 231)
+        rows.set_sort_click_adds(sort_click_adds_default()); // Shift 없는 클릭 추가(설정 `list.sort_click_adds` · DR-31 ⑦)
         rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
@@ -1587,6 +1589,8 @@ impl Panel {
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
+        rows.set_sort_mark_vector(true, inv);
+        rows.set_sort_click_adds(sort_click_adds_default());
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.rows().view_mode(), inv);
@@ -1727,6 +1731,8 @@ impl Panel {
         );
         rows.set_columns(self.rows().columns().to_vec(), inv);
         rows.set_sort_mark_trailing(true, inv);
+        rows.set_sort_mark_vector(true, inv);
+        rows.set_sort_click_adds(sort_click_adds_default());
         rows.set_col_drag_marker(true);
         rows.set_focused(self.focused, inv);
         rows.set_view_mode(self.tabs[i].rows.view_mode(), inv);
@@ -2251,6 +2257,13 @@ impl Panel {
             let _ = self.navigate_to(path, inv);
         } else {
             self.pending_open = Some(path);
+        }
+    }
+
+    /// Shift 없는 헤더 클릭 = 정렬 추가(설정 `list.sort_click_adds` · T-128 · DR-31 ⑦) — 열린 탭 전부에 즉시.
+    pub(crate) fn set_sort_click_adds(&mut self, on: bool) {
+        for tab in &mut self.tabs {
+            tab.rows.set_sort_click_adds(on);
         }
     }
 
@@ -2928,6 +2941,17 @@ impl Panel {
             self.session_dirty = true;
         }
     }
+}
+
+/// 새 그리드가 읽는 `list.sort_click_adds` 값(설정 → [`set_sort_click_adds_default`] · 탭/패널 생성 시 적용 · 열린 탭은 [`Panel::set_sort_click_adds`]).
+static SORT_CLICK_ADDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn set_sort_click_adds_default(on: bool) {
+    SORT_CLICK_ADDS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn sort_click_adds_default() -> bool {
+    SORT_CLICK_ADDS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 #[cfg(test)]

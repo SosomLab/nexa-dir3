@@ -207,6 +207,7 @@ impl App {
                 self.apply_transfer_tuning();
             }
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
+            "list.sort_click_adds" => self.apply_sort_click_setting(),
             "list.col_layout" => {
                 let v = self
                     .settings
@@ -387,6 +388,15 @@ impl App {
             space: s.flag("typeahead.space"),
             backspace: s.flag("typeahead.backspace"),
             hud_pos: panel::hud_pos_index(s.get("typeahead.hud_pos").unwrap_or("bottom_left")),
+        }
+    }
+
+    /// `list.sort_click_adds`(T-128 · DR-31 ⑦) → 열린 탭 전부 + 새 탭 기본값.
+    pub(crate) fn apply_sort_click_setting(&mut self) {
+        let on = self.settings.flag("list.sort_click_adds");
+        crate::panel::set_sort_click_adds_default(on);
+        for p in &mut self.panels {
+            p.set_sort_click_adds(on);
         }
     }
 
