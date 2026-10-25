@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **설정 카드 허용값 문구**(86d573d · `pref.err.allowed`) · **라이선스 상태/등급 문구**(6ac558f · `license.state.*`/`license.tier.*`) · T-134 사용자 결정 2건(자가 점검 항목 이름 · 중복 키) → [10-25 §26](journal/2026-10-25.md)
+
 - **툴바 툴팁 T3**(089ab72 · T-150 14/19 + 사유 5 종결) · **터미널 cd `/d` 판정 = 프로그램 이름 cmd**(6aed495 · T-134 남김) · CI d9214e2 ✓(T4 memory-window PASS) → [10-25 §25](journal/2026-10-25.md)
 
 - **메모리 창 기동 명령 · 덤프**(d9214e2 · `view.memory` · `memwin` 덤프 · T4 memory-window · T-93 남김 ✅) · CI 62301c3/a809110 ✓ → [10-25 §24](journal/2026-10-25.md)
