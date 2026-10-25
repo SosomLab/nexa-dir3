@@ -127,9 +127,9 @@ pub(crate) fn is_monitor_item(id: &str) -> bool {
     matches!(id, "cpu" | "mem" | "disk" | "net" | "appmem")
 }
 
-/// 바이트/초 → 짧은 속도 글(`0 B/s` · `1.2 MB/s`).
+/// 바이트/초 → 짧은 속도 글(`0B/s` · `1.2MB/s` — M 칸과 같이 숫자·단위 사이 빈칸 없음 · T-145 사용자 결정 10-25 DR-31 ⑧).
 pub(crate) fn fmt_rate(bps: u64) -> String {
-    format!("{}/s", filelist::format_size(bps))
+    format!("{}/s", filelist::format_size(bps).replace(' ', ""))
 }
 
 /// 사용률 단계(CPU · 메모리 — 사용자 10-04): 20 이하 적음 · 40 이하 보통 · 60 이하 바쁨 · 80 이하 경고 · 90 이하 위험 · 그 위 심각.
@@ -200,7 +200,7 @@ pub(crate) const MEM_HINT: &str = "128.0GB";
 fn size_hints(prefix: &str, suffix: &str) -> Vec<String> {
     ["KB", "MB", "GB"]
         .iter()
-        .map(|u| format!("{prefix}999.9 {u}{suffix}"))
+        .map(|u| format!("{prefix}999.9{u}{suffix}")) // 빈칸 없음(T-145 · 값 글과 같은 꼴)
         .collect()
 }
 
@@ -1108,8 +1108,8 @@ mod tests {
                 "license"
             ]
         );
-        assert_eq!(fmt_rate(0), "0 B/s");
-        assert_eq!(fmt_rate(1536), "1.5 KB/s");
+        assert_eq!(fmt_rate(0), "0B/s");
+        assert_eq!(fmt_rate(1536), "1.5KB/s", "M 칸처럼 빈칸 없음(T-145)");
     }
 }
 

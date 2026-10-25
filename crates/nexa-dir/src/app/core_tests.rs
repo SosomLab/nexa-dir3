@@ -3005,7 +3005,11 @@ fn status_segments_and_tab_status_bar() {
     assert_eq!((net.parts.len(), net.rows.len()), (1, 2));
     assert_eq!(net.rows[0].color, Some(app.theme.danger));
     assert_eq!(net.rows[1].color, Some(app.theme.accent));
-    assert!(net.rows[0].hints.iter().any(|h| h == "999.9 MB/s"));
+    assert!(
+        net.rows[0].hints.iter().any(|h| h == "999.9MB/s"),
+        "폭 견본도 빈칸 없음(T-145): {:?}",
+        net.rows[0].hints
+    );
     // 화살표 글자 대신 삼각형 표식(줄 왼쪽 고정 자리) · 조회 전 = 단계 0(깜빡이지 않음 → 깨우지 않는다).
     use nexa_ctl::StatusMarker;
     assert_eq!(
