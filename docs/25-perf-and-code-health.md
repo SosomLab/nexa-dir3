@@ -73,11 +73,13 @@ bash scripts/perf-baseline.sh                                  # 표(이번 수�
 bash scripts/perf-baseline.sh --save-baseline                  # 이번 수치 = 이 PC 기준선(target/perf/baseline.json · git 미추적)
 bash scripts/perf-baseline.sh --baseline target/perf/baseline.json [--strict]   # 기준선 열 + Δ + "회귀 N건" · --strict = 회귀/측정 실패면 exit 1
 bash scripts/perf-baseline.sh --runs 10 --debug                # 회차 수 · debug 빌드
+bash scripts/perf-baseline.sh --copy                           # ⑤ 복사 벤치(ndir-ops bench_copy · 수십 초 · copy_ms · 회귀선 +20 % · 10-26 T-164)
 ```
 
 - 벽시계 = `date +%s%N`(GNU date · Git Bash) — 종전 `python -c` 2회가 회차마다 파이썬 기동 수십 ms를 `--smoke` 값에 섞었다(10-05 §67 ⚠ · nexa-sql `cli-wall.py` 교훈). `%N`이 없는 BSD date(macOS)는 perl `Time::HiRes`.
 - 예열 1회 제외 · 중앙값 · 측정 실패(0 ms) ⚠ 표시 · JSON(`at` · `head` · `smoke_runs_ms` · `groups_ms` · `exe_bytes`).
 - 출력 표는 journal에 그대로 붙인다(📌 §7 형식).
+- `--copy`(10-26 · T-164 · DR-31 ② "측정 뒤 결정"의 측정 자료): `bench_copy`(#[ignore] · release)를 돌려 전략별 ms를 `copy_ms`로 — 작은 파일 4,000개(16 KiB) × [루프 1T · CopyFileEx 1T · 4T · 8T · 루프 4T] · 512 MiB × [루프 · CopyFileEx 버퍼드 · 비버퍼드](Linux/macOS = 네이티브 경로가 CopyFileEx 자리). 디스크 종류(`seek`)가 결과를 크게 가르므로 같은 PC끼리만 비교한다.
 
 ---
 
@@ -174,6 +176,22 @@ python scripts/code-health.py --baseline target/code-health/baseline.json   # �
 ---
 
 ## 8. 실행 기록
+
+### 8-4. 2026-10-26 · 복사 벤치(T-164 · DR-31 ② 측정 자료 · Windows PC · `bench_copy` release · seek = Costly)
+
+| 대상 | 전략 | ms |
+| --- | --- | --- |
+| 작은 파일 4,000개(16 KiB) | 루프 · 1스레드(종전) | 4,939 |
+| | CopyFileEx · 1스레드 | 3,076 |
+| | CopyFileEx · 4스레드 | 1,301 |
+| | CopyFileEx · 8스레드 | 1,780 |
+| | 루프 · 4스레드 | 1,193 |
+| 큰 파일 512 MiB | 루프(종전) | 5,603 |
+| | CopyFileEx 버퍼드 | 6,741 |
+| | CopyFileEx 비버퍼드 | 16,663 |
+
+- 읽기: 작은 파일은 **동시 4**가 최적(8은 탐색 비용으로 되레 느림 · `seek: Costly`) · 루프 4T ≈ CopyFileEx 4T. 큰 파일은 이 디스크에서 **비버퍼드가 3배 손해** · 버퍼드 CopyFileEx도 루프보다 느림 → 현재 기본(OS 복사 + 동시 작업 수)은 작은 파일에 유리 · 큰 파일 비버퍼드 문턱은 SSD/NVMe 측정(다른 PC)과 함께 봐야 결정(DR-31 ② 유지).
+- 재현: `bash scripts/perf-baseline.sh --copy`(이 회차는 벤치만 직접 실행 · 수치는 `target/perf/bench_copy_raw.txt`).
 
 ### 8-3. 2026-10-18 · v0.25.0(ee11c6d) · Windows · 체감 점검 착수(journal 10-18 §19)
 
