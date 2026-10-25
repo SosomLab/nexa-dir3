@@ -78,14 +78,18 @@ impl BulkItem {
     }
 }
 
-const KINDS: [(&str, &str); 6] = [
+const KINDS: [(&str, &str); 8] = [
     ("replace", "bulk.kind.replace"),
     ("replacerx", "bulk.kind.replaceRx"),
     ("insert", "bulk.kind.insert"),
     ("case", "bulk.kind.case"),
     ("number", "bulk.kind.number"),
     ("date", "bulk.kind.date"),
+    ("move", "bulk.kind.move"),
+    ("ext", "bulk.kind.ext"),
 ];
+/// 구간 이동 목적지(dir2 `bulk.destFront/destEnd`).
+const DESTS: [(&str, &str); 2] = [("front", "bulk.destFront"), ("end", "bulk.destEnd")];
 const SCOPES: [(&str, &str); 4] = [
     ("name", "bulk.scope.name"),
     ("nameext", "bulk.scope.nameext"),
@@ -163,6 +167,13 @@ struct Card {
     per_folder: Checkbox,
     date_kind: Combo,
     fmt: TextBox,
+    /// 구간 이동(dir2 고유 · T-162 노출 10-25): 시작(1기준) · 길이 · 목적지.
+    mv_start: TextBox,
+    mv_len: TextBox,
+    mv_dest: Combo,
+    /// 확장자 변경(dir2 고유): 원본(빈 = 모두) · 새 확장자.
+    ext_from: TextBox,
+    ext_to: TextBox,
     rect: Rect,
 }
 
@@ -176,6 +187,10 @@ impl Card {
         offset.set_text("0");
         let mut fmt = TextBox::new("");
         fmt.set_text(DEFAULT_DATE_FMT);
+        let mut mv_start = TextBox::new(tr("bulk.moveStart"));
+        mv_start.set_text("1");
+        let mut mv_len = TextBox::new(tr("bulk.moveLen"));
+        mv_len.set_text("1");
         Card {
             kind: combo_of(&KINDS, kind_idx),
             add: Button::new("+"),
@@ -203,8 +218,18 @@ impl Card {
             per_folder: Checkbox::new(tr("bulk.perFolder"), false),
             date_kind: combo_of(&DATES, 0),
             fmt,
+            mv_start,
+            mv_len,
+            mv_dest: combo_of(&DESTS, 0),
+            ext_from: TextBox::new(tr("bulk.extFrom")),
+            ext_to: TextBox::new(tr("bulk.extTo")),
             rect: Rect::default(),
         }
+    }
+
+    /// 대상(이름/확장자) 행이 있는 종류인가 — Move · ChangeExt는 대상 개념이 없다(줄기/확장자에 고정).
+    fn has_scope(&self) -> bool {
+        !matches!(self.kind_value().as_str(), "move" | "ext")
     }
 
     fn kind_value(&self) -> String {
@@ -220,6 +245,8 @@ impl Card {
             "case" => 1,
             "number" => 5,
             "date" => 4,
+            "move" => 2,
+            "ext" => 1,
             _ => 0,
         }
     }
@@ -335,11 +362,42 @@ impl Card {
                     },
                 })
             }
+            "move" => Some(RenameOp::Move {
+                start: self
+                    .mv_start
+                    .text()
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(1)
+                    .clamp(1, 999),
+                len: self
+                    .mv_len
+                    .text()
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(0)
+                    .min(999),
+                to_front: self.mv_dest.selected_value() == "front",
+            }),
+            "ext" => Some(RenameOp::ChangeExt {
+                from: self
+                    .ext_from
+                    .text()
+                    .trim()
+                    .trim_start_matches('.')
+                    .to_string(),
+                to: self
+                    .ext_to
+                    .text()
+                    .trim()
+                    .trim_start_matches('.')
+                    .to_string(),
+            }),
             _ => None,
         }
     }
 
-    /// 동작 → 폼(프리셋 복원 · `set_form_from_op` · Move/ChangeExt = None).
+    /// 동작 → 폼(프리셋 복원 · `set_form_from_op` · Move/ChangeExt 포함 10-25).
     fn from_op(op: &RenameOp) -> Option<Card> {
         let set_at = |c: &mut Card, at: &InsertAt| {
             c.offset.set_text(&at.offset.to_string());
@@ -411,7 +469,24 @@ impl Card {
                 set_at(&mut c, &spec.at);
                 c
             }
-            RenameOp::Move { .. } | RenameOp::ChangeExt { .. } => return None,
+            RenameOp::Move {
+                start,
+                len,
+                to_front,
+            } => {
+                let mut c = Card::new(6);
+                c.mv_start.set_text(&start.to_string());
+                c.mv_len.set_text(&len.to_string());
+                c.mv_dest
+                    .select_value(if *to_front { "front" } else { "end" });
+                c
+            }
+            RenameOp::ChangeExt { from, to } => {
+                let mut c = Card::new(7);
+                c.ext_from.set_text(from);
+                c.ext_to.set_text(to);
+                c
+            }
         })
     }
 
@@ -424,6 +499,7 @@ impl Card {
             &mut self.case_mode,
             &mut self.pad,
             &mut self.date_kind,
+            &mut self.mv_dest,
         ]
     }
 
@@ -438,6 +514,10 @@ impl Card {
             &mut self.prefix,
             &mut self.suffix,
             &mut self.fmt,
+            &mut self.mv_start,
+            &mut self.mv_len,
+            &mut self.ext_from,
+            &mut self.ext_to,
         ]
     }
 
@@ -1260,7 +1340,7 @@ impl BulkWin {
             }
             c.match_case.set_bounds(Rect::default(), &mut inv);
             c.per_folder.set_bounds(Rect::default(), &mut inv);
-            let rows = 2 + c.body_rows();
+            let rows = 1 + usize::from(c.has_scope()) + c.body_rows();
             let ch = inner_pad * 2 + rows as i32 * row_h;
             c.rect = Rect::new(cr.x, y, cw, ch);
             let x0 = cr.x + inner_pad;
@@ -1286,11 +1366,13 @@ impl BulkWin {
                 &mut inv,
             );
             ry += row_h;
-            // 행 2: 대상.
-            c.scope.set_scale(s);
-            c.scope
-                .set_bounds(Rect::new(field_x, ry, field_w, row_h - 4), &mut inv);
-            ry += row_h;
+            // 행 2: 대상(Move · ChangeExt는 없음 — 숨김).
+            if c.has_scope() {
+                c.scope.set_scale(s);
+                c.scope
+                    .set_bounds(Rect::new(field_x, ry, field_w, row_h - 4), &mut inv);
+                ry += row_h;
+            }
             let kind = c.kind_value();
             let half = (field_w - gap) / 2;
             let mut place = |ctl: &mut dyn Widget, x: i32, w: i32, ry: i32| {
@@ -1346,6 +1428,21 @@ impl BulkWin {
                     ry += row_h;
                     c.per_folder.set_scale(s);
                     place(&mut c.per_folder, field_x, field_w, ry);
+                }
+                "move" => {
+                    c.mv_start.set_scale(s);
+                    place(&mut c.mv_start, field_x, half, ry);
+                    c.mv_len.set_scale(s);
+                    place(&mut c.mv_len, field_x + half + gap, half, ry);
+                    ry += row_h;
+                    c.mv_dest.set_scale(s);
+                    place(&mut c.mv_dest, field_x, field_w, ry);
+                }
+                "ext" => {
+                    c.ext_from.set_scale(s);
+                    place(&mut c.ext_from, field_x, half, ry);
+                    c.ext_to.set_scale(s);
+                    place(&mut c.ext_to, field_x + half + gap, half, ry);
                 }
                 "date" => {
                     c.date_kind.set_scale(s);
@@ -1516,7 +1613,7 @@ impl BulkWin {
                 th.text,
             );
         }
-        let rows = 1 + card.body_rows() as i32;
+        let rows = i32::from(card.has_scope()) + card.body_rows() as i32;
         for i in 0..rows {
             let ry = ghost.y + inner + row_h * (i + 1);
             let fr = Rect::new(
@@ -2216,16 +2313,18 @@ impl BulkWin {
                 let kind = c.kind_value();
                 let mut ry = r.y + inner_pad + row_h;
                 // 다른 라벨과 같이 오른쪽 정렬(사용자 10-18 — 종전 왼쪽 정렬).
-                let apply_to = tr("bulk.lbl.applyTo");
-                let aw = dc.text_width(&apply_to);
-                dc.text(
-                    lx + label_w - self.s(6.0) - aw,
-                    ty(ry),
-                    clip,
-                    &apply_to,
-                    th.text_dim,
-                );
-                ry += row_h;
+                if c.has_scope() {
+                    let apply_to = tr("bulk.lbl.applyTo");
+                    let aw = dc.text_width(&apply_to);
+                    dc.text(
+                        lx + label_w - self.s(6.0) - aw,
+                        ty(ry),
+                        clip,
+                        &apply_to,
+                        th.text_dim,
+                    );
+                    ry += row_h;
+                }
                 let labels: Vec<&str> = match kind.as_str() {
                     "replace" => vec![
                         "bulk.lbl.mode",
@@ -2249,6 +2348,8 @@ impl BulkWin {
                         "bulk.lbl.wrap",
                         "bulk.lbl.fmt",
                     ],
+                    "move" => vec!["bulk.lbl.pos", "bulk.lbl.dest"],
+                    "ext" => vec!["bulk.lbl.ext"],
                     _ => vec![],
                 };
                 for k in labels {
@@ -2533,6 +2634,30 @@ mod tests {
         let text = br::serialize_ops(&w.ops());
         w.load_ops(&br::parse_ops(&text));
         assert_eq!(w.ops(), ops, "프리셋 직렬화 왕복");
+        // Move · ChangeExt 카드 노출(T-162 · 10-25): 폼 왕복 · 대상 행 없음 · 프리셋 왕복 · 미리보기("photo_a" → 2번째부터 3자 "hot"를 앞으로).
+        let ops2 = vec![
+            RenameOp::Move {
+                start: 2,
+                len: 3,
+                to_front: true,
+            },
+            RenameOp::ChangeExt {
+                from: "jpg".into(),
+                to: "jpeg".into(),
+            },
+        ];
+        w.load_ops(&ops2);
+        assert_eq!(w.cards.len(), 2);
+        assert_eq!(w.ops(), ops2);
+        assert!(w.cards.iter().all(|c| !c.has_scope()));
+        w.load_ops(&br::parse_ops(&br::serialize_ops(&w.ops())));
+        assert_eq!(w.ops(), ops2, "move/ext 프리셋 왕복");
+        assert!(
+            w.dump().contains("photo_a.jpg → hotpo_a.jpeg"),
+            "{}",
+            w.dump()
+        );
+        w.load_ops(&ops); // 뒤 단언(연번 미리보기 · 카드 드래그)은 원래 ops로.
         assert!(
             w.dump().contains("photo_a.jpg → [0005]photo_a.JPG"),
             "{}",
