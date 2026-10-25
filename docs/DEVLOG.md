@@ -2,6 +2,10 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-10-26
+
+- **빠른 필터 검색창 = nexa-ui 235 SearchBox 한 컨트롤 · 판정 = nexa-sql과 동일**(26b5f3f · 공백 낱말 전부 포함 · 한글 자모 연속 · 빠짐 = 부분열 퍼지 · 초성만 입력) · CONSUMER-CHANGES 235 d26dcbf → [10-26 §1](journal/2026-10-26.md)
+
 ## 2026-10-25
 
 - **회차 마감 정리**(사용자 지시 · 전수 485ace3 gate full 725/0 · T4 38/0 · DR-31 착수 항목 전부 구현 표 · STATUS/MILESTONES/TODO/CLAUDE.md 현 단계 최신화 · main = origin · 병합할 브랜치 없음) → [10-25 §38](journal/2026-10-25.md)
