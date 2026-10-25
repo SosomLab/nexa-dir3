@@ -10638,3 +10638,56 @@ fn manual_folder_size_command_queues_and_toasts() {
     ));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 이름 바꾼 폴더의 펼침 유지(WINB-033 `rename_expanded` · OPS-082 · 10-25): 펼친 `sub`를 `sub2`로 바꾸면 다시 읽은 뒤에도 펼쳐져 있고 안의 항목이
+/// 보인다 · 선택 = 새 이름 · 잘못된 이름(`..`)은 상태줄 안내만.
+#[test]
+fn rename_keeps_expanded_subfolders() {
+    let (mut app, dir) = fixture("rnexp");
+    let sub = dir.join("sub");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let row_of = |app: &App, p: &std::path::Path| {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .find(|&i| src.row_path(i).as_deref() == Some(p))
+            .expect("row")
+    };
+    let r = row_of(&app, &sub);
+    assert!(app.panels[0].rows_mut().source_mut().expand_row(r));
+    assert!(
+        app.panels[0].rows().source().len() > 3,
+        "펼침 = inner.rs 보임"
+    );
+    app.apply_rename(0, r, "sub2");
+    let sub2 = dir.join("sub2");
+    assert!(sub2.is_dir() && !sub.exists());
+    let expanded = app.panels[0].rows().source().expanded_dirs(10);
+    assert!(
+        expanded.iter().any(|p| p == &sub2),
+        "펼침 유지: {expanded:?}"
+    );
+    assert!(
+        app.panels[0]
+            .rows()
+            .source()
+            .row_path(row_of(&app, &sub2) + 1)
+            .is_some_and(|p| p.starts_with(&sub2)),
+        "안의 항목이 보인다"
+    );
+    assert_eq!(
+        app.panels[0].selected_paths_in_view_order(),
+        vec![sub2.clone()],
+        "선택 = 새 이름"
+    );
+    // 잘못된 이름 = 상태줄 안내 · 그대로.
+    app.apply_rename(0, row_of(&app, &sub2), "..");
+    assert!(sub2.is_dir());
+    assert!(
+        app.statusbar.left().contains("rename failed"),
+        "{}",
+        app.statusbar.left()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -2456,6 +2456,26 @@ impl Panel {
         self.reopen_with(false, inv);
     }
 
+    /// 이름을 바꾼 뒤 다시 읽기(WINB-033 · 10-25): 활성 탭은 펼침·선택의 접두를 새 이름으로 바꿔 복원(동기) · 다른 탭은 낡음.
+    pub(crate) fn reopen_renamed(&mut self, old: &Path, new: &Path, inv: &mut Invalidations) {
+        let active = self.active;
+        for (i, tab) in self.tabs.iter_mut().enumerate() {
+            if i != active {
+                tab.stale = true;
+            }
+        }
+        let tab = &mut self.tabs[active];
+        if tab.pending.is_some() || tab.reloading.is_some() {
+            tab.stale = true;
+        } else {
+            let (caret, sr, sx) = (tab.rows.caret(), tab.rows.scroll_row(), tab.rows.scroll_x());
+            tab.rows.source_mut().reload_renamed(old, new);
+            tab.rows.restore_view(caret, sr, sx, inv);
+            tab.stale = false;
+        }
+        self.sync_chrome(inv);
+    }
+
     /// 감시 통지로 다시 읽기(10-18 결정 ③): `reopen` + 신선 스탬프 지움 — 감시가 읽은 것은 억제 창을 열지 않는다
     /// (바깥에서 변경이 이어지면 통지마다 종전대로 다시 읽는다).
     pub(crate) fn reopen_from_watch(&mut self, inv: &mut Invalidations) {

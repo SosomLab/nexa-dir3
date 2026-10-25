@@ -203,6 +203,27 @@ pub(crate) struct ReloadPlan {
     selected: Vec<String>,
 }
 
+impl ReloadPlan {
+    /// 펼침·선택 경로의 `old` 접두(그 자신 또는 하위)를 `new`로 바꾼다(순수).
+    fn remap_prefix(&mut self, old: &Path, new: &Path) {
+        let (o, n) = (
+            old.to_string_lossy().into_owned(),
+            new.to_string_lossy().into_owned(),
+        );
+        let remap = |s: &mut String| {
+            if *s == o {
+                *s = n.clone();
+            } else if let Some(rest) = s.strip_prefix(&o) {
+                if rest.starts_with(['\\', '/']) {
+                    *s = format!("{n}{rest}");
+                }
+            }
+        };
+        self.expanded.iter_mut().for_each(remap);
+        self.selected.iter_mut().for_each(remap);
+    }
+}
+
 /// 만든 트리 + 열거 전 폴더 수정 시각([`TreeSource::reload_build`] → [`TreeSource::reload_apply`]).
 #[derive(Debug)]
 pub(crate) struct ReloadBuilt {
@@ -449,6 +470,14 @@ impl TreeSource {
             expanded,
             selected,
         }
+    }
+
+    /// 이름을 바꾼 뒤 다시 읽기(dir2 WINB-033 `rename_expanded` · OPS-082 · 10-25): 펼침·선택 스냅숏의 `old` 접두를 `new`로 바꿔 복원한다 —
+    /// 종전 `reload`는 옛 경로로 복원해 이름 바꾼 폴더 안의 펼침이 접혔다.
+    pub(crate) fn reload_renamed(&mut self, old: &Path, new: &Path) {
+        let mut plan = self.reload_plan();
+        plan.remap_prefix(old, new);
+        self.reload_apply(Self::reload_build(&plan));
     }
 
     /// 트리 만들기(열거 · 정렬 · 펼침 · 선택 복원) — 폴더 수정 시각은 **열거 전에** 잰다(열거 중 바뀐 것은 스탬프와 달라져

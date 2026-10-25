@@ -773,6 +773,7 @@ impl App {
             crate::platform::hides_shortcut_ext(),
         );
         let mut inv = Invalidations::default();
+        let mut note: Option<String> = None;
         match ndir_ops::rename(&path, new_name) {
             Ok(new_path) => {
                 if new_path != path {
@@ -782,21 +783,25 @@ impl App {
                         new_path.clone(),
                         desc.clone(),
                     )));
-                    self.statusbar.set_left(&desc, &mut inv);
+                    note = Some(desc);
                 }
                 self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
                 self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
+                                         // 펼침·선택을 새 이름으로 이어서 복원(WINB-033 `rename_expanded` · 10-25 — 종전엔 이름 바꾼 폴더 안이 접혔다).
                 for p in &mut self.panels {
-                    p.reopen(&mut inv);
+                    p.reopen_renamed(&path, &new_path, &mut inv);
                 }
                 self.panels[panel].select_path(&new_path, &mut inv);
             }
             Err(e) => {
-                self.statusbar
-                    .set_left(&trf("rename.fail", &[&ops_err_text(&e)]), &mut inv);
+                note = Some(trf("rename.fail", &[&ops_err_text(&e)]));
             }
         }
+        // 상태줄 안내는 갱신 **뒤에**(갱신이 왼쪽 글을 덮는다 — 종전엔 성공/실패 문구가 보이지 않았다 · 10-25).
         self.update_status();
+        if let Some(n) = note {
+            self.statusbar.set_left(&n, &mut inv);
+        }
         self.redraw();
     }
 
