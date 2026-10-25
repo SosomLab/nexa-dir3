@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **툴바 툴팁 T3**(089ab72 · T-150 14/19 + 사유 5 종결) · **터미널 cd `/d` 판정 = 프로그램 이름 cmd**(6aed495 · T-134 남김) · CI d9214e2 ✓(T4 memory-window PASS) → [10-25 §25](journal/2026-10-25.md)
+
 - **메모리 창 기동 명령 · 덤프**(d9214e2 · `view.memory` · `memwin` 덤프 · T4 memory-window · T-93 남김 ✅) · CI 62301c3/a809110 ✓ → [10-25 §24](journal/2026-10-25.md)
 
 - **일괄 이름 바꾸기 창 묶음**(4d16d9b Move/ChangeExt 카드 · fa7beae 적용 열 전체 토글 · db12cda 크기 조절 · 62301c3 충돌 행 경고색 · a809110 Tab 순회) · nexa-ui 230 `RowSource::row_mark`(CONSUMER-CHANGES dbd7c6e) → [10-25 §23](journal/2026-10-25.md)
