@@ -165,9 +165,25 @@ impl App {
                 let prefs = self.font_prefs();
                 let font = Rc::clone(&self.ui_font);
                 let mono = self.mono_font.clone();
-                let mut dc =
-                    RasterCtx::with_font_set(&mut gfx, self.font_set(&font, mono.as_deref()), s)
-                        .with_fonts(prefs);
+                // 영역별 글꼴(GAP-015 · 10-25): 목록·상태줄·대화 본문은 FontSet 슬롯 · 메뉴·대화상자는 RasterCtx 확장(nexa-ui 232).
+                let (list_f, status_f, menu_f, dialog_f) = (
+                    self.list_font.clone(),
+                    self.status_font.clone(),
+                    self.menu_font.clone(),
+                    self.dialog_font.clone(),
+                );
+                let (menu_p, dialog_p) = self.area_prefs();
+                let fonts = nexa_ctl::raster::FontSet {
+                    base: &font,
+                    peerlist: list_f.as_deref(),
+                    message: dialog_f.as_deref(),
+                    status: status_f.as_deref(),
+                    mono: mono.as_deref(),
+                };
+                let mut dc = RasterCtx::with_font_set(&mut gfx, fonts, s)
+                    .with_fonts(prefs)
+                    .with_area_fonts(menu_f.as_deref(), dialog_f.as_deref())
+                    .with_area_prefs(Some(menu_p), Some(dialog_p));
                 match &rects {
                     None => {
                         self.paint_into(&mut dc, wi, hi, s);

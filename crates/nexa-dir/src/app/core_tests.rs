@@ -11185,3 +11185,47 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 영역별 글꼴(GAP-015 · DR-31 ⑤ · 10-25): 빈 값 = UI 글꼴(None) · 이름을 주면 그 글꼴(실제 이름 탐색 · 시스템 사슬 폴백)이 목록/상태줄/메뉴/대화상자
+/// 자리에 들어가고 바꾸면 즉시 다시 읽는다 · 재시작 목록에 없음.
+#[test]
+fn area_font_settings_load_fonts_and_apply_immediately() {
+    let (mut app, dir) = fixture("areafonts");
+    for k in [
+        "list.font_face",
+        "statusbar.font_face",
+        "ui.menu_font_face",
+        "ui.dialog_font_face",
+    ] {
+        assert!(!crate::app::settings::NEEDS_RESTART.contains(&k), "{k}");
+    }
+    assert!(
+        app.list_font.is_none() && app.menu_font.is_none(),
+        "빈 값 = UI 글꼴"
+    );
+    {
+        let ui = Rc::clone(&app.ui_font);
+        let fs = app.font_set(&ui, None);
+        assert!(fs.peerlist.is_none() && fs.status.is_none() && fs.message.is_none());
+    }
+    let _ = app.settings.set("list.font_face", "Segoe UI");
+    app.after_setting_changed("list.font_face");
+    assert!(
+        app.list_font.is_some(),
+        "이름 = 글꼴(없는 이름도 시스템 사슬 폴백)"
+    );
+    let _ = app.settings.set("ui.menu_font_face", "Consolas");
+    app.after_setting_changed("ui.menu_font_face");
+    assert!(app.area_fonts().0.is_some() && app.area_fonts().1.is_none());
+    {
+        let ui = Rc::clone(&app.ui_font);
+        let fs = app.font_set(&ui, None);
+        assert!(fs.peerlist.is_some() && fs.status.is_none());
+    }
+    let (menu_p, dialog_p) = app.area_prefs();
+    assert!(menu_p.size > 0.0 && dialog_p.size > 0.0);
+    let _ = app.settings.reset("list.font_face");
+    app.after_setting_changed("list.font_face");
+    assert!(app.list_font.is_none(), "되돌림 = UI 글꼴");
+    let _ = std::fs::remove_dir_all(&dir);
+}

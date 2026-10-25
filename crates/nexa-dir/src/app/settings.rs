@@ -7,13 +7,7 @@
 use crate::*;
 
 /// 바꾸면 다시 시작해야 반영되는 키(의도된 목록 — 그 밖의 `false`는 누락).
-pub(crate) const NEEDS_RESTART: &[&str] = &[
-    "ui.font_face",
-    "ui.menu_font_face",
-    "list.font_face",
-    "statusbar.font_face",
-    "ui.dialog_font_face",
-];
+pub(crate) const NEEDS_RESTART: &[&str] = &["ui.font_face"];
 
 /// 글자 래스터 값(설정 → nexa-gfx 전역에 넘길 값 · 순수 · docs/15 §2-8: 시험은 전역이 아니라 이 값을 단언한다 · OS별 기본은
 /// `OS_DEFAULTS`가 정하므로 절대값을 가정하지 않는다).
@@ -229,6 +223,11 @@ impl App {
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             // 글자 래스터(GAP-015 · DR-31 ⑤ · 10-25): 종전엔 레지스트리에만 있고 읽는 곳이 없어 바꿔도 효과가 없었다 → 즉시 반영.
             k if k.starts_with("ui.text_") => self.apply_text_raster(),
+            // 영역별 글꼴(GAP-015 · DR-31 ⑤ · 10-25): 종전 재시작 목록 → 즉시 다시 읽기.
+            "list.font_face"
+            | "statusbar.font_face"
+            | "ui.menu_font_face"
+            | "ui.dialog_font_face" => self.apply_area_fonts(),
             "list.sort_click_adds" => self.apply_sort_click_setting(),
             "list.filter_case" | "list.filter_word" | "list.filter_regex" => {
                 self.apply_filter_opts_setting();

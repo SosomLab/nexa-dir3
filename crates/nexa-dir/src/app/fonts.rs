@@ -150,15 +150,50 @@ impl App {
         }
     }
 
-    /// 얼굴 묶음 — 기본 = UI 글꼴 · Mono = 고정폭(없으면 기본으로 폴백).
-    pub(crate) fn font_set<'f>(&self, ui: &'f Font, mono: Option<&'f Font>) -> FontSet<'f> {
+    /// 얼굴 묶음 — 기본 = UI 글꼴 · 목록 = `list.font_face` · 상태줄 = `statusbar.font_face` · 대화 본문 = `ui.dialog_font_face`(없으면 기본) ·
+    /// Mono = 고정폭(없으면 기본으로 폴백). 메뉴·대화상자 슬롯 얼굴은 [`Self::area_fonts`](RasterCtx 확장 · nexa-ui 232).
+    #[allow(dead_code)] // 주 창은 paint.rs가 같은 모양을 지역 Rc로 조립한다(빌림 수명) · 시험 · 보조 창 후속
+    pub(crate) fn font_set<'f>(&'f self, ui: &'f Font, mono: Option<&'f Font>) -> FontSet<'f> {
         FontSet {
             base: ui,
-            peerlist: None,
-            message: None,
-            status: None,
+            peerlist: self.list_font.as_deref(),
+            message: self.dialog_font.as_deref(),
+            status: self.status_font.as_deref(),
             mono,
         }
+    }
+
+    /// 메뉴 · 대화상자 얼굴(RasterCtx `with_area_fonts` · `None` = UI 글꼴).
+    #[allow(dead_code)] // 시험 · 보조 창 후속
+    pub(crate) fn area_fonts(&self) -> (Option<&Font>, Option<&Font>) {
+        (self.menu_font.as_deref(), self.dialog_font.as_deref())
+    }
+
+    /// 메뉴 · 대화상자 크기(`ui.menu_font_size` · `ui.dialog_font_size` · em → px · RasterCtx `with_area_prefs`).
+    pub(crate) fn area_prefs(&self) -> (SlotFont, SlotFont) {
+        (
+            SlotFont::plain(self.font_px("ui.menu_font_size")),
+            SlotFont::plain(self.font_px("ui.dialog_font_size")),
+        )
+    }
+
+    /// 영역 글꼴 설정값(`<key>` = 글꼴 이름 · 빈 값 = UI 글꼴 → `None`) → 글꼴(nexa-ui 152 실제 이름 탐색 + 시스템 사슬 폴백).
+    pub(crate) fn load_face_font(settings: &Settings, key: &str) -> Option<Rc<Font>> {
+        let face = settings.get(key).unwrap_or("").trim();
+        if face.is_empty() {
+            return None;
+        }
+        nexa_font::ui_font(Some(face)).map(|l| Rc::new(l.font))
+    }
+
+    /// 영역별 글꼴 설정이 바뀌면 다시 읽고 전체 다시 그린다(종전 = 재시작 필요 · GAP-015 · 10-25).
+    pub(crate) fn apply_area_fonts(&mut self) {
+        self.list_font = App::load_face_font(&self.settings, "list.font_face");
+        self.status_font = App::load_face_font(&self.settings, "statusbar.font_face");
+        self.menu_font = App::load_face_font(&self.settings, "ui.menu_font_face");
+        self.dialog_font = App::load_face_font(&self.settings, "ui.dialog_font_face");
+        self.damage.borrow_mut().full = true;
+        self.redraw();
     }
 
     /// ★ 플래시 메시지 글꼴(nexa-sql `apply_flash_font` · 사용자 10-07): `ui.flash_font_face` 비면 UI 글꼴 = `None` · 이름이면 그 얼굴

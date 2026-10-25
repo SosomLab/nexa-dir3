@@ -302,7 +302,11 @@ impl App {
             let ui_px = self.font_px("ui.font_size");
             match self.dlg.handle(event) {
                 DlgAction::Paint => {
-                    let font = Rc::clone(&self.ui_font);
+                    // 대화상자 글꼴(`ui.dialog_font_face` · GAP-015) — 없으면 UI 글꼴.
+                    let font = self
+                        .dialog_font
+                        .clone()
+                        .unwrap_or_else(|| Rc::clone(&self.ui_font));
                     self.dlg.paint(&font, &self.theme, ui_px);
                 }
                 DlgAction::Done { id, text } => {

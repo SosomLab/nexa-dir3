@@ -245,6 +245,12 @@ struct App {
     mono_font: Option<Rc<Font>>,
     /// ★ 플래시 메시지 글꼴(설정 `ui.flash_font_face` · None = UI 글꼴 · nexa-sql 10-07 차용).
     flash_font: Option<Rc<Font>>,
+    /// 영역별 글꼴(GAP-015 · DR-31 ⑤ · 10-25): 목록(`list.font_face`) · 상태줄(`statusbar.font_face`) · 메뉴(`ui.menu_font_face`) ·
+    /// 대화상자(`ui.dialog_font_face`) — `None` = UI 글꼴. 설정이 바뀌면 [`App::apply_area_fonts`]가 다시 읽는다.
+    list_font: Option<Rc<Font>>,
+    status_font: Option<Rc<Font>>,
+    menu_font: Option<Rc<Font>>,
+    dialog_font: Option<Rc<Font>>,
     /// ★ 주 창 순간 메시지(nexa-sql 플래시 꼴 · `app/flash.rs` · 10-18).
     flash: flashmsg::FlashBox,
     /// 직전 그리기에서 메뉴바가 열려 있었는가 — 닫힘 → 열림 전이에서 OS 테마·언어를 다시 읽어 메뉴 라벨을 갱신한다(사용자 10-07).
@@ -731,6 +737,10 @@ impl App {
             toasts,
             panel_toasts,
             flash_font: App::load_flash_font(&settings),
+            list_font: App::load_face_font(&settings, "list.font_face"),
+            status_font: App::load_face_font(&settings, "statusbar.font_face"),
+            menu_font: App::load_face_font(&settings, "ui.menu_font_face"),
+            dialog_font: App::load_face_font(&settings, "ui.dialog_font_face"),
             flash: flashmsg::FlashBox::new(),
             menu_was_open: false,
             settings,
