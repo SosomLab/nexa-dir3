@@ -792,9 +792,8 @@ impl ContextMenuProvider for XdgMenu {
             "xdg.showin".into(),
             ndir_i18n::tr("ctx.showInFileManager"),
         ));
-        if st.archiver.is_some() {
-            out.push(item("xdg.compress".into(), ndir_i18n::tr("ctx.compress")));
-        }
+        // 압축 = 항상(DR-31 ⑳ⓑ · 10-25): 외부 아카이버가 있으면 그것으로 · 없으면 호스트의 내장 zip(`has_external_archiver`).
+        out.push(item("xdg.compress".into(), ndir_i18n::tr("ctx.compress")));
         if let Some(sub) = self.scripts_item() {
             out.push(sub);
         }
@@ -852,6 +851,9 @@ impl ContextMenuProvider for XdgMenu {
     }
 
     /// 우클릭 드래그 드롭 메뉴(10-18): 노틸러스 스크립트 ▸ — 작업 폴더 = 놓은 폴더(노틸러스 규약 = 현재 폴더 · 선택 = 끌고 온 것들).
+    fn has_external_archiver(&self) -> bool {
+        self.state().archiver.is_some()
+    }
     fn drop_items(&self, _dest: &Path, _paths: &[PathBuf]) -> Vec<ShellMenuItem> {
         self.scripts_item().into_iter().collect()
     }

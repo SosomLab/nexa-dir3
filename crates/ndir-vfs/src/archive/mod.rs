@@ -35,6 +35,7 @@ pub mod sevenz;
 pub mod stream;
 pub mod tar;
 pub mod zip;
+pub mod zipwrite;
 
 /// 목록 항목 상한(초과 = `truncated` 표시 — 창/그리드 보호).
 pub const MAX_ENTRIES: usize = 50_000;

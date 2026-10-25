@@ -1041,6 +1041,11 @@ impl App {
                 }
             }
             "ctx.loading" => {}
+            // Linux "압축"인데 외부 아카이버가 없으면 **내장 zip**(DR-31 ⑳ⓑ · 10-25 · T-187) — 포트에 넘기지 않는다.
+            "xdg.compress" if !self.platform.ctxmenu.has_external_archiver() => {
+                let sel = self.panels[panel].selected_paths();
+                self.start_zip(panel, sel);
+            }
             other if ndir_settings::command(other).is_none() => {
                 // 셸 항목(`shell:<id>` · 가짜 `fake.*`) = 플랫폼 포트 실행. 배경 메뉴면 폴더 기준.
                 // 비동기 실행을 지원하면(Windows 메뉴 스레드 — 속성 창 같은 모달이 UI를 붙잡지 않는다) 결과는 틱에서, 아니면 동기.

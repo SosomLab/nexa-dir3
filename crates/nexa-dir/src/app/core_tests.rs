@@ -11229,3 +11229,46 @@ fn area_font_settings_load_fonts_and_apply_immediately() {
     assert!(app.list_font.is_none(), "되돌림 = UI 글꼴");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 내장 zip(DR-31 ⑳ⓑ · 10-25 · T-187): 우클릭 "압축"(`xdg.compress`)이 외부 아카이버 없는 포트(가짜 = 기본 false)에서 내장 작업으로 가고
+/// 작업 스레드가 끝나면 틱이 수거 — 같은 폴더에 `<이름>.zip` · 기존 풀기 엔진으로 열린다 · 새 zip이 선택된다.
+#[test]
+fn builtin_zip_compresses_selection_when_no_external_archiver() {
+    let (mut app, dir) = fixture("zipjob");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::create_dir_all(dir.join("pack/inner")).unwrap();
+    std::fs::write(dir.join("pack/one.txt"), b"one").unwrap();
+    std::fs::write(dir.join("pack/inner/two.bin"), vec![3u8; 5000]).unwrap();
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&dir.join("pack"), &mut inv);
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("xdg.compress");
+    assert!(app.zip_job.is_some(), "내장 작업 시작");
+    let deadline = Instant::now() + std::time::Duration::from_secs(20);
+    while app.zip_tick() {
+        assert!(Instant::now() < deadline, "압축이 끝나지 않음");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let zip = dir.join("pack.zip");
+    assert!(zip.is_file(), "{zip:?}");
+    let out = dir.join("unz");
+    let rep = ndir_vfs::archive::extract::extract(
+        &zip,
+        &out,
+        &mut |_| {},
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!((rep.files, rep.dirs), (2, 2), "{rep:?}");
+    assert_eq!(
+        std::fs::read(out.join("pack/inner/two.bin")).unwrap().len(),
+        5000
+    );
+    assert_eq!(
+        app.panels[0].selected_paths(),
+        vec![zip],
+        "끝나면 새 zip을 가리킨다"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

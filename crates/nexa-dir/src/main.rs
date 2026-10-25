@@ -397,6 +397,8 @@ struct App {
     hash_job: Option<app::checksum::HashJob>,
     /// 압축 풀기 작업(T-169 · 전송과 같은 슬롯).
     extract_job: Option<app::extract::ExtractJob>,
+    /// 내장 zip 압축 작업(DR-31 ⑳ⓑ · 10-25 · 풀기와 같은 슬롯 규칙).
+    zip_job: Option<app::zip::ZipJob>,
     /// 차례를 기다리는 압축 파일(경로 · 여기에?) — 여러 개 풀기(10-25 · T-187 한계 해소).
     extract_queue: Vec<(PathBuf, bool)>,
     /// 여러 개 풀기의 (지금 번호 · 전체) — 1개짜리면 (0, 0).
@@ -831,6 +833,7 @@ impl App {
             open_hash: false,
             hash_job: None,
             extract_job: None,
+            zip_job: None,
             extract_queue: Vec::new(),
             extract_seq: (0, 0),
             dupes_win: dupes_win::DupesWin::new(),

@@ -41,6 +41,7 @@ mod toasts;
 mod toolfloat;
 pub(crate) mod watch;
 mod windows;
+pub(crate) mod zip;
 
 #[cfg(test)]
 mod core_tests;

@@ -256,6 +256,11 @@ pub(crate) trait ContextMenuProvider {
     fn poll(&self) -> Option<MenuEvent> {
         None
     }
+    /// 이 포트가 "압축" 항목(`xdg.compress`)을 **외부 아카이버**로 처리할 수 있는가. false(기본)면 호스트가 내장 zip 쓰기로
+    /// 처리한다(DR-31 ⑳ⓑ · 10-25). Windows/macOS는 셸 메뉴가 자체 항목을 내므로 해당 없음.
+    fn has_external_archiver(&self) -> bool {
+        false
+    }
     /// 준비분 폐기(폴더 내용이 바뀜). 기본 = 무시.
     fn invalidate(&self) {}
     /// 진행 중인 구축/실행이 있는가(호스트가 틱을 유지). 기본 = 없음.
