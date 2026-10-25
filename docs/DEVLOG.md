@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **회차 마감 정리**(사용자 지시 · 전수 485ace3 gate full 725/0 · T4 38/0 · DR-31 착수 항목 전부 구현 표 · STATUS/MILESTONES/TODO/CLAUDE.md 현 단계 최신화 · main = origin · 병합할 브랜치 없음) → [10-25 §38](journal/2026-10-25.md)
+
 - **드롭 메뉴 셸 항목 비동기**(485ace3 · 7-Zip 등 실행 중에도 창 그려짐) — **DR-31 착수 항목 전부 완료** · 보류 4건 + 고속 복사 측정은 그대로 · 태그 전 WiX 필요 · STATUS 갱신 → [10-25 §37](journal/2026-10-25.md)
 
 - **Linux 내장 zip 압축**(94ff8fa · 외부 아카이버 없으면 zipwrite 작업 스레드 + 진행 창 · CI ✓) · 협업 검토 3건 → eaddde5(UTF-8 비트 11 단언 · store 명시 · 4 GiB 쓰기 전 판정) → [10-25 §36](journal/2026-10-25.md)
