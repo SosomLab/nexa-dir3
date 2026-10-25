@@ -15,8 +15,53 @@ pub(crate) fn copy_formats(value: &str) -> (bool, bool) {
     }
 }
 
+/// Windows Terminal 색 구성표 이름 → 내장 스킴 id(순수 · T-101): 소문자 · 빈칸/밑줄 → `-` · "Campbell Powershell" → campbell · 내장에 없으면 None.
+pub(crate) fn wt_scheme_id(name: &str) -> Option<&'static str> {
+    let norm: String = name
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| if c == ' ' || c == '_' { '-' } else { c })
+        .collect();
+    let norm = norm.strip_suffix("-powershell").unwrap_or(&norm);
+    ndir_term::scheme(norm).map(|s| s.id)
+}
+
+/// Windows Terminal `commandline` → 셸 사양(순수 · T-101): 첫 낱말 = 프로그램(후보 이름/파일명과 맞으면 그 후보 경로 · 아니면 실제 파일일 때만) ·
+/// 나머지 = 인자(따옴표 묶음 유지). 맞는 것이 없으면 None(자동 탐지로).
+pub(crate) fn wt_commandline_spec(cmd: &str, cands: &[ShellSpec]) -> Option<ShellSpec> {
+    let words = crate::pathexpand::words(cmd);
+    let (prog, args) = words.split_first()?;
+    let stem = std::path::Path::new(prog)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let program = cands
+        .iter()
+        .find(|c| {
+            c.program
+                .file_stem()
+                .is_some_and(|s| s.to_string_lossy().to_ascii_lowercase() == stem)
+        })
+        .map(|c| c.program.clone())
+        .or_else(|| {
+            let p = PathBuf::from(prog);
+            p.is_file().then_some(p)
+        })?;
+    Some(ShellSpec {
+        label: program
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| prog.clone()),
+        program,
+        args: args.to_vec(),
+    })
+}
+
 impl App {
     /// 설정 `term.shell`(빈 값 = 자동 탐지 · 아니면 후보 중 파일명/라벨 일치 · 없으면 그 경로 그대로).
+    /// 빈 값 + "기본 터미널 따르기"가 켜져 있고 Windows Terminal 기본 프로필에 `commandline`이 있으면 **그 명령**(프로그램 + 인자 · T-101 "시작 명령" ·
+    /// 10-25) — 프로그램이 후보 이름이거나 실제 파일일 때만 · 아니면 자동 탐지.
     pub(crate) fn term_shell(&self) -> Option<ShellSpec> {
         let want = self
             .settings
@@ -25,6 +70,17 @@ impl App {
             .trim()
             .to_string();
         let cands = self.platform.shell.candidates();
+        if want.is_empty() && self.settings.flag("term.follow_windows_terminal") {
+            if let Some(cmd) = self
+                .wt_profile
+                .as_ref()
+                .and_then(|w| w.commandline.as_deref())
+            {
+                if let Some(spec) = wt_commandline_spec(cmd, &cands) {
+                    return Some(spec);
+                }
+            }
+        }
         if want.is_empty() {
             return cands.into_iter().next();
         }
@@ -50,10 +106,25 @@ impl App {
         cands.into_iter().next()
     }
 
-    /// 터미널 팔레트(설정 `term.theme`/`theme_dark`/`theme_light` + 앱 테마 — dir2 09-04 규칙).
+    /// 터미널 팔레트(설정 `term.theme`/`theme_dark`/`theme_light` + 앱 테마 — dir2 09-04 규칙). `term.theme`이 `system`이고 "기본 터미널
+    /// 따르기"가 켜져 있으며 Windows Terminal 기본 프로필의 `colorScheme`이 내장 스킴 이름과 맞으면 **그 스킴**(T-101 "색 구성표" · 10-25) —
+    /// 사용자가 테마를 고르면(`dark`/`light`/스킴 id) 그것이 우선.
     pub(crate) fn term_palette(&self) -> ndir_term::TermPalette {
+        let selector = self.settings.get("term.theme").unwrap_or("system");
+        if selector == "system" && self.settings.flag("term.follow_windows_terminal") {
+            if let Some(id) = self
+                .wt_profile
+                .as_ref()
+                .and_then(|w| w.scheme.as_deref())
+                .and_then(wt_scheme_id)
+            {
+                if let Some(s) = ndir_term::scheme(id) {
+                    return s.palette;
+                }
+            }
+        }
         ndir_term::resolve_scheme(
-            self.settings.get("term.theme").unwrap_or("system"),
+            selector,
             self.settings.get("term.theme_dark").unwrap_or(""),
             self.settings.get("term.theme_light").unwrap_or(""),
             self.theme.is_dark,

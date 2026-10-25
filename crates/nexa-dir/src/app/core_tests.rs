@@ -10741,3 +10741,53 @@ fn watch_covers_git_dir_of_shown_repo() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 터미널이 Windows Terminal 기본 프로필을 따른다(T-101 색 구성표 · 시작 명령 · 10-25): `term.theme = system` + 따르기 켬 + 프로필 colorScheme이
+/// 내장 스킴과 맞으면 그 팔레트 · 사용자가 스킴을 고르면 그것 · 따르기 끄면 앱 테마 규칙 · `commandline`은 `term.shell`이 비었을 때만 · 프로그램이
+/// 실제 파일(또는 후보)이면 인자까지 · 모르는 프로그램 = 자동 탐지.
+#[test]
+fn terminal_follows_windows_terminal_scheme_and_commandline() {
+    use crate::app::term::{wt_commandline_spec, wt_scheme_id};
+    assert_eq!(wt_scheme_id("One Half Dark"), Some("one-half-dark"));
+    assert_eq!(wt_scheme_id("Campbell Powershell"), Some("campbell"));
+    assert_eq!(wt_scheme_id("solarized_light"), Some("solarized-light"));
+    assert_eq!(wt_scheme_id("Vintage"), None);
+    let (mut app, dir) = fixture("wtfollow");
+    let exe = std::env::current_exe().expect("exe");
+    app.wt_profile = Some(crate::platform::WtProfile {
+        faces: Vec::new(),
+        size_pt: None,
+        scheme: Some("One Half Dark".into()),
+        commandline: Some(format!("\"{}\" -NoLogo -x", exe.display())),
+    });
+    let _ = app.settings.set("term.follow_windows_terminal", "on");
+    let _ = app.settings.set("term.theme", "system");
+    let one = ndir_term::scheme("one-half-dark").expect("scheme").palette;
+    assert_eq!(app.term_palette(), one, "system + 따르기 = WT 스킴");
+    let _ = app.settings.set("term.theme", "dracula");
+    assert_eq!(
+        app.term_palette(),
+        ndir_term::scheme("dracula").unwrap().palette,
+        "고른 스킴 우선"
+    );
+    let _ = app.settings.set("term.theme", "system");
+    let _ = app.settings.set("term.follow_windows_terminal", "off");
+    assert_ne!(
+        app.term_palette(),
+        one,
+        "따르기 끔 = 앱 테마 규칙(다크 기본 campbell)"
+    );
+    // 시작 명령.
+    let _ = app.settings.set("term.follow_windows_terminal", "on");
+    let _ = app.settings.set("term.shell", "");
+    let spec = app.term_shell().expect("shell");
+    assert_eq!(spec.program, exe);
+    assert_eq!(spec.args, vec!["-NoLogo".to_string(), "-x".to_string()]);
+    let cands = app.platform.shell.candidates();
+    assert!(
+        wt_commandline_spec("no-such-program.exe -a", &cands).is_none(),
+        "모르는 프로그램 = 자동 탐지"
+    );
+    assert!(wt_commandline_spec("", &cands).is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}

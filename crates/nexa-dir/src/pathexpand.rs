@@ -286,7 +286,7 @@ fn glob(p: &[char], s: &[char]) -> bool {
 }
 
 /// 명령 줄을 낱말로(따옴표로 묶은 것은 한 낱말 · 따옴표는 벗긴다 · 괄호 안(`$(…)` 중첩)의 빈칸은 낱말을 나누지 않는다).
-fn words(s: &str) -> Vec<String> {
+pub(crate) fn words(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quote: Option<char> = None;
