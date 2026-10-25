@@ -15,6 +15,31 @@ pub(crate) const NEEDS_RESTART: &[&str] = &[
     "ui.dialog_font_face",
 ];
 
+/// 글자 래스터 값(설정 → nexa-gfx 전역에 넘길 값 · 순수 · docs/15 §2-8: 시험은 전역이 아니라 이 값을 단언한다 · OS별 기본은
+/// `OS_DEFAULTS`가 정하므로 절대값을 가정하지 않는다).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TextRaster {
+    pub gdi: bool,
+    pub hint: bool,
+    pub snap: bool,
+    /// 획 두께 보강(%/100 · 0.0~0.6).
+    pub weight: f32,
+    /// 대비 감마(%/100 · 0.5~3.0).
+    pub contrast: f32,
+}
+
+impl TextRaster {
+    pub(crate) fn from_settings(s: &Settings) -> Self {
+        Self {
+            gdi: s.flag("ui.text_gdi"),
+            hint: s.flag("ui.text_hint"),
+            snap: s.flag("ui.text_snap"),
+            weight: (s.int("ui.text_weight") as f32 / 100.0).clamp(0.0, 0.6),
+            contrast: (s.int("ui.text_contrast") as f32 / 100.0).clamp(0.5, 3.0),
+        }
+    }
+}
+
 impl App {
     /// 바뀐 설정 하나를 지금 상태에 반영. 반영했으면 `true`.
     pub(crate) fn apply_setting(&mut self, key: &str) -> bool {
@@ -404,13 +429,12 @@ impl App {
     /// 설정 → nexa-gfx 전역(기동(main) · 변경 때 같은 길 · 순수 입력): `weight` %/100(0.0~0.6 · nexa-sql 25 % = 0.25) · `contrast` %/100(0.5~3.0).
     /// 값은 유효값(`flag`/`int` = 성능 향상 모드 `BOOST` 반영).
     pub(crate) fn apply_text_raster_of(s: &Settings) {
-        nexa_gfx::text::set_text_gdi(s.flag("ui.text_gdi"));
-        nexa_gfx::text::set_text_hint(s.flag("ui.text_hint"));
-        nexa_gfx::text::set_text_snap(s.flag("ui.text_snap"));
-        nexa_gfx::text::set_text_weight((s.int("ui.text_weight") as f32 / 100.0).clamp(0.0, 0.6));
-        nexa_gfx::text::set_text_contrast(
-            (s.int("ui.text_contrast") as f32 / 100.0).clamp(0.5, 3.0),
-        );
+        let t = TextRaster::from_settings(s);
+        nexa_gfx::text::set_text_gdi(t.gdi);
+        nexa_gfx::text::set_text_hint(t.hint);
+        nexa_gfx::text::set_text_snap(t.snap);
+        nexa_gfx::text::set_text_weight(t.weight);
+        nexa_gfx::text::set_text_contrast(t.contrast);
     }
 
     /// `list.sort_click_adds`(T-128 · DR-31 ⑦) → 열린 탭 전부 + 새 탭 기본값.

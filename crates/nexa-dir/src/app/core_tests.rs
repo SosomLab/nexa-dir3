@@ -10974,9 +10974,12 @@ fn sort_marks_are_triangles_and_click_adds_setting() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// `ui.text_*`(GAP-015 · DR-31 ⑤ · 10-25): 바꾸면 nexa-gfx 전역이 바로 바뀐다(종전 = 읽는 곳 없음 · 재시작 목록) · 범위 클램프 · 재시작 목록에 없음.
+/// `ui.text_*`(GAP-015 · DR-31 ⑤ · 10-25): 설정 → nexa-gfx에 넘길 값 매핑(순수 `TextRaster` · %/100 · 범위 클램프) · 재시작 목록에 없음 ·
+/// 적용 가지 있음. 전역(`nexa_gfx::text::*`)은 단언하지 않고(프로세스 공유 · 병렬 시험 · docs/15 §2-8) 기본값도 OS별(`OS_DEFAULTS` ·
+/// macOS = 0/off/100)이라 절대값을 가정하지 않는다(macOS CI 10-25 실패).
 #[test]
 fn text_raster_settings_apply_immediately() {
+    use crate::app::settings::TextRaster;
     let (mut app, dir) = fixture("textraster");
     for k in [
         "ui.text_gdi",
@@ -10987,24 +10990,39 @@ fn text_raster_settings_apply_immediately() {
     ] {
         assert!(!crate::app::settings::NEEDS_RESTART.contains(&k), "{k}");
     }
-    let _ = app.settings.set("ui.text_weight", "40");
-    assert!(app.apply_setting("ui.text_weight"));
-    assert!((nexa_gfx::text::text_weight() - 0.4).abs() < 1e-6);
-    let _ = app.settings.set("ui.text_contrast", "300");
-    app.after_setting_changed("ui.text_contrast");
+    let t = TextRaster::from_settings(&app.settings);
+    let w0 = app.settings.int("ui.text_weight") as f32 / 100.0;
+    let c0 = app.settings.int("ui.text_contrast") as f32 / 100.0;
     assert!(
-        (nexa_gfx::text::text_contrast() - 3.0).abs() < 1e-6,
-        "상한 3.0"
+        (t.weight - w0).abs() < 1e-6 && (t.contrast - c0).abs() < 1e-6,
+        "{t:?}"
     );
+    assert_eq!(
+        (t.hint, t.snap, t.gdi),
+        (
+            app.settings.flag("ui.text_hint"),
+            app.settings.flag("ui.text_snap"),
+            app.settings.flag("ui.text_gdi")
+        )
+    );
+    let _ = app.settings.set("ui.text_weight", "40");
+    let _ = app.settings.set("ui.text_contrast", "300");
     let _ = app.settings.set("ui.text_hint", "off");
-    app.after_setting_changed("ui.text_hint");
-    assert!(!nexa_gfx::text::text_hint());
-    // 기본값으로 되돌림(전역 — 다른 그리기 시험에 영향 없게).
+    let t = TextRaster::from_settings(&app.settings);
+    assert!(
+        (t.weight - 0.4).abs() < 1e-6 && (t.contrast - 3.0).abs() < 1e-6 && !t.hint,
+        "{t:?}"
+    );
+    let _ = app.settings.set("ui.text_weight", "100");
+    assert!(
+        (TextRaster::from_settings(&app.settings).weight - 0.6).abs() < 1e-6,
+        "상한 0.6"
+    );
+    // 적용 가지는 있다 — 값은 기본으로 되돌린 뒤 넘겨 전역이 OS 기본값을 벗어나지 않게.
     for k in ["ui.text_weight", "ui.text_contrast", "ui.text_hint"] {
         let _ = app.settings.reset(k);
-        app.after_setting_changed(k);
     }
-    assert!((nexa_gfx::text::text_weight() - 0.25).abs() < 1e-6 && nexa_gfx::text::text_hint());
+    assert!(app.apply_setting("ui.text_weight"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
