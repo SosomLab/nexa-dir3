@@ -1,7 +1,7 @@
 //! App — 내장 zip 압축(DR-31 ⑳ⓑ · 10-25 · T-187 "Linux 압축하기 없음"): 우클릭 "압축"(Linux `xdg.compress`)이 외부 아카이버
 //! (file-roller · ark · xarchiver …)가 없는 기기에서도 동작하도록 `ndir_vfs::archive::zipwrite`(store · 외부 crate 0)로 직접 쓴다.
 //! 구조는 압축 풀기(`extract.rs`)와 같다: 작업 스레드 1개 · 전송과 같은 슬롯 · 진행 = 전송 진행 창 재사용 · 취소 = 진행 창 ·
-//! 끝 = 토스트 + 상태줄 + 재열람 + 새 zip 선택. 대상 이름 = 하나면 그 이름(확장자 제외) · 여럿이면 부모 폴더 이름 · 충돌 = " (2)".
+//! 끝 = 토스트 + 상태줄 + 재열람 + 새 zip 선택. **store(무압축)** — 메뉴 이름이 "압축"이므로 라벨·토스트에 명시(협업 검토 ②) · DEFLATE = 후속 후보. 대상 이름 = 하나면 그 이름(확장자 제외) · 여럿이면 부모 폴더 이름 · 충돌 = " (2)".
 
 use crate::*;
 use ndir_vfs::archive::zipwrite::{self as zw, WriteReport};
@@ -75,6 +75,9 @@ fn zip_summary(rep: &WriteReport, dest: &Path) -> (String, bool) {
     let warn = rep.canceled || !rep.too_big.is_empty() || !rep.errors.is_empty();
     let text = if rep.canceled {
         tr("zip.canceled")
+    } else if !rep.too_big.is_empty() {
+        // 4 GiB 한도(ZIP64 없음) = 쓰지 않았다(엔진이 파일을 만들지 않는다 · 협업 검토 ③).
+        trf("zip.tooBig", &[&rep.too_big.len().to_string()])
     } else {
         trf(
             "zip.done",
@@ -172,7 +175,7 @@ impl App {
                 for p in &rep.too_big {
                     self.log_with(
                         ndir_log::LogKind::Error,
-                        trf("zip.tooBig", &[&p.display().to_string()]),
+                        trf("zip.tooBigItem", &[&p.display().to_string()]),
                         None,
                         None,
                     );

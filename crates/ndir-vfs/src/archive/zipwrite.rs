@@ -1,6 +1,7 @@
 //! zip **쓰기**(DR-31 ⑳ⓑ · 10-25 · "Linux 압축하기 없음" — 외부 아카이버가 없어도 폴더/파일을 zip으로): 저장(store) 방식만(외부 crate 0 · DR-8) ·
 //! CRC-32 · UTF-8 이름 깃발(0x800) · 항목마다 **데이터 서술자**(깃발 비트 3 — 파일을 한 번만 읽는다) · 폴더는 재귀(`dir/` 항목 포함) ·
-//! ZIP64 없음(파일 하나 또는 전체가 4 GiB를 넘으면 그 항목만 `too_big`에 적고 건너뛴다) · 취소 = 항목 경계.
+//! ZIP64 없음(파일 하나 또는 전체가 4 GiB를 넘으면 **쓰기 전에** `fits_zip32`로 판정해 파일을 만들지 않고 `too_big`에 적는다 — 부분 zip을 남기지
+//! 않는다 · 협업 검토 10-25 ③) · 취소 = 항목 경계.
 //! 읽기 쪽(`zip.rs` · `extract.rs`)이 그대로 열 수 있다(왕복 시험).
 
 use std::io::{self, Read, Seek, Write};
@@ -166,6 +167,20 @@ fn collect(src: &Path, base: &Path, out: &mut Vec<(PathBuf, String, bool)>, rep:
     }
 }
 
+/// 항목 크기 묶음이 ZIP32(4 GiB · ZIP64 없음)에 들어가는가 — 항목 하나와 전체(항목별 머리·서술자·중앙 항목·이름 여유 포함) 둘 다(순수 판정).
+#[must_use]
+pub fn fits_zip32(sizes: &[u64]) -> bool {
+    const OVERHEAD: u64 = 30 + 16 + 46 + 2 * 1024; // 로컬 머리 + 서술자 + 중앙 항목 + 이름 2회(1 KiB씩 여유)
+    let mut total: u64 = 0;
+    for &s in sizes {
+        if s > LIMIT {
+            return false;
+        }
+        total = total.saturating_add(s).saturating_add(OVERHEAD);
+    }
+    total <= LIMIT
+}
+
 /// 선택한 경로들(`sources` · 같은 부모 폴더 아래라고 가정 — 이름은 **그 부모 기준**)을 `dest`(zip 파일)로. `on_bytes` = 진행(누적 원본 바이트) ·
 /// `cancel` = 항목 경계에서 멈추고 부분 파일을 지운다.
 pub fn write_zip(
@@ -182,6 +197,31 @@ pub fn write_zip(
     let mut entries = Vec::new();
     for s in sources {
         collect(s, &base, &mut entries, &mut rep);
+    }
+    // 크기 한도(ZIP64 없음): 쓰기 전에 판정 — 넘으면 파일을 만들지 않고 넘는 항목(전체 초과면 원본 전부)을 `too_big`에 적는다.
+    let sizes: Vec<u64> = entries
+        .iter()
+        .map(|(p, _, d)| {
+            if *d {
+                0
+            } else {
+                std::fs::metadata(p).map_or(0, |m| m.len())
+            }
+        })
+        .collect();
+    if !fits_zip32(&sizes) {
+        let over: Vec<PathBuf> = entries
+            .iter()
+            .zip(&sizes)
+            .filter(|(_, s)| **s > LIMIT)
+            .map(|((p, _, _), _)| p.clone())
+            .collect();
+        rep.too_big = if over.is_empty() {
+            sources.to_vec()
+        } else {
+            over
+        };
+        return Ok(rep);
     }
     let mut file = std::fs::File::create(dest)?;
     let mut central: Vec<Central> = Vec::new();
@@ -200,14 +240,6 @@ pub fn write_zip(
                 continue;
             }
         };
-        if !is_dir && meta.len() > LIMIT {
-            rep.too_big.push(path.clone());
-            continue;
-        }
-        if offset > LIMIT {
-            rep.too_big.push(path.clone());
-            continue;
-        }
         let dt = dos_datetime(&meta);
         let nb = name.as_bytes().to_vec();
         let mut head = Vec::with_capacity(30 + nb.len());
@@ -327,6 +359,16 @@ mod tests {
     use super::*;
 
     /// 왕복: 폴더(하위 폴더 · 파일 2 · 빈 폴더) + 파일 1 → zip → 기존 풀기(`extract`)로 풀어 내용 · 수가 같다 · UTF-8 이름 · 취소 = 파일 없음.
+    /// ZIP64 없음(협업 검토 ③): 한도 판정은 순수 함수 — 항목 하나 초과 · 전체 초과 · 머리 여유까지 센다.
+    #[test]
+    fn zip32_limit_is_checked_before_writing() {
+        assert!(fits_zip32(&[]));
+        assert!(fits_zip32(&[0, 1 << 20, 3 << 30]));
+        assert!(!fits_zip32(&[LIMIT + 1]), "항목 하나 초과");
+        assert!(!fits_zip32(&[3 << 30, 3 << 30]), "전체 초과");
+        assert!(!fits_zip32(&[LIMIT - 10]), "머리 여유까지 세면 초과");
+    }
+
     #[test]
     fn write_then_extract_round_trip() {
         let base = std::env::temp_dir().join(format!("ndir-zipw-{}", std::process::id()));
@@ -364,6 +406,25 @@ mod tests {
         );
         assert_eq!(std::fs::read(out.join("top.md")).unwrap(), b"# top");
         assert!(out.join("empty").is_dir(), "빈 폴더도 항목으로");
+        // 헤더 일반 비트 11(UTF-8 이름) = 로컬·중앙 모두(협업 검토 ① — 없으면 Windows 탐색기가 한글 이름을 CP437로 읽어 깨진다).
+        let bytes = std::fs::read(&dest).unwrap();
+        let (mut n_local, mut n_central) = (0, 0);
+        for i in 0..bytes.len() - 10 {
+            let sig = u32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
+            let (flag_at, which) = match sig {
+                SIG_LOCAL => (i + 6, &mut n_local),
+                SIG_CENTRAL => (i + 8, &mut n_central),
+                _ => continue,
+            };
+            let flags = u16::from_le_bytes([bytes[flag_at], bytes[flag_at + 1]]);
+            assert!(flags & FLAG_UTF8 != 0, "UTF-8 비트 없음 @{i}");
+            *which += 1;
+        }
+        assert_eq!(
+            (n_local, n_central),
+            (6, 6),
+            "항목 6개(파일 3 · 폴더 3) 머리 각각"
+        );
         // 취소 = 부분 파일 제거.
         let dest2 = base.join("canceled.zip");
         let rep2 = write_zip(
