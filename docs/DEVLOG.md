@@ -4,6 +4,20 @@
 
 ## 2026-10-26
 
+- **밤 작업 ⓔ~ⓗ + 처방 2건**(f88f81a 전역 2개 → Panel 필드 · dd20de4 CI fonts 시도별 timeout · 3055e67 Unix 좀비 회수 · 5144d97 `compare.by_content`/`compare.mirror_delete` · edd1d44 미러 처방 · 5c9f688 DEFLATE 동적 허프먼 · d23d59d `compare.sync`/`trash.wait` 기동 명령 · bf28437 일괄 이름 바꾸기 바뀐 부분 강조 · nexa-ui 236) · 협업 검토 = 미러 결함 2건(중첩 삭제 목록 재현 · Windows 휴지통 워커 경쟁) → 처방 · **Windows 미러 실기 ✓**(휴지통 정확히 2개 · 잔상 없음) · DEFLATE 2차 독립 검증 ✓(zlib -6 대비 +2~3 %) · perf 기준선 회귀 0(기동 −52 %) · 코드 건강 결함 신호 없음 → [10-26 §9](journal/2026-10-26.md)
+
+- **밤 작업 ⓓ Linux 실행 파일 직접 실행 `open.exec_direct`(기본 off · ELF만 · 스크립트는 xdg-open) · xdg-open 실패 토스트 · 와일드카드 안내**(880bb9c · DR-32 ①②) · 협업 검토 = Unix 좀비 2곳 → [10-26 §8](journal/2026-10-26.md)
+
+- **밤 작업 ⓒ 내장 zip DEFLATE**(2af1dba · LZ77 + 고정 허프먼 · 외부 crate 0) · 협업 독립 해제기 3종 대조 ✓(Python zipfile · 7-Zip · Expand-Archive) → [10-26 §7](journal/2026-10-26.md)
+
+- **macOS 빨강 처방**(a6ff7e5 · 필터 기본값 전역 단언) · **밤 작업 ⓑ 체크섬 검증 파일 + 중복 찾기 옵션**(fddcd4c) → [10-26 §6](journal/2026-10-26.md)
+
+- **밤 작업 ⓐ 복사 벤치 T6 편입**(e610181 · 자동 4스레드 유지) · 성능 향상 모드 3차 + 터미널 커서/여백(0530a99) → [10-26 §5](journal/2026-10-26.md)
+
+- **사용자 결정 4건 DR-32**(와일드카드 = 규칙 안내만 · Linux 실행 = 설정 + 실패 토스트 · 초성 검색 = nexa-sql과 같음 · WiX = 태그 때) · 밤 작업 계획 → [10-26 §4](journal/2026-10-26.md)
+
+- **(협업) 빠른 필터 와일드카드 검증**(target\debug 실측 9건 ✓ · 정규식 켬 = 와일드카드 꺼짐) · 사용자 질문 "리눅스 더블클릭 실행" 답 → [10-26 §3](journal/2026-10-26.md)
+
 - **마감 정리**(사용자 지시 · nexa-ui 235 + 26b5f3f · CI ✓ · 전수 725/0 · T4 38/0 · STATUS/MILESTONES/TODO/CLAUDE.md 최신화 · 사용자 선택지 = 초성 전용 규칙) → [10-26 §2](journal/2026-10-26.md)
 
 - **빠른 필터 검색창 = nexa-ui 235 SearchBox 한 컨트롤 · 판정 = nexa-sql과 동일**(26b5f3f · 공백 낱말 전부 포함 · 한글 자모 연속 · 빠짐 = 부분열 퍼지 · 초성만 입력) · CONSUMER-CHANGES 235 d26dcbf → [10-26 §1](journal/2026-10-26.md)
