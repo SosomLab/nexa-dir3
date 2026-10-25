@@ -45,6 +45,7 @@ pub(crate) fn is_wait_cmd(id: &str) -> bool {
             | "compare.wait"
             | "hash.wait"
             | "jobs.wait"
+            | "trash.wait"
             | "dirsize.wait"
             | "git.wait"
     )
@@ -197,6 +198,17 @@ impl App {
             let _ = self.panels[self.active].navigate_to(PathBuf::from(path), &mut inv);
             self.update_status();
             self.redraw();
+            return;
+        }
+        // 비교 창 동기화 버튼(10-26 · 협업 실기 자동화): `compare.sync:l2r|r2l|both` = 창의 → ← ⇄ 버튼과 같다(`compare_sync(dir, 전부)`).
+        if let Some(dir) = id.strip_prefix("compare.sync:") {
+            use ndir_ops::compare::Direction;
+            let d = match dir.trim() {
+                "r2l" => Direction::RightToLeft,
+                "both" => Direction::Both,
+                _ => Direction::LeftToRight,
+            };
+            self.compare_sync(d, Vec::new());
             return;
         }
         if let Some(n) = id.strip_prefix("panel:") {
@@ -968,7 +980,7 @@ impl App {
     }
 
     /// 대기 명령이 아직 기다려야 하는가.
-    fn startup_wait_busy(&self, id: &str) -> bool {
+    pub(crate) fn startup_wait_busy(&self, id: &str) -> bool {
         match id {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
             "ops.wait" => self.transfer.is_some(),
@@ -1003,8 +1015,13 @@ impl App {
                 self.hash_job.is_some() || self.hash_win.is_running() || self.hash_win.is_waiting()
             }
             "jobs.wait" => {
-                self.extract_job.is_some() || self.sync_job.is_some() || self.transfer.is_some()
+                self.extract_job.is_some()
+                    || self.sync_job.is_some()
+                    || self.transfer.is_some()
+                    || self.trash_busy()
             }
+            // 휴지통 워커(Windows `trash_async` · 미러 삭제 실기 · 10-26).
+            "trash.wait" => self.trash_busy(),
             "dirsize.wait" => self.dirsizes.running() || self.dirsizes.display_pending(),
             "git.wait" => !self.git_busy.is_empty(),
             _ => false,

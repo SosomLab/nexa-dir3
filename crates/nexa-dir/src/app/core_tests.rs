@@ -11614,3 +11614,18 @@ fn exec_direct_only_for_elf_with_exec_bit() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 기동 명령 `compare.sync:<방향>`(비교 창 동기화 버튼과 같음) · `trash.wait`(휴지통 워커 대기 · 10-26 협업 실기 자동화): 비교 결과가 없으면 동기화는 조용히 아무 일도
+/// 하지 않는다 · 대기 명령 판정 · 가짜 휴지통(동기)은 바쁘지 않다 · `jobs.wait`도 휴지통을 본다.
+#[test]
+fn startup_compare_sync_and_trash_wait_commands() {
+    use crate::app::startup_cmd::is_wait_cmd;
+    let (mut app, dir) = fixture("cmpsynccmd");
+    app.startup_cmd("compare.sync:l2r");
+    app.startup_cmd("compare.sync:r2l");
+    app.startup_cmd("compare.sync:both");
+    assert!(app.sync_job.is_none(), "비교 결과 없음 = 동기화 없음");
+    assert!(is_wait_cmd("trash.wait") && is_wait_cmd("jobs.wait"));
+    assert!(!app.startup_wait_busy("trash.wait"), "가짜 휴지통 = 동기");
+    let _ = std::fs::remove_dir_all(&dir);
+}
