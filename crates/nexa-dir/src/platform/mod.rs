@@ -1333,14 +1333,15 @@ pub(crate) fn exec_direct_candidate(path: &Path) -> bool {
 pub(crate) fn exec_direct(path: &Path) -> Result<(), PlatformError> {
     #[cfg(unix)]
     {
-        std::process::Command::new(path)
+        let child = std::process::Command::new(path)
             .current_dir(path.parent().unwrap_or(Path::new(".")))
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .map(|_| ())
-            .map_err(|e| PlatformError::Failed(format!("{}: {e}", path.display())))
+            .map_err(|e| PlatformError::Failed(format!("{}: {e}", path.display())))?;
+        reap_detached(child); // 사용자가 그 프로그램을 닫을 때 좀비(<defunct>)로 남지 않게(협업 검토 10-26)
+        Ok(())
     }
     #[cfg(not(unix))]
     {
@@ -1367,7 +1368,8 @@ pub(crate) fn open_watch_active() -> bool {
     OPEN_WATCHERS.load(std::sync::atomic::Ordering::Relaxed) > 0
 }
 
-/// 떼어 실행한 자식을 3초까지 지켜본다(스레드) — 0이 아닌 코드로 끝나면 실패 목록에.
+/// 떼어 실행한 자식을 3초까지 지켜본다(스레드) — 0이 아닌 코드로 끝나면 실패 목록에. 3초 뒤에도 살아 있으면(앱이 떴다 = 정상) 감시는 끝내되
+/// 스레드는 **`wait()`로 끝까지 회수**한다 — Rust `Child`는 drop해도 reap하지 않아 늦게 끝나는 핸들러(gio 등)가 좀비로 남았다(협업 검토 10-26).
 fn watch_open_child(mut child: std::process::Child, path: PathBuf) {
     use std::sync::atomic::Ordering;
     OPEN_WATCHERS.fetch_add(1, Ordering::Relaxed);
@@ -1390,7 +1392,15 @@ fn watch_open_child(mut child: std::process::Child, path: PathBuf) {
                 _ => break, // 3초 넘게 살아 있음 = 앱이 떴다(정상) · 오류 = 포기
             }
         }
-        OPEN_WATCHERS.fetch_sub(1, Ordering::Relaxed);
+        OPEN_WATCHERS.fetch_sub(1, Ordering::Relaxed); // 틱 유지는 여기까지
+        let _ = child.wait(); // 좀비 회수(이미 끝났으면 즉시 · 아니면 끝날 때까지 이 스레드만 잠잔다)
+    });
+}
+
+/// 떼어 실행한 자식을 끝날 때까지 회수하는 스레드(좀비 방지 · 결과는 보지 않는다 — 직접 실행한 프로그램).
+fn reap_detached(mut child: std::process::Child) {
+    std::thread::spawn(move || {
+        let _ = child.wait();
     });
 }
 
@@ -1910,6 +1920,41 @@ pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
 
 #[cfg(test)]
 mod tests {
+    /// 명령 열기의 뒤늦은 실패 통지 + 좀비 회수(Unix · 협업 검토 10-26): `sh -c 'exit 3'` → 3초 안에 (경로, 3) · 감시 수 0 복귀 ·
+    /// `sh -c 'sleep 4'`는 감시가 끝난 뒤에도 회수 스레드가 wait해 `/proc/<pid>/stat`가 Z(좀비)가 아니다.
+    #[cfg(unix)]
+    #[test]
+    fn command_opener_reports_exit_code_and_reaps_children() {
+        use std::sync::atomic::Ordering;
+        let _ = take_open_failures();
+        let p = Path::new("/tmp/ndir-open-test-file");
+        CommandOpener::run(
+            &["sh".to_string(), "-c".to_string(), "exit 3".to_string()],
+            p,
+        )
+        .unwrap();
+        let at = std::time::Instant::now();
+        let mut got = Vec::new();
+        while got.is_empty() && at.elapsed().as_secs() < 5 {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            got = take_open_failures();
+        }
+        assert_eq!(got, vec![(p.to_path_buf(), 3)]);
+        // 늦게 끝나는 자식: 감시(3초)가 끝나도 회수된다 → 좀비 아님.
+        let child = std::process::Command::new("sh")
+            .args(["-c", "sleep 4"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        watch_open_child(child, p.to_path_buf());
+        std::thread::sleep(std::time::Duration::from_millis(5_500));
+        assert_eq!(OPEN_WATCHERS.load(Ordering::Relaxed), 0, "감시 끝");
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+        assert!(!stat.contains(") Z "), "좀비로 남으면 안 된다: {stat}");
+    }
     /// 디스크 할당 크기의 클러스터 올림(dir2 fileinfo.rs:431 시험 이식): 올림 · 딱 맞음 · 클러스터 모름 · 0바이트.
     #[test]
     fn cluster_round_up() {
