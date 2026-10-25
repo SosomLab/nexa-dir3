@@ -2,7 +2,7 @@
 //! → 폴더로 이동(cd) · 복사/붙여넣기/전체 선택 · 덤프. 뷰 자체는 `termview.rs`.
 
 use crate::platform::ShellSpec;
-use crate::termview::{TermStyle, TermView, POLL_MS};
+use crate::termview::{TermCursor, TermStyle, TermView, POLL_MS};
 use crate::*;
 
 /// 설정 `term.copy_format` → `(HTML도 게시, RTF도 게시)`(순수 · dir2 win.rs:7413-7414): text = 평문만 · html · rtf · both.
@@ -133,6 +133,29 @@ impl App {
     }
 
     /// 표시 설정(dir2 X-3): `term.font_size`(Mono 슬롯 = 상태줄 크기 기준 증분) · `term.wrap` · `term.cols`.
+    /// 캐럿 모양(T-101 · 10-26): "기본 터미널 따르기" + Windows Terminal 프로필 `cursorShape` → 그 모양(vintage는 `cursorHeight`) · 아니면 설정
+    /// `term.cursor`.
+    pub(crate) fn term_cursor(&self) -> TermCursor {
+        if self.settings.flag("term.follow_windows_terminal") {
+            if let Some(wt) = self.wt_profile.as_ref() {
+                if let Some(shape) = wt.cursor_shape.as_deref() {
+                    return TermCursor::from_wt(shape, wt.cursor_height);
+                }
+            }
+        }
+        TermCursor::from_setting(self.settings.get("term.cursor").unwrap_or("bar"))
+    }
+
+    /// 격자 여백 px [왼, 위, 오, 아래](T-101 · 10-26): 따르기 + WT `padding`(DIP) → ×배율 · 아니면 종전 2·1·2·1.
+    pub(crate) fn term_pad(&self) -> [i32; 4] {
+        if self.settings.flag("term.follow_windows_terminal") {
+            if let Some(p) = self.wt_profile.as_ref().and_then(|w| w.padding) {
+                return p.map(|d| (d * self.scale).round().clamp(0.0, 64.0) as i32);
+            }
+        }
+        [2, 1, 2, 1]
+    }
+
     pub(crate) fn term_style(&self) -> TermStyle {
         let base = self.font_px("statusbar.font_size");
         // Windows Terminal 따라가기: 글꼴 크기 pt → DIP(×96/72) → **그 고정폭 글꼴의** px. nexa-ctl의 Mono 슬롯은 숫자 높이를
@@ -173,6 +196,8 @@ impl App {
             wrap: self.settings.flag("term.wrap"),
             cols: self.settings.int("term.cols").clamp(80, 1000) as usize,
             scrollback: self.settings.int("term.scrollback").clamp(100, 100_000) as usize,
+            cursor: self.term_cursor(),
+            pad: self.term_pad(),
         }
     }
 

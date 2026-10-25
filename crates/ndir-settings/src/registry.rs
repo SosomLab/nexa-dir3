@@ -65,6 +65,15 @@ const TAB_SCROLL_BTN_OPTS: &[(&str, &str)] = &[
     ("start", "pref.tabScrollButtons.start"),
     ("split", "pref.tabScrollButtons.split"),
 ];
+/// 캐럿 모양(T-101 · 10-26 · Windows Terminal `cursorShape` 어휘 · 따르기가 켜져 있고 프로필이 주면 그것이 우선).
+const TERM_CURSOR_OPTS: &[(&str, &str)] = &[
+    ("bar", "pref.termCursor.bar"),
+    ("underscore", "pref.termCursor.underscore"),
+    ("box", "pref.termCursor.box"),
+    ("emptybox", "pref.termCursor.emptybox"),
+    ("vintage", "pref.termCursor.vintage"),
+    ("dunderscore", "pref.termCursor.dunderscore"),
+];
 const TERM_COPY_OPTS: &[(&str, &str)] = &[
     ("text", "pref.termCopy.text"),
     ("html", "pref.termCopy.html"),
@@ -1668,6 +1677,15 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 4, max: 100 },
         "16"
     ),
+    // 애니메이션(T-99 3차 · 10-26): hover 페이드 · 혜성 링 같은 **보여주기 움직임**. 성능 향상 모드 = off(`FORCES` · 즉시 전환).
+    e!(
+        "ui.motion",
+        CAT_APPEARANCE,
+        "pref.motion",
+        "pref.motion.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "ui.toast_ms",
         CAT_APPEARANCE,
@@ -1727,6 +1745,14 @@ pub const REGISTRY: &[Entry] = &[
         "pref.termWrap.desc",
         Bool,
         "off"
+    ),
+    e!(
+        "term.cursor",
+        CAT_TERMINAL,
+        "pref.termCursor",
+        "pref.termCursor.desc",
+        Choice(TERM_CURSOR_OPTS),
+        "bar"
     ),
     e!(
         "term.cols",
@@ -2501,6 +2527,14 @@ pub const FORCES: &[(&str, &str, Dep, &str)] = &[
     // 플래시 메시지(nexa-sql perf BOOST 차용 · 10-18): 유지 0.3초 · 페이드 0.2초(최소) + 즉시 모드(`FlashStyle::from_settings`).
     ("ui.flash_hold_ms", "perf.boost", Dep::On, "300"),
     ("ui.flash_ms", "perf.boost", Dep::On, "200"),
+    // 성능 향상 모드 3차(T-99 · DR-32 ⑤ · 사용자 10-26 "보여주기·대기 시간에만 여유 · 동작은 항상 정확"): 애니메이션 off · 고속 스크롤 HUD off ·
+    // 폴링/갱신 주기 2배(감시 1 s → 2 s · git 30 s → 60 s) · 터미널 스크롤백 1,000줄 · 아이콘 캐시 절반. 유효값만 · 저장값은 그대로.
+    ("ui.motion", "perf.boost", Dep::On, "off"),
+    ("scroll.fast_hud", "perf.boost", Dep::On, "off"),
+    ("watch.poll_ms", "perf.boost", Dep::On, "2000"),
+    ("git.refresh_s", "perf.boost", Dep::On, "60"),
+    ("term.scrollback", "perf.boost", Dep::On, "1000"),
+    ("list.icon_cache_max", "perf.boost", Dep::On, "256"),
     // 단일 패널이면 정보 배치는 단일뿐(T-130 D2 · 종전 = 호출부가 `!dual ||`로 따로 판정).
     (
         "layout.info_mode",

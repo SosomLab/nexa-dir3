@@ -541,6 +541,8 @@ pref.termScrollback = Terminal scrollback lines
 pref.termScrollback.desc = How many lines that scrolled off the top of the terminal are kept for scrolling back. Applies to new output.
 pref.frameMs = Animation frame interval (ms)
 pref.frameMs.desc = How often the window redraws while something is animating (toasts, fades, drags). 16 ≈ 60 frames per second; higher saves CPU.
+pref.motion = Animations
+pref.motion.desc = Fades, hover glow, the busy ring and other decorative motion. Off = everything switches instantly. Performance mode turns this off.
 pref.toastMs = Toast display time (ms)
 pref.toastMs.desc = How long a notification toast stays on screen.
 pref.toastAlpha = Toast opacity (%)
@@ -629,6 +631,14 @@ pref.viewScope.tab = Tab
 pref.viewScope.dir = Folder
 pref.termWrap = Terminal word wrap
 pref.termWrap.desc = Wrap lines to the view width. Off = fixed columns with horizontal scroll.
+pref.termCursor = Terminal cursor shape
+pref.termCursor.desc = Shape of the terminal caret. When “Follow the system terminal” is on and the Windows Terminal profile sets cursorShape, that shape (and padding) is used instead.
+pref.termCursor.bar = Bar
+pref.termCursor.underscore = Underscore
+pref.termCursor.box = Filled box
+pref.termCursor.emptybox = Empty box
+pref.termCursor.vintage = Vintage (bottom quarter)
+pref.termCursor.dunderscore = Double underscore
 pref.termCols = Terminal columns (80~1000)
 pref.termCols.desc = Fixed column count when word wrap is off. Scroll horizontally with Shift+wheel.
 pref.termTheme = Terminal theme
@@ -1434,7 +1444,7 @@ tabstatus.git.upstream = Upstream: {0} (ahead {1}, behind {2})
 tabstatus.git.clean = Working tree clean
 tabstatus.git.changes = Staged +{0} · modified !{1} · untracked ?{2} · conflicts ={3} · deleted ✘{4} · renamed »{5} · stash ${6}
 pref.perfBoost = Performance mode
-pref.perfBoost.desc = Turns off heavier extras to keep the app light. Currently: system status monitoring in the status bar (CPU, memory, disk, network, app memory), icons before file names, and icons before menu items. Your other settings are kept.
+pref.perfBoost.desc = Turns off heavier extras to keep the app light — only display and waiting times change; every action still runs exactly. Currently: status-bar system monitoring, icons before file names and menu items, folder size calculation, window transparency, animations and the fast-scroll HUD, longer folder-watch (2 s) and git-refresh (60 s) intervals, terminal scrollback 1,000 lines, half the icon cache. Your own values are kept and come back when you turn it off.
 pref.partialRedraw = Redraw only changed areas
 pref.partialRedraw.desc = Repaint and present only the rectangles that input or timers marked dirty, instead of the whole window every frame. Falls back to a full frame when a menu, tooltip, flash or toast is showing. Turn off if anything looks stale or torn.
 pref.idleTrim = Idle memory trim (seconds)

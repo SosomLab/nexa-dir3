@@ -1157,6 +1157,14 @@ mod tests {
             assert_eq!(s.forced_by(k), Some(("perf.boost", Dep::On, "off")));
             assert_eq!(s.effective(k).as_deref(), Some("off"));
         }
+        // 3차(T-99 · DR-32 ⑤ · 10-26): 보여주기·대기 시간만 — 애니메이션 · HUD off · 감시 2 s · git 60 s · 스크롤백 1,000 · 아이콘 캐시 256 · 저장값은 기본 그대로.
+        assert!(!s.flag("ui.motion") && !s.flag("scroll.fast_hud"));
+        assert_eq!((s.int("watch.poll_ms"), s.int("git.refresh_s")), (2000, 60));
+        assert_eq!(
+            (s.int("term.scrollback"), s.int("list.icon_cache_max")),
+            (1000, 256)
+        );
+        assert_eq!(s.get("watch.poll_ms"), Some("1000"), "저장값(기본) 그대로");
         // 강제된 부모(dock.folder_size = off)로 하위가 잠긴다 — 유효값으로 판정.
         let eff = |k: &str| s.effective(k).map(|v| v.into_owned()).unwrap_or_default();
         assert_eq!(

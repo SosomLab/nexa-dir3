@@ -66,11 +66,97 @@ pub(crate) struct TermStyle {
     pub scrollback: usize,
     /// 줄(칸) 높이 지정(px) — Windows Terminal 따라가기: 그 글꼴의 줄 높이(어센트+디센트+줄 간격). `None` = 종전 규칙.
     pub cell_h: Option<i32>,
+    /// 캐럿 모양(T-101 · 10-26 · WT `cursorShape` 따르기 또는 설정 `term.cursor`).
+    pub cursor: TermCursor,
+    /// 격자 여백 px [왼, 위, 오, 아래](WT `padding` 따르기 · 종전 = 2·1·2·1).
+    pub pad: [i32; 4],
+}
+
+impl TermStyle {
+    /// 여백을 뺀 격자 영역.
+    pub(crate) fn inner(&self, rc: Rect) -> Rect {
+        let [l, t, r, b] = self.pad;
+        Rect::new(
+            rc.x + l,
+            rc.y + t,
+            (rc.w - l - r).max(0),
+            (rc.h - t - b).max(0),
+        )
+    }
+}
+
+/// 캐럿 모양(Windows Terminal `cursorShape` 어휘 · 설정 `term.cursor` · T-101 · 10-26).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TermCursor {
+    /// 세로 막대 2 px(종전).
+    Bar,
+    /// 아래 밑줄 2 px.
+    Underscore,
+    /// 칸 전체 채움.
+    FilledBox,
+    /// 칸 테두리 1 px.
+    EmptyBox,
+    /// 아래쪽 n %(WT `cursorHeight` · 기본 25).
+    Vintage(u8),
+    /// 밑줄 둘(1 px · 사이 1 px).
+    DoubleUnderscore,
+}
+
+impl TermCursor {
+    /// WT `cursorShape`(+ `cursorHeight` %) → 모양(순수 · 대소문자 무시 · 모르는 값 = Bar).
+    pub(crate) fn from_wt(shape: &str, height: Option<u8>) -> Self {
+        match shape.trim().to_ascii_lowercase().as_str() {
+            "underscore" => TermCursor::Underscore,
+            "filledbox" => TermCursor::FilledBox,
+            "emptybox" => TermCursor::EmptyBox,
+            "vintage" => TermCursor::Vintage(height.unwrap_or(25).clamp(1, 100)),
+            "doubleunderscore" => TermCursor::DoubleUnderscore,
+            _ => TermCursor::Bar,
+        }
+    }
+
+    /// 설정 `term.cursor` 값 → 모양(순수 · 모르는 값 = Bar).
+    pub(crate) fn from_setting(v: &str) -> Self {
+        match v {
+            "underscore" => TermCursor::Underscore,
+            "box" => TermCursor::FilledBox,
+            "emptybox" => TermCursor::EmptyBox,
+            "vintage" => TermCursor::Vintage(25),
+            "dunderscore" => TermCursor::DoubleUnderscore,
+            _ => TermCursor::Bar,
+        }
+    }
+
+    /// 칸 사각형 안에 캐럿을 그린다(색 = 전경).
+    pub(crate) fn draw(self, dc: &mut dyn DrawCtx, cell: Rect, fg: Color) {
+        let (x, y, w, h) = (cell.x, cell.y, cell.w.max(1), cell.h.max(1));
+        match self {
+            TermCursor::Bar => dc.fill_rect(Rect::new(x, y, 2, h), fg),
+            TermCursor::Underscore => dc.fill_rect(Rect::new(x, y + h - 2, w, 2), fg),
+            TermCursor::DoubleUnderscore => {
+                dc.fill_rect(Rect::new(x, y + h - 1, w, 1), fg);
+                dc.fill_rect(Rect::new(x, y + h - 3, w, 1), fg);
+            }
+            TermCursor::FilledBox => dc.fill_rect(Rect::new(x, y, w, h), fg),
+            TermCursor::EmptyBox => {
+                dc.fill_rect(Rect::new(x, y, w, 1), fg);
+                dc.fill_rect(Rect::new(x, y + h - 1, w, 1), fg);
+                dc.fill_rect(Rect::new(x, y, 1, h), fg);
+                dc.fill_rect(Rect::new(x + w - 1, y, 1, h), fg);
+            }
+            TermCursor::Vintage(pct) => {
+                let hh = (h * i32::from(pct) / 100).max(1);
+                dc.fill_rect(Rect::new(x, y + h - hh, w, hh), fg);
+            }
+        }
+    }
 }
 
 impl Default for TermStyle {
     fn default() -> Self {
         TermStyle {
+            cursor: TermCursor::Bar,
+            pad: [2, 1, 2, 1],
             cell_h: None,
             font_delta: 0.0,
             wrap: true,
@@ -159,6 +245,8 @@ pub(crate) struct TermView {
     /// paint가 캐시한 격자: (내용 rect, cell_w, cell_h, 가시 열 수).
     grid: (Rect, i32, i32, usize),
     pub(crate) caret_on: bool,
+    /// 마지막 그리기의 격자 여백(px · `cell_at`/마우스 보고가 되돌린다 · T-101 · 10-26).
+    pad: [i32; 4],
     blink_at: u64,
     /// 시작한 셸 라벨(상태 글 "시작 중…").
     pub(crate) shell_label: String,
@@ -203,6 +291,7 @@ impl TermView {
             drag: false,
             grid: (Rect::default(), 8, 16, 80),
             caret_on: true,
+            pad: [2, 1, 2, 1],
             blink_at: 0,
             shell_label: String::new(),
             shell_is_cmd: false,
@@ -235,13 +324,14 @@ impl TermView {
             None if style.font_delta == 0.0 => row_h.max(8),
             None => (dc.text_height() + 3).max(8),
         };
-        let vis_cols = ((rc.w - 4) / cw).max(0) as usize;
+        let ir = style.inner(rc);
+        let vis_cols = (ir.w / cw).max(0) as usize;
         let cols = if style.wrap {
             vis_cols
         } else {
             style.cols.clamp(80, 1000)
         };
-        (cols, ((rc.h - 2) / ch).max(0) as usize, cw, ch)
+        (cols, (ir.h / ch).max(0) as usize, cw, ch)
     }
 
     /// 세션 시작(cwd · 크기). 셸 없음/스폰 실패 = `failed`.
@@ -416,12 +506,12 @@ impl TermView {
     /// 격자 좌표 → (절대 라인, 열) — 범위 클램프 · 가로 오프셋 반영.
     pub(crate) fn cell_at(&self, x: i32, y: i32) -> (usize, usize) {
         let (rc, cw, ch, _) = self.grid;
-        let col = ((x - rc.x - 2) / cw.max(1)).max(0) as usize + self.view_x;
+        let col = ((x - rc.x - self.pad[0]) / cw.max(1)).max(0) as usize + self.view_x;
         let sb = self.screen.scrollback_count();
         let top = sb - self.view_off.min(sb);
         // 픽셀 잔여(view_px)만큼 윗줄이 내려와 있다 → 그만큼 되돌려 줄을 센다(윗줄 일부 = 줄 top-1).
         let (extra, shift) = self.px_shift(ch.max(1), top);
-        let row = ((y - rc.y - 1 + shift) / ch.max(1)).max(0) as usize;
+        let row = ((y - rc.y - self.pad[1] + shift) / ch.max(1)).max(0) as usize;
         let line = (top + row)
             .saturating_sub(extra)
             .min(self.screen.line_count().saturating_sub(1));
@@ -438,8 +528,8 @@ impl TermView {
         if !rc.contains(nexa_ctl::geom::Point { x, y }) {
             return None;
         }
-        let col = ((x - rc.x - 2) / cw.max(1)).max(0) as usize + self.view_x + 1;
-        let row = ((y - rc.y - 1) / ch.max(1)).max(0) as usize + 1;
+        let col = ((x - rc.x - self.pad[0]) / cw.max(1)).max(0) as usize + self.view_x + 1;
+        let row = ((y - rc.y - self.pad[1]) / ch.max(1)).max(0) as usize + 1;
         Some(format!(
             "\x1b[<{button};{col};{row}{}",
             if press { 'M' } else { 'm' }
@@ -701,12 +791,14 @@ impl TermView {
             self.screen.set_max_scrollback(style.scrollback); // 설정 `term.scrollback`(T-100) — 그릴 때 반영
         }
         let (cols, rows, cell_w, cell_h) = Self::grid_dims(dc, rc, row_h, style);
+        let ir = style.inner(rc); // 여백을 뺀 격자 영역(T-101 · 10-26)
+        self.pad = style.pad;
         let argb = |c: u32| Color::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8);
         dc.fill_rect(rc, argb(pal.bg));
         if self.failed {
             dc.text(
-                rc.x + 2,
-                rc.y + 1,
+                ir.x,
+                ir.y,
                 Rect::new(rc.x, rc.y, rc.w, cell_h),
                 &tr("term.fail"),
                 theme.text_dim,
@@ -717,7 +809,7 @@ impl TermView {
             return;
         }
         self.sync_size(cols, rows);
-        let vis_cols = (((rc.w - 4) / cell_w.max(1)).max(1) as usize).min(cols);
+        let vis_cols = (((ir.w) / cell_w.max(1)).max(1) as usize).min(cols);
         self.grid = (rc, cell_w, cell_h, vis_cols);
         self.view_x = self.view_x.min(cols.saturating_sub(vis_cols)); // 래핑 전환·리사이즈 방어
         let c0 = self.view_x;
@@ -741,12 +833,12 @@ impl TermView {
         let accent = 0xFF00_0000 | (u32::from(ar) << 16) | (u32::from(ag) << 8) | u32::from(ab);
         let mut cur_bold = (false, false); // (굵게, 기울임) — grid_dims가 보통 Mono를 골라 뒀다
         for r in 0..rows + extra {
-            let y = rc.y + 1 + r as i32 * cell_h - shift;
+            let y = ir.y + r as i32 * cell_h - shift;
             // 보이는 띠 = [y_vis, y_vis + row_h) — 윗줄 일부는 위가 잘리고 맨 아래 줄은 아래가 잘린다.
-            let y_vis = y.max(rc.y + 1);
-            let row_h = (y + cell_h).min(rc.bottom()) - y_vis;
+            let y_vis = y.max(ir.y);
+            let row_h = (y + cell_h).min(ir.bottom()) - y_vis;
             if row_h <= 0 {
-                if y >= rc.bottom() {
+                if y >= ir.bottom() {
                     break;
                 }
                 continue;
@@ -788,11 +880,11 @@ impl TermView {
                     dc.select_font_sized_styled(FontSlot::Mono, bold.0, bold.1, style.font_delta);
                     cur_bold = bold;
                 }
-                let x = rc.x + 2 + (start - c0) as i32 * cell_w;
+                let x = ir.x + (start - c0) as i32 * cell_w;
                 let clip = Rect::new(
                     x,
                     y_vis,
-                    ((c - start) as i32 * cell_w).min(rc.right() - x),
+                    ((c - start) as i32 * cell_w).min(ir.right() - x),
                     row_h,
                 );
                 if bg != pal.bg {
@@ -816,7 +908,7 @@ impl TermView {
                     let wide = line.get(i + 1).is_some_and(|n| {
                         n.ch == '\0' || ((is_icon_glyph(ch) || is_wide_symbol(ch)) && n.ch == ' ')
                     });
-                    let cx = rc.x + 2 + (i - c0) as i32 * cell_w;
+                    let cx = ir.x + (i - c0) as i32 * cell_w;
                     let cclip = Rect::new(cx, y_vis, if wide { 2 } else { 1 } * cell_w, row_h);
                     let mut buf = [0u8; 4];
                     dc.text(cx, y, cclip, ch.encode_utf8(&mut buf), fgc);
@@ -830,19 +922,19 @@ impl TermView {
         // 세션은 떴지만 셸이 아직 아무것도 내지 않았다 = 프로필 로딩 중.
         if self.session.is_some() && !self.exited && !self.got_output {
             dc.text(
-                rc.x + 2,
-                rc.y + 1,
-                Rect::new(rc.x + 2, rc.y + 1, rc.w - 4, cell_h),
+                ir.x,
+                ir.y,
+                Rect::new(ir.x, ir.y, ir.w, cell_h),
                 &ndir_i18n::trf("term.starting", &[&self.shell_label]),
                 theme.text_dim,
             );
         }
         if self.exited {
-            let y = rc.bottom() - cell_h - 1;
+            let y = ir.bottom() - cell_h;
             dc.text_opaque(
-                rc.x + 2,
+                ir.x,
                 y,
-                Rect::new(rc.x + 2, y, rc.w - 4, cell_h),
+                Rect::new(ir.x, y, ir.w, cell_h),
                 &tr("term.exited"),
                 theme.accent,
                 argb(pal.bg),
@@ -852,10 +944,12 @@ impl TermView {
             let cr = sb + self.screen.cursor_row();
             let cc = self.screen.cursor_col();
             if cr >= top && cr < top + rows && cc >= c0 && cc < c0 + vis_cols {
-                let cx = rc.x + 2 + (cc - c0) as i32 * cell_w;
-                let cy = rc.y + 1 + (cr - top) as i32 * cell_h;
-                if cy + cell_h <= rc.bottom() {
-                    dc.fill_rect(Rect::new(cx, cy, 2, cell_h), argb(pal.fg));
+                let cx = ir.x + (cc - c0) as i32 * cell_w;
+                let cy = ir.y + (cr - top) as i32 * cell_h;
+                if cy + cell_h <= ir.bottom() {
+                    style
+                        .cursor
+                        .draw(dc, Rect::new(cx, cy, cell_w, cell_h), argb(pal.fg));
                 }
             }
         }
@@ -988,6 +1082,7 @@ mod tests {
             cols: 120,
             cell_h: None,
             scrollback: ndir_term::MAX_SCROLLBACK,
+            ..TermStyle::default()
         };
         let mut rec = nexa_ctl::RecordCtx::with_surface(300, 100);
         let th = Theme::dark();
@@ -1279,6 +1374,81 @@ mod tests {
         t.scroll_px(-(ch / 2));
         t.paint(&mut rec, rc, &th, &TermPalette::dark(), false, 20, &style);
         assert!(rec.strings().count() > 0, "그려진다(잘림은 clip)");
+    }
+
+    /// 커서 모양 · 여백(T-101 · 10-26): WT 어휘 → 모양(대소문자 무시 · vintage 높이) · 설정 값 → 모양 · 여백은 격자 원점/열 수를 옮기고
+    /// `cell_at`이 되돌린다 · 캐럿은 모양대로 그려진다(기록 ctx).
+    #[test]
+    fn cursor_shape_and_padding_follow_style() {
+        assert_eq!(
+            TermCursor::from_wt("FilledBox", None),
+            TermCursor::FilledBox
+        );
+        assert_eq!(
+            TermCursor::from_wt("vintage", Some(40)),
+            TermCursor::Vintage(40)
+        );
+        assert_eq!(
+            TermCursor::from_wt("vintage", None),
+            TermCursor::Vintage(25)
+        );
+        assert_eq!(
+            TermCursor::from_wt("doubleUnderscore", None),
+            TermCursor::DoubleUnderscore
+        );
+        assert_eq!(TermCursor::from_wt("???", None), TermCursor::Bar);
+        assert_eq!(TermCursor::from_setting("box"), TermCursor::FilledBox);
+        assert_eq!(
+            TermCursor::from_setting("dunderscore"),
+            TermCursor::DoubleUnderscore
+        );
+        let p = Platform::fake();
+        let mut t = TermView::new();
+        let shell = p.shell.default_shell();
+        assert!(t.start(&p, shell, Path::new("."), 40, 5));
+        let style = TermStyle {
+            wrap: true,
+            pad: [8, 4, 8, 4],
+            cursor: TermCursor::Underscore,
+            ..TermStyle::default()
+        };
+        let th = Theme::dark();
+        let rc = Rect::new(10, 20, 300, 100);
+        let mut rec = nexa_ctl::RecordCtx::with_surface(320, 130);
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), false, 20, &style);
+        // RecordCtx text_width = 글자 수 × 7 → 가시 열 = (300-16)/7 = 40 (종전 2·1 여백이면 42).
+        assert_eq!(t.grid.3, 40, "여백이 열 수를 줄인다");
+        assert_eq!(
+            t.cell_at(10 + 8, 20 + 4),
+            (t.cell_at(10 + 8, 20 + 4).0, 0),
+            "원점 = 여백 뒤"
+        );
+        assert_eq!(
+            t.cell_at(10 + 8 + 7 * 3, 20 + 4).1,
+            3,
+            "열 = (x - 왼 여백) / 칸 폭"
+        );
+        // 캐럿: 출력이 있어야 그린다 · 밑줄 = 칸 폭 × 2 px · 채운 상자 = 칸 전체.
+        t.screen.feed("abc");
+        t.got_output = true;
+        let (_, cw, ch, _) = t.grid;
+        let mut rec = nexa_ctl::RecordCtx::with_surface(320, 130);
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), true, 20, &style);
+        assert!(
+            rec.fills.iter().any(|(r, _)| r.w == cw && r.h == 2),
+            "밑줄 캐럿: {:?}",
+            rec.fills
+        );
+        let boxed = TermStyle {
+            cursor: TermCursor::FilledBox,
+            ..style
+        };
+        let mut rec = nexa_ctl::RecordCtx::with_surface(320, 130);
+        t.paint(&mut rec, rc, &th, &TermPalette::dark(), true, 20, &boxed);
+        assert!(
+            rec.fills.iter().any(|(r, _)| r.w == cw && r.h == ch),
+            "채운 상자 캐럿"
+        );
     }
 
     #[test]

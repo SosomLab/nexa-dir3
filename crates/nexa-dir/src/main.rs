@@ -965,6 +965,7 @@ impl App {
         app.apply_log_settings();
         app.apply_dirsize_tuning();
         app.apply_runtime_tuning(); // 값 추출 1차(T-100): 아이콘 캐시 상한 · 미리보기 읽기 상한(토스트 · 프레임 · 감시 · 스크롤백은 읽을 때)
+        app.apply_motion(); // 애니메이션(`ui.motion` 유효값 · 성능 향상 모드 = off · T-99 3차)
         app.log_plugin_notes();
         if app.settings.flag("log.open_at_start") {
             app.open_log = true;

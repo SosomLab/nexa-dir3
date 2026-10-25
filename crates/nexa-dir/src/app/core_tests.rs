@@ -3872,6 +3872,9 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
         size_pt: None,
         scheme: None,
         commandline: None,
+        cursor_shape: None,
+        cursor_height: None,
+        padding: None,
     });
     let forced = app.prefs_forced();
     assert_eq!(forced.len(), 1, "크기는 프로필이 줄 때만(Windows Terminal)");
@@ -3922,6 +3925,9 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
             size_pt: None, // Linux: 프로필에 크기 없음
             scheme: None,
             commandline: None,
+            cursor_shape: None,
+            cursor_height: None,
+            padding: None,
         });
         let linux_like = app.term_style();
         assert_eq!(
@@ -10813,6 +10819,9 @@ fn terminal_follows_windows_terminal_scheme_and_commandline() {
         size_pt: None,
         scheme: Some("One Half Dark".into()),
         commandline: Some(format!("\"{}\" -NoLogo -x", exe.display())),
+        cursor_shape: None,
+        cursor_height: None,
+        padding: None,
     });
     let _ = app.settings.set("term.follow_windows_terminal", "on");
     let _ = app.settings.set("term.theme", "system");
@@ -11336,5 +11345,103 @@ fn drop_menu_shell_item_runs_async_and_finishes_on_event() {
     // 사건 도착 → 뒤처리.
     let _ = app.ctx_shell_tick(Instant::now());
     assert!(app.drop_async.is_none(), "사건으로 끝남");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 성능 향상 모드 3차(T-99 · DR-32 ⑤ · 사용자 10-26 "보여주기·대기 시간에만 여유 · 동작은 항상 정확"): 켜면 애니메이션·HUD off · 감시 2 s ·
+/// git 60 s · 스크롤백 1,000 · 아이콘 캐시 256이 **유효값**으로 · 터미널 스타일이 그 스크롤백을 쓴다 · 설정 창 사유 글은 ⚡로 시작 · 끄면 복귀 · 저장값 불변.
+#[test]
+fn performance_mode_relaxes_display_and_wait_times_only() {
+    let (mut app, dir) = fixture("boost3");
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("term.scrollback", "5000");
+    assert_eq!(app.term_style().scrollback, 5000);
+    let _ = app.settings.set("perf.boost", "on");
+    app.after_setting_changed("perf.boost");
+    assert_eq!(app.term_style().scrollback, 1000, "스크롤백 상한");
+    assert!(!app.settings.flag("ui.motion") && !app.settings.flag("scroll.fast_hud"));
+    assert_eq!(app.settings.int("watch.poll_ms"), 2000);
+    assert_eq!(app.settings.int("git.refresh_s"), 60);
+    assert_eq!(app.settings.int("list.icon_cache_max"), 256);
+    assert_eq!(
+        app.settings.get("term.scrollback"),
+        Some("5000"),
+        "저장값 그대로"
+    );
+    let why = crate::prefs_win::forced_reason_text(
+        "ui.motion",
+        "perf.boost",
+        ndir_settings::Dep::On,
+        "off",
+    );
+    assert!(why.starts_with('⚡'), "{why}");
+    let plain = crate::prefs_win::forced_reason_text(
+        "layout.info_mode",
+        "layout.panel_mode",
+        ndir_settings::Dep::Eq("single"),
+        "single",
+    );
+    assert!(!plain.starts_with('⚡'), "{plain}");
+    let _ = app.settings.set("perf.boost", "off");
+    app.after_setting_changed("perf.boost");
+    assert_eq!(app.term_style().scrollback, 5000);
+    assert!(app.settings.flag("ui.motion") && app.settings.flag("scroll.fast_hud"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T-101 커서 모양 · 여백(10-26): settings.json의 `cursorShape`/`cursorHeight`/`padding`을 읽고(수 하나 · "l, t, r, b" · 기본 프로필 > defaults) ·
+/// 따르기가 켜져 있으면 그것 · 꺼져 있으면 설정 `term.cursor` + 종전 여백 2·1·2·1 · 여백 DIP는 배율을 곱한다.
+#[test]
+fn terminal_cursor_and_padding_follow_windows_terminal_or_setting() {
+    use crate::termview::TermCursor;
+    let json = r#"{ "defaultProfile": "{a}", "profiles": { "defaults": { "padding": "8, 4", "cursorShape": "bar" },
+        "list": [ { "guid": "{a}", "name": "PS", "cursorShape": "vintage", "cursorHeight": 40 } ] } }"#;
+    let wt = crate::platform::parse_wt_settings(json).expect("profile");
+    assert_eq!(
+        wt.cursor_shape.as_deref(),
+        Some("vintage"),
+        "기본 프로필이 defaults보다 먼저"
+    );
+    assert_eq!(wt.cursor_height, Some(40));
+    assert_eq!(
+        wt.padding,
+        Some([8.0, 4.0, 8.0, 4.0]),
+        "defaults의 padding(\"8, 4\" = 좌우 8 · 상하 4)"
+    );
+    use ndir_settings::json::Json;
+    assert_eq!(crate::platform::wt_padding(&Json::Num(6.0)), Some([6.0; 4]));
+    assert_eq!(
+        crate::platform::wt_padding(&Json::Str("1, 2, 3, 4".into())),
+        Some([1.0, 2.0, 3.0, 4.0])
+    );
+    assert_eq!(
+        crate::platform::wt_padding(&Json::Str("1, 2, 3".into())),
+        None,
+        "셋은 없음"
+    );
+    assert_eq!(
+        crate::platform::wt_padding(&Json::Str("-1".into())),
+        None,
+        "음수 없음"
+    );
+    let (mut app, dir) = fixture("wtcursor");
+    app.wt_profile = Some(wt);
+    let _ = app.settings.set("term.follow_windows_terminal", "on");
+    assert_eq!(app.term_cursor(), TermCursor::Vintage(40));
+    assert_eq!(app.term_pad(), [8, 4, 8, 4], "배율 1.0");
+    let _ = app.settings.set("term.follow_windows_terminal", "off");
+    assert_eq!(
+        app.term_cursor(),
+        TermCursor::Bar,
+        "따르지 않음 = 설정 기본 bar"
+    );
+    assert_eq!(app.term_pad(), [2, 1, 2, 1]);
+    let _ = app.settings.set("term.cursor", "emptybox");
+    assert_eq!(app.term_cursor(), TermCursor::EmptyBox);
+    assert_eq!(
+        app.term_style().cursor,
+        TermCursor::EmptyBox,
+        "스타일에 실린다"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

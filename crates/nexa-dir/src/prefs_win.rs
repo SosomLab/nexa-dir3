@@ -130,11 +130,16 @@ fn lock_reason_text(parent: &str, dep: ndir_settings::Dep) -> String {
 }
 
 /// 강제 값 이유 덧줄(`ndir_settings::FORCES` · T-130): 부모가 켜져 있어서(On) / 부모가 어떤 값이라서(그 밖) 자식이 `value`로 정해진다.
-fn forced_reason_text(child: &str, parent: &str, dep: ndir_settings::Dep, value: &str) -> String {
+pub(crate) fn forced_reason_text(
+    child: &str,
+    parent: &str,
+    dep: ndir_settings::Dep,
+    value: &str,
+) -> String {
     use ndir_settings::Dep;
     let name = ndir_settings::entry(parent).map_or_else(|| parent.to_string(), |e| tr(e.label));
     let shown = value_label(child, value);
-    match dep {
+    let text = match dep {
         Dep::On => trf("pref.forcedBy", &[&name, &shown]),
         Dep::Eq(v) => trf("pref.forcedEq", &[&name, &value_label(parent, v), &shown]),
         Dep::Ne(v) => trf(
@@ -147,6 +152,12 @@ fn forced_reason_text(child: &str, parent: &str, dep: ndir_settings::Dep, value:
         }
         Dep::Gt(n) => trf("pref.forcedEq", &[&name, &format!("> {n}"), &shown]),
         Dep::NotEmpty => trf("pref.forcedBy", &[&name, &shown]),
+    };
+    // 성능 향상 모드가 정한 값 = ⚡ 표시(T-99 3차 · 10-26).
+    if parent == "perf.boost" {
+        format!("⚡ {text}")
+    } else {
+        text
     }
 }
 

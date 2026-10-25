@@ -1547,6 +1547,35 @@ pub(crate) struct WtProfile {
     pub scheme: Option<String>,
     /// 시작 명령(`commandline` · 없으면 프로필 원천의 기본).
     pub commandline: Option<String>,
+    /// 캐럿 모양(`cursorShape` · bar/vintage/underscore/filledBox/emptyBox/doubleUnderscore · T-101 · 10-26).
+    pub cursor_shape: Option<String>,
+    /// vintage 캐럿 높이(% · `cursorHeight`).
+    pub cursor_height: Option<u8>,
+    /// 격자 여백(DIP · 왼·위·오·아래 · `padding` = 수 하나 · "l, t, r, b" · "lr, tb").
+    pub padding: Option<[f32; 4]>,
+}
+
+/// Windows Terminal `padding` 값 → DIP 여백 [왼, 위, 오, 아래](순수 · T-101 · 10-26): 수 하나 = 넷 다 · "a, b" = 좌우 a · 상하 b ·
+/// "a, b, c, d" = 그대로 · 그 밖(음수 · 글자) = None.
+pub(crate) fn wt_padding(v: &ndir_settings::json::Json) -> Option<[f32; 4]> {
+    use ndir_settings::json::Json;
+    let nums: Vec<f32> = match v {
+        Json::Num(n) => vec![*n as f32],
+        Json::Str(s) => s
+            .split(',')
+            .map(|p| p.trim().parse::<f32>().ok())
+            .collect::<Option<Vec<f32>>>()?,
+        _ => return None,
+    };
+    if nums.iter().any(|n| !(0.0..=256.0).contains(n)) {
+        return None;
+    }
+    match nums.as_slice() {
+        [a] => Some([*a, *a, *a, *a]),
+        [a, b] => Some([*a, *b, *a, *b]),
+        [a, b, c, d] => Some([*a, *b, *c, *d]),
+        _ => None,
+    }
 }
 
 /// JSON 주석 제거(`// …` · `/* … */` — 문자열 안은 그대로). Windows Terminal의 settings.json은 주석을 허용한다.
@@ -1665,6 +1694,19 @@ pub(crate) fn parse_wt_settings(text: &str) -> Option<WtProfile> {
         size_pt: Some(size.filter(|s| (4.0..=96.0).contains(s)).unwrap_or(12.0)),
         scheme: pick(&|p| text_of(get(p, "colorScheme"))),
         commandline: pick(&|p| text_of(get(p, "commandline"))),
+        cursor_shape: pick(&|p| text_of(get(p, "cursorShape"))),
+        cursor_height: profile
+            .and_then(|p| num_of(get(p, "cursorHeight")))
+            .or_else(|| defaults.and_then(|p| num_of(get(p, "cursorHeight"))))
+            .map(|h| h.clamp(1.0, 100.0) as u8),
+        padding: profile
+            .and_then(|p| get(p, "padding"))
+            .and_then(wt_padding)
+            .or_else(|| {
+                defaults
+                    .and_then(|p| get(p, "padding"))
+                    .and_then(wt_padding)
+            }),
     })
 }
 
@@ -1756,6 +1798,9 @@ pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
             size_pt: None,
             scheme: None,
             commandline: None,
+            cursor_shape: None,
+            cursor_height: None,
+            padding: None,
         })
     }
     #[cfg(not(any(windows, all(target_os = "linux", not(test)))))]

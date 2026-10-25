@@ -147,6 +147,11 @@ impl App {
                     // 성능 향상 모드 = 행 · 메뉴 아이콘 · 폴더 크기의 유효값이 바뀐다(`FORCES` · T-130) → 그 적용도 같이.
                     self.apply_icon_switches();
                     self.apply_transparency(); // 투명도도 0으로 강제(DR-22 · `FORCES`)
+                                               // 3차(T-99 · DR-32 ⑤ · 10-26): 애니메이션 · HUD · 감시/git 주기 · 스크롤백 · 아이콘 캐시의 유효값도 바뀐다.
+                    self.apply_motion();
+                    self.apply_scroll_settings();
+                    self.apply_runtime_tuning();
+                    self.watch_next = Instant::now();
                     self.dirsizes.clear();
                     self.git_detail.clear();
                     self.update_docks();
@@ -154,6 +159,7 @@ impl App {
                 }
             }
             "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
+            "ui.motion" => self.apply_motion(),
             "dock.folder_size" => {
                 self.dirsizes.clear();
                 self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
@@ -394,6 +400,34 @@ impl App {
     }
 
     /// 설정 `typeahead.*` → 두 패널(모든 탭)의 목록. 종전에는 키만 있고 적용하는 곳이 없어 늘 그리드 기본값이었다.
+    /// 애니메이션 켬/끔(`ui.motion` **유효값** · 성능 향상 모드 = off · T-99 3차 · DR-32 ⑤): nexa-ctl hover 페이드 두 속도(행 · 버튼)와
+    /// 혜성(BusyRing)을 즉시 전환으로. 보여주기 움직임만 — 동작(필터 적용 · 전송 …)은 그대로.
+    pub(crate) fn apply_motion(&self) {
+        Self::apply_motion_of(&self.settings);
+    }
+
+    /// [`Self::apply_motion`]의 설정 → nexa-ctl 전역 쓰기. 시험 빌드에서는 전역을 건드리지 않는다(docs/15 §2-8 · 병렬 시험이 같은 전역을 본다).
+    pub(crate) fn apply_motion_of(s: &Settings) {
+        let on = s.flag("ui.motion");
+        if cfg!(test) {
+            let _ = on;
+            return;
+        }
+        use nexa_ctl::tokens::{set_fade_ms, FadeSpeed};
+        set_fade_ms(
+            FadeSpeed::Slow,
+            if on {
+                nexa_ctl::tokens::motion::HOVER_IN_MS
+            } else {
+                0
+            },
+        );
+        set_fade_ms(FadeSpeed::Fast, if on { 500 } else { 0 });
+        let mut st = nexa_ctl::busy_style();
+        st.enabled = on;
+        nexa_ctl::set_busy_style(st);
+    }
+
     pub(crate) fn apply_typeahead(&mut self) {
         let opts = Self::typeahead_opts(&self.settings);
         let mut inv = Invalidations::default();
