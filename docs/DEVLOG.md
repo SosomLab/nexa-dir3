@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **일괄 이름 바꾸기 창 묶음**(4d16d9b Move/ChangeExt 카드 · fa7beae 적용 열 전체 토글 · db12cda 크기 조절 · 62301c3 충돌 행 경고색 · a809110 Tab 순회) · nexa-ui 230 `RowSource::row_mark`(CONSUMER-CHANGES dbd7c6e) → [10-25 §23](journal/2026-10-25.md)
+
 - **NFC ccc 정렬 + UAX #15 차단 규칙**(0e94d1f · §20 협업 지적 처방 · Python NFC 대조 7경우) · CI 91985b0/3b80b9d ✓ → [10-25 §22](journal/2026-10-25.md)
 
 - **일괄 이름 바꾸기 연번 폴더마다 다시 시작**(3b80b9d · T-162 남김 · 프리셋 `pf=`) · NFC 표 생성 규칙 확정(428 + 196 = 624 · nfc.rs 주석) → [10-25 §21](journal/2026-10-25.md)
