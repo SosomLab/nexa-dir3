@@ -4,6 +4,8 @@
 
 ## 2026-10-25
 
+- **T-125 ⓐⓑ 설정 키 연결**(e76a608 글자 래스터 5키 · dd74050 `typeahead.scope`) · macOS CI 결정적 실패(OS별 기본값 하드코딩) → 4d15dca · nexa-ui 232 `FontSlot::{Menu, Dialog}`(CONSUMER-CHANGES 7d10141) · 사용자 지시 = 스크롤바 결함 우선 → [10-25 §30](journal/2026-10-25.md)
+
 - **T-145 D/N 표기**(5ae8316) · **T-128 정렬 삼각형 + 클릭 추가 옵트인**(nexa-ui 231 a3dbc9e · CONSUMER-CHANGES a5e27de · 8b8bbdc 빨강 push → 9a30e1f 시험 수정) · docs/15 §3-1 "gate 판정 줄로만 커밋" → [10-25 §29](journal/2026-10-25.md)
 
 - **사용자 결정 20건 = DR-31**(670ba8a · nexa-copy 전 채널 동봉 · T-125 모두 연결 · 정렬/표기 · 일괄 이름 변경 카드 묶음 · 픽셀 스크롤 · Linux zip · 보류 4건) · 다음 개발 순서 확정 · CI 재개 회차 전부 ✓ → [10-25 §28](journal/2026-10-25.md)
