@@ -11070,7 +11070,6 @@ fn typeahead_scope_setting_reaches_tree_source() {
 /// 혜성꼬리(입력 뒤 BusyRing Running→Done · 빈 글 = Idle) · 설정 `list.filter_*` ↔ 토글 양방향(설정 → 패널 · 토글 → 설정 영속 + 새 탭 기본값).
 #[test]
 fn quick_filter_search_box_fuzzy_toggles_and_busy() {
-    use crate::filelist::filter_opts_default;
     use ndir_ops::namefilter::FilterOpts;
     use nexa_ctl::controls::busy::BusyState;
     let (mut app, dir) = fixture("qsearch");
@@ -11163,7 +11162,9 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
     // 설정 → 패널 · 새 탭 기본값.
     let _ = app.settings.set("list.filter_word", "on");
     app.after_setting_changed("list.filter_word");
-    assert!(app.panels[0].filter_opts().word && filter_opts_default().word);
+    // 새 탭 기본값(`filelist::filter_opts_default`)은 프로세스 전역이라 단언하지 않는다(docs/15 §2-8 · 병렬 시험의 App::new가 덮는다 ·
+    // macOS CI 0530a99 적발) — 설정과 이 패널의 값만 본다.
+    assert!(app.settings.flag("list.filter_word") && app.panels[0].filter_opts().word);
     assert!(
         !app.panels[0].filter_opts().regex,
         "설정 기준(regex off)으로 맞춰진다"
