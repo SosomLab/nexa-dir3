@@ -2563,6 +2563,13 @@ pub const HIDDEN: &[&str] = &[
     "list.async_wait_ms",
     "plugins.disabled",
     "cloud.conns",
+    // 클라우드 OAuth 키·비밀(T-72 · CLOUD 결정 대기 · GAP-015 · DR-31 ⑤ 10-25): 기능이 없는 동안 설정 창에서 숨긴다(값은 보존).
+    "cloud.client_id_onedrive",
+    "cloud.client_id_googledrive",
+    "cloud.client_id_dropbox",
+    "cloud.client_secret_onedrive",
+    "cloud.client_secret_googledrive",
+    "cloud.client_secret_dropbox",
 ];
 
 /// 고급(Advanced 토글을 켜야 보임) — HIDDEN은 자동 포함.
