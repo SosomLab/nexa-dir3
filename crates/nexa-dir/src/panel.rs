@@ -302,6 +302,8 @@ pub(crate) struct TaOpts {
     pub backspace: bool,
     /// 배지 위치(0~8 = 행 × 3 + 열 · 6 = 왼쪽 아래).
     pub hud_pos: u8,
+    /// 찾기 범위(설정 `typeahead.scope` · GAP-015 · DR-31 ⑤ · 10-25): 가시 스트림(기본) · 같은 수준 · 전체 처음부터.
+    pub scope: ndir_tree::FindScope,
 }
 
 impl Default for TaOpts {
@@ -313,6 +315,7 @@ impl Default for TaOpts {
             space: true,
             backspace: true,
             hud_pos: 6,
+            scope: ndir_tree::FindScope::VisibleStream,
         }
     }
 }
@@ -1520,6 +1523,7 @@ impl Panel {
             if tab.rows.source_mut().set_icons(icons) {
                 inv.push(tab.rows.bounds());
             }
+            tab.rows.source_mut().set_find_scope(o.scope);
             tab.rows.set_typeahead_opts(
                 o.reset_ms,
                 o.special,

@@ -11007,3 +11007,34 @@ fn text_raster_settings_apply_immediately() {
     assert!((nexa_gfx::text::text_weight() - 0.25).abs() < 1e-6 && nexa_gfx::text::text_hint());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `typeahead.scope`(GAP-015 · DR-31 ⑤ · 10-25): 기본 = 가시 스트림 · `level`/`global`로 바꾸면 열린 탭 소스 + 새 탭이 따른다(종전 = 읽는 곳 없음).
+#[test]
+fn typeahead_scope_setting_reaches_tree_source() {
+    use ndir_tree::FindScope;
+    let (mut app, dir) = fixture("tascope");
+    app.layout_for(1200, 800, 1.0);
+    assert_eq!(
+        app.panels[0].rows().source().find_scope(),
+        FindScope::VisibleStream
+    );
+    let _ = app.settings.set("typeahead.scope", "level");
+    app.after_setting_changed("typeahead.scope");
+    assert_eq!(
+        app.panels[0].rows().source().find_scope(),
+        FindScope::CurrentLevel
+    );
+    app.command("file.new_tab");
+    assert_eq!(
+        app.panels[0].rows().source().find_scope(),
+        FindScope::CurrentLevel,
+        "새 탭도"
+    );
+    let _ = app.settings.set("typeahead.scope", "global");
+    app.after_setting_changed("typeahead.scope");
+    assert_eq!(
+        app.panels[0].rows().source().find_scope(),
+        FindScope::GlobalFirst
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

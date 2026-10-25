@@ -251,6 +251,8 @@ pub(crate) struct TreeSource {
     dir_sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
     /// 빠른 필터 글(NEW-057 · 탭 소유 · 재열람에도 유지 · 다른 폴더로 가면 새 원천 = 풀림) — 빈 글 = 끔.
     name_filter: String,
+    /// 타입어헤드 찾기 범위(설정 `typeahead.scope` · GAP-015 · 10-25 — 종전엔 늘 가시 스트림).
+    find_scope: FindScope,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
     no_icons: bool,
     /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
@@ -281,6 +283,7 @@ impl TreeSource {
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
             name_filter: String::new(),
+            find_scope: FindScope::VisibleStream,
             no_icons: false,
             probe_cache: Default::default(),
             probe_inbox: Default::default(),
@@ -394,6 +397,16 @@ impl TreeSource {
     }
 
     /// 빠른 필터(NEW-057) 설정 — 바뀌었으면 true(호스트가 목록 무효화). 빈 글 = 끔.
+    /// 타입어헤드 찾기 범위(설정 `typeahead.scope`).
+    pub(crate) fn set_find_scope(&mut self, scope: FindScope) {
+        self.find_scope = scope;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn find_scope(&self) -> FindScope {
+        self.find_scope
+    }
+
     pub(crate) fn set_name_filter(&mut self, spec: &str) -> bool {
         let spec = spec.trim();
         let changed_text = self.name_filter != spec;
@@ -1180,7 +1193,7 @@ impl RowSource for TreeSource {
     fn find_prefix(&self, caret: Option<usize>, prefix: &str) -> Option<usize> {
         self.tree
             .as_ref()?
-            .find_prefix(caret, prefix, FindScope::VisibleStream)
+            .find_prefix(caret, prefix, self.find_scope)
     }
 }
 

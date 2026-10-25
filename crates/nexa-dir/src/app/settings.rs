@@ -385,6 +385,11 @@ impl App {
             space: s.flag("typeahead.space"),
             backspace: s.flag("typeahead.backspace"),
             hud_pos: panel::hud_pos_index(s.get("typeahead.hud_pos").unwrap_or("bottom_left")),
+            scope: match s.get("typeahead.scope").unwrap_or("visible") {
+                "global" => ndir_tree::FindScope::GlobalFirst,
+                "level" => ndir_tree::FindScope::CurrentLevel,
+                _ => ndir_tree::FindScope::VisibleStream,
+            },
         }
     }
 
