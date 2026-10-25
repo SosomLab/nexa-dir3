@@ -60,13 +60,23 @@ impl App {
     pub(crate) fn watch_sync(&mut self) {
         // 현재 폴더 + 화면에 펼쳐진 하위 폴더(dir2 WINB-014 · 패널당 64개 상한). 내 PC(가상 최상위)는 드라이브 감시가 본다.
         let mut dirs: Vec<PathBuf> = Vec::new();
-        for p in &self.panels {
+        for p in &mut self.panels {
             if ndir_vfs::is_virtual_root(p.root_path()) {
                 continue;
             }
             for d in p.watch_dirs() {
                 if !dirs.contains(&d) {
                     dirs.push(d);
+                }
+            }
+            // 보이는 저장소의 `.git`(T-95 HEAD/index 감시 · 10-25): 다른 앱의 checkout · commit · add가 `.git/HEAD` · `index`를 바꾸면 그 폴더
+            // 자체는 바뀌지 않아 종전엔 감시가 못 봤다 → `.git`을 함께 본다(변경은 `is_git_internal`로 걸러 요약 무효화만 · 재열람 아님).
+            if self.git_enabled {
+                if let Some((repo, _)) = p.git_info_fresh() {
+                    let g = repo.join(".git");
+                    if g.is_dir() && !dirs.contains(&g) {
+                        dirs.push(g);
+                    }
                 }
             }
         }

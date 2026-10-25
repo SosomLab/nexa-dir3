@@ -10691,3 +10691,53 @@ fn rename_keeps_expanded_subfolders() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `.git` 감시(T-95 HEAD/index · 10-25): 탭 상태바가 켜져 있고 보이는 폴더가 저장소면 `.git`도 감시 대상 · `.git` 변경 통지 = 재열람 없이
+/// 브랜치 캐시만 버려 다음 동기에서 `.git/HEAD`를 다시 읽는다(다른 앱의 checkout 반영).
+#[test]
+fn watch_covers_git_dir_of_shown_repo() {
+    let (mut app, dir) = fixture("watchgit");
+    std::fs::create_dir_all(dir.join(".git")).expect("mkdir");
+    std::fs::write(dir.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("write");
+    let _ = app.settings.set("layout.tab_statusbar", "on");
+    app.after_setting_changed("layout.tab_statusbar");
+    app.git_enabled = true; // 시험 빌드 기본 false(git 실행 안 함) — 감시 대상 판정만 본다 · 조회는 git_may_request가 막는다
+    app.layout_for(1200, 800, 1.0);
+    // 픽스처가 App을 만든 뒤 `.git`을 만들었으므로 브랜치 캐시("없음")를 버린다(실사용 = 이미 있는 저장소로 이동).
+    let mut inv = Invalidations::default();
+    app.panels[0].invalidate_dir_info();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let log = app.platform.log.clone().expect("fake log");
+    let tick = |app: &mut App| {
+        app.watch_next = Instant::now();
+        app.watch_tick(Instant::now());
+    };
+    app.update_status();
+    tick(&mut app);
+    assert!(
+        log.borrow().watched.contains(&dir.join(".git")),
+        "{:?}",
+        log.borrow().watched
+    );
+    assert_eq!(
+        app.panels[0].git_info().map(|(_, b)| b),
+        Some("main".to_string())
+    );
+    // 다른 앱의 checkout: `.git/HEAD`만 바뀜 → `.git` 변경 통지 → 브랜치 다시 읽힘 · 목록 재열람은 없음.
+    let reloads = app.panels[0].rows().source().reloads();
+    std::fs::write(dir.join(".git").join("HEAD"), "ref: refs/heads/feat/x\n").expect("write");
+    log.borrow_mut().changed = vec![dir.join(".git")];
+    tick(&mut app);
+    app.update_status();
+    assert_eq!(
+        app.panels[0].git_info().map(|(_, b)| b),
+        Some("feat/x".to_string()),
+        "checkout 반영"
+    );
+    assert_eq!(
+        app.panels[0].rows().source().reloads(),
+        reloads,
+        "`.git` 변경 = 재열람 없음"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
