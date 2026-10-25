@@ -4,6 +4,7 @@
 
 use crate::*;
 use ndir_ops::hash::{self, Algo};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -98,7 +99,15 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let algos = parse_algos(self.settings.get("hash.algos").unwrap_or(""));
+        // 검증 모드면 창이 가진 알고리즘 하나로(검증 파일의 것) · 아니면 설정.
+        let algos = match self.hash_win.verify_counts() {
+            Some(_) => self
+                .hash_win
+                .strongest()
+                .map(|a| vec![a])
+                .unwrap_or_default(),
+            None => parse_algos(self.settings.get("hash.algos").unwrap_or("")),
+        };
         self.hash_win.begin();
         self.hash_begin(paths, algos);
     }
@@ -167,6 +176,130 @@ impl App {
         let canceled = job.shared.cancel.load(Ordering::Relaxed);
         self.hash_win.finish(canceled.then(|| tr("ops.canceled")));
         false
+    }
+
+    /// [저장 .sha256](T-167 · DR-32 ⑥): 가장 강한 알고리즘 값을 GNU 형식(`<16진>  <이름>`)으로 같은 폴더에 — 파일 하나 = `<이름>.<키>` ·
+    /// 여럿 = `checksums.<키>` · 이미 있으면 덮어쓰기 확인.
+    pub(crate) fn checksum_save(&mut self) {
+        let Some(algo) = self.hash_win.strongest() else {
+            return;
+        };
+        let rows = self.hash_win.save_rows();
+        if rows.is_empty() {
+            return;
+        }
+        let paths: Vec<PathBuf> = self
+            .hash_win
+            .files()
+            .iter()
+            .map(|f| f.path.clone())
+            .collect();
+        let Some(dest) = hash::sums_file_name(&paths, algo) else {
+            return;
+        };
+        let text = hash::sums_text(&rows);
+        if dest.exists() {
+            let spec = crate::dlg_win::DlgSpec::confirm(
+                tr("hash.title"),
+                trf("hash.overwrite", &[&ndir_ops::leaf_name(&dest)]),
+                tr("bulk.preset.overwrite"),
+            );
+            self.ask(spec, app::dialogs::DlgReply::HashSave { dest, text });
+            return;
+        }
+        self.checksum_write(&dest, &text);
+    }
+
+    /// 검증 파일을 실제로 쓴다(저장 · 덮어쓰기 확인 뒤).
+    pub(crate) fn checksum_write(&mut self, dest: &Path, text: &str) {
+        let a = self.active;
+        match std::fs::write(dest, text) {
+            Ok(()) => {
+                self.toast_panel(
+                    a,
+                    toast::ToastKind::Info,
+                    tr("hash.title"),
+                    trf("hash.saved", &[&ndir_ops::leaf_name(dest)]),
+                );
+                let mut inv = Invalidations::default();
+                for p in &mut self.panels {
+                    p.reopen(&mut inv);
+                }
+                self.redraw();
+            }
+            Err(e) => self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("hash.title"),
+                trf("hash.saveFailed", &[&e.to_string()]),
+            ),
+        }
+    }
+
+    /// `ctx.verify_checksum`(T-167): 검증 파일(GNU `<16진>  <이름>`)을 읽어 그 폴더의 파일들을 계산하고 줄별로 대조 — 결과 열(✓/✗) · 요약(일치 · 불일치 · 없음).
+    pub(crate) fn checksum_verify(&mut self, sums: &Path) {
+        if self.hash_job.is_some() {
+            let mut inv = Invalidations::default();
+            self.statusbar.set_left(&tr("hash.busy"), &mut inv);
+            self.redraw();
+            return;
+        }
+        let a = self.active;
+        let text = match std::fs::read_to_string(sums) {
+            Ok(t) => t,
+            Err(e) => {
+                self.toast_panel(
+                    a,
+                    toast::ToastKind::Warn,
+                    tr("hash.title"),
+                    trf("hash.failed", &[&e.to_string()]),
+                );
+                return;
+            }
+        };
+        let entries = hash::parse_sums(&text);
+        let Some(algo) = hash::sums_algo(sums, &entries) else {
+            self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("hash.title"),
+                tr("hash.noEntries"),
+            );
+            return;
+        };
+        if entries.is_empty() {
+            self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("hash.title"),
+                tr("hash.noEntries"),
+            );
+            return;
+        }
+        let base = sums.parent().map_or_else(PathBuf::new, Path::to_path_buf);
+        let mut files: Vec<(PathBuf, u64)> = Vec::new();
+        let mut expected: Vec<String> = Vec::new();
+        let mut missing = 0usize;
+        for (hex, name) in &entries {
+            let p = base.join(name.replace('/', std::path::MAIN_SEPARATOR_STR));
+            match std::fs::metadata(&p) {
+                Ok(md) if md.is_file() => {
+                    files.push((p, md.len()));
+                    expected.push(hex.clone());
+                }
+                _ => missing += 1,
+            }
+        }
+        let total: u64 = files.iter().map(|(_, s)| *s).sum();
+        let auto = auto_start(total, self.settings.int("hash.auto_limit_mb"));
+        self.hash_win.start(&files, &[algo], auto);
+        self.hash_win.set_verify(algo, expected, missing);
+        if auto && !files.is_empty() {
+            self.hash_begin(files.into_iter().map(|(p, _)| p).collect(), vec![algo]);
+        } else if files.is_empty() {
+            self.hash_win.finish(None);
+        }
+        self.open_hash = true;
     }
 
     /// 창을 닫는다 — 진행 중이면 계산도 취소.

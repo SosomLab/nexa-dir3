@@ -42,6 +42,30 @@ impl DupGroup {
     }
 }
 
+/// 같음 기준(T-170 옵션 · 10-26).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DupMode {
+    /// 내용(같은 크기 → 앞부분 지문 → SHA-256 · 기본).
+    #[default]
+    Content,
+    /// 이름(대소문자 무시) + 크기 — 읽지 않는다(빠름 · 이름이 다른 복사본은 못 찾는다).
+    NameSize,
+    /// 크기만 — 읽지 않는다(후보 훑기용 · 내용이 다른 파일도 묶인다).
+    Size,
+}
+
+impl DupMode {
+    /// 설정 값(`content` · `namesize` · `size`) → 기준(모르면 Content).
+    #[must_use]
+    pub fn from_key(k: &str) -> Self {
+        match k {
+            "namesize" => DupMode::NameSize,
+            "size" => DupMode::Size,
+            _ => DupMode::Content,
+        }
+    }
+}
+
 /// 검색 옵션.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DupOpts {
@@ -49,6 +73,8 @@ pub struct DupOpts {
     pub min_size: u64,
     /// 하위 폴더 포함.
     pub recursive: bool,
+    /// 같음 기준.
+    pub mode: DupMode,
 }
 
 impl Default for DupOpts {
@@ -56,6 +82,7 @@ impl Default for DupOpts {
         DupOpts {
             min_size: 1,
             recursive: true,
+            mode: DupMode::Content,
         }
     }
 }
@@ -120,6 +147,39 @@ pub fn find(
     sizes.sort_unstable_by(|a, b| b.cmp(a));
     for size in sizes {
         let paths = &by_size[&size];
+        // 기준이 크기/이름+크기면 읽지 않고 묶는다(`sha256` = 빈 글).
+        match opts.mode {
+            DupMode::Size => {
+                let mut v = paths.clone();
+                v.sort();
+                groups.push(DupGroup {
+                    size,
+                    sha256: String::new(),
+                    paths: v,
+                });
+                continue;
+            }
+            DupMode::NameSize => {
+                let mut by_name: HashMap<String, Vec<PathBuf>> = HashMap::new();
+                for p in paths {
+                    let key = p
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_lowercase())
+                        .unwrap_or_default();
+                    by_name.entry(key).or_default().push(p.clone());
+                }
+                for (_, mut v) in by_name.into_iter().filter(|(_, v)| v.len() > 1) {
+                    v.sort();
+                    groups.push(DupGroup {
+                        size,
+                        sha256: String::new(),
+                        paths: v,
+                    });
+                }
+                continue;
+            }
+            DupMode::Content => {}
+        }
         progress
             .candidates
             .fetch_add(paths.len() as u64, Ordering::Relaxed);
@@ -259,6 +319,46 @@ mod tests {
         d
     }
 
+    /// 기준 옵션(T-170 · 10-26): 크기만 = 같은 크기면 내용이 달라도 묶임(읽기 0) · 이름+크기 = 이름(대소문자 무시)까지 같아야 · 내용 = 종전.
+    #[test]
+    fn name_size_and_size_modes_group_without_reading() {
+        let d = fixture("modes");
+        std::fs::create_dir_all(d.join("a")).unwrap();
+        std::fs::create_dir_all(d.join("b")).unwrap();
+        std::fs::write(d.join("a").join("Same.txt"), b"0123456789").unwrap();
+        std::fs::write(d.join("b").join("same.TXT"), b"abcdefghij").unwrap(); // 같은 이름(대소문자) · 같은 크기 · 다른 내용
+        std::fs::write(d.join("b").join("other.txt"), b"0123456789").unwrap(); // 같은 내용 · 다른 이름
+        let run = |mode: DupMode| {
+            let prog = DupProgress::default();
+            let g = find(
+                std::slice::from_ref(&d),
+                DupOpts {
+                    mode,
+                    ..DupOpts::default()
+                },
+                &prog,
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            (g, prog.hashed.load(Ordering::Relaxed))
+        };
+        let (size, read) = run(DupMode::Size);
+        assert_eq!(size.len(), 1, "{size:?}");
+        assert_eq!(size[0].paths.len(), 3, "크기만 = 셋 다");
+        assert_eq!(read, 0, "읽지 않는다");
+        assert!(size[0].sha256.is_empty());
+        let (ns, read) = run(DupMode::NameSize);
+        assert_eq!(ns.len(), 1, "{ns:?}");
+        assert_eq!(ns[0].paths.len(), 2, "Same.txt ↔ same.TXT");
+        assert_eq!(read, 0);
+        let (content, _) = run(DupMode::Content);
+        assert_eq!(content.len(), 1);
+        assert_eq!(content[0].paths.len(), 2, "Same.txt ↔ other.txt(내용)");
+        assert_eq!(DupMode::from_key("size"), DupMode::Size);
+        assert_eq!(DupMode::from_key("???"), DupMode::Content);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     /// 같은 크기 · 다른 내용(앞부분 같고 뒤 다름 포함)은 묶이지 않고, 같은 내용은 폴더가 달라도 묶인다 · 0바이트 제외 ·
     /// 묶음은 되찾는 바이트 큰 것부터 · 진행값 · 취소.
     #[test]
@@ -302,6 +402,7 @@ mod tests {
             DupOpts {
                 min_size: 1,
                 recursive: false,
+                mode: DupMode::Content,
             },
             &DupProgress::default(),
             &AtomicBool::new(false),
@@ -314,6 +415,7 @@ mod tests {
             DupOpts {
                 min_size: 1000,
                 recursive: true,
+                mode: DupMode::Content,
             },
             &DupProgress::default(),
             &AtomicBool::new(false),

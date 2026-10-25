@@ -407,6 +407,8 @@ struct App {
     dupes_win: dupes_win::DupesWin,
     open_dupes: bool,
     dup_job: Option<app::dupes::DupJob>,
+    /// 마지막 중복 찾기 대상(옵션을 바꿔 다시 찾기 · T-170 옵션 · 10-26).
+    dup_roots: Vec<PathBuf>,
     /// 폴더 비교 · 동기화(T-171/172 · compare_win.rs) · 열기 요청 · 비교 작업 · 복사 작업.
     compare_win: compare_win::CompareWin,
     open_compare: bool,
@@ -841,6 +843,7 @@ impl App {
             dupes_win: dupes_win::DupesWin::new(),
             open_dupes: false,
             dup_job: None,
+            dup_roots: Vec::new(),
             compare_win: compare_win::CompareWin::new(),
             open_compare: false,
             cmp_job: None,

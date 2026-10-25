@@ -38,6 +38,8 @@ pub(crate) enum HashAction {
     CopyText(String),
     /// [계산] — 상한을 넘어 자동으로 시작하지 않은 계산을 시작한다.
     Start,
+    /// [저장 .sha256] — 가장 강한 알고리즘 값을 GNU 검증 파일로(T-167 · DR-32 ⑥ · 호스트가 경로·덮어쓰기 확인).
+    Save,
 }
 
 const PAD: f32 = 12.0;
@@ -62,6 +64,8 @@ pub(crate) struct FileRow {
 pub(crate) struct HashSource {
     rows: Vec<FileRow>,
     algos: Vec<Algo>,
+    /// 검증 모드(T-167): (알고리즘 번호, 행별 기대 16진).
+    verify: Option<(usize, Vec<String>)>,
     /// 내용 묶음 글자(마지막 알고리즘 값이 같은 파일끼리 A · B … · 혼자면 없음).
     groups: Vec<Option<char>>,
     /// 비교 입력과 일치하는 행.
@@ -106,6 +110,8 @@ impl HashSource {
 
 const COL_SIZE: u32 = 1;
 const COL_SAME: u32 = 2;
+/// 검증 결과 열(검증 모드만 · `COL_ALGO0` 뒤 번호라 `cell`에서 먼저 가른다).
+const COL_RESULT: u32 = 1_000;
 const COL_ALGO0: u32 = 3;
 
 impl RowSource for HashSource {
@@ -124,6 +130,23 @@ impl RowSource for HashSource {
         let r = &self.rows[index];
         match key {
             COL_SIZE => crate::filelist::format_size(r.size),
+            COL_RESULT => match &self.verify {
+                Some((ai, expected)) => match (
+                    r.values.get(*ai).and_then(|v| v.as_deref()),
+                    r.error.as_ref(),
+                ) {
+                    (_, Some(_)) => tr("hash.bad"),
+                    (Some(got), None) => {
+                        if expected.get(index).is_some_and(|e| e == got) {
+                            format!("\u{2713} {}", tr("hash.ok"))
+                        } else {
+                            format!("\u{2717} {}", tr("hash.bad"))
+                        }
+                    }
+                    (None, None) => String::new(),
+                },
+                None => String::new(),
+            },
             COL_SAME => {
                 let mut s = self.groups[index].map(String::from).unwrap_or_default();
                 if self.matched[index] {
@@ -217,9 +240,12 @@ pub(crate) struct HashWin {
     tb_cmp: TextBox,
     btn_calc: Button,
     btn_copy: Button,
+    btn_save: Button,
     btn_close: Button,
     /// 바닥 안내(복사됨 등 · 다음 클릭까지).
     note: Option<String>,
+    /// 검증 모드(T-167 · DR-32 ⑥): (알고리즘 번호 · 행별 기대 16진 · 검증 파일에 있었지만 없는 파일 수).
+    verify: Option<(usize, Vec<String>, usize)>,
 }
 
 impl HashWin {
@@ -248,13 +274,59 @@ impl HashWin {
             tb_cmp: TextBox::new(""),
             btn_calc: Button::new(tr("hash.calc")),
             btn_copy: Button::new(tr("hash.copyAll")),
+            btn_save: Button::new(trf("hash.save", &["sha256"])),
             btn_close: Button::new(tr("ops.cancel")),
             note: None,
+            verify: None,
         }
     }
 
+    /// 표 보기(파일 여럿 또는 검증 모드).
     fn multi(&self) -> bool {
-        self.files.len() > 1
+        self.files.len() > 1 || self.verify.is_some()
+    }
+
+    /// 저장할 알고리즘 = 가장 강한(마지막) 것.
+    pub(crate) fn strongest(&self) -> Option<Algo> {
+        self.algos.last().copied()
+    }
+
+    /// 검증 모드로(`start` 뒤): `expected` = 행별 기대 16진(소문자) · `missing` = 검증 파일에만 있던 수 — 결과 열이 생기고 끝나면 요약을 보인다.
+    pub(crate) fn set_verify(&mut self, algo: Algo, expected: Vec<String>, missing: usize) {
+        let ai = self.algos.iter().position(|a| *a == algo).unwrap_or(0);
+        self.verify = Some((ai, expected, missing));
+        self.rebuild_grid();
+        self.redraw();
+    }
+
+    /// 검증 집계(끝난 뒤): (일치, 불일치, 없음). 검증 모드가 아니면 None.
+    pub(crate) fn verify_counts(&self) -> Option<(usize, usize, usize)> {
+        let (ai, expected, missing) = self.verify.as_ref()?;
+        let (mut ok, mut bad) = (0usize, 0usize);
+        for (i, f) in self.files.iter().enumerate() {
+            match (f.values.get(*ai).and_then(|v| v.as_deref()), &f.error) {
+                (Some(got), None) if expected.get(i).is_some_and(|e| e == got) => ok += 1,
+                (None, None) => {}
+                _ => bad += 1,
+            }
+        }
+        Some((ok, bad, *missing))
+    }
+
+    /// 저장할 줄들(가장 강한 알고리즘 · 값이 있는 파일만): (16진, 파일 이름).
+    pub(crate) fn save_rows(&self) -> Vec<(String, String)> {
+        let Some(ai) = self.algos.len().checked_sub(1) else {
+            return Vec::new();
+        };
+        self.files
+            .iter()
+            .filter_map(|f| {
+                f.values
+                    .get(ai)
+                    .and_then(|v| v.clone())
+                    .map(|h| (h, ndir_ops::leaf_name(&f.path)))
+            })
+            .collect()
     }
 
     /// 대상 지정 — `auto` = 바로 계산(호스트가 작업을 띄웠다) · 아니면 [계산] 대기(상한 초과).
@@ -278,10 +350,16 @@ impl HashWin {
         self.waiting = !auto;
         self.error = None;
         self.note = None;
+        self.verify = None;
         let mut inv = Invalidations::default();
         self.bar.set_items(Vec::new(), &mut inv);
         self.bar.set_totals(0, self.total.max(1), &mut inv);
         self.btn_copy.set_enabled(false);
+        self.btn_save.set_enabled(false);
+        self.btn_save.set_label(trf(
+            "hash.save",
+            &[self.strongest().map_or("sha256", Algo::key)],
+        ));
         self.btn_calc.set_enabled(!auto);
         self.btn_close.set_label(tr(if auto {
             "ops.cancel"
@@ -312,6 +390,7 @@ impl HashWin {
         let mut src = HashSource {
             rows: self.files.clone(),
             algos: self.algos.clone(),
+            verify: self.verify.as_ref().map(|(ai, e, _)| (*ai, e.clone())),
             groups: vec![None; n],
             matched: vec![false; n],
             selected: vec![false; n],
@@ -325,6 +404,9 @@ impl HashWin {
             Column::new(COL_SIZE, tr("col.size"), 80).right_aligned(),
             Column::new(COL_SAME, tr("hash.col.same"), 60),
         ];
+        if self.verify.is_some() {
+            cols.push(Column::new(COL_RESULT, tr("hash.col.result"), 110));
+        }
         for (i, a) in self.algos.iter().enumerate() {
             cols.push(Column::new(
                 COL_ALGO0 + i as u32,
@@ -391,11 +473,12 @@ impl HashWin {
             self.bar
                 .set_totals(self.total.max(1), self.total.max(1), &mut inv);
         }
-        self.btn_copy.set_enabled(
-            self.files
-                .iter()
-                .any(|f| f.values.iter().any(Option::is_some)),
-        );
+        let any = self
+            .files
+            .iter()
+            .any(|f| f.values.iter().any(Option::is_some));
+        self.btn_copy.set_enabled(any);
+        self.btn_save.set_enabled(any && self.verify.is_none());
         self.btn_close.set_label(tr("license.btn.close"));
         self.redraw();
     }
@@ -562,7 +645,12 @@ impl HashWin {
     pub(crate) fn close(&mut self) {
         self.surface = None;
         self.window = None;
-        for b in [&mut self.btn_close, &mut self.btn_copy, &mut self.btn_calc] {
+        for b in [
+            &mut self.btn_close,
+            &mut self.btn_copy,
+            &mut self.btn_save,
+            &mut self.btn_calc,
+        ] {
             b.clear_transient();
         }
         self.tb_cmp.set_text("");
@@ -592,6 +680,10 @@ impl HashWin {
     pub(crate) fn relabel(&mut self) {
         self.btn_calc.set_label(tr("hash.calc"));
         self.btn_copy.set_label(tr("hash.copyAll"));
+        self.btn_save.set_label(trf(
+            "hash.save",
+            &[self.strongest().map_or("sha256", Algo::key)],
+        ));
         self.btn_close.set_label(tr(if self.running {
             "ops.cancel"
         } else {
@@ -607,6 +699,7 @@ impl HashWin {
         self.window.is_some()
             && (self.btn_close.tick(now_ms)
                 | self.btn_copy.tick(now_ms)
+                | self.btn_save.tick(now_ms)
                 | self.btn_calc.tick(now_ms)
                 | self.tb_cmp.tick(now_ms))
     }
@@ -615,6 +708,7 @@ impl HashWin {
         self.window.is_some()
             && (self.btn_close.is_animating()
                 || self.btn_copy.is_animating()
+                || self.btn_save.is_animating()
                 || self.btn_calc.is_animating()
                 || self.tb_cmp.is_animating())
     }
@@ -683,7 +777,12 @@ impl HashWin {
                 self.redraw();
             }
             WindowEvent::Focused(false) => {
-                for b in [&mut self.btn_close, &mut self.btn_copy, &mut self.btn_calc] {
+                for b in [
+                    &mut self.btn_close,
+                    &mut self.btn_copy,
+                    &mut self.btn_save,
+                    &mut self.btn_calc,
+                ] {
                     b.clear_transient();
                 }
                 self.redraw();
@@ -700,7 +799,12 @@ impl HashWin {
                 self.cursor = (position.x as i32, position.y as i32);
                 let (x, y) = self.cursor;
                 let mv = InputEvent::MouseMove { x, y };
-                for b in [&mut self.btn_close, &mut self.btn_copy, &mut self.btn_calc] {
+                for b in [
+                    &mut self.btn_close,
+                    &mut self.btn_copy,
+                    &mut self.btn_save,
+                    &mut self.btn_calc,
+                ] {
                     b.on_event(&mv, &mut inv);
                 }
                 self.tb_cmp.on_event(&mv, &mut inv);
@@ -744,7 +848,12 @@ impl HashWin {
                 if up || self.tb_cmp.bounds().contains(p) {
                     self.tb_cmp.on_event(&e, &mut inv);
                 }
-                for b in [&mut self.btn_close, &mut self.btn_copy, &mut self.btn_calc] {
+                for b in [
+                    &mut self.btn_close,
+                    &mut self.btn_copy,
+                    &mut self.btn_save,
+                    &mut self.btn_calc,
+                ] {
                     if up || b.bounds().contains(p) {
                         b.on_event(&e, &mut inv);
                     }
@@ -765,6 +874,9 @@ impl HashWin {
                 if self.btn_copy.take_clicked() {
                     self.note = Some(trf("hash.copied", &[&tr("hash.copyAll")]));
                     return HashAction::CopyText(self.results_text());
+                }
+                if self.btn_save.take_clicked() {
+                    return HashAction::Save;
                 }
             }
             WindowEvent::MouseWheel { .. } => {
@@ -996,10 +1108,27 @@ impl HashWin {
                 }
                 t
             };
-            let line_color = if self.error.is_some() || file_err.is_some() {
-                th.danger
-            } else {
-                th.text_dim
+            // 검증 모드가 끝났으면 진행 글 대신 집계(일치 · 불일치 · 없음).
+            let (line, line_color) = match self.verify_counts() {
+                Some((ok, bad, missing))
+                    if !self.running && !self.waiting && self.error.is_none() =>
+                {
+                    (
+                        trf(
+                            "hash.verifySummary",
+                            &[&ok.to_string(), &bad.to_string(), &missing.to_string()],
+                        ),
+                        if bad + missing > 0 { th.danger } else { th.ok },
+                    )
+                }
+                _ => (
+                    line,
+                    if self.error.is_some() || file_err.is_some() {
+                        th.danger
+                    } else {
+                        th.text_dim
+                    },
+                ),
             };
             dc.text(pad, y, clip, &line, line_color);
             y += th_txt + px(10.0);
@@ -1034,9 +1163,11 @@ impl HashWin {
             }
             let mut x = wi - pad;
             let show_calc = self.waiting;
+            let show_save = self.verify.is_none();
             for (b, show) in [
                 (&mut self.btn_close, true),
                 (&mut self.btn_copy, true),
+                (&mut self.btn_save, show_save),
                 (&mut self.btn_calc, show_calc),
             ] {
                 b.set_scale(s);

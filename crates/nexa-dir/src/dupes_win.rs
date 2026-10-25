@@ -4,7 +4,7 @@
 //! 진행 글과 결과만 받는다. 묶음의 모든 파일에 표시를 하면 그 묶음은 하나도 지우지 않는다(헤더에 경고).
 
 use ndir_i18n::{tr, trf};
-use ndir_ops::dupes::{keep_index, DupGroup, Keep};
+use ndir_ops::dupes::{keep_index, DupGroup, DupMode, Keep};
 use nexa_ctl::draw::{DrawCtx, FontSlot};
 use nexa_ctl::geom::{Point, Rect};
 use nexa_ctl::raster::RasterCtx;
@@ -29,7 +29,19 @@ pub(crate) enum DupAction {
     Close,
     /// 표시한 파일들을 휴지통으로.
     Trash(Vec<PathBuf>),
+    /// 바닥 옵션(하위 폴더 · 기준)이 바뀌었다 — 호스트가 설정에 적고 다시 찾는다(T-170 옵션 · 10-26).
+    Opts {
+        recursive: bool,
+        mode: DupMode,
+    },
 }
+
+/// 기준 콤보 항목(값 · i18n 키).
+const MODES: &[(&str, &str, DupMode)] = &[
+    ("content", "pref.dupesMode.content", DupMode::Content),
+    ("namesize", "pref.dupesMode.namesize", DupMode::NameSize),
+    ("size", "pref.dupesMode.size", DupMode::Size),
+];
 
 const PAD: f32 = 10.0;
 const BTN_H: f32 = 28.0;
@@ -337,6 +349,10 @@ pub(crate) struct DupesWin {
     btn_trash: Button,
     btn_close: Button,
     tz: i32,
+    /// 옵션 줄(T-170 · 10-26): 하위 폴더 포함 체크박스 · 기준 콤보.
+    cb_recursive: nexa_ctl::Checkbox,
+    mode: Combo,
+    mode_value: String,
 }
 
 impl DupesWin {
@@ -357,7 +373,50 @@ impl DupesWin {
             btn_trash: Button::new(trf("dupes.trash", &["0"])),
             btn_close: Button::new(tr("license.btn.close")),
             tz: 0,
+            cb_recursive: nexa_ctl::Checkbox::new(tr("dupes.scope"), true),
+            mode: Self::mode_combo(),
+            mode_value: "content".into(),
         }
+    }
+
+    fn mode_combo() -> Combo {
+        Combo::new(
+            MODES
+                .iter()
+                .map(|(v, k, _)| ComboItem::new(*v, tr(k)))
+                .collect(),
+            0,
+        )
+    }
+
+    /// 호스트가 검색을 시작할 때의 옵션(설정값) — 창의 체크박스/콤보에 반영.
+    pub(crate) fn set_opts(&mut self, recursive: bool, mode: DupMode) {
+        self.cb_recursive.set_checked(recursive);
+        let v = MODES
+            .iter()
+            .find(|(_, _, m)| *m == mode)
+            .map_or("content", |(v, _, _)| *v);
+        self.mode_value = v.to_string();
+        self.mode.select_value(v);
+    }
+
+    /// 지금 창의 옵션(시험).
+    #[cfg(test)]
+    pub(crate) fn opts(&self) -> (bool, DupMode) {
+        (
+            self.cb_recursive.is_checked(),
+            MODES
+                .iter()
+                .find(|(v, _, _)| *v == self.mode_value)
+                .map_or(DupMode::Content, |(_, _, m)| *m),
+        )
+    }
+
+    fn mode_of(value: &str) -> DupMode {
+        MODES
+            .iter()
+            .find(|(v, _, _)| *v == value)
+            .map_or(DupMode::Content, |(_, _, m)| *m)
     }
 
     fn keep_combo() -> Combo {
@@ -597,6 +656,11 @@ impl DupesWin {
     }
 
     pub(crate) fn relabel(&mut self) {
+        self.cb_recursive =
+            nexa_ctl::Checkbox::new(tr("dupes.scope"), self.cb_recursive.is_checked());
+        let mv = self.mode_value.clone();
+        self.mode = Self::mode_combo();
+        self.mode.select_value(&mv);
         self.btn_close.set_label(tr("license.btn.close"));
         self.keep = Self::keep_combo();
         self.keep.select_value(&self.keep_value.clone());
@@ -616,7 +680,8 @@ impl DupesWin {
     }
 
     fn bottom_h(&self) -> i32 {
-        ((BTN_H + PAD * 2.0) * self.scale).round() as i32 + self.row_h.max(16)
+        // 상태 줄 + 옵션 줄(하위 폴더 · 기준) + 버튼 줄.
+        ((BTN_H * 2.0 + PAD * 3.0) * self.scale).round() as i32 + self.row_h.max(16)
     }
 
     fn layout(&mut self) {
@@ -711,8 +776,9 @@ impl DupesWin {
             }
             WindowEvent::KeyboardInput { event: kev, .. } if kev.state == ElementState::Pressed => {
                 if matches!(kev.logical_key.as_ref(), Key::Named(NamedKey::Escape)) {
-                    if self.keep.is_open() {
+                    if self.keep.is_open() || self.mode.is_open() {
                         self.keep.close(&mut inv);
+                        self.mode.close(&mut inv);
                         self.redraw();
                         return DupAction::None;
                     }
@@ -739,6 +805,8 @@ impl DupesWin {
             self.btn_trash.on_event(&mv, &mut inv);
             self.btn_close.on_event(&mv, &mut inv);
             self.keep.on_event(&mv, &mut inv);
+            self.mode.on_event(&mv, &mut inv);
+            self.cb_recursive.on_event(&mv, &mut inv);
         }
         if let WindowEvent::MouseInput { state, button, .. } = ev {
             if *button == MouseButton::Left {
@@ -754,6 +822,33 @@ impl DupesWin {
                     ElementState::Released => InputEvent::MouseUp { x, y },
                 };
                 let up = matches!(e, InputEvent::MouseUp { .. });
+                // 옵션 줄(T-170 · 10-26): 기준 콤보 · 하위 폴더 체크박스 — 바뀌면 호스트가 다시 찾는다.
+                if self.mode.is_open() || self.mode.bounds().contains(p) || up {
+                    self.mode.on_event(&e, &mut inv);
+                    let v = self.mode.selected_value();
+                    if v != self.mode_value {
+                        self.mode_value = v.clone();
+                        self.redraw();
+                        return DupAction::Opts {
+                            recursive: self.cb_recursive.is_checked(),
+                            mode: Self::mode_of(&v),
+                        };
+                    }
+                    if self.mode.is_open() {
+                        self.redraw();
+                        return DupAction::None;
+                    }
+                }
+                if up || self.cb_recursive.bounds().contains(p) {
+                    self.cb_recursive.on_event(&e, &mut inv);
+                    if let Some(on) = self.cb_recursive.take_toggled() {
+                        self.redraw();
+                        return DupAction::Opts {
+                            recursive: on,
+                            mode: Self::mode_of(&self.mode_value),
+                        };
+                    }
+                }
                 // 콤보가 열려 있으면 콤보가 전부 받는다.
                 if self.keep.is_open() || self.keep.bounds().contains(p) || up {
                     self.keep.on_event(&e, &mut inv);
@@ -860,8 +955,25 @@ impl DupesWin {
             let sy = gh + (4.0 * s).round() as i32;
             let status = nexa_ctl::draw::ellipsize_middle(&mut dc, &self.status, wi - pad * 2);
             dc.text(pad, sy, Rect::new(0, 0, wi, hi), &status, th.text_dim);
-            // 바닥: 보존 규칙 콤보 · [휴지통으로 보내기 (N)] · [닫기].
+            // 옵션 줄(T-170 · 10-26): [☑ 하위 폴더 포함]  기준: [내용 ▾] — 바뀌면 다시 찾는다.
             let btn_h = (BTN_H * s).round() as i32;
+            let oy = hi - pad * 2 - btn_h * 2;
+            self.cb_recursive.set_scale(s);
+            let cbw = dc.text_width(&tr("dupes.scope")) + (30.0 * s).round() as i32;
+            self.cb_recursive
+                .set_bounds(Rect::new(pad, oy, cbw, btn_h), inv);
+            self.cb_recursive.paint(&mut dc, th);
+            let mlabel = tr("dupes.mode");
+            let mlw = dc.text_width(&mlabel) + (8.0 * s).round() as i32;
+            let mx = pad + cbw + (16.0 * s).round() as i32;
+            let mly = dc.text_center_y(oy, btn_h);
+            dc.text(mx, mly, Rect::new(0, 0, wi, hi), &mlabel, th.text);
+            self.mode.set_scale(s);
+            self.mode.set_bounds(
+                Rect::new(mx + mlw, oy, (200.0 * s).round() as i32, btn_h),
+                inv,
+            );
+            // 바닥: 보존 규칙 콤보 · [휴지통으로 보내기 (N)] · [닫기].
             let by = hi - pad - btn_h;
             let label = tr("dupes.keep");
             let lw = dc.text_width(&label) + (8.0 * s).round() as i32;
@@ -882,6 +994,7 @@ impl DupesWin {
                 x -= (8.0 * s).round() as i32;
             }
             self.keep.paint(&mut dc, th);
+            self.mode.paint(&mut dc, th); // 팝업이 아래 줄을 덮도록 마지막에
         }
         let _ = buf.present();
         self.surface = Some(surface);

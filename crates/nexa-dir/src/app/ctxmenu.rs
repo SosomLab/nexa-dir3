@@ -564,6 +564,13 @@ impl App {
             }
         }
         // 체크섬(T-167 · dir3 신규): 파일 1개일 때 · 경로/이름 복사 묶음 뒤(이름 복사는 경로 복사 바로 아래여야 한다 — dir2 규칙).
+        // 검증 파일(`.sha256`/`.md5`/`…SUMS`) 하나 = "체크섬 검증…"(10-26 · DR-32 ⑥).
+        if sel.len() == 1 && sel[0].is_file() && ndir_ops::hash::is_sums_file(&sel[0]) {
+            items.push(CtxItem::item(
+                "ctx.verify_checksum",
+                tr("ctx.verifyChecksum"),
+            ));
+        }
         if !sel.is_empty() && sel.iter().all(|p| p.is_file()) {
             items.push(CtxItem::item("ctx.checksum", tr("ctx.checksum")));
         }
@@ -946,6 +953,11 @@ impl App {
             "ctx.checksum" => {
                 let paths = self.panels[panel].selected_paths_in_view_order();
                 self.open_checksum(&paths);
+            }
+            "ctx.verify_checksum" => {
+                if let Some(p) = self.panels[panel].selected_paths().first().cloned() {
+                    self.checksum_verify(&p);
+                }
             }
             "ctx.compare_panels" => self.compare_panels(),
             "ctx.find_dupes" => {

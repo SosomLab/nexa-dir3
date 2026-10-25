@@ -8804,7 +8804,7 @@ fn duplicate_finder_groups_and_marks() {
     app.layout_for(1200, 800, 1.0);
     app.start_dupes(vec![dir.clone()]);
     assert!(app.dup_job.is_some() && app.open_dupes && app.dupes_win.is_running());
-    app.start_dupes(vec![dir]);
+    app.start_dupes(vec![dir.clone()]);
     let at = std::time::Instant::now();
     while app.dupes_tick() {
         assert!(at.elapsed().as_secs() < 30);
@@ -8825,6 +8825,34 @@ fn duplicate_finder_groups_and_marks() {
     }
     app.close_dupes();
     assert!(app.dup_job.is_none() && !app.dupes_win.is_open());
+    // 옵션(T-170 · 10-26): 이름+크기 = one.bin ↔ sub/two.bin은 이름이 달라 0묶음 · 크기만 = 셋(4000 B)이 한 묶음 · 창이 옵션을 보여 준다 ·
+    // 창 바닥에서 바꾸면(`dupes_set_opts`) 설정에 적히고 같은 대상을 다시 찾는다.
+    std::fs::write(dir.join("other.bin"), vec![8u8; 4000]).expect("write");
+    let finish = |app: &mut App| {
+        let at = std::time::Instant::now();
+        while app.dupes_tick() {
+            assert!(at.elapsed().as_secs() < 30);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    };
+    app.dupes_set_opts(false, ndir_ops::dupes::DupMode::NameSize);
+    assert_eq!(app.settings.get("dupes.mode"), Some("namesize"));
+    assert_eq!(app.settings.get("dupes.recursive"), Some("off"));
+    assert_eq!(
+        app.dupes_win.opts(),
+        (false, ndir_ops::dupes::DupMode::NameSize)
+    );
+    finish(&mut app);
+    assert_eq!(app.dupes_win.rows_len(), 0, "{}", app.dupes_win.status());
+    app.dupes_set_opts(true, ndir_ops::dupes::DupMode::Size);
+    finish(&mut app);
+    assert_eq!(
+        app.dupes_win.rows_len(),
+        1 + 3,
+        "{}",
+        app.dupes_win.status()
+    );
+    app.close_dupes();
 }
 
 /// 폴더 비교 · 동기화(T-171/172): 두 폴더 → 작업 스레드 → 창에 다른 것만 · [→ 왼쪽 기준] = 복사 워커 → 오른쪽에 생김 → 다시 비교.
@@ -11444,5 +11472,67 @@ fn terminal_cursor_and_padding_follow_windows_terminal_or_setting() {
         TermCursor::EmptyBox,
         "스타일에 실린다"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 체크섬 검증 파일(T-167 · DR-32 ⑥ · 10-26): [저장] = 가장 강한 알고리즘(SHA-256) GNU 줄을 같은 폴더 `checksums.sha256`에 · 우클릭 메뉴에 그 파일 =
+/// "체크섬 검증…" · 검증 = 줄별 대조(일치 · 불일치 · 없음) → 결과 열 + 요약 · 저장 버튼은 검증 모드에서 숨김.
+#[test]
+fn checksum_save_and_verify_round_trip() {
+    let (mut app, dir) = fixture("sums");
+    let paths = vec![dir.join("a.txt"), dir.join("b.md")];
+    app.open_checksum(&paths);
+    let at = std::time::Instant::now();
+    while app.hash_tick() {
+        assert!(at.elapsed().as_secs() < 60);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.checksum_save();
+    let sums = dir.join("checksums.sha256");
+    let text = std::fs::read_to_string(&sums).expect("saved");
+    let lines = ndir_ops::hash::parse_sums(&text);
+    assert_eq!(lines.len(), 2, "{text}");
+    assert_eq!(lines[0].1, "a.txt");
+    assert_eq!(
+        lines[0].0,
+        ndir_ops::hash::digest(ndir_ops::hash::Algo::Sha256, b"hello")
+    );
+    // 두 번째 저장 = 덮어쓰기 확인 대화상자(쓰지 않음).
+    app.checksum_save();
+    assert!(app.dlg_pending.is_some(), "덮어쓰기 확인");
+    app.dlg_pending = None;
+    // 우클릭 메뉴: 검증 파일 하나 = 검증 항목.
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&sums, &mut inv);
+    app.open_row_menu(0);
+    let ids: Vec<String> = app
+        .ctx_items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(ids.contains(&"ctx.verify_checksum".to_string()), "{ids:?}");
+    app.ctx_pick("ctx.cancel");
+    // b.md를 바꾸고 · 한 줄은 없는 파일로 → 검증.
+    std::fs::write(dir.join("b.md"), b"changed").expect("write");
+    std::fs::write(&sums, format!("{text}{}  gone.bin\n", "0".repeat(64))).expect("write");
+    app.checksum_verify(&sums);
+    assert!(app.open_hash);
+    let at = std::time::Instant::now();
+    while app.hash_tick() {
+        assert!(at.elapsed().as_secs() < 60);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        app.hash_win.verify_counts(),
+        Some((1, 1, 1)),
+        "a 일치 · b 불일치 · gone 없음"
+    );
+    assert!(app.hash_win.save_rows().len() == 2);
+    app.close_checksum();
     let _ = std::fs::remove_dir_all(&dir);
 }

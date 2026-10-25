@@ -44,10 +44,18 @@ impl App {
             self.redraw();
             return;
         }
+        // 옵션(T-170 · 10-26) = 설정 `dupes.recursive`/`dupes.mode`(창 바닥의 체크박스/콤보가 바꾼다).
+        let opts = DupOpts {
+            min_size: 1,
+            recursive: self.settings.flag("dupes.recursive"),
+            mode: dp::DupMode::from_key(self.settings.get("dupes.mode").unwrap_or("content")),
+        };
+        self.dup_roots = roots.clone();
+        self.dupes_win.set_opts(opts.recursive, opts.mode);
         let shared = Arc::new(DupShared::default());
         let sh = Arc::clone(&shared);
         std::thread::spawn(move || {
-            let r = dp::find(&roots, DupOpts::default(), &sh.progress, &sh.cancel).map(|groups| {
+            let r = dp::find(&roots, opts, &sh.progress, &sh.cancel).map(|groups| {
                 let mtimes = groups
                     .iter()
                     .map(|g| g.paths.iter().map(|p| mtime_secs(p)).collect())
@@ -92,6 +100,26 @@ impl App {
             None => self.dupes_win.set_error(&tr("dupes.failed")),
         }
         false
+    }
+
+    /// 창 바닥 옵션이 바뀜(T-170 · 10-26): 설정에 적고 같은 대상을 다시 찾는다(진행 중이면 취소 뒤).
+    pub(crate) fn dupes_set_opts(&mut self, recursive: bool, mode: dp::DupMode) {
+        let _ = self
+            .settings
+            .set("dupes.recursive", if recursive { "on" } else { "off" });
+        let _ = self.settings.set(
+            "dupes.mode",
+            match mode {
+                dp::DupMode::Content => "content",
+                dp::DupMode::NameSize => "namesize",
+                dp::DupMode::Size => "size",
+            },
+        );
+        if let Some(job) = self.dup_job.take() {
+            job.shared.cancel.store(true, Ordering::Relaxed);
+        }
+        let roots = self.dup_roots.clone();
+        self.start_dupes(roots);
     }
 
     /// 창 닫기 — 진행 중이면 취소.

@@ -463,6 +463,7 @@ impl App {
                     let _ = clipboard::write_text(&t);
                 }
                 crate::hash_win::HashAction::Start => self.checksum_start(),
+                crate::hash_win::HashAction::Save => self.checksum_save(),
                 crate::hash_win::HashAction::Close => self.close_checksum(),
                 crate::hash_win::HashAction::None => {}
             }
@@ -476,6 +477,9 @@ impl App {
                     self.dupes_win.paint(&font, &self.theme, ui_px);
                 }
                 crate::dupes_win::DupAction::Trash(paths) => self.dupes_trash(paths),
+                crate::dupes_win::DupAction::Opts { recursive, mode } => {
+                    self.dupes_set_opts(recursive, mode);
+                }
                 crate::dupes_win::DupAction::Close => self.close_dupes(),
                 crate::dupes_win::DupAction::None => {}
             }

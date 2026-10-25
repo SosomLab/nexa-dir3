@@ -4,7 +4,7 @@
 
 use std::fmt::Write as _;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 지원 알고리즘(표시 순서).
@@ -84,6 +84,77 @@ pub fn new_digest(a: Algo) -> Box<dyn Digest> {
         Algo::Sha256 => Box::new(Sha256::default()),
         Algo::Sha512 => Box::new(Sha512::default()),
     }
+}
+
+/// 검증 파일 글(GNU `sha256sum`/`md5sum` 형식 · T-167 · DR-32 ⑥): `<16진>  <이름>` 한 줄씩(두 칸) · 이름은 넘긴 그대로(상대 이름).
+#[must_use]
+pub fn sums_text(rows: &[(String, String)]) -> String {
+    let mut out = String::new();
+    for (hex, name) in rows {
+        out.push_str(hex);
+        out.push_str("  ");
+        out.push_str(name);
+        out.push('\n');
+    }
+    out
+}
+
+/// 검증 파일 글 → `(16진 소문자, 이름)`(순수): GNU `hex  name` · `hex *name`(바이너리 표시 `*` 제거) · 탭/여러 칸 허용 · `#` 주석과 빈 줄 건너뜀 ·
+/// 16진이 아닌 첫 낱말 = 그 줄 무시.
+#[must_use]
+pub fn parse_sums(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let line = line.trim_end_matches('\r').trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let (hex, rest) = line.split_once([' ', '\t'])?;
+            if hex.len() < 8 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return None;
+            }
+            let name = rest.trim_start().trim_start_matches('*').trim();
+            (!name.is_empty()).then(|| (hex.to_ascii_lowercase(), name.to_string()))
+        })
+        .collect()
+}
+
+/// 검증 파일의 알고리즘(순수): 확장자 키(`.sha256` · `.md5` · `.sha1` · `.sha512` · `.crc32`) → 그것 · 아니면 첫 항목의 16진 길이로.
+#[must_use]
+pub fn sums_algo(path: &Path, entries: &[(String, String)]) -> Option<Algo> {
+    let by_ext = path
+        .extension()
+        .and_then(|e| Algo::from_key(e.to_string_lossy().to_ascii_lowercase().as_str()));
+    by_ext.or_else(|| {
+        let n = entries.first()?.0.len();
+        Algo::ALL.iter().copied().find(|a| a.hex_len() == n)
+    })
+}
+
+/// 검증 파일인가(순수 · 메뉴 노출 판정 · 파일을 열지 않는다): 확장자가 알고리즘 키거나 이름이 `…SUMS`(SHA256SUMS · md5sums 등).
+#[must_use]
+pub fn is_sums_file(path: &Path) -> bool {
+    let ext_ok = path.extension().is_some_and(|e| {
+        Algo::from_key(e.to_string_lossy().to_ascii_lowercase().as_str()).is_some()
+    });
+    let stem_ok = path.file_stem().is_some_and(|s| {
+        let u = s.to_string_lossy().to_ascii_uppercase();
+        u.len() > 4 && u.ends_with("SUMS") // SHA256SUMS · md5sums (sums.rs 같은 이름은 아님)
+    });
+    ext_ok || stem_ok
+}
+
+/// 저장할 검증 파일 경로(순수 · DR-32 ⑥ "같은 폴더"): 파일 하나 = `<이름>.<키>` · 여럿 = 첫 파일 폴더의 `checksums.<키>`.
+#[must_use]
+pub fn sums_file_name(sources: &[PathBuf], algo: Algo) -> Option<PathBuf> {
+    let first = sources.first()?;
+    let dir = first.parent()?;
+    let name = if sources.len() == 1 {
+        format!("{}.{}", first.file_name()?.to_string_lossy(), algo.key())
+    } else {
+        format!("checksums.{}", algo.key())
+    };
+    Some(dir.join(name))
 }
 
 /// 한 번에(시험 · 짧은 입력).
@@ -881,6 +952,66 @@ impl Digest for Sha512 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 검증 파일(T-167 · DR-32 ⑥): GNU 두 칸 형식 왕복 · `*` 바이너리 표시 · 주석/빈 줄 · 알고리즘 판정(확장자 → 길이) · 파일 판정 · 저장 이름.
+    #[test]
+    fn sums_file_round_trip_and_naming() {
+        let rows = vec![
+            ("ABCDEF0123456789".to_string(), "a.txt".to_string()),
+            ("0123456789abcdef".to_string(), "sub/b c.md".to_string()),
+        ];
+        let text = sums_text(&rows);
+        assert_eq!(
+            text,
+            "ABCDEF0123456789  a.txt\n0123456789abcdef  sub/b c.md\n"
+        );
+        let back = parse_sums(&format!(
+            "# comment\n\n{text}deadbeefdeadbeef *bin.dat\r\nnot-hex  x\n"
+        ));
+        assert_eq!(back.len(), 3, "{back:?}");
+        assert_eq!(
+            back[0],
+            ("abcdef0123456789".to_string(), "a.txt".to_string()),
+            "소문자"
+        );
+        assert_eq!(back[1].1, "sub/b c.md", "이름 안 빈칸 유지");
+        assert_eq!(
+            back[2],
+            ("deadbeefdeadbeef".to_string(), "bin.dat".to_string()),
+            "`*` 제거"
+        );
+        let sha = (digest(Algo::Sha256, b"x"), "x".to_string());
+        assert_eq!(
+            sums_algo(Path::new("a.sha256"), &[]),
+            Some(Algo::Sha256),
+            "확장자"
+        );
+        assert_eq!(
+            sums_algo(Path::new("SHA256SUMS"), std::slice::from_ref(&sha)),
+            Some(Algo::Sha256),
+            "길이"
+        );
+        assert_eq!(sums_algo(Path::new("x.md5"), &[]), Some(Algo::Md5));
+        assert_eq!(sums_algo(Path::new("x.txt"), &[]), None);
+        assert!(
+            is_sums_file(Path::new("d/a.zip.sha256"))
+                && is_sums_file(Path::new("md5sums"))
+                && is_sums_file(Path::new("SHA512SUMS.txt"))
+        );
+        assert!(!is_sums_file(Path::new("a.txt")) && !is_sums_file(Path::new("sums.rs")));
+        assert_eq!(
+            sums_file_name(&[PathBuf::from("D:/x/a.zip")], Algo::Sha256),
+            Some(PathBuf::from("D:/x").join("a.zip.sha256"))
+        );
+        assert_eq!(
+            sums_file_name(
+                &[PathBuf::from("D:/x/a"), PathBuf::from("D:/x/b")],
+                Algo::Md5
+            ),
+            Some(PathBuf::from("D:/x").join("checksums.md5"))
+        );
+        assert_eq!(sums_file_name(&[], Algo::Md5), None);
+    }
 
     /// 표준 시험 벡터(빈 입력 · "abc" · 긴 문장) — 알고리즘 5종.
     #[test]

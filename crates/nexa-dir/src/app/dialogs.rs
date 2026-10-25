@@ -31,6 +31,8 @@ pub(crate) enum DlgReply {
     NfcConvert(Vec<PathBuf>),
     /// 패턴으로 선택(NEW-054 · 10-25): 1 = 선택에 더함 · 2 = 선택에서 뺌 · 그 외 취소 — 입력 = `;` 구분 글롭.
     SelectPattern,
+    /// 체크섬 검증 파일 저장 — 이미 있을 때 덮어쓰기 확인(1 = 쓴다 · T-167 · 10-26).
+    HashSave { dest: PathBuf, text: String },
 }
 
 /// 덮어쓰기 질문 글 — 이름 + **대상 폴더**(사용자 10-05 "대상 폴더 식별이 되지 않아": 종전에는 이름만 있어 어느 폴더에
@@ -134,6 +136,11 @@ impl App {
                 2 => self.nfc_convert(paths, false),
                 _ => {}
             },
+            DlgReply::HashSave { dest, text } => {
+                if id == 1 {
+                    self.checksum_write(&dest, &text);
+                }
+            }
             DlgReply::SelectPattern => {
                 if matches!(id, 1 | 2) {
                     let spec = text.unwrap_or_default();

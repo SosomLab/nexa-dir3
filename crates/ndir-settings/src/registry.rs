@@ -74,6 +74,12 @@ const TERM_CURSOR_OPTS: &[(&str, &str)] = &[
     ("vintage", "pref.termCursor.vintage"),
     ("dunderscore", "pref.termCursor.dunderscore"),
 ];
+/// 중복 찾기 같음 기준(T-170 옵션 · 10-26).
+const DUPES_MODE_OPTS: &[(&str, &str)] = &[
+    ("content", "pref.dupesMode.content"),
+    ("namesize", "pref.dupesMode.namesize"),
+    ("size", "pref.dupesMode.size"),
+];
 const TERM_COPY_OPTS: &[(&str, &str)] = &[
     ("text", "pref.termCopy.text"),
     ("html", "pref.termCopy.html"),
@@ -1354,6 +1360,23 @@ pub const REGISTRY: &[Entry] = &[
             max: 1_048_576
         },
         "512"
+    ),
+    // 중복 찾기 옵션(T-170 · 10-26): 창 바닥의 체크박스/콤보가 바꾸고 다시 찾는다 · 다음 검색의 기본값.
+    e!(
+        "dupes.recursive",
+        CAT_CTXMENU,
+        "pref.dupesRecursive",
+        "pref.dupesRecursive.desc",
+        Bool,
+        "on"
+    ),
+    e!(
+        "dupes.mode",
+        CAT_CTXMENU,
+        "pref.dupesMode",
+        "pref.dupesMode.desc",
+        Choice(DUPES_MODE_OPTS),
+        "content"
     ),
     // ── 파일 목록 › 파일 전송
     e!(
