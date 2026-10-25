@@ -661,6 +661,23 @@ const LATIN: &[(char, char, char)] = &[
     ('\u{1ee7}', '\u{031b}', '\u{1eed}'),
 ];
 
+/// 정규 결합 부류(canonical combining class · U+0300~036F · Python `unicodedata` 13.0에서 생성). 범위 밖 = 0.
+fn ccc(m: char) -> u8 {
+    #[rustfmt::skip]
+    const CCC: [u8; 112] = [
+    230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230,
+    230, 230, 230, 230, 230, 232, 220, 220, 220, 220, 232, 216, 220, 220, 220, 220,
+    220, 202, 202, 220, 220, 220, 220, 202, 202, 220, 220, 220, 220, 220, 220, 220,
+    220, 220, 220, 220, 1, 1, 1, 1, 1, 220, 220, 220, 220, 230, 230, 230,
+    230, 230, 230, 230, 230, 240, 230, 220, 220, 220, 230, 230, 230, 220, 220, 0,
+    230, 230, 230, 220, 220, 220, 220, 230, 232, 220, 220, 230, 233, 234, 234, 233,
+    234, 234, 233, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230,
+    ];
+    CCC.get((m as u32).wrapping_sub(0x300) as usize)
+        .copied()
+        .unwrap_or(0)
+}
+
 /// NFC 합성(표시 · 변환용): 한글 초성+중성(+종성) → 완성형 · 완성형 + 종성 자모 → 완성형 · 라틴 글자 + 결합 기호 → 미리 조합된 글자.
 /// 바뀌는 것이 없으면 빌림 그대로(할당 0).
 pub fn compose(s: &str) -> Cow<'_, str> {
@@ -703,21 +720,35 @@ pub fn compose(s: &str) -> Cow<'_, str> {
                 }
             }
         }
-        // 라틴 글자 + 결합 기호(여러 개면 차례로 — `a` `̂` `́` → `ấ` · 표에 없는 기호에서 멈춘다).
-        let mut cur = c;
+        // 라틴 글자 + 결합 기호 묶음: 정규 결합 순서(ccc · 안정 정렬 — 비정규 순서 입력도 NFC와 같게 · 협업 10-25)로 세운 뒤 차례로
+        // 합성한다. 합성되지 않은 기호가 뒤 기호를 **막는다**(ccc가 같거나 더 큼 · UAX #15 차단 규칙) — 막히지 않은 기호는 건너 합성.
+        let mut marks: Vec<char> = Vec::new();
         while let Some(&m) = chars.peek() {
-            if !('\u{0300}'..='\u{036F}').contains(&m) {
-                break;
+            if !('\u{0300}'..='\u{036F}').contains(&m) || ccc(m) == 0 {
+                break; // ccc 0(U+034F CGJ)은 시작 문자 = 묶음을 끊는다
             }
-            match latin(cur, m) {
-                Some(pre) => {
-                    chars.next();
+            marks.push(m);
+            chars.next();
+        }
+        if marks.is_empty() {
+            out.push(c);
+            continue;
+        }
+        marks.sort_by_key(|m| ccc(*m));
+        let mut cur = c;
+        let mut rest: Vec<char> = Vec::new();
+        for m in marks {
+            let blocked = rest.last().is_some_and(|r| ccc(*r) >= ccc(m));
+            if !blocked {
+                if let Some(pre) = latin(cur, m) {
                     cur = pre;
+                    continue;
                 }
-                None => break,
             }
+            rest.push(m);
         }
         out.push(cur);
+        out.extend(rest);
     }
     Cow::Owned(out)
 }
@@ -804,7 +835,27 @@ mod tests {
         assert_eq!(
             compose("a\u{0301}\u{0333}"),
             "á\u{0333}",
-            "표에 없는 기호에서 멈춘다(앞은 합성 · 뒤는 그대로)"
+            "표에 없는 기호는 그대로(앞은 합성)"
+        );
+        // 정규 순서 정렬 + 차단 규칙(협업 10-25 · 기대값 = Python NFC): 비정규 순서 a+̂+̣ 도 ậ · 낮은 ccc(̳ 220)는 ́(230)을 막지 않음 ·
+        // 같은 ccc는 순서 유지(ē+́ → ḕ · ä+̄ → ǟ) · 합성 안 된 같은 ccc 기호는 뒤를 막음(á + ́).
+        assert_eq!(compose("a\u{0302}\u{0323}"), "\u{1ead}", "비정규 순서 → ậ");
+        assert_eq!(compose("a\u{0323}\u{0302}"), "\u{1ead}");
+        assert_eq!(
+            compose("a\u{0333}\u{0301}"),
+            "á\u{0333}",
+            "낮은 ccc는 막지 않음"
+        );
+        assert_eq!(compose("e\u{0304}\u{0301}"), "\u{1e17}");
+        assert_eq!(compose("a\u{0308}\u{0304}"), "\u{01df}");
+        assert_eq!(compose("a\u{0301}\u{0301}"), "á\u{0301}", "같은 ccc = 차단");
+        assert_eq!(ccc('\u{0301}'), 230);
+        assert_eq!(ccc('\u{0323}'), 220);
+        assert_eq!(ccc('x'), 0);
+        assert_eq!(
+            compose("a\u{034F}\u{0301}"),
+            "a\u{034F}\u{0301}",
+            "CGJ(ccc 0)는 묶음을 끊는다"
         );
         assert!(
             LATIN
