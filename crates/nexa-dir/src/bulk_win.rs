@@ -78,7 +78,7 @@ impl BulkItem {
     }
 }
 
-const KINDS: [(&str, &str); 8] = [
+const KINDS: [(&str, &str); 10] = [
     ("replace", "bulk.kind.replace"),
     ("replacerx", "bulk.kind.replaceRx"),
     ("insert", "bulk.kind.insert"),
@@ -87,7 +87,12 @@ const KINDS: [(&str, &str); 8] = [
     ("date", "bulk.kind.date"),
     ("move", "bulk.kind.move"),
     ("ext", "bulk.kind.ext"),
+    ("remove", "bulk.kind.remove"),
+    ("trim", "bulk.kind.trim"),
 ];
+/// 연번 번호 기준(DR-31 ⑭): 보이는 순서(기본) · 선택한 순서(dir2).
+const NUM_ORDERS: [(&str, &str); 2] =
+    [("view", "bulk.numOrder.view"), ("sel", "bulk.numOrder.sel")];
 /// 구간 이동 목적지(dir2 `bulk.destFront/destEnd`).
 const DESTS: [(&str, &str); 2] = [("front", "bulk.destFront"), ("end", "bulk.destEnd")];
 const SCOPES: [(&str, &str); 4] = [
@@ -115,6 +120,15 @@ const DATES: [(&str, &str); 2] = [
 ];
 const PADS: [&str; 6] = ["1", "01", "001", "0001", "00001", "000001"];
 const DEFAULT_DATE_FMT: &str = "${YYYY}-${MM}-${DD}";
+
+/// 날짜 포맷 도움말(DLG-085 · dir2 bulkrename.rs:1843-1865의 OS 메시지 상자 → 자체 다중 줄 툴팁): 토큰 15개 + 예 + i18n 안내.
+fn date_help_text() -> String {
+    format!(
+        "{}\n${{YYYY}} ${{YY}} · ${{MMMM}} ${{MMM}} ${{MM}} ${{M}} · ${{DDD}} ${{DD}} ${{D}}\n${{HH}} ${{H}} · ${{mm}} ${{m}} · ${{ss}} ${{s}}\n{}",
+        tr("bulk.date.fmtHelpTitle"),
+        tr("bulk.date.fmtHelpNote")
+    )
+}
 
 fn combo_of(items: &[(&str, &str)], selected: usize) -> Combo {
     Combo::new(
@@ -174,6 +188,20 @@ struct Card {
     /// 확장자 변경(dir2 고유): 원본(빈 = 모두) · 새 확장자.
     ext_from: TextBox,
     ext_to: TextBox,
+    /// 지우기(DR-31 ⑬): 개수(위치는 `offset`/`dir` 공용).
+    count: TextBox,
+    /// 공백 정리(DR-31 ⑬): 앞뒤 공백 · 연속 공백 → 하나 · 앞뒤 구두점.
+    trim_edges: Checkbox,
+    trim_collapse: Checkbox,
+    trim_punct: Checkbox,
+    /// 연번 번호 기준(DR-31 ⑭): 보이는 순서 / 선택한 순서.
+    num_order: Combo,
+    /// 카드 켜기/끄기(DR-31 ⑮): 끄면 미리보기에서 없는 셈 · 프리셋 `enabled=0`.
+    on: Checkbox,
+    /// 카드 복제(DR-31 ⑮): 같은 설정 카드를 바로 아래에.
+    dup: Button,
+    /// 날짜 포맷 도움말 `?`(DLG-085): 머물면 토큰 목록 툴팁.
+    help: Button,
     rect: Rect,
 }
 
@@ -191,6 +219,8 @@ impl Card {
         mv_start.set_text("1");
         let mut mv_len = TextBox::new(tr("bulk.moveLen"));
         mv_len.set_text("1");
+        let mut count = TextBox::new(tr("bulk.count.ph"));
+        count.set_text("1");
         Card {
             kind: combo_of(&KINDS, kind_idx),
             add: Button::new("+"),
@@ -223,8 +253,44 @@ impl Card {
             mv_dest: combo_of(&DESTS, 0),
             ext_from: TextBox::new(tr("bulk.extFrom")),
             ext_to: TextBox::new(tr("bulk.extTo")),
+            count,
+            trim_edges: Checkbox::new(tr("bulk.trim.edges"), true),
+            trim_collapse: Checkbox::new(tr("bulk.trim.collapse"), true),
+            trim_punct: Checkbox::new(tr("bulk.trim.punct"), false),
+            num_order: combo_of(&NUM_ORDERS, 0),
+            on: Checkbox::new("", true),
+            dup: Button::new("⧉"),
+            help: Button::new("?"),
             rect: Rect::default(),
         }
+    }
+
+    /// 켜져 있는가(끈 카드는 미리보기·적용에서 없는 셈).
+    fn is_on(&self) -> bool {
+        self.on.is_checked()
+    }
+
+    /// 체크박스 전부(배치 초기화 · 히트 · 사건 · 그리기 공용).
+    fn checks(&mut self) -> [&mut Checkbox; 6] {
+        [
+            &mut self.match_case,
+            &mut self.per_folder,
+            &mut self.trim_edges,
+            &mut self.trim_collapse,
+            &mut self.trim_punct,
+            &mut self.on,
+        ]
+    }
+
+    fn checks_ref(&self) -> [&Checkbox; 6] {
+        [
+            &self.match_case,
+            &self.per_folder,
+            &self.trim_edges,
+            &self.trim_collapse,
+            &self.trim_punct,
+            &self.on,
+        ]
     }
 
     /// 대상(이름/확장자) 행이 있는 종류인가 — Move · ChangeExt는 대상 개념이 없다(줄기/확장자에 고정).
@@ -243,10 +309,12 @@ impl Card {
             "replacerx" => 3,
             "insert" => 2,
             "case" => 1,
-            "number" => 5,
+            "number" => 6,
             "date" => 4,
             "move" => 2,
             "ext" => 1,
+            "remove" => 2,
+            "trim" => 3,
             _ => 0,
         }
     }
@@ -338,7 +406,25 @@ impl Card {
                     prefix: self.prefix.text(),
                     suffix: self.suffix.text(),
                     per_folder: self.per_folder.is_checked(),
+                    by_selection: self.num_order.selected_value() == "sel",
                 },
+            }),
+            "remove" => Some(RenameOp::Remove {
+                scope,
+                at: self.at(),
+                count: self
+                    .count
+                    .text()
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(1)
+                    .min(999),
+            }),
+            "trim" => Some(RenameOp::Trim {
+                scope,
+                edges: self.trim_edges.is_checked(),
+                collapse: self.trim_collapse.is_checked(),
+                punct: self.trim_punct.is_checked(),
             }),
             "date" => {
                 let f = self.fmt.text();
@@ -453,7 +539,29 @@ impl Card {
                 c.prefix.set_text(&spec.prefix);
                 c.suffix.set_text(&spec.suffix);
                 c.per_folder.set_checked(spec.per_folder);
+                c.num_order
+                    .select_value(if spec.by_selection { "sel" } else { "view" });
                 set_at(&mut c, &spec.at);
+                c
+            }
+            RenameOp::Remove { scope, at, count } => {
+                let mut c = Card::new(8);
+                c.scope.select_value(scope_value(*scope));
+                c.count.set_text(&count.to_string());
+                set_at(&mut c, at);
+                c
+            }
+            RenameOp::Trim {
+                scope,
+                edges,
+                collapse,
+                punct,
+            } => {
+                let mut c = Card::new(9);
+                c.scope.select_value(scope_value(*scope));
+                c.trim_edges.set_checked(*edges);
+                c.trim_collapse.set_checked(*collapse);
+                c.trim_punct.set_checked(*punct);
                 c
             }
             RenameOp::Date { scope, spec } => {
@@ -500,6 +608,7 @@ impl Card {
             &mut self.pad,
             &mut self.date_kind,
             &mut self.mv_dest,
+            &mut self.num_order,
         ]
     }
 
@@ -518,11 +627,12 @@ impl Card {
             &mut self.mv_len,
             &mut self.ext_from,
             &mut self.ext_to,
+            &mut self.count,
         ]
     }
 
-    fn buttons(&mut self) -> [&mut Button; 2] {
-        [&mut self.add, &mut self.del]
+    fn buttons(&mut self) -> [&mut Button; 4] {
+        [&mut self.add, &mut self.del, &mut self.dup, &mut self.help]
     }
 
     /// Tab 순회용 — 종류별 **보이는 입력칸**을 배치 순서(행 위→아래 · 왼→오)로(T-162 남김 · 10-25). 종류 기준이라 창 없는 시험에서도
@@ -546,6 +656,7 @@ impl Card {
             ],
             "move" => vec![&mut self.mv_start, &mut self.mv_len],
             "ext" => vec![&mut self.ext_from, &mut self.ext_to],
+            "remove" => vec![&mut self.offset, &mut self.count],
             _ => Vec::new(),
         }
     }
@@ -721,6 +832,8 @@ pub(crate) struct BulkWin {
     /// `[…]` 버튼 + 그 위로 펴는 프리셋 메뉴(사용자 10-18 · 종전 콤보 = ✓ 칸 · 헤더/구분자 불가).
     /// 카드 드래그 이동(사용자 10-18 · Path Finder 꼴): 카드 바탕(컨트롤 밖)을 잡고 끌면 삽입 위치 인디케이터 + 고스트(열 밖 = 축소).
     card_drag: Option<CardDrag>,
+    /// 날짜 포맷 도움말 툴팁(DLG-085 · nexa-ctl `Tooltip` 229): 날짜 카드 `?` 위에 머물면 토큰 목록(여러 줄).
+    tip: nexa_ctl::controls::tooltip::Tooltip,
     /// "모든 프리셋 제거" 무장 시각(사용자 10-18 "제한 시간에 2번"): 첫 선택 = 무장(메뉴를 다시 열어 항목이 `(N)` 카운트다운) ·
     /// 그 안에 다시 선택 = 실행 · 지나면 원복.
     clear_armed: Option<std::time::Instant>,
@@ -776,6 +889,7 @@ impl BulkWin {
             cards_rect: Rect::default(),
             grid_rect: Rect::default(),
             card_drag: None,
+            tip: nexa_ctl::controls::tooltip::Tooltip::new(),
             clear_armed: None,
             bars: ScrollBars::new(),
             flash: FlashBox::new(),
@@ -999,7 +1113,7 @@ impl BulkWin {
                 self.reset_cards();
                 None
             }
-            "save" => Some(BulkAction::SavePreset(br::serialize_ops(&self.ops_all()))),
+            "save" => Some(BulkAction::SavePreset(self.preset_text())),
             "edit" => Some(BulkAction::EditPresets),
             "clear" => {
                 if self.clear_armed_secs().is_some() {
@@ -1035,12 +1149,52 @@ impl BulkWin {
 
     /// 현재 파이프라인(유효 카드만).
     pub(crate) fn ops(&self) -> Vec<RenameOp> {
-        self.cards.iter().filter_map(Card::op).collect()
+        self.cards
+            .iter()
+            .filter(|c| c.is_on())
+            .filter_map(Card::op)
+            .collect()
     }
 
-    /// 카드 전부(무효 포함) — 프리셋 저장용(불러오면 같은 카드 수로 돌아온다).
-    pub(crate) fn ops_all(&self) -> Vec<RenameOp> {
-        self.cards.iter().filter_map(|c| c.op_with(false)).collect()
+    /// 프리셋 텍스트(카드 전부 · 꺼진 카드 = 줄 끝 `|enabled=0` · 파서는 모르는 열쇠를 무시한다 · DR-31 ⑮).
+    pub(crate) fn preset_text(&self) -> String {
+        let cards: Vec<&Card> = self
+            .cards
+            .iter()
+            .filter(|c| c.op_with(false).is_some())
+            .collect();
+        let ops: Vec<RenameOp> = cards.iter().filter_map(|c| c.op_with(false)).collect();
+        let text = br::serialize_ops(&ops);
+        // 머리말(`#`)·빈 줄은 그대로 · 동작 줄 i = 카드 i → 꺼진 카드면 `|enabled=0`.
+        let mut k = 0;
+        let mut out = String::new();
+        for line in text.lines() {
+            out.push_str(line);
+            if !line.trim().is_empty() && !line.starts_with('#') {
+                if cards.get(k).is_some_and(|c| !c.is_on()) {
+                    out.push_str("|enabled=0");
+                }
+                k += 1;
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    /// 프리셋 텍스트 → 카드(동작 + 켜기/끄기).
+    pub(crate) fn load_preset_text(&mut self, text: &str) {
+        let ops = br::parse_ops(text);
+        self.load_ops(&ops);
+        let flags: Vec<bool> = text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(|l| !l.contains("|enabled=0"))
+            .collect();
+        for (c, on) in self.cards.iter_mut().zip(flags) {
+            c.on.set_checked(on);
+        }
+        self.recompute(true);
     }
 
     /// 시험용 카드 폼 접근(종류 · 찾기 · 바꾸기 · 텍스트).
@@ -1072,8 +1226,25 @@ impl BulkWin {
                 group: it.parent.to_string_lossy().into_owned(),
             })
             .collect();
+        // 연번 번호 기준(DR-31 ⑭): 연번 카드가 "보이는 순서"면 미리보기가 정렬된 순서로 항목을 넘기고 결과를 제자리에 되돌린다 ·
+        // "선택한 순서"(dir2)면 항목 순서 그대로.
+        let by_view = ops.iter().any(|o| o.number_order() == Some(false));
+        let order: Vec<usize> = {
+            let shown: Vec<usize> = self.rows.source().rows.iter().map(|r| r.idx).collect();
+            if by_view && shown.len() == inputs.len() {
+                shown
+            } else {
+                (0..inputs.len()).collect()
+            }
+        };
         let news = if self.error.is_none() {
-            br::preview(&inputs, &ops, self.tz_min)
+            let ordered: Vec<RenameInput> = order.iter().map(|&i| inputs[i].clone()).collect();
+            let out = br::preview(&ordered, &ops, self.tz_min);
+            let mut news = vec![String::new(); inputs.len()];
+            for (pos, &i) in order.iter().enumerate() {
+                news[i] = out[pos].clone();
+            }
+            news
         } else {
             inputs.iter().map(|i| i.name.clone()).collect()
         };
@@ -1327,6 +1498,7 @@ impl BulkWin {
         }
         let mut inv = Invalidations::default();
         self.rows.tick(now_ms, &mut inv);
+        any |= self.tip.tick();
         any | !inv.is_empty() | inv.tick_requested()
     }
 
@@ -1337,6 +1509,7 @@ impl BulkWin {
                 || self.presets_btn.is_animating()
                 || self.flash.animating()
                 || self.clear_armed.is_some()
+                || self.tip.pending()
                 || self.preset_menu.next_wake().is_some())
     }
 
@@ -1394,8 +1567,10 @@ impl BulkWin {
             for tb in c.boxes() {
                 tb.set_bounds(Rect::default(), &mut inv);
             }
-            c.match_case.set_bounds(Rect::default(), &mut inv);
-            c.per_folder.set_bounds(Rect::default(), &mut inv);
+            for ck in c.checks() {
+                ck.set_bounds(Rect::default(), &mut inv);
+            }
+            c.help.set_bounds(Rect::default(), &mut inv);
             let rows = 1 + usize::from(c.has_scope()) + c.body_rows();
             let ch = inner_pad * 2 + rows as i32 * row_h;
             c.rect = Rect::new(cr.x, y, cw, ch);
@@ -1406,9 +1581,23 @@ impl BulkWin {
             // 행 1: 종류 콤보 + [+][−] — 헤더 띠(높이 inner_pad + row_h − 2) 세로 중앙에(사용자 10-18).
             let head_h = inner_pad + row_h - s2;
             let hy = y + (head_h - (row_h - 4)) / 2;
+            // 켜기/끄기 체크(왼쪽) · 복제 ⧉(+ 왼쪽) — DR-31 ⑮.
+            let chk = row_h - 4;
+            c.on.set_scale(s);
+            c.on.set_bounds(Rect::new(x0, hy, chk, row_h - 4), &mut inv);
             c.kind.set_scale(s);
             c.kind.set_bounds(
-                Rect::new(x0, hy, cw - inner_pad * 2 - bw * 2 - gap * 2, row_h - 4),
+                Rect::new(
+                    x0 + chk + gap,
+                    hy,
+                    cw - inner_pad * 2 - chk - bw * 3 - gap * 4,
+                    row_h - 4,
+                ),
+                &mut inv,
+            );
+            c.dup.set_scale(s);
+            c.dup.set_bounds(
+                Rect::new(cr.right() - inner_pad - bw * 3 - gap * 2, hy, bw, row_h - 4),
                 &mut inv,
             );
             c.add.set_scale(s);
@@ -1484,6 +1673,28 @@ impl BulkWin {
                     ry += row_h;
                     c.per_folder.set_scale(s);
                     place(&mut c.per_folder, field_x, field_w, ry);
+                    ry += row_h;
+                    c.num_order.set_scale(s);
+                    place(&mut c.num_order, field_x, field_w, ry);
+                }
+                "remove" => {
+                    c.offset.set_scale(s);
+                    place(&mut c.offset, field_x, w56, ry);
+                    c.dir.set_scale(s);
+                    place(&mut c.dir, field_x + w56 + gap, field_w - w56 - gap, ry);
+                    ry += row_h;
+                    c.count.set_scale(s);
+                    place(&mut c.count, field_x, w56, ry);
+                }
+                "trim" => {
+                    c.trim_edges.set_scale(s);
+                    place(&mut c.trim_edges, field_x, field_w, ry);
+                    ry += row_h;
+                    c.trim_collapse.set_scale(s);
+                    place(&mut c.trim_collapse, field_x, field_w, ry);
+                    ry += row_h;
+                    c.trim_punct.set_scale(s);
+                    place(&mut c.trim_punct, field_x, field_w, ry);
                 }
                 "move" => {
                     c.mv_start.set_scale(s);
@@ -1515,7 +1726,10 @@ impl BulkWin {
                     place(&mut c.suffix, field_x + half + gap, half, ry);
                     ry += row_h;
                     c.fmt.set_scale(s);
-                    place(&mut c.fmt, field_x, field_w, ry);
+                    place(&mut c.fmt, field_x, field_w - w56 - gap, ry);
+                    // 날짜 포맷 도움말 `?`(DLG-085): 머물면 토큰 목록 툴팁.
+                    c.help.set_scale(s);
+                    place(&mut c.help, field_x + field_w - w56, w56, ry);
                 }
                 _ => {}
             }
@@ -1545,8 +1759,10 @@ impl BulkWin {
             .iter()
             .position(|c| c.rect.h > 0 && c.rect.contains(p))?;
         let c = &mut self.cards[i];
-        let mut hit = c.match_case.bounds().h > 0 && c.match_case.bounds().contains(p);
-        hit |= c.per_folder.bounds().h > 0 && c.per_folder.bounds().contains(p);
+        let mut hit = c
+            .checks()
+            .iter()
+            .any(|ck| ck.bounds().h > 0 && ck.bounds().contains(p));
         hit |= c.buttons().iter().any(|b| b.bounds().contains(p));
         hit |= c
             .combos()
@@ -1831,6 +2047,7 @@ impl BulkWin {
         let mut restructure = false;
         let mut add_after: Option<usize> = None;
         let mut del_at: Option<usize> = None;
+        let mut dup_at: Option<usize> = None;
         for (i, c) in self.cards.iter_mut().enumerate() {
             if c.add.take_clicked() {
                 add_after = Some(i);
@@ -1838,6 +2055,10 @@ impl BulkWin {
             if c.del.take_clicked() {
                 del_at = Some(i);
             }
+            if c.dup.take_clicked() {
+                dup_at = Some(i);
+            }
+            let _ = c.help.take_clicked(); // `?`는 머묾 툴팁만(DLG-085)
             if c.kind.take_changed().is_some() {
                 restructure = true;
             }
@@ -1848,6 +2069,16 @@ impl BulkWin {
         if let Some(i) = add_after {
             self.cards.insert(i + 1, Card::new(0));
             restructure = true;
+        }
+        if let Some(i) = dup_at {
+            // 복제(DR-31 ⑮): 동작 → 폼으로 같은 카드를 바로 아래에(켜기/끄기도 따라간다).
+            if let Some(op) = self.cards[i].op_with(false) {
+                if let Some(mut c) = Card::from_op(&op) {
+                    c.on.set_checked(self.cards[i].is_on());
+                    self.cards.insert(i + 1, c);
+                    restructure = true;
+                }
+            }
         }
         if let Some(i) = del_at {
             if self.cards.len() > 1 {
@@ -2076,6 +2307,19 @@ impl BulkWin {
                 self.cursor = (position.x as i32, position.y as i32);
                 let (x, y) = self.cursor;
                 let mv = InputEvent::MouseMove { x, y };
+                // 날짜 포맷 도움말(DLG-085): `?` 위에 머물면 토큰 목록 툴팁 · 벗어나면 사라짐.
+                {
+                    use nexa_ctl::Widget as _;
+                    let p = Point { x, y };
+                    let target = self
+                        .cards
+                        .iter()
+                        .find(|c| c.help.bounds().h > 0 && c.help.bounds().contains(p))
+                        .map(|c| (c.help.bounds(), date_help_text()));
+                    if self.tip.hover(target) {
+                        self.redraw();
+                    }
+                }
                 if self.preset_menu.is_open() {
                     if self.preset_menu.on_event(&mv) {
                         self.redraw();
@@ -2139,8 +2383,9 @@ impl BulkWin {
                         for tb in c.boxes() {
                             tb.on_event(&cmv, &mut inv);
                         }
-                        c.match_case.on_event(&cmv, &mut inv);
-                        c.per_folder.on_event(&cmv, &mut inv);
+                        for ck in c.checks() {
+                            ck.on_event(&cmv, &mut inv);
+                        }
                     }
                     self.presets_btn.on_event(&mv, &mut inv);
                     self.btn_cancel.on_event(&mv, &mut inv);
@@ -2319,14 +2564,12 @@ impl BulkWin {
                             tb.on_event(&e, &mut inv);
                         }
                     }
-                    if up || (in_cards && c.match_case.bounds().contains(p)) {
-                        c.match_case.on_event(&e, &mut inv);
+                    for ck in c.checks() {
+                        if up || (in_cards && ck.bounds().contains(p)) {
+                            ck.on_event(&e, &mut inv);
+                        }
+                        let _ = ck.take_toggled();
                     }
-                    let _ = c.match_case.take_toggled();
-                    if up || (in_cards && c.per_folder.bounds().contains(p)) {
-                        c.per_folder.on_event(&e, &mut inv);
-                    }
-                    let _ = c.per_folder.take_toggled();
                 }
                 if up || self.presets_btn.bounds().contains(p) {
                     self.presets_btn.on_event(&e, &mut inv);
@@ -2450,6 +2693,7 @@ impl BulkWin {
                         "bulk.lbl.start",
                         "bulk.lbl.step",
                         "bulk.lbl.perFolder",
+                        "bulk.lbl.numOrder",
                     ],
                     "date" => vec![
                         "bulk.lbl.type",
@@ -2459,9 +2703,15 @@ impl BulkWin {
                     ],
                     "move" => vec!["bulk.lbl.pos", "bulk.lbl.dest"],
                     "ext" => vec!["bulk.lbl.ext"],
+                    "remove" => vec!["bulk.lbl.pos", "bulk.lbl.count"],
+                    "trim" => vec!["bulk.lbl.trim", "", ""],
                     _ => vec![],
                 };
                 for k in labels {
+                    if k.is_empty() {
+                        ry += row_h;
+                        continue;
+                    }
                     let t = tr(k);
                     let tw = dc.text_width(&t);
                     dc.text(
@@ -2481,6 +2731,10 @@ impl BulkWin {
                 }
                 c.add.paint(&mut dc, th);
                 c.del.paint(&mut dc, th);
+                c.dup.paint(&mut dc, th);
+                if c.help.bounds().h > 0 {
+                    c.help.paint(&mut dc, th);
+                }
                 for cb in [
                     &c.kind,
                     &c.scope,
@@ -2502,11 +2756,10 @@ impl BulkWin {
                         tb.paint(&mut dc, th);
                     }
                 }
-                if c.match_case.bounds().h > 0 {
-                    c.match_case.paint(&mut dc, th);
-                }
-                if c.per_folder.bounds().h > 0 {
-                    c.per_folder.paint(&mut dc, th);
+                for ck in c.checks_ref() {
+                    if ck.bounds().h > 0 {
+                        ck.paint(&mut dc, th);
+                    }
                 }
             }
             // 카드 영역 위/아래 바깥은 창 배경으로 덮는다(스크롤 잘림).
@@ -2579,6 +2832,8 @@ impl BulkWin {
             self.paint_card_drag(&mut dc, th, wi, hi);
             // 프리셋 메뉴 = 맨 뒤(모든 컨트롤 위).
             self.preset_menu.paint(&mut dc, th);
+            // 날짜 포맷 도움말 툴팁(DLG-085) — 팝업 층.
+            self.tip.paint(&mut dc, th, (0, wi), s);
         }
         for c in &self.cards {
             for tb in [
@@ -2768,6 +3023,7 @@ mod tests {
                     prefix: "[".into(),
                     suffix: "]".into(),
                     per_folder: true, // 카드 체크박스 왕복(T-162 · 10-25)
+                    by_selection: false,
                 },
             },
             RenameOp::Case {
@@ -2805,7 +3061,69 @@ mod tests {
             w.dump()
         );
         w.load_ops(&ops); // 뒤 단언(연번 미리보기 · 카드 드래그)은 원래 ops로.
-                          // Tab 순회(T-162 · 10-25): number 카드 = offset·start·prefix·step·suffix(5) · case 카드 = 없음 → 5칸 순환 · Shift = 역방향.
+                          // DR-31 ⑬⑭⑮ · DLG-085(10-25): 지우기/정리 카드 왕복 · 번호 기준 콤보 · 켜기/끄기(프리셋 enabled=0) · 복제 · 날짜 도움말 글.
+        let ops3 = vec![
+            RenameOp::Remove {
+                scope: Scope::Name,
+                at: InsertAt {
+                    offset: 1,
+                    from_end: false,
+                },
+                count: 2,
+            },
+            RenameOp::Trim {
+                scope: Scope::Name,
+                edges: true,
+                collapse: false,
+                punct: true,
+            },
+        ];
+        w.load_ops(&ops3);
+        assert_eq!(w.ops(), ops3, "지우기·정리 폼 왕복");
+        assert!(w.dump().contains("photo_a.jpg → pto_a.jpg"), "{}", w.dump());
+        w.cards[0].on.set_checked(false);
+        w.recompute(true);
+        assert_eq!(w.ops().len(), 1, "끈 카드는 없는 셈");
+        let text = w.preset_text();
+        let op_lines: Vec<&str> = text
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
+            .collect();
+        assert!(
+            op_lines[0].ends_with("|enabled=0")
+                && op_lines.len() == 2
+                && !op_lines[1].contains("enabled"),
+            "{text}"
+        );
+        w.load_preset_text(&text);
+        assert!(
+            !w.cards[0].is_on() && w.cards[1].is_on(),
+            "프리셋 왕복 = 켜기/끄기 유지"
+        );
+        assert_eq!(w.ops().len(), 1);
+        w.cards[0].on.set_checked(true);
+        w.cards[1]
+            .dup
+            .set_bounds(Rect::new(0, 0, 10, 10), &mut Invalidations::default());
+        w.cards[1].dup.on_event(
+            &InputEvent::MouseDown {
+                x: 5,
+                y: 5,
+                shift: false,
+                primary: false,
+            },
+            &mut Invalidations::default(),
+        );
+        w.cards[1].dup.on_event(
+            &InputEvent::MouseUp { x: 5, y: 5 },
+            &mut Invalidations::default(),
+        );
+        let _ = w.collect();
+        assert_eq!(w.cards.len(), 3, "복제 = 바로 아래 같은 카드");
+        assert_eq!(w.ops()[1], w.ops()[2]);
+        assert!(date_help_text().contains("${YYYY}") && date_help_text().lines().count() == 4);
+        w.load_ops(&ops);
+        // Tab 순회(T-162 · 10-25): number 카드 = offset·start·prefix·step·suffix(5) · case 카드 = 없음 → 5칸 순환 · Shift = 역방향.
         assert!(w.focus_step(true));
         assert!(w.cards[0].offset.is_focused(), "포커스 없음 → 첫 칸");
         for _ in 0..4 {
@@ -2849,7 +3167,17 @@ mod tests {
         // 프리셋 저장 = 카드 전부(빈 찾기 카드 포함 · 사용자 10-18): 유효 2 + 빈 치환 1 → 3장으로 돌아온다.
         w.load_ops(&ops);
         w.cards.push(Card::new(0));
-        assert_eq!((w.ops().len(), w.ops_all().len()), (2, 3));
+        assert_eq!(
+            (
+                w.ops().len(),
+                w.preset_text()
+                    .lines()
+                    .filter(|l| !l.starts_with('#') && !l.is_empty())
+                    .count()
+            ),
+            (2, 3),
+            "무효 카드도 프리셋 줄에는 남는다"
+        );
         let saved = match w.preset_pick("save") {
             Some(BulkAction::SavePreset(t)) => t,
             other => panic!("{other:?}"),

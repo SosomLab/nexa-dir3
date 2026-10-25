@@ -69,6 +69,51 @@ impl InsertAt {
 }
 
 /// 문자 단위 삽입(UTF-8 안전) — [`InsertAt`] 규약.
+/// `at`부터 `count`글자 지우기(글자 단위 · 범위 밖은 있는 만큼만 · count 0 = 그대로).
+fn remove_at(s: &str, at: InsertAt, count: usize) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let off = at.offset.min(cs.len());
+    let start = if at.from_end {
+        // 뒤에서 `off`글자 전에 끝나는 `count`글자(예: off 0 = 마지막 count글자).
+        cs.len().saturating_sub(off + count)
+    } else {
+        off
+    };
+    let end = if at.from_end {
+        cs.len() - off
+    } else {
+        (off + count).min(cs.len())
+    };
+    cs[..start].iter().chain(&cs[end..]).collect()
+}
+
+/// 공백 정리: 앞뒤 공백 · 연속 공백 → 하나 · 앞뒤 `.`·`_`·`-`(순서 = 연속 → 구두점 → 공백 · 구두점 뒤 남은 공백도 걷는다).
+fn trim_text(s: &str, edges: bool, collapse: bool, punct: bool) -> String {
+    let mut out = s.to_string();
+    if collapse {
+        let mut c = String::with_capacity(out.len());
+        let mut prev_ws = false;
+        for ch in out.chars() {
+            let ws = ch.is_whitespace();
+            if ws && prev_ws {
+                continue;
+            }
+            c.push(if ws { ' ' } else { ch });
+            prev_ws = ws;
+        }
+        out = c;
+    }
+    if punct {
+        out = out
+            .trim_matches(|c: char| c == '.' || c == '_' || c == '-' || c.is_whitespace())
+            .to_string();
+    }
+    if edges {
+        out = out.trim().to_string();
+    }
+    out
+}
+
 fn insert_at(s: &str, at: InsertAt, ins: &str) -> String {
     let cs: Vec<char> = s.chars().collect();
     let off = at.offset.min(cs.len());
@@ -155,6 +200,9 @@ pub struct NumberSpec {
     pub suffix: String,
     /// 폴더마다 다시 시작(T-162 · 10-25): 같은 `RenameInput::group`(부모 폴더) 안에서만 센다 · 꺼짐 = 목록 전체 한 줄.
     pub per_folder: bool,
+    /// 번호 기준(DR-31 ⑭ · 10-25): `false`(기본) = 미리보기에 **보이는 순서**(정렬 반영 · 호스트가 그 순서로 항목을 넘긴다) ·
+    /// `true` = 선택한 순서(dir2 · OPS-414 종전 동작). 엔진은 넘겨받은 순서대로 셀 뿐 — 순서를 정하는 일은 호스트.
+    pub by_selection: bool,
 }
 
 /// 날짜 원천(PF Add Date Type).
@@ -224,6 +272,19 @@ pub enum RenameOp {
     },
     /// 확장자 변경(dir2 고유 — 예: cfg→config). `from` 빈 값 = 모든 확장자.
     ChangeExt { from: String, to: String },
+    /// 지우기(DR-31 ⑬ · 10-25 · Path Finder 관용): `at`(1기준 아님 — Insert와 같은 0기준 오프셋 · 앞/뒤에서)부터 `count`글자를 지운다.
+    Remove {
+        scope: Scope,
+        at: InsertAt,
+        count: usize,
+    },
+    /// 공백 정리(DR-31 ⑬): `edges` = 앞뒤 공백 · `collapse` = 연속 공백 → 하나 · `punct` = 앞뒤 `.`·`_`·`-` 제거(끝 `.`은 숨김 확장자 꼴이 되므로 제거).
+    Trim {
+        scope: Scope,
+        edges: bool,
+        collapse: bool,
+        punct: bool,
+    },
 }
 
 /// 미리보기 입력 1건(v2 — Date가 파일별 메타데이터 요구, [docs/22 §2-4]).
@@ -236,6 +297,21 @@ pub struct RenameInput {
     pub created_ms: i64,
     /// 연번 묶음 열쇠(부모 폴더 경로 · `NumberSpec::per_folder`일 때만 쓴다 · 빈 값 = 전체 하나).
     pub group: String,
+}
+
+impl RenameOp {
+    /// 연번 동작의 번호 기준(시험 · 호스트가 미리보기 순서를 정할 때 본다): `Some(true)` = 선택한 순서 · `Some(false)` = 보이는 순서 · 연번 아님 = `None`.
+    pub fn number_order(&self) -> Option<bool> {
+        match self {
+            RenameOp::Number { spec, .. } => Some(spec.by_selection),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    fn number_by_selection(&self) -> bool {
+        self.number_order().unwrap_or(false)
+    }
 }
 
 impl RenameInput {
@@ -697,6 +773,19 @@ fn apply(
                 format!("{rest}{cut}")
             };
         }
+        RenameOp::Remove { scope, at, count } => {
+            scoped(stem, ext, *scope, is_dir, |s| remove_at(s, *at, *count));
+        }
+        RenameOp::Trim {
+            scope,
+            edges,
+            collapse,
+            punct,
+        } => {
+            scoped(stem, ext, *scope, is_dir, |s| {
+                trim_text(s, *edges, *collapse, *punct)
+            });
+        }
         RenameOp::ChangeExt { from, to } => {
             if is_dir {
                 return; // 폴더는 확장자 개념 없음
@@ -1045,7 +1134,7 @@ pub fn serialize_ops(ops: &[RenameOp]) -> String {
                 at_fields(*at)
             ),
             RenameOp::Number { scope, spec } => format!(
-                "op=number|scope={}|start={}|step={}|pad={}|{}|pre={}|suf={}|pf={}",
+                "op=number|scope={}|start={}|step={}|pad={}|{}|pre={}|suf={}|pf={}|ord={}",
                 scope.as_str(),
                 spec.start,
                 spec.step,
@@ -1053,7 +1142,8 @@ pub fn serialize_ops(ops: &[RenameOp]) -> String {
                 at_fields(spec.at),
                 esc(&spec.prefix),
                 esc(&spec.suffix),
-                u8::from(spec.per_folder)
+                u8::from(spec.per_folder),
+                if spec.by_selection { "sel" } else { "view" }
             ),
             RenameOp::Date { scope, spec } => format!(
                 "op=date|scope={}|kind={}|fmt={}|{}|pre={}|suf={}",
@@ -1075,6 +1165,23 @@ pub fn serialize_ops(ops: &[RenameOp]) -> String {
             RenameOp::ChangeExt { from, to } => {
                 format!("op=ext|from={}|to={}", esc(from), esc(to))
             }
+            RenameOp::Remove { scope, at, count } => format!(
+                "op=remove|scope={}|count={count}|{}",
+                scope.as_str(),
+                at_fields(*at)
+            ),
+            RenameOp::Trim {
+                scope,
+                edges,
+                collapse,
+                punct,
+            } => format!(
+                "op=trim|scope={}|edges={}|collapse={}|punct={}",
+                scope.as_str(),
+                u8::from(*edges),
+                u8::from(*collapse),
+                u8::from(*punct)
+            ),
         };
         out.push_str(&line);
         out.push('\n');
@@ -1141,7 +1248,19 @@ pub fn parse_ops(text: &str) -> Vec<RenameOp> {
                     prefix: get("pre").unwrap_or_default(),
                     suffix: get("suf").unwrap_or_default(),
                     per_folder: get("pf").is_some_and(|v| v == "1"),
+                    by_selection: get("ord").is_some_and(|v| v == "sel"),
                 },
+            },
+            "remove" => RenameOp::Remove {
+                scope,
+                at: at(),
+                count: get("count").and_then(|v| v.parse().ok()).unwrap_or(1),
+            },
+            "trim" => RenameOp::Trim {
+                scope,
+                edges: get("edges").as_deref() != Some("0"),
+                collapse: get("collapse").as_deref() == Some("1"),
+                punct: get("punct").as_deref() == Some("1"),
             },
             "date" => RenameOp::Date {
                 scope,
@@ -1241,6 +1360,7 @@ mod tests {
                     prefix: String::new(),
                     suffix: String::new(),
                     per_folder: false,
+                    by_selection: false,
                 },
             },
             RenameOp::Move {
@@ -1355,6 +1475,7 @@ mod tests {
                     from_end: false,
                 },
                 per_folder: false,
+                by_selection: false,
             },
         };
         assert_eq!(pv(&files(&["a.txt"]), &[num]), vec!["a07_.txt"]);
@@ -1396,6 +1517,7 @@ mod tests {
             prefix: "_".into(),
             suffix: String::new(),
             per_folder: true,
+            by_selection: false,
         };
         let items = [
             RenameInput::plain("a.txt", false).in_group("/x"),
@@ -1439,9 +1561,92 @@ mod tests {
                     prefix: String::new(),
                     suffix: String::new(),
                     per_folder: false,
+                    by_selection: false,
                 },
             }],
             "옛 프리셋 = 꺼짐"
+        );
+    }
+
+    /// 지우기 · 공백 정리(DR-31 ⑬ · 10-25) + 연번 기준 왕복(⑭).
+    #[test]
+    fn remove_and_trim_ops_and_number_order_round_trip() {
+        let rm = |off: usize, from_end: bool, count: usize| RenameOp::Remove {
+            scope: Scope::Name,
+            at: InsertAt {
+                offset: off,
+                from_end,
+            },
+            count,
+        };
+        assert_eq!(
+            pv(&files(&["IMG_0012.jpg"]), &[rm(2, false, 4)]),
+            vec!["IM12.jpg"],
+            "위치 2부터 4글자"
+        );
+        assert_eq!(
+            pv(&files(&["IMG_0012.jpg"]), &[rm(0, true, 2)]),
+            vec!["IMG_00.jpg"],
+            "뒤에서 2글자"
+        );
+        assert_eq!(
+            pv(&files(&["IMG_0012.jpg"]), &[rm(2, true, 2)]),
+            vec!["IMG_12.jpg"],
+            "뒤 2글자 남기고 그 앞 2글자(00)"
+        );
+        assert_eq!(
+            pv(&files(&["ab.txt"]), &[rm(1, false, 99)]),
+            vec!["a.txt"],
+            "범위 밖 = 있는 만큼"
+        );
+        let tr = |edges, collapse, punct| RenameOp::Trim {
+            scope: Scope::Name,
+            edges,
+            collapse,
+            punct,
+        };
+        assert_eq!(
+            pv(&files(&["  report  final .pdf"]), &[tr(true, true, false)]),
+            vec!["report final.pdf"]
+        );
+        assert_eq!(
+            pv(&files(&["--draft_.md"]), &[tr(false, false, true)]),
+            vec!["draft.md"],
+            "앞뒤 구두점"
+        );
+        assert_eq!(
+            pv(&files(&["a  b   c.txt"]), &[tr(false, true, false)]),
+            vec!["a b c.txt"],
+            "연속만(미리보기는 앞뒤 공백을 늘 잘라낸다)"
+        );
+        let ops = vec![
+            rm(1, true, 3),
+            tr(true, true, true),
+            RenameOp::Number {
+                scope: Scope::Name,
+                spec: NumberSpec {
+                    start: 1,
+                    step: 1,
+                    pad: 2,
+                    at: InsertAt::edge(true),
+                    prefix: "_".into(),
+                    suffix: String::new(),
+                    per_folder: false,
+                    by_selection: true,
+                },
+            },
+        ];
+        let text = serialize_ops(&ops);
+        assert!(
+            text.contains("op=remove|") && text.contains("op=trim|") && text.contains("|ord=sel"),
+            "{text}"
+        );
+        assert_eq!(parse_ops(&text), ops, "왕복");
+        assert!(
+            !parse_ops("op=number|start=1|step=1|pad=3|pos=suffix\n")[0]
+                .clone()
+                .number_by_selection(),
+            "옛 프리셋 = 보이는 순서"
         );
     }
 
@@ -1461,6 +1666,7 @@ mod tests {
                 prefix: "PRE".into(),
                 suffix: "SUF".into(),
                 per_folder: false,
+                by_selection: false,
             },
         }];
         let out = pv(&files(&["a.md", "sublime.md"]), &ops);
@@ -1636,6 +1842,7 @@ mod tests {
                     prefix: "P|".into(),
                     suffix: "S".into(),
                     per_folder: false,
+                    by_selection: false,
                 },
             },
             RenameOp::Date {

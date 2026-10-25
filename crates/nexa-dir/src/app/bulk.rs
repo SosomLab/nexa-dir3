@@ -219,7 +219,7 @@ impl App {
             BulkAction::LoadPreset(name) => {
                 let path = Self::presets_dir().join(format!("{name}.cfg"));
                 if let Ok(text) = std::fs::read_to_string(&path) {
-                    self.bulk_win.load_ops(&br::parse_ops(&text));
+                    self.bulk_win.load_preset_text(&text); // 켜기/끄기(`enabled=0`)까지(DR-31 ⑮)
                     self.bulk_win.notify_preset_loaded(&name);
                 }
             }
