@@ -2794,8 +2794,9 @@ fn header_sort_marks_trail_and_shift_cycles() {
     assert_eq!((mark(&app, 0).as_deref(), mark(&app, 2)), (Some("▲"), None));
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
     app.paint_into(&mut rec, 1200, 800, 1.0);
+    // 10-25(T-128 · DR-31 ⑥): 끝 정렬 표시는 삼각형 도형 — 글자 ▲는 그리지 않는다.
     assert!(
-        rec.drew_text("▲") && rec.drew_text("Name"),
+        !rec.triangles.is_empty() && !rec.drew_text("▲") && rec.drew_text("Name"),
         "표시와 제목을 따로 그린다"
     );
     app.command("file.new_tab");
