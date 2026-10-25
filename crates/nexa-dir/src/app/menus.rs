@@ -627,6 +627,10 @@ impl App {
                 p.reopen(&mut inv);
             }
         }
+        // 미러 삭제가 미뤄 둔 재비교(Windows 워커 · 협업 검토 10-26) — 휴지통 결과가 나온 뒤에야 비교가 정확하다.
+        if std::mem::take(&mut self.compare_after_trash) {
+            self.recompare_after_trash(true);
+        }
         if failed.is_empty() {
             return;
         }

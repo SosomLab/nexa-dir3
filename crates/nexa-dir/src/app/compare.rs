@@ -180,15 +180,8 @@ impl App {
                 );
                 self.statusbar.set_left(&text, &mut inv);
                 self.update_status();
-                // 끝났으면 다시 비교해 창을 최신으로.
-                if self.compare_win.is_open() {
-                    let (l, r) = (
-                        self.compare_win.left.clone(),
-                        self.compare_win.right.clone(),
-                    );
-                    let bc = self.compare_win.by_content();
-                    self.start_compare(&l, &r, bc);
-                }
+                // 끝났으면 다시 비교해 창을 최신으로(미러 삭제가 워커로 돌고 있으면 그 뒤에).
+                self.recompare_after_trash(true);
                 self.redraw();
             } else {
                 live = true;
@@ -225,8 +218,7 @@ impl App {
                 self.statusbar.set_left(&text, &mut inv);
                 self.toasts
                     .push(toast::ToastKind::Info, tr("cmp.title"), text);
-                let bc = self.compare_win.by_content();
-                self.start_compare(&l, &r, bc);
+                self.recompare_after_trash(false);
                 self.redraw();
                 return;
             }
@@ -273,6 +265,24 @@ impl App {
             deletes,
         });
         self.redraw();
+    }
+
+    /// 미러 삭제 뒤 재비교(협업 검토 10-26 · 5144d97 ②): 휴지통이 워커(Windows)로 돌고 있으면 표식만 두고 `trash_finish`가 부른다 · 동기면 바로.
+    /// `only_if_open` = 창이 열려 있을 때만(동기화 완료 뒤) · false = 늘(삭제만 있던 경로).
+    pub(crate) fn recompare_after_trash(&mut self, only_if_open: bool) {
+        if self.trash_busy() {
+            self.compare_after_trash = true;
+            return;
+        }
+        if only_if_open && !self.compare_win.is_open() {
+            return;
+        }
+        let (l, r) = (
+            self.compare_win.left.clone(),
+            self.compare_win.right.clone(),
+        );
+        let bc = self.compare_win.by_content();
+        self.start_compare(&l, &r, bc);
     }
 
     fn compare_win_entries(&self) -> Option<Vec<CmpEntry>> {

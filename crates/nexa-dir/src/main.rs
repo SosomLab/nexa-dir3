@@ -413,6 +413,8 @@ struct App {
     compare_win: compare_win::CompareWin,
     open_compare: bool,
     cmp_job: Option<app::compare::CmpJob>,
+    /// 미러 삭제 뒤 재비교를 휴지통 워커가 끝난 뒤로 미룸(Windows `trash_async` · 협업 검토 10-26 · 5144d97 ②).
+    compare_after_trash: bool,
     sync_job: Option<app::compare::SyncJob>,
     open_license: bool,
     file_win: FileWin,
@@ -847,6 +849,7 @@ impl App {
             compare_win: compare_win::CompareWin::new(),
             open_compare: false,
             cmp_job: None,
+            compare_after_trash: false,
             sync_job: None,
             open_license: false,
             file_win: FileWin::new(),

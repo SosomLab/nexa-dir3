@@ -8950,6 +8950,10 @@ fn compare_two_folders_and_sync_left_to_right() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     // (fake 플랫폼의 휴지통은 파일을 지우지 않는다 — 실제 삭제는 삭제 목록 + `trash_checked` 호출로 보증 · 실기 = 휴지통 복원 가능)
+    assert!(
+        !app.compare_after_trash,
+        "동기 휴지통 = 미뤄 둔 재비교 없음(Windows 워커 경로는 trash_finish가 부른다)"
+    );
     app.close_compare();
     assert!(app.cmp_job.is_none());
 }

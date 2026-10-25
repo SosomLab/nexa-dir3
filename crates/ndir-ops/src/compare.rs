@@ -336,6 +336,17 @@ pub fn plan(
             (Verdict::Differ, Direction::Both) => {} // 같은 시각 · 다른 내용 = 사람이 고른다
         }
     }
+    // 미러 삭제 = 조상만(협업 검토 10-26 · 5144d97): 비교가 재귀라 대상에만 있는 폴더의 자손도 전부 OnlyRight/OnlyLeft로 실린다 →
+    // 폴더를 휴지통에 보내면 자손은 함께 가므로 목록에서 뺀다(정렬 뒤 직전에 남긴 경로의 아래면 건너뜀 · 개수 토스트 · 되돌리기 기록도 정확).
+    out.deletes.sort();
+    let mut kept: Vec<PathBuf> = Vec::with_capacity(out.deletes.len());
+    for d in out.deletes.drain(..) {
+        if kept.last().is_some_and(|k| d.starts_with(k)) {
+            continue;
+        }
+        kept.push(d);
+    }
+    out.deletes = kept;
     out
 }
 
@@ -424,6 +435,44 @@ mod tests {
 
     /// 두 폴더: 왼쪽만 · 오른쪽만 · 같음 · 왼쪽 새로움 · 크기 다름 · 하위 폴더 · 내용 비교 → 계획(→ · ← · 양쪽 · 미러 삭제 · 일부만) ·
     /// 적용 → 오른쪽에 생김 · 취소.
+    /// 미러 삭제 목록 = 조상만(협업 검토 10-26): 대상에만 있는 폴더 `x`(자손 a.txt · y/b.txt)와 파일 z.txt → deletes = [x, z.txt] · 자손은 빠진다 · 양쪽은 삭제 없음.
+    #[test]
+    fn mirror_deletes_keep_only_ancestors() {
+        let d = fixture("cmpmirror");
+        let (l, r) = (d.join("L"), d.join("R"));
+        std::fs::create_dir_all(&l).unwrap();
+        std::fs::create_dir_all(r.join("x").join("y")).unwrap();
+        touch(&r.join("x").join("a.txt"), b"a", 1000);
+        touch(&r.join("x").join("y").join("b.txt"), b"b", 1000);
+        touch(&r.join("z.txt"), b"z", 1000);
+        let res = compare(
+            &l,
+            &r,
+            CmpOpts::default(),
+            &CmpProgress::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(
+            res.iter()
+                .filter(|e| e.verdict == Verdict::OnlyRight)
+                .count()
+                >= 4,
+            "{res:?}"
+        );
+        let p = plan(&res, &l, &r, Direction::LeftToRight, true, None);
+        assert_eq!(
+            p.deletes,
+            vec![r.join("x"), r.join("z.txt")],
+            "{:?}",
+            p.deletes
+        );
+        assert!(p.copies.is_empty());
+        let p2 = plan(&res, &l, &r, Direction::Both, true, None);
+        assert!(p2.deletes.is_empty(), "양쪽 = 삭제 없음");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn compare_and_plan_and_apply() {
         let d = fixture("cmp");
