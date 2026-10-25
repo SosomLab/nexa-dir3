@@ -1945,7 +1945,13 @@ fn license_view_about_install_rejects_garbage() {
     let v = app.license_view();
     assert_eq!(v.state, "Free · non-commercial use only");
     assert!(v.warn && v.request.is_some());
-    assert_eq!(v.rows[0], ("State".to_string(), "free".to_string()));
+    assert_eq!(
+        v.rows[0],
+        ("State".to_string(), "Free".to_string()),
+        "상태 = i18n(원문 free 아님 · T-134)"
+    );
+    assert_eq!(crate::app::license::tier_text("org"), "Org");
+    assert_eq!(crate::app::license::tier_text("trial"), "Trial");
     assert_eq!(v.rows[1].1, "-", "파일 없음");
     assert!(v.rows.iter().any(|(k, val)| k == "Install location"
         && val.starts_with(&dir.join("license").display().to_string())));

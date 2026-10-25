@@ -35,6 +35,15 @@ pub(crate) enum FilePurpose {
     FavImport,
 }
 
+/// 등급 글(i18n · `Tier::parse` 규칙 — 모르는 값 = Pro).
+pub(crate) fn tier_text(tier: &str) -> String {
+    match Tier::parse(tier) {
+        Tier::Trial => tr("license.tier.trial"),
+        Tier::Org => tr("license.tier.org"),
+        Tier::Pro | Tier::Free => tr("license.tier.pro"),
+    }
+}
+
 impl App {
     /// 시험은 픽스처 폴더 아래(실제 사용자 폴더를 건드리지 않는다 · LIC-164 ④) · 운영은 기본 자리(사용자 → 기기 공용).
     pub(crate) fn licensing_for(start: Option<&Path>) -> Licensing {
@@ -57,12 +66,7 @@ impl App {
         match lic.state() {
             LicenseState::Free => tr("license.st.free"),
             LicenseState::Licensed(l) => {
-                let tier = match Tier::parse(&l.tier) {
-                    Tier::Trial => tr("license.tier.trial"),
-                    Tier::Org => tr("license.tier.org"),
-                    Tier::Pro | Tier::Free => tr("license.tier.pro"),
-                };
-                trf("license.st.licensed", &[&tier, &l.licensee])
+                trf("license.st.licensed", &[&tier_text(&l.tier), &l.licensee])
             }
             LicenseState::Invalid(i) => trf(
                 "license.st.invalid",
@@ -79,7 +83,11 @@ impl App {
         let warn = !matches!(st, LicenseState::Licensed(_));
         let dash = || "-".to_string();
         let mut rows: Vec<(String, String)> = vec![
-            (tr("license.lbl.state"), st.name().to_string()),
+            // 상태 = i18n(종전 엔진 원문 `free`/`licensed`/… · T-134 10-25).
+            (
+                tr("license.lbl.state"),
+                tr(&format!("license.state.{}", st.name())),
+            ),
             (
                 tr("license.lbl.file"),
                 self.licensing
@@ -95,7 +103,10 @@ impl App {
             };
             rows.push((tr("license.lbl.id"), l.id.clone()));
             rows.push((tr("license.lbl.licensee"), l.licensee.clone()));
-            rows.push((tr("license.lbl.kind"), format!("{} / {}", l.kind, l.tier)));
+            rows.push((
+                tr("license.lbl.kind"),
+                format!("{} / {}", l.kind, tier_text(&l.tier)),
+            ));
             rows.push((tr("license.lbl.features"), feats));
             rows.push((tr("license.lbl.issued"), l.issued.clone()));
             rows.push((tr("license.lbl.until"), l.updates_until.clone()));
