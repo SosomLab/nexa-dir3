@@ -87,6 +87,26 @@ impl App {
 
     /// 메모리 덤프(기동 명령 `mem.dump:<파일>` · T6 측정 · 사용자 10-06 "dir2 대비 메모리 증가 점검"): 운영체제 값 + 영역별 어림 +
     /// 미집계(런타임 · 라이브러리). 바이트 그대로(표는 보는 쪽이 만든다).
+    /// `view.memory` — 열려 있으면 닫고 아니면 연다(모덜리스 · 로그 창 `view.log`와 같은 규칙 · T-93 기동 명령/T4 · 10-25). 실제 창은
+    /// 다음 프레임의 창 열기 단계가 만든다(`open_memory` — 상태 바 앱 메모리 칸 클릭과 같은 길).
+    pub(crate) fn toggle_memory_window(&mut self) {
+        if self.mem_win.is_open() {
+            self.mem_win.close();
+        } else {
+            self.open_memory = true;
+        }
+        self.redraw();
+    }
+
+    /// 메모리 **창** 덤프(`memwin.dump:` · T-93 T4 · 10-25): 열림(요청 포함) + 창 상태 · 묶음 소계([`MemWin::dump`]).
+    pub(crate) fn memwin_dump(&self) -> String {
+        format!(
+            "open {}\n{}",
+            self.mem_win.is_open() || self.open_memory,
+            self.mem_win.dump()
+        )
+    }
+
     pub(crate) fn mem_dump(&self) -> String {
         let s = self.mem_sample();
         let mut out = String::new();

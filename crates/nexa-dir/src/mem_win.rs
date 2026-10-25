@@ -204,6 +204,32 @@ impl MemWin {
         self.btn_trim.set_label(tr("mem.trim"));
     }
 
+    /// 창 상태 덤프(`memwin.dump:` · T-93 T4 · 10-25): 스위치 · 주기 · 표본 수 · 정리 중 · 마지막 표본의 총량과 묶음별 소계/변화(상세 끔 표 한 줄 꼴
+    /// · 이름 = i18n 키라 언어 무관). 열림 여부는 App이 앞에 붙인다(요청 중 포함).
+    pub(crate) fn dump(&self) -> String {
+        let mut out = format!(
+            "detail {} on_top {} every_ms {} samples {} trimming {}\n",
+            self.detail,
+            self.on_top,
+            self.every_ms,
+            self.hist.len(),
+            self.trim_hold > 0
+        );
+        if let Some(sm) = self.sample.as_ref() {
+            out.push_str(&format!("footprint {}\n", sm.sys.footprint));
+            for g in Group::ALL {
+                let (_, sum, delta) = compact_group(sm, &self.trend, g);
+                out.push_str(&format!(
+                    "{} {} {}\n",
+                    g.label_key(),
+                    sum,
+                    delta.map_or_else(|| "-".to_string(), |d| d.to_string())
+                ));
+            }
+        }
+        out
+    }
+
     pub(crate) fn is_open(&self) -> bool {
         self.window.is_some()
     }

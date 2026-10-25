@@ -10810,3 +10810,38 @@ fn terminal_follows_windows_terminal_scheme_and_commandline() {
     assert!(wt_commandline_spec("", &cands).is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 메모리 창 명령·덤프(T-93 · 10-25): `view.memory` = 창 열기 요청(상태 바 칸 클릭과 같은 길 · 창은 다음 프레임) · `memwin` 덤프 = 열림(요청 포함) ·
+/// 스위치 · 표본 수 · 표본이 들어오면 총량 + 묶음 6 소계 · layout 덤프 `mem`도 요청을 반영.
+#[test]
+fn memory_window_command_and_dump() {
+    let (mut app, dir) = fixture("memwin");
+    app.layout_for(1200, 800, 1.0);
+    assert!(app.dump_of("memwin").unwrap().starts_with("open false\n"));
+    assert!(app.layout_dump().contains("mem false"));
+    app.command("view.memory");
+    assert!(app.open_memory, "열기 요청");
+    let d = app.dump_of("memwin").unwrap();
+    assert!(
+        d.starts_with(
+            "open true\ndetail false on_top false every_ms 1000 samples 0 trimming false\n"
+        ),
+        "{d}"
+    );
+    assert!(
+        app.layout_dump().contains("mem true"),
+        "layout 덤프도 요청 반영"
+    );
+    let s = app.mem_sample();
+    app.mem_win.set_sample(s, 1000);
+    let d = app.dump_of("memwin").unwrap();
+    assert!(d.contains("samples 1") && d.contains("footprint "), "{d}");
+    for g in crate::memstat::Group::ALL {
+        assert!(
+            d.contains(&format!("\n{} ", g.label_key())),
+            "묶음 {g:?}: {d}"
+        );
+    }
+    assert!(d.contains("mem.grp.render "), "{d}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

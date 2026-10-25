@@ -5,7 +5,7 @@
 //! - `@ready:<명령>` = 첫 프레임 뒤 · `@idle:<명령>` = 작업 큐가 빈 뒤(지금은 ready와 같다 — 작업 큐는 M6) · `@after:<ms>:<명령>`
 //! - `nav:<경로>` · `panel:<0|1>` · `ui.move|click|dclick|rclick|wheel:<x>/<y>[/<delta>]`(창 좌표 · 장치 px) · `ui.click:@<영역>`(영역 가운데 —
 //!   `menubar` `toolbar` `panel0` `panel1` `panel0.tabs|nav|path|list` `splitter` `statusbar`)
-//! - `<대상>.dump:<파일>`(`layout` `panel` `list` `tabs` `status` `menu` · `dump:<파일>` = 전부)
+//! - `<대상>.dump:<파일>`(`layout` `panel` `list` `tabs` `status` `menu` · `mem`(표본) · `memwin`(메모리 창 · T-93) · `dump:<파일>` = 전부)
 //! - `assert.<대상>:<식>` = 그 덤프에 `식`이 **들어 있어야**(앞에 `!` = 없어야) — 실패 = stderr 한 줄 + 덤프 + 종료 코드 3
 //! - `quit[:코드]` = 정상 종료(코드 기본 0) · `app.exit` = `quit`
 
@@ -578,6 +578,7 @@ impl App {
             "layout" => self.layout_dump(),
             "log" => self.log_dump(),
             "mem" => self.mem_dump(),
+            "memwin" => self.memwin_dump(),
             "panel" => self.panel_dump(self.active),
             "panel0" => self.panel_dump(0),
             "panel1" => self.panel_dump(1),
@@ -886,7 +887,7 @@ impl App {
         out.push_str(&format!(
             "log {} mem {}\n",
             self.log_win.is_open() || self.open_log,
-            self.mem_win.is_open()
+            self.mem_win.is_open() || self.open_memory
         ));
         out.push_str(&format!("splitter {}\n", r(self.splitter.rect())));
         out.push_str(&format!("dsplit_h {}\n", r(self.dock_split_h.rect())));

@@ -1118,6 +1118,8 @@ impl App {
             "view.palette" => self.toggle_palette(),
             "view.quicklook" => self.quick_look_toggle(),
             "view.log" => self.toggle_log_window(),
+            // 메모리 창 토글(T-93 · 10-25): 상태 바 앱 메모리 칸 클릭과 같은 창 — 기동 명령 · 키맵 · T4에서 이름으로 부른다.
+            "view.memory" => self.toggle_memory_window(),
             // `list.context_menu` = 키맵 id(Shift+F10 · 메뉴 키 · macOS ⌃Return) · `cmd.contextMenu` = 기동 명령/시험이 부르던 이름 — 같은 일.
             // 종전에는 뒤 이름만 받아 **키로는 메뉴가 열리지 않았다**(키맵이 가로챈 뒤 분기가 없었다 · 10-05 매트릭스 대조에서 적발).
             "list.context_menu" | "cmd.contextMenu" => self.open_row_menu_at_caret(a),

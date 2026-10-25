@@ -1,0 +1,15 @@
+# T4 · T-93 메모리 창(10-25): view.memory 토글 → 창 열림(layout `mem true`) · memwin 덤프 = 열림 + 표본 묶음 소계 → 다시 토글 = 닫힘.
+id: memory-window
+title: 메모리 창 토글 · 창 덤프
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:view.memory
+cmd: @ready:layout.dump:<out>/open.txt
+cmd: @after:600:memwin.dump:<out>/mem.txt
+cmd: @after:700:view.memory
+cmd: @after:800:layout.dump:<out>/closed.txt
+cmd: @after:900:quit
+check: open.txt: mem true
+check: mem.txt: open true
+check: mem.txt: mem.grp.program
+check: closed.txt: mem false
