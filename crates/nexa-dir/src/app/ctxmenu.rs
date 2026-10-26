@@ -585,6 +585,15 @@ impl App {
         }) {
             items.push(CtxItem::item("ctx.nfc", tr("ctx.nfc")));
         }
+        // 압축(내장 zip · T-187 · 사용자 10-26 "압축 메뉴가 안 보인다"): 종전엔 Linux xdg "압축"(`xdg.compress`)만 있어 Windows/macOS 행 메뉴에
+        // 없었다 → 셸/xdg 항목에 "압축"이 없을 때 자체 항목(DEFLATE · 이미 압축된 형식은 store · 같은 폴더에 `<이름>.zip`).
+        if !sel.is_empty()
+            && !shell
+                .iter()
+                .any(|c| matches!(c, CtxItem::Item { id, .. } if id == "xdg.compress"))
+        {
+            items.push(CtxItem::item("ctx.zip", tr("ctx.compress")));
+        }
         // 압축 풀기 ▸(T-169 · dir3 신규): zip · tar · gz · tgz 파일만 골랐을 때 — 여기에 / "<이름>" 폴더에 · 여러 개면 각자 폴더에
         // 차례로(10-25 · T-187 한계 해소).
         if !sel.is_empty()
@@ -1063,6 +1072,11 @@ impl App {
                 }
             }
             "ctx.loading" => {}
+            // 자체 "압축"(Windows · macOS 행 메뉴 · 10-26) = 내장 zip.
+            "ctx.zip" => {
+                let sel = self.panels[panel].selected_paths();
+                self.start_zip(panel, sel);
+            }
             // Linux "압축"인데 외부 아카이버가 없으면 **내장 zip**(DR-31 ⑳ⓑ · 10-25 · T-187) — 포트에 넘기지 않는다.
             "xdg.compress" if !self.platform.ctxmenu.has_external_archiver() => {
                 let sel = self.panels[panel].selected_paths();

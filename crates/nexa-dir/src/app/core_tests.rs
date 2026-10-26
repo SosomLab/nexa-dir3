@@ -11890,3 +11890,53 @@ fn quick_filter_text_clipboard_keys_drag_and_popup() {
     assert_eq!(log.borrow().calls.len(), ops_before);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 행 메뉴 "압축"(사용자 10-26 "압축/풀기 메뉴가 안 보인다"): 셸 항목에 xdg "압축"이 없으면(Windows · macOS · 가짜 포트) 자체 `ctx.zip`이
+/// 들어가고 실행 = 내장 zip 작업 · xdg "압축"이 있으면(Linux) 중복으로 넣지 않는다 · "압축 풀기"는 zip/tar/gz/tgz를 골랐을 때만.
+#[test]
+fn row_menu_offers_builtin_zip_without_xdg_compress() {
+    let (mut app, dir) = fixture("ctxzip");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    let sel = app.panels[0].selected_paths();
+    let ids = |items: &[nexa_ctl::controls::ctxmenu::CtxItem]| -> Vec<String> {
+        items
+            .iter()
+            .filter_map(|c| match c {
+                nexa_ctl::controls::ctxmenu::CtxItem::Item { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let items = app.row_menu_items(&sel, Some(&[]));
+    let v = ids(&items);
+    assert!(v.iter().any(|i| i == "ctx.zip"), "압축 항목: {v:?}");
+    assert!(
+        !v.iter().any(|i| i == "ctx.extract"),
+        "txt = 압축 풀기 없음"
+    );
+    // xdg "압축"이 셸 항목에 있으면(Linux) 자체 항목은 넣지 않는다.
+    let xdg = [crate::platform::ShellMenuItem {
+        id: "xdg.compress".into(),
+        label: "압축".into(),
+        ..Default::default()
+    }];
+    let v2 = ids(&app.row_menu_items(&sel, Some(&xdg)));
+    assert!(
+        !v2.iter().any(|i| i == "ctx.zip"),
+        "xdg 압축 있음 = 중복 없음: {v2:?}"
+    );
+    // 실행 = 내장 zip 작업 → 같은 폴더에 a.zip.
+    app.ctx_kind = Some(crate::app::ctxmenu::CtxKind::Row(0));
+    app.ctx_menu_action("ctx.zip");
+    assert!(app.zip_job.is_some(), "내장 zip 시작");
+    let deadline = Instant::now() + std::time::Duration::from_secs(20);
+    while app.zip_tick() {
+        assert!(Instant::now() < deadline, "압축이 끝나지 않음");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(dir.join("a.zip").is_file(), "a.zip");
+    let _ = std::fs::remove_dir_all(&dir);
+}
