@@ -335,7 +335,7 @@ impl App {
             .settings
             .int("window.transparency_blur")
             .clamp(0, platform::OPACITY_MAX_PCT);
-        // 포커스별 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40"): 메인 창 = 포커스 여부에 따라 · 새로 만드는 창과 보조 창
+        // 포커스별 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40" → 10-26 기본 20): 메인 창 = 포커스 여부에 따라 · 새로 만드는 창과 보조 창
         // = 포커스 값(보조 창을 쓰는 동안 그 창이 흐려지지 않게 — 메인은 그때 포커스를 잃어 blur 값이 된다).
         platform::set_opacity_pct(focused);
         let main_pct = if self.main_active { focused } else { blur };

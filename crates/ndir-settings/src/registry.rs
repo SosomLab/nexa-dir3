@@ -229,14 +229,15 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 90 },
         "0"
     ),
-    // 포커스 없을 때의 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40") — 메인 창만 · 보조 창은 포커스 값.
+    // 포커스 없을 때의 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40" → 10-26 기본 **20**) — 메인 창만 · 보조 창은 포커스 값 ·
+    // 성능 향상 모드 = 0(`FORCES`).
     e!(
         "window.transparency_blur",
         CAT_APPEARANCE,
         "pref.transparencyBlur",
         "pref.transparencyBlur.desc",
         Int { min: 0, max: 90 },
-        "40"
+        "20"
     ),
     e!(
         "layout.panel_mode",

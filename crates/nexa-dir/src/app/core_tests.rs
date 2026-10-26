@@ -10335,14 +10335,14 @@ fn window_transparency_follows_setting_and_boost() {
         (255, 127, 25, 25)
     );
     assert_eq!(opacity_alpha(-5), 255);
-    // 포커스 없을 때 = `window.transparency_blur`(기본 40 · T-199) · 성능 향상 모드 = 0 · 포커스가 돌아오면 포커스 값.
+    // 포커스 없을 때 = `window.transparency_blur`(기본 20 · T-199 · 사용자 10-26 40 → 20) · 성능 향상 모드 = 0(FORCES) · 포커스가 돌아오면 포커스 값.
     assert_eq!(
         app.settings.int("window.transparency_blur"),
-        40,
-        "기본 = 40"
+        20,
+        "기본 = 20"
     );
     app.main_active = false;
-    assert_eq!(app.apply_transparency(), 40);
+    assert_eq!(app.apply_transparency(), 20);
     let _ = app.settings.set("window.transparency_blur", "55");
     assert_eq!(app.apply_transparency(), 55);
     let _ = app.settings.set("perf.boost", "on");
