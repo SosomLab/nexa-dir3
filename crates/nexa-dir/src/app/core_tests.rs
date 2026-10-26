@@ -11807,6 +11807,14 @@ fn quick_filter_text_clipboard_keys_drag_and_popup() {
     app.command("edit.select_all");
     app.command("edit.delete");
     assert_eq!(app.panels[0].filter_text(), "", "Delete = 글자");
+    app.command("edit.undo");
+    assert_eq!(
+        app.panels[0].filter_text(),
+        "abc",
+        "Ctrl+Z = 상자 되돌리기(파일 작업 아님)"
+    );
+    app.command("edit.redo");
+    assert_eq!(app.panels[0].filter_text(), "", "Ctrl+Y = 다시 실행");
     assert!(app.panels[0].filter_focused(), "상자 포커스 유지");
     assert_eq!(
         log.borrow().calls.len(),

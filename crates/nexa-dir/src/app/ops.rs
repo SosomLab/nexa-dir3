@@ -830,7 +830,10 @@ impl App {
                     &mut inv,
                 );
             }
-            "edit.undo" | "edit.redo" | "edit.rename" | "edit.bulk_rename" => {}
+            // 되돌리기/다시 실행은 상자 글자에(TextBox 단계 되돌리기 · 협업 검토 10-26) — 파일 작업 되돌리기로 가지 않는다.
+            "edit.undo" => self.panels[a].key_event(&InputEvent::Undo, &mut inv),
+            "edit.redo" => self.panels[a].key_event(&InputEvent::Redo, &mut inv),
+            "edit.rename" | "edit.bulk_rename" => {}
             _ => return false,
         }
         self.redraw();
