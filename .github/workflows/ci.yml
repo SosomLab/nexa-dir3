@@ -41,15 +41,28 @@ jobs:
       # Linux 러너: 한글 글꼴(nexa-font 실측) — 빌드 자체는 시스템 라이브러리 불요(Wayland/X11 dlopen).
       # apt 미러 지연으로 이 단계만 19~20분 넘게 걸린 일이 두 번(10-25 · 1b7ed98 · 88ceb01 — 협업 관측) → 재시도 3회.
       # 10-26(c8fb216 run 40210458203): 첫 시도가 상한 8분을 다 먹어 재시도 기회가 없었다 → **시도별 상한 3분**(`timeout 180` · update·install 각각) + 단계 상한 12분.
-      # 상한에 걸리면 그 run은 빨강(느려도 통과하던 것보다 엄격) — 재시도가 보완한다. 더 근본(.deb 캐시 · 글꼴 파일 고정 URL)은 반복 시.
+      # 상한에 걸리면 그 run은 빨강(느려도 통과하던 것보다 엄격) — 재시도가 보완한다.
+      # 10-26 재발(57a7efd run 40253265893 · 3회 전부 180 s 초과 · azure 미러 61 MB fonts-noto-cjk) → **.deb 캐시**(협업 제안 ①): 내려받은 .deb를
+      # `actions/cache`에 보관하고 적중하면 apt 미러 없이 `dpkg -i`(수 초). 캐시가 없거나 dpkg가 실패하면 종전 apt 경로(재시도 3회)로 내려받아 다음 run에 저장.
+      - name: fonts cache (linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-fonts
+          key: apt-fonts-${{ runner.os }}-noto-cjk-dejavu-core-noto-core-v1
       - name: fonts (linux)
         if: runner.os == 'Linux'
         timeout-minutes: 12
         run: |
+          DIR="$HOME/apt-fonts"; mkdir -p "$DIR/partial"
+          if ls "$DIR"/*.deb >/dev/null 2>&1 && sudo dpkg -i "$DIR"/*.deb; then
+            echo "fonts installed from cache ($(ls "$DIR"/*.deb | wc -l) debs)"; exit 0
+          fi
           for i in 1 2 3; do
             timeout 180 sudo apt-get -o Acquire::Retries=3 update \
-              && timeout 180 sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends fonts-noto-cjk fonts-dejavu-core fonts-noto-core \
-              && exit 0
+              && timeout 180 sudo apt-get -o Acquire::Retries=3 -o Dir::Cache::archives="$DIR" -o APT::Keep-Downloaded-Packages=true \
+                   install -y --no-install-recommends fonts-noto-cjk fonts-dejavu-core fonts-noto-core \
+              && sudo chown -R "$USER" "$DIR" && rm -rf "$DIR/partial" "$DIR/lock" && exit 0
             echo "apt attempt $i failed or timed out"; sleep 10
           done
           exit 1
