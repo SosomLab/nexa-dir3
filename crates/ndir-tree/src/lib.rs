@@ -5,7 +5,7 @@
 //!
 //! 슬라이스 1(이 크레이트): open/expand/collapse/가시행/선택(OrderedSet). ABI·앱은 후속 슬라이스.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -236,6 +236,45 @@ fn glob_chars(p: &[char], s: &[char]) -> bool {
     }
 }
 
+/// 깊은 이름 판정(순수 · 사용자 10-26 "하위 폴더 검색"): `dir` 아래 **모든 깊이**의 항목(가시 필터 통과) 중 `matcher`가 참인 이름(파일 · 폴더)이
+/// 하나라도 있으면 `Some(true)` · 다 보고 없으면 `Some(false)` · 걷는 도중 `cancelled`가 참이면 `None`(낡은 검색 · 호스트 워커가 세대로 판단).
+/// 심링크는 따라가지 않는다(순환 방지) · 못 읽는 폴더는 건너뛴다 · 첫 일치에서 멈춘다.
+pub fn deep_name_match(
+    dir: &Path,
+    show_hidden: bool,
+    show_dotfiles: bool,
+    show_protected: bool,
+    matcher: &dyn Fn(&str) -> bool,
+    cancelled: &dyn Fn() -> bool,
+) -> Option<bool> {
+    let f = Filter {
+        show_hidden,
+        show_dotfiles,
+        show_protected,
+    };
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        if cancelled() {
+            return None;
+        }
+        let Ok(entries) = read_dir_entries(&d) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            if !f.allows(&e.name, e.attrs) {
+                continue;
+            }
+            if matcher(&e.name) {
+                return Some(true);
+            }
+            if e.kind == FileKind::Dir && e.target.is_none() {
+                stack.push(d.join(&e.name));
+            }
+        }
+    }
+    Some(false)
+}
+
 /// 호스트가 주는 이름 판정기(빠른 필터 · 10-25).
 pub type NameMatcherFn = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
@@ -266,6 +305,11 @@ pub struct Tree {
     name_matcher: Option<MatcherBox>,
     /// 필터가 없을 때의 가시 행 수("n/m" 표지 · 필터가 없으면 `visible.len()`과 같다).
     unfiltered_len: usize,
+    /// 하위 폴더까지(사용자 10-26 검색창 범위 토글): 켜지면 이름이 안 맞는 폴더도 **깊은 판정**([`Self::deep`] · 자손 중 맞는 이름 있음)이 참이면
+    /// 남는다(접힌 채 · 자동 펼침 없음). 판정 자체는 호스트 워커가 [`deep_name_match`]로 하고 [`Self::set_deep_results`]로 넣는다.
+    deep_scope: bool,
+    /// 깊은 판정 결과(노드 → 자손 중 맞는 이름 있음) — 필터 열쇠가 바뀌면 비움 · 범위를 끄고 켜는 것은 유지.
+    deep: HashMap<NodeId, bool>,
     sort: SortSpec,
 }
 
@@ -310,6 +354,8 @@ impl Tree {
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,
+            deep_scope: false,
+            deep: HashMap::new(),
         };
         let roots = tree.enumerate(&root_path, None, 0)?;
         tree.roots.clone_from(&roots);
@@ -515,13 +561,19 @@ impl Tree {
         self.visible = vis;
     }
 
+    /// 이름이 맞는가(판정기 · 없으면 부분 문자열/글롭) · 범위가 켜진 폴더는 깊은 판정(자손 중 맞는 이름)이 참이어도 남는다.
     fn passes_filter(&self, spec: &str, id: NodeId) -> bool {
-        self.nodes
-            .get(id as usize)
-            .is_some_and(|n| match &self.name_matcher {
-                Some(m) => (m.0)(&n.name),
-                None => name_filter_matches(spec, &n.name),
-            })
+        self.nodes.get(id as usize).is_some_and(|n| {
+            self.name_passes(spec, n)
+                || (self.deep_scope && n.is_dir() && self.deep.get(&id) == Some(&true))
+        })
+    }
+
+    fn name_passes(&self, spec: &str, n: &Node) -> bool {
+        match &self.name_matcher {
+            Some(m) => (m.0)(&n.name),
+            None => name_filter_matches(spec, &n.name),
+        }
     }
 
     fn collect_subtree_filtered(&self, spec: &str, id: NodeId, out: &mut Vec<NodeId>) {
@@ -554,6 +606,7 @@ impl Tree {
             return false;
         }
         self.name_filter = next;
+        self.deep.clear(); // 새 열쇠 = 깊은 판정 다시(호스트가 `deep_pending_dirs`로 걷는다)
         self.name_matcher = if self.name_filter.is_some() {
             matcher.map(MatcherBox)
         } else {
@@ -561,6 +614,70 @@ impl Tree {
         };
         self.rebuild_visible();
         true
+    }
+
+    /// 하위 폴더까지(사용자 10-26 검색창 범위 토글) 켬/끔 — 바뀌었고 필터 중이면 가시 목록을 다시 만들고 `true`.
+    pub fn set_deep_scope(&mut self, on: bool) -> bool {
+        if self.deep_scope == on {
+            return false;
+        }
+        self.deep_scope = on;
+        if self.name_filter.is_some() {
+            self.rebuild_visible();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 하위 폴더까지 켜져 있는가.
+    pub fn deep_scope(&self) -> bool {
+        self.deep_scope
+    }
+
+    /// 깊은 판정이 아직 없는 폴더(범위 켬 + 필터 중 · **이름이 안 맞는** 폴더만 · 후보 = 최상위 + 펼친 폴더의 자식 전부) — 호스트가
+    /// [`deep_name_match`]로 걷어 [`Self::set_deep_results`]로 넣는다. 그 전까지 그 폴더는 숨어 있다(결과가 오면 접힌 채 나타난다).
+    pub fn deep_pending_dirs(&self) -> Vec<(NodeId, PathBuf)> {
+        let Some(spec) = self.name_filter.as_deref() else {
+            return Vec::new();
+        };
+        if !self.deep_scope {
+            return Vec::new();
+        }
+        let mut all = Vec::new();
+        for &r in &self.roots {
+            all.push(r);
+            let n = &self.nodes[r as usize];
+            if n.is_dir() && n.expanded {
+                self.collect_subtree(r, &mut all);
+            }
+        }
+        all.into_iter()
+            .filter_map(|id| {
+                let n = &self.nodes[id as usize];
+                if !n.is_dir() || self.deep.contains_key(&id) || self.name_passes(spec, n) {
+                    return None;
+                }
+                Some((id, n.path.clone()))
+            })
+            .collect()
+    }
+
+    /// 깊은 판정 결과를 넣는다(노드 → 자손 중 맞는 이름 있음) — 가시 목록이 바뀌었으면 `true`.
+    pub fn set_deep_results(&mut self, results: &[(NodeId, bool)]) -> bool {
+        let mut any = false;
+        for &(id, v) in results {
+            if (id as usize) < self.nodes.len() {
+                self.deep.insert(id, v);
+                any = true;
+            }
+        }
+        if !(any && self.deep_scope && self.name_filter.is_some()) {
+            return false;
+        }
+        let before = self.visible.clone();
+        self.rebuild_visible();
+        before != self.visible
     }
 
     /// 지금 필터(소문자 · 없으면 `None`).
@@ -1214,6 +1331,8 @@ impl Tree {
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,
+            deep_scope: false,
+            deep: HashMap::new(),
         }
     }
 }
@@ -1407,6 +1526,69 @@ mod tests {
         assert_eq!(t.unfiltered_len(), 5);
         assert!(name_filter_matches("a?c", "ABC") && !name_filter_matches("a?c", "abcd"));
         assert!(!name_filter_matches(" ; ", "x"));
+    }
+
+    /// 하위 폴더까지(사용자 10-26 검색창 범위 토글): 이름이 안 맞는 폴더는 깊은 판정이 올 때까지 숨고 · 참이면 **접힌 채** 남는다(자동 펼침 없음) ·
+    /// 펼치면 자식 폴더도 같은 규칙 · 필터를 끄면 펼친 상태는 그대로 · `deep_name_match`는 모든 깊이(dirA/dirB/z.txt) · 취소 = `None` ·
+    /// 새 열쇠 = 깊은 판정 비움.
+    #[test]
+    fn deep_scope_keeps_collapsed_folders_with_matching_descendants() {
+        let base = make_fixture("deep");
+        let mut t = Tree::open(&base).unwrap();
+        let only_z: NameMatcherFn = std::sync::Arc::new(|n: &str| n.starts_with('z'));
+        assert!(t.set_name_matcher(Some("z"), Some(only_z)));
+        assert_eq!(t.visible_len(), 0, "범위 끔 = 현재 층 이름만");
+        assert!(t.set_deep_scope(true) && t.deep_scope());
+        assert_eq!(t.visible_len(), 0, "깊은 판정 전 = 아직 숨김");
+        let pending = t.deep_pending_dirs();
+        assert_eq!(pending.len(), 1);
+        let (dir_a, path_a) = pending[0].clone();
+        assert!(path_a.ends_with("dirA"));
+        let z = |n: &str| n.starts_with('z');
+        assert_eq!(
+            deep_name_match(&path_a, true, true, true, &z, &|| false),
+            Some(true),
+            "dirA/dirB/z.txt — 모든 깊이"
+        );
+        assert_eq!(
+            deep_name_match(&path_a, true, true, true, &|_: &str| false, &|| false),
+            Some(false)
+        );
+        assert_eq!(
+            deep_name_match(&path_a, true, true, true, &z, &|| true),
+            None,
+            "취소"
+        );
+        assert!(t.set_deep_results(&[(dir_a, true)]));
+        assert_eq!(names(&t), vec!["dirA"]);
+        assert_eq!(t.is_expanded(dir_a), Some(false), "자동 펼침 없음");
+        assert!(t.deep_pending_dirs().is_empty());
+        // 사용자가 펼치면 자식 폴더 dirB도 같은 규칙(판정 전 숨김 → 참이면 표시) · 파일은 이름만.
+        t.expand(dir_a).unwrap();
+        assert_eq!(
+            names(&t),
+            vec!["dirA"],
+            "dirB는 판정 전 · x/y는 이름 안 맞음"
+        );
+        let p2 = t.deep_pending_dirs();
+        assert_eq!(p2.len(), 1);
+        let dir_b = p2[0].0;
+        assert!(t.set_deep_results(&[(dir_b, true)]));
+        assert_eq!(names(&t), vec!["dirA", "dirB"]);
+        t.expand(dir_b).unwrap();
+        assert_eq!(names(&t), vec!["dirA", "dirB", "z.txt"]);
+        // 필터를 끄면 펼친 상태는 그대로(전부 보임).
+        assert!(t.set_name_matcher(None, None));
+        assert_eq!(
+            names(&t),
+            vec!["dirA", "dirB", "z.txt", "x.txt", "y.txt", "file1.txt"]
+        );
+        assert_eq!(t.is_expanded(dir_a), Some(true));
+        // 새 열쇠 = 깊은 판정 비움(dirA · dirB 다시).
+        assert!(t.set_name_matcher(Some("q"), Some(std::sync::Arc::new(|_: &str| false))));
+        assert_eq!(t.deep_pending_dirs().len(), 2);
+        assert!(!t.set_deep_scope(true), "같은 값 = 무변경");
+        fs::remove_dir_all(&base).unwrap();
     }
 
     /// 호스트 판정기(10-25 검색창): 판정기가 가시성을 정한다(글은 열쇠일 뿐) · 같은 열쇠 = 무변경 · 빈 열쇠 = 끔(판정기도 버림).

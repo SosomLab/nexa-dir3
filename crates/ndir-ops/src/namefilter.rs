@@ -18,6 +18,9 @@ pub struct FilterOpts {
     pub case: bool,
     pub word: bool,
     pub regex: bool,
+    /// 하위 폴더까지(검색창 넷째 토글 · 사용자 10-26) — 판정기와 무관한 **범위**(트리가 접힌 폴더의 자손 이름도 본다 · ndir-tree
+    /// `set_deep_scope`) · [`Self::tag`]에 들어가지 않는다(판정 열쇠는 같다 → 범위만 바꿔도 깊은 판정 결과는 그대로).
+    pub subdirs: bool,
 }
 
 impl FilterOpts {
@@ -273,9 +276,17 @@ mod tests {
     use super::*;
 
     fn m(spec: &str, case: bool, word: bool, regex: bool) -> NameMatcher {
-        compile(spec, FilterOpts { case, word, regex })
-            .expect("compile")
-            .expect("non-empty")
+        compile(
+            spec,
+            FilterOpts {
+                case,
+                word,
+                regex,
+                subdirs: false,
+            },
+        )
+        .expect("compile")
+        .expect("non-empty")
     }
 
     fn plain(spec: &str) -> NameMatcher {
@@ -393,7 +404,8 @@ mod tests {
             FilterOpts {
                 case: true,
                 word: false,
-                regex: true
+                regex: true,
+                subdirs: true
             }
             .tag(),
             "cr"

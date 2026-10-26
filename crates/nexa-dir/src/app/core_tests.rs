@@ -11256,6 +11256,7 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
         case: true,
         word: false,
         regex: false,
+        subdirs: false,
     });
     assert!(app.settings.flag("list.filter_case") && !app.settings.flag("list.filter_word"));
     assert_eq!(
@@ -11263,7 +11264,8 @@ fn quick_filter_search_box_fuzzy_toggles_and_busy() {
         FilterOpts {
             case: true,
             word: false,
-            regex: false
+            regex: false,
+            subdirs: false
         }
     );
     app.panels[0].close_filter(&mut inv);
@@ -11627,5 +11629,82 @@ fn startup_compare_sync_and_trash_wait_commands() {
     assert!(app.sync_job.is_none(), "비교 결과 없음 = 동기화 없음");
     assert!(is_wait_cmd("trash.wait") && is_wait_cmd("jobs.wait"));
     assert!(!app.startup_wait_busy("trash.wait"), "가짜 휴지통 = 동기");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 하위 폴더 검색(사용자 10-26 · 검색창 넷째 토글 = nexa-sql "경로까지 검색" 자리 · nexa-ui 237 `SearchToggle::Scope` · `list.filter_subdirs`):
+/// 끔 = 현재 층 이름만("needle" → 0행) · 켬 = 접힌 `sub`가 자손 `needle.txt` 덕에 **접힌 채** 보임(자동 펼침 없음) · 펼치면 자식 폴더도 같은 규칙 ·
+/// 하위 폴더 **이름**도 대상("deep" → sub › deeper) · Esc로 글을 지워도 펼친 상태 유지 · 설정 ↔ 토글(persist → 패널) · 혜성은 동기 결과라 Running에 머물지 않음.
+#[test]
+fn quick_filter_subfolder_scope_keeps_user_expansion() {
+    use ndir_ops::namefilter::FilterOpts;
+    use nexa_ctl::controls::busy::BusyState;
+    let (mut app, dir) = fixture("qsubdirs");
+    std::fs::create_dir_all(dir.join("sub/deeper")).expect("mkdir");
+    std::fs::write(dir.join("sub/deeper/needle.txt"), b"x").expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let names = |app: &App| -> Vec<String> {
+        let src = app.panels[0].rows().source();
+        (0..src.len()).map(|i| src.row(i).text).collect()
+    };
+    let type_text = |app: &mut App, s: &str| {
+        for c in s.chars() {
+            app.route(InputEvent::Char { c, now_ms: 1_000 });
+        }
+    };
+    app.panels[0].toggle_filter(&mut inv);
+    type_text(&mut app, "needle");
+    assert!(
+        names(&app).is_empty(),
+        "범위 끔 = 현재 층만: {:?}",
+        names(&app)
+    );
+    // 설정 → 패널(토글 켜짐) · 접힌 sub가 자손 덕에 보인다(a.txt · b.md는 숨음) · 자동 펼침 없음.
+    app.persist_filter_opts(FilterOpts {
+        subdirs: true,
+        ..FilterOpts::default()
+    });
+    assert!(app.settings.flag("list.filter_subdirs") && app.panels[0].filter_opts().subdirs);
+    assert_eq!(names(&app), vec!["sub".to_string()], "접힌 sub만");
+    assert!(
+        !app.panels[0].rows().source().deep_pending(),
+        "시험 = 동기 깊은 판정(워커 없음) · 혜성은 최소 표시 뚤 Done"
+    );
+    assert_ne!(app.panels[0].filter_busy_state(), BusyState::Idle);
+    // 사용자가 펼치면 자식 폴더 deeper도 같은 규칙(inner.rs는 이름이 안 맞아 숨음) · 다시 펼치면 needle.txt.
+    assert!(app.panels[0].rows_mut().source_mut().expand_row(0));
+    assert_eq!(names(&app), vec!["sub".to_string(), "deeper".to_string()]);
+    assert!(app.panels[0].rows_mut().source_mut().expand_row(1));
+    assert_eq!(
+        names(&app),
+        vec![
+            "sub".to_string(),
+            "deeper".to_string(),
+            "needle.txt".to_string()
+        ]
+    );
+    // Esc = 글 지움 → 펼친 상태는 그대로(sub › deeper › needle.txt · inner.rs · a.txt · b.md).
+    app.route(InputEvent::Key {
+        key: nexa_ctl::Key::Escape,
+        shift: false,
+        primary: false,
+    });
+    assert!(app.panels[0].filter_text().is_empty());
+    assert_eq!(
+        names(&app),
+        ["sub", "deeper", "needle.txt", "inner.rs", "a.txt", "b.md"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+        "검색을 지워도 펼친 채"
+    );
+    // 하위 폴더 이름도 대상: "deep" → sub(자손 deeper) › deeper(이름) · 파일은 없음.
+    type_text(&mut app, "deep");
+    assert_eq!(names(&app), vec!["sub".to_string(), "deeper".to_string()]);
+    // 토글 끔(설정) → 현재 층 이름만 = 0행 · 펼친 상태는 여전히 유지(글을 지우면 다시 전부).
+    app.persist_filter_opts(FilterOpts::default());
+    assert!(names(&app).is_empty(), "범위 끔: {:?}", names(&app));
     let _ = std::fs::remove_dir_all(&dir);
 }

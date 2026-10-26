@@ -265,12 +265,27 @@ pub(crate) struct TreeSource {
     probe_inbox: probe::Inbox,
     probe_gen: u64,
     probe_pending: std::cell::RefCell<std::collections::HashSet<ndir_tree::NodeId>>,
+    /// 하위 폴더 검색(사용자 10-26 검색창 범위 토글): 워커에 준 판정기 · 결과함 · 현재 세대(워커가 낡은 검색을 걷는 도중 멈춘다) · 워커에 가 있는 폴더.
+    deep_matcher: Option<DeepMatcher>,
+    deep_inbox: deep::Inbox,
+    deep_gen: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    deep_pending: std::collections::HashSet<ndir_tree::NodeId>,
     /// 스스로 읽은 시각과 그때의 폴더 수정 시각(10-18 결정 ③ 자기 변경 억제): 감시 통지가 이 뒤 창 안에 오고 수정 시각이
     /// 같으면 우리 작업의 메아리 — 호스트가 버린다. 감시가 읽은 것은 `clear_fresh`로 지운다(연속 통지는 종전대로).
     fresh: Option<(std::time::Instant, Option<std::time::SystemTime>)>,
     /// 재로드 횟수(시험 증거).
     #[cfg(test)]
     reloads: u32,
+}
+
+/// 하위 폴더 검색 워커에 줄 판정기(클로저는 Debug가 없다 · ndir-tree `MatcherBox`와 같은 이유).
+#[derive(Clone)]
+struct DeepMatcher(ndir_tree::NameMatcherFn);
+
+impl std::fmt::Debug for DeepMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("NameMatcherFn")
+    }
 }
 
 impl TreeSource {
@@ -295,6 +310,10 @@ impl TreeSource {
             probe_inbox: Default::default(),
             probe_gen: 0,
             probe_pending: Default::default(),
+            deep_matcher: None,
+            deep_inbox: Default::default(),
+            deep_gen: Default::default(),
+            deep_pending: Default::default(),
             fresh: None,
             #[cfg(test)]
             reloads: 0,
@@ -392,7 +411,7 @@ impl TreeSource {
 
     /// 워커 결과를 기다리는 폴더가 있는가(이벤트 루프 깨움 · 덤프 대기).
     pub(crate) fn probes_pending(&self) -> bool {
-        !self.probe_pending.borrow().is_empty()
+        !self.probe_pending.borrow().is_empty() || self.deep_pending()
     }
 
     /// 이름 앞 아이콘 켬/끔 — 바뀌었으면 true.
@@ -441,22 +460,28 @@ impl TreeSource {
         self.filter_err
     }
 
+    /// 글 + 토글로 판정기를 만들어 트리에 넣고(정규식 오류 = `filter_err` + 아무것도 안 맞음) · 하위 폴더 범위(`subdirs`)를 전하고 · 깊은 판정이
+    /// 없는 폴더의 검색을 건다(`schedule_deep`). 새 판정 = 새 세대(워커의 낡은 깊은 검색은 중단 · 결과는 버림). 가시 목록이 바뀌었으면 `true`.
     fn apply_matcher(&mut self) -> bool {
         let Some(tree) = self.tree.as_mut() else {
             return false;
         };
+        self.deep_gen
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.deep_pending.clear();
+        self.deep_matcher = None;
+        let mut changed = tree.set_deep_scope(self.filter_opts.subdirs);
         if self.name_filter.is_empty() {
             self.filter_err = false;
-            return tree.set_name_matcher(None, None);
+            return tree.set_name_matcher(None, None) || changed;
         }
         let key = format!("{}\u{1}{}", self.name_filter, self.filter_opts.tag());
-        match ndir_ops::namefilter::compile(&self.name_filter, self.filter_opts) {
+        changed |= match ndir_ops::namefilter::compile(&self.name_filter, self.filter_opts) {
             Ok(Some(m)) => {
                 self.filter_err = false;
-                tree.set_name_matcher(
-                    Some(&key),
-                    Some(std::sync::Arc::new(move |n: &str| m.matches(n))),
-                )
+                let f: ndir_tree::NameMatcherFn = std::sync::Arc::new(move |n: &str| m.matches(n));
+                self.deep_matcher = Some(DeepMatcher(f.clone()));
+                tree.set_name_matcher(Some(&key), Some(f))
             }
             Ok(None) => {
                 self.filter_err = false;
@@ -466,7 +491,86 @@ impl TreeSource {
                 self.filter_err = true;
                 tree.set_name_matcher(Some(&key), Some(std::sync::Arc::new(|_: &str| false)))
             }
+        };
+        changed | self.schedule_deep()
+    }
+
+    /// 깊은 판정이 없는 폴더를 걷는다(범위 켬 + 필터 중 · 사용자 10-26): 창이 있으면 워커(`deep`)에 맡기고 · 아니면(시험 · 덤프) 지금 동기로 —
+    /// 가시 목록이 바뀌었으면 `true`. 펼침 뒤·결과 수신 뒤에도 불러 새로 보이는 자식 폴더를 잇는다.
+    fn schedule_deep(&mut self) -> bool {
+        let Some(DeepMatcher(m)) = self.deep_matcher.clone() else {
+            return false;
+        };
+        let Some(tree) = self.tree.as_mut() else {
+            return false;
+        };
+        let todo: Vec<(ndir_tree::NodeId, PathBuf)> = tree
+            .deep_pending_dirs()
+            .into_iter()
+            .filter(|(id, _)| !self.deep_pending.contains(id))
+            .collect();
+        if todo.is_empty() {
+            return false;
         }
+        let (h, d, pr) = (
+            self.opts.show_hidden,
+            self.opts.show_dotfiles,
+            self.opts.show_protected,
+        );
+        if probe::is_async() {
+            let gen = self.deep_gen.load(std::sync::atomic::Ordering::Relaxed);
+            for (id, path) in todo {
+                self.deep_pending.insert(id);
+                deep::submit(deep::Job {
+                    gen,
+                    id,
+                    path,
+                    flags: (h, d, pr),
+                    matcher: m.clone(),
+                    cur: std::sync::Arc::clone(&self.deep_gen),
+                    inbox: std::sync::Arc::clone(&self.deep_inbox),
+                });
+            }
+            return false;
+        }
+        let results: Vec<(ndir_tree::NodeId, bool)> = todo
+            .iter()
+            .map(|(id, p)| {
+                let v = ndir_tree::deep_name_match(p, h, d, pr, &|n: &str| m(n), &|| false);
+                (*id, v.unwrap_or(false))
+            })
+            .collect();
+        tree.set_deep_results(&results)
+    }
+
+    /// 깊은 검색 워커 결과를 트리에 넣고(유휴 틱) 새로 펼쳐진 폴더의 검색을 건다 — 가시 목록이 바뀌었으면 `true`.
+    pub(crate) fn deep_tick(&mut self) -> bool {
+        let got: Vec<(u64, ndir_tree::NodeId, bool)> = self
+            .deep_inbox
+            .lock()
+            .map(|mut v| v.drain(..).collect())
+            .unwrap_or_default();
+        let cur = self.deep_gen.load(std::sync::atomic::Ordering::Relaxed);
+        let mut results = Vec::new();
+        for (gen, id, v) in got {
+            if gen != cur {
+                continue; // 낡은 검색(글이 바뀐 뒤)
+            }
+            self.deep_pending.remove(&id);
+            results.push((id, v));
+        }
+        let mut changed = false;
+        if !results.is_empty() {
+            if let Some(t) = self.tree.as_mut() {
+                changed |= t.set_deep_results(&results);
+            }
+        }
+        changed | self.schedule_deep()
+    }
+
+    /// 깊은 검색 결과를 기다리는가(혜성 Running · 이벤트 루프 깨움).
+    pub(crate) fn deep_pending(&self) -> bool {
+        !self.deep_pending.is_empty()
     }
 
     pub(crate) fn name_filter(&self) -> &str {
@@ -585,13 +689,11 @@ impl TreeSource {
         self.probe_gen += 1;
         self.probe_pending.borrow_mut().clear();
         match built.tree {
-            Ok(mut t) => {
-                // 빠른 필터(NEW-057)는 재열람해도 그대로.
-                if !self.name_filter.is_empty() {
-                    t.set_name_filter(Some(&self.name_filter));
-                }
+            Ok(t) => {
                 self.tree = Some(t);
                 self.error = None;
+                // 빠른 필터(NEW-057)는 재열람해도 그대로 — 토글·하위 폴더 범위까지 다시 건다(종전엔 글만 넣어 판정기가 부분 문자열로 돌아갔다 · 10-26).
+                self.apply_matcher();
             }
             Err(e) => {
                 self.tree = None;
@@ -720,10 +822,14 @@ impl TreeSource {
         let Some(t) = self.tree.as_mut() else {
             return false;
         };
-        match t.visible_id(index) {
+        let ok = match t.visible_id(index) {
             Some(id) if t.is_expanded(id) == Some(false) => t.expand(id).is_ok(),
             _ => false,
+        };
+        if ok {
+            self.schedule_deep(); // 하위 폴더 검색 중이면 새로 보이는 자식 폴더의 깊은 판정(10-26)
         }
+        ok
     }
 
     /// 화면에 **펼쳐져 있는** 폴더들의 경로(위에서부터 최대 `cap`개) — 폴더 감시 대상(dir2 WINB-014 "가시 펼침 폴더").
@@ -1163,7 +1269,13 @@ impl RowSource for TreeSource {
                 t.collapse(id);
                 true
             }
-            Some(false) => t.expand(id).is_ok(),
+            Some(false) => {
+                let ok = t.expand(id).is_ok();
+                if ok {
+                    self.schedule_deep(); // 하위 폴더 검색 중이면 새로 보이는 자식 폴더의 깊은 판정(10-26)
+                }
+                ok
+            }
             None => false,
         }
     }
@@ -1324,6 +1436,81 @@ pub(crate) mod probe {
             q.push_back(job);
         }
         p.cv.notify_one();
+    }
+}
+
+/// 하위 폴더 검색 워커(사용자 10-26 · 검색창 범위 토글): 보이는 폴더마다 자손 이름을 끝까지 걷는 일은 그리기 중에 할 수 없어(docs/01 §3 · 10-18 프로브와
+/// 같은 이유) 전용 스레드 하나가 큐를 처리한다 · 결과는 결과함에 쌓이고 유휴 틱이 폴링한다(`TreeSource::deep_tick`) · 세대가 바뀐 검색은 걷는 도중 멈춘다
+/// (`ndir_tree::deep_name_match`의 취소 · 결과 없음).
+pub(crate) mod deep {
+    use std::collections::VecDeque;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Arc, Condvar, Mutex, OnceLock};
+
+    /// 결과함: (세대, 노드, 자손 중 맞는 이름 있음).
+    pub(crate) type Inbox = Arc<Mutex<Vec<(u64, ndir_tree::NodeId, bool)>>>;
+
+    pub(crate) struct Job {
+        pub gen: u64,
+        pub id: ndir_tree::NodeId,
+        pub path: PathBuf,
+        /// (show_hidden, show_dotfiles, show_protected).
+        pub flags: (bool, bool, bool),
+        pub matcher: ndir_tree::NameMatcherFn,
+        /// 원천의 현재 세대 — `gen`과 다르면 낡은 검색(걷기 중단 · 결과 없음).
+        pub cur: Arc<AtomicU64>,
+        pub inbox: Inbox,
+    }
+
+    struct Walker {
+        queue: Mutex<VecDeque<Job>>,
+        cv: Condvar,
+    }
+
+    static WALKER: OnceLock<Walker> = OnceLock::new();
+
+    fn walker() -> &'static Walker {
+        WALKER.get_or_init(|| {
+            let w = Walker {
+                queue: Mutex::new(VecDeque::new()),
+                cv: Condvar::new(),
+            };
+            std::thread::Builder::new()
+                .name("ndir-deep".into())
+                .spawn(|| {
+                    let w = walker();
+                    loop {
+                        let job = {
+                            let mut q = w.queue.lock().unwrap_or_else(|e| e.into_inner());
+                            while q.is_empty() {
+                                q = w.cv.wait(q).unwrap_or_else(|e| e.into_inner());
+                            }
+                            q.pop_front()
+                        };
+                        let Some(job) = job else { continue };
+                        let cancelled = || job.cur.load(Ordering::Relaxed) != job.gen;
+                        let (h, d, pr) = job.flags;
+                        let m = |n: &str| (job.matcher)(n);
+                        if let Some(v) =
+                            ndir_tree::deep_name_match(&job.path, h, d, pr, &m, &cancelled)
+                        {
+                            let _ = job.inbox.lock().map(|mut g| g.push((job.gen, job.id, v)));
+                        }
+                    }
+                })
+                .expect("spawn deep worker");
+            w
+        })
+    }
+
+    /// 큐에 넣는다(워커는 첫 호출 때 생긴다).
+    pub(crate) fn submit(job: Job) {
+        let w = walker();
+        if let Ok(mut q) = w.queue.lock() {
+            q.push_back(job);
+        }
+        w.cv.notify_one();
     }
 }
 
@@ -1644,6 +1831,71 @@ mod tests {
 #[cfg(test)]
 mod probe_tests {
     use super::*;
+
+    /// 하위 폴더 검색 워커(10-26): 자손 이름이 맞으면 결과함에 `(세대, 노드, true)` · 세대가 다른 작업은 걷지 않고 결과도 없다(취소) ·
+    /// 결과는 `deep_tick`이 트리에 넣어 접힌 폴더가 나타난다. 프로세스 전역(`probe::set_async`)은 건드리지 않고 큐에 직접 넣는다.
+    #[test]
+    fn deep_worker_reports_descendant_match_and_skips_stale_generation() {
+        let dir = std::env::temp_dir().join(format!("ndir-deepw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub/deeper")).unwrap();
+        std::fs::write(dir.join("sub/deeper/needle.txt"), b"x").unwrap();
+        std::fs::write(dir.join("hay.txt"), b"x").unwrap();
+        let opts = ListOpts {
+            show_hidden: false,
+            show_dotfiles: false,
+            show_protected: false,
+            folders_first: true,
+            case_sensitive: false,
+            natural: true,
+            hide_empty_glyph: false,
+            nfc_display: false,
+        };
+        let mut src = TreeSource::open(&dir, opts);
+        let sub = src.tree.as_ref().unwrap().row(0).unwrap().id;
+        // 범위 끔 + 글 → 0행(동기 경로는 범위가 켜져 있을 때만 걷는다).
+        assert!(src.set_name_filter("needle"));
+        assert_eq!(src.len(), 0);
+        assert!(src.set_filter_opts(ndir_ops::namefilter::FilterOpts {
+            subdirs: true,
+            ..Default::default()
+        }));
+        assert_eq!(src.len(), 1, "동기 깊은 판정 = sub 표시: {}", src.len());
+        // 워커 경로: 결과를 지우고(새 열쇠) 큐에 직접 — 현재 세대 = 결과 · 낡은 세대 = 없음.
+        src.deep_matcher = None; // 동기 재검색을 막고 워커만 본다
+        src.tree.as_mut().unwrap().set_name_matcher(
+            Some("needle2"),
+            Some(std::sync::Arc::new(|n: &str| n.contains("needle"))),
+        );
+        assert_eq!(src.len(), 0, "새 열쇠 = 깊은 판정 비움");
+        let cur = src.deep_gen.load(std::sync::atomic::Ordering::Relaxed);
+        let m: ndir_tree::NameMatcherFn = std::sync::Arc::new(|n: &str| n.contains("needle"));
+        for (gen, id) in [(cur + 99, sub), (cur, sub)] {
+            deep::submit(deep::Job {
+                gen,
+                id,
+                path: dir.join("sub"),
+                flags: (false, false, false),
+                matcher: m.clone(),
+                cur: std::sync::Arc::clone(&src.deep_gen),
+                inbox: std::sync::Arc::clone(&src.deep_inbox),
+            });
+        }
+        src.deep_pending.insert(sub);
+        let at = std::time::Instant::now();
+        while src.deep_pending() && at.elapsed() < std::time::Duration::from_secs(5) {
+            let _ = src.deep_tick();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(!src.deep_pending(), "결과 수신");
+        assert_eq!(src.len(), 1, "워커 결과 = sub 표시(접힌 채)");
+        assert_eq!(
+            src.deep_inbox.lock().unwrap().len(),
+            0,
+            "낡은 세대는 결과를 내지 않는다"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn probe_worker_fills_cache_and_ignores_stale_generation() {

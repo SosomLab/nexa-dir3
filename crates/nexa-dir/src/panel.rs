@@ -375,11 +375,17 @@ impl Panel {
         rows.set_col_drag_marker(true); // 컬럼을 끄는 동안 놓일 자리 표식(T-123)
         let mut tabbar = TabBar::new();
         tabbar.set_show_new(true);
-        let mut filter = nexa_ctl::SearchBox::new(ndir_i18n::tr("filter.placeholder"));
+        // 넷째 토글 = 하위 폴더 검색(사용자 10-26 · nexa-sql "경로까지 검색" 자리 · nexa-ui 237 `with_scope_toggle`).
+        let mut filter =
+            nexa_ctl::SearchBox::new(ndir_i18n::tr("filter.placeholder")).with_scope_toggle();
         filter.set_tips(
             ndir_i18n::tr("filter.tip.case"),
             ndir_i18n::tr("filter.tip.word"),
             ndir_i18n::tr("filter.tip.regex"),
+        );
+        filter.set_tip(
+            nexa_ctl::SearchToggle::Scope,
+            ndir_i18n::tr("filter.tip.subdirs"),
         );
         nexa_ctl::Control::set_scale(&mut filter, m.scale);
         let mut p = Panel {
@@ -1230,6 +1236,10 @@ impl Panel {
             ndir_i18n::tr("filter.tip.word"),
             ndir_i18n::tr("filter.tip.regex"),
         );
+        self.filter.set_tip(
+            nexa_ctl::SearchToggle::Scope,
+            ndir_i18n::tr("filter.tip.subdirs"),
+        );
         self.sync_chrome(inv);
     }
 
@@ -1308,13 +1318,14 @@ impl Panel {
         self.filter.bounds()
     }
 
-    /// 토글 셋(대소문자 · 단어 · 정규식) — 버튼 색(켜짐 = 강조)으로 들고 있다.
+    /// 토글 셋(대소문자 · 단어 · 정규식 · 하위 폴더) — 버튼 색(켜짐 = 강조)으로 들고 있다.
     pub(crate) fn filter_opts(&self) -> ndir_ops::namefilter::FilterOpts {
         use nexa_ctl::SearchToggle as T;
         ndir_ops::namefilter::FilterOpts {
             case: self.filter.is_on(T::Case),
             word: self.filter.is_on(T::Word),
             regex: self.filter.is_on(T::Regex),
+            subdirs: self.filter.is_on(T::Scope),
         }
     }
 
@@ -1329,6 +1340,7 @@ impl Panel {
         self.filter.set_checked(T::Case, opts.case);
         self.filter.set_checked(T::Word, opts.word);
         self.filter.set_checked(T::Regex, opts.regex);
+        self.filter.set_checked(T::Scope, opts.subdirs);
         for tab in &mut self.tabs {
             if tab.rows.source_mut().set_filter_opts(opts) {
                 inv.push(tab.rows.bounds());
@@ -1350,7 +1362,10 @@ impl Panel {
             self.filter.set_busy(BusyState::Idle);
         } else {
             self.filter.set_busy(BusyState::Running);
-            self.filter.set_busy(BusyState::Done);
+            // 하위 폴더 검색(10-26)이 워커에 가 있으면 결과가 다 올 때까지 Running — `tick`이 Done으로 바꾼다.
+            if !self.rows().source().deep_pending() {
+                self.filter.set_busy(BusyState::Done);
+            }
         }
     }
 
@@ -1579,6 +1594,21 @@ impl Panel {
         // 빈 폴더 프로브 결과(워커 · 10-18) — 바뀐 마커만큼 목록을 다시 그린다.
         if self.tabs[self.active].rows.source_mut().drain_probes() {
             inv.push(self.tabs[self.active].rows.bounds());
+        }
+        // 하위 폴더 검색 결과(워커 · 사용자 10-26 검색창 범위 토글) — 목록이 바뀌면 다시 그리고 "n/m" 갱신 · 다 왔으면 혜성 Done.
+        if self.tabs[self.active].rows.source_mut().deep_tick() {
+            inv.push(self.tabs[self.active].rows.bounds());
+            self.sync_status(inv);
+        }
+        {
+            use nexa_ctl::controls::busy::BusyState;
+            if self.filter_on
+                && self.filter.busy_state() == BusyState::Running
+                && !self.rows().source().deep_pending()
+            {
+                self.filter.set_busy(BusyState::Done);
+                inv.push(self.filter_bar_rect());
+            }
         }
         self.poll_drive_space(inv);
     }

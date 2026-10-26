@@ -235,7 +235,10 @@ impl App {
             | "ui.menu_font_face"
             | "ui.dialog_font_face" => self.apply_area_fonts(),
             "list.sort_click_adds" => self.apply_sort_click_setting(),
-            "list.filter_case" | "list.filter_word" | "list.filter_regex" => {
+            "list.filter_case"
+            | "list.filter_word"
+            | "list.filter_regex"
+            | "list.filter_subdirs" => {
                 self.apply_filter_opts_setting();
             }
             "list.col_layout" => {
@@ -489,6 +492,7 @@ impl App {
             case: s.flag("list.filter_case"),
             word: s.flag("list.filter_word"),
             regex: s.flag("list.filter_regex"),
+            subdirs: s.flag("list.filter_subdirs"),
         }
     }
 
@@ -498,6 +502,7 @@ impl App {
             ("list.filter_case", o.case),
             ("list.filter_word", o.word),
             ("list.filter_regex", o.regex),
+            ("list.filter_subdirs", o.subdirs),
         ] {
             let _ = self.settings.set(k, if v { "on" } else { "off" });
         }

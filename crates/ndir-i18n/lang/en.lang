@@ -283,6 +283,7 @@ filter.placeholder = Filter by name (all words must match · * ? = whole-name pa
 filter.tip.case = Match Case (wildcards off)
 filter.tip.word = Match Whole Word (wildcards off)
 filter.tip.regex = Use Regular Expression (* ? are regex here, not wildcards)
+filter.tip.subdirs = Search Subfolders (a folder with a match stays listed, collapsed · expand it yourself)
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab
@@ -695,6 +696,8 @@ pref.filterWord = Filter: whole word
 pref.filterWord.desc = Quick filter toggle ab — the text must appear as a whole word (letters, digits and _ on either side break the match). Off = fuzzy: the letters only need to appear in order (rprt matches report).
 pref.filterRegex = Filter: regular expression
 pref.filterRegex.desc = Quick filter toggle .* — the text is a regular expression (regex-lite syntax). Invalid patterns show a red frame and match nothing. Off = plain text with * ? wildcards.
+pref.filterSubdirs = Filter: search subfolders
+pref.filterSubdirs.desc = Quick filter toggle (folder with check) — names inside collapsed subfolders are searched too. A folder stays listed, collapsed, when its own name or any descendant matches; nothing is expanded for you. Folders you expand stay expanded after the filter is cleared. Off = current level only.
 pref.navUpAlign = Selection position after Go Up
 pref.navUpAlign.desc = Where the left folder is placed in the view after Alt+Up.
 pref.align.top = Top

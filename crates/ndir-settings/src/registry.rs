@@ -1051,6 +1051,16 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 넷째 토글 = 하위 폴더까지(사용자 10-26 · nexa-sql 프로젝트 탐색기 "경로까지 검색" 자리): 접힌 폴더의 자손 이름도 검색 · 맞는 이름/자손이 있는
+    // 폴더는 접힌 채 표시(자동 펼침 없음) · 사용자가 펼친 폴더는 검색을 지워도 그대로.
+    e!(
+        "list.filter_subdirs",
+        CAT_LIST,
+        "pref.filterSubdirs",
+        "pref.filterSubdirs.desc",
+        Bool,
+        "off"
+    ),
     e!(
         "list.view_scope",
         CAT_LIST,
