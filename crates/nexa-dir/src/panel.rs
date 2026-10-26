@@ -213,6 +213,9 @@ pub(crate) struct Panel {
     filter_on: bool,
     /// 토글이 바뀌었다(호스트가 설정 `list.filter_*`에 적는다).
     filter_opts_changed: bool,
+    /// 검색창 편집 메뉴(TextBox 팝업)에서 고른 행동(복사 · 잘라내기 · 붙여넣기) — 호스트가 [`Panel::take_filter_clip`]로 거둬
+    /// [`Panel::filter_clip`]으로 잇는다(클립보드 접근은 호스트 몫 · 사용자 10-26).
+    filter_clip: Option<nexa_ctl::EditCtxAction>,
     /// 새 탭·새 원천이 이어받는 토글(설정 기본값 · App이 `set_filter_opts`로 준다 · 종전 프로세스 전역 `filelist::FILTER_OPTS_DEFAULT`는 10-26 제거 · docs/15 §2-8).
     filter_defaults: ndir_ops::namefilter::FilterOpts,
     /// 새 그리드의 Shift 없는 헤더 클릭 = 정렬 추가(설정 `list.sort_click_adds` · App이 `set_sort_click_adds`로 준다 · 종전 전역 제거).
@@ -444,6 +447,7 @@ impl Panel {
             git: None,
             pending_status: None,
             filter_opts_changed: false,
+            filter_clip: None,
             filter_defaults: ndir_ops::namefilter::FilterOpts::default(),
             sort_click_adds: false,
             git_extra: String::new(),
@@ -1353,6 +1357,45 @@ impl Panel {
     /// 토글이 바뀌었는가(호스트가 가져가 설정에 적는다 · 한 번만 참).
     pub(crate) fn take_filter_opts_changed(&mut self) -> bool {
         std::mem::take(&mut self.filter_opts_changed)
+    }
+
+    /// 검색창 편집 메뉴에서 고른 행동(한 번만) — 호스트가 [`Self::filter_clip`]으로 잇는다.
+    pub(crate) fn take_filter_clip(&mut self) -> Option<nexa_ctl::EditCtxAction> {
+        self.filter_clip.take()
+    }
+
+    /// 검색창 글의 클립보드 동작(Ctrl+C/X/V · 편집 메뉴 · 사용자 10-26 — 종전엔 Ctrl+C/X/V가 파일 복사/붙여넣기로 갔고 팝업 항목은
+    /// 아무 일도 안 했다): 복사 = 선택 글 → 클립보드 · 잘라내기 · 붙여넣기(단일 행 상자라 개행은 공백으로) · 글이 바뀌면 다시 거른다.
+    pub(crate) fn filter_clip(&mut self, act: nexa_ctl::EditCtxAction, inv: &mut Invalidations) {
+        use nexa_ctl::EditCtxAction as A;
+        let tb = self.filter.textbox_mut();
+        match act {
+            A::Copy => {
+                if let Some(t) = tb.copy_selection() {
+                    let _ = crate::clipboard::write_text(&t);
+                }
+                return;
+            }
+            A::Cut => {
+                if let Some(t) = tb.cut_selection(inv) {
+                    let _ = crate::clipboard::write_text(&t);
+                }
+            }
+            A::Paste => {
+                if let Some(t) = crate::clipboard::read_text() {
+                    tb.paste(&t, inv);
+                }
+            }
+            A::Custom(_) => return,
+        }
+        inv.push(self.filter_bounds());
+        self.apply_filter_text(inv);
+    }
+
+    /// 검색 상자(시험 · 덤프).
+    #[cfg(test)]
+    pub(crate) fn filter_box(&self) -> &nexa_ctl::SearchBox {
+        &self.filter
     }
 
     /// 혜성꼬리(nexa-ctl `BusyRing` · TextBox 속성): 필터가 적용되는 동안 Running → 바로 Done(동기 · 최소 표시 뒤 완료 깜빡임) · 빈 글 = Idle.
@@ -2809,6 +2852,11 @@ impl Panel {
             Part::List => self.tabs[self.active].rows.on_event(ev, inv),
             Part::Filter => {
                 use nexa_ctl::SearchEvent;
+                if matches!(*ev, InputEvent::RightDown { .. }) {
+                    // 편집 메뉴의 "붙여넣기" 활성 = 클립보드에 글이 있을 때(prefs_win과 같은 규칙 · 10-26).
+                    let has = crate::clipboard::read_text().is_some_and(|s| !s.is_empty());
+                    self.filter.textbox_mut().set_clipboard_has_text(has);
+                }
                 // 토글(뗄 때 · DR-27) · 상자 포커스 · 글자는 SearchBox가 가른다(nexa-ui 235 · 10-26) — 토글 = 다시 걸러 혜성 + 설정에 적기 ·
                 // 글 = 다시 거름.
                 match self.filter.handle(ev, inv) {
@@ -2820,6 +2868,10 @@ impl Panel {
                     }
                     SearchEvent::Changed => self.apply_filter_text(inv),
                     SearchEvent::None | SearchEvent::Consumed => {}
+                }
+                // 편집 메뉴에서 고른 행동(복사 · 잘라내기 · 붙여넣기) → 호스트가 클립보드를 잇는다(`take_filter_clip`).
+                if let Some(act) = self.filter.textbox_mut().take_edit_ctx() {
+                    self.filter_clip = Some(act);
                 }
             }
             Part::Status => {
@@ -2834,6 +2886,21 @@ impl Panel {
 
     /// 포인터 사건 — 눌린 부분이 캡처 · 이동은 전부(hover). 키는 [`Panel::key_event`].
     pub(crate) fn on_event(&mut self, ev: &InputEvent, inv: &mut Invalidations) {
+        // 검색창 편집 메뉴(TextBox 팝업)가 열려 있으면 포인터 사건은 전부 검색창으로(사용자 10-26 — 종전엔 팝업이 목록 위에 떠 있어
+        // 항목 클릭을 `part_at`이 목록으로 보냈고 복사/붙여넣기가 듣지 않았다). 팝업 밖 클릭 = 닫기만(아래로 흘리지 않는다 · 팝업 UX 규칙).
+        if self.filter_on
+            && self.filter.popup_open()
+            && matches!(
+                *ev,
+                InputEvent::MouseMove { .. }
+                    | InputEvent::MouseDown { .. }
+                    | InputEvent::MouseUp { .. }
+                    | InputEvent::RightDown { .. }
+            )
+        {
+            self.send(Part::Filter, ev, inv);
+            return;
+        }
         match *ev {
             InputEvent::MouseMove { .. } => {
                 if let Some(p) = self.pressed {

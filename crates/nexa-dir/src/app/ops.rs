@@ -806,6 +806,37 @@ impl App {
     }
 
     /// 이름 바꾸기 편집 필드 안의 편집 명령(dir2 `do_clip` ② — undo/cut/copy/paste/select_all/delete). 처리했으면 true.
+    /// 검색창(빠른 필터 상자) 포커스 중의 편집 명령 → 상자 글자(텍스트 클립보드 · 사용자 10-26 — 종전엔 Ctrl+C/X/V가 파일
+    /// 복사/붙여넣기로 갔다). 처리했으면 true. 경로 바와 같은 규칙: 파일을 바꾸는 편집 명령은 삼킨다.
+    pub(crate) fn filter_edit(&mut self, id: &str) -> bool {
+        use nexa_ctl::EditCtxAction as A;
+        let a = self.active;
+        if !self.panels[a].filter_focused() {
+            return false;
+        }
+        let mut inv = Invalidations::default();
+        match id {
+            "edit.copy" => self.panels[a].filter_clip(A::Copy, &mut inv),
+            "edit.cut" => self.panels[a].filter_clip(A::Cut, &mut inv),
+            "edit.paste" => self.panels[a].filter_clip(A::Paste, &mut inv),
+            "edit.select_all" => self.panels[a].key_event(&InputEvent::SelectAll, &mut inv),
+            "edit.delete" | "edit.delete_permanent" => {
+                self.panels[a].key_event(
+                    &InputEvent::Key {
+                        key: nexa_ctl::Key::Delete,
+                        shift: false,
+                        primary: false,
+                    },
+                    &mut inv,
+                );
+            }
+            "edit.undo" | "edit.redo" | "edit.rename" | "edit.bulk_rename" => {}
+            _ => return false,
+        }
+        self.redraw();
+        true
+    }
+
     /// 경로 바 편집 중의 편집 명령 → 경로 글자(텍스트 클립보드). 처리했으면 true. 편집 중이면 **모르는 편집 명령도 삼킨다** —
     /// 경로를 고치는 동안 파일 명령(붙여넣기·삭제·되돌리기)이 실행되면 안 된다.
     pub(crate) fn path_edit(&mut self, id: &str) -> bool {

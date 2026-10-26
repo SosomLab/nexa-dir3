@@ -976,6 +976,10 @@ impl App {
         if self.path_edit(id) {
             return;
         }
+        // 검색창(빠른 필터 상자) 포커스 중 편집 명령은 상자 글자에(사용자 10-26).
+        if self.filter_edit(id) {
+            return;
+        }
         match id {
             "file.exit" => self.exit_requested = true,
             "file.new_folder" => self.create_new(true),

@@ -11773,3 +11773,112 @@ fn rename_field_double_click_selects_word_not_opens() {
     }));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 검색창 글의 클립보드(사용자 10-26 — 종전엔 Ctrl+C/X/V가 파일 명령으로 갔고 우클릭 팝업 항목은 목록이 받아 아무 일도 안 했다):
+/// 키 = 전체 선택 · 복사 · 잘라내기 · 붙여넣기 · Delete(파일/플랫폼 호출 없음) · 드래그 = 범위 선택 · 우클릭 팝업 → 항목 클릭(Down/Up) = 복사.
+#[test]
+fn quick_filter_text_clipboard_keys_drag_and_popup() {
+    let (mut app, dir) = fixture("qclip");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("a.txt"), &mut inv);
+    app.panels[0].toggle_filter(&mut inv);
+    for c in "abc".chars() {
+        app.route(InputEvent::Char { c, now_ms: 1_000 });
+    }
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let ops_before = log.borrow().calls.len();
+    let entries_before = std::fs::read_dir(&dir).unwrap().count();
+    // 키: 전체 선택 → 복사 → 잘라내기 → 붙여넣기 → 전체 선택 + Delete.
+    app.command("edit.select_all");
+    app.command("edit.copy");
+    assert_eq!(
+        crate::clipboard::read_text().as_deref(),
+        Some("abc"),
+        "복사"
+    );
+    assert_eq!(app.panels[0].filter_text(), "abc");
+    app.command("edit.cut");
+    assert_eq!(app.panels[0].filter_text(), "", "잘라내기");
+    app.command("edit.paste");
+    assert_eq!(app.panels[0].filter_text(), "abc", "붙여넣기");
+    app.command("edit.select_all");
+    app.command("edit.delete");
+    assert_eq!(app.panels[0].filter_text(), "", "Delete = 글자");
+    assert!(app.panels[0].filter_focused(), "상자 포커스 유지");
+    assert_eq!(
+        log.borrow().calls.len(),
+        ops_before,
+        "파일 클립보드·휴지통 호출 없음: {:?}",
+        log.borrow().calls
+    );
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), entries_before);
+    // 드래그 = 범위 선택(상자 왼쪽 끝에서 오른쪽 끝까지 = 전부).
+    for c in "abc".chars() {
+        app.route(InputEvent::Char { c, now_ms: 2_000 });
+    }
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let tb = nexa_ctl::Widget::bounds(app.panels[0].filter_box().textbox());
+    let cy = tb.y + tb.h / 2;
+    app.route(InputEvent::MouseDown {
+        x: tb.x + 2,
+        y: cy,
+        shift: false,
+        primary: false,
+    });
+    app.route(InputEvent::MouseMove {
+        x: tb.right() - 2,
+        y: cy,
+    });
+    app.route(InputEvent::MouseUp {
+        x: tb.right() - 2,
+        y: cy,
+    });
+    assert_eq!(
+        app.panels[0]
+            .filter_box()
+            .textbox()
+            .copy_selection()
+            .as_deref(),
+        Some("abc"),
+        "드래그 선택"
+    );
+    // 우클릭 = 편집 팝업 · 첫 항목(복사) 클릭(Down/Up) → 클립보드 · 팝업 닫힘 · 목록으로 새지 않는다.
+    let _ = crate::clipboard::write_text("zzz");
+    let sel_before = app.panels[0].selected_paths_in_view_order();
+    assert_eq!(sel_before.len(), 1, "a.txt 선택");
+    app.route(InputEvent::RightDown {
+        x: tb.x + 10,
+        y: cy,
+    });
+    assert!(app.panels[0].filter_box().popup_open(), "편집 팝업");
+    assert!(
+        !app.tab_menu.is_open(),
+        "상자 우클릭 = 행/빈 곳 메뉴 안 뜨(그리드로 전파 없음 · 사용자 10-26)"
+    );
+    let pb = app.panels[0].filter_box().textbox().popup_bounds();
+    let (px, py) = (pb.x + 20, pb.y + 14);
+    app.route(InputEvent::MouseDown {
+        x: px,
+        y: py,
+        shift: false,
+        primary: false,
+    });
+    app.route(InputEvent::MouseUp { x: px, y: py });
+    assert!(!app.panels[0].filter_box().popup_open(), "항목 선택 = 닫힘");
+    assert_eq!(
+        crate::clipboard::read_text().as_deref(),
+        Some("abc"),
+        "팝업 복사 = 선택 글"
+    );
+    assert_eq!(app.panels[0].filter_text(), "abc");
+    assert_eq!(
+        app.panels[0].selected_paths_in_view_order(),
+        sel_before,
+        "팝업 항목 클릭이 팝업 아래 목록으로 새지 않는다(선택 불변 · 사용자 10-26 지적)"
+    );
+    assert_eq!(log.borrow().calls.len(), ops_before);
+    let _ = std::fs::remove_dir_all(&dir);
+}

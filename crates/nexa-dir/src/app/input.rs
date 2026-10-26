@@ -1092,6 +1092,10 @@ impl App {
                 let o = self.panels[i].filter_opts();
                 self.persist_filter_opts(o);
             }
+            // 검색창 편집 메뉴(복사 · 잘라내기 · 붙여넣기)에서 고른 행동 → 클립보드(10-26).
+            if let Some(act) = self.panels[i].take_filter_clip() {
+                self.panels[i].filter_clip(act, inv);
+            }
             // 컬럼 순서(GAP-016): 끌어 바꾼 순서를 같은 패널의 모든 탭에 · 동기화가 켜져 있으면 반대 패널에도(세션에는 패널
             // 더러움으로 저장된다).
             if self.panels[i].take_col_order_changed() {
