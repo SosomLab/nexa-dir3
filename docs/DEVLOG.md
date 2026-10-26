@@ -4,6 +4,8 @@
 
 ## 2026-10-26
 
+- **사용자 결정 7건 DR-33**(3cab098 · 236 중복 = 주석(nexa-ui d60b8f5) · 정렬 삼각형 · Shift 없는 클릭 리셋 · 유휴 fps 현재 유지 · `ctxmenu.shell` always · dirwatch 두 결 · choco 0.24.0 건너뜀 · 전부 권장안) · STATUS 낡은 결정 대기 줄 해소 표시 · 매트릭스 내장 zip = NEW-058 분리(7ee2e86) → [10-26 §20~§21](journal/2026-10-26.md)
+
 - **사용자 실기 ✓ ⑧ DEFLATE zip 압축/해제**(eed4dee 우클릭 › 압축 → 탐색기/7-Zip) — 10-26 실기 8건 전부 ✓ · 매트릭스 NEW-025 비고(상태 🚧 유지 = Linux xdg 항목 남음) → [10-26 §19](journal/2026-10-26.md)
 
 - **행 메뉴 내장 zip "압축" = Windows/macOS에도**(eed4dee · 종전 Linux xdg 항목만 · 협업 기동 명령 실기 ✓ = 메뉴 항목 + a.zip DEFLATE) → [10-26 §18](journal/2026-10-26.md)
