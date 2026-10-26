@@ -60,6 +60,40 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Mon Oct 26 2026 Sangyong Bae <kiros33@gmail.com> - 0.27.0-1
+- Quick filter is now a search box (Ctrl+F): match-case, whole-word and regex toggles,
+  all-words matching with Hangul jamo sequences, a progress ring on the frame, and a new
+  "Search subfolders" toggle that finds names inside collapsed folders (folders with a
+  match stay listed, nothing is expanded for you; folders you expand stay expanded).
+- Built-in zip now compresses with DEFLATE (LZ77 + dynamic Huffman, no external crate);
+  already-compressed formats are stored; 4 GiB guard; "Compress" is in the context menu on
+  every OS; several archives extract in sequence; CRC-32 is verified on extract.
+- Checksums: save GNU-style sums files (.sha256 and others) and verify them from the
+  context menu; duplicate finder options (include subfolders; match by content, name+size
+  or size).
+- Folder compare: compare-by-content default and one-way sync "mirror" (remove items that
+  exist only on the target, to the Trash; off by default); recompare after trash.
+- Performance mode third pass (animations off, longer polling, smaller scrollback and
+  caches, transparency 0) with locked settings; window transparency has separate focused
+  and unfocused values (unfocused default 20 %).
+- Terminal: cursor shape and padding follow the Windows Terminal profile; pixel-precise
+  and fast wheel scrolling of the scrollback.
+- Bulk rename: changed-span highlight, conflict rows, Tab cycling, resizable window, more
+  card kinds, per-folder numbering, OS name validation.
+- nexa-copy CLI: --verify, --mirror, --include/--exclude, --ask, dry-run, Ctrl+C cancel;
+  bundled on every channel.
+- Settings: "Changed" view, export/import, per-area fonts, type-ahead scope, text
+  rasterization keys, favorites export/import, column-width sync per folder type, toolbar
+  floating groups and reset.
+- Lists: triangle sort marks, sort-click setting, select by pattern, copy-path variants,
+  recent folders, folder size column, progress "current file", status bar transfer cell,
+  undo from the completion toast.
+- Linux: optional direct execution of ELF executables, xdg-open failure toast, zombie
+  process reaping.
+- Fixes: double/triple click inside the rename field selects text instead of opening the
+  file; search box clipboard shortcuts and edit menu; git worktree watching; NFC
+  composition order; right-button drop menu runs shell handlers asynchronously.
+
 * Tue Oct 20 2026 Sangyong Bae <kiros33@gmail.com> - 0.26.0-1
 - Responsiveness: folder listing, back/forward, refresh and change-watch reloads run on a worker
   (the old list stays until the new one is ready) · partial redraw (only changed regions are
