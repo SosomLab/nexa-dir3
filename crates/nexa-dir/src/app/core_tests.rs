@@ -11708,3 +11708,68 @@ fn quick_filter_subfolder_scope_keeps_user_expansion() {
     assert!(names(&app).is_empty(), "범위 끔: {:?}", names(&app));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 이름 바꾸기(인라인 편집) 중 필드 위 **더블클릭 = 그 자리 단어** · **트리플 = 전체**(사용자 10-26 — 종전엔 행 더블클릭으로 흘러 파일이
+/// 실행됐다): `text_click_select`가 삼키고(`true`) 편집은 계속 · 필드 밖 더블클릭은 종전대로 가로채지 않는다.
+#[test]
+fn rename_field_double_click_selects_word_not_opens() {
+    let (mut app, dir) = fixture("renamedbl");
+    std::fs::write(dir.join("hello_world.txt"), b"x").expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].select_path(&dir.join("hello_world.txt"), &mut inv);
+    app.begin_rename();
+    assert!(app.panels[0].rows().is_renaming());
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0); // 필드 레이아웃 캐시
+    let (_, rc, _) = app.panels[0]
+        .rows()
+        .rename_edit_info()
+        .expect("rename field");
+    assert_eq!(
+        app.panels[0].rows().rename_state().map(|s| s.1).as_deref(),
+        Some("hello_world.txt")
+    );
+    // RecordCtx 글자 폭 7 · 필드 안쪽 여백 뒤 글자 3('l') 위.
+    let (x, y) = (rc.x + 6 + 7 * 3 + 3, rc.y + rc.h / 2);
+    assert!(
+        app.panels[0].rows().rename_field_hit(x, y),
+        "필드 안: {rc:?}"
+    );
+    let dbl = InputEvent::DoubleClick {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    };
+    assert!(app.text_click_select(&dbl), "필드 위 더블클릭은 삼킨다");
+    assert!(app.panels[0].rows().is_renaming(), "편집 계속(열기 아님)");
+    assert_eq!(
+        app.panels[0].rows().rename_selected_text().as_deref(),
+        Some("hello_world"),
+        "그 자리 단어"
+    );
+    app.click_count = 3;
+    assert!(app.text_click_select(&InputEvent::MouseDown {
+        x,
+        y,
+        shift: false,
+        primary: false,
+    }));
+    assert_eq!(
+        app.panels[0].rows().rename_selected_text().as_deref(),
+        Some("hello_world.txt"),
+        "트리플 = 전체"
+    );
+    // 필드 밖(목록 아래쪽 빈 곳) 더블클릭은 가로채지 않는다.
+    app.click_count = 2;
+    let lb = app.panels[0].rows().bounds();
+    assert!(!app.text_click_select(&InputEvent::DoubleClick {
+        x: lb.x + 40,
+        y: lb.bottom() - 4,
+        shift: false,
+        primary: false,
+    }));
+    let _ = std::fs::remove_dir_all(&dir);
+}

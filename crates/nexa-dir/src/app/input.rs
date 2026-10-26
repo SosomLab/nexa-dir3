@@ -107,7 +107,8 @@ impl App {
     }
 
     /// **글 영역의 더블/트리플 클릭 선택**(사용자 10-05 — 종전에는 정보 · 미리보기 · 터미널에서 더블클릭해도 선택되지 않았다):
-    /// 더블클릭 = 그 자리 단어 · 트리플 클릭 = 그 줄. 대상 = 터미널 격자(TUI 마우스 모드면 셸 몫 — Shift면 로컬) ·
+    /// 더블클릭 = 그 자리 단어 · 트리플 클릭 = 그 줄. 대상 = **이름 바꾸기 필드**(인라인 편집 · 사용자 10-26 — 종전엔 행 더블클릭으로
+    /// 흘러 파일이 실행됐다 · 필드 위 더블/트리플은 늘 삼킨다) · 터미널 격자(TUI 마우스 모드면 셸 몫 — Shift면 로컬) ·
     /// 도크의 정보 · 미리보기 글. 처리했으면 `true`(그 사건은 다른 곳으로 보내지 않는다).
     pub(crate) fn text_click_select(&mut self, ev: &InputEvent) -> bool {
         let (x, y, shift, count) = match *ev {
@@ -119,6 +120,25 @@ impl App {
             return false;
         }
         let mut inv = Invalidations::default();
+        // 이름 바꾸기 필드(인라인 편집) 위 = 상자의 더블/트리플 클릭(nexa-grid 238 `rename_select_word_at`/`rename_select_all`).
+        for i in 0..2 {
+            if !self.dual && i != self.active {
+                continue;
+            }
+            if !self.panels[i].rows().rename_field_hit(x, y) {
+                continue;
+            }
+            let rows = self.panels[i].rows_mut();
+            let done = if count == 2 {
+                rows.rename_select_word_at(x, y, &mut inv)
+            } else {
+                rows.rename_select_all(x, y, &mut inv)
+            };
+            if done {
+                self.redraw();
+            }
+            return true; // 필드 위 더블클릭은 열기로 흘리지 않는다
+        }
         if let Some(i) = self.term_hit_at(x, y) {
             if !self.terms[i].started()
                 || (!shift && self.terms[i].mouse_report(x, y, 0, true).is_some())
