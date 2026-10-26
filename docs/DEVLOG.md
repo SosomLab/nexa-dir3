@@ -4,6 +4,8 @@
 
 ## 2026-10-26
 
+- **릴리스 v0.27.0 ✓**(fa12231 · 선검증 40279805020 · release run 40280642494 전 잡 ✓ · 공개 06:40:49Z · 자산 9 · brew 810f107 · winget #462011/#462012 OPEN · choco 0.27.0 pushed · linux-repo ✓) → [10-26 §23](journal/2026-10-26.md)
+
 - **낮 마감 정리**(사용자 지시 · 코드 dir3 6 + nexa-ui 2 · 실기 ✓ 11건 · DR-33 · gate full ×3 · CI ✓ · main = origin · 병합할 브랜치 없음) → [10-26 §22](journal/2026-10-26.md)
 
 - **사용자 결정 7건 DR-33**(3cab098 · 236 중복 = 주석(nexa-ui d60b8f5) · 정렬 삼각형 · Shift 없는 클릭 리셋 · 유휴 fps 현재 유지 · `ctxmenu.shell` always · dirwatch 두 결 · choco 0.24.0 건너뜀 · 전부 권장안) · STATUS 낡은 결정 대기 줄 해소 표시 · 매트릭스 내장 zip = NEW-058 분리(7ee2e86) → [10-26 §20~§21](journal/2026-10-26.md)
