@@ -4,6 +4,10 @@
 
 ## 2026-10-26
 
+- **검색창 글 클립보드**(d0767d6 · Ctrl+C/X/V/A·Delete = 상자 글자 · 우클릭 편집 메뉴가 아래 목록으로 새던 것 처방) + **상자 Ctrl+Z/Y**(9ab63a0 · 협업 관찰 반영) → [10-26 §15](journal/2026-10-26.md)
+
+- **이름 바꾸기 중 필드 더블클릭 = 단어 · 트리플 = 전체**(9af55df · 종전엔 파일 실행 · nexa-ui 238 3a7b200) → [10-26 §14](journal/2026-10-26.md)
+
 - **CI ubuntu fonts = .deb 캐시**(7809832 · 미러 타임아웃 재발 2회 처방 · 협업 사전 검토 partial/·lock 권한 반영) · 첫 run 40254557879 캐시 미스 → "Cache saved" ✓ · 둘째 run 40255144145(e69da38) **"fonts installed from cache (3 debs)"** · fonts 단계 15초 · 3-OS ✓ → [10-26 §13](journal/2026-10-26.md)
 
 - **빠른 필터 "하위 폴더 검색" 토글**(57a7efd · `list.filter_subdirs` 기본 off · 워커 `ndir-deep` 세대 취소 · 재열람 토글 재적용 결함 처방 · nexa-ui 237 b7be384 `SearchToggle::Scope`) · 협업 사전 검토 결함 없음 → [10-26 §12](journal/2026-10-26.md)
