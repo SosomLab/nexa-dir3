@@ -4,6 +4,8 @@
 
 ## 2026-10-26
 
+- **CI ubuntu fonts = .deb 캐시**(7809832 · 미러 타임아웃 재발 2회 처방 · 협업 사전 검토 partial/·lock 권한 반영) · 첫 run 40254557879 캐시 미스 → "Cache saved" ✓ · 둘째 run 40255144145(e69da38) **"fonts installed from cache (3 debs)"** · fonts 단계 15초 · 3-OS ✓ → [10-26 §13](journal/2026-10-26.md)
+
 - **빠른 필터 "하위 폴더 검색" 토글**(57a7efd · `list.filter_subdirs` 기본 off · 워커 `ndir-deep` 세대 취소 · 재열람 토글 재적용 결함 처방 · nexa-ui 237 b7be384 `SearchToggle::Scope`) · 협업 사전 검토 결함 없음 → [10-26 §12](journal/2026-10-26.md)
 
 - **창 투명도(포커스 없을 때) 기본값 40 → 20**(27f8044 · 성능 향상 모드 = 0 유지) · nexa-ui 차수 236 중복(사용자 답 대기) → [10-26 §11](journal/2026-10-26.md)
