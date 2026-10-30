@@ -90,7 +90,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 
 | 항목 | 내용 |
 | --- | --- |
-| Linux · macOS 2차 | ✅ 10-24(T-164 · §6) — Linux `FICLONE` → `copy_file_range` · macOS `copyfile(ALL \| CLONE)` + 진행 콜백 · Linux `queue/rotational` 장치 판정 · macOS 장치 판정은 후속 |
+| Linux · macOS 2차 | ✅ 10-24(T-164 · §6) — Linux `FICLONE` → `copy_file_range` · macOS `copyfile(ALL \| CLONE)` + 진행 콜백 · Linux `queue/rotational` 장치 판정 · macOS 장치 판정 ✅ 10-31(e47ee38) |
 | 최상위 항목 병렬 | 지금 병렬은 **폴더 안**에만 적용 — 파일 수천 개를 직접 선택해 복사하는 경우는 여전히 차례로(전송 진행 창의 항목 세그먼트 모델과 함께 T-96/T-98에서) |
 | ReFS 블록 복제 직접 호출 | Windows 11 24H2 이전에서의 같은 볼륨 즉시 복사 |
 | 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98 |
@@ -126,7 +126,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 | 보존 | 수정 시각 · 속성 · 대체 스트림(호출 안) | 수정 시각 · 권한(복사 뒤 `set_modified`/`set_permissions`) | 수정 시각 · 권한 · 확장 속성 · ACL(`COPYFILE_STAT\|XATTR\|ACL`) |
 | 중단 | 콜백 `PROGRESS_CANCEL` → OS가 대상 삭제 | 청크 사이 `stop` → 대상 삭제 | 콜백 `COPYFILE_QUIT`(ECANCELED) → 대상 삭제 |
 | 폴백 조건(**한 바이트도 안 옮겼을 때만** · 중간 실패는 원 오류) | `ERROR_INVALID_FUNCTION/NOT_SUPPORTED/INVALID_PARAMETER` | 첫 호출 `EPERM/EBADF/EXDEV/EINVAL/ENOSYS/EOPNOTSUPP` 또는 **첫 호출 0 바이트**(procfs/sysfs · 일부 FUSE — std `kernel_copy` 규칙) | `ENOTSUP/EINVAL/EXDEV` · **심볼릭 링크 원본**(CLONE = NOFOLLOW_SRC라 루프로 내용 복사 → 다른 OS와 같은 결과) |
-| 장치 판정 | `IOCTL_STORAGE_QUERY_PROPERTY`(SeekPenalty) · UNC = 없음 | `st_dev` → `/sys/dev/block/<maj>:<min>/queue/rotational`(파티션 = 상위 `../queue`) · major 0(Btrfs/ZFS/overlayfs 익명 장치 · NFS · CIFS · tmpfs · FUSE) = **모름 = 있음**(자동 4 · 네트워크 판정은 `statfs` 후속) | 아직 없음 = 알 수 없음(자동 4) — IOKit 특성 조회는 후속 |
+| 장치 판정 | `IOCTL_STORAGE_QUERY_PROPERTY`(SeekPenalty) · UNC = 없음 | `st_dev` → `/sys/dev/block/<maj>:<min>/queue/rotational`(파티션 = 상위 `../queue`) · major 0(Btrfs/ZFS/overlayfs 익명 장치 · NFS · CIFS · tmpfs · FUSE) = **모름 = 있음**(자동 4 · 네트워크 판정은 `statfs` 후속) | ✅ 10-31 e47ee38: `statfs$INODE64`(장치 경로 · 파일시스템 종류) → IOKit `IOBSDNameMatching` 부모 체인 `Device Characteristics ▸ Medium Type` = "Solid State"면 없음(자동 8) · 합성 APFS(disk1s1 등)도 부모 체인으로 닿음 · smbfs/nfs/afpfs/webdav/cifs = 없음 · 모름 = 있음(자동 4) · 순수 `seek_from(fstype, medium)` MC/DC |
 | 캐시 우회 | `COPY_FILE_NO_BUFFERING`(설정 · 실측 손해라 기본 끔) | `posix_fadvise(SEQUENTIAL)`만(O_DIRECT는 정렬 제약 · 보류) | `F_NOCACHE` 보류 |
 | 덮어쓰기 | `FAIL_IF_EXISTS` 플래그 | `create_new`/`create` | CLONE = EXCL 함의 → 덮어쓰기는 먼저 지움 · 아니면 `AlreadyExists` |
 
@@ -136,7 +136,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 | --- | --- |
 | 최상위 항목 병렬 | 지금 병렬은 **폴더 안**에만 — 파일 수천 개를 직접 골라 복사하면 차례로. 엔진 항목 루프(`transfer`)가 항목마다 충돌 질문 · 스테이징 · 실행 취소 기록을 순서대로 하므로, 병렬화는 "질문 없는 항목만 묶어 보내기"(T-96 카드형 진행 창의 항목 세그먼트)와 함께 설계해야 한다. |
 | Windows ReFS 블록 복제 직접 호출 | 24H2 이전에서 같은 볼륨 즉시 복사(`FSCTL_DUPLICATE_EXTENTS_TO_FILE` · 클러스터 정렬 · 무결성 스트림 끔 조건). 이 PC에 ReFS 볼륨이 없어 실측 불가. |
-| macOS 장치 판정 | IOKit `kIOPropertyMediumTypeKey`(Solid State) 조회 → 자동 8. Mac 실기 필요. |
+| ~~macOS 장치 판정~~ | ✅ 10-31 e47ee38(이 Mac `/` = apfs disk1s2s1 → "Solid State" → 자동 8 · `/System` 일치) · 외부 crate 0. |
 | 큰 파일 읽기/쓰기 분리(FastCopy 방식) | 서로 다른 물리 디스크 사이에서만 이득 · 구현 큼 · 측정 뒤 결정(T-98). |
 | 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98(NEW-007 ②~⑩). |
 | T6 기준선 | `bench_copy`를 perf-baseline에 편입 · Linux/macOS 실측은 그 PC 세션에서. |

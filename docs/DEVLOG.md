@@ -4,6 +4,10 @@
 
 ## 2026-10-31
 
+- **e47ee38 macOS 저장 장치 판정**(IOKit Medium Type · SSD = 자동 8 · docs/24 §6 ✅) · **selfcheck 실제 점검 4그룹**(pty 8f9b44b · fonts 121c6b4 · preview 22f57d7 · archive 8b7bd7c · pass 20 → 30 · pty 3-OS CI ✓) → [10-31 §14](journal/2026-10-31.md)
+
+- **b2b962d macOS 자동화**(CI macOS T4 단계 · gate KNOWN Darwin = 없음 · ctx-menu check@macos · 번들 T4 2 · status-load) · **CI macOS 러너 T4 첫 실행 41/0** · Windows 회복(57ffbfe CI ✓) → [10-31 §13](journal/2026-10-31.md)
+
 - **macOS 패키징 로컬 검증 ✓**(app · pkg · dmg · 이름 꼬리표 57ffbfe · postinstall 755 98c422e) · **e612629 macOS OS 드래그 발신**(NSDraggingSession · 하이브리드 · 판정 = 창 안 불변 ✓) · **CI windows 빨강 4a2c6b0~eed5fed**(Unix에서 쓴 시험이 Windows 빈 범위 결함 노출) → 1f16bc4 · 사용자 아침 실기 체크 (a)~(f) → [10-31 §12](journal/2026-10-31.md)
 
 - **사고 2**: b4892d5가 수정 없이 push(amend 차단 → `git add` 누락 · 작업 트리로 gate 녹색) → eed5fed 회복 · 재발 방지 = 한 명령에 묶지 않기 · push 전 `git status` 비었는지 · amend 대신 후속 커밋 → [10-31 §11](journal/2026-10-31.md)
