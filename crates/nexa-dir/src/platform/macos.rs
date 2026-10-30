@@ -1,7 +1,99 @@
 //! macOS 구현(T-50·T-51 A·T-52): 셸 탐지 · 열기/보기 · **휴지통(`NSFileManager trashItemAtURL` = Finder 되돌리기와 같은 길 · 복원 = 이번 세션 기록으로 `moveItem` · 실패 = `~/.Trash` 이동 폴백)** · **드라이브 용량**(`statvfs`).
 //! 파일 클립보드 = `macclip.rs`(NSPasteboard) · 폴더 감시 = `macwatch.rs`(kqueue) · PTY = `unixpty.rs` · NSDragging은 T-52 잔여.
+//! **포인터 폴링**([`pointer_state`] · 10-31 T-153): OS 드래그 중 winit macOS는 CursorMoved · 수식키 사건을 주지 않아 CoreGraphics로 읽는다.
 
 use super::*;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CGPoint {
+    x: f64,
+    y: f64,
+}
+
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGEventCreate(source: *const std::ffi::c_void) -> *const std::ffi::c_void;
+    fn CGEventGetLocation(event: *const std::ffi::c_void) -> CGPoint;
+    fn CGEventSourceFlagsState(state: i32) -> u64;
+}
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFRelease(p: *const std::ffi::c_void);
+}
+#[link(name = "objc")]
+extern "C" {
+    fn objc_getClass(name: *const std::os::raw::c_char) -> *mut std::ffi::c_void;
+    fn sel_registerName(name: *const std::os::raw::c_char) -> *const std::ffi::c_void;
+    fn objc_msgSend();
+}
+#[link(name = "AppKit", kind = "framework")]
+extern "C" {}
+
+/// `kCGEventSourceStateHIDSystemState`.
+const HID_SYSTEM_STATE: i32 = 1;
+/// `CGEventFlags` 비트(IOKit/hidsystem/IOLLEvent.h).
+const FLAG_SHIFT: u64 = 0x2_0000;
+const FLAG_OPTION: u64 = 0x8_0000;
+const FLAG_COMMAND: u64 = 0x10_0000;
+
+/// 주 화면(키 창이 있는 화면)의 배율 — `[[NSScreen mainScreen] backingScaleFactor]`(없으면 1.0). winit의 창 위치가 물리 px라 포인터
+/// 포인트를 같은 눈금으로 맞춘다(다른 배율의 보조 화면에 창이 있으면 어긋난다 — 1차 한계 · 기록).
+fn main_screen_scale() -> f64 {
+    // SAFETY: 클래스 메서드 → 인스턴스 메서드(f64 반환은 x86_64/arm64 모두 일반 objc_msgSend) · 널 검사.
+    unsafe {
+        let cls = objc_getClass(c"NSScreen".as_ptr());
+        if cls.is_null() {
+            return 1.0;
+        }
+        let f0: unsafe extern "C" fn(
+            *mut std::ffi::c_void,
+            *const std::ffi::c_void,
+        ) -> *mut std::ffi::c_void = std::mem::transmute(objc_msgSend as *const ());
+        let screen = f0(cls, sel_registerName(c"mainScreen".as_ptr()));
+        if screen.is_null() {
+            return 1.0;
+        }
+        let f1: unsafe extern "C" fn(*mut std::ffi::c_void, *const std::ffi::c_void) -> f64 =
+            std::mem::transmute(objc_msgSend as *const ());
+        let s = f1(screen, sel_registerName(c"backingScaleFactor".as_ptr()));
+        if s.is_finite() && s > 0.0 {
+            s
+        } else {
+            1.0
+        }
+    }
+}
+
+/// 포인터 자리(전역 · 왼쪽 위 원점 · 포인트 × 배율 = 물리 px) + 수식키 → [`PointerState`](ctrl/shift = **복사/이동 키** · macOS =
+/// Option/Cmd · [`drag_mods`]). 한 번에 수 µs(1000회 0.36 ms · 10-31 실측).
+pub(super) fn pointer_state() -> Option<PointerState> {
+    // SAFETY: CGEventCreate(NULL)이 준 사건은 우리가 CFRelease · 널 검사 · 나머지는 순수 조회.
+    unsafe {
+        let ev = CGEventCreate(std::ptr::null());
+        if ev.is_null() {
+            return None;
+        }
+        let p = CGEventGetLocation(ev);
+        CFRelease(ev);
+        if !p.x.is_finite() || !p.y.is_finite() {
+            return None;
+        }
+        let flags = CGEventSourceFlagsState(HID_SYSTEM_STATE);
+        let scale = main_screen_scale();
+        let (copy, mv) = drag_mods(
+            flags & FLAG_COMMAND != 0,
+            flags & FLAG_SHIFT != 0,
+            flags & FLAG_OPTION != 0,
+        );
+        Some(PointerState {
+            x: (p.x * scale).round() as i32,
+            y: (p.y * scale).round() as i32,
+            ctrl: copy,
+            shift: mv,
+        })
+    }
+}
 
 pub(super) struct NativeShell;
 

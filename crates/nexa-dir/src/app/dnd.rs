@@ -285,8 +285,8 @@ impl App {
             platform::DropEvent::Enter {
                 paths: paths.clone(),
                 at,
-                ctrl: self.primary,
-                shift: self.shift,
+                ctrl: self.drag_mods().0,
+                shift: self.drag_mods().1,
             },
             Instant::now(),
         );
@@ -304,9 +304,10 @@ impl App {
             None
         };
         self.dnd_icon_choice = Some(choice);
+        let (copy, mv) = self.drag_mods();
         if let Some(s) = self.xdnd.as_mut() {
             let (rx, ry) = Self::root_point(self.window.as_deref(), at);
-            s.motion(rx, ry, self.primary, self.shift);
+            s.motion(rx, ry, copy, mv);
         }
         self.dnd_internal = Some(InternalDrag {
             panel,
@@ -379,8 +380,15 @@ impl App {
         }
     }
 
-    /// 앱 밖 대상 위에서 보일 동작: 대상이 Status로 돌려준 동작(받는 쪽의 결정 — 시스템 기본 규칙) · 아직 없으면 수식키 제안(Ctrl 복사 ·
-    /// Shift 이동 · 없음 = 미정 → 이름만).
+    /// 앱 밖 대상 위에서 보일 동작: 대상이 Status로 돌려준 동작(받는 쪽의 결정 — 시스템 기본 규칙) · 아직 없으면 수식키 제안(복사 키 ·
+    /// 이동 키 = OS 매핑 `platform::drag_mods` · 없음 = 미정 → 이름만).
+    /// 창 안 드래그의 수식키 → (복사 키, 이동 키): Windows/Linux Ctrl·Shift · macOS Option·Cmd(`platform::drag_mods` · T-153 10-31).
+    /// 외부 드래그(`DropEvent` · `PointerState`)는 포트가 이미 매핑해 보낸다 — `dnd_track`이 그 값을 `primary`/`shift`에 잠시 담으므로
+    /// 그 뒤의 `drop_plan`은 필드를 그대로 쓴다.
+    pub(crate) fn drag_mods(&self) -> (bool, bool) {
+        platform::drag_mods(self.primary, self.shift, self.alt)
+    }
+
     fn external_choice(&self, ctrl: bool, shift: bool) -> platform::DropChoice {
         self.xdnd
             .as_ref()
@@ -436,7 +444,7 @@ impl App {
             InputEvent::MouseMove { x, y } => {
                 // 앱 밖 대상(XDND 세션)에 자리를 알리고, 그쪽이 받겠다고 하면 커서는 제안 동작으로.
                 let (rx, ry) = Self::root_point(self.window.as_deref(), (x, y));
-                let (ctrl, shift) = (self.primary, self.shift);
+                let (ctrl, shift) = self.drag_mods();
                 if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
                     let inside = x >= 0 && y >= 0 && x < self.viewport.0 && y < self.viewport.1;
                     eprintln!(
@@ -455,8 +463,8 @@ impl App {
                     self.dnd_event(
                         platform::DropEvent::Over {
                             at: (x, y),
-                            ctrl: self.primary,
-                            shift: self.shift,
+                            ctrl: self.drag_mods().0,
+                            shift: self.drag_mods().1,
                         },
                         Instant::now(),
                     )
@@ -484,8 +492,8 @@ impl App {
                     platform::DropEvent::Drop {
                         paths: drag.paths,
                         at: (x, y),
-                        ctrl: self.primary,
-                        shift: self.shift,
+                        ctrl: self.drag_mods().0,
+                        shift: self.drag_mods().1,
                         menu: drag.menu,
                     },
                     Instant::now(),
@@ -545,8 +553,8 @@ impl App {
         if self.dnd_internal.is_none() {
             return changed;
         }
-        // 포인터가 멈춘 채 수식키만 바뀐 경우 — 외부 대상에 제안 동작을 다시 알린다(Shift = 이동 · Ctrl = 복사).
-        let (ctrl, shift) = (self.primary, self.shift);
+        // 포인터가 멈춘 채 수식키만 바뀐 경우 — 외부 대상에 제안 동작을 다시 알린다(이동 키 · 복사 키 = OS 매핑 `drag_mods`).
+        let (ctrl, shift) = self.drag_mods();
         if let Some(s) = self.xdnd.as_mut() {
             s.modifiers(ctrl, shift);
         }
@@ -574,8 +582,8 @@ impl App {
         let choice = self.dnd_event(
             platform::DropEvent::Over {
                 at: self.cursor,
-                ctrl: self.primary,
-                shift: self.shift,
+                ctrl: self.drag_mods().0,
+                shift: self.drag_mods().1,
             },
             now,
         );
@@ -849,14 +857,25 @@ impl App {
         }
     }
 
-    /// 틱 — 모인 드롭을 처리했으면 true.
+    /// 틱 — 모인 드롭(winit `DroppedFile` 경로 · macOS · Linux Wayland)을 처리했으면 true. 수식키 = OS 드래그 중에는 winit이
+    /// `ModifiersChanged`를 주지 않으므로 **포인터 폴링 값**(`platform::pointer_state` · 이미 복사/이동 키로 매핑 · 10-31) · 없으면(다른
+    /// OS · 가짜 플랫폼 시험) 필드를 `drag_mods`로 매핑 — 종전엔 날 필드(macOS Cmd = 복사)를 그대로 썼다.
     pub(crate) fn dnd_flush(&mut self) -> bool {
         if self.dnd_drop.is_empty() {
             return false;
         }
         let sources = std::mem::take(&mut self.dnd_drop);
         let (x, y) = self.cursor;
+        let saved = (self.shift, self.primary);
+        let polled = if self.platform.log.is_none() {
+            platform::pointer_state()
+        } else {
+            None
+        };
+        let (copy, mv) = polled.map_or_else(|| self.drag_mods(), |ps| (ps.ctrl, ps.shift));
+        (self.primary, self.shift) = (copy, mv);
         self.external_drop(sources, Point { x, y });
+        (self.shift, self.primary) = saved;
         platform::xdnd_set_inject_local(None); // 주입 드롭이 처리됐다(시나리오)
         true
     }

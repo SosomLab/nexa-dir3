@@ -4742,23 +4742,39 @@ fn internal_drag_moves_into_folder_and_escape_cancels() {
     let mark = app.dnd_mark.clone().expect("놓일 자리 표시");
     assert_eq!(mark.dest, dir.join("sub"));
     assert_eq!(mark.choice, crate::platform::DropChoice::Move);
-    // 포인터를 멈춘 채 수식키만 바꾸면 틱이 판정 · 상자를 맞춘다(10-10): Ctrl = 복사 · 떼면 다시 이동.
-    app.primary = true;
+    // 포인터를 멈춘 채 수식키만 바꾸면 틱이 판정 · 상자를 맞춘다(10-10): 복사 키 = 복사 · 떼면 다시 이동. 키는 OS 매핑
+    // (`platform::drag_mods` · 10-31): Windows/Linux Ctrl(primary)·Shift / macOS Option(alt)·Cmd(primary).
+    let mac = cfg!(target_os = "macos");
+    let set_copy = |app: &mut App, on: bool| {
+        if mac {
+            app.alt = on;
+        } else {
+            app.primary = on;
+        }
+    };
+    let set_move = |app: &mut App, on: bool| {
+        if mac {
+            app.primary = on;
+        } else {
+            app.shift = on;
+        }
+    };
+    set_copy(&mut app, true);
     assert!(app.dnd_internal_tick(Instant::now()));
     assert_eq!(
         app.dnd_internal.as_ref().map(|d| d.choice),
         Some(crate::platform::DropChoice::Copy),
-        "Ctrl 누름 = 복사"
+        "복사 키 누름 = 복사"
     );
-    app.primary = false;
-    app.shift = true;
+    set_copy(&mut app, false);
+    set_move(&mut app, true);
     let _ = app.dnd_internal_tick(Instant::now());
     assert_eq!(
         app.dnd_internal.as_ref().map(|d| d.choice),
         Some(crate::platform::DropChoice::Move),
-        "Shift = 이동"
+        "이동 키 = 이동"
     );
-    app.shift = false;
+    set_move(&mut app, false);
     let _ = app.dnd_internal_tick(Instant::now());
     assert_eq!(
         app.dnd_internal.as_ref().map(|d| d.choice),
@@ -4847,8 +4863,13 @@ fn external_drop_moves_or_copies_into_folder_under_cursor() {
     assert_eq!(r, Some((dir.join("sub"), ndir_ops::Op::Move)));
     wait(&mut app);
     assert!(dir.join("sub").join("a.txt").is_file() && !dir.join("a.txt").exists());
-    // Ctrl = 복사 · winit 이벤트 경로(dnd_dropped → 틱 flush · 커서 = 폴더 행).
-    app.primary = true;
+    // 복사 키 = 복사 · winit 이벤트 경로(dnd_dropped → 틱 flush · 커서 = 폴더 행). 복사 키 = OS 매핑(Windows/Linux Ctrl = primary ·
+    // macOS Option = alt · `platform::drag_mods`) — 가짜 플랫폼이라 포인터 폴링은 안 쓴다.
+    if cfg!(target_os = "macos") {
+        app.alt = true;
+    } else {
+        app.primary = true;
+    }
     app.cursor = (p_sub.x, p_sub.y);
     app.dnd_hover(dir.join("b.md"));
     app.dnd_dropped(dir.join("b.md"));
@@ -4860,6 +4881,7 @@ fn external_drop_moves_or_copies_into_folder_under_cursor() {
         "복사 = 원본 유지"
     );
     app.primary = false;
+    app.alt = false;
     let _ = std::fs::remove_dir_all(&dir);
 }
 

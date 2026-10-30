@@ -492,8 +492,9 @@ pub(crate) enum DropChoice {
     Move,
 }
 
-/// 복사/이동 규칙(순수 · 탐색기 관례 · dir2 `op_for`): **Ctrl = 복사 · Shift = 이동 · 그 밖 = 같은 볼륨이면 이동 / 다르면 복사**.
-/// Ctrl이 Shift보다 먼저다(둘 다 = 복사 — dir2 계승 · 탐색기의 "바로 가기 만들기"는 없다).
+/// 복사/이동 규칙(순수 · 탐색기 관례 · dir2 `op_for`): **복사 키 = 복사 · 이동 키 = 이동 · 그 밖 = 같은 볼륨이면 이동 / 다르면 복사**.
+/// 인자는 OS 매핑을 거친 키([`drag_mods`] — Windows/Linux Ctrl·Shift · macOS Option·Cmd). 복사 키가 이동 키보다 먼저다(둘 다 = 복사 —
+/// dir2 계승 · 탐색기의 "바로 가기 만들기"는 없다).
 pub(crate) fn drop_choice(ctrl: bool, shift: bool, same_volume: bool) -> DropChoice {
     if ctrl {
         DropChoice::Copy
@@ -724,12 +725,16 @@ pub(crate) fn lower_thread_priority() {
 pub(crate) struct PointerState {
     pub x: i32,
     pub y: i32,
+    /// **복사 키**가 눌려 있다(OS 매핑 뒤 — Windows/Linux Ctrl · macOS Option · [`drag_mods`]). 이름은 Windows 유래.
     pub ctrl: bool,
+    /// **이동 키**가 눌려 있다(Windows/Linux Shift · macOS Cmd).
     pub shift: bool,
 }
 
-/// [`PointerState`] 조회(화면 좌표) — Windows = `GetCursorPos` + `GetAsyncKeyState` · Linux = X11 `QueryPointer`(XWayland 포함 ·
-/// `xdnd::pointer_state` · 10-10: 종전 `None`이라 외부 드롭이 폴더 행이 아니라 패널 폴더로 갔다) · macOS = 후속(`None`).
+/// [`PointerState`] 조회(화면 좌표 · 물리 px) — Windows = `GetCursorPos` + `GetAsyncKeyState` · Linux = X11 `QueryPointer`(XWayland
+/// 포함 · `xdnd::pointer_state` · 10-10: 종전 `None`이라 외부 드롭이 폴더 행이 아니라 패널 폴더로 갔다) · macOS = CoreGraphics
+/// `CGEventGetLocation` × 주 화면 배율 + `CGEventSourceFlagsState`(`macos::pointer_state` · 10-31 · 종전 `None` = Finder에서 끌어올 때
+/// 자리·수식키가 마지막 값에 머물던 결함).
 pub(crate) fn pointer_state() -> Option<PointerState> {
     #[cfg(windows)]
     {
@@ -741,7 +746,18 @@ pub(crate) fn pointer_state() -> Option<PointerState> {
     }
     #[cfg(target_os = "macos")]
     {
-        None
+        macos::pointer_state()
+    }
+}
+
+/// 드래그 수식키 → **(복사 키, 이동 키)**(순수 · DR-29 "받는 쪽 OS 규칙" · T-153 10-31 사용자 추천안 채택): Windows/Linux = (Ctrl, Shift) ·
+/// macOS = Finder 규칙 **(Option, Cmd)** — Shift는 무의미 · Option+Cmd(별칭)는 1차에서 복사로. `primary` = Windows/Linux Ctrl ·
+/// macOS Cmd(앱의 `primary` 필드 규약). 종전 macOS는 Cmd = 복사 · Shift = 이동이라 Finder 습관(Option = 복사)이 **이동**이 됐다.
+pub(crate) fn drag_mods(primary: bool, shift: bool, alt: bool) -> (bool, bool) {
+    if cfg!(target_os = "macos") {
+        (alt, primary)
+    } else {
+        (primary, shift)
     }
 }
 
@@ -2096,6 +2112,34 @@ mod tests {
             );
             assert_eq!(p.size_dip(), p.size_pt, "macOS = pointSize가 곧 DIP");
         }
+    }
+
+    /// 드래그 수식키 매핑(순수 · MC/DC): Windows/Linux = (Ctrl, Shift) · alt 무관 / macOS = (Option, Cmd) · shift 무관.
+    #[test]
+    fn drag_mods_follow_os_rules() {
+        for (primary, shift, alt) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+            (true, true, true),
+        ] {
+            let got = drag_mods(primary, shift, alt);
+            let want = if cfg!(target_os = "macos") {
+                (alt, primary)
+            } else {
+                (primary, shift)
+            };
+            assert_eq!(got, want, "primary={primary} shift={shift} alt={alt}");
+        }
+    }
+
+    /// macOS 포인터 조회(실제 CG · 헤드리스 CI에서도 Some · 좌표는 음수가 아니거나 다중 화면이면 음수 가능 → 죽지 않음만).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_pointer_state_is_available() {
+        let p = pointer_state();
+        assert!(p.is_some(), "{p:?}");
     }
 
     /// 글꼴 크기 단위(순수): WT pt 12 → 16 DIP · macOS pointSize 14(= size_px) → 14 DIP · 둘 다 없음 → None.
