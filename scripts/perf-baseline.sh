@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# perf-baseline.sh — 성능 기준선(T6 · T-91 · CI-118 간소 절차 ①②④ · T-176 ① 기준선 저장/비교) · 외부 도구 0(bash + cargo + python).
+# perf-baseline.sh — 성능 기준선(T6 · T-91 · CI-118 간소 절차 ①②④ · T-176 ① 기준선 저장/비교) · 외부 도구 0(bash + cargo + python3).
 #   ① 기동: `nexa-dir --smoke`(창 없는 기동 경로 = 자가 점검 ci 부분집합) 벽시계 N회 → 중앙값 ms(앞 1회는 예열로 버린다)
 #   ② fs 점검: `--selfcheck --ci --only fs` 프로세스 벽시계(생성·복사·이름 바꾸기·삭제 + 폴더 감시 통지)
 #      ※ 대량 폴더(1만/10만 항목) 목록·정렬은 헤드리스 경로가 없어 미측정 — fs 점검은 자기 임시 폴더만 쓴다(T-08 잔여)
@@ -57,7 +57,10 @@ if [ "$(date +%N 2>/dev/null)" != "N" ] && [ -n "$(date +%N 2>/dev/null)" ]; the
 else
     now_ms() { perl -MTime::HiRes=time -e 'printf("%d\n", time()*1000)'; }
 fi
-median() { python -c "import sys; v=sorted(int(x) for x in sys.argv[1:]); print(v[len(v)//2])" "$@"; }
+# 파이썬 = `python3` 우선(순정 macOS · CI macos 러너에는 `python`이 없다 · 10-31) · `PYTHON` 환경 변수로 지정 가능.
+PY="${PYTHON:-$(command -v python3 || command -v python)}"
+[[ -n "$PY" ]] || { echo "python3(또는 python)이 필요하다" >&2; exit 2; }
+median() { "$PY" -c "import sys; v=sorted(int(x) for x in sys.argv[1:]); print(v[len(v)//2])" "$@"; }
 HEAD_SHA="$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 # ① 기동 — 예열 1회(파일 캐시 · 백신 검사)는 버린다.
@@ -79,7 +82,7 @@ JSON="$HOME_DIR/selfcheck.json"
 "$EXE" --selfcheck --ci --json >"$JSON" 2>/dev/null
 
 # ④ 크기
-SIZE=$(python -c "import os,sys; print(os.path.getsize(sys.argv[1]))" "$EXE")
+SIZE=$("$PY" -c "import os,sys; print(os.path.getsize(sys.argv[1]))" "$EXE")
 
 # ⑤ 복사 벤치(--copy · T-164): ndir-ops `bench_copy`의 "이름  ms" 줄만 거둔다(release · 임시 폴더는 벤치가 스스로 지운다).
 COPY_TXT=""
@@ -89,7 +92,7 @@ if [ "$COPY" = 1 ]; then
 fi
 
 # 집계 · 기준선 비교 · JSON 저장(한 번의 파이썬) — 표준 출력 = 마크다운 표 · 마지막 줄 = `REGRESSIONS=<n> FAILED=<n>`
-RESULT=$(python - "$JSON" "$OUT" "$BASE" "$SAVE" "$PERF_DIR/baseline.json" "$HEAD_SHA" "$PROFILE" "$RUNS" "$SMOKE_MED" "$FS_MS" "$SIZE" "${times[*]}" "$COPY_TXT" <<'EOF'
+RESULT=$("$PY" - "$JSON" "$OUT" "$BASE" "$SAVE" "$PERF_DIR/baseline.json" "$HEAD_SHA" "$PROFILE" "$RUNS" "$SMOKE_MED" "$FS_MS" "$SIZE" "${times[*]}" "$COPY_TXT" <<'EOF'
 import json, re, sys, time
 from collections import defaultdict
 (sc_json, out_path, base_path, save, base_default, head, profile, runs, smoke, fs_ms, size, raw, copy_txt) = sys.argv[1:14]
