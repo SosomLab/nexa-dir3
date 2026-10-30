@@ -157,18 +157,45 @@ pub(crate) const CTXMENU_BLOCKS_XDG: OrderDefs = &[
     ("xdgbg", &["terminal", "filemanager", "scripts", "props"]),
 ];
 
-/// 컨텍스트 메뉴 블록 정의(순수): xdg 셸 메뉴가 있는 OS면 셸 블록 포함.
+/// macOS(`macmenu` · 10-31) — 같은 `xdg.*` 어휘지만 **이 OS가 내지 않는 항목**(전자메일 · 압축 · 스크립트 = Linux 전용)은 편집기에 올리지
+/// 않는다(체크해도 효과 없는 행 — 협업 판정 10-31 §9 ⑤).
+pub(crate) const CTXMENU_BLOCKS_MAC: OrderDefs = &[
+    (
+        "row",
+        &[
+            "new",
+            "deletePermanent",
+            "copyName",
+            "copyAs",
+            "pasteInto",
+            "copyTo",
+            "moveTo",
+            "folderSize",
+        ],
+    ),
+    ("bg", &["paste", "undo", "redo"]),
+    ("xdg", &["openwith", "terminal", "showin", "props"]),
+    ("xdgbg", &["terminal", "filemanager", "props"]),
+];
+
+/// 컨텍스트 메뉴 블록 정의(순수): xdg 셸 메뉴가 있는 OS면 셸 블록 포함(Linux 전체 집합) — 시험용 줄임.
+#[cfg(test)]
 pub(crate) fn ctxmenu_blocks_for(xdg: bool) -> OrderDefs {
-    if xdg {
-        CTXMENU_BLOCKS_XDG
-    } else {
-        CTXMENU_BLOCKS
+    ctxmenu_blocks_for_os(xdg, false)
+}
+
+/// 컨텍스트 메뉴 블록 정의(순수 · OS별): `xdg` = 고정 집합 셸 메뉴 있음 · `mac` = macOS 집합(email · compress · scripts 없음).
+pub(crate) fn ctxmenu_blocks_for_os(xdg: bool, mac: bool) -> OrderDefs {
+    match (xdg, mac) {
+        (false, _) => CTXMENU_BLOCKS,
+        (true, false) => CTXMENU_BLOCKS_XDG,
+        (true, true) => CTXMENU_BLOCKS_MAC,
     }
 }
 
 /// 이 OS의 컨텍스트 메뉴 블록 정의.
 pub(crate) fn ctxmenu_blocks() -> OrderDefs {
-    ctxmenu_blocks_for(crate::platform::has_xdg_menu())
+    ctxmenu_blocks_for_os(crate::platform::has_xdg_menu(), cfg!(target_os = "macos"))
 }
 
 /// xdg 셸 항목 id → 순서 편집 키(순수): 앱 항목(`xdg.app:*`)과 "다른 앱으로 열기"는 `openwith` 한 묶음 · 그 밖은 `xdg.` 뒤 이름 ·
@@ -452,6 +479,21 @@ mod tests {
         assert_eq!(ctxmenu_blocks_for(false).len(), 2);
         assert_eq!(ctxmenu_blocks_for(true).len(), 4);
         assert_eq!(ctxmenu_blocks_for(true)[3].0, "xdgbg");
+        // macOS 집합(MC/DC: xdg × mac): Linux 전용 행(email · compress · scripts) 없음 · 나머지 키는 Linux 집합의 부분집합.
+        let mac = ctxmenu_blocks_for_os(true, true);
+        assert_eq!(mac.len(), 4);
+        for (block, keys) in mac {
+            let linux_keys = CTXMENU_BLOCKS_XDG.iter().find(|b| b.0 == *block).unwrap().1;
+            assert!(keys.iter().all(|k| linux_keys.contains(k)), "{block}");
+            assert!(
+                !keys
+                    .iter()
+                    .any(|k| ["email", "compress", "scripts"].contains(k)),
+                "{block}"
+            );
+        }
+        assert_eq!(ctxmenu_blocks_for_os(false, true), CTXMENU_BLOCKS);
+        assert_eq!(ctxmenu_blocks_for_os(true, false), CTXMENU_BLOCKS_XDG);
     }
 
     /// 열 정의: 상태 열 추가 · 확장자/종류 기본 숨김 · 옛 저장값 이행(없던 상태 = 표시로 · 적혀 있던 열은 그대로) ·
