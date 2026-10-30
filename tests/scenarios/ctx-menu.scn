@@ -25,6 +25,14 @@ check@unix: bg.txt: bg
 check@linux: bg.txt: xdg.props
 check@linux: row.txt: xdg.showin
 check@linux: row.txt: xdg.props
+# macOS(MacMenu b892a76 · 10-31 · 같은 xdg.* 어휘): 배경 = 터미널 · Finder에서 열기 · 정보 · 행(a.txt) = 기본 앱(TextEdit · 번들 id · 공백 없음) · Finder에서 보기 · 정보.
+check@macos: bg.txt: xdg.terminal
+check@macos: bg.txt: xdg.filemanager
+check@macos: bg.txt: xdg.props
+check@macos: row.txt: xdg.app:
+check@macos: row.txt: !xdg.app:path:
+check@macos: row.txt: xdg.showin
+check@macos: row.txt: xdg.props
 check: bg.txt: edit.paste
 check: bg.txt: file.new_folder
 check: list.txt: New Folder

@@ -78,9 +78,13 @@ jobs:
         run: cargo run -q -p nexa-dir -- --smoke
       - name: selfcheck (ci subset)
         run: cargo run -q -p nexa-dir -- --selfcheck --ci
-      # T4 시나리오(실제 창 · docs/18 §4): Windows 러너는 데스크톱 세션이 있어 winit 창이 뜬다. Linux(xvfb)·macOS는 T-06 후속.
+      # T4 시나리오(실제 창 · docs/18 §4): Windows 러너는 데스크톱 세션이 있어 winit 창이 뜬다. Linux = xvfb(T-117).
       - name: scenarios (T4 · windows)
         if: runner.os == 'Windows'
+        run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
+      # macOS 러너도 GUI 세션(Aqua)이 있어 winit 창이 뜬다(10-31 · 이 Mac gate T4 41/0 · 배율 1.0 러너와 2.0 Mac의 좌표 차이는 `.scn`이 배율 무관 검사만 쓰도록).
+      - name: scenarios (T4 · macos)
+        if: runner.os == 'macOS'
         run: cargo build -q -p nexa-dir && cargo run -q -p ndir-check -- --ci
       # T-117: Linux는 화면이 없어 xvfb 가상 화면에서 돈다(X 런타임 라이브러리는 winit이 dlopen — 러너에 없어 설치한다).
       # `.scn`의 `키@os:` 줄이 OS 분기를 담는다. 관찰 2회차(run 37231460856)에서 20/20 통과 → 필수 단계.

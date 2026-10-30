@@ -1,0 +1,20 @@
+# T4 · GAP-025 번들 우클릭(macOS): `Foo.app` 행 선택 → 행 메뉴에 `ctx.show_package`(패키지 내용 보기) · 열기/다른 앱으로 열기(xdg.app:/openwith) 없음 ·
+# 다른 OS = 폴더 메뉴(패키지 항목 없음). 행 번호 = 정렬 차이: macOS는 파일끼리 자연 정렬(b.txt < Foo.app → Foo.app = 1) · 다른 OS는 폴더 먼저(Foo.app = 0).
+id: bundle-macos-menu
+title: 번들 행 메뉴 — macOS "패키지 내용 보기"
+tree: dir Foo.app/Contents
+tree: file b.txt 3
+settings: ui.lang=en
+cmd@macos: @ready:list.select:1
+cmd@windows: @ready:list.select:0
+cmd@linux: @ready:list.select:0
+cmd: @ready:cmd.contextMenu
+cmd: @ready:ctx.wait
+cmd: @ready:ctx.dump:<out>/row.txt
+cmd: @ready:ui.press:escape
+cmd: @ready:quit
+check@macos: row.txt: ctx.show_package
+check@macos: row.txt: !xdg.openwith
+check@macos: row.txt: !xdg.app:
+check@windows: row.txt: !ctx.show_package
+check@linux: row.txt: !ctx.show_package

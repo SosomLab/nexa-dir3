@@ -588,6 +588,8 @@ impl App {
         self.probe_wait(Duration::from_secs(2));
         Some(match target {
             "layout" => self.layout_dump(),
+            // 시스템 부하 표본(상태줄 CPU·메모리·디스크·네트워크 칸의 근거 · `SysLoad` Debug · 아직 두 표본 전이면 None · 10-31 macOS 디스크 칸 T4).
+            "load" => format!("{:?}\n", self.load),
             "log" => self.log_dump(),
             "mem" => self.mem_dump(),
             "memwin" => self.memwin_dump(),

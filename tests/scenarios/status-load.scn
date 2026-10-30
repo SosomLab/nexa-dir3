@@ -1,0 +1,12 @@
+# T4 · NEW-003 상태줄 부하 표본(`load.dump` · 10-31): 두 표본 뒤(기본 주기 2 s) CPU 값이 있고 · Unix(Linux /proc/diskstats · macOS IOKit 8dc1b23)는
+# 디스크 누적이 있어 D 칸이 `–`가 아니다. Windows IOCTL_DISK_PERFORMANCE는 러너 권한/카운터에 따라 None일 수 있어 단정하지 않는다.
+id: status-load
+title: 상태줄 부하 표본 — CPU · Unix 디스크 값 존재
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @after:5000:load.dump:<out>/load.txt
+cmd: @after:5200:quit
+check: load.txt: cpu_pct:
+check: load.txt: mem_total:
+check@unix: load.txt: disk_bps: Some(
+check@unix: load.txt: net_bps: Some(

@@ -99,8 +99,9 @@ SM="$(cargo run -q -p nexa-dir -- --smoke 2>&1 | tail -1)"; [[ "$SM" == "smoke o
 SC="$(cargo run -q -p nexa-dir -- --selfcheck --ci 2>&1 | tail -1)"; [[ "$SC" == *"fail 0"* ]] || fail "selfcheck: $SC"; echo "  ✓ selfcheck $SC"
 T4="$(cargo run -q -p ndir-check -- --ci 2>&1 | grep -E '^FAIL|scenario')"
 # Windows 전제 시나리오 3개는 다른 OS에서 실패가 기준선이다(T-117).
-# Windows 전제 2개(셸 컨텍스트 메뉴 · Windows 자가 점검)만 다른 OS 실패 기준선 — `launcher`는 10-31 배율 무관 검사로 3-OS 통과(T-117).
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) KNOWN='^$';; *) KNOWN='^FAIL (ctx-menu|selfcheck-win) ';; esac
+# 알려진 실패 기준선(T-117): Windows · macOS = 없음(이 Mac gate 4~11차 T4 38/0 · MacMenu 뒤 ctx-menu `check@unix`도 맞음 · 10-31) ·
+# Linux = Windows 전제 2개(ctx-menu · selfcheck-win). `launcher`는 10-31 배율 무관 검사로 3-OS 통과.
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) KNOWN='^$';; *) KNOWN='^FAIL (ctx-menu|selfcheck-win) ';; esac
 BAD="$(echo "$T4" | grep '^FAIL' | grep -vE "$KNOWN")"
 [[ -z "$BAD" ]] || { echo "$T4"; fail "T4 시나리오"; }
 echo "  ✓ T4 — $(echo "$T4" | tail -1)"

@@ -1,0 +1,14 @@
+# T4 · GAP-025 번들(macOS `.app` = Finder처럼 파일로 · 5e48780 · 10-31): `Foo.app` 폴더 = macOS에서는 마커 없음(잎 · 파일 종류) · 다른 OS에서는
+# 접힌 마커(자식 Contents). 비교용 일반 폴더 `plain/inner`는 모든 OS에서 접힌 마커. 행 아이콘(앱 아이콘)과 실행은 실기 거리.
+id: bundle-macos
+title: 번들(.app) = macOS 파일 취급 · 다른 OS 폴더
+tree: dir Foo.app/Contents
+tree: dir plain/inner
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:list.dump:<out>/list.txt
+cmd: @ready:quit
+check: list.txt: Collapsed plain
+check@macos: list.txt: None Foo.app
+check@windows: list.txt: Collapsed Foo.app
+check@linux: list.txt: Collapsed Foo.app
