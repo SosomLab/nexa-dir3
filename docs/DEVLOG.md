@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **macOS 패키징 로컬 검증 ✓**(app · pkg · dmg · 이름 꼬리표 57ffbfe · postinstall 755 98c422e) · **e612629 macOS OS 드래그 발신**(NSDraggingSession · 하이브리드 · 판정 = 창 안 불변 ✓) · **CI windows 빨강 4a2c6b0~eed5fed**(Unix에서 쓴 시험이 Windows 빈 범위 결함 노출) → 1f16bc4 · 사용자 아침 실기 체크 (a)~(f) → [10-31 §12](journal/2026-10-31.md)
+
 - **사고 2**: b4892d5가 수정 없이 push(amend 차단 → `git add` 누락 · 작업 트리로 gate 녹색) → eed5fed 회복 · 재발 방지 = 한 명령에 묶지 않기 · push 전 `git status` 비었는지 · amend 대신 후속 커밋 → [10-31 §11](journal/2026-10-31.md)
 
 - **4a2c6b0 Unix resident_bytes = mincore**(판정 Fonts 8.3 MB · TermFont 5.4 MB ✓) · **d597bfe `unix-perf.sh`**(T-176 ⑤ ✅ · docs/25 §5-6 · macOS 첫 실측) · b4892d5 + eed5fed 순서 편집기 macOS 집합 · NSDragging 발신 사전 분석 → [10-31 §10](journal/2026-10-31.md)
