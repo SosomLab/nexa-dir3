@@ -15,6 +15,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::SystemTime;
 
+/// bplist00 해석(순수 · 3-OS 시험 · 쓰는 곳은 macOS Terminal.app 프로필).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) mod bplist;
 pub(crate) mod fake;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod linux;
@@ -1884,12 +1887,17 @@ pub(crate) fn parse_font_spec(spec: &str) -> Option<(String, f32)> {
 
 /// 이 OS의 **기본 터미널이 쓰는 글꼴**(터미널 도크가 따라갈 값 · DR-21 확장 — 사용자 10-03 Linux 실기 "시스템 기본(터미널과 동일한)
 /// 폰트로"): Windows = Windows Terminal 기본 프로필(글꼴 + 크기) · Linux = 데스크톱의 고정폭 글꼴 **이름**(`gsettings
-/// org.gnome.desktop.interface monospace-font-name` — GNOME 터미널 기본값이 이것을 쓴다) · 그 밖/없음 = `None`(설정 값 사용).
-/// 시험 빌드에서는 Linux도 `None`(프로세스를 띄우지 않고 · 화면이 PC 설정에 따라 달라지지 않게).
+/// org.gnome.desktop.interface monospace-font-name` — GNOME 터미널 기본값이 이것을 쓴다) · macOS = Terminal.app 기본 프로필의
+/// 글꼴 **이름 + 크기**([`macos_terminal_profile`] · T-114 ② · 10-31) · 그 밖/없음 = `None`(설정 값 사용).
+/// 시험 빌드에서는 Linux · macOS도 `None`(프로세스를 띄우지 않고 · 화면이 PC 설정에 따라 달라지지 않게).
 pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
     #[cfg(windows)]
     {
         windows_terminal_profile()
+    }
+    #[cfg(all(target_os = "macos", not(test)))]
+    {
+        macos_terminal_profile()
     }
     #[cfg(all(target_os = "linux", not(test)))]
     {
@@ -1912,10 +1920,58 @@ pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
             padding: None,
         })
     }
-    #[cfg(not(any(windows, all(target_os = "linux", not(test)))))]
+    #[cfg(not(any(
+        windows,
+        all(target_os = "linux", not(test)),
+        all(target_os = "macos", not(test))
+    )))]
     {
         None
     }
+}
+
+/// macOS Terminal.app **기본 프로필**의 글꼴(이름 + 크기 · WT 선례와 같이 둘 다 따라간다 — Terminal.app도 진짜 터미널 프로필이라
+/// Linux의 데스크톱 글꼴과 다르다): `~/Library/Preferences/com.apple.Terminal.plist` ▸ `Default Window Settings`(프로필 이름) ▸
+/// `Window Settings.<이름>.Font`(NSKeyedArchiver NSFont · [`bplist::parse_archived_font`]). 둘 다 `plutil -extract … raw`로 읽는다
+/// (같은 파일 기준이라 일관 · cfprefsd 반영은 수 초 안). 키가 없으면(프로필을 안 바꾼 사용자 · Terminal 미실행) `None` = 설정 값.
+/// PostScript 이름은 패밀리 어간만(`Menlo-Regular` → `Menlo` · [`bplist::postscript_family`]) — Terminal.app 번들 안의 비공개 글꼴
+/// (SF Mono Terminal)은 nexa-font가 못 찾아 `term.font_face` 폴백으로 떨어진다. 색 구성표 · 커서 · 여백은 후속(NSColor 보관).
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_terminal_profile() -> Option<WtProfile> {
+    let plist = std::path::PathBuf::from(std::env::var_os("HOME")?)
+        .join("Library/Preferences/com.apple.Terminal.plist");
+    if !plist.is_file() {
+        return None;
+    }
+    let extract = |key: &str| -> Option<String> {
+        let out = std::process::Command::new("plutil")
+            .args(["-extract", key, "raw", "-o", "-"])
+            .arg(&plist)
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (!s.is_empty()).then_some(s)
+    };
+    let profile = extract("Default Window Settings")?;
+    // 프로필 이름에 `.`이 있으면 plutil 키 경로가 갈라진다 — 그런 이름은 포기(None = 설정 값).
+    if profile.contains('.') {
+        return None;
+    }
+    let b64 = extract(&format!("Window Settings.{profile}.Font"))?;
+    let (ps_name, size) = bplist::parse_archived_font(&bplist::base64_decode(&b64)?)?;
+    let face = bplist::postscript_family(&ps_name)?;
+    Some(WtProfile {
+        faces: vec![face],
+        size_pt: Some(size),
+        scheme: None,
+        commandline: None,
+        cursor_shape: None,
+        cursor_height: None,
+        padding: None,
+    })
 }
 
 #[cfg(test)]
@@ -2004,9 +2060,25 @@ mod tests {
         assert_eq!(parse_font_spec("Ubuntu Mono"), None);
         assert_eq!(parse_font_spec("Mono 200"), None);
         assert_eq!(parse_font_spec("''"), None);
-        // 시험 빌드의 Linux는 프로세스를 띄우지 않는다.
-        #[cfg(target_os = "linux")]
+        // 시험 빌드의 Linux · macOS는 프로세스를 띄우지 않는다.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         assert_eq!(system_terminal_profile(), None);
+    }
+
+    /// macOS Terminal.app 프로필 읽기(실제 plutil · 이 PC 값에 따라 Some/None — 죽지 않고 · Some이면 이름 비지 않음 · 크기 4~200).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_terminal_profile_reads_or_is_none() {
+        let p = macos_terminal_profile();
+        eprintln!("macos_terminal_profile = {p:?}");
+        if let Some(p) = p {
+            assert_eq!(p.faces.len(), 1);
+            assert!(!p.faces[0].is_empty() && !p.faces[0].contains('-'), "{p:?}");
+            assert!(
+                p.size_pt.is_some_and(|s| (4.0..=200.0).contains(&s)),
+                "{p:?}"
+            );
+        }
     }
 
     fn spec(p: &str) -> ShellSpec {
