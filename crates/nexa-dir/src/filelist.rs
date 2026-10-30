@@ -1087,8 +1087,18 @@ fn kind_label(kind: FileKind, name: &str) -> String {
     }
 }
 
-/// 파일마다 아이콘이 다른 확장자(dir2 `icons.rs:8-36` · PANEL-064) — 키 = 소문자 전체 경로.
-const PER_FILE_ICON_EXTS: [&str; 7] = ["exe", "lnk", "ico", "cur", "msi", "scr", "appref-ms"];
+/// 파일마다 아이콘이 다른 확장자(dir2 `icons.rs:8-36` · PANEL-064) — 키 = 소문자 전체 경로. macOS는 `icns`도(아이콘 파일 자체 ·
+/// 10-31) · 번들(`.app` …)은 속성 비트로 따로 본다([`ndir_vfs::is_bundle_attrs`] → 경로 키 = 그 앱의 아이콘).
+const PER_FILE_ICON_EXTS: [&str; 8] = [
+    "exe",
+    "lnk",
+    "ico",
+    "cur",
+    "msi",
+    "scr",
+    "appref-ms",
+    "icns",
+];
 
 /// 행 아이콘 키(dir2 `icons::icon_key` · PANEL-064): 폴더 = `dir` · 확장자 없음 = `file` · 파일별 확장자 = 소문자 전체 경로 · 그 외 = 확장자.
 /// 드라이브 루트 같은 **가상 최상위의 항목**은 경로마다 고유 아이콘(셸이 경로를 본다) → 경로 키.
@@ -1135,7 +1145,10 @@ impl RowSource for TreeSource {
         let is_dir = row.kind == FileKind::Dir;
         let path = self.row_path(index)?;
         // 링크(심볼릭 링크 · 정션)는 경로로 조회해야 셸이 화살표 오버레이를 얹는다(GAP-008 — 종류별 아이콘에는 링크 정보가 없다).
-        let per_path = ndir_vfs::is_virtual_root(&self.path) || ndir_vfs::is_link_attrs(row.attrs);
+        // 번들(macOS `.app` · GAP-025)은 경로로 조회해야 그 앱의 아이콘이 온다.
+        let per_path = ndir_vfs::is_virtual_root(&self.path)
+            || ndir_vfs::is_link_attrs(row.attrs)
+            || ndir_vfs::is_bundle_attrs(row.attrs);
         Some((
             icon_key(is_dir, &path, per_path),
             path.to_string_lossy().into_owned(),

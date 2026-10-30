@@ -896,11 +896,14 @@ impl App {
         }
         // 폴더 행 위 = 그 폴더 · **파일 행 위 = 그 파일이 든 폴더**(트리에서 펼친 하위 폴더 안의 파일이면 그 하위 폴더 —
         // 사용자 10-05: 종전에는 파일 위면 늘 탭의 최상위 폴더였다) · 빈 곳 = 탭의 현재 폴더.
+        // 폴더 판정은 **행 종류**(fs `is_dir()`가 아니라) — 번들(macOS `.app` · 파일로 다룸)에 놓으면 번들 안이 아니라 그 부모로(앱 손상 방지 ·
+        // GAP-025 · 10-31). "앱으로 열기" 드롭은 후속.
+        let src = panel.rows().source();
         let dest = panel
             .rows()
             .row_at(p.x, p.y)
-            .and_then(|r| panel.rows().source().row_path(r))
-            .map(|path| drop_folder_of(&path, path.is_dir(), &root))
+            .and_then(|r| Some((src.row_path(r)?, src.row_is_dir(r))))
+            .map(|(path, is_dir)| drop_folder_of(&path, is_dir, &root))
             .unwrap_or(root);
         Some((i, dest))
     }

@@ -40,6 +40,60 @@ pub const ATTR_HIDDEN: u32 = 0x2;
 pub const DOT_IS_HIDDEN: bool = cfg!(unix);
 /// 시스템(Windows `FILE_ATTRIBUTE_SYSTEM` · macOS `SF_RESTRICTED`(SIP 보호)를 이 비트로 옮긴다 · Linux에는 없다).
 pub const ATTR_SYSTEM: u32 = 0x4;
+/// **번들**(macOS `.app` 등 — 실제는 폴더지만 Finder처럼 **파일로 다룬다** · dir3 전용 비트 · OS 속성 아님 · 10-31 GAP-025).
+/// [`read_dir_entries`]가 [`is_bundle_name`]인 폴더에 켜고 종류를 `File`로 바꾼다 → 쉐브론 없음 · 활성화 = OS 열기(실행) ·
+/// 아이콘 = 경로별(앱 아이콘). 안으로 들어가기는 호스트의 "패키지 내용 보기".
+pub const ATTR_BUNDLE: u32 = 0x4000_0000;
+/// 이 OS에서 번들 폴더를 파일로 다루는가 — macOS만(Finder 규칙). Windows/Linux에서는 `.app` 이름의 폴더도 그냥 폴더.
+pub const BUNDLE_IS_FILE: bool = cfg!(target_os = "macos");
+/// macOS 번들 확장자(패키지로 다루는 폴더 · LaunchServices가 패키지로 보는 흔한 종류 — Finder "패키지 내용 보기" 대상).
+pub const BUNDLE_EXTS: [&str; 15] = [
+    "app",
+    "bundle",
+    "framework",
+    "plugin",
+    "appex",
+    "prefpane",
+    "kext",
+    "pkg",
+    "mpkg",
+    "xcodeproj",
+    "xcworkspace",
+    "playground",
+    "photoslibrary",
+    "rtfd",
+    "qlgenerator",
+];
+
+/// 이름이 번들 확장자인가(순수 · 대소문자 무시) — 이 OS가 번들을 파일로 다룰 때([`BUNDLE_IS_FILE`])만 참. 폴더인지는 호출자가 본다.
+#[must_use]
+pub fn is_bundle_name(name: &str) -> bool {
+    BUNDLE_IS_FILE
+        && std::path::Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| {
+                let e = e.to_ascii_lowercase();
+                BUNDLE_EXTS.contains(&e.as_str())
+            })
+}
+
+/// 경로가 번들(실존하는 폴더 + 번들 이름)인가.
+#[must_use]
+pub fn is_bundle_path(path: &Path) -> bool {
+    BUNDLE_IS_FILE
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(is_bundle_name)
+        && path.is_dir()
+}
+
+/// 속성에 번들 비트가 있는가.
+#[must_use]
+pub fn is_bundle_attrs(attrs: u32) -> bool {
+    attrs & ATTR_BUNDLE != 0
+}
 
 /// **보호된 운영 체제 항목**인가 — 숨김 + 시스템이 **둘 다** 켜진 것(Windows 탐색기 "보호된 운영 체제 파일 숨기기"와 같은 규칙:
 /// `$RECYCLE.BIN` · `pagefile.sys` · `System Volume Information` · 호환용 정션 …). macOS는 숨김 + SIP 보호 항목.
@@ -56,6 +110,10 @@ impl Entry {
     /// 종류와 독립: 폴더 정션은 `kind == Dir && is_link()`. 비Windows·메타데이터 실패 시 `false`.
     pub fn is_link(&self) -> bool {
         is_link_attrs(self.attrs)
+    }
+    /// 번들(폴더이지만 파일로 다루는 항목 · macOS `.app` 등 · [`ATTR_BUNDLE`]).
+    pub fn is_bundle(&self) -> bool {
+        is_bundle_attrs(self.attrs)
     }
 }
 
@@ -241,8 +299,16 @@ pub fn read_dir_entries(
         };
         let attrs = attrs | unix_link_attrs(&dirent, file_type.is_symlink());
         let kind = classify_kind(file_type.is_dir(), file_type.is_symlink(), attrs);
+        let name = dirent.file_name().to_string_lossy().into_owned();
+        // 번들(macOS `.app` …)은 Finder처럼 파일로(GAP-025 · 10-31) — 폴더 링크(정션)는 대상이 번들이어도 그대로 폴더.
+        let (kind, attrs) =
+            if kind == FileKind::Dir && !is_link_attrs(attrs) && is_bundle_name(&name) {
+                (FileKind::File, attrs | ATTR_BUNDLE)
+            } else {
+                (kind, attrs)
+            };
         Ok(Entry {
-            name: dirent.file_name().to_string_lossy().into_owned(),
+            name,
             kind,
             size,
             modified,
@@ -564,6 +630,45 @@ mod tests {
 
     /// 상태 열 판정(순수): 클라우드 속성 → 상태(위가 우선) · 클라우드 플레이스홀더는 링크가 아니다(GAP-018) ·
     /// 네트워크 마운트 = 그 경로를 덮는 가장 긴 마운트의 파일 시스템 종류.
+    /// 번들 규칙(GAP-025): macOS = `.app`·`.framework` 이름이 번들 · 대소문자 무시 · 확장자 없음/다른 확장자 = 아님 · 다른 OS = 전부 아님.
+    /// 열거 = macOS에서 `Foo.app` 폴더가 File + ATTR_BUNDLE · 일반 폴더는 Dir · 다른 OS는 둘 다 Dir.
+    #[test]
+    fn bundles_are_files_on_macos_only() {
+        let mac = cfg!(target_os = "macos");
+        assert_eq!(is_bundle_name("Safari.app"), mac);
+        assert_eq!(is_bundle_name("Foo.FRAMEWORK"), mac);
+        assert!(!is_bundle_name("Documents"));
+        assert!(!is_bundle_name("notes.txt"));
+        assert!(
+            !is_bundle_name(".app"),
+            "확장자만 있는 이름(숨김 파일 `.app`)은 번들이 아니다"
+        );
+        let base = std::env::temp_dir().join(format!("ndir-bundle-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(base.join("Foo.app")).unwrap();
+        fs::create_dir_all(base.join("plain")).unwrap();
+        fs::write(base.join("x.app"), b"file named like a bundle").unwrap();
+        let entries: Vec<Entry> = read_dir_entries(&base)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let get = |n: &str| entries.iter().find(|e| e.name == n).unwrap().clone();
+        let foo = get("Foo.app");
+        assert_eq!(foo.kind, if mac { FileKind::File } else { FileKind::Dir });
+        assert_eq!(foo.is_bundle(), mac);
+        assert_eq!(is_bundle_path(&base.join("Foo.app")), mac);
+        assert_eq!(get("plain").kind, FileKind::Dir);
+        assert!(!get("plain").is_bundle());
+        let x = get("x.app");
+        assert_eq!(
+            (x.kind, x.is_bundle()),
+            (FileKind::File, false),
+            "파일은 번들 비트 없음"
+        );
+        assert!(!is_bundle_path(&base.join("x.app")));
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn cloud_status_link_and_network_rules() {
         use FileStatus as S;

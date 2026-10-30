@@ -11965,3 +11965,62 @@ fn row_menu_offers_builtin_zip_without_xdg_compress() {
     assert!(dir.join("a.zip").is_file(), "a.zip");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 번들(macOS `.app` · GAP-025 · 10-31): macOS = 파일처럼(행 종류 File · 아이콘 = 경로 키 · 활성화 = 열기 · 드롭 대상 = 부모 폴더 ·
+/// 런처 실행 대상 · 우클릭 "패키지 내용 보기") · 다른 OS = 그냥 폴더(항목 없음 · 활성화 = 진입).
+#[test]
+fn bundles_act_like_files_on_macos() {
+    let (mut app, dir) = fixture("bundle");
+    let mac = cfg!(target_os = "macos");
+    std::fs::create_dir_all(dir.join("Foo.app/Contents")).unwrap();
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    let _ = app.panels[0].navigate_to(dir.clone(), &mut inv);
+    let src = app.panels[0].rows().source();
+    let row = (0..src.len())
+        .find(|&i| src.row(i).text == "Foo.app")
+        .expect("Foo.app 행");
+    assert_eq!(src.row_is_dir(row), !mac, "macOS = 파일 종류");
+    let (key, _) = src.icon(row).expect("아이콘 키");
+    assert_eq!(
+        key == dir.join("Foo.app").to_string_lossy().to_lowercase(),
+        mac,
+        "macOS = 경로 키(앱 아이콘) · 다른 OS = dir: {key}"
+    );
+    // 드롭 대상 = 번들 행 위 → macOS는 부모 폴더(앱 안으로 넣지 않음).
+    let b = app.panels[0].rows().bounds();
+    let point = (b.y..b.bottom())
+        .map(|y| Point { x: b.x + 40, y })
+        .find(|p| app.panels[0].rows().row_at(p.x, p.y) == Some(row))
+        .expect("행 점");
+    let dest = app.drop_dest_at(point).map(|(_, d)| d);
+    assert_eq!(
+        dest,
+        Some(if mac {
+            dir.clone()
+        } else {
+            dir.join("Foo.app")
+        })
+    );
+    // 우클릭 항목 · 런처 실행 대상.
+    let items = app.row_menu_items(&[dir.join("Foo.app")], Some(&[]));
+    let got: Vec<&str> = items
+        .iter()
+        .filter_map(|c| match c {
+            CtxItem::Item { id, .. } => Some(id.as_str()),
+            CtxItem::Separator => None,
+        })
+        .collect();
+    assert_eq!(got.contains(&"ctx.show_package"), mac, "{got:?}");
+    assert_eq!(
+        crate::launcher::exe_path(&dir.join("Foo.app").to_string_lossy()).is_some(),
+        mac
+    );
+    // 활성화: macOS = 열기 대기(pending_open) · 다른 OS = 진입.
+    app.panels[0].activate_row(row, &mut inv);
+    assert_eq!(app.panels[0].take_open(), mac.then(|| dir.join("Foo.app")));
+    if !mac {
+        assert!(app.panels[0].root_path().ends_with("Foo.app"));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

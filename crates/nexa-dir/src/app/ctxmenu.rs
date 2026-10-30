@@ -517,6 +517,12 @@ impl App {
             ));
         }
         items.push(CtxItem::Separator);
+        // 번들(macOS `.app` … · 파일로 다룸 · GAP-025): Finder "패키지 내용 보기" = 앱 안에서 그 폴더로 이동.
+        if let [one] = sel {
+            if ndir_vfs::is_bundle_path(one) {
+                items.push(CtxItem::item("ctx.show_package", tr("ctx.showPackage")));
+            }
+        }
         if !have("ctx.copy_path") {
             items.push(CtxItem::item("ctx.copy_path", tr("ctx.copyPath")));
         }
@@ -1000,6 +1006,20 @@ impl App {
                     .filter(|p| app::extract::extract_ext_ok(p))
                     .collect();
                 self.start_extract_many(&archives, id == "ctx.extract_here");
+            }
+            "ctx.show_package" => {
+                if let Some(p) = self.panels[panel]
+                    .selected_paths_in_view_order()
+                    .first()
+                    .cloned()
+                {
+                    let mut inv = Invalidations::default();
+                    if let Some(why) = self.panels[panel].navigate_to(p, &mut inv) {
+                        self.toast_panel(panel, toast::ToastKind::Warn, tr("ctx.showPackage"), why);
+                    }
+                    self.update_status();
+                    self.redraw();
+                }
             }
             "ctx.copy_name" => {
                 let text = self.panels[panel]

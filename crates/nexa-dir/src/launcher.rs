@@ -86,7 +86,8 @@ pub(crate) fn encode_items(items: &[LauncherItem]) -> String {
 pub(crate) fn exe_path(exe: &str) -> Option<PathBuf> {
     let p = Path::new(exe);
     if p.is_absolute() {
-        return p.is_file().then(|| p.to_path_buf());
+        // macOS `.app` 번들은 폴더지만 실행 대상(`open -a`)이다 — 종전 `is_file()`만 허용해 기본 런처(VS Code · Terminal)가 늘 글리프였다(10-31).
+        return (p.is_file() || ndir_vfs::is_bundle_path(p)).then(|| p.to_path_buf());
     }
     if exe.contains(['/', '\\']) {
         return None;
