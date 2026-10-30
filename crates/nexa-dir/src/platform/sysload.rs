@@ -5,7 +5,7 @@
 //! |---|---|---|---|---|
 //! | Linux | `/proc/stat` | `/proc/meminfo` | `/proc/diskstats`(디스크 단위) | `/proc/net/dev` |
 //! | Windows | `GetSystemTimes` | `GlobalMemoryStatusEx` | `IOCTL_DISK_PERFORMANCE`(물리 드라이브) | `GetIfTable` |
-//! | macOS | `host_statistics` | `host_statistics64` + `hw.memsize` | (미구현 — IOKit 필요) | `getifaddrs`(AF_LINK) |
+//! | macOS | `host_statistics` | `host_statistics64` + `hw.memsize` | IOKit `IOBlockStorageDriver` `Statistics`(디스크 이미지 제외) | `getifaddrs`(AF_LINK) |
 //!
 //! 조회는 호스트가 주기(`statusbar.load_interval_ms`)마다 부른다 — 스레드 · 타이머 없음. 못 구한 항목은 `None`(칸에 `–`).
 
@@ -633,6 +633,122 @@ mod imp {
         fn freeifaddrs(list: *mut IfAddrs);
     }
 
+    // IOKit — 블록 저장 드라이버 열거(`iostat`과 같은 길 · IOKit/storage/IOBlockStorageDriver.h).
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOServiceMatching(name: *const c_char) -> *mut c_void;
+        fn IOServiceGetMatchingServices(
+            main_port: u32,
+            matching: *mut c_void,
+            existing: *mut u32,
+        ) -> i32;
+        fn IOIteratorNext(iterator: u32) -> u32;
+        fn IOObjectRelease(object: u32) -> i32;
+        fn IORegistryEntryGetParentEntry(entry: u32, plane: *const c_char, parent: *mut u32)
+            -> i32;
+        fn IOObjectConformsTo(object: u32, class_name: *const c_char) -> u32;
+        fn IORegistryEntryCreateCFProperty(
+            entry: u32,
+            key: *const c_void,
+            allocator: *const c_void,
+            options: u32,
+        ) -> *const c_void;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            s: *const c_char,
+            enc: u32,
+        ) -> *const c_void;
+        fn CFDictionaryGetValue(dict: *const c_void, key: *const c_void) -> *const c_void;
+        fn CFNumberGetValue(num: *const c_void, kind: i32, out: *mut c_void) -> u8;
+        fn CFRelease(p: *const c_void);
+    }
+    // `kCFStringEncodingUTF8` · `kCFNumberSInt64Type`.
+    const CF_UTF8: u32 = 0x0800_0100;
+    const CF_NUMBER_SINT64: i32 = 4;
+    /// 디스크 이미지 장치 클래스(Ventura+ · 그 전) — Linux의 loop처럼 실제 디스크 I/O와 겹치므로 뺀다.
+    const DISK_IMAGE_CLASSES: [&std::ffi::CStr; 2] = [c"AppleDiskImageDevice", c"IOHDIXHDDrive"];
+
+    /// 드라이버의 부모(저장 장치)가 디스크 이미지인가.
+    unsafe fn is_disk_image(driver: u32) -> bool {
+        let mut parent = 0u32;
+        if IORegistryEntryGetParentEntry(driver, c"IOService".as_ptr(), &mut parent) != 0
+            || parent == 0
+        {
+            return false;
+        }
+        let hit = DISK_IMAGE_CLASSES
+            .iter()
+            .any(|c| IOObjectConformsTo(parent, c.as_ptr()) != 0);
+        IOObjectRelease(parent);
+        hit
+    }
+
+    /// CFNumber → u64(음수 · 널 · 숫자가 아니면 None).
+    unsafe fn cf_u64(num: *const c_void) -> Option<u64> {
+        if num.is_null() {
+            return None;
+        }
+        let mut v: i64 = 0;
+        (CFNumberGetValue(num, CF_NUMBER_SINT64, (&mut v as *mut i64).cast()) != 0)
+            .then(|| v.max(0) as u64)
+    }
+
+    /// 모든 블록 저장 드라이버의 `Statistics` ▸ `Bytes (Read)` · `Bytes (Write)` 합(디스크 이미지 제외).
+    /// 합성 APFS 디스크(disk1 · disk3)는 IOBlockStorageDriver가 아니라 겹치지 않는다(10-31 Mac 실기 ioreg 확인).
+    fn disks() -> Option<(u64, u64)> {
+        // SAFETY: Create/Copy 규칙으로 받은 CF 객체와 io_object는 전부 우리가 해제 · 널 검사 뒤에만 읽는다 ·
+        // IOServiceGetMatchingServices는 matching 사전의 참조를 가져가므로 따로 해제하지 않는다.
+        unsafe {
+            let keys = [c"Statistics", c"Bytes (Read)", c"Bytes (Write)"]
+                .map(|k| CFStringCreateWithCString(std::ptr::null(), k.as_ptr(), CF_UTF8));
+            let release_keys = |keys: &[*const c_void; 3]| {
+                for k in keys {
+                    if !k.is_null() {
+                        CFRelease(*k);
+                    }
+                }
+            };
+            if keys.iter().any(|k| k.is_null()) {
+                release_keys(&keys);
+                return None;
+            }
+            let matching = IOServiceMatching(c"IOBlockStorageDriver".as_ptr());
+            let mut it = 0u32;
+            if matching.is_null() || IOServiceGetMatchingServices(0, matching, &mut it) != 0 {
+                release_keys(&keys);
+                return None;
+            }
+            let mut sum = (0u64, 0u64);
+            let mut any = false;
+            loop {
+                let svc = IOIteratorNext(it);
+                if svc == 0 {
+                    break;
+                }
+                if !is_disk_image(svc) {
+                    let stats = IORegistryEntryCreateCFProperty(svc, keys[0], std::ptr::null(), 0);
+                    if !stats.is_null() {
+                        let r = cf_u64(CFDictionaryGetValue(stats, keys[1]));
+                        let w = cf_u64(CFDictionaryGetValue(stats, keys[2]));
+                        if let (Some(r), Some(w)) = (r, w) {
+                            sum.0 += r;
+                            sum.1 += w;
+                            any = true;
+                        }
+                        CFRelease(stats);
+                    }
+                }
+                IOObjectRelease(svc);
+            }
+            IOObjectRelease(it);
+            release_keys(&keys);
+            any.then_some(sum)
+        }
+    }
+
     fn net() -> Option<(u64, u64)> {
         let mut list: *mut IfAddrs = std::ptr::null_mut();
         // SAFETY: getifaddrs가 준 목록을 읽기만 하고 freeifaddrs로 돌려준다 · 포인터는 쓰기 전에 널 검사.
@@ -727,7 +843,7 @@ mod imp {
                 mem_total,
                 mem_app,
                 app_cpu_ns,
-                disk: None, // 디스크 누적 바이트는 IOKit이 필요하다 — 후속
+                disk: disks(),
                 net: net(),
             })
         }
@@ -834,7 +950,7 @@ mod tests {
             assert!(a.app_cpu_ns.is_some(), "{a:?}");
             let b = sample().expect("sample");
             assert!(b.cpu_total >= a.cpu_total);
-            if cfg!(target_os = "linux") {
+            if cfg!(any(target_os = "linux", target_os = "macos")) {
                 assert!(a.net.is_some() && a.disk.is_some(), "{a:?}");
             }
         } else {
