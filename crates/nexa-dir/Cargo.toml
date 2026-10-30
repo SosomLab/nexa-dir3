@@ -91,6 +91,10 @@ objc2-app-kit = { version = "0.2", features = [
     "NSGraphics",
     "NSPasteboard",
     "NSWorkspace",
+    "NSDragging",
+    "NSDraggingItem",
+    "NSDraggingSession",
+    "NSEvent",
 ] }
 objc2-foundation = { version = "0.2", features = [
     "NSString",

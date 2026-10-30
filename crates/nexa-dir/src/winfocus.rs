@@ -94,6 +94,16 @@ fn ns_window(w: &Window) -> Option<objc2::rc::Retained<objc2_app_kit::NSWindow>>
     }
 }
 
+/// macOS NSView 포인터(winit raw handle · OS 드래그 발신 `platform::macdrag_start`용 · 10-31) — AppKit 창이 아니면 `None`.
+#[cfg(target_os = "macos")]
+pub(crate) fn ns_view_ptr(w: &Window) -> Option<*mut std::ffi::c_void> {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    match w.window_handle().ok()?.as_raw() {
+        RawWindowHandle::AppKit(h) => Some(h.ns_view.as_ptr()),
+        _ => None,
+    }
+}
+
 /// macOS 창 알파(T-102 창 투명도 · `platform::apply_window_opacity`가 부른다) — NSWindow를 못 얻으면 `false`.
 #[cfg(target_os = "macos")]
 pub(crate) fn set_alpha(w: &Window, alpha: f64) -> bool {

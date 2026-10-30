@@ -442,6 +442,31 @@ impl App {
         };
         match *ev {
             InputEvent::MouseMove { x, y } => {
+                // macOS(T-52/T-147 · 10-31 하이브리드): 포인터가 창 밖으로 나가는 첫 사건에서 OS 드래그 세션(NSDraggingSession)을 열고
+                // 창 안 드래그를 접는다 — 이 사건 처리 안에서만 시작할 수 있다(AppKit currentEvent = mouseDragged). 못 열면(마우스 사건
+                // 아님 · 가짜 플랫폼) 창 안 드래그 그대로.
+                #[cfg(target_os = "macos")]
+                if self.xdnd.is_none()
+                    && self.platform.log.is_none()
+                    && (x < 0 || y < 0 || x >= self.viewport.0 || y >= self.viewport.1)
+                {
+                    let view = self.window.as_deref().and_then(winfocus::ns_view_ptr);
+                    if let Some(view) = view {
+                        let image = self.drag_image(&drag.paths, platform::DropChoice::None);
+                        if let Some(s) = platform::macdrag_start(
+                            view,
+                            &drag.paths,
+                            Some(image),
+                            f64::from(self.scale),
+                        ) {
+                            self.xdnd = Some(s);
+                            self.dnd_internal = None;
+                            let _ = self.dnd_event(platform::DropEvent::Leave, Instant::now());
+                            self.set_drag_cursor(None);
+                            return true;
+                        }
+                    }
+                }
                 // 앱 밖 대상(XDND 세션)에 자리를 알리고, 그쪽이 받겠다고 하면 커서는 제안 동작으로.
                 let (rx, ry) = Self::root_point(self.window.as_deref(), (x, y));
                 let (ctrl, shift) = self.drag_mods();

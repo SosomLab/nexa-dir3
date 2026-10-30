@@ -26,6 +26,8 @@ mod linuxwatch;
 #[cfg(target_os = "macos")]
 mod macclip;
 #[cfg(target_os = "macos")]
+mod macdrag;
+#[cfg(target_os = "macos")]
 mod macmenu;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -849,9 +851,31 @@ pub(crate) fn pointer_button_down(right: bool) -> Option<bool> {
         None
     }
 }
-#[cfg(not(all(unix, not(target_os = "macos"))))]
+/// macOS = `NSDraggingSession` 발신 세션(`macdrag` · 10-31) — 시작은 [`macdrag_start`](창 밖으로 나가는 포인터 사건 안에서) ·
+/// `xdnd_start`는 macOS에서 `None`(창 안 드래그가 먼저).
+#[cfg(target_os = "macos")]
+pub(crate) type XdndSession = macdrag::Session;
+/// macOS OS 드래그 발신 시작(메인 스레드 · 지금 처리 중인 사건이 mouseDragged일 때만 · 아니면 `None` = 창 안 드래그 유지).
+#[cfg(target_os = "macos")]
+pub(crate) fn macdrag_start(
+    ns_view: *mut std::ffi::c_void,
+    paths: &[PathBuf],
+    image: Option<DragImage>,
+    scale: f64,
+) -> Option<XdndSession> {
+    match macdrag::Session::start(ns_view, paths, image, scale) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            if std::env::var_os("NDIR_XDND_DEBUG").is_some() {
+                eprintln!("[macdrag] not started: {e}");
+            }
+            None
+        }
+    }
+}
+#[cfg(not(unix))]
 pub(crate) struct XdndSession;
-#[cfg(not(all(unix, not(target_os = "macos"))))]
+#[cfg(not(unix))]
 impl XdndSession {
     pub(crate) fn motion(&mut self, _x: i16, _y: i16, _ctrl: bool, _shift: bool) {}
     pub(crate) fn modifiers(&mut self, _ctrl: bool, _shift: bool) {}
