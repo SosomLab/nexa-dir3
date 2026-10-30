@@ -190,6 +190,7 @@ pub(crate) fn run(opts: &Options) -> Report {
                 check_watch(&mut r);
             }
             "trash" => check_trash(&mut r, opts.ci),
+            "pty" => check_pty(&mut r),
             "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
                 group: other,
@@ -540,6 +541,71 @@ fn check_shell(r: &mut Report) {
                 .collect::<Vec<_>>()
                 .join(" · "),
         )
+    });
+}
+
+/// PTY 셸(T-54 · 3-OS · 10-31): 기본 셸을 PTY로 띄워 **되돌아오지 않는 표식**(타이핑 에코에는 없고 출력에만 나타나는 문자열)을 찍게 하고
+/// 3초 안에 읽히는지 — Unix = `printf 'ndir-pty-%s\n' ok`(에코 = `%s`) · PowerShell = `[string]::Concat('ndir-pty-','ok')` · cmd = `echo ndir-pty-^ok`
+/// (`^`는 출력에서 사라진다). 셸이 없으면 Skip · 못 띄우면 Fail · 끝나면 kill.
+fn check_pty(r: &mut Report) {
+    let p = crate::platform::Platform::native();
+    let Some(sh) = p.shell.default_shell() else {
+        r.items.push(Item {
+            group: "pty",
+            name: "echo round trip".into(),
+            verdict: Verdict::Skip,
+            detail: "no shell".into(),
+            ms: 0,
+        });
+        return;
+    };
+    let kind = sh
+        .program
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase());
+    let cmd: &str = match kind.as_deref() {
+        Some("pwsh" | "powershell") => "[string]::Concat('ndir-pty-','ok')\r",
+        Some("cmd") => "echo ndir-pty-^ok\r",
+        _ => "printf 'ndir-pty-%s\\n' ok\n",
+    };
+    let label = sh.label.clone();
+    timed(r, "pty", "echo round trip", || {
+        let mut session = match p.pty.spawn(&sh, &std::env::temp_dir(), 80, 24) {
+            Ok(s) => s,
+            Err(e) => return (Verdict::Fail, format!("{label}: spawn failed: {e}")),
+        };
+        // 셸이 프롬프트를 내기까지 잠시(스크립트 없이 바로 쓰면 일부 셸이 첫 줄을 흘린다).
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        if let Err(e) = session.write(cmd.as_bytes()) {
+            session.kill();
+            return (Verdict::Fail, format!("{label}: write failed: {e}"));
+        }
+        let deadline = Instant::now() + std::time::Duration::from_secs(3);
+        let mut seen = Vec::new();
+        let mut buf = [0u8; 4096];
+        let verdict = loop {
+            match session.read(&mut buf) {
+                Ok(0) => {}
+                Ok(n) => seen.extend_from_slice(&buf[..n]),
+                Err(e) => break (Verdict::Fail, format!("{label}: read failed: {e}")),
+            }
+            if String::from_utf8_lossy(&seen).contains("ndir-pty-ok") {
+                break (Verdict::Pass, format!("{label} · {} bytes", seen.len()));
+            }
+            if Instant::now() >= deadline {
+                break (
+                    Verdict::Fail,
+                    format!(
+                        "{label}: no echo within 3 s ({} bytes · alive {})",
+                        seen.len(),
+                        session.alive()
+                    ),
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        session.kill();
+        verdict
     });
 }
 
