@@ -192,6 +192,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "trash" => check_trash(&mut r, opts.ci),
             "pty" => check_pty(&mut r),
             "fonts" => check_fonts(&mut r),
+            "preview" => check_preview(&mut r),
             "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
                 group: other,
@@ -587,6 +588,62 @@ fn check_fonts(r: &mut Report) {
             ),
         },
     );
+}
+
+/// 미리보기(T-54 · 10-31): 임시 텍스트 파일 → 내장 텍스트 공급자(`builtin.*`)가 줄을 돌려주는지(3-OS) · macOS = Quick Look `qlmanage -t`로
+/// 같은 파일의 PNG 썸네일이 만들어지는지(Finder 미리보기 패널과 같은 원천 · `qlmanage` 없으면 Skip · 다른 OS는 항목 없음).
+fn check_preview(r: &mut Report) {
+    let dir = std::env::temp_dir().join(format!("ndir-selfcheck-preview-{}", unique_tag()));
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("probe.txt");
+    let _ = std::fs::write(&file, b"ndir preview probe line 1\nline 2\n");
+    timed(r, "preview", "builtin text preview", || {
+        let (doc, id) = crate::preview::preview_for(&file, "", "");
+        match doc {
+            crate::preview::PreviewDoc::Lines(lines)
+                if lines.iter().any(|l| l.contains("ndir preview probe")) =>
+            {
+                (Verdict::Pass, format!("{id} · {} line(s)", lines.len()))
+            }
+            crate::preview::PreviewDoc::Lines(lines) => (
+                Verdict::Fail,
+                format!("{id}: text not found in {} line(s)", lines.len()),
+            ),
+            other => (Verdict::Fail, format!("{id}: unexpected doc {other:?}")),
+        }
+    });
+    #[cfg(target_os = "macos")]
+    timed(r, "preview", "quick look thumbnail", || {
+        let out = dir.join("ql");
+        let _ = std::fs::create_dir_all(&out);
+        let status = std::process::Command::new("qlmanage")
+            .args(["-t", "-s", "64", "-o"])
+            .arg(&out)
+            .arg(&file)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        let png = out.join("probe.txt.png");
+        match status {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                (Verdict::Skip, "qlmanage not found".into())
+            }
+            Err(e) => (Verdict::Fail, format!("qlmanage: {e}")),
+            Ok(_) if png.is_file() => (
+                Verdict::Pass,
+                format!(
+                    "{} bytes",
+                    std::fs::metadata(&png).map(|m| m.len()).unwrap_or(0)
+                ),
+            ),
+            Ok(st) => (
+                Verdict::Fail,
+                format!("no thumbnail (qlmanage exit {:?})", st.code()),
+            ),
+        }
+    });
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// PTY 셸(T-54 · 3-OS · 10-31): 기본 셸을 PTY로 띄워 **되돌아오지 않는 표식**(타이핑 에코에는 없고 출력에만 나타나는 문자열)을 찍게 하고
