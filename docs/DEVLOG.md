@@ -4,6 +4,12 @@
 
 ## 2026-10-31
 
+- **4cdd5c9 종합 판정**(CI 41095815380 ✓ · 58fe883 macos ✗ 회복) · 행 아이콘 ✓ · 정보 Kind = 확장자(dir2 패리티 · NEW-059 후보) · 런처 `.app` 글리프 결함 · GAP-025 `.app` 번들 = 폴더처럼 동작 · nexa-ui 246 마감 d63928d → [10-31 §7](journal/2026-10-31.md)
+
+- **58fe883 터미널 글꼴 크기 처방**(포트 단위 환산 · 판정 = 칸 폭 7 DIP ✓ Terminal.app과 같음) · **nexa-ui 246 0a18346**(macOS OS 아이콘 · dir3 행 아이콘 = Finder 꼴 ✓) · **사고 = gate 적신호인 채 push**(gate와 push를 한 명령에 묶음 · 4cdd5c9 런처 시험 기대값 수정 · 재발 방지 = 분리) → [10-31 §6](journal/2026-10-31.md)
+
+- **사전 분석 → 결정**: MacMenu = `xdg.*` 어휘 재사용(B) · `.app` 번들 폴더 아이콘 결함(`per_path_icon` 처방 예정) · macOS 드래그 수식키가 Finder와 반대(추천안 = Option 복사 · Cmd 이동) · `pointer_state` macOS CG · GAP-024(OS 아이콘 끄기 설정 없음) → [10-31 §5](journal/2026-10-31.md)
+
 - **6c59ebe 경로 제안 자연 정렬**(CI 41092453597 ✓ 3-OS) · 협업 재기동 판정 = 제안 순서 ✓ · 터미널 글꼴 이름 ✓ · **크기 1.33배 ✗**(`term.rs` ×96/72가 macOS pt에도 적용) · 설명 문구 macOS 누락 → [10-31 §4](journal/2026-10-31.md)
 
 - **CI 8dc1b23 ubuntu T4 `path-suggest` 빨강**(제안 순서 = `read_dir` 순서 그대로 · ext4 해시 순서 · 잠복 결함 · 처방 = 이름 정렬 제안) → [10-31 §3](journal/2026-10-31.md)
