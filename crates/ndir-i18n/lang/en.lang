@@ -1478,6 +1478,10 @@ pref.perfBoost = Performance mode
 pref.perfBoost.desc = Turns off heavier extras to keep the app light — only display and waiting times change; every action still runs exactly. Currently: status-bar system monitoring, icons before file names and menu items, folder size calculation, window transparency, animations and the fast-scroll HUD, longer folder-watch (2 s) and git-refresh (60 s) intervals, terminal scrollback 1,000 lines, half the icon cache. Your own values are kept and come back when you turn it off.
 pref.partialRedraw = Redraw only changed areas
 pref.partialRedraw.desc = Repaint and present only the rectangles that input or timers marked dirty, instead of the whole window every frame. Falls back to a full frame when a menu, tooltip, flash or toast is showing. Turn off if anything looks stale or torn.
+pref.macPresent = macOS presentation path
+pref.macPresent.desc = IOSurface (default) draws CPU pixels straight into a surface and leaves colour matching to the compositor. softbuffer is the previous path (a copy and a colour conversion every frame · slow). Switch back to softbuffer if a window ever shows blank. Applies to newly opened windows; the main window after a restart. Ignored on other OSes.
+pref.macPresent.iosurface = IOSurface (recommended)
+pref.macPresent.softbuffer = softbuffer (previous)
 pref.idleTrim = Idle memory trim (seconds)
 pref.idleTrim.desc = After this many seconds without input, return the glyph cache, shell menu objects, free heap blocks and the working set to the OS. Coming back costs a brief reload. 0 = off.
 pref.idleTrimScope = Idle trim scope

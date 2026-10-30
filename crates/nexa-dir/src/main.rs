@@ -1634,6 +1634,8 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     crash::install(ndir_settings::config_dir());
     install_ctl_labels();
     input::set_natural_scroll(settings.flag("input.scroll_natural"));
+    // 화면 내보내기 방식(`gfx.mac_present` · Q-8 재검토 10-31) — 첫 창이 만들어지기 전에(nexa-sql `main.rs` 순서 그대로).
+    present::set_mode(settings.get("gfx.mac_present").unwrap_or("iosurface"));
     // 자연 정렬(숫자를 값으로) — 첫 목록을 읽기 전에 정렬 엔진에 알린다.
     // 글자 래스터 설정(`ui.text_*` · GAP-015)은 글꼴을 쓰기 전에 전역에(변경 때는 `apply_text_raster`).
     App::apply_text_raster_of(&settings);

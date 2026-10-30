@@ -1477,6 +1477,10 @@ pref.perfBoost = 성능 향상 모드
 pref.perfBoost.desc = 무거운 부가 기능을 꺼서 앱을 가볍게 합니다 — 보여주기·대기 시간만 바뀌고 동작은 그대로 정확히 수행됩니다. 지금 바뀌는 것: 상태바 시스템 상태 모니터링 · 파일 이름/메뉴 앞 아이콘 · 폴더 크기 계산 · 창 투명도 · 애니메이션과 고속 스크롤 HUD · 폴더 감시(2초)/git 갱신(60초) 주기 · 터미널 스크롤백 1,000줄 · 아이콘 캐시 절반. 직접 정한 값은 그대로 보관되고 끄면 다시 쓰입니다.
 pref.partialRedraw = 바뀐 영역만 다시 그리기
 pref.partialRedraw.desc = 매 프레임 창 전체 대신 입력이나 타이머가 더럽힌 사각형만 다시 그려 내보냅니다. 메뉴 · 툴팁 · 플래시 · 토스트가 보일 때는 전체를 그립니다. 화면이 낡아 보이거나 어긋나면 끄세요.
+pref.macPresent = macOS 화면 내보내기 방식
+pref.macPresent.desc = IOSurface(기본) = CPU가 그린 픽셀을 표면에 바로 두고 색 맞춤을 합성기에 맡깁니다. softbuffer = 종전 방식(프레임마다 복사와 색 변환 · 느림). 빈 창이 보이면 softbuffer로 되돌리세요. 새로 여는 창부터 적용되며 메인 창은 재시작 뒤입니다. 다른 OS에서는 무시됩니다.
+pref.macPresent.iosurface = IOSurface (권장)
+pref.macPresent.softbuffer = softbuffer (종전)
 pref.idleTrim = 유휴 메모리 정리(초)
 pref.idleTrim.desc = 마지막 입력 뒤 이 시간이 지나면 글자 캐시 · 셸 메뉴 객체 · 힙의 빈 조각 · 작업 집합을 운영체제에 돌려줍니다. 돌아올 때 잠깐 다시 읽어 들이는 비용이 있습니다. 0 = 끔.
 pref.idleTrimScope = 유휴 정리 범위

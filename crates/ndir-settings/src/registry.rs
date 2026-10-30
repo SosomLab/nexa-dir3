@@ -13,6 +13,11 @@ const THEME_OPTS: &[(&str, &str)] = &[
     ("dark", "pref.theme.dark"),
 ];
 /// 토스트 모서리(10-18 · 전역 = 창 · 패널 작업 = 그 패널 사각형 · 둘 다 같은 모서리).
+/// macOS 화면 내보내기 방식(nexa-sql `gfx.mac_present` 계승 · Q-8 재검토 10-31).
+const MAC_PRESENT_OPTS: &[(&str, &str)] = &[
+    ("iosurface", "pref.macPresent.iosurface"),
+    ("softbuffer", "pref.macPresent.softbuffer"),
+];
 const TOAST_POS_OPTS: &[(&str, &str)] = &[
     ("bottom-right", "pref.toastPos.br"),
     ("bottom-left", "pref.toastPos.bl"),
@@ -800,6 +805,19 @@ pub const REGISTRY: &[Entry] = &[
         "pref.partialRedraw.desc",
         Bool,
         "on"
+    ),
+    // macOS 화면 내보내기(Q-8 재검토 · 10-31 맥 실측 · 고급): softbuffer의 CoreGraphics 뒷단은 프레임마다 새 버퍼 + DeviceRGB
+    // `CGImage` → CoreAnimation이 창 전체를 CPU(vImage)로 색 변환한다(2400×1600 present 28 ms · 유휴 ~11 fps면 코어의 40 %).
+    // `iosurface` = nexa-sys `LayerPresenter`(표면 풀 · 할당 0 · sRGB 태그 → 색 맞춤은 합성기 · nexa-sql 09-24 실측 present 36 → 3 ms).
+    // 만들기에 실패하면 `present.rs`가 조용히 softbuffer로 돌아간다 · 빈 창이 보이면 `softbuffer`로 되돌린다. 다른 OS는 무시(키는 전 OS 등재 · 41 §).
+    // 방식은 창을 만들 때 고정 — 새로 여는 창부터 · 메인 창은 재시작 뒤.
+    e!(
+        "gfx.mac_present",
+        CAT_APPEARANCE,
+        "pref.macPresent",
+        "pref.macPresent.desc",
+        Choice(MAC_PRESENT_OPTS),
+        "iosurface"
     ),
     // 유휴 메모리 트림(dir2 M2-8 계승 · T-179 A · 고급): 마지막 입력 뒤 이 초가 지나면 글리프 캐시 · 셸 메뉴 객체 · 힙 ·
     // 작업 집합을 돌려준다. 0 = 끔. 기본 300 s(10-18 결정 ④ — 종전 60 s는 잠깐 손을 뗀 뒤 첫 입력이 끊겨 보였다: 글리프 재래스터 ·
@@ -2714,6 +2732,7 @@ pub const ADVANCED: &[&str] = &[
     "mem.idle_trim_s",
     "mem.idle_trim_scope",
     "gfx.partial_redraw",
+    "gfx.mac_present",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",
