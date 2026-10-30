@@ -1883,8 +1883,8 @@ fn launcher_bar_layout_and_launch() {
     assert!(app.dump_of("layout").unwrap().contains("launcher 0,"));
     let ld = app.dump_of("launcher").unwrap();
     assert_eq!(ld.lines().count(), 5, "{ld}");
-    // T-30 B 아이콘: 없는 exe = 즉시 글리프 `Ba` · 자기 exe = Windows면 셸 아이콘(비동기 → 폴링 후 image) · 다른 OS = 글리프 `Se`.
-    // 아이콘 테마가 있는 Linux = 둘 다 그림(앱 아이콘 · 못 찾으면 일반 실행 파일 아이콘 — 사용자 10-03).
+    // T-30 B 아이콘: 없는 exe = 즉시 글리프 `Ba` · 자기 exe = Windows · macOS(nexa-ui 246 · NSWorkspace)면 셸 아이콘(비동기 → 폴링 후
+    // image 16x16) · 다른 OS = 글리프 `Se`. 아이콘 테마가 있는 Linux = 둘 다 그림(앱 아이콘 · 못 찾으면 일반 실행 파일 아이콘 — 사용자 10-03).
     let themed = nexa_fs::icontheme::theme_name().is_some();
     assert_eq!(ld.contains("launch:2=glyph:Ba"), !themed, "{ld}");
     assert_eq!(ld.contains("launch:2=image"), themed, "{ld}");
@@ -1895,7 +1895,7 @@ fn launcher_bar_layout_and_launch() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let icons = app.launcher_icon_summary();
-    if cfg!(windows) {
+    if cfg!(any(windows, target_os = "macos")) {
         assert!(
             icons.iter().any(|s| s.starts_with("launch:0=image 16x16")),
             "{icons:?}"
