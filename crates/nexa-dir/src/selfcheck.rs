@@ -578,7 +578,12 @@ fn check_fonts(r: &mut Report) {
                 Verdict::Pass,
                 format!(
                     "{} · {}",
-                    p.faces.join(", "),
+                    // 글꼴 이름 없는 프로필(Windows Terminal이 글꼴 미지정 → 앱은 설정 `term.font_face`) — 빈칸 대신 명시(협업 10-31).
+                    if p.faces.is_empty() {
+                        "no font name (settings face)".to_string()
+                    } else {
+                        p.faces.join(", ")
+                    },
                     p.size_pt
                         .map_or("size: settings".to_string(), |s| format!("{s} pt"))
                 ),
