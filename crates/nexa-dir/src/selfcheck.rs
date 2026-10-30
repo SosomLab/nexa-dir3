@@ -191,6 +191,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             }
             "trash" => check_trash(&mut r, opts.ci),
             "pty" => check_pty(&mut r),
+            "fonts" => check_fonts(&mut r),
             "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
                 group: other,
@@ -542,6 +543,50 @@ fn check_shell(r: &mut Report) {
                 .join(" · "),
         )
     });
+}
+
+/// 글꼴(T-54 · 3-OS · 10-31): UI 글꼴(OS 기본 · 체인) · 고정폭 글꼴(터미널 · 없으면 UI 글꼴로 대신 = Warn) · 시스템 터미널 프로필
+/// (Windows Terminal · Terminal.app · GNOME 고정폭 — 없으면 Skip = 설정 값 사용 · 결함 아님).
+fn check_fonts(r: &mut Report) {
+    timed(r, "fonts", "ui font", || match nexa_font::ui_font(None) {
+        Some(l) => (Verdict::Pass, l.chain.join(" → ")),
+        None => (
+            Verdict::Fail,
+            "no UI font found (nexa-font FONT_DIRS)".into(),
+        ),
+    });
+    timed(
+        r,
+        "fonts",
+        "monospace font",
+        || match nexa_font::mono_font(None) {
+            Some(l) => (Verdict::Pass, l.chain.join(" → ")),
+            None => (
+                Verdict::Warn,
+                "no monospace font — UI font will be used".into(),
+            ),
+        },
+    );
+    timed(
+        r,
+        "fonts",
+        "system terminal profile",
+        || match crate::platform::system_terminal_profile() {
+            Some(p) => (
+                Verdict::Pass,
+                format!(
+                    "{} · {}",
+                    p.faces.join(", "),
+                    p.size_pt
+                        .map_or("size: settings".to_string(), |s| format!("{s} pt"))
+                ),
+            ),
+            None => (
+                Verdict::Skip,
+                "no profile on this PC (settings used)".into(),
+            ),
+        },
+    );
 }
 
 /// PTY 셸(T-54 · 3-OS · 10-31): 기본 셸을 PTY로 띄워 **되돌아오지 않는 표식**(타이핑 에코에는 없고 출력에만 나타나는 문자열)을 찍게 하고
