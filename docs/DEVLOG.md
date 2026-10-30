@@ -2,6 +2,16 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-10-31
+
+- **CI 8dc1b23 ubuntu T4 `path-suggest` 빨강**(제안 순서 = `read_dir` 순서 그대로 · ext4 해시 순서 · 잠복 결함 · 처방 = 이름 정렬 제안) → [10-31 §3](journal/2026-10-31.md)
+
+- **macOS 터미널 도크 글꼴 = Terminal.app 기본 프로필**(1c1c0d7 · 이름 + 크기 · `platform/bplist.rs` 순수 해석기 · T-114 ②) · T4 launcher 배율 무관(eb13dcf) · gate 2차 full 732/0 · T4 38/0 · push → [10-31 §2](journal/2026-10-31.md)
+
+- **macOS 상태바 디스크 칸 = IOKit**(8dc1b23 · `IOBlockStorageDriver` Statistics · 디스크 이미지 제외 · 이 Mac 첫 gate full 727/0 · 실기 ✓ = D 칸 KB/s · 팝업 Read/Written since boot) → [10-31 §1](journal/2026-10-31.md)
+
+- **macOS PC 회차 시작**(개발 b5b080 · 협업 427dc3 분담 · 세 저장소 ff-pull · winget/choco 0.27.0 검수 종결 · T-114 사전 분석 → 순서 = 터미널 글꼴 → 행 아이콘 → MacMenu) → [10-31 §0](journal/2026-10-31.md)
+
 ## 2026-10-26
 
 - **릴리스 뒤 마감 정리**(사용자 지시 · v0.27.0 공개 · 채널 4 · 기록 3커밋 · main = origin · 병합할 브랜치 없음 · 남은 것 = winget/choco 검수 · 설치본 교체) → [10-26 §24](journal/2026-10-26.md)

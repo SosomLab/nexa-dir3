@@ -2,7 +2,12 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-26 v0.27.0 릴리스 마감 · Windows PC · [journal 10-26 §1~§24](journal/2026-10-26.md) · 마감 정리 = §24(릴리스 뒤) · §22(낮) · §10(아침) · 그 전 [10-25 §18~§39](journal/2026-10-25.md) 마감 정리 = §38 — 그 전 10-25 §1~§17 · 10-24 §7~§24 마감 · 10-24 Linux PC §1~§6 · §14 · 10-20 내용은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-31 macOS PC 회차 진행 중 · [journal 10-31 §0~§3](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+
+- **★ 10-31 macOS PC(사용자 "맥에서 필요한 시험 자동화 · 오류 수정 · 아침까지 진행" · 개발 b5b080 · 협업 427dc3 · [10-31 §0~§3](journal/2026-10-31.md))**: 8dc1b23 **macOS 상태바 디스크 칸**(IOKit `IOBlockStorageDriver` · 실기 ✓ = D 칸 값 · 팝업 Read/Written since boot) · 1c1c0d7 **터미널 도크 글꼴 = Terminal.app 기본 프로필**(T-114 ②) · eb13dcf T4 launcher 배율 무관. 이 Mac 첫 `gate.sh full` = 727/0 · T4 38 중 1(launcher → eb13dcf) → 2차 full 732/0 · T4 38/0 · 세 커밋 push 완료. **CI 8dc1b23 = ubuntu T4 `path-suggest` 빨강**(제안 순서 = `read_dir` 순서 · dir2도 같음 · 처방 = 개발 진행 중 · §3) · windows/macos ✓. 채널 0.27.0 = winget #462011/#462012 MERGED · choco 2건 Approved(검수 종결). 다음 = T-114 ① 행 아이콘(nexa-ui nexa-fs) → ③ MacMenu("다음으로 열기" 1차) → NSDragging T-52/T-147 → T-153 mac 수식키 → T-176 ⑤. 앱 = 격리 8dc1b23 PID 72459(협업 scratchpad `ndir-home`).
+- **macOS PC 세션 분담**(10-31 · Linux/Windows 관례 그대로): 개발 = 설계 · `crates/` · `scripts/` · 시험 · 코드 커밋 · pull/push · 세 저장소 ff-pull · `gate.sh` · 검증 빌드 `CARGO_TARGET_DIR=target/dev` / 협업 = `docs/` 기록 커밋(push는 개발) · 사용자 인스턴스 `target/debug` + 격리 `NDIR_HOME` 재기동(빌드 성공 직후 · **자기 PID만 종료**) · CI 감시 · 사전 분석 · macOS 실기 판정(판정은 `NDIR_NO_ACTIVATE=1` 별도 인스턴스 + `capture:` → `scripts/cap2png.py`).
+
+## 이전 시작점(10-26 v0.27.0 릴리스 마감 · Windows PC · [journal 10-26 §1~§24](journal/2026-10-26.md) · 마감 정리 = §24(릴리스 뒤) · §22(낮) · §10(아침) · 그 전 [10-25 §18~§39](journal/2026-10-25.md) 마감 정리 = §38 — 그 전 10-25 §1~§17 · 10-24 §7~§24 마감 · 10-24 Linux PC §1~§6 · §14 · 10-20 내용은 아래 항목에 그대로)
 
 - **★ 릴리스 v0.27.0 ✓(10-26 §23)**: 태그 = fa12231(주석 · 영어) · 선검증 run 40279805020 ✓(WiX 5.0.2 MSI · 스모크 3-OS) → release run 40280642494 전 잡 ✓ · Release 공개 06:40:49Z · 자산 9 · brew 탭 810f107 · linux-repo ✓ · **winget PR #462011 · #462012 OPEN(검수 추적)** · **choco `nexa-dir`/`.portable` 0.27.0 pushed(검수 대기)** · 전수 gate full 743/0 · T4 38/0 · CI 40279783152 ✓. **저장소(§24)** = 로컬 main = 원격 main(브랜치 없음) · nexa-ui d60b8f5 · nexa-license f33ebef · 작업 트리 깨끗 · 설치본 0.26.0(교체 = 사용자 결정) · 공개된 0.27.0 자산·태그 재생성 금지(docs/16 §5-5).
 
