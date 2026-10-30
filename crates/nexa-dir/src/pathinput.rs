@@ -164,7 +164,9 @@ pub(crate) fn suggest_folders(
     out
 }
 
-/// 실제 파일시스템 열거자 — 베이스 폴더의 하위 **폴더** 전체 경로(오류=빈 목록).
+/// 실제 파일시스템 열거자 — 베이스 폴더의 하위 **폴더** 전체 경로(오류=빈 목록). **이름 자연 정렬(대소문자 무시)** — `read_dir`
+/// 순서는 OS/파일시스템마다 다르다(NTFS = 이름순 · ext4 htree = 해시순 · APFS = 이름순)라 제안 순서가 PC마다 달라졌고 CI ubuntu T4
+/// `path-suggest`가 흔들렸다(10-31 · 8dc1b23 run 41090985489). 목록 정렬과 같은 비교(`ndir_tree::cmp_natural`).
 pub(crate) fn fs_dirs(base: &str) -> Vec<String> {
     let Ok(rd) = std::fs::read_dir(base) else {
         return Vec::new();
@@ -175,6 +177,7 @@ pub(crate) fn fs_dirs(base: &str) -> Vec<String> {
             out.push(e.path().to_string_lossy().into_owned());
         }
     }
+    out.sort_by(|a, b| ndir_tree::cmp_natural(last_name(a), last_name(b), true));
     out
 }
 
@@ -251,6 +254,30 @@ mod tests {
         } else {
             vec![]
         }
+    }
+
+    /// 실제 열거자는 `read_dir` 순서와 무관하게 이름 자연 정렬(대소문자 무시)로 돌려준다 · 파일은 제외 · 없는 폴더 = 빈 목록.
+    #[test]
+    fn fs_dirs_are_sorted_naturally_case_insensitive() {
+        let base = std::env::temp_dir().join(format!(
+            "ndir-fsdirs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        for d in ["sub", "second", "Alpha", "x10", "x2"] {
+            std::fs::create_dir_all(base.join(d)).unwrap();
+        }
+        std::fs::write(base.join("a.txt"), b"x").unwrap();
+        let got: Vec<String> = fs_dirs(&base.to_string_lossy())
+            .iter()
+            .map(|p| last_name(p).to_string())
+            .collect();
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(got, ["Alpha", "second", "sub", "x2", "x10"]);
+        assert!(fs_dirs(&base.join("nope").to_string_lossy()).is_empty());
     }
 
     #[test]
