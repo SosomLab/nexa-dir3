@@ -28,7 +28,7 @@ cargo run -p nexa-copy -- --help        # 고속 복사 CLI(별도 실행파일 
 | 단계 | 하는 일 |
 | --- | --- |
 | `quick` | fmt + 호스트 clippy(`check-3os.sh --quick` · `-D warnings` · **마지막 전수 뒤 diff에 `cfg(unix|windows|target_os …)`/`cfg!`가 더해졌으면 `check-3os.sh` 전체 = 3-OS clippy** — Windows 호스트 clippy는 cfg(unix/macos) 가지를 못 본다 · 10-18 930a505) + **마지막 전수 뒤 바뀐 크레이트만** `cargo test -p …`(ndir-i18n · ndir-settings가 바뀌면 nexa-dir 포함) + `--smoke` |
-| `full` | `check-3os.sh`(fmt + 3-OS clippy) + `cargo test --workspace` + `--smoke` + `--selfcheck --ci` + T4(`ndir-check --ci` — Windows 전제 3개 `ctx-menu` · `launcher` · `selfcheck-win`는 다른 OS에서 실패가 기준선 · T-117) → 통과하면 `target/gate/last-full`에 `시각 HEAD nexa-ui-HEAD nexa-license-HEAD` 기록(PC별 · git 미추적) |
+| `full` | `check-3os.sh`(fmt + 3-OS clippy) + `cargo test --workspace` + `--smoke` + `--selfcheck --ci` + T4(`ndir-check --ci` — Windows 전제 2개 `ctx-menu` · `selfcheck-win`는 다른 OS에서 실패가 기준선 · T-117 · `launcher`는 10-31 배율 무관 검사로 3-OS 통과) → 통과하면 `target/gate/last-full`에 `시각 HEAD nexa-ui-HEAD nexa-license-HEAD` 기록(PC별 · git 미추적) |
 | `auto`(기본) | **full을 고르는 때**(하나라도): ① 이 PC에 전수 기록 없음 ② 마지막 전수가 `NDIR_GATE_FULL_HOURS`(기본 24)시간 경과 ③ 형제 저장소(nexa-ui · nexa-license) **코드** 변경(기록 해시 → HEAD 차이 · 작업 트리 중 `crates/` · `Cargo.toml|lock` — 문서 커밋만이면 아님 · 기록 해시를 모르면 full · T-139 abe82c9 · 10-24) ④ 마지막 전수 뒤 **핵심 경로** 변경 — `crates/{ndir-core,ndir-vfs,ndir-tree,ndir-ops,ndir-term,ndir-license}/` · `crates/ndir-settings/src/lib.rs` · `crates/nexa-dir/src/platform/` · `crates/nexa-dir/Cargo.toml` · `crates/ndir-check/` · `Cargo.toml`/`Cargo.lock` · `.github/` · `scripts/` · `tests/scenarios/`. 그 밖 = quick |
 
 - **중요 시점 = `gate.sh full` 한 번 더**: 배포(패키징) · 버전 태그 · 마일스톤 마감 · 브랜치 병합 전.
@@ -45,7 +45,7 @@ cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자�
 cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용자 자원 필요 항목 SKIP)
 ```
 
-**Linux 개발 세션**(10-03 §101 · 이제 `gate.sh full`에 포함): `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4) — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 3개(`ctx-menu` · `launcher` · `selfcheck-win`)의 실패는 제외(T-117).
+**Linux 개발 세션**(10-03 §101 · 이제 `gate.sh full`에 포함): `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4) — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 2개(`ctx-menu` · `selfcheck-win`)의 실패는 제외(T-117 · `launcher`는 10-31부터 3-OS 통과 기준).
 
 한 번에: `scripts/check-all.sh`(T-05에서 작성 · nexa-ui → nexa-license → dir3 순으로 fmt·clippy·test → 위 4단계 → `tests/out/summary.txt`).
 

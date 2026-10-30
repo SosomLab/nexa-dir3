@@ -1,4 +1,4 @@
-# T4 · T-42 런처 바(실제 창 · Windows 러너): 항목 1개(cmd /c exit) → 도구 모음 아래 24 밴드 → launch:0 = 덤프 last launched · 끄면 0.
+# T4 · T-42 런처 바(실제 창 · 3-OS): 항목 1개(cmd /c exit) → 도구 모음 아래 24 밴드 → launch:0 = 덤프 last launched · 끄면 0.
 id: launcher
 title: 퀵 런처 바 배치 · 실행 · 토글
 tree: file a.txt 3
@@ -15,8 +15,12 @@ cmd: @ready:assert.launcher:last Shell launched
 cmd: @ready:view.launcher
 cmd: @ready:layout.dump:<out>/layout2.txt
 cmd: @ready:quit
-check: layout.txt: launcher 0,53 1200x28 items 1
-check: layout2.txt: launcher 0,53 1200x0
+# 좌표는 물리 픽셀이라 배율에 따라 다르다(macOS Retina 2.00 = 0,106 2400x56 · 10-31) → 배율 무관 조각만 본다:
+# 켜짐 = 높이가 0이 아니고 항목 1 · 끔 = 높이 0(`x0 items 1`).
+check: layout.txt: launcher 0,
+check: layout.txt: !x0 items 1
+check: layout2.txt: launcher 0,
+check: layout2.txt: x0 items 1
 check: launcher.txt: last Shell launched
 check@windows: launcher.txt: Shell|cmd.exe|/c exit
 check@unix: launcher.txt: Shell|/bin/sh|-c exit
