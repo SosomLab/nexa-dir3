@@ -694,7 +694,9 @@ mod os {
 /// macOS(T-164 · docs/24 §6): `copyfile(3)` 한 번으로 — `COPYFILE_CLONE`이면 APFS 같은 볼륨은 `clonefile`(즉시 · 쓰기 시 복사) · 아니면
 /// 커널 복사로 떨어진다(`COPYFILE_ALL` = 데이터 + 수정 시각/권한 + 확장 속성 + ACL 보존) · `COPYFILE_STATE_STATUS_CB`로 진행 보고 ·
 /// 중단은 콜백이 `COPYFILE_QUIT`. `COPYFILE_CLONE`은 `NOFOLLOW_SRC`를 함의하므로 **심볼릭 링크 원본은 루프**(다른 OS처럼 내용 복사).
-/// 장치 판정은 아직 보지 않는다(알 수 없음 = 자동 4). 외부 crate 0 — libSystem 심벌만 선언한다.
+/// 장치 판정(10-31 · docs/24 §6 후속) = `statfs`(`f_mntfromname` → BSD 이름) → IOKit `IOBSDNameMatching` → 부모 체인(IOService 평면)에서
+/// `Device Characteristics` ▸ `Medium Type`("Solid State" = 탐색 지연 없음 · "Rotational" = 있음 · 없음 = 모름 = 있음) · 네트워크 파일
+/// 시스템(smbfs · nfs · afpfs · webdav)은 탐색 지연 없음. 외부 crate 0 — libSystem · IOKit · CoreFoundation 심벌만 선언한다.
 #[cfg(target_os = "macos")]
 mod os {
     use super::{canceled, Seek, Stop};
@@ -853,9 +855,176 @@ mod os {
             || matches!(e.raw_os_error(), Some(EXDEV | EINVAL | ENOTSUP))
     }
 
-    /// 장치 판정은 아직 보지 않는다(IOKit 특성 조회는 후속) → 알 수 없음 = [`Seek::Costly`](자동 4까지).
-    pub(super) fn seek_of(_path: &Path) -> Seek {
-        Seek::Costly
+    /// `struct statfs`(64비트 inode 판 · sys/mount.h · 2168바이트) — 파일 시스템 이름과 장치 경로만 쓴다.
+    #[repr(C)]
+    struct StatFs {
+        f_bsize: u32,
+        f_iosize: i32,
+        f_blocks: u64,
+        f_bfree: u64,
+        f_bavail: u64,
+        f_files: u64,
+        f_ffree: u64,
+        f_fsid: [i32; 2],
+        f_owner: u32,
+        f_type: u32,
+        f_flags: u32,
+        f_fssubtype: u32,
+        f_fstypename: [c_char; 16],
+        f_mntonname: [c_char; 1024],
+        f_mntfromname: [c_char; 1024],
+        f_flags_ext: u32,
+        f_reserved: [u32; 7],
+    }
+    extern "C" {
+        // x86_64 macOS의 `statfs` 심벌은 옛 구조체 → 64비트 inode 판은 `statfs$INODE64`(arm64는 그 판이 기본).
+        #[cfg_attr(target_arch = "x86_64", link_name = "statfs$INODE64")]
+        fn statfs(path: *const c_char, buf: *mut StatFs) -> c_int;
+    }
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOBSDNameMatching(main_port: u32, options: u32, bsd_name: *const c_char) -> *mut c_void;
+        fn IOServiceGetMatchingService(main_port: u32, matching: *mut c_void) -> u32;
+        fn IORegistryEntryGetParentEntry(
+            entry: u32,
+            plane: *const c_char,
+            parent: *mut u32,
+        ) -> c_int;
+        fn IORegistryEntryCreateCFProperty(
+            entry: u32,
+            key: *const c_void,
+            allocator: *const c_void,
+            options: u32,
+        ) -> *const c_void;
+        fn IOObjectRelease(object: u32) -> c_int;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            s: *const c_char,
+            enc: u32,
+        ) -> *const c_void;
+        fn CFDictionaryGetValue(dict: *const c_void, key: *const c_void) -> *const c_void;
+        fn CFStringGetCString(s: *const c_void, buf: *mut c_char, len: isize, enc: u32) -> u8;
+        fn CFGetTypeID(p: *const c_void) -> usize;
+        fn CFDictionaryGetTypeID() -> usize;
+        fn CFRelease(p: *const c_void);
+    }
+    const CF_UTF8: u32 = 0x0800_0100;
+    /// 네트워크 파일 시스템 — 탐색 지연 없음(원격이 알아서 · 병렬 이득).
+    const NETWORK_FS: [&str; 5] = ["smbfs", "nfs", "afpfs", "webdav", "cifs"];
+
+    /// (파일 시스템 이름 · 장치 경로 `f_mntfromname`) — 없는 경로는 부모로.
+    fn mount_of(path: &Path) -> Option<(String, String)> {
+        let target = if path.exists() {
+            path.to_path_buf()
+        } else {
+            path.parent()?.to_path_buf()
+        };
+        let c = CString::new(target.as_os_str().as_bytes()).ok()?;
+        // SAFETY: 0으로 채운 출력 구조체(64비트 inode 판 크기) · NUL 종료 경로.
+        unsafe {
+            let mut st: StatFs = std::mem::zeroed();
+            if statfs(c.as_ptr(), &mut st) != 0 {
+                return None;
+            }
+            let text = |b: &[c_char]| {
+                std::ffi::CStr::from_ptr(b.as_ptr())
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            Some((text(&st.f_fstypename), text(&st.f_mntfromname)))
+        }
+    }
+
+    /// BSD 장치 이름(`disk1s1`) → IOKit 부모 체인의 `Medium Type` 문자열(없으면 None).
+    fn medium_type(bsd: &str) -> Option<String> {
+        let name = CString::new(bsd).ok()?;
+        // SAFETY: IOServiceGetMatchingService가 matching 사전을 가져간다 · io_object는 전부 우리가 해제 · CF 객체는 Create 규칙으로 해제 ·
+        // 널 검사 뒤에만 읽는다 · 부모 체인은 24단 상한.
+        unsafe {
+            let matching = IOBSDNameMatching(0, 0, name.as_ptr());
+            if matching.is_null() {
+                return None;
+            }
+            let mut cur = IOServiceGetMatchingService(0, matching);
+            if cur == 0 {
+                return None;
+            }
+            let key_dc = CFStringCreateWithCString(
+                std::ptr::null(),
+                c"Device Characteristics".as_ptr(),
+                CF_UTF8,
+            );
+            let key_mt =
+                CFStringCreateWithCString(std::ptr::null(), c"Medium Type".as_ptr(), CF_UTF8);
+            let mut out = None;
+            if !key_dc.is_null() && !key_mt.is_null() {
+                for _ in 0..24 {
+                    let dc = IORegistryEntryCreateCFProperty(cur, key_dc, std::ptr::null(), 0);
+                    if !dc.is_null() {
+                        if CFGetTypeID(dc) == CFDictionaryGetTypeID() {
+                            let mt = CFDictionaryGetValue(dc, key_mt);
+                            if !mt.is_null() {
+                                let mut buf = [0 as c_char; 64];
+                                if CFStringGetCString(mt, buf.as_mut_ptr(), 64, CF_UTF8) != 0 {
+                                    out = Some(
+                                        std::ffi::CStr::from_ptr(buf.as_ptr())
+                                            .to_string_lossy()
+                                            .into_owned(),
+                                    );
+                                }
+                            }
+                        }
+                        CFRelease(dc);
+                        if out.is_some() {
+                            break;
+                        }
+                    }
+                    let mut parent = 0u32;
+                    let rc = IORegistryEntryGetParentEntry(cur, c"IOService".as_ptr(), &mut parent);
+                    IOObjectRelease(cur);
+                    cur = parent;
+                    if rc != 0 || cur == 0 {
+                        break;
+                    }
+                }
+            }
+            if cur != 0 {
+                IOObjectRelease(cur);
+            }
+            if !key_dc.is_null() {
+                CFRelease(key_dc);
+            }
+            if !key_mt.is_null() {
+                CFRelease(key_mt);
+            }
+            out
+        }
+    }
+
+    /// (파일 시스템 이름 · Medium Type) → 탐색 판정(순수 · MC/DC): 네트워크 = 없음 · "Solid State" = 없음 · 그 밖/모름 = 있음(자동 4).
+    pub(super) fn seek_from(fstype: &str, medium: Option<&str>) -> Seek {
+        if NETWORK_FS.contains(&fstype) {
+            return Seek::Free;
+        }
+        match medium {
+            Some(m) if m.eq_ignore_ascii_case("Solid State") => Seek::Free,
+            _ => Seek::Costly,
+        }
+    }
+
+    /// 저장 장치 판정(10-31): statfs → 네트워크면 없음 · 아니면 BSD 이름으로 IOKit `Medium Type`. 못 읽으면 있음.
+    pub(super) fn seek_of(path: &Path) -> Seek {
+        let Some((fstype, from)) = mount_of(path) else {
+            return Seek::Costly;
+        };
+        if NETWORK_FS.contains(&fstype.as_str()) {
+            return Seek::Free;
+        }
+        let medium = from.strip_prefix("/dev/").and_then(medium_type);
+        seek_from(&fstype, medium.as_deref())
     }
 }
 
@@ -1128,6 +1297,24 @@ mod os {
 
 #[cfg(test)]
 mod tests {
+    /// macOS 장치 판정(10-31): 순수 매핑 MC/DC(네트워크 · Solid State · Rotational · 모름) · 실제 `/`와 `/tmp`는 죽지 않고 판정이 나온다
+    /// (이 Mac = Solid State → Free · CI VM은 Medium Type이 없을 수 있어 값은 단정하지 않음) · 없는 경로 = 부모로.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_seek_detection() {
+        use super::os::seek_from;
+        use super::Seek;
+        assert_eq!(seek_from("smbfs", None), Seek::Free);
+        assert_eq!(seek_from("apfs", Some("Solid State")), Seek::Free);
+        assert_eq!(seek_from("apfs", Some("Rotational")), Seek::Costly);
+        assert_eq!(seek_from("apfs", None), Seek::Costly);
+        assert_eq!(seek_from("hfs", Some("solid state")), Seek::Free);
+        let root = super::os::seek_of(std::path::Path::new("/"));
+        let tmp = super::os::seek_of(std::path::Path::new("/tmp/does-not-exist-ndir"));
+        eprintln!("seek / = {root:?} · /tmp(없는 경로) = {tmp:?}");
+        assert_eq!(root, super::os::seek_of(std::path::Path::new("/System")));
+    }
+
     use super::*;
     use std::time::{Duration, SystemTime};
 
