@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **6c59ebe 경로 제안 자연 정렬**(CI 41092453597 ✓ 3-OS) · 협업 재기동 판정 = 제안 순서 ✓ · 터미널 글꼴 이름 ✓ · **크기 1.33배 ✗**(`term.rs` ×96/72가 macOS pt에도 적용) · 설명 문구 macOS 누락 → [10-31 §4](journal/2026-10-31.md)
+
 - **CI 8dc1b23 ubuntu T4 `path-suggest` 빨강**(제안 순서 = `read_dir` 순서 그대로 · ext4 해시 순서 · 잠복 결함 · 처방 = 이름 정렬 제안) → [10-31 §3](journal/2026-10-31.md)
 
 - **macOS 터미널 도크 글꼴 = Terminal.app 기본 프로필**(1c1c0d7 · 이름 + 크기 · `platform/bplist.rs` 순수 해석기 · T-114 ②) · T4 launcher 배율 무관(eb13dcf) · gate 2차 full 732/0 · T4 38/0 · push → [10-31 §2](journal/2026-10-31.md)
