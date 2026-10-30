@@ -47,6 +47,39 @@ pub(crate) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
     imp::resident_bytes(ranges)
 }
 
+/// Unix 공통 — `mincore(2)`로 범위 안 **상주 페이지**를 센다(Windows `QueryWorkingSetEx`와 같은 뜻 · 10-31 · 협업 진단: 종전 `None`이라
+/// 메모리 창/`mem.dump`의 Fonts · TermFont가 매핑한 글꼴 파일 **전체 크기**(macOS 실측 91 MB · AppleSDGothicNeo 55 MB 등)로 보이던
+/// 측정 착시). 시작 주소는 페이지에 내려 맞추고 페이지마다 1바이트(비트 0 = 상주). 매핑 밖 주소(ENOMEM 등)면 `None`.
+#[cfg(unix)]
+fn mincore_resident(ranges: &[&[u8]]) -> Option<u64> {
+    use std::ffi::c_void;
+    extern "C" {
+        fn mincore(addr: *const c_void, len: usize, vec: *mut u8) -> i32;
+        fn getpagesize() -> i32;
+    }
+    // SAFETY: getpagesize는 순수 조회.
+    let page = usize::try_from(unsafe { getpagesize() }).ok()?.max(1);
+    let mut resident = 0u64;
+    let mut vec: Vec<u8> = Vec::new();
+    for r in ranges {
+        if r.is_empty() {
+            continue;
+        }
+        let start = (r.as_ptr() as usize) & !(page - 1);
+        let end = (r.as_ptr() as usize).checked_add(r.len())?;
+        let pages = end.saturating_sub(start).div_ceil(page);
+        vec.clear();
+        vec.resize(pages, 0);
+        // SAFETY: 페이지 정렬 시작 · 길이 = 그 페이지들 · 출력 벡터 길이 = 페이지 수(mincore 규약).
+        let rc = unsafe { mincore(start as *const c_void, pages * page, vec.as_mut_ptr()) };
+        if rc != 0 {
+            return None;
+        }
+        resident += vec.iter().filter(|b| **b & 1 == 1).count() as u64 * page as u64;
+    }
+    Some(resident)
+}
+
 /// "런타임 · 라이브러리 · 미집계"의 **분해**(사용자 10-08 "메모리 사용량이 너무 많다 — 전체 점검": 메모리 창의 미집계 49.8 MB가 무엇인지
 /// 보이도록) — 전용(커밋) 가운데 우리 영역 밖의 큰 덩어리 셋 + 모듈/스레드 수. 모르는 OS = 전부 0(행 숨김).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -412,8 +445,8 @@ mod imp {
         }
     }
 
-    pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
-        None
+    pub(super) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
+        super::mincore_resident(ranges)
     }
 
     pub(super) fn runtime_breakdown() -> super::RtBreak {
@@ -487,8 +520,8 @@ mod imp {
         }
     }
 
-    pub(super) fn resident_bytes(_ranges: &[&[u8]]) -> Option<u64> {
-        None
+    pub(super) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
+        super::mincore_resident(ranges)
     }
 
     /// 활성 상태 보기의 "메모리" = 풋프린트 그대로 — 따로 세지 않는다(행 숨김).
@@ -538,6 +571,17 @@ mod imp {
 #[cfg(test)]
 mod tests {
     /// 큰 조각 다수를 놓은 뒤 정리 — 어느 OS든 실패 없이 돌고, 값을 읽을 수 있는 OS에서는 터무니없지 않은 값이 나온다.
+    /// Unix `mincore` 상주 계수(10-31): 방금 쓴 힙 1 MB = 거의 전부 상주(≥ 절반 · ≤ 길이 + 페이지 2장) · 빈 입력 = 0 · Windows는 종전 경로.
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn resident_bytes_counts_touched_pages() {
+        let buf = vec![1u8; 1 << 20];
+        let r = super::resident_bytes(&[&buf]).expect("지원 OS");
+        assert!(((1 << 19)..=(1 << 20) + 2 * 16384).contains(&r), "{r}");
+        assert_eq!(super::resident_bytes(&[]), Some(0));
+        assert_eq!(super::resident_bytes(&[&buf[..0]]), Some(0));
+    }
+
     #[test]
     fn sys_reads_and_trim_runs() {
         let junk: Vec<String> = (0..50_000).map(|i| format!("cell value {i:08}")).collect();
