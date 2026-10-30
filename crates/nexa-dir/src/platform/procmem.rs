@@ -308,6 +308,10 @@ mod imp {
     pub(super) fn resident_bytes(ranges: &[&[u8]]) -> Option<u64> {
         let mut pages: Vec<WsExInfo> = Vec::new();
         for r in ranges {
+            // 빈 범위 = 0(종전엔 시작을 페이지에 내려 맞춰 ptr이 경계가 아니면 1페이지를 셌다 — 10-31 Unix 시험이 드러낸 결함 · CI windows).
+            if r.is_empty() {
+                continue;
+            }
             let start = r.as_ptr() as usize & !(PAGE - 1);
             let end = (r.as_ptr() as usize).saturating_add(r.len());
             pages.extend((start..end).step_by(PAGE).map(|a| WsExInfo {
