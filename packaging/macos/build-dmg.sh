@@ -5,7 +5,7 @@
 #
 #   packaging/macos/build-app.sh && packaging/macos/build-dmg.sh
 #
-# 산출: target/packaging/macos/nexa-dir-<ver>-macos-universal.dmg
+# 산출: target/packaging/macos/nexa-dir-<ver>-macos-<universal|arm64|x86_64>.dmg (꼬리표 = lib.sh mac_arch_tag)
 # 공증(자리만): MACOS_NOTARY_PROFILE 이 있고 번들이 Developer ID로 서명돼 있으면 notarytool submit + stapler.
 # 이식 원천: ../nexa-clip/.github/workflows/release.yml "macOS 설치본(.dmg)" 단계.
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
@@ -13,7 +13,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 OUT="$OUT_ROOT/macos"
 APP="$OUT/$APP_NAME.app"
 [ -d "$APP" ] || die "번들 없음: $APP — 먼저 build-app.sh"
-FINAL="$OUT/nexa-dir-$VERSION-macos-universal.dmg"
+FINAL="$OUT/nexa-dir-$VERSION-macos-$(mac_arch_tag "$APP/Contents/MacOS/nexa-dir").dmg"
 DROOT="$OUT/dmgroot"; rm -rf "$DROOT"; mkdir -p "$DROOT"
 
 step "dmg 루트 구성"

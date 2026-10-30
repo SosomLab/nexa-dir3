@@ -3,7 +3,7 @@
 #
 #   packaging/macos/build-app.sh && packaging/macos/build-pkg.sh
 #
-# 산출: target/packaging/macos/nexa-dir-<ver>-macos-universal.pkg (+ 서명본은 같은 이름으로 대체)
+# 산출: target/packaging/macos/nexa-dir-<ver>-macos-<universal|arm64|x86_64>.pkg (+ 서명본은 같은 이름으로 대체 · 꼬리표 = lib.sh mac_arch_tag)
 # 구조: component pkg(Nexa Dir.app → /Applications · scripts/postinstall) → product archive(distribution.xml · 라이선스 화면).
 # 서명·공증(DR-20 · 자리만):
 #   MACOS_INSTALLER_IDENTITY="Developer ID Installer: …"       → productsign
@@ -19,7 +19,7 @@ APP="$OUT/$APP_NAME.app"
 
 WORK="$OUT/pkg"; rm -rf "$WORK"; mkdir -p "$WORK/root" "$WORK/res"
 COMPONENT="$WORK/nexa-dir-component.pkg"
-FINAL="$OUT/nexa-dir-$VERSION-macos-universal.pkg"
+FINAL="$OUT/nexa-dir-$VERSION-macos-$(mac_arch_tag "$APP/Contents/MacOS/nexa-dir").pkg"
 
 step "component pkg (pkgbuild)"
 cp -R "$APP" "$WORK/root/"

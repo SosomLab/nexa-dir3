@@ -17,6 +17,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="$ROOT/target/packaging"
 BRANDING="$ROOT/packaging/branding"
 APP_NAME="Nexa Dir"
+# macOS 번들 바이너리의 아키텍처 꼬리표(10-31): arm64 + x86_64 = `universal`(CI · 두 타깃) · 하나만 = 그 이름(로컬 단일 타깃 빌드가
+#   `universal`로 이름 붙던 것 정정) · lipo 실패 = `universal`(종전 기본).
+mac_arch_tag() {
+    local a
+    a=$(lipo -archs "$1" 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')
+    case "$a" in
+        *arm64*x86_64*|*x86_64*arm64*) echo universal ;;
+        arm64|x86_64) echo "$a" ;;
+        *) echo universal ;;
+    esac
+}
 BUNDLE_ID="com.sosomlab.nexa-dir"
 PUBLISHER="SosomLab"
 HOMEPAGE="https://github.com/SosomLab/nexa-dir3"
