@@ -12024,3 +12024,26 @@ fn bundles_act_like_files_on_macos() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `prefs.dump`에 강제 목록과 카드 줄(`key=값` · 잠금 이유)이 나온다(10-31 · 설정 창 화면 판정 수단): 검색으로 연 카드 값 · 종속으로 잠긴 카드.
+#[test]
+fn prefs_dump_lists_forced_and_card_lines() {
+    let (mut app, dir) = fixture("prefsdump");
+    app.layout_for(1200, 800, 1.0);
+    let _ = app.settings.set("term.font_face", "My Mono");
+    app.wt_profile = None; // PC의 실제 터미널 프로필을 타지 않게(강제 없음)
+    app.startup_cmd("prefs.search:term.font_face");
+    let d = app.dump_of("prefs").unwrap();
+    assert!(d.contains("forced []") && d.contains("\ncards\n"), "{d}");
+    assert!(d.lines().any(|l| l == "term.font_face=My Mono"), "{d}");
+    // 종속으로 잠긴 카드 = 이유 덧줄이 줄에 붙는다(어느 키든 하나).
+    app.startup_cmd("prefs.search:");
+    let d2 = app.dump_of("prefs").unwrap();
+    let locked = app
+        .prefs_win
+        .card_lines()
+        .iter()
+        .any(|l| l.contains("[locked: "));
+    assert_eq!(d2.contains("[locked: "), locked, "{d2}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

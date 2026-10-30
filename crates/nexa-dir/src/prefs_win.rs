@@ -579,6 +579,27 @@ impl PrefsWin {
         self.cards.iter().map(|c| c.entry.key).collect()
     }
 
+    /// 덤프용 카드 줄(`prefs.dump` · 10-31 설정 창 화면 판정 수단 — 별도 창이라 `capture:`에 안 잡힌다): `key=값` · 잠겼으면
+    /// ` [locked: 이유]` · 오류 줄이 있으면 ` [error: …]`. 보이는 카드 순서 그대로.
+    pub(crate) fn card_lines(&self) -> Vec<String> {
+        self.cards
+            .iter()
+            .map(|c| {
+                let mut line = format!("{}={}", c.entry.key, c.value);
+                if c.locked {
+                    line.push_str(&format!(
+                        " [locked: {}]",
+                        c.lock_reason.as_deref().unwrap_or("")
+                    ));
+                }
+                if let Some(e) = &c.error {
+                    line.push_str(&format!(" [error: {e}]"));
+                }
+                line
+            })
+            .collect()
+    }
+
     /// 카드 잠김(종속 조건 불충족) 여부(시험).
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn is_locked(&self, key: &str) -> Option<bool> {

@@ -609,13 +609,23 @@ impl App {
                 self.statusbar.left(),
                 self.statusbar.right()
             ),
-            "prefs" => format!(
-                "open {} keys {:?}\nplugins {:?}\nchanged_only {}\n",
-                self.prefs_win.is_open(),
-                self.prefs_win.shown_keys(),
-                self.prefs_win.plugin_states(),
-                self.prefs_win.changed_only()
-            ),
+            "prefs" => {
+                // 강제 카드(프로필이 덮는 값 · `pref.forcedBy`) + 보이는 카드 값/잠금 줄 — 설정 창 화면 판정(10-31).
+                let forced: Vec<String> = self
+                    .prefs_forced()
+                    .into_iter()
+                    .map(|(k, v, _)| format!("{k}={v}"))
+                    .collect();
+                format!(
+                    "open {} keys {:?}\nplugins {:?}\nchanged_only {}\nforced {:?}\ncards\n{}\n",
+                    self.prefs_win.is_open(),
+                    self.prefs_win.shown_keys(),
+                    self.prefs_win.plugin_states(),
+                    self.prefs_win.changed_only(),
+                    forced,
+                    self.prefs_win.card_lines().join("\n")
+                )
+            }
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
             "license" => self.license_dump(),
