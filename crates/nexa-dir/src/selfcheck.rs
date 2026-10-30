@@ -193,6 +193,7 @@ pub(crate) fn run(opts: &Options) -> Report {
             "pty" => check_pty(&mut r),
             "fonts" => check_fonts(&mut r),
             "preview" => check_preview(&mut r),
+            "archive" => check_archive(&mut r),
             "plugin" => check_plugin(&mut r),
             other => r.items.push(Item {
                 group: other,
@@ -641,6 +642,60 @@ fn check_preview(r: &mut Report) {
                 Verdict::Fail,
                 format!("no thumbnail (qlmanage exit {:?})", st.code()),
             ),
+        }
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 압축(T-54 · 3-OS · 10-31): 임시 파일 하나를 내장 zip 작성기(`ndir_vfs::archive::zipwrite`)로 묶고 내장 압축 공급자(`builtin.archive`)가
+/// 그 항목을 돌려주는지(쓰기 → 읽기 왕복 · 외부 아카이버 없음).
+fn check_archive(r: &mut Report) {
+    let dir = std::env::temp_dir().join(format!("ndir-selfcheck-archive-{}", unique_tag()));
+    let _ = std::fs::create_dir_all(&dir);
+    let src = dir.join("probe.txt");
+    let _ = std::fs::write(&src, b"ndir archive probe\n");
+    let zip = dir.join("probe.zip");
+    timed(r, "archive", "zip write + list round trip", || {
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let rep = match ndir_vfs::archive::zipwrite::write_zip(
+            std::slice::from_ref(&src),
+            &zip,
+            &mut |_| {},
+            &cancel,
+        ) {
+            Ok(rep) => rep,
+            Err(e) => return (Verdict::Fail, format!("write_zip: {e}")),
+        };
+        let (doc, id) = crate::preview::preview_for(&zip, "", "");
+        match doc {
+            crate::preview::PreviewDoc::Archive(a)
+                if a.listing
+                    .entries
+                    .iter()
+                    .any(|e| e.path.ends_with("probe.txt")) =>
+            {
+                (
+                    Verdict::Pass,
+                    format!(
+                        "{id} · {} entr{} · {rep:?}",
+                        a.listing.entries.len(),
+                        if a.listing.entries.len() == 1 {
+                            "y"
+                        } else {
+                            "ies"
+                        }
+                    ),
+                )
+            }
+            crate::preview::PreviewDoc::Archive(a) => (
+                Verdict::Fail,
+                format!(
+                    "{id}: probe.txt not listed ({} entries · {:?})",
+                    a.listing.entries.len(),
+                    a.status
+                ),
+            ),
+            other => (Verdict::Fail, format!("{id}: unexpected doc {other:?}")),
         }
     });
     let _ = std::fs::remove_dir_all(&dir);
