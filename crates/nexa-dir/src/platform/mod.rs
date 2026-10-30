@@ -1665,6 +1665,18 @@ pub(crate) struct WtProfile {
     pub cursor_height: Option<u8>,
     /// 격자 여백(DIP · 왼·위·오·아래 · `padding` = 수 하나 · "l, t, r, b" · "lr, tb").
     pub padding: Option<[f32; 4]>,
+    /// 글꼴 크기의 **DIP 값**(px @1x) — OS 단위가 다를 때 포트가 환산해 둔다: Windows Terminal pt(96 dpi) = 비움(→ `size_pt`×96/72) ·
+    /// macOS NSFont pointSize = 이미 DIP라 그대로(10-31 실기 · 14 pt가 18.7 DIP로 1.33배 커지던 결함). 표시는 `size_pt`("14 pt").
+    pub size_px: Option<f32>,
+}
+
+impl WtProfile {
+    /// 터미널 격자가 쓸 글꼴 크기(DIP · px @1x): `size_px`가 있으면 그것 · 없으면 `size_pt`를 96 dpi pt로 보고 ×96/72 · 둘 다 없으면 None
+    /// (= 설정 `term.font_size`).
+    pub(crate) fn size_dip(&self) -> Option<f32> {
+        self.size_px
+            .or_else(|| self.size_pt.map(|pt| pt * 96.0 / 72.0))
+    }
 }
 
 /// Windows Terminal `padding` 값 → DIP 여백 [왼, 위, 오, 아래](순수 · T-101 · 10-26): 수 하나 = 넷 다 · "a, b" = 좌우 a · 상하 b ·
@@ -1819,6 +1831,7 @@ pub(crate) fn parse_wt_settings(text: &str) -> Option<WtProfile> {
                     .and_then(|p| get(p, "padding"))
                     .and_then(wt_padding)
             }),
+        size_px: None,
     })
 }
 
@@ -1918,6 +1931,7 @@ pub(crate) fn system_terminal_profile() -> Option<WtProfile> {
             cursor_shape: None,
             cursor_height: None,
             padding: None,
+            size_px: None,
         })
     }
     #[cfg(not(any(
@@ -1971,6 +1985,8 @@ pub(crate) fn macos_terminal_profile() -> Option<WtProfile> {
         cursor_shape: None,
         cursor_height: None,
         padding: None,
+        // NSFont pointSize = DIP(72 기준 논리 좌표) — WT pt처럼 ×96/72 하면 1.33배 커진다(협업 판정 10-31 §4).
+        size_px: Some(size),
     })
 }
 
@@ -2078,7 +2094,35 @@ mod tests {
                 p.size_pt.is_some_and(|s| (4.0..=200.0).contains(&s)),
                 "{p:?}"
             );
+            assert_eq!(p.size_dip(), p.size_pt, "macOS = pointSize가 곧 DIP");
         }
+    }
+
+    /// 글꼴 크기 단위(순수): WT pt 12 → 16 DIP · macOS pointSize 14(= size_px) → 14 DIP · 둘 다 없음 → None.
+    #[test]
+    fn wt_profile_size_dip_units() {
+        let base = WtProfile {
+            faces: vec![],
+            size_pt: None,
+            scheme: None,
+            commandline: None,
+            cursor_shape: None,
+            cursor_height: None,
+            padding: None,
+            size_px: None,
+        };
+        assert_eq!(base.size_dip(), None);
+        let wt = WtProfile {
+            size_pt: Some(12.0),
+            ..base.clone()
+        };
+        assert_eq!(wt.size_dip(), Some(16.0));
+        let mac = WtProfile {
+            size_pt: Some(14.0),
+            size_px: Some(14.0),
+            ..base
+        };
+        assert_eq!(mac.size_dip(), Some(14.0));
     }
 
     fn spec(p: &str) -> ShellSpec {

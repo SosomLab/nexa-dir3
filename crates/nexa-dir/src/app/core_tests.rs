@@ -3875,6 +3875,7 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
         cursor_shape: None,
         cursor_height: None,
         padding: None,
+        size_px: None,
     });
     let forced = app.prefs_forced();
     assert_eq!(forced.len(), 1, "크기는 프로필이 줄 때만(Windows Terminal)");
@@ -3928,6 +3929,7 @@ fn forced_settings_show_effective_value_and_keep_user_value() {
             cursor_shape: None,
             cursor_height: None,
             padding: None,
+            size_px: None,
         });
         let linux_like = app.term_style();
         assert_eq!(
@@ -10895,6 +10897,7 @@ fn terminal_follows_windows_terminal_scheme_and_commandline() {
         cursor_shape: None,
         cursor_height: None,
         padding: None,
+        size_px: None,
     });
     let _ = app.settings.set("term.follow_windows_terminal", "on");
     let _ = app.settings.set("term.theme", "system");

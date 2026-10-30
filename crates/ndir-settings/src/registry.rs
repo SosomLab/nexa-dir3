@@ -1854,7 +1854,8 @@ pub const REGISTRY: &[Entry] = &[
         Choice(TERM_COPY_OPTS),
         "text"
     ),
-    // Windows Terminal 따라가기(dir3 신규 · DR-21): 켜면 그 기본 프로필의 글꼴 목록·크기를 터미널 도크에 쓴다(Windows · 없으면 무시).
+    // 시스템 기본 터미널 따라가기(dir3 신규 · DR-21 · 키 이름은 설정 호환으로 유지): Windows = Windows Terminal 기본 프로필 글꼴·크기 ·
+    // Linux = 데스크톱 고정폭 글꼴 이름 · macOS = Terminal.app 기본 프로필 글꼴·크기(10-31) · 없으면 무시.
     e!(
         "term.follow_windows_terminal",
         CAT_TERMINAL,

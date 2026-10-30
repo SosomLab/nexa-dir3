@@ -168,14 +168,12 @@ impl App {
             {
                 // 크기: 따르는 프로필이 주면 그 pt → DIP · 그 밖(Linux · 따르지 않음)은 설정 `term.font_size`(em) — 어느 쪽이든
                 // **그 고정폭 글꼴의** 지표로 px를 구한다(본문 글꼴 지표로 환산하면 글꼴마다 실제 크기가 달라진다).
+                // 단위 환산은 포트의 몫(`WtProfile::size_dip` — WT pt×96/72 · macOS pointSize 그대로 · DR-5).
                 let em = self
                     .wt_profile
                     .as_ref()
-                    .and_then(|wt| wt.size_pt)
-                    .map_or_else(
-                        || self.settings.font_px("term.font_size"),
-                        |pt| pt * 96.0 / 72.0,
-                    );
+                    .and_then(|wt| wt.size_dip())
+                    .unwrap_or_else(|| self.settings.font_px("term.font_size"));
                 let target = mono.em_to_px(em);
                 let mult =
                     (self.ui_font.digit_height(100.0) / mono.digit_height(100.0)).clamp(0.75, 1.15);
