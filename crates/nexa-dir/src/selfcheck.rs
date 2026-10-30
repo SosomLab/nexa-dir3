@@ -864,7 +864,8 @@ mod tests {
         assert!(fails.is_empty(), "{fails:?}");
     }
 
-    /// ctxmenu 그룹은 OS가 아니라 공급자로 가른다(T-131 · 10-18): Windows 셸·Linux xdg = 행/배경 항목 실제 점검 · macOS = SKIP 1건.
+    /// ctxmenu 그룹은 OS가 아니라 공급자로 가른다(T-131 · 10-18): Windows 셸 · Linux xdg · macOS `macmenu`(10-31) = 행/배경 항목 실제 점검
+    /// (공급자가 없는 OS = SKIP 1건 — 지금은 없음 · `Unsupported` 분기만 남아 있다).
     #[test]
     fn ctxmenu_group_probes_where_a_provider_exists() {
         let _g = crate::platform::os_test_guard();
@@ -875,7 +876,7 @@ mod tests {
         });
         assert!(r.items.iter().all(|i| i.group == "ctxmenu"));
         assert_eq!(r.failed(), 0, "{}", r.to_table());
-        if cfg!(target_os = "macos") {
+        if !cfg!(any(windows, unix)) {
             assert_eq!(r.items.len(), 1, "{}", r.to_table());
             assert!(r.items.iter().all(|i| i.verdict == Verdict::Skip));
         } else {

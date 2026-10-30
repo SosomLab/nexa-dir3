@@ -90,6 +90,7 @@ objc2-app-kit = { version = "0.2", features = [
     "NSView",
     "NSGraphics",
     "NSPasteboard",
+    "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.2", features = [
     "NSString",
@@ -101,4 +102,5 @@ objc2-foundation = { version = "0.2", features = [
     "NSURL",
     "NSError",
     "NSFileManager",
+    "NSBundle",
 ] }

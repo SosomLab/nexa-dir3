@@ -26,6 +26,8 @@ mod linuxwatch;
 #[cfg(target_os = "macos")]
 mod macclip;
 #[cfg(target_os = "macos")]
+mod macmenu;
+#[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
 mod macwatch;
@@ -1571,10 +1573,12 @@ impl Platform {
         let pty: Box<dyn Pty> = Box::new(unixpty::ForkPty);
         #[cfg(windows)]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(winshell::NativeShellMenu::new());
-        // Linux = 앱 연결(MimeApps)로 만든 항목(1차) · macOS = 아직 없음(앱 메뉴만).
+        // Linux = 앱 연결(MimeApps)로 만든 항목(1차) · macOS = LaunchServices 앱 + Finder 항목(`macmenu` · 10-31 · 같은 `xdg.*` 어휘).
         #[cfg(all(unix, not(target_os = "macos")))]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(linux::XdgMenu::default());
-        #[cfg(not(any(windows, all(unix, not(target_os = "macos")))))]
+        #[cfg(target_os = "macos")]
+        let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(macmenu::MacMenu::default());
+        #[cfg(not(any(windows, unix)))]
         let ctxmenu: Box<dyn ContextMenuProvider> = Box::new(Unsupported);
         #[cfg(windows)]
         let watcher: Box<dyn Watcher> = Box::new(winwatch::NativeWatcher::new());
@@ -1625,10 +1629,10 @@ pub(crate) fn has_dotfile_toggle() -> bool {
     !ndir_vfs::DOT_IS_HIDDEN
 }
 
-/// 셸 컨텍스트 메뉴 항목이 **고정 집합**(freedesktop xdg · T-131)이라 순서/표시 편집(`ctxmenu.layout` `xdg`·`xdgbg` 블록)이 뜻이
-/// 있는 OS인가 — Linux만. Windows 셸 확장 항목은 동적이라 편집 대상이 아니다.
+/// 셸 컨텍스트 메뉴 항목이 **고정 집합**(freedesktop xdg · T-131 · macOS `macmenu` 10-31 — 같은 `xdg.*` 어휘)이라 순서/표시 편집
+/// (`ctxmenu.layout` `xdg`·`xdgbg` 블록)이 뜻이 있는 OS인가 — Linux · macOS. Windows 셸 확장 항목은 동적이라 편집 대상이 아니다.
 pub(crate) fn has_xdg_menu() -> bool {
-    cfg!(target_os = "linux")
+    cfg!(any(target_os = "linux", target_os = "macos"))
 }
 
 /// 바로 가기 파일의 확장자를 이름에서 숨기는 OS인가(GAP-006) — Windows 탐색기는 `.lnk` · `.url` · `.appref-ms`를
@@ -2305,8 +2309,8 @@ mod tests {
             Ok(0),
             "빈 목록 = 0(3-OS 휴지통 구현 존재)"
         );
-        // Windows = 셸 메뉴 · Linux = 앱 연결 메뉴(빈 입력 = 빈 목록) · macOS = 아직 없음(Unsupported).
-        if cfg!(any(windows, all(unix, not(target_os = "macos")))) {
+        // Windows = 셸 메뉴 · Linux = 앱 연결 메뉴 · macOS = LaunchServices 메뉴(10-31)(빈 입력 = 빈 목록) · 그 밖 = Unsupported.
+        if cfg!(any(windows, unix)) {
             assert_eq!(
                 p.ctxmenu.items(&[]).map(|v| v.len()),
                 Ok(0),
