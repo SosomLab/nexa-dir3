@@ -726,15 +726,15 @@ impl Tree {
         if prefix.is_empty() || n == 0 {
             return None;
         }
-        let lower = prefix.to_lowercase();
+        let lower = ndir_core::nfc::compose(prefix).to_lowercase();
         // 노드 이름을 통째로 소문자화(힙 할당)하지 않고 접두사 길이만큼만 문자 단위 비교 —
         // 키 입력마다 가시 행 전체를 스캔하는 인터랙티브 경로라 할당 제로가 중요.
+        // NFD 이름(macOS HFS+/SMB · 10-31 사용자 "NFD 파일이 검색에 안 잡힘"): 분해형일 때만 NFC로 합성(그 행만 할당 1) —
+        // NFC로 친 글자가 분해형 이름에도 맞게. 그 밖 행은 종전 할당 0 경로(`compose` = 빌림).
         let starts = |idx: usize| -> bool {
             let id = self.visible[idx];
-            let mut name = self.nodes[id as usize]
-                .name
-                .chars()
-                .flat_map(char::to_lowercase);
+            let composed = ndir_core::nfc::compose(&self.nodes[id as usize].name);
+            let mut name = composed.chars().flat_map(char::to_lowercase);
             lower.chars().all(|pc| name.next() == Some(pc))
         };
         let caret = caret.filter(|&c| c < n);
@@ -2148,6 +2148,32 @@ mod tests {
         // 없는 접두사 → None, 빈 접두사 → None
         assert_eq!(t.find_prefix(None, "z", FindScope::VisibleStream), None);
         assert_eq!(t.find_prefix(Some(1), "", FindScope::VisibleStream), None);
+    }
+
+    /// NFD 이름(10-31): 분해형 "도곡.txt"는 NFC로 친 "도"에도, 분해형 글에도 잡힌다(APFS·NTFS·ext4 모두 바이트 보존).
+    #[test]
+    fn find_prefix_matches_nfd_names_with_nfc_prefix() {
+        let base = std::env::temp_dir().join(format!("nexa_tree_ta_nfd_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let nfd = "\u{1103}\u{1169}\u{1100}\u{1169}\u{11A8}.txt";
+        fs::write(base.join(nfd), b"a").unwrap();
+        fs::write(base.join("zeta.txt"), b"z").unwrap();
+        let t = Tree::open(&base).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+        let idx = names(&t).iter().position(|n| n.starts_with('\u{1103}'));
+        assert!(
+            idx.is_some(),
+            "분해형 이름이 바이트 그대로 보존돼야 시험이 의미 있다: {:?}",
+            names(&t)
+        );
+        assert_eq!(t.find_prefix(None, "도", FindScope::VisibleStream), idx);
+        assert_eq!(t.find_prefix(None, "도곡", FindScope::VisibleStream), idx);
+        assert_eq!(
+            t.find_prefix(None, "\u{1103}\u{1169}", FindScope::VisibleStream),
+            idx
+        );
+        assert_eq!(t.find_prefix(None, "돌", FindScope::VisibleStream), None);
     }
 
     #[test]

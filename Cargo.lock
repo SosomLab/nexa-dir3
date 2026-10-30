@@ -822,6 +822,7 @@ version = "0.27.0"
 name = "ndir-ops"
 version = "0.27.0"
 dependencies = [
+ "ndir-core",
  "regex-lite",
 ]
 

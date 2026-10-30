@@ -75,7 +75,9 @@ fn lower_chars(s: &str) -> Vec<char> {
 
 /// 글 + 토글 → 판정기. `Ok(None)` = 빈 글(필터 끔) · `Err(msg)` = 정규식 오류.
 pub fn compile(spec: &str, opts: FilterOpts) -> Result<Option<NameMatcher>, String> {
-    let text = spec.trim();
+    // NFD(분해형) 글은 NFC로 합성해 둔다(10-31 · 이름 쪽도 `matches`에서 합성 — 정규화만 다른 이름이 빠지지 않게).
+    let composed = crate::nfc::compose(spec.trim());
+    let text: &str = &composed;
     if text.is_empty() {
         return Ok(None);
     }
@@ -133,6 +135,9 @@ impl NameMatcher {
     /// 이름이 조각 중 하나에 맞는가(조각 = 낱말 전부 포함 · 토글이 켜졌으면 정규식).
     #[must_use]
     pub fn matches(&self, name: &str) -> bool {
+        // macOS HFS+/SMB에서 온 NFD 이름(10-31 사용자 "NFD 파일이 검색 결과에 안 보임"): 비교 전에 NFC로 합성한다(이미 NFC면 빌림 · 할당 0).
+        let composed = crate::nfc::compose(name);
+        let name: &str = &composed;
         self.rules.iter().any(|r| match r {
             Rule::Rx(rx) => rx.is_match(name),
             Rule::Words(ws) => {
@@ -410,5 +415,33 @@ mod tests {
             .tag(),
             "cr"
         );
+    }
+
+    /// NFD 이름(macOS HFS+/SMB · 10-31): NFC 글로 걸러도 맞아야 한다 — 낱말 · 자모 · 정규식 경로 모두, 글 쪽이 NFD여도 같다.
+    #[test]
+    fn nfd_names_match_nfc_query_and_vice_versa() {
+        // "도곡" = 도(ᄃ+ᅩ) 곡(ᄀ+ᅩ+ᆨ) 분해형.
+        let nfd = "\u{1103}\u{1169}\u{1100}\u{1169}\u{11A8}로77길.m4a";
+        let nfc = "도곡로77길.m4a";
+        let m = compile("도곡", FilterOpts::default()).unwrap().unwrap();
+        assert!(m.matches(nfc) && m.matches(nfd), "낱말(자모 퍼지)");
+        let m = compile("도ㄱ", FilterOpts::default()).unwrap().unwrap();
+        assert!(m.matches(nfd), "자모 퍼지(타자 중 '도ㄱ')도 NFD 이름에");
+        let m = compile(
+            "도곡",
+            FilterOpts {
+                case: true,
+                ..FilterOpts::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(m.matches(nfd), "정규식 경로");
+        let m = compile("\u{1103}\u{1169}", FilterOpts::default())
+            .unwrap()
+            .unwrap();
+        assert!(m.matches(nfc) && m.matches(nfd), "글 쪽이 NFD");
+        let m = compile("삼성", FilterOpts::default()).unwrap().unwrap();
+        assert!(!m.matches(nfd), "다른 이름은 여전히 제외");
     }
 }

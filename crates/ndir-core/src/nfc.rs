@@ -1,7 +1,8 @@
-//! 유니코드 정규화(NFC 표시 · NFD 식별 · 변환 계획 · 10-18 사용자 "맥에서 NFD 이름의 자모가 깨져 보임" · ndir-ops에 두는 이유 = 이름 바꾸기 엔진
-//! `batch_rename::apply_renames`가 "정규화만 다른 이름"을 같은 항목으로 판정해야 한다(APFS 정규화 둔감)): 외부 crate 0(DR-8) · 범위 =
+//! 유니코드 정규화(NFC 표시 · NFD 식별 · 변환 계획 · 10-18 사용자 "맥에서 NFD 이름의 자모가 깨져 보임" · ndir-core(공통 바닥)에 두는 이유 = 이름 바꾸기 엔진
+//! ndir-ops `batch_rename::apply_renames`가 "정규화만 다른 이름"을 같은 항목으로 판정해야 한다(APFS 정규화 둔감)): 외부 crate 0(DR-8) · 범위 =
 //! **한글 자모 합성**(알고리즘 · 표 없음)과 **라틴 글자 + 결합 기호 전부**(ASCII 글자 × U+0300~036F 중 NFC가 한 글자가 되는 쌍 · 2단계 포함 ·
 //! 생성 표 · 10-25). Finder는 모든 이름을 정규화해 보이고, HFS+/SMB에서 온 NFD 이름은
+//! ★ 10-31 ndir-ops → ndir-core로 이동(ndir-tree 타입어헤드 `find_prefix` · ndir-ops 필터도 써야 해서 · `ndir_ops::nfc` 재수출로 종전 경로 유지).
 //! 다른 앱에서 자모가 흩어져 보인다 → 설정 `list.nfc_display`(켬 = 합성해 표시) · 상태 열 "NFD" 표식 · 행 메뉴 "이름을 NFC로 변환".
 
 use std::borrow::Cow;

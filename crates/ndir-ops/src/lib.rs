@@ -13,7 +13,10 @@ pub mod fastcopy;
 pub mod hash;
 pub mod history;
 pub mod namefilter;
-pub mod nfc;
+/// 유니코드 정규화 — 10-31 ndir-core로 옮김(ndir-tree도 씀) · 종전 경로 `ndir_ops::nfc::*` 유지.
+pub mod nfc {
+    pub use ndir_core::nfc::*;
+}
 
 use std::fs;
 use std::io;
