@@ -208,7 +208,8 @@ pub(crate) fn xdg_layout_key(id: &str) -> Option<&str> {
 }
 
 /// 셸 항목 목록에 순서/표시를 적용(순수): `layout`(키 · 표시)의 순서대로 · 숨긴 키는 뺀다 · xdg가 아닌 항목(Windows 셸)은 그대로 ·
-/// 구분선은 버리고 `openwith` 묶음 뒤에 하나만 다시 넣는다. `layout`이 비면 그대로.
+/// 구분선은 버리고 `openwith` 묶음 뒤에 하나만 다시 넣는다. `layout`이 비면 그대로. **레이아웃이 모르는 xdg 키**(이 OS 블록 정의에 없는
+/// 항목 — 10-31 macOS 집합이 Linux보다 작아짐)는 숨긴 것이 아니므로 뒤에 그대로 남긴다.
 pub(crate) fn apply_xdg_layout<T, F>(
     items: Vec<T>,
     layout: &[(String, bool)],
@@ -248,6 +249,19 @@ where
             out.push(sep.clone());
         }
     }
+    // 레이아웃에 없는 xdg 키 = 모르는 항목 → 순서 뒤에 보존(숨김과 구별).
+    let known: Vec<&str> = layout.iter().map(|(k, _)| k.as_str()).collect();
+    let unknown: Vec<T> = items
+        .iter()
+        .filter(|it| {
+            id_of(it)
+                .as_deref()
+                .and_then(xdg_layout_key)
+                .is_some_and(|k| !known.contains(&k))
+        })
+        .cloned()
+        .collect();
+    out.extend(unknown);
     // 끝이 구분선이면 뗀다(openwith만 남은 경우).
     if out.last().is_some_and(|it| id_of(it).is_none()) {
         out.pop();
@@ -421,6 +435,18 @@ mod tests {
 
     /// T-131 잔여: xdg 항목 키 매핑 · 순서/표시 적용(순서 = layout · 숨김 제외 · openwith 뒤 구분선 하나 · 비xdg 목록은 그대로 ·
     /// 빈 layout = 그대로) · 블록 정의는 xdg OS만 셸 블록 포함.
+    /// 레이아웃이 모르는 xdg 키(이 OS 블록에 없음 · 예: macOS 집합에서 `compress`)는 숨김이 아니라 **보존**(뒤에) · 숨긴 키(vis=false)는 뺀다.
+    #[test]
+    fn apply_xdg_layout_keeps_unknown_keys() {
+        let items: Vec<String> = ["xdg.openwith", "xdg.compress", "xdg.props", "edit.copy"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let layout = vec![("props".to_string(), true), ("openwith".to_string(), false)];
+        let out = apply_xdg_layout(items, &layout, |s| Some(s.clone()), "-".to_string());
+        assert_eq!(out, vec!["xdg.props", "xdg.compress"]);
+    }
+
     #[test]
     fn xdg_layout_apply_and_blocks() {
         assert_eq!(xdg_layout_key("xdg.app:foo.desktop"), Some("openwith"));
