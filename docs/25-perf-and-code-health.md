@@ -24,7 +24,7 @@
 | D2 | 기동 | `--smoke`(창 없는 기동 경로) 벽시계 중앙값 · **창이 보일 때까지** + 안정 뒤 CPU/Private | perf-baseline ① · `win-startup-probe.ps1`(§5-2) |
 | D3 | 자가 점검 그룹별 ms | `--selfcheck --ci --json` 그룹 합(ctxmenu · license · fs …) | perf-baseline ③ |
 | D4 | 파일 작업 | `--selfcheck --ci --only fs` 벽시계(생성·복사·이름·삭제 + 감시 통지) · 대량 전송 = [24](24-fast-copy.md) T6 | perf-baseline ② · `membench.ps1` |
-| D5 | 상주 메모리 | 유휴 Private · 워킹셋 · 전용 워킹셋(작업 관리자 기준) · 핸들 · GDI · USER · 스레드 | 메모리 창 · `mem.dump:<파일>` · win-leak-cycle `base` 행 · 10-08 d1090cf: `mem.dump` 둘째 줄 `rt image_private · heaps_other · stacks · modules · threads`(Windows VirtualQuery + GetProcessHeaps · 다른 OS 0) = 메모리 창 "런타임·라이브러리·미집계" 분해 4행(DLL 전용 페이지 · 라이브러리 힙 · 스레드 스택 · 그 밖) + "모듈 N · 스레드 M" · ⚠ macOS/Linux: `mem.dump`·메모리 창의 Fonts · TermFont = 매핑 파일 크기 전체(`procmem::resident_bytes` = None → 매핑 길이 · 10-31 §9 실측 release footprint 50 MB인데 Fonts 97 MB + TermFont 91 MB · 처방 후보 = `mincore`) · `rt image_private … threads` 줄 = Windows 전용(다른 OS 0) |
+| D5 | 상주 메모리 | 유휴 Private · 워킹셋 · 전용 워킹셋(작업 관리자 기준) · 핸들 · GDI · USER · 스레드 | 메모리 창 · `mem.dump:<파일>` · win-leak-cycle `base` 행 · 10-08 d1090cf: `mem.dump` 둘째 줄 `rt image_private · heaps_other · stacks · modules · threads`(Windows VirtualQuery + GetProcessHeaps · 다른 OS 0) = 메모리 창 "런타임·라이브러리·미집계" 분해 4행(DLL 전용 페이지 · 라이브러리 힙 · 스레드 스택 · 그 밖) + "모듈 N · 스레드 M" · ⚠ macOS/Linux: `mem.dump`·메모리 창의 Fonts · TermFont = 매핑 파일 크기 전체(종전 `procmem::resident_bytes` = None → 매핑 길이 · 10-31 §9 실측 release footprint 50 MB인데 Fonts 97 MB + TermFont 91 MB → **4a2c6b0 `mincore(2)`로 해소** · 판정 Fonts 8.3 MB · TermFont 5.4 MB) · `rt image_private … threads` 줄 = Windows 전용(다른 OS 0) |
 | D6 | 누수 | 같은 동작 N주기 뒤 절반 기울기(MB/주기) · 핸들 증가 | win-leak-cycle |
 | D7 | 회수 | 큰 작업 뒤 힙 반납(`mem_after_job` · [힙 정리] · 유휴 트림) — 기준 → 올림 → 놓음 → 트림 뒤 **4점** | `win-mem-reclaim.ps1`(§5-3 · `mem.dump` 4회) · 메모리 창(실기) · 10-08 d1090cf: [힙 정리](`Cmd::Release`) 뒤 `CoFreeUnusedLibrariesEx`(셸 확장 DLL 해제) · 유휴 트림 `image_cache.evict_to(4 MB)` · 단계 측정 = 협업 세션 memscen(base → 16탭 → nav30 → select30 → rclick → preview → terminal → back → trimmed · §8-2) |
 | D8 | 벤치 | 해시 5종 병렬(T-175) · 압축 풀기 스트리밍(T-179 D) | `cargo test --release -- --ignored bench_` |
@@ -96,7 +96,7 @@ pwsh -NoProfile -File scripts/win-leak-cycle.ps1 -HomeDir C:\tmp\ndir-leak -Firs
 
 - 주기 i의 동작을 주기 앞 60 %에 고르게 놓고 뒤 40 %는 쉬게 둔 뒤 그 끝에서 Private · WS · 핸들 · GDI · USER · 스레드를 찍는다. 마지막 측정 뒤 `quit`으로 스스로 끝난다(이름으로 죽이지 않는다 · 18 §10).
 - 판정 = `slope(last half)`(MB/주기) · 핸들 증감 · `OK`/`WARN`(§3). 첫 1~2주기 상승은 캐시 · 글리프 적재(정상).
-- Linux · macOS 실행기는 T-176 ⑤(후속) — 같은 기동 명령으로 `ps -o rss,nlwp` 표본.
+- Linux · macOS 실행기 = §5-6 `scripts/unix-perf.sh`(T-176 ⑤ · 10-31).
 
 ### 5-2. 창 기동 프로브(`scripts/win-startup-probe.ps1`)
 
@@ -136,6 +136,30 @@ python scripts/frame-stats.py /tmp/frames.log [--warm 2] [--json]
 ### 5-5. 주소 공간 분류(`scripts/win-addrspace.ps1` · Windows · 읽기 전용 · d25e24e)
 
 - 실행 중 프로세스의 주소 공간을 VirtualQuery로 훑어 종류별(이미지 전용 페이지 · 힙 · 스레드 스택 · 그 밖 private 등)로 합산한다 — 메모리 창 "런타임·라이브러리·미집계" 분해(`rt` 줄)를 바깥에서 대조할 때. 대상 프로세스를 바꾸지 않는다(측정 전용).
+
+### 5-6. Linux · macOS 프로브(`scripts/unix-perf.sh` · T-176 ⑤ · d597bfe · 입력 주입 0)
+
+§5 · §5-2 · §5-3의 Windows PowerShell 프로브 3종을 Unix에서 같은 열 이름으로 잰다(bash + python3 + perl `Time::HiRes` · 외부 도구 0 · 격리 `NDIR_HOME` · 자기 PID만 종료).
+
+```bash
+scripts/unix-perf.sh startup --home /tmp/ndir-probe [--exe target/release/nexa-dir] [--runs 5] [--settle 3] [--cmd "nav:/usr/lib"]
+scripts/unix-perf.sh leak    --home /tmp/ndir-leak --cycle-cmds "nav:/usr/lib;nav:/tmp" [--cycles 10] [--period-ms 4000]
+scripts/unix-perf.sh reclaim --home /tmp/ndir-reclaim --raise "nav:/usr/lib" --release "nav:/tmp" [--settle-ms 3000] [--trim-sec 5]
+```
+
+| 열 | Windows ps1 | Linux | macOS |
+| --- | --- | --- | --- |
+| `window_ms` | `MainWindowHandle`이 생길 때까지 | `@ready:layout.dump` 파일 mtime − 기동 시각(첫 프레임 + 초기 열거 뒤 · OS API 없음) | 같음 |
+| `cpu_ms` | `TotalProcessorTime` | `/proc/PID/stat` utime + stime ÷ `CLK_TCK` | `ps -o time=`(분:초.센티초) |
+| `priv_mb` | Private Bytes | 앱 `mem.dump` 첫 줄(resident − shared) | 앱 `mem.dump` 첫 줄 `footprint`(task_info phys_footprint = 활동 모니터 "메모리") |
+| `ws_mb` | 워킹셋 | `ps -o rss=` | `ps -o rss=`(공유 페이지 포함 · 비교는 같은 OS끼리) |
+| `fds` | 핸들 | `/proc/PID/fd` 개수 | `lsof -p PID` 줄 수(느림 · 약 100 ms) |
+| `threads` | 스레드 | `ps -o nlwp=` | `ps -M -p PID` 줄 수 − 1(BSD ps에는 `nlwp`가 없다) |
+
+- 판정 기준은 §3과 같다(기동 +20 % · 상주 +5 %/+1 MB · 누수 = 뒤 절반 기울기 ≤ 0.5 MB/주기 · 회수 = ④ − ① ≤ +1 MB 또는 +5 %). 숫자는 **release**로 잰다(debug = 참고).
+- 한계: 다른 PC · 다른 화면 배율(Retina 2.00 = 표면이 4배)끼리는 비교하지 않는다. gate · 빌드와 동시에 돌리면 CPU 경합으로 `window_ms` · `cpu_ms`가 흔들린다. macOS `lsof`는 수십~백 ms라 `fds`는 표본 시점이 조금 늦다.
+- **10-31 첫 실측(macOS x86_64 · release · gate 동시 실행 = 참고값 · journal 10-31 §10)**: startup 중앙값(3회) window 724 ms · cpu 1730 ms · priv 77.15 MB · ws 116 MB · fds 40 · threads 10 / leak(`nav:/usr/lib` ↔ `/tmp` × 3) 0.110 MB/주기 ok / reclaim(올림 `/usr/lib` · 놓음 `/tmp` · 트림 2 s) 기준 76.89 → 트림 뒤 47.88 MB(−29 MB) ok.
+- `mem.dump`의 Fonts · TermFont: Linux · macOS도 `mincore(2)`로 **상주 페이지만** 센다(4a2c6b0 · 종전 = 매핑 파일 크기 전체 · 10-31 §9 · §10). `rt image_private … threads` 줄은 Windows 전용 칸이다(다른 OS = 0).
 
 ## 6. 코드 건강 — `scripts/code-health.py`(nexa-sql docs/93 §3 차용 · 외부 패키지 0)
 

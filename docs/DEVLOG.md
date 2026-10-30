@@ -4,6 +4,10 @@
 
 ## 2026-10-31
 
+- **사고 2**: b4892d5가 수정 없이 push(amend 차단 → `git add` 누락 · 작업 트리로 gate 녹색) → eed5fed 회복 · 재발 방지 = 한 명령에 묶지 않기 · push 전 `git status` 비었는지 · amend 대신 후속 커밋 → [10-31 §11](journal/2026-10-31.md)
+
+- **4a2c6b0 Unix resident_bytes = mincore**(판정 Fonts 8.3 MB · TermFont 5.4 MB ✓) · **d597bfe `unix-perf.sh`**(T-176 ⑤ ✅ · docs/25 §5-6 · macOS 첫 실측) · b4892d5 + eed5fed 순서 편집기 macOS 집합 · NSDragging 발신 사전 분석 → [10-31 §10](journal/2026-10-31.md)
+
 - **b892a76 macOS 우클릭 메뉴 MacMenu**(xdg.* 어휘 · 번들 id · 기본 앱 + 다른 앱 ▸ · 터미널 · Finder · 정보) · 협업 판정 ✓(ctx.dump 4종 · Finder 선택) · 순서 편집기 Linux 전용 항목 노출(후보) · **TermFont 91 MB = 측정 착시**(Unix resident_bytes 미구현 · mincore 후보) · T-176 ⑤ 실행기 분석 → [10-31 §9](journal/2026-10-31.md)
 
 - **8d929f8 macOS 드래그 수식키 = Finder 규칙**(Option 복사 · Cmd 이동 · CG 포인터 폴링 · CI 41097478904 ✓) · **5e48780 번들(.app 등) = 파일처럼**(쉐브론 없음 · 실행 · 앱 아이콘 · 런처 · 드롭 = 부모 · 패키지 내용 보기 · GAP-025 ✅) · 협업 판정 ✓ · 사용자 실기 체크 7건 → [10-31 §8](journal/2026-10-31.md)
