@@ -459,10 +459,15 @@ impl App {
         let Some(txt) = clipboard::read_text() else {
             return false;
         };
+        self.term_write_text(i, &txt);
+        true
+    }
+
+    /// 터미널 i에 글 입력(붙여넣기·글자 드롭 공용 · 10-31): 줄바꿈 → `\r` · 보기 오프셋 0.
+    pub(crate) fn term_write_text(&mut self, i: usize, txt: &str) {
         let t = &mut self.terms[i];
         t.write(&txt.replace("\r\n", "\r").replace('\n', "\r"));
         t.view_off = 0;
-        true
     }
 
     pub(crate) fn term_select_all(&mut self) -> bool {

@@ -11126,6 +11126,46 @@ fn drop_onto_bundle_opens_with_app_instead_of_copying() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 글자 드롭 적용(T-147 잔여 · 10-31): 존재하는 폴더 글자 = 놓은 자리 패널이 그 폴더로 · 파일 글자 = 부모로 이동 + 선택 · 그 밖 글자(터미널 없음) =
+/// 상태줄 안내 · 플랫폼 큐는 macOS만이라 여기선 `apply_text_drop`을 직접 부른다.
+#[test]
+fn text_drop_navigates_selects_or_notes() {
+    use crate::app::textdrop::DropText;
+    let (mut app, dir) = fixture("textdrop");
+    std::fs::create_dir_all(dir.join("sub")).expect("sub");
+    std::fs::write(dir.join("sub/f.txt"), b"x").expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let b = app.panels[0].rows().bounds();
+    let at = Point {
+        x: b.x + 10,
+        y: b.y + 10,
+    };
+    let sub = dir.join("sub");
+    assert_eq!(
+        app.apply_text_drop(&format!("  {}  ", sub.display()), at),
+        DropText::Folder(sub.clone())
+    );
+    assert_eq!(app.panels[0].root_path(), sub, "폴더 글자 = 이동");
+    let f = sub.join("f.txt");
+    assert_eq!(
+        app.apply_text_drop(&format!("\"{}\"", f.display()), at),
+        DropText::File(f.clone())
+    );
+    assert_eq!(app.panels[0].root_path(), sub);
+    assert_eq!(
+        app.panels[0].selected_paths(),
+        vec![f],
+        "파일 글자 = 부모 + 선택"
+    );
+    assert_eq!(
+        app.apply_text_drop("hello\nworld", at),
+        DropText::Text("hello\nworld".into()),
+        "글 = 터미널 없음 → 안내"
+    );
+    assert_eq!(app.panels[0].root_path(), sub, "글은 이동하지 않는다");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 검색창 토글 툴팁 = 오버레이(10-31 사용자 macOS "툴팁이 안 보이거나 깜빡임"): 토글 위에 머물고 지연이 지나면 `popups_open` →
 /// `overlay_active` = 전체 프레임(부분 프레임의 클립에 잘리지 않게) · 벗어나면 다시 부분 가능.
 #[test]

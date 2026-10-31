@@ -37,6 +37,7 @@ pub(crate) mod slowclick;
 mod startup_cmd;
 pub(crate) mod statusline;
 pub(crate) mod term;
+pub(crate) mod textdrop;
 mod toasts;
 mod toolfloat;
 pub(crate) mod watch;

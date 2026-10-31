@@ -44,6 +44,11 @@ impl ApplicationHandler<Wake> for App {
         platform::set_opacity_pct(self.settings.int("window.transparency"));
         let _ = platform::apply_window_opacity(&win);
         self.drop_shared = platform::register_drop_target(&win);
+        // macOS 글자 드롭 수신(T-147 잔여 · 10-31): winit 창 델리게이트에 문자열 타입 등록 + IMP 감싸기(파일 우선 · 실패 = 조용히 종전).
+        #[cfg(target_os = "macos")]
+        if let Some(view) = crate::winfocus::ns_view_ptr(&win) {
+            platform::mactextdrop::install(view);
+        }
         {
             let mons: Vec<_> = win.available_monitors().collect();
             let place = self
@@ -118,6 +123,10 @@ impl ApplicationHandler<Wake> for App {
         self.pump_os_open_files(&mut inv);
         // macOS 훑어보기 패널 안 키(↑/↓/Space · T-187).
         if self.quick_look_keys_tick() {
+            self.redraw();
+        }
+        // macOS 글자 드롭(경로 = 이동 · 글 = 터미널 · T-147 잔여).
+        if self.text_drop_tick() {
             self.redraw();
         }
         // macOS Quick Look 썸네일(preview::quicklook)이 끝났으면 도크를 다시 계산해 그린다(10-18).

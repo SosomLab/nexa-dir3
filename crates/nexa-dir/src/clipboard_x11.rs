@@ -150,41 +150,9 @@ pub(crate) fn file_uri(path: &Path) -> String {
     s
 }
 
-/// `file://` URI → 경로(호스트 비움/`localhost`만 · 다른 스킴 = None · `%XX` 복원).
+/// `file://` URI → 경로(공용 `pathexpand::file_uri_path` · 10-31 글자 드롭도 쓴다).
 pub(crate) fn uri_path(uri: &str) -> Option<PathBuf> {
-    let rest = uri.trim().strip_prefix("file://")?;
-    let path = if let Some(p) = rest.strip_prefix("localhost/") {
-        format!("/{p}")
-    } else if rest.starts_with('/') {
-        rest.to_string()
-    } else {
-        return None; // 원격 호스트
-    };
-    let mut out: Vec<u8> = Vec::with_capacity(path.len());
-    let b = path.as_bytes();
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
-                out.push(h << 4 | l);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(b[i]);
-        i += 1;
-    }
-    let s = String::from_utf8_lossy(&out).into_owned();
-    (!s.is_empty()).then(|| PathBuf::from(s))
-}
-
-fn hex(c: u8) -> Option<u8> {
-    match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    }
+    crate::pathexpand::file_uri_path(uri)
 }
 
 /// `text/uri-list` 본문 → 경로들(`#` 주석 · 빈 줄 · 비파일 스킴 제외).

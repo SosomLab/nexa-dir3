@@ -535,6 +535,43 @@ fn root_prefix_len(base: &str, ctx: &Ctx) -> usize {
     usize::from(base.starts_with('\\') || base.starts_with('/'))
 }
 
+/// `file://` URI → 경로(호스트 비움/`localhost`만 · 다른 스킴 = None · `%XX` 복원) — X11 클립보드 · 글자 드롭 공용(10-31 clipboard_x11에서 이동).
+pub(crate) fn file_uri_path(uri: &str) -> Option<PathBuf> {
+    let rest = uri.trim().strip_prefix("file://")?;
+    let path = if let Some(p) = rest.strip_prefix("localhost/") {
+        format!("/{p}")
+    } else if rest.starts_with('/') {
+        rest.to_string()
+    } else {
+        return None; // 원격 호스트
+    };
+    let mut out: Vec<u8> = Vec::with_capacity(path.len());
+    let b = path.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let (Some(h), Some(l)) = (uri_hex(b[i + 1]), uri_hex(b[i + 2])) {
+                out.push(h << 4 | l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    let s = String::from_utf8_lossy(&out).into_owned();
+    (!s.is_empty()).then(|| PathBuf::from(s))
+}
+
+fn uri_hex(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
+    }
+}
+
 /// 운영 문맥으로 확장(실제 환경변수 · 홈 · 이 OS 규칙) — `pwd` = 이 패널의 현재 폴더(가상 최상위면 `None`).
 pub(crate) fn expand_native(input: &str, pwd: Option<&Path>) -> String {
     let env = |name: &str| std::env::var(name).ok();
