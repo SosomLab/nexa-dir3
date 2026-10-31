@@ -7,7 +7,7 @@
 
 - **목적**: 앱 · 명령행 · 다른 프로그램이 **같은 전송 엔진을 같은 규칙으로** 쓰게 한다. 작업을 **직렬화 가능한 한 덩어리(JobSpec)**로 표현해 저장 · 재실행 · 다른 프로세스 전달이 되게 하고, 진행과 결과도 기계가 읽는 모양(Progress · Report)으로 낸다.
 - **이번 회차(DR-34 ①⑦)**: ① 이 설계 문서 ② `ndir-xfer` rlib 골격 — JobSpec/Progress/Report 직렬화 · 복사 · 이동 · 검증 · 미러 4엔진 포장 · dry-run ③ `nexa-copy` `--job job.json` · `--progress`(JSON 줄). **cdylib은 다음 회차.**
-- **범위 밖(설계만 · §8)**: 작업 큐 · 최상위 항목 병렬 · 휴지통 미러 앱 배선(재개 · 속도 제한 · 이동 검증 · 내용 비교 미러는 T-202 ②③⑤⑦로 구현됨).
+- **범위 밖(설계만 · §8)**: 작업 큐 · 최상위 항목 병렬 · 앱 전송의 `ndir-xfer` 통합(재개 · 속도 제한 · 이동 검증 · 내용 비교 미러는 T-202 ②③⑤⑦로 구현됨).
 
 ## 2. 지금 있는 것(재사용 · 바꾸지 않는다)
 
@@ -69,7 +69,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `native` | `bool` | true | `--no-native` | |
 | `unbuffered_mb` | `u64`(Windows만 의미 · 0 = 끔) | **0** | `--unbuffered-mb` | 엔진 · 간단 인자와 같은 기본(docs/24 §6-2 "실측 손해라 기본 끔") — 초안 골격의 64를 협업 지적으로 0으로 맞춤(6b1a22d) |
 | `include` · `exclude` | `Vec<String>` 글롭 → `NameFilter` | `[]` | `--include` · `--exclude` | 규칙 = docs/24 §7(exclude 우선 · include는 파일만 · 대소문자 무시) |
-| `verify` | `bool` | false | `--verify` | 복사 = 끝난 뒤 대조(필터로 뺀 항목 제외) · **이동(T-202 ⑤) = 교차 볼륨만 원본 정리 전 대조**(`note: verified`) · 같은 볼륨 rename은 검증 안 함(`note: renamed on the same volume (not verified)`) · 이동이면 `rep.verify` 요약 없음 |
+| `verify` | `bool` | false | `--verify` | 복사 = 끝난 뒤 **실제로 옮긴 경로 목록** 대조(f745f3d · 필터로 뺀 항목 · 복사 중 신생 파일 제외) · **이동(T-202 ⑤) = 교차 볼륨만 원본 정리 전 대조**(`note: verified`) · 같은 볼륨 rename은 검증 안 함(`note: renamed on the same volume (not verified)`) · 이동이면 `rep.verify` 요약 없음 |
 | `mirror` | `bool` | false | `--mirror` | `sources` 1개 · 대상을 원본과 같게(새것/바뀐 것 복사 + 대상에만 있는 것 영구 삭제) |
 | `dry_run` | `bool` | false | `-n` | 파일 시스템 불변 · Report 항목 `status` = `planned` |
 | `yes` | `bool` | false | `--yes` | 미러 삭제 확인 — false면 지울 것이 있을 때 실행 안 하고 목록 + 오류 |
@@ -138,8 +138,8 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - **재개 ✅ T-202 ②(abc69f3 · §4 `journal` · `resume` · `ndir_xfer::resume`)** — 한계: 최상위 항목 단위 · 파일 중간 재개 없음(스테이징 교체가 원자적) · 폴더가 끊기면 그 폴더는 다시 돌고 `conflict: skip`이면 있는 파일을 건너뜀(`overwrite`면 다시 씀) · 그사이 원본이 바뀌어도 `done`이면 건너뜀(감지 안 함). cdylib = JobSpec 키라 자동 적용(ABI 1 불변).
 - **속도 제한 ✅ T-202 ③(071fc30 · §4 `max_bps` · `ndir_ops::fastcopy::Pacer` + `with_pacer(bps, f)` 스레드 지역 범위 · Tuning 필드 추가 없음)** — 실제 전송 지점(루프 · `copy_file_range` 청크 · `CopyFileExW`/`copyfile` 진행 콜백)에서 `on_bytes` 뒤 `pace` · 병렬은 작업 스레드 TLS에 같은 Pacer(Arc)를 걸어 **합계 기준** · 청크 = `Pacer::chunk_for`(¼초 분량 · 하한 64 KiB · 상한 기본) · 100 ms 조각으로 자며 `stop` 확인. 한계: ① 같은 파일 시스템 복제(FICLONE · clonefile · 블록 복제)는 순간이라 제한 없음 ② Windows · macOS 콜백 간격은 OS가 정해 덩어리질 수 있음(**실기 필요**) ③ 전역 `set_tuning`에는 제한 없음(`with_pacer` 범위만) · 검증 읽기 비제한.
 - **미러 내용 비교 ✅ T-202 ⑦(4f2f3ac · §4 `mirror_by_content` · `mirror_plan_with`)** — 엔진 `CmpOpts::by_content`를 쓰지 않고 필터 뒤 직접 해시(제외 파일 미해시). 판정 공용 `compare::content_verdict`(둘 다 읽혔고 같을 때만 Same · GAP-026).
-- **휴지통 미러 = Rust API만(4f2f3ac)**: `apply_mirror_with(plan, on_bytes, cancel, delete)` · `run_with(spec, on_progress, cancel, Option<DeleteFn>)`(`run` = None 위임 · 영구 삭제) — CLI · cdylib은 영구 삭제 그대로(ABI 1). **앱 배선 = T-202 ④ 작업 큐/진행 창 때**(휴지통 포트는 `platform/` · DR-5).
-- **이동 검증 ✅ T-202 ⑤(7b28766 · `ndir_ops::verify` · `fastcopy::with_move_verify(on, f)` 스레드 지역 · 기본 false = 경로 불변)** — `move_by_copy`가 원본 정리 **전** 대조: 폴더 = `copied` 목록의 파일만(필터로 뺀 항목은 없는 게 정상 · 링크 → 폴더 항목 제외) · 파일 = (src, dest) · 최상위 링크도 검증(metadata가 따라감) · 실패 = `InvalidData` + **부분 정리 없음**(원본 전부 유지 · 사본은 그 자리) · 검증 중 취소 = Interrupted · 원본 유지 · 검증 바이트는 `on_bytes`에 안 더함 · 저널 `done` = 검증 뒤. **경계**: `overwrite`면 스테이징 교체가 먼저라 검증 실패 시 옛 대상은 이미 없고 깨진 사본이 그 자리에 있다(원본은 유지 → 데이터 유실 아님). **동작 변경**: `--move --verify`는 종전 무시 → 검증(느려질 수 있음 · 실패 가능 · 릴리스 노트 대상).
+- **휴지통 미러 = Rust API만(4f2f3ac)**: `apply_mirror_with(plan, on_bytes, cancel, delete)` · `run_with(spec, on_progress, cancel, Option<DeleteFn>)`(`run` = None 위임 · 영구 삭제) — CLI · cdylib은 영구 삭제 그대로(ABI 1). **앱은 T-172로 이미 휴지통**(`compare.mirror_delete` · `trash_checked` · `ndir-xfer` 안 거침 · 11-01 §3) · `run_with(delete)` 경유 통합 = T-202 ④에서 앱 전송이 `ndir-xfer`로 옮겨 갈 때 함께(휴지통 포트는 `platform/` · DR-5).
+- **이동 검증 ✅ T-202 ⑤(7b28766 · `ndir_ops::verify` · `fastcopy::with_move_verify(on, f)` 스레드 지역 · 기본 false = 경로 불변)** — `move_by_copy`가 원본 정리 **전** 대조: 폴더 = 실제로 옮긴 경로 목록(f745f3d · 파일 = 크기 + SHA-256 · 폴더 = 존재 · 종류 · 링크 안쪽 · 빈 폴더 포함 · 필터로 뺀 항목 없음 · 원본 정리용 `copied`와 별개 — BUG-001 불변) · 파일 = (src, dest) · 최상위 링크도 검증(metadata가 따라감) · 실패 = `InvalidData` + **부분 정리 없음**(원본 전부 유지 · 사본은 그 자리) · 검증 중 취소 = Interrupted · 원본 유지 · 검증 바이트는 `on_bytes`에 안 더함 · 저널 `done` = 검증 뒤. **경계**: `overwrite`면 스테이징 교체가 먼저라 검증 실패 시 옛 대상은 이미 없고 깨진 사본이 그 자리에 있다(원본은 유지 → 데이터 유실 아님). **동작 변경**: `--move --verify`는 종전 무시 → 검증(느려질 수 있음 · 실패 가능 · 릴리스 노트 대상).
 
 | 기능 | 설계 | 걸림돌 |
 | --- | --- | --- |
@@ -155,6 +155,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - **속도 제한(071fc30)**: ndir-ops `pacer_limits_loop_and_parallel_copies`(8 × 128 KiB · 4스레드 ≥ 200 ms · 1 B/s stop < 1 s) · `Pacer::delay_for` 순수 판정 · ndir-xfer `max_bps_slows_transfer` · nexa-copy `parse_rate` · 프로세스 `max_bps_limits_copy_speed` — 실측 시험은 하한만 단언(흔들림 방지).
 - **미러 내용 비교(4f2f3ac)**: ndir-xfer `mirror_by_content_and_delete_callback`(기본 미러 유지 · by_content 덮어씀 · 해시 진행 · 삭제 콜백 · 제외 파일 미해시) · 프로세스 `mirror_by_content_overwrites_same_size_and_time` · ndir-ops `content_verdict_treats_unreadable_as_differ`(5경우).
 - **이동 검증(7b28766)**: ndir-ops `move_verify_checks_copies_before_cleanup`(통과 이동 · 불일치 = 오류 + 양쪽 유지 · copied에 없는 파일 미대조 · 범위 밖 = 검사 없음) · `verify_detects_mismatch_missing_and_type`(필터 안/밖 · GAP-027) · ndir-xfer `move_with_verify_still_moves`.
+- **목록 대조(f745f3d · GAP-027 후반)**: ndir-ops `verify_collect_lists_copied_paths_and_listed_verify_ignores_newcomers`(목록 = 파일 · 빈 폴더 · 폴더 · 링크 안쪽 · 제외 파일 없음 · 신생 파일 ok · 수정 파일 불일치 · 빈 폴더 누락 적발 · 링크 안쪽 손상 적발 · 깃발 꺼짐 = 빈 목록).
 - **T6(성능)**: `bench_copy`를 `scripts/perf-baseline.sh`에 편입 · `ndir-xfer` 포장 전후 같은 작업의 시간 차 ≤ 2 %(포장층 비용 0 확인) · Linux/macOS 실측은 그 PC 회차.
 
 ## 10. 성능 기준선 확장 계획(T-97 "+ 성능 기준선 확장")
