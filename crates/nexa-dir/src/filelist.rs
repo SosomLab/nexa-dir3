@@ -31,7 +31,6 @@ pub(crate) fn status_icon_key(st: ndir_vfs::FileStatus) -> Option<&'static str> 
         S::AvailableLocally => "status:local",
         S::AlwaysKeep => "status:pinned",
         S::Network => "status:network",
-        S::Nfd => return None, // 아이콘 없음 = 글 "NFD"(상태 열 · 10-18)
     })
 }
 
@@ -44,7 +43,6 @@ pub(crate) fn status_label(st: ndir_vfs::FileStatus) -> String {
         S::AvailableLocally => ndir_i18n::tr("status.availableLocally"),
         S::AlwaysKeep => ndir_i18n::tr("status.alwaysKeep"),
         S::Network => ndir_i18n::tr("status.network"),
-        S::Nfd => ndir_i18n::tr("status.nfd"),
     }
 }
 
@@ -716,18 +714,26 @@ impl TreeSource {
     }
 
     /// 행의 저장 상태(상태 열): 클라우드 속성이 있으면 그것 · 없고 네트워크 위치면 네트워크 · 그 밖 = 없음.
+    /// (10-31 사용자 결정 ③: 종전 "클라우드 상태가 없을 때만 NFD" 표식은 뺐다 — 상태 열은 저장 상태 전용 · NFD는 Info 줄 + 집계.)
     pub(crate) fn status_of(&self, index: usize) -> ndir_vfs::FileStatus {
         let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return ndir_vfs::FileStatus::None;
         };
         match ndir_vfs::cloud_status(r.attrs) {
-            // NFD 이름 식별(10-18) — 클라우드 상태가 없을 때만(상태 열은 한 가지만 보인다).
-            ndir_vfs::FileStatus::None if ndir_ops::nfc::is_decomposed(r.name) => {
-                ndir_vfs::FileStatus::Nfd
-            }
             ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
             st => st,
         }
+    }
+
+    /// 현재 목록(가시 행)에서 이름이 분해형(NFD)인 행 수 — 패널 상태 줄 "NFD n" 집계(10-31 사용자 결정 ②).
+    pub(crate) fn nfd_count(&self) -> usize {
+        let Some(t) = self.tree.as_ref() else {
+            return 0;
+        };
+        (0..t.visible_len())
+            .filter_map(|i| t.row_ref(i))
+            .filter(|r| ndir_ops::nfc::is_decomposed(r.name))
+            .count()
     }
 
     /// 이 소스의 열람 옵션(탭별 보기 옵션의 원천 — 숨김 · Dot · 폴더 우선은 탭이 소유한다).
@@ -1544,7 +1550,8 @@ mod tests {
         }
     }
 
-    /// NFC 표시(10-18): 분해형 이름은 켬이면 합성해 보이고 끄면 원래대로 · 상태 열 = NFD · 원래 이름은 트리에 그대로(이름 바꾸기 기준).
+    /// NFC 표시(10-18): 분해형 이름은 켬이면 합성해 보이고 끄면 원래대로 · 상태 열은 저장 상태 전용(10-31 ③ · NFD 표식 없음) ·
+    /// `nfd_count`가 집계 · 원래 이름은 트리에 그대로(이름 바꾸기 기준).
     #[test]
     fn nfd_names_display_composed_and_flagged() {
         let nfd = "\u{1112}\u{1161}\u{11AB}\u{1100}\u{1173}\u{11AF}.txt";
@@ -1554,7 +1561,12 @@ mod tests {
         std::fs::write(base.join(nfd), b"x").unwrap();
         let src = TreeSource::open(&base, opts());
         assert_eq!(src.row(0).text, "한글.txt", "켬 = 합성");
-        assert_eq!(src.status_of(0), ndir_vfs::FileStatus::Nfd, "상태 열 = NFD");
+        assert_eq!(
+            src.status_of(0),
+            ndir_vfs::FileStatus::None,
+            "상태 열은 저장 상태 전용(NFD 표식 없음 · 10-31 ③)"
+        );
+        assert_eq!(src.nfd_count(), 1, "집계 = 분해형 1");
         assert_eq!(
             src.row_path(0)
                 .unwrap()

@@ -1248,7 +1248,7 @@ fn ext_of(name: &str) -> &str {
 /// 상태 정렬 순위(속성 비트 → [`ndir_vfs::cloud_status`]).
 fn status_rank(attrs: u32) -> u8 {
     match ndir_vfs::cloud_status(attrs) {
-        ndir_vfs::FileStatus::None | ndir_vfs::FileStatus::Network | ndir_vfs::FileStatus::Nfd => 0,
+        ndir_vfs::FileStatus::None | ndir_vfs::FileStatus::Network => 0,
         ndir_vfs::FileStatus::CloudOnly => 1,
         ndir_vfs::FileStatus::AvailableLocally => 2,
         ndir_vfs::FileStatus::AlwaysKeep => 3,

@@ -148,9 +148,9 @@ pub enum FileStatus {
     AlwaysKeep,
     /// 네트워크 위치(NFS · SMB 등 마운트 아래 · UNC 경로).
     Network,
-    /// 이름이 분해형(NFD · 조합형 한글 자모/결합 기호 — macOS HFS+/SMB 유래 · 10-18): 행 메뉴 "이름을 NFC로 변환" 대상.
-    Nfd,
 }
+// (10-31 사용자 결정 ③) `Nfd` 변종은 뺐다 — 상태 열은 저장 상태 전용 · 분해형 이름은 Info 패널 줄 + 패널 상태 줄 집계로(nfc 식별은
+// ndir-core `nfc::is_decomposed`).
 
 /// 속성 비트 → 클라우드 상태(순수 · 위가 우선): 항상 유지 → 온라인 전용 → 로컬에 있음 → 없음.
 /// "동기화 중"은 속성만으로 알 수 없어 다루지 않는다(Windows cldapi 필요 — 후속).
