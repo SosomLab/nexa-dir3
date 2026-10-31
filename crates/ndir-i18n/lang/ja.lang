@@ -1484,6 +1484,8 @@ pref.macPresent = macOS の画面出力方式
 pref.macPresent.desc = IOSurface（既定）は CPU で描いたピクセルをサーフェスに直接置き、色合わせをコンポジタに任せます。softbuffer は従来方式（毎フレームのコピーと色変換・低速）。ウィンドウが空白になる場合は softbuffer に戻してください。新しく開くウィンドウから適用され、メインウィンドウは再起動後です。他の OS では無視されます。
 pref.macPresent.iosurface = IOSurface（推奨）
 pref.macPresent.softbuffer = softbuffer（従来）
+pref.blinkMinBps = マーカー点滅のしきい値（B/s）
+pref.blinkMinBps.desc = ステータスバーのディスク・ネットワークのマーカー（▲▼）は、転送速度がこの値（バイト/秒）以上のときだけ点滅します。バックグラウンド I/O が常にある環境（特に macOS）で絶えず点滅して再描画されるのを防ぎます。0 = 1 B/s から点滅（従来）。既定 16384（16 KB/s）。
 pref.idleTrim = アイドル時のメモリ整理 (秒)
 pref.idleTrim.desc = 最後の入力からこの秒数が過ぎると、文字キャッシュ・シェルメニューオブジェクト・ヒープの空き・ワーキングセットを OS に返します。戻るときに短い再読み込みコストがあります。0 = オフ。
 pref.idleTrimScope = アイドル整理の範囲

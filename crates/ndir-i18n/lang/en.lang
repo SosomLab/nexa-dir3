@@ -1484,6 +1484,8 @@ pref.macPresent = macOS presentation path
 pref.macPresent.desc = IOSurface (default) draws CPU pixels straight into a surface and leaves colour matching to the compositor. softbuffer is the previous path (a copy and a colour conversion every frame · slow). Switch back to softbuffer if a window ever shows blank. Applies to newly opened windows; the main window after a restart. Ignored on other OSes.
 pref.macPresent.iosurface = IOSurface (recommended)
 pref.macPresent.softbuffer = softbuffer (previous)
+pref.blinkMinBps = Marker blink threshold (B/s)
+pref.blinkMinBps.desc = The disk and network markers (▲▼) in the status bar blink only when the transfer rate is at least this many bytes per second. Stops them from blinking and repainting constantly where background I/O is always present (notably on macOS). 0 = blink from 1 B/s (previous behaviour). Default 16384 (16 KB/s).
 pref.idleTrim = Idle memory trim (seconds)
 pref.idleTrim.desc = After this many seconds without input, return the glyph cache, shell menu objects, free heap blocks and the working set to the OS. Coming back costs a brief reload. 0 = off.
 pref.idleTrimScope = Idle trim scope

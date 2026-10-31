@@ -172,10 +172,12 @@ pub(crate) fn load_style(
     }
 }
 
-/// 속도(바이트/초) → 표식 깜빡임 단계(순수): 0 = 송수신 없음(깜빡이지 않음) · 1 = 느림 … 9 = 빠름. 4배마다 한 단계 —
-/// 1: ~4 KB/s · 2: ~16 KB/s · 3: ~64 KB/s · 4: ~256 KB/s · 5: ~1 MB/s · 6: ~4 MB/s · 7: ~16 MB/s · 8: ~64 MB/s · 9: 그 이상.
-pub(crate) fn rate_level(bps: u64) -> u8 {
-    if bps == 0 {
+/// 속도(바이트/초) → 표식 깜빡임 단계(순수): 0 = 송수신 없음 **또는 문턱(`min_bps`) 미만**(깜빡이지 않음) · 1 = 느림 … 9 = 빠름.
+/// 4배마다 한 단계 — 1: ~4 KB/s · 2: ~16 KB/s · 3: ~64 KB/s · 4: ~256 KB/s · 5: ~1 MB/s · 6: ~4 MB/s · 7: ~16 MB/s · 8: ~64 MB/s · 9: 그 이상.
+/// 문턱 = 설정 `status.blink_min_bps`(기본 16 KB/s · 10-31 사용자 결정 ④ — macOS는 유휴에도 디스크·네트워크 배경 I/O가 수~수십 KB/s라
+/// 표식 4개가 늘 깜빡여 초당 10여 번 다시 그렸다 · 실제 전송 때만 깜빡이게). 단계 자체는 문턱과 무관(문턱을 넘으면 종전 눈금).
+pub(crate) fn rate_level(bps: u64, min_bps: u64) -> u8 {
+    if bps == 0 || bps < min_bps {
         return 0;
     }
     let mut level = 1u8;
@@ -211,6 +213,7 @@ impl App {
     pub(crate) fn status_segments(&self) -> Vec<StatusSeg> {
         let dash = || "–".to_string();
         let load: Option<SysLoad> = self.load;
+        let blink_min = self.settings.int("status.blink_min_bps").clamp(0, 1 << 30) as u64;
         let (up_c, down_c) = (self.theme.danger, self.theme.accent);
         let part = StatusPart::new;
         // 디스크 · 네트워크 = 약어 옆에 **두 줄로 쌓는다**(위 ↑ · 아래 ↓ — 사용자 10-04): 한 줄에 `↑ 24.5 MB/s` ·
@@ -228,7 +231,7 @@ impl App {
                 .color(if up { up_c } else { down_c })
                 .hints(size_hints("", "/s"))
                 .font_delta(row_delta)
-                .marker(marker, rate_level(v.unwrap_or(0)))
+                .marker(marker, rate_level(v.unwrap_or(0), blink_min))
         };
         let leveled = |id: &str, abbr: StatusPart, value: StatusPart, pct: Option<f32>| {
             let Some(pct) = pct else {

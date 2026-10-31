@@ -3060,16 +3060,30 @@ fn status_segments_and_tab_status_bar() {
             vec![crate::app::statusline::MEM_HINT.to_string()]
         );
     }
-    // 깜빡임 단계: 0 = 없음 · 4배마다 한 단계 · 9가 끝.
+    // 깜빡임 단계: 0 = 없음 · 4배마다 한 단계 · 9가 끝 · 문턱(`status.blink_min_bps` · 10-31 ④) 미만 = 0 · 넘으면 눈금 그대로.
     use crate::app::statusline::rate_level;
-    assert_eq!(rate_level(0), 0);
+    assert_eq!(rate_level(0, 0), 0);
     assert_eq!(
-        (rate_level(1), rate_level(4095), rate_level(4096)),
+        (rate_level(1, 0), rate_level(4095, 0), rate_level(4096, 0)),
         (1, 1, 2)
     );
-    assert_eq!((rate_level(1 << 20), rate_level(64 << 20)), (6, 9));
-    assert_eq!(rate_level(u64::MAX), 9);
-    assert!((0..40).all(|s| rate_level(1u64 << s) <= rate_level(1u64 << (s + 1))));
+    assert_eq!((rate_level(1 << 20, 0), rate_level(64 << 20, 0)), (6, 9));
+    assert_eq!(rate_level(u64::MAX, 0), 9);
+    assert!((0..40).all(|s| rate_level(1u64 << s, 0) <= rate_level(1u64 << (s + 1), 0)));
+    assert_eq!(
+        (
+            rate_level(16_383, 16_384),
+            rate_level(16_384, 16_384),
+            rate_level(1, 16_384)
+        ),
+        (0, 3, 0),
+        "문턱 미만 = 0(배경 I/O는 깜빡이지 않음) · 문턱부터 종전 눈금(16 KB/s = 3단계)"
+    );
+    assert_eq!(
+        app.settings.int("status.blink_min_bps"),
+        16_384,
+        "기본 문턱 16 KB/s"
+    );
     let row_delta = (app.status_row_font_delta() * 100.0).round() as i32;
     assert!(row_delta < 0, "두 줄용 글꼴은 상태줄 글꼴보다 작다");
     assert_eq!(net.rows[0].font_delta_c, Some(row_delta));

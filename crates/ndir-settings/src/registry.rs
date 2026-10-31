@@ -806,6 +806,19 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // 상태줄 디스크·네트워크 표식 깜빡임 문턱(바이트/초 · 10-31 사용자 결정 ④ · 고급): 이 속도 미만이면 표식이 깜빡이지 않는다(단계 0).
+    // macOS는 유휴에도 배경 I/O가 수~수십 KB/s라 표식 4개가 늘 깜빡여 초당 10여 번 다시 그렸다 — 기본 16 KB/s · 0 = 종전(1 B/s부터).
+    e!(
+        "status.blink_min_bps",
+        CAT_STATUSBAR,
+        "pref.blinkMinBps",
+        "pref.blinkMinBps.desc",
+        Int {
+            min: 0,
+            max: 1_073_741_824
+        },
+        "16384"
+    ),
     // macOS 화면 내보내기(Q-8 재검토 · 10-31 맥 실측 · 고급): softbuffer의 CoreGraphics 뒷단은 프레임마다 새 버퍼 + DeviceRGB
     // `CGImage` → CoreAnimation이 창 전체를 CPU(vImage)로 색 변환한다(2400×1600 present 28 ms · 유휴 ~11 fps면 코어의 40 %).
     // `iosurface` = nexa-sys `LayerPresenter`(표면 풀 · 할당 0 · sRGB 태그 → 색 맞춤은 합성기 · nexa-sql 09-24 실측 present 36 → 3 ms).
@@ -2733,6 +2746,7 @@ pub const ADVANCED: &[&str] = &[
     "mem.idle_trim_scope",
     "gfx.partial_redraw",
     "gfx.mac_present",
+    "status.blink_min_bps",
     "transfer.native",
     "transfer.threads",
     "transfer.unbuffered_mb",
