@@ -1507,7 +1507,10 @@ impl Panel {
         );
         let mut segs = vec![nexa_ctl::StatusSeg::with_parts(
             SEG_FOLDER,
-            vec![nexa_ctl::StatusPart::new(folder_text).hints(vec![folder_hint])],
+            // 글은 왼쪽(nexa-ui 252 `left()` — 견본 폭만 빌리고 "n개 항목" 글머리는 제자리 · 협업 관찰: 오른쪽 정렬이면 왼쪽 빈칸).
+            vec![nexa_ctl::StatusPart::new(folder_text)
+                .hints(vec![folder_hint])
+                .left()],
         )];
         if let Some((_, Some((_, branch)))) = &self.git {
             let mut text = ndir_i18n::trf("tabstatus.git", &[branch]);
