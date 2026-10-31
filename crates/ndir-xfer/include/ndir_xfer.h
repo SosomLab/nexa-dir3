@@ -5,7 +5,9 @@
  *                "journal": a file that gets one Report-item JSON line per finished top-level item; "resume": a previous
  *                Report JSON or journal whose "done" (source, dest) pairs are skipped (same ABI — keys only).
  *                "max_bps": transfer speed limit in bytes per second (0 = unlimited; copy phase only, block clones are
- *                not counted, the verify phase is not limited).
+ *                not counted, the verify phase is not limited). "mirror_by_content": a mirror also hashes files whose
+ *                size and time match and copies them if the content differs. Mirror deletions through this ABI are
+ *                permanent (the trash hook is a Rust API: ndir_xfer::run_with).
  *   - progress : one Progress JSON line per callback (docs/26 §5 — {"phase":..,"done":..,"total":..,"item":..,"items":..,"current":..})
  *   - result   : Report JSON    (docs/26 §6 — {"ok":bool,"canceled":bool,"dry_run":bool,"items":[..],"errors":[..],...})
  * Errors never come back as NULL: a failed call still returns a Report with "ok":false and "errors":[...].

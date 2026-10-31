@@ -318,6 +318,37 @@ fn mirror_makes_destination_identical() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--mirror --by-content`(T-202 ⑦): 크기·시각이 같고 내용만 다른 파일 = 기본 미러는 그대로(0 copied) · `--by-content`면 덮어씀 · 미러 없이 = 2.
+#[test]
+fn mirror_by_content_overwrites_same_size_and_time() {
+    let d = sandbox("by-content");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    fs::create_dir_all(&src).expect("mkdir");
+    fs::create_dir_all(&dst).expect("mkdir");
+    let t = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    for (dir, body) in [(&src, b"AAAA"), (&dst, b"BBBB")] {
+        let p = dir.join("same.txt");
+        fs::write(&p, body).expect("write");
+        fs::File::options()
+            .write(true)
+            .open(&p)
+            .expect("open")
+            .set_modified(t)
+            .expect("mtime");
+    }
+    let r = run(&[&src, &dst], &["--mirror"], &[]);
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(r.err.contains("mirror: 0 copied"), "{}", r.err);
+    assert_eq!(fs::read(dst.join("same.txt")).expect("read"), b"BBBB");
+    let r = run(&[&src, &dst], &["--mirror", "--by-content"], &[]);
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(r.err.contains("mirror: 1 copied"), "{}", r.err);
+    assert_eq!(fs::read(dst.join("same.txt")).expect("read"), b"AAAA");
+    let r = run(&[&src, &dst], &["--by-content"], &[]);
+    assert_eq!(r.code, 2, "{}", r.err);
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// `--include/--exclude`(10-25): 폴더 안은 엔진 계획 단계에서 거르고 · 최상위 원본은 CLI가 걸러 안내한다 · 대소문자 무시 · 제외가 우선.
 #[test]
 fn include_exclude_filters_files_and_top_level_sources() {

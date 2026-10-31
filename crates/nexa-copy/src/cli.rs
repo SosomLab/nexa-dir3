@@ -11,6 +11,7 @@
 //!   -n, --dry-run        print the plan (one tab-separated line per item on stdout) and change nothing
 //!   --verify             after copying, compare every copied file with its source (size + SHA-256); mismatch = exit 1
 //!   --mirror             make the destination folder identical to the one source folder (copy new/changed · delete extras permanently)
+//!   --by-content         with --mirror: also hash files whose size and modified time match · copy them if the content differs (T-202 ⑦)
 //!   --yes                confirm permanent deletions for --mirror (without it, deletions are listed and the exit code is 2)
 //!   --include <glob>     copy only files whose name matches (repeatable · folders are always entered)
 //!   --exclude <glob>     skip files and folders whose name matches (repeatable)
@@ -62,6 +63,9 @@ Options:
                        files (size + modified time, 2 s tolerance), then permanently delete items that exist
                        only in the destination (no recycle bin) · works with --dry-run, --include/--exclude, --verify
                        · refuses a drive root or the user home as destination · deletions need --yes
+  --by-content         with --mirror: also compare the content (SHA-256) of files whose size and modified time
+                       match, and copy them if it differs (slower: reads both sides of every matching file;
+                       --max-bps does not limit these reads)
   --yes                confirm permanent deletions (--mirror); without it they are only listed and the exit code is 2
   --include <glob>     copy only files whose name matches the glob (* ?, case-insensitive);
                        repeatable, or several globs separated by ; · folders are always entered
@@ -106,6 +110,8 @@ pub(crate) struct Options {
     pub filter: NameFilter,
     /// 미러(`--mirror` · 원본 폴더 1개 → 대상 폴더를 같게 · 대상에만 있는 것은 영구 삭제).
     pub mirror: bool,
+    /// 미러에서 크기·시각이 같은 파일도 내용 대조(`--by-content` · T-202 ⑦).
+    pub by_content: bool,
     /// 영구 삭제 확인(`--yes` · 미러에서 지울 것이 있을 때 필요).
     pub yes: bool,
     pub sources: Vec<PathBuf>,
@@ -140,6 +146,7 @@ impl Options {
             filter: self.filter.clone(),
             verify: self.verify,
             mirror: self.mirror,
+            mirror_by_content: self.by_content,
             dry_run: self.dry_run,
             yes: self.yes,
             journal: self.journal.clone(),
@@ -200,6 +207,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut verify = false;
     let mut filter = NameFilter::default();
     let mut mirror = false;
+    let mut by_content = false;
     let mut yes = false;
     let mut progress = false;
     let mut job: Option<PathBuf> = None;
@@ -229,6 +237,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "-n" | "--dry-run" => dry_run = true,
             "--verify" => verify = true,
             "--mirror" => mirror = true,
+            "--by-content" => by_content = true,
             "-y" | "--yes" => yes = true,
             "--progress" => progress = true,
             "--report" => {
@@ -289,7 +298,15 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         }
     }
     if let Some(file) = job {
-        if !paths.is_empty() || ask || mirror || dry_run || verify || overwrite || max_bps > 0 {
+        if !paths.is_empty()
+            || ask
+            || mirror
+            || by_content
+            || dry_run
+            || verify
+            || overwrite
+            || max_bps > 0
+        {
             return Err(
                 "--job takes no sources/destination or operation flags (put them in the JSON)"
                     .into(),
@@ -303,6 +320,9 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             journal,
             resume,
         });
+    }
+    if by_content && !mirror {
+        return Err("--by-content needs --mirror".into());
     }
     if paths.len() < 2 {
         return Err("need at least one source and a destination folder".into());
@@ -320,6 +340,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         verify,
         filter,
         mirror,
+        by_content,
         yes,
         sources: paths,
         dest,
@@ -1352,6 +1373,20 @@ mod tests {
             "1".into()
         ])
         .is_err());
+        // `--by-content`(T-202 ⑦): 미러와 함께만 · 명세 키 `mirror_by_content`.
+        let Parsed::Run(o) = parse(&[
+            "--mirror".into(),
+            "--by-content".into(),
+            "/s".into(),
+            "/d".into(),
+        ])
+        .unwrap() else {
+            panic!("run")
+        };
+        assert!(o.by_content && o.to_spec().mirror_by_content);
+        assert!(parse(&["--by-content".into(), "/s".into(), "/d".into()])
+            .unwrap_err()
+            .contains("--mirror"));
         assert!(parse(&["--job".into(), "j.json".into(), "a".into(), "b".into()]).is_err());
         let Parsed::Run(o) = parse(&[
             "--move".into(),

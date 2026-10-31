@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 // 계획 · 구분자 정규화 · 홈 · 위험 대상 판정은 ndir-xfer(`mirror` 모듈)로 옮겼다(10-31 T-97 — 앱·CLI·cdylib 공용).
-pub(crate) use ndir_xfer::mirror::{dangerous_dest, home_dir, mirror_plan};
+pub(crate) use ndir_xfer::mirror::{dangerous_dest, home_dir, mirror_plan_with};
 
 /// 계획을 탭 줄로(dry-run · `action · bytes · source · destination`): copy · overwrite · delete.
 pub(crate) fn plan_rows(plan: &SyncPlan) -> Vec<String> {
@@ -60,7 +60,8 @@ pub(crate) fn run_mirror(
         return ExitCode::from(2);
     }
     let started = Instant::now();
-    let plan = match mirror_plan(src, &o.dest, &o.filter, cancel) {
+    // `--by-content`(T-202 ⑦): 해시 진행은 사람용 출력에 안 보인다(기계용은 `--job`/`--progress` 경로의 plan 줄).
+    let plan = match mirror_plan_with(src, &o.dest, &o.filter, o.by_content, &mut |_| {}, cancel) {
         Ok(p) => p,
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
             let _ = writeln!(err, "canceled");
@@ -263,7 +264,8 @@ mod tests {
         std::fs::write(t.join("extra.tmp"), b"extra").unwrap();
         std::fs::write(s.join("skip.log"), b"log").unwrap();
         let cancel = AtomicBool::new(false);
-        let plan = mirror_plan(&s, &t, &NameFilter::default(), &cancel).unwrap();
+        let plan =
+            mirror_plan_with(&s, &t, &NameFilter::default(), false, &mut |_| {}, &cancel).unwrap();
         let rows = plan_rows(&plan);
         let acts: Vec<&str> = rows.iter().map(|r| r.split('\t').next().unwrap()).collect();
         assert_eq!(acts.iter().filter(|a| **a == "copy").count(), 2, "{rows:?}"); // new.txt · skip.log
@@ -284,7 +286,7 @@ mod tests {
             include: vec![],
             exclude: vec!["*.log".into(), "*.tmp".into()],
         };
-        let plan = mirror_plan(&s, &t, &f, &cancel).unwrap();
+        let plan = mirror_plan_with(&s, &t, &f, false, &mut |_| {}, &cancel).unwrap();
         assert_eq!(plan.copies.len(), 2, "{plan:?}"); // new.txt · differ.txt
         assert!(plan.deletes.is_empty(), "제외된 extra.tmp는 지우지 않는다");
         let _ = std::fs::remove_dir_all(&d);

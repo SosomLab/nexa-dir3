@@ -213,9 +213,7 @@ pub fn compare(
                 if v == Verdict::Same && opts.by_content && !a.is_dir && a.size > 0 {
                     let la = hash_of(&left.join(k), progress, cancel)?;
                     let rb = hash_of(&right.join(k), progress, cancel)?;
-                    if la != rb {
-                        v = Verdict::Differ;
-                    }
+                    v = content_verdict(la.as_deref(), rb.as_deref());
                 }
                 v
             }
@@ -231,6 +229,15 @@ pub fn compare(
         });
     }
     Ok(out)
+}
+
+/// 내용 비교 판정(순수 · GAP-026 · 협업 지적 10-31): 해시가 **둘 다 있고 같을 때만** 같음 — 한쪽이라도 못 읽었으면(`None`) 다름.
+/// 종전 `la != rb`는 양쪽 다 읽기 실패(`None == None`)를 "같음"으로 보여 사용자가 내용 비교를 켰는데 조용히 같다고 표시됐다.
+fn content_verdict(left: Option<&str>, right: Option<&str>) -> Verdict {
+    match (left, right) {
+        (Some(a), Some(b)) if a == b => Verdict::Same,
+        _ => Verdict::Differ,
+    }
 }
 
 fn hash_of(
@@ -385,6 +392,16 @@ pub fn apply_copies(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 내용 비교 판정(GAP-026): 둘 다 있고 같음 = Same · 다름 = Differ · 한쪽/양쪽 읽기 실패 = Differ(조용한 "같음" 금지).
+    #[test]
+    fn content_verdict_treats_unreadable_as_differ() {
+        assert_eq!(content_verdict(Some("ab"), Some("ab")), Verdict::Same);
+        assert_eq!(content_verdict(Some("ab"), Some("cd")), Verdict::Differ);
+        assert_eq!(content_verdict(None, Some("ab")), Verdict::Differ);
+        assert_eq!(content_verdict(Some("ab"), None), Verdict::Differ);
+        assert_eq!(content_verdict(None, None), Verdict::Differ);
+    }
 
     fn fixture(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("nexa_cmp_{}_{tag}", std::process::id()));

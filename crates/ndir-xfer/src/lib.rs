@@ -6,6 +6,7 @@
 //! - 단계 = plan(계획 · dry-run은 여기서 끝) → transfer(복사/이동) → verify(크기 + SHA-256) / mirror(비교 → 복사 → 삭제).
 //! - 취소 = `AtomicBool`(협력적) · 진행 = 콜백(`&mut dyn FnMut(&Progress)`) · 항목별 실패 격리(배치는 계속).
 //! - 재개(T-202 ② · `resume.rs`): `journal` = 최상위 항목 완료마다 한 줄 · `resume` = 이전 Report/저널의 `done` 쌍 건너뜀.
+//! - 미러(T-202 ⑦): `mirror_by_content` = 크기·시각 같은 파일도 해시 대조 · [`run_with`]의 `delete` 콜백 = 휴지통 미러(앱이 포트 주입 · 기본 영구 삭제).
 
 pub mod capi;
 pub mod json;
@@ -98,8 +99,22 @@ fn validate_with(spec: &JobSpec, done: &[ItemReport]) -> Option<String> {
     None
 }
 
+/// 미러 삭제 콜백(T-202 ⑦): 대상에만 있는 항목의 경로를 받아 지운다(휴지통 포트 등) · `Err` = 그 항목 실패.
+pub type DeleteFn<'a> = &'a mut dyn FnMut(&Path) -> std::io::Result<()>;
+
 /// 작업 실행 — 명세대로 계획/전송/검증/미러 · 진행은 `on_progress` · 취소는 `cancel`. 오류는 [`Report::errors`]로(패닉 없음).
+/// 미러 삭제는 영구 삭제([`run_with`]에 콜백을 주면 휴지통 등으로 바꿀 수 있다).
 pub fn run(spec: &JobSpec, on_progress: &mut dyn FnMut(&Progress), cancel: &AtomicBool) -> Report {
+    run_with(spec, on_progress, cancel, None)
+}
+
+/// [`run`] + 미러 삭제 콜백(`delete` · None = 영구 삭제). CLI · cdylib은 [`run`] · 앱은 휴지통 포트를 넣는다(T-202 ⑦).
+pub fn run_with(
+    spec: &JobSpec,
+    on_progress: &mut dyn FnMut(&Progress),
+    cancel: &AtomicBool,
+    delete: Option<DeleteFn<'_>>,
+) -> Report {
     let started = Instant::now();
     let mut rep = Report {
         ok: true,
@@ -120,7 +135,7 @@ pub fn run(spec: &JobSpec, on_progress: &mut dyn FnMut(&Progress), cancel: &Atom
         return finish(rep, started);
     }
     if spec.mirror {
-        run_mirror(spec, &mut rep, on_progress, cancel);
+        run_mirror(spec, &mut rep, on_progress, cancel, delete);
         return finish(rep, started);
     }
     // 재개(T-202 ②): 이미 끝난 (source, dest) 쌍 = skipped/resumed(먼저 적힘) · 그 밖은 최상위 원본 필터(폴더 안은 엔진 계획 단계 `with_filter`).
@@ -367,9 +382,30 @@ fn run_mirror(
     rep: &mut Report,
     on_progress: &mut dyn FnMut(&Progress),
     cancel: &AtomicBool,
+    delete: Option<DeleteFn<'_>>,
 ) {
     let src = &spec.sources[0];
-    let plan = match mirror::mirror_plan(src, &spec.dest, &spec.filter, cancel) {
+    // 내용 비교의 해시 읽기 = Progress `plan`(done = 읽은 바이트 · total 0 = 미정 · T-202 ⑦).
+    let mut hashed = 0u64;
+    let mut on_hash = |n: u64| {
+        hashed += n;
+        on_progress(&Progress {
+            phase: Phase::Plan,
+            done_bytes: hashed,
+            total_bytes: 0,
+            item_index: 0,
+            item_count: 0,
+            current: None,
+        });
+    };
+    let plan = match mirror::mirror_plan_with(
+        src,
+        &spec.dest,
+        &spec.filter,
+        spec.mirror_by_content,
+        &mut on_hash,
+        cancel,
+    ) {
         Ok(p) => p,
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
             rep.canceled = true;
@@ -410,7 +446,7 @@ fn run_mirror(
     if !plan.deletes.is_empty() && !spec.yes {
         rep.ok = false;
         rep.errors.push(format!(
-            "mirror would permanently delete {} item(s) in the destination; set yes to confirm (or dry_run to review)",
+            "mirror would delete {} item(s) in the destination (permanently unless the caller supplies a trash delete); set yes to confirm (or dry_run to review)",
             plan.deletes.len()
         ));
         return;
@@ -428,8 +464,14 @@ fn run_mirror(
             current: None,
         });
     };
+    // 삭제 = 주입된 콜백(앱 휴지통 포트) 또는 영구 삭제(CLI · cdylib) — T-202 ⑦.
+    let mut permanent = |p: &Path| ndir_ops::delete_permanent(p);
+    let delete: DeleteFn<'_> = match delete {
+        Some(d) => d,
+        None => &mut permanent,
+    };
     let out = match fastcopy::with_pacer(spec.max_bps, || {
-        mirror::apply_mirror(&plan, &mut on_bytes, cancel)
+        mirror::apply_mirror_with(&plan, &mut on_bytes, cancel, delete)
     }) {
         Ok(o) => o,
         Err(e) => {
@@ -562,7 +604,7 @@ mod tests {
         };
         let cancel = AtomicBool::new(false);
         let r = run(&spec, &mut |_| {}, &cancel);
-        assert!(!r.ok && r.errors[0].contains("permanently delete"), "{r:?}");
+        assert!(!r.ok && r.errors[0].contains("would delete"), "{r:?}");
         assert!(d.join("dst/extra.txt").exists(), "거부 = 불변");
         spec.dry_run = true;
         let r = run(&spec, &mut |_| {}, &cancel);
@@ -709,6 +751,122 @@ mod tests {
             "{:?}",
             t0.elapsed()
         );
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// 미러 내용 비교 + 삭제 콜백(T-202 ⑦): 크기·시각이 같은데 내용이 다른 파일 = 기본 미러는 그대로 · `mirror_by_content`면 덮어씀 ·
+    /// `run_with(delete)` = 대상에만 있는 항목이 콜백으로(휴지통 흉내 = 옮김) · 콜백 Err = 그 항목 failed.
+    #[test]
+    fn mirror_by_content_and_delete_callback() {
+        let d = sandbox("by-content");
+        let t = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        for (side, body) in [("src", b"AAAA"), ("dst", b"BBBB")] {
+            let p = d.join(side).join("same.txt");
+            fs::write(&p, body).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(&p)
+                .unwrap()
+                .set_modified(t)
+                .unwrap();
+        }
+        fs::write(d.join("dst/extra.txt"), b"x").unwrap();
+        let cancel = AtomicBool::new(false);
+        let base = JobSpec {
+            sources: vec![d.join("src")],
+            dest: d.join("dst"),
+            mirror: true,
+            yes: true,
+            ..JobSpec::default()
+        };
+        // 기본: 크기·시각 같음 = 같다고 봄(덮어쓰지 않음).
+        let r = run(&base, &mut |_| {}, &cancel);
+        assert!(r.ok, "{r:?}");
+        assert_eq!(fs::read(d.join("dst/same.txt")).unwrap(), b"BBBB");
+        assert!(
+            !r.items.iter().any(|i| i.dest.ends_with("same.txt")),
+            "{:?}",
+            r.items
+        );
+        // 내용 비교: 해시가 달라 덮어씀 · 삭제는 콜백으로(옮김) · Report delete = done · deleted 1.
+        fs::write(d.join("dst/extra.txt"), b"x").unwrap();
+        let trash = d.join("trash");
+        fs::create_dir_all(&trash).unwrap();
+        let spec = JobSpec {
+            mirror_by_content: true,
+            ..base.clone()
+        };
+        let mut moved = 0;
+        let mut to_trash = |p: &Path| {
+            moved += 1;
+            fs::rename(p, trash.join(p.file_name().unwrap()))
+        };
+        let mut hashed = 0u64;
+        let r = run_with(
+            &spec,
+            &mut |p| {
+                if p.phase == Phase::Plan {
+                    hashed = hashed.max(p.done_bytes);
+                }
+            },
+            &cancel,
+            Some(&mut to_trash),
+        );
+        assert!(r.ok && r.deleted == 1, "{r:?}");
+        assert_eq!(moved, 1);
+        assert_eq!(
+            hashed, 6018,
+            "같다고 본 쌍 전부 양쪽 해시: (5 + 3000 + 4) × 2 · 진행 보고"
+        );
+        assert_eq!(
+            fs::read(d.join("dst/same.txt")).unwrap(),
+            b"AAAA",
+            "내용 비교로 덮어씀"
+        );
+        assert!(trash.join("extra.txt").is_file() && !d.join("dst/extra.txt").exists());
+        assert!(r
+            .items
+            .iter()
+            .any(|i| i.action == "delete" && i.status == "done"));
+        // 콜백 Err = 그 항목 failed(ok false · 나머지는 계속).
+        fs::write(d.join("dst/extra2.txt"), b"y").unwrap();
+        let mut refuse = |_: &Path| Err(std::io::Error::other("trash unavailable"));
+        let r = run_with(&base, &mut |_| {}, &cancel, Some(&mut refuse));
+        assert!(!r.ok && r.failed == 1 && r.deleted == 0, "{r:?}");
+        assert!(r
+            .items
+            .iter()
+            .any(|i| i.action == "delete" && i.status == "failed" && i.note.contains("trash")));
+        assert!(d.join("dst/extra2.txt").is_file(), "실패 = 그대로");
+        // 제외된 파일은 해시하지 않는다(협업 지적 ①): same.txt를 exclude → plan 진행 0.
+        fs::write(d.join("dst/same.txt"), b"BBBB").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(d.join("dst/same.txt"))
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+        let excl = JobSpec {
+            mirror_by_content: true,
+            filter: ndir_ops::fastcopy::NameFilter {
+                include: vec![],
+                exclude: vec!["same.txt".into()],
+            },
+            ..base
+        };
+        let mut hashed = 0u64;
+        let r = run(
+            &excl,
+            &mut |p| {
+                if p.phase == Phase::Plan {
+                    hashed = hashed.max(p.done_bytes);
+                }
+            },
+            &cancel,
+        );
+        assert!(r.ok, "{r:?}");
+        assert_eq!(hashed, 6010, "제외한 same.txt(4 × 2)만 빠짐 = 읽지 않음");
+        assert_eq!(fs::read(d.join("dst/same.txt")).unwrap(), b"BBBB");
         let _ = fs::remove_dir_all(&d);
     }
 

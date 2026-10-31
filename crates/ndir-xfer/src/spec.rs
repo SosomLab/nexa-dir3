@@ -3,7 +3,8 @@
 //! ```json
 //! {"op":"copy","sources":["/a/x.txt","/a/dir"],"dest":"/b","conflict":"skip","threads":0,"native":true,"unbuffered_mb":64,
 //!  "include":["*.txt"],"exclude":[],"verify":false,"mirror":false,"dry_run":false,"yes":false,
-//!  "journal":null,"resume":null,"max_bps":0}   (unbuffered_mb 기본 0 · journal/resume = 재개 T-202 ② · max_bps = 속도 제한 T-202 ③ · 0 = 없음)
+//!  "journal":null,"resume":null,"max_bps":0,"mirror_by_content":false}
+//!   (unbuffered_mb 기본 0 · journal/resume = 재개 T-202 ② · max_bps = 속도 제한 T-202 ③ · 0 = 없음 · mirror_by_content = T-202 ⑦)
 //! ```
 //! 빠진 키 = 기본값 · 모르는 키 = 무시(앞으로 호환) · `op` = `copy`|`move` · `conflict` = `skip`|`overwrite`.
 
@@ -44,6 +45,8 @@ pub struct JobSpec {
     pub filter: NameFilter,
     pub verify: bool,
     pub mirror: bool,
+    /// 미러에서 크기·시각이 같은 파일도 SHA-256으로 대조(T-202 ⑦ · 같다고 본 쌍만 해시 · 미러가 아니면 무시).
+    pub mirror_by_content: bool,
     pub dry_run: bool,
     /// 미러의 영구 삭제 확인.
     pub yes: bool,
@@ -68,6 +71,7 @@ impl Default for JobSpec {
             filter: NameFilter::default(),
             verify: false,
             mirror: false,
+            mirror_by_content: false,
             dry_run: false,
             yes: false,
             journal: None,
@@ -152,6 +156,7 @@ impl JobSpec {
         };
         s.verify = flag(j.get("verify"), "verify", false)?;
         s.mirror = flag(j.get("mirror"), "mirror", false)?;
+        s.mirror_by_content = flag(j.get("mirror_by_content"), "mirror_by_content", false)?;
         s.dry_run = flag(j.get("dry_run"), "dry_run", false)?;
         s.yes = flag(j.get("yes"), "yes", false)?;
         s.journal = path(j.get("journal"), "journal")?;
@@ -224,6 +229,10 @@ impl JobSpec {
             ("exclude".into(), strs(&self.filter.exclude)),
             ("verify".into(), Json::Bool(self.verify)),
             ("mirror".into(), Json::Bool(self.mirror)),
+            (
+                "mirror_by_content".into(),
+                Json::Bool(self.mirror_by_content),
+            ),
             ("dry_run".into(), Json::Bool(self.dry_run)),
             ("yes".into(), Json::Bool(self.yes)),
             ("journal".into(), opt_path(self.journal.as_deref())),
@@ -257,6 +266,7 @@ mod tests {
             },
             verify: true,
             mirror: false,
+            mirror_by_content: true,
             dry_run: true,
             yes: false,
             journal: Some(PathBuf::from("/j/log")),
