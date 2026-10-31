@@ -150,6 +150,9 @@ impl OpsError {
 #[derive(Default, Debug)]
 pub struct Outcome {
     pub transferred: Vec<(PathBuf, PathBuf)>,
+    /// 복사가 실제로 옮긴 원본 경로(파일 · 폴더 · 링크 안쪽 포함 · `record` 무관) — [`fastcopy::with_verify_collect`] 안에서만 채워진다
+    /// (GAP-027 · 11-01). 검증 쌍은 [`verify::pairs_for`]가 만든다. 교차 볼륨 이동의 원본 정리 목록(`copied`)과는 다르다(BUG-001).
+    pub copied_paths: Vec<PathBuf>,
     pub skipped: Vec<PathBuf>,
     /// 개별 격리된 실패(항목, 사유) — 한 항목의 실패가 배치를 중단하지 않는다.
     pub errors: Vec<(PathBuf, String)>,
@@ -519,46 +522,57 @@ fn move_by_copy(
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> io::Result<()> {
+    // 이동 검증(T-202 ⑤)의 대조 목록 = 복사가 실제로 옮긴 경로(링크 안쪽 · 빈 폴더 포함 · GAP-027 싱크) — `copied`(원본 정리용 · 링크 안쪽 제외)와 다르다.
+    let collect = fastcopy::move_verify();
     if is_link(src) {
         // ⚠ 링크(심볼릭 링크·정션)를 다른 볼륨으로 옮길 때: 대상 내용을 새 자리에 복사하고 원본에서는 **링크만** 없앤다.
         // 종전에는 링크를 폴더처럼 보고 `링크\자식` 경로를 하나씩 지워 **링크가 가리키는 실제 파일이 삭제**됐다(dir2와 공통 결함).
         // 이동 검증(T-202 ⑤)도 건다 — `fs::metadata`가 링크를 따라가 "가리키는 내용 vs 사본"이 바로 맞는 대조(협업 판단 ②).
-        copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)?;
-        verify_moved(src, dest, None, cancel)?;
+        let (r, list) = collect_if(collect, || {
+            copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)
+        });
+        r?;
+        verify_moved(src, dest, &list, cancel)?;
         remove_link(src)
     } else if src.is_dir() {
         let mut copied = Vec::new();
-        copy_onto_inner(src, dest, overwrite, on_bytes, cancel, Some(&mut copied))?; // 스테이징 교체
-        verify_moved(src, dest, Some(&copied), cancel)?; // 원본 정리 **전**(T-202 ⑤)
+        let (r, list) = collect_if(collect, || {
+            copy_onto_inner(src, dest, overwrite, on_bytes, cancel, Some(&mut copied))
+            // 스테이징 교체
+        });
+        r?;
+        verify_moved(src, dest, &list, cancel)?; // 원본 정리 **전**(T-202 ⑤)
         remove_copied(src, &copied)
     } else {
         copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)?;
-        verify_moved(src, dest, None, cancel)?;
+        verify_moved(src, dest, &[], cancel)?;
         fs::remove_file(src)
     }
 }
 
+/// `on`이면 [`fastcopy::collect_verify`]로 목록을 모으며 돌리고, 아니면 그냥 돌린다(빈 목록).
+fn collect_if<R>(on: bool, f: impl FnOnce() -> R) -> (R, Vec<PathBuf>) {
+    if on {
+        fastcopy::collect_verify(f)
+    } else {
+        (f(), Vec::new())
+    }
+}
+
 /// 이동 검증(T-202 ⑤ · [`fastcopy::with_move_verify`] 범위에서만): 교차 볼륨 이동이 **원본을 지우기 전에** 사본을 원본과 대조한다
-/// (크기 + SHA-256 · `copied`가 있으면 복사한 **파일만** — 필터로 뺀 항목은 대상에 없는 것이 정상). 불일치 = 오류(원본 **유지** · 사본도 남김 ·
-/// 사용자가 판단) · 검증 읽기는 진행 바이트에 더하지 않는다(전송 총량 기준 유지).
-fn verify_moved(
-    src: &Path,
-    dest: &Path,
-    copied: Option<&[PathBuf]>,
-    cancel: &AtomicBool,
-) -> io::Result<()> {
+/// (목록 검증 `verify_listed` · `inner` = 복사가 실제로 옮긴 경로(GAP-027 싱크 · 링크 안쪽 · 빈 폴더 포함) — 필터로 뺀 항목은 대상에 없는 것이
+/// 정상). 불일치 = 오류(원본 **유지** · 사본도 남김 · 사용자가 판단) · 검증 읽기는 진행 바이트에 더하지 않는다(전송 총량 기준 유지).
+fn verify_moved(src: &Path, dest: &Path, inner: &[PathBuf], cancel: &AtomicBool) -> io::Result<()> {
     if !fastcopy::move_verify() {
         return Ok(());
     }
-    let pairs: Vec<(PathBuf, PathBuf)> = match copied {
-        None => vec![(src.to_path_buf(), dest.to_path_buf())],
-        Some(c) => c
-            .iter()
-            .filter(|p| p.is_file())
-            .map(|p| (p.clone(), dest.join(p.strip_prefix(src).unwrap_or(p))))
-            .collect(),
-    };
-    let rep = verify::verify_pairs(&pairs, &mut |_| {}, cancel)?;
+    // 항목 자체(파일 = 크기+해시 · 폴더/링크 = 존재·종류) + 안쪽 목록(링크 안쪽 · 빈 폴더 포함 · 대상은 상대 경로로 재계산 — 스테이징 무관).
+    let mut pairs: Vec<(PathBuf, PathBuf)> = vec![(src.to_path_buf(), dest.to_path_buf())];
+    pairs.extend(inner.iter().filter_map(|p| {
+        let rel = p.strip_prefix(src).ok()?;
+        (!rel.as_os_str().is_empty()).then(|| (p.clone(), dest.join(rel)))
+    }));
+    let rep = verify::verify_listed(&pairs, &mut |_| {}, cancel)?;
     match rep.failures.first() {
         None => Ok(()),
         Some((p, why)) => Err(io::Error::new(
@@ -870,6 +884,7 @@ fn transfer_inner(
             out.canceled = true;
             break;
         }
+        let mut verify_paths: Vec<PathBuf> = Vec::new(); // 검증 목록(GAP-027 · 수집 깃발이 켜진 때만 채워짐)
         let result: io::Result<Option<PathBuf>> = (|| {
             // 자리 판정은 `placement`(dry-run `plan_transfer`와 같은 함수 · 10-24).
             let (dest, overwrite) = match placement(src, dest_dir, op) {
@@ -899,7 +914,18 @@ fn transfer_inner(
                 }));
             };
             match op {
-                Op::Copy => copy_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)?,
+                Op::Copy => {
+                    if fastcopy::verify_collect() {
+                        // 검증 목록(GAP-027): 이 항목이 실제로 옮긴 원본 경로를 모은다(파일 항목 = 자기 자신 · 폴더 = plan/copy_tree가 적음).
+                        let (r, list) = fastcopy::collect_verify(|| {
+                            copy_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)
+                        });
+                        r?;
+                        verify_paths.extend(list);
+                    } else {
+                        copy_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)?;
+                    }
+                }
                 Op::Move => move_onto_with_progress(src, &dest, overwrite, &mut bytes, cancel)?,
             }
             Ok(Some(dest))
@@ -912,7 +938,10 @@ fn transfer_inner(
         };
         on_event(Event::ItemEnd { index: i, status });
         match result {
-            Ok(Some(dest)) => out.transferred.push((src.clone(), dest)),
+            Ok(Some(dest)) => {
+                out.transferred.push((src.clone(), dest));
+                out.copied_paths.append(&mut verify_paths);
+            }
             Ok(None) => out.skipped.push(src.clone()),
             Err(e) if e.kind() == io::ErrorKind::Interrupted => {
                 out.canceled = true;
@@ -1544,7 +1573,7 @@ mod tests {
         fs::write(d2.join("x.txt"), "diff").unwrap();
         fs::write(s2.join("skip.log"), "not copied").unwrap();
         let copied = vec![s2.join("x.txt")];
-        let r = fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, Some(&copied), &never));
+        let r = fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, &copied, &never));
         let e = r.unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::InvalidData);
         assert!(
@@ -1557,18 +1586,134 @@ mod tests {
         );
         // 필터로 뺀 skip.log는 copied에 없어 대조하지 않는다(대상에 없어도 통과).
         fs::write(d2.join("x.txt"), "same").unwrap();
-        fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, Some(&copied), &never)).unwrap();
+        fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, &copied, &never)).unwrap();
         // 파일 하나(copied 없음) · 범위 밖 = 검사 없음.
         fs::write(d2.join("x.txt"), "diff").unwrap();
         assert!(fastcopy::with_move_verify(true, || verify_moved(
             &s2.join("x.txt"),
             &d2.join("x.txt"),
-            None,
+            &[],
             &never
         ))
         .is_err());
-        verify_moved(&s2.join("x.txt"), &d2.join("x.txt"), None, &never).unwrap();
+        verify_moved(&s2.join("x.txt"), &d2.join("x.txt"), &[], &never).unwrap();
         assert!(!fastcopy::move_verify(), "끝나면 복원");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-027(11-01): 검증 목록 — `with_verify_collect` 안의 복사는 실제 옮긴 경로(파일 · 빈 폴더 · 링크 안쪽 · 필터로 뺀 것 제외)를
+    /// `copied_paths`에 싣고 `verify_listed(pairs_for)`는 원본 트리를 다시 훑지 않는다: 복사 뒤 생긴 원본 파일 = ok(재귀 검증은 missing) ·
+    /// 복사한 파일 수정 = 불일치 · 빈 폴더 누락 = 적발 · 링크 안쪽 사본 손상 = 적발 · 깃발 꺼짐 = 빈 목록.
+    #[test]
+    fn verify_collect_lists_copied_paths_and_listed_verify_ignores_newcomers() {
+        let d = fixture("gap027");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(a.join("tree/empty")).unwrap();
+        fs::create_dir_all(a.join("tree/sub")).unwrap();
+        fs::write(a.join("tree/sub/f.txt"), "f").unwrap();
+        fs::write(a.join("tree/skip.iso"), "iso").unwrap();
+        fs::create_dir_all(d.join("linked")).unwrap();
+        fs::write(d.join("linked/in.txt"), "inside").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(d.join("linked"), a.join("tree/ln")).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        let cancel = AtomicBool::new(false);
+        let f = fastcopy::NameFilter {
+            include: vec![],
+            exclude: vec!["*.iso".into()],
+        };
+        let out = fastcopy::with_verify_collect(true, || {
+            fastcopy::with_filter(f, || {
+                transfer_with(
+                    &[a.join("tree")],
+                    &b,
+                    Op::Copy,
+                    &mut |_| Conflict::Skip,
+                    &mut |_| {},
+                    &cancel,
+                    &LOOP,
+                )
+            })
+        });
+        assert_eq!(out.transferred.len(), 1, "{out:?}");
+        let rel: Vec<String> = out
+            .copied_paths
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&a)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        assert!(
+            rel.contains(&"tree/sub/f.txt".to_string())
+                && rel.contains(&"tree/empty".to_string())
+                && rel.contains(&"tree/sub".to_string()),
+            "{rel:?}"
+        );
+        assert!(
+            !rel.iter().any(|r| r.ends_with("skip.iso")),
+            "필터로 뺀 파일은 목록에 없다: {rel:?}"
+        );
+        #[cfg(unix)]
+        assert!(
+            rel.contains(&"tree/ln".to_string()) && rel.contains(&"tree/ln/in.txt".to_string()),
+            "링크 안쪽도 목록에: {rel:?}"
+        );
+        let pairs = verify::pairs_for(&out);
+        assert!(verify::verify_listed(&pairs, &mut |_| {}, &cancel)
+            .unwrap()
+            .ok());
+        // 복사 뒤 생긴 원본 파일 = 목록 밖 = ok(재귀 검증은 missing으로 본다 — 대조).
+        fs::write(a.join("tree/new.txt"), "new").unwrap();
+        assert!(verify::verify_listed(&pairs, &mut |_| {}, &cancel)
+            .unwrap()
+            .ok());
+        assert!(
+            !verify::verify_pairs(&out.transferred, &mut |_| {}, &cancel)
+                .unwrap()
+                .ok(),
+            "재귀 검증은 신생 파일 · 제외 파일을 missing으로 본다"
+        );
+        // 복사한 파일 수정 = 불일치.
+        fs::write(a.join("tree/sub/f.txt"), "F").unwrap();
+        let rep = verify::verify_listed(&pairs, &mut |_| {}, &cancel).unwrap();
+        assert_eq!(rep.failures.len(), 1, "{:?}", rep.failures);
+        fs::write(a.join("tree/sub/f.txt"), "f").unwrap();
+        // 빈 폴더 누락 = 적발.
+        fs::remove_dir(b.join("tree/empty")).unwrap();
+        let rep = verify::verify_listed(&pairs, &mut |_| {}, &cancel).unwrap();
+        assert!(
+            rep.failures
+                .iter()
+                .any(|(p, w)| p.ends_with("empty") && w == "missing"),
+            "{:?}",
+            rep.failures
+        );
+        fs::create_dir(b.join("tree/empty")).unwrap();
+        // 링크 안쪽 사본 손상 = 적발.
+        #[cfg(unix)]
+        {
+            fs::write(b.join("tree/ln/in.txt"), "broken").unwrap();
+            let rep = verify::verify_listed(&pairs, &mut |_| {}, &cancel).unwrap();
+            assert!(
+                rep.failures.iter().any(|(p, _)| p.ends_with("in.txt")),
+                "{:?}",
+                rep.failures
+            );
+        }
+        // 깃발 꺼짐 = 빈 목록.
+        let out2 = transfer_with(
+            &[a.join("tree/sub/f.txt")],
+            &b,
+            Op::Copy,
+            &mut |_| Conflict::Overwrite,
+            &mut |_| {},
+            &cancel,
+            &LOOP,
+        );
+        assert!(out2.copied_paths.is_empty());
         fs::remove_dir_all(&d).unwrap();
     }
 

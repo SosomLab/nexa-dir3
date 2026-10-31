@@ -265,18 +265,21 @@ pub fn run_with(
     };
     // 속도 제한(T-202 ③): 전송 단계만(검증 읽기는 제한하지 않음) · 복제 경로는 세지 않음 · 병렬 작업 스레드 합계(`fastcopy::Pacer`).
     // 이동 검증(T-202 ⑤): `verify` + move = 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 failed · 원본·사본 유지).
-    let out = fastcopy::with_move_verify(spec.verify && spec.op == Op::Move, || {
-        fastcopy::with_pacer(spec.max_bps, || {
-            fastcopy::with_filter(spec.filter.clone(), || {
-                transfer_with(
-                    &sources,
-                    &spec.dest,
-                    spec.op,
-                    &mut resolve,
-                    &mut on_event,
-                    cancel,
-                    &tuning,
-                )
+    // 복사 검증(GAP-027 · 11-01): 전송이 실제로 옮긴 경로 목록을 모아(`with_verify_collect`) 그 목록만 대조 — 원본 트리를 다시 훑지 않는다.
+    let out = fastcopy::with_verify_collect(spec.verify && spec.op == Op::Copy, || {
+        fastcopy::with_move_verify(spec.verify && spec.op == Op::Move, || {
+            fastcopy::with_pacer(spec.max_bps, || {
+                fastcopy::with_filter(spec.filter.clone(), || {
+                    transfer_with(
+                        &sources,
+                        &spec.dest,
+                        spec.op,
+                        &mut resolve,
+                        &mut on_event,
+                        cancel,
+                        &tuning,
+                    )
+                })
             })
         })
     });
@@ -345,10 +348,8 @@ pub fn run_with(
                 current: None,
             });
         };
-        // 필터 범위 안에서 검증(GAP-027): 복사에서 뺀 항목을 "missing"으로 보지 않는다.
-        match fastcopy::with_filter(spec.filter.clone(), || {
-            verify::verify_pairs(&out.transferred, &mut on_bytes, cancel)
-        }) {
+        // 목록 검증(GAP-027): 복사가 옮긴 경로(필터 반영 · 신생 파일 제외 · 빈 폴더 · 링크 안쪽 포함)만 대조.
+        match verify::verify_listed(&verify::pairs_for(&out), &mut on_bytes, cancel) {
             Ok(v) => {
                 if !v.ok() {
                     rep.ok = false;

@@ -29,9 +29,41 @@ pub fn verify_pairs(
 ) -> std::io::Result<VerifyReport> {
     let mut rep = VerifyReport::default();
     for (src, dst) in pairs {
-        verify_one(src, dst, &mut rep, on_bytes, cancel)?;
+        verify_one(src, dst, &mut rep, on_bytes, cancel, true)?;
     }
     Ok(rep)
+}
+
+/// **목록** 검증(GAP-027 · 11-01): 쌍마다 재귀 없이 — 폴더는 존재 · 종류만(빈 폴더 누락 적발) · 파일은 크기 + SHA-256. 원본 트리를 다시
+/// 훑지 않으므로 필터로 뺀 파일 · 복사 중 새로 생긴 파일을 "missing"으로 보지 않는다. 쌍은 [`pairs_for`](복사 결과) 또는 이동 검증이 만든다.
+pub fn verify_listed(
+    pairs: &[(PathBuf, PathBuf)],
+    on_bytes: &mut dyn FnMut(u64),
+    cancel: &AtomicBool,
+) -> std::io::Result<VerifyReport> {
+    let mut rep = VerifyReport::default();
+    for (src, dst) in pairs {
+        verify_one(src, dst, &mut rep, on_bytes, cancel, false)?;
+    }
+    Ok(rep)
+}
+
+/// 복사 결과([`crate::Outcome`] · [`crate::fastcopy::with_verify_collect`] 안에서 만든 것)의 검증 쌍: 옮긴 항목 (원본, 대상)마다
+/// 항목 자체 + `copied_paths` 중 그 아래 경로를 `대상.join(원본 기준 상대 경로)`로 짝짓는다(스테이징 교체와 무관 · 링크 안쪽 포함).
+#[must_use]
+pub fn pairs_for(out: &crate::Outcome) -> Vec<(PathBuf, PathBuf)> {
+    let mut pairs = Vec::with_capacity(out.transferred.len() + out.copied_paths.len());
+    for (src, dst) in &out.transferred {
+        pairs.push((src.clone(), dst.clone()));
+        for p in &out.copied_paths {
+            if let Ok(rel) = p.strip_prefix(src) {
+                if !rel.as_os_str().is_empty() {
+                    pairs.push((p.clone(), dst.join(rel)));
+                }
+            }
+        }
+    }
+    pairs
 }
 
 fn verify_one(
@@ -40,6 +72,7 @@ fn verify_one(
     rep: &mut VerifyReport,
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
+    recurse: bool,
 ) -> std::io::Result<()> {
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
         return Err(std::io::Error::new(
@@ -60,6 +93,9 @@ fn verify_one(
         return Ok(());
     }
     if sm.is_dir() {
+        if !recurse {
+            return Ok(()); // 목록 검증: 폴더는 존재 · 종류까지만(안쪽은 목록의 다른 쌍이 본다)
+        }
         let mut names: Vec<std::ffi::OsString> = std::fs::read_dir(src)?
             .filter_map(Result::ok)
             .map(|e| e.file_name())
@@ -71,7 +107,7 @@ fn verify_one(
             if !crate::fastcopy::filter_allows(&n, child.is_dir()) {
                 continue;
             }
-            verify_one(&child, &dst.join(&n), rep, on_bytes, cancel)?;
+            verify_one(&child, &dst.join(&n), rep, on_bytes, cancel, true)?;
         }
         return Ok(());
     }

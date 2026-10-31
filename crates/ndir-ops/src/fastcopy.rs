@@ -91,6 +91,47 @@ thread_local! {
     static PACER: std::cell::RefCell<Option<Arc<Pacer>>> = const { std::cell::RefCell::new(None) };
     /// 이 스레드의 이동 검증 깃발([`with_move_verify`] · T-202 ⑤) — 교차 볼륨 이동이 원본을 지우기 전에 사본을 대조한다(`crate::verify`).
     static MOVE_VERIFY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// 검증 목록 수집 깃발([`with_verify_collect`] · GAP-027 · 11-01) — 복사가 실제로 옮긴 원본 경로를 `Outcome::copied_paths`에 적는다.
+    static VERIFY_COLLECT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// 검증 목록 싱크([`collect_verify`]) — `plan`이 들어간 폴더 · `copy_tree`가 끝낸 모든 작업의 원본(`record` 무관 · 링크 안쪽 포함).
+    static VERIFY_SINK: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// `f`가 도는 동안 이 스레드의 복사가 **검증 목록**을 모은다(GAP-027 · 11-01): `transfer*`가 항목마다 실제로 옮긴 원본 경로(파일 · 폴더 ·
+/// 링크 안쪽 포함)를 [`crate::Outcome::copied_paths`]에 싣는다 → 검증([`crate::verify::verify_listed`])이 원본 트리를 다시 훑지 않아
+/// 필터로 뺀 파일 · 복사 중 새로 생긴 파일을 "missing"으로 보지 않는다. 꺼져 있으면(기본) 비용 0.
+pub fn with_verify_collect<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            VERIFY_COLLECT.with(|c| c.set(self.0));
+        }
+    }
+    let _restore = Restore(VERIFY_COLLECT.with(|c| c.replace(on)));
+    f()
+}
+
+/// 이 스레드의 검증 목록 수집 깃발.
+#[must_use]
+pub fn verify_collect() -> bool {
+    VERIFY_COLLECT.with(std::cell::Cell::get)
+}
+
+/// `f`가 도는 동안 이 스레드의 `plan`/`copy_tree`가 적는 원본 경로를 모아 돌려준다(끝나면 이전 싱크로 · 중첩 가능).
+pub(crate) fn collect_verify<R>(f: impl FnOnce() -> R) -> (R, Vec<PathBuf>) {
+    let prev = VERIFY_SINK.with(|c| c.replace(Some(Vec::new())));
+    let r = f();
+    let got = VERIFY_SINK.with(|c| c.replace(prev)).unwrap_or_default();
+    (r, got)
+}
+
+/// 검증 목록에 원본 경로 하나(싱크가 없으면 무시).
+fn note_verify(p: &Path) {
+    VERIFY_SINK.with(|c| {
+        if let Some(v) = c.borrow_mut().as_mut() {
+            v.push(p.to_path_buf());
+        }
+    });
 }
 
 /// `f`가 도는 동안 이 스레드의 교차 볼륨 이동이 **원본 정리 전에 사본을 검증**한다(크기 + SHA-256 · 불일치 = 그 항목 오류 · 원본·사본 유지).
@@ -472,6 +513,7 @@ fn plan(
         }
         if ft.is_dir() && !link {
             plan(&p, &d, record, stop, jobs, dirs)?;
+            note_verify(&p); // 검증 목록(GAP-027): 폴더도 `record` 무관하게(빈 폴더 누락 적발)
             if record {
                 dirs.push(p);
             }
@@ -485,6 +527,7 @@ fn plan(
                 }
             }
             plan(&p, &d, false, stop, jobs, dirs)?;
+            note_verify(&p); // 링크 폴더도 검증 목록에(안쪽 항목은 재귀 호출이 적는다 · `copied`에는 안 적는다 — BUG-001)
             if record {
                 dirs.push(p);
             }
@@ -537,6 +580,10 @@ pub(crate) fn copy_tree(
         copy_jobs_parallel(&jobs, threads, on_bytes, stop, t, &mut done)
     };
     result?;
+    // 검증 목록(GAP-027): 끝낸 **모든** 작업의 원본(`record` 무관 — 링크 안쪽 파일도 대조 대상 · `copied`와 다르다).
+    for &i in &done {
+        note_verify(&jobs[i].src);
+    }
     if let Some(c) = copied {
         c.extend(
             done.into_iter()

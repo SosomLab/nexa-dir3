@@ -610,18 +610,21 @@ pub(crate) fn run_with(
     }
     // 속도 제한(`--max-bps` · T-202 ③): 복사 단계만 · 복제 경로는 세지 않음 · 병렬 합계(`fastcopy::Pacer`).
     // 이동 검증(`--verify --move` · T-202 ⑤): 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 오류 · 양쪽 유지).
-    let out = ndir_ops::fastcopy::with_move_verify(o.verify && o.op == Op::Move, || {
-        ndir_ops::fastcopy::with_pacer(o.max_bps, || {
-            ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
-                transfer_with(
-                    &sources,
-                    &o.dest,
-                    o.op,
-                    &mut resolve,
-                    &mut |ev| printer.event(&ev, err),
-                    cancel,
-                    &tuning,
-                )
+    // 복사 검증(GAP-027): 옮긴 경로 목록을 모아 그 목록만 대조(`with_verify_collect` · 원본 트리 재주행 없음).
+    let out = ndir_ops::fastcopy::with_verify_collect(o.verify && o.op == Op::Copy, || {
+        ndir_ops::fastcopy::with_move_verify(o.verify && o.op == Op::Move, || {
+            ndir_ops::fastcopy::with_pacer(o.max_bps, || {
+                ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+                    transfer_with(
+                        &sources,
+                        &o.dest,
+                        o.op,
+                        &mut resolve,
+                        &mut |ev| printer.event(&ev, err),
+                        cancel,
+                        &tuning,
+                    )
+                })
             })
         })
     });
@@ -671,10 +674,12 @@ pub(crate) fn run_with(
                 let _ = err.flush();
             }
         };
-        // 필터 범위 안에서 검증(GAP-027 협업 실측): `--exclude`로 뺀 파일을 "missing"으로 보지 않는다.
-        match ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
-            ndir_xfer::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel)
-        }) {
+        // 목록 검증(GAP-027): 복사가 옮긴 경로만 대조 — `--exclude`로 뺀 파일 · 복사 중 생긴 파일을 "missing"으로 보지 않는다.
+        match ndir_xfer::verify::verify_listed(
+            &ndir_xfer::verify::pairs_for(&out),
+            &mut on_bytes,
+            cancel,
+        ) {
             Ok(rep) => {
                 if !o.quiet && read > 0 {
                     let _ = writeln!(err);
