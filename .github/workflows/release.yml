@@ -136,13 +136,18 @@ jobs:
           nexa-dir --smoke
           test -f /usr/share/applications/nexa-dir.desktop
           test -d /usr/share/nexa-dir/plugins
+          # libndir_xfer.so(C ABI 전송 엔진 · T-202 ①) — 파일 존재만으론 심볼·로드를 못 잡는다 → ctypes로 판 조회(협업 제안 10-31).
+          test -f /usr/share/nexa-dir/include/ndir_xfer.h
+          python3 -c 'import ctypes,sys; L=ctypes.CDLL(sys.argv[1]); L.ndir_xfer_version.restype=ctypes.c_char_p; print(L.ndir_xfer_version().decode())' /usr/lib/nexa-dir/libndir_xfer.so | tee /dev/stderr | grep -qx "$NDIR_VERSION"
           sudo dpkg -r nexa-dir
           # `! cmd`는 set -e를 타지 않는다 — 부정은 test 안에서.
-          test ! -e /usr/bin/nexa-dir; test ! -e /usr/bin/nexa-copy; test ! -e /usr/share/nexa-dir
+          test ! -e /usr/bin/nexa-dir; test ! -e /usr/bin/nexa-copy; test ! -e /usr/share/nexa-dir; test ! -e /usr/lib/nexa-dir
           # rpm은 ubuntu에 설치할 수 없다 — 목록·서명 검사만(rpm 계열 실기는 docs/port/90 실기표).
           rpm=$(ls target/packaging/linux/*.rpm)
           rpm -qpl "$rpm" | grep -q '^/usr/bin/nexa-dir$'
           rpm -qpl "$rpm" | grep -q '^/usr/bin/nexa-copy$'
+          rpm -qpl "$rpm" | grep -q '^/usr/lib/nexa-dir/libndir_xfer.so$'
+          rpm -qpl "$rpm" | grep -q '^/usr/share/nexa-dir/include/ndir_xfer.h$'
           rpm -K --nosignature "$rpm"
 
       # ── macOS: Universal 2 .app → pkg + dmg ──
@@ -180,6 +185,9 @@ jobs:
           test -L /usr/local/bin/nexa-copy
           /usr/local/bin/nexa-copy --version | tee /dev/stderr | grep -q "^nexa-copy $NDIR_VERSION\$"
           "/Applications/Nexa Dir.app/Contents/MacOS/nexa-dir" --smoke
+          # libndir_xfer.dylib(C ABI 전송 엔진 · T-202 ① · Contents/Frameworks · --deep 서명) — ctypes 로드 + 판 조회.
+          test -f "/Applications/Nexa Dir.app/Contents/Resources/include/ndir_xfer.h"
+          python3 -c 'import ctypes,sys; L=ctypes.CDLL(sys.argv[1]); L.ndir_xfer_version.restype=ctypes.c_char_p; print(L.ndir_xfer_version().decode())' "/Applications/Nexa Dir.app/Contents/Frameworks/libndir_xfer.dylib" | tee /dev/stderr | grep -qx "$NDIR_VERSION"
           pkgutil --pkg-info com.sosomlab.nexa-dir
           sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"
           # `! cmd`는 set -e를 타지 않는다 — 부정은 test 안에서 / if로.
@@ -225,6 +233,10 @@ jobs:
           $v3 = (& (Join-Path $dir "nexa-copy.exe") --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $v3 -ne "nexa-copy $env:NDIR_VERSION") { throw "nexa-copy --version 불일치: '$v3' (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir "plugins\markdown.wasm"))) { throw "동봉 플러그인 누락" }
+          # ndir_xfer.dll(C ABI 전송 엔진 · T-202 ①) + include\ndir_xfer.h — ctypes 로드 + 판 조회(파일 존재만으론 심볼을 못 잡는다).
+          if (-not (Test-Path (Join-Path $dir "include\ndir_xfer.h"))) { throw "ndir_xfer.h 누락" }
+          $v4 = (& python -c "import ctypes,sys; L=ctypes.CDLL(sys.argv[1]); L.ndir_xfer_version.restype=ctypes.c_char_p; print(L.ndir_xfer_version().decode())" (Join-Path $dir "ndir_xfer.dll") | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $v4 -ne $env:NDIR_VERSION) { throw "ndir_xfer_version 불일치: '$v4' (exit $LASTEXITCODE)" }
           (Get-ItemProperty 'HKLM:\SOFTWARE\SosomLab\Nexa Dir').InstallDir
           $p = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "msiexec /x 실패 $($p.ExitCode)" }
@@ -301,6 +313,8 @@ jobs:
           | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | Unzip and run \`nexa-dir.exe\` (settings go to a \`data\` folder next to the exe if present, otherwise %APPDATA%\\\\nexa-dir); in a console (PowerShell) use \`ndir.exe\`, e.g. \`ndir --selfcheck\` |
 
           Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` \`--mirror\` \`--dry-run\` \`--include/--exclude\` \`--job <file.json>\` \`--progress\` \`--report <file>\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
+
+          The same engine is also bundled as a C library, **\`ndir_xfer\`** (\`ndir_xfer.dll\` next to the exe on Windows · \`Contents/Frameworks/libndir_xfer.dylib\` on macOS · \`/usr/lib/nexa-dir/libndir_xfer.so\` on Linux) with its header \`include/ndir_xfer.h\`: \`ndir_xfer_run(job_json, progress_cb, user, cancel)\` takes the same job JSON as \`nexa-copy --job\` and returns a report JSON (\`ndir_xfer_abi_version()\` = 1).
 
           Verify downloads with \`sha256sums.txt\`. Uninstall: Windows Apps & features · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\` / \`dnf remove nexa-dir\`.
           User data (settings, sessions, favorites, rename presets) lives in the settings folder and is kept on uninstall. Settings from 0.22.0 and earlier (nexa-dir2) are imported once on first start.

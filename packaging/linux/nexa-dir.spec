@@ -48,6 +48,10 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %files
 %{_bindir}/nexa-dir
 %{_bindir}/nexa-copy
+# C ABI transfer engine (T-202 1, docs/26 7): private dir under /usr/lib (not %{_libdir} = lib64 on Fedora - deb staging puts it in /usr/lib).
+%dir %{_prefix}/lib/nexa-dir
+%{_prefix}/lib/nexa-dir/libndir_xfer.so
+%{_datadir}/nexa-dir/include
 %{_datadir}/applications/nexa-dir.desktop
 %{_datadir}/icons/hicolor/*/apps/nexa-dir.png
 %dir %{_datadir}/nexa-dir

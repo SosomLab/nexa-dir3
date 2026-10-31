@@ -36,9 +36,9 @@ for T in $TARGETS; do
         if ! rustup target list --installed 2>/dev/null | grep -q "^$T\$"; then
             note "타깃 std 없음: $T (rustup target add $T) — 건너뜀"; continue
         fi
-        "$CARGO" build --release --locked -p nexa-dir -p nexa-copy --target "$T"
+        "$CARGO" build --release --locked -p nexa-dir -p nexa-copy -p ndir-xfer --target "$T"
     fi
-    if [ -x "$ROOT/target/$T/release/nexa-dir" ]; then
+    if [ -x "$ROOT/target/$T/release/nexa-dir" ] && [ -f "$ROOT/target/$T/release/libndir_xfer.dylib" ]; then
         BUILT+=("$T"); note "✓ $T"
     else
         note "산출물 없음: target/$T/release — 건너뜀"
@@ -58,6 +58,18 @@ for b in "${BINS[@]}"; do
     chmod 0755 "$APP/Contents/MacOS/$b"
     note "$b: $(lipo -archs "$APP/Contents/MacOS/$b" | tr '\n' ' ')($(du -h "$APP/Contents/MacOS/$b" | cut -f1))"
 done
+# C ABI 전송 엔진 libndir_xfer.dylib(T-202 ① · docs/26 §7 · §11-4 전 채널 동봉) → Contents/Frameworks(서명 **앞** · codesign --deep이 함께 서명) ·
+# 헤더 = Contents/Resources/include(stage_common) · 설치 id = @rpath(소비자는 전체 경로 dlopen이라 참고용).
+LIB=libndir_xfer.dylib
+if [ ${#BUILT[@]} -ge 2 ]; then
+    inputs=(); for T in "${BUILT[@]}"; do inputs+=("$ROOT/target/$T/release/$LIB"); done
+    lipo -create "${inputs[@]}" -output "$APP/Contents/Frameworks/$LIB"
+else
+    cp "$ROOT/target/${BUILT[0]}/release/$LIB" "$APP/Contents/Frameworks/$LIB"
+fi
+chmod 0644 "$APP/Contents/Frameworks/$LIB"
+install_name_tool -id "@rpath/$LIB" "$APP/Contents/Frameworks/$LIB"
+note "$LIB: $(lipo -archs "$APP/Contents/Frameworks/$LIB" | tr '\n' ' ')($(du -h "$APP/Contents/Frameworks/$LIB" | cut -f1)) → Contents/Frameworks"
 sed "s/@VERSION@/$VERSION/g" "$ROOT/packaging/macos/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 stage_common "$APP/Contents/Resources"

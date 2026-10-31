@@ -66,6 +66,9 @@ stage_common() {
     local n=0
     for w in "$pk"/*.wasm; do [ -f "$w" ] && { install -m 0644 "$w" "$dst/plugins/"; n=$((n+1)); }; done
     note "plugins/ ← $pk ($n .wasm)"
+    # C ABI 헤더(T-202 ① · docs/26 §7) — 라이브러리 본체는 채널마다 자리가 다르다(deb/rpm /usr/lib/nexa-dir · macOS Contents/Frameworks · Windows exe 옆).
+    mkdir -p "$dst/include"
+    install -m 0644 "$ROOT/crates/ndir-xfer/include/ndir_xfer.h" "$dst/include/ndir_xfer.h"
     third_party_notices "$dst/THIRD-PARTY-NOTICES.txt"
 }
 

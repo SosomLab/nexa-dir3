@@ -65,6 +65,7 @@
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Nexa Dir">
         <Directory Id="PluginsFolder" Name="plugins" />
+        <Directory Id="IncludeFolder" Name="include" />
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
@@ -82,6 +83,10 @@
         <File Id="NdirExe" Source="$(var.Staging)\ndir.exe" />
         <!-- nexa-copy.exe: command-line copy/move tool on the same transfer engine (bundled in every channel, DR-31 1, 10-25). -->
         <File Id="NexaCopyExe" Source="$(var.Staging)\nexa-copy.exe" />
+      </Component>
+      <!-- ndir_xfer.dll: the transfer engine as a C library (ndir_xfer_run, bundled in every channel, T-202 1, 10-31). Own component: one key path per component. -->
+      <Component Id="XferLib" Guid="D622D205-5AF1-4F56-BC7B-A6E90BC05CDA">
+        <File Id="NdirXferDll" Source="$(var.Staging)\ndir_xfer.dll" KeyPath="yes" />
       </Component>
       <Component Id="Docs" Guid="3EA7048D-1375-4387-8636-F9BED6F72FF9">
         <File Source="$(var.Staging)\LICENSE.md" KeyPath="yes" />
@@ -108,6 +113,14 @@
       <Files Include="$(var.Staging)\plugins\**" />
     </ComponentGroup>
 
+    <!-- include\ndir_xfer.h: C header for ndir_xfer.dll (T-202 1). -->
+    <ComponentGroup Id="IncludeFiles" Directory="IncludeFolder">
+      <Component Id="XferHeader" Guid="1CAFAB71-EC4E-412F-A49E-0196D6F3AA04">
+        <File Id="NdirXferHeader" Source="$(var.Staging)\include\ndir_xfer.h" KeyPath="yes" />
+        <RemoveFolder Id="RemoveIncludeFolder" On="uninstall" />
+      </Component>
+    </ComponentGroup>
+
     <!-- ── 선택: PATH 추가(nexa-dir를 어느 콘솔에서나) ── -->
     <ComponentGroup Id="PathEnvFiles" Directory="INSTALLFOLDER">
       <Component Id="PathEnv" Guid="2DB6334C-9C33-46E5-9507-E1E279C96AE7">
@@ -120,6 +133,7 @@
     <Feature Id="Main" Title="Nexa Dir" Description="Nexa Dir (nexa-dir.exe) and bundled plugins" Level="1" AllowAbsent="no" AllowAdvertise="no" Display="expand">
       <ComponentGroupRef Id="MainFiles" />
       <ComponentGroupRef Id="PluginsFiles" />
+      <ComponentGroupRef Id="IncludeFiles" />
       <Feature Id="PathEnv" Title="Add to PATH" Description="Adds the install folder to the system PATH so 'ndir --selfcheck' (console helper), 'nexa-dir' and 'nexa-copy' (command-line copy/move) work in any console." Level="1" AllowAdvertise="no">
         <ComponentGroupRef Id="PathEnvFiles" />
       </Feature>

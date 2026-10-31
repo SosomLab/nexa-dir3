@@ -36,5 +36,5 @@ note "$(basename "$FINAL") $(du -h "$FINAL" | cut -f1) · sha256 $(sha256_of "$F
 
 step "검증(설치 없이)"
 rpm -qpi "$FINAL" 2>/dev/null | sed -n '1,8p' | sed 's/^/    /'
-rpm -qpl "$FINAL" 2>/dev/null | grep -E 'bin/nexa-dir$|nexa-dir.desktop$|256x256/apps/nexa-dir.png$' | sed 's/^/    /'
+rpm -qpl "$FINAL" 2>/dev/null | grep -E 'bin/nexa-dir$|bin/nexa-copy$|lib/nexa-dir/libndir_xfer.so$|include/ndir_xfer.h$|nexa-dir.desktop$|256x256/apps/nexa-dir.png$' | sed 's/^/    /'
 echo "RPM=$FINAL"
