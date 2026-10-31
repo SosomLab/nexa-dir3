@@ -332,18 +332,17 @@ jobs:
           \`\`\`
           Linux (apt/rpm repository): <https://pkg.sosomlab.com>
 
-          winget·Chocolatey는 중앙 검수를 거쳐야 위 명령이 동작합니다. 함께 올린 \`nexa-dir-$VERSION-package-manifests.zip\`이 실제 제출본입니다.
+          The winget and Chocolatey commands work once the central reviews are through; \`nexa-dir-$VERSION-package-manifests.zip\` attached here is the exact submission.
 
-          ## 서명
+          ## Signing
 
-          코드 서명 키가 투입되지 않은 빌드는 macOS Gatekeeper·Windows SmartScreen이 경고합니다(DR-20 · 별도 요청 시 서명).
-          - macOS: \`xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"\`(brew Cask로 설치하면 자동)
-          - Windows: SmartScreen "추가 정보 → 실행"
+          Builds made without a code-signing key are flagged by macOS Gatekeeper and Windows SmartScreen (signed builds on request).
+          - macOS: \`xattr -dr com.apple.quarantine "/Applications/Nexa Dir.app"\` (the brew Cask does this for you)
+          - Windows: SmartScreen → "More info" → "Run anyway"
 
-          변경 내역: [docs/DEVLOG.md](https://github.com/SosomLab/nexa-dir3/blob/main/docs/DEVLOG.md)
+          Changelog: [docs/DEVLOG.md](https://github.com/SosomLab/nexa-dir3/blob/main/docs/DEVLOG.md) (Korean, development log)
 
           License: PolyForm Noncommercial 1.0.0 — free for noncommercial use only; commercial use requires a license.
-          라이선스: PolyForm Noncommercial 1.0.0 (비상업적 사용만 허용 · 상업 사용은 라이선스 필요).
           EOF
       - name: 릴리스 게시(태그 = 공개 · 수동 = 초안)
         env:
