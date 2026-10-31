@@ -4,11 +4,12 @@ title: 자가 점검 창 — 백그라운드 점검 결과 표
 settings: ui.lang=en
 # 덤프 시점 14 s(10-31 · 종전 8 s): pty 에코 대기가 3 → 8 s(c926d98)가 되어 부하 중(디스크 10~45 MB/s · 셸 기동 지연) 8 s엔 아직 "Running…"
 # — 기본 timeout 20 s 안.
+# 10-31 T-161: 고정 대기(8 → 14 s) 대신 `@until:check` = 자가 점검 백그라운드가 끝난 뒤(부하와 무관 · 상한 20 s는 `resume_blocked`).
 cmd: @ready:help.selfcheck
-cmd: @after:14000:check.dump:<out>/check.txt
-cmd: @after:14100:assert.check:!FAIL
-cmd: @after:14200:assert.check:PASS env
-cmd: @after:14300:quit
+cmd: @until:check:check.dump:<out>/check.txt
+cmd: @ready:assert.check:!FAIL
+cmd: @ready:assert.check:PASS env
+cmd: @ready:quit
 check: check.txt: PASS env
 check: check.txt: PASS plugin
 check: check.txt: !FAIL

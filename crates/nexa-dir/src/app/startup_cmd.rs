@@ -48,6 +48,10 @@ pub(crate) fn is_wait_cmd(id: &str) -> bool {
             | "trash.wait"
             | "dirsize.wait"
             | "git.wait"
+            // 조건 대기 3종(T-161/T-136 · 10-31 사용자 결정 ⑤): 자가 점검 끝 · 대화상자 열림 · 앱 조용함.
+            | "check.wait"
+            | "dlg.wait"
+            | "idle.wait"
     )
 }
 
@@ -1019,6 +1023,22 @@ impl App {
                 busy
             }
             // 10-08 Linux 실기 자동화: 신규 기능의 워커가 끝날 때까지(중복 찾기 · 폴더 비교 · 체크섬 · 압축 풀기/동기화 · 폴더 크기).
+            // 자가 점검 창의 백그라운드 점검이 끝날 때까지(열기 요청이 아직 창을 안 만들었으면 그것도 바쁨 · T-161).
+            "check.wait" => self.open_check || self.check_win.is_running(),
+            // 대화상자 **대기 사양이 창이 될 때까지**(`ask` → `dlg_pending` → 다음 틱 창 생성 · T-136 delete-confirm · 종전 `@after:300`) ·
+            // 요청 자체가 없으면 바로 통과(덤프가 `none`으로 판정을 드러낸다).
+            "dlg.wait" => self.dlg_pending.is_some(),
+            // 앱이 조용해질 때까지: 전송 · 메뉴 셸 항목 수집 · 자가 점검 · 대화상자 대기 · 도크 갱신 예약이 모두 없을 때.
+            "idle.wait" => {
+                self.transfer.is_some()
+                    || self.ctx_pending.is_some()
+                    || self.ctx_wait.is_some()
+                    || self.open_check
+                    || self.check_win.is_running()
+                    || self.platform.ctxmenu.busy()
+                    || self.dlg_pending.is_some()
+                    || self.docks_due.is_some()
+            }
             "dupes.wait" => self.dup_job.is_some() || self.dupes_win.is_running(),
             "compare.wait" => {
                 self.cmp_job.is_some() || self.compare_win.is_running() || self.sync_job.is_some()
@@ -1046,6 +1066,11 @@ impl App {
             match classify_startup(id) {
                 StartupWhen::Now(c) => self.startup_cmd(c),
                 StartupWhen::Ready(c) => self.startup_ready.push(c.to_string()),
+                // 조건 대기 = `<조건>.wait` + 명령(둘 다 `@ready` 순차 큐 · 대기는 `run_ready`/`resume_blocked`가 20 s 상한으로 푼다).
+                StartupWhen::Until(pred, c) => {
+                    self.startup_ready.push(format!("{pred}.wait"));
+                    self.startup_ready.push(c.to_string());
+                }
                 StartupWhen::After(ms, c) => self
                     .startup_timed
                     .push((Instant::now() + Duration::from_millis(ms), c.to_string())),
@@ -1060,15 +1085,27 @@ pub(crate) enum StartupWhen<'a> {
     Now(&'a str),
     Ready(&'a str),
     After(u64, &'a str),
+    /// `<조건>.wait` 뒤 명령(조건 = `idle` · `check` · `dlg` · `ops` · `ctx` … — `is_wait_cmd` 어휘의 앞부분).
+    Until(&'a str, &'a str),
 }
 
-/// `@ready:` · `@idle:`(= ready · 작업 큐는 M6) · `@after:<ms>:` 접두 판정(순수).
+/// `@ready:` · `@idle:<명령>`(= 앱이 조용해진 뒤 · 10-31 T-161) · `@until:<조건>:<명령>`(조건 = `check` 자가 점검 끝 · `dlg` 대화상자
+/// 열림 · `ops` 전송 끝 · `ctx` 메뉴 셸 항목 도착 · `idle` …) · `@after:<ms>:` 접두 판정(순수). 모르는 조건은 `@ready`로(대기 없음).
 pub(crate) fn classify_startup(id: &str) -> StartupWhen<'_> {
-    if let Some(c) = id
-        .strip_prefix("@ready:")
-        .or_else(|| id.strip_prefix("@idle:"))
-    {
+    if let Some(c) = id.strip_prefix("@ready:") {
         return StartupWhen::Ready(c);
+    }
+    if let Some(c) = id.strip_prefix("@idle:") {
+        return StartupWhen::Until("idle", c);
+    }
+    if let Some(rest) = id.strip_prefix("@until:") {
+        if let Some((pred, c)) = rest.split_once(':') {
+            let pred = pred.trim();
+            if is_wait_cmd(&format!("{pred}.wait")) {
+                return StartupWhen::Until(pred, c);
+            }
+            return StartupWhen::Ready(c);
+        }
     }
     if let Some(rest) = id.strip_prefix("@after:") {
         if let Some((ms, c)) = rest.split_once(':') {
@@ -1086,9 +1123,28 @@ mod tests {
     fn classify_prefixes() {
         assert_eq!(classify_startup("nav.up"), StartupWhen::Now("nav.up"));
         assert_eq!(classify_startup("@ready:quit"), StartupWhen::Ready("quit"));
+        // 조건 대기(T-161 · 10-31): `@idle` = idle.wait 뒤 · `@until:<조건>` = 그 wait 뒤 · 모르는 조건 = 대기 없이 ready.
+        assert_eq!(
+            classify_startup("@idle:list.dump:x"),
+            StartupWhen::Until("idle", "list.dump:x")
+        );
+        assert_eq!(
+            classify_startup("@until:check:check.dump:x"),
+            StartupWhen::Until("check", "check.dump:x")
+        );
+        assert_eq!(
+            classify_startup("@until:dlg:dlg.pick:0"),
+            StartupWhen::Until("dlg", "dlg.pick:0")
+        );
+        assert_eq!(
+            classify_startup("@until:nope:quit"),
+            StartupWhen::Ready("quit")
+        );
+        assert!(is_wait_cmd("check.wait") && is_wait_cmd("dlg.wait") && is_wait_cmd("idle.wait"));
         assert_eq!(
             classify_startup("@idle:quit:2"),
-            StartupWhen::Ready("quit:2")
+            StartupWhen::Until("idle", "quit:2"),
+            "10-31 T-161: `@idle`는 예약만 돼 있던 접두 → 이제 `idle.wait` 뒤(종전 = ready와 동일)"
         );
         assert_eq!(
             classify_startup("@after:250:layout.dump:x"),
