@@ -144,6 +144,21 @@ impl JobSpec {
         Ok(s)
     }
 
+    /// 상대 경로를 `base`(잡 파일이 있는 폴더 · 사용자 결정 10-31 §11 ①) 기준으로 푼다 — 절대 경로는 그대로.
+    #[must_use]
+    pub fn resolved_against(mut self, base: &std::path::Path) -> JobSpec {
+        let fix = |p: &PathBuf| {
+            if p.is_absolute() {
+                p.clone()
+            } else {
+                base.join(p)
+            }
+        };
+        self.sources = self.sources.iter().map(fix).collect();
+        self.dest = fix(&self.dest);
+        self
+    }
+
     /// 명세 → JSON(모든 키 · 입력 순서 고정).
     #[must_use]
     pub fn to_json(&self) -> String {
@@ -240,5 +255,20 @@ mod tests {
                 .starts_with("op")
         );
         assert!(JobSpec::from_json("[1]").is_err());
+        // 상대 경로 = 기준 폴더 아래 · 절대 경로는 그대로.
+        let abs = if cfg!(windows) {
+            "C:\\abs\\x"
+        } else {
+            "/abs/x"
+        };
+        let r = JobSpec::from_json(&format!(
+            r#"{{"sources":["src/a","{}"],"dest":"out"}}"#,
+            abs.replace('\\', "\\\\")
+        ))
+        .unwrap()
+        .resolved_against(std::path::Path::new("/jobs"));
+        assert_eq!(r.sources[0], PathBuf::from("/jobs").join("src/a"));
+        assert_eq!(r.sources[1], PathBuf::from(abs));
+        assert_eq!(r.dest, PathBuf::from("/jobs").join("out"));
     }
 }

@@ -16,6 +16,8 @@
 //!   --exclude <glob>     skip files and folders whose name matches (repeatable)
 //!   --job <file.json>    run a job spec (ndir-xfer JobSpec JSON · all options above as keys · no --ask) instead of arguments
 //!   --progress           machine-readable: one JSON line per progress step on stdout, then the final report JSON (T-97 · 10-31)
+//!   --report <file>      also write the final report JSON to a file (works with or without --progress)
+//!                        relative paths inside a --job file are resolved against the folder that contains the job file
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
 //! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
@@ -66,6 +68,7 @@ Options:
                        (ignored with --move: the source is gone)
   --job <file.json>    run an ndir-xfer JobSpec JSON instead of arguments (no --ask)
   --progress           JSON progress lines + final report on stdout (machine-readable)
+  --report <file>      also write the final report JSON to a file (relative job paths = job file folder)
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
@@ -98,6 +101,8 @@ pub(crate) struct Options {
     pub dest: PathBuf,
     /// `--progress`: JSON 줄 출력(ndir-xfer 경로 · `--ask`와 함께 못 씀).
     pub progress: bool,
+    /// `--report <file>`: 결과 JSON 파일(ndir-xfer 경로).
+    pub report: Option<PathBuf>,
 }
 
 impl Options {
@@ -127,11 +132,12 @@ impl Options {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Parsed {
     Run(Options),
-    /// `--job <file>`(JobSpec JSON · 10-31 T-97) — `progress` = JSON 줄 출력 · `quiet` = 요약 생략.
+    /// `--job <file>`(JobSpec JSON · 10-31 T-97) — `progress` = JSON 줄 출력 · `quiet` = 요약 생략 · `report` = 결과 JSON 파일.
     Job {
         file: PathBuf,
         progress: bool,
         quiet: bool,
+        report: Option<PathBuf>,
     },
     Help,
     Version,
@@ -153,6 +159,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut yes = false;
     let mut progress = false;
     let mut job: Option<PathBuf> = None;
+    let mut report: Option<PathBuf> = None;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -177,6 +184,10 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--mirror" => mirror = true,
             "-y" | "--yes" => yes = true,
             "--progress" => progress = true,
+            "--report" => {
+                let v = it.next().ok_or("--report needs a file")?;
+                report = Some(PathBuf::from(v));
+            }
             "--job" => {
                 let v = it.next().ok_or("--job needs a file")?;
                 job = Some(PathBuf::from(v));
@@ -227,6 +238,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             file,
             progress,
             quiet,
+            report,
         });
     }
     if paths.len() < 2 {
@@ -249,6 +261,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         sources: paths,
         dest,
         progress,
+        report,
     }))
 }
 
@@ -258,6 +271,7 @@ pub(crate) fn run_job_with(
     spec: &JobSpec,
     progress: bool,
     quiet: bool,
+    report: Option<&Path>,
     cancel: &AtomicBool,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -278,6 +292,12 @@ pub(crate) fn run_job_with(
         }
     };
     let rep = ndir_xfer::run(spec, &mut on_progress, cancel);
+    if let Some(path) = report {
+        // `--report`(사용자 결정 10-31 §11 ③): 결과 JSON 파일 — 쓰기 실패는 안내만(작업 결과는 그대로).
+        if let Err(e) = std::fs::write(path, format!("{}\n", rep.to_json())) {
+            let _ = writeln!(err, "nexa-copy: --report {}: {e}", path.display());
+        }
+    }
     if progress {
         let _ = writeln!(out, "{}", rep.to_json());
         let _ = out.flush();
@@ -335,6 +355,7 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
             file,
             progress,
             quiet,
+            report,
         }) => {
             let text = match std::fs::read_to_string(&file) {
                 Ok(t) => t,
@@ -344,7 +365,8 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
                 }
             };
             let spec = match JobSpec::from_json(&text) {
-                Ok(s) => s,
+                // 상대 경로 = 잡 파일이 있는 폴더 기준(사용자 결정 10-31 §11 ①).
+                Ok(s) => s.resolved_against(file.parent().unwrap_or(Path::new("."))),
                 Err(e) => {
                     let _ = writeln!(err, "nexa-copy: --job {}: {e}", file.display());
                     return ExitCode::from(2);
@@ -353,11 +375,22 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
             crate::ctrlc::install();
             let stdout = std::io::stdout();
             let mut out = stdout.lock();
-            run_job_with(&spec, progress, quiet, crate::ctrlc::flag(), &mut out, err)
+            run_job_with(
+                &spec,
+                progress,
+                quiet,
+                report.as_deref(),
+                crate::ctrlc::flag(),
+                &mut out,
+                err,
+            )
         }
-        Ok(Parsed::Run(o)) if o.progress => {
+        Ok(Parsed::Run(o)) if o.progress || o.report.is_some() => {
             if o.ask {
-                let _ = writeln!(err, "nexa-copy: --progress cannot be combined with --ask");
+                let _ = writeln!(
+                    err,
+                    "nexa-copy: --progress/--report cannot be combined with --ask"
+                );
                 return ExitCode::from(2);
             }
             crate::ctrlc::install();
@@ -365,8 +398,9 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
             let mut out = stdout.lock();
             run_job_with(
                 &o.to_spec(),
-                true,
+                o.progress,
                 o.quiet,
+                o.report.as_deref(),
                 crate::ctrlc::flag(),
                 &mut out,
                 err,
@@ -1179,9 +1213,20 @@ mod tests {
             Parsed::Job {
                 file: PathBuf::from("j.json"),
                 progress: true,
-                quiet: false
+                quiet: false,
+                report: None
             }
         );
+        let Parsed::Job { report, .. } = parse(&[
+            "--job".into(),
+            "j.json".into(),
+            "--report".into(),
+            "r.json".into(),
+        ])
+        .unwrap() else {
+            panic!("job")
+        };
+        assert_eq!(report, Some(PathBuf::from("r.json")));
         assert!(parse(&["--job".into(), "j.json".into(), "a".into(), "b".into()]).is_err());
         let Parsed::Run(o) = parse(&[
             "--move".into(),
@@ -1215,15 +1260,19 @@ mod tests {
             ..JobSpec::default()
         };
         let (mut out, mut err) = (Vec::new(), Vec::new());
+        let report_file = d.join("report.json");
         let code = run_job_with(
             &spec,
             true,
             false,
+            Some(&report_file),
             &AtomicBool::new(false),
             &mut out,
             &mut err,
         );
         assert_eq!(code, ExitCode::SUCCESS);
+        let rf = std::fs::read_to_string(&report_file).unwrap();
+        assert!(rf.starts_with("{\"ok\":true"), "--report 파일: {rf}");
         let text = String::from_utf8(out).unwrap();
         let last = text.lines().last().unwrap();
         assert!(
@@ -1240,6 +1289,7 @@ mod tests {
             &bad,
             false,
             false,
+            None,
             &AtomicBool::new(false),
             &mut out,
             &mut err,
