@@ -9,6 +9,11 @@ repository.workspace = true
 homepage.workspace = true
 description = "Nexa Dir transfer engine facade: serializable job spec, progress and report over ndir-ops (copy, move, verify, mirror, dry-run)"
 
+# ★ T-202 ①(10-31 사용자 결정 docs/26 §11-4): rlib(앱 · nexa-copy 정적 내장) + cdylib(`ndir_xfer_run` C ABI · 패키지 동봉 · nexa-sql D-350 꼴).
+#   산출물 = libndir_xfer.so / libndir_xfer.dylib / ndir_xfer.dll · 헤더 = include/ndir_xfer.h · ABI 판 = src/capi.rs ABI_VERSION.
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 ndir-ops = { workspace = true }
 
