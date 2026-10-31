@@ -2,11 +2,13 @@
 id: selfcheck-win
 title: 자가 점검 창 — 백그라운드 점검 결과 표
 settings: ui.lang=en
+# 덤프 시점 14 s(10-31 · 종전 8 s): pty 에코 대기가 3 → 8 s(c926d98)가 되어 부하 중(디스크 10~45 MB/s · 셸 기동 지연) 8 s엔 아직 "Running…"
+# — 기본 timeout 20 s 안.
 cmd: @ready:help.selfcheck
-cmd: @after:8000:check.dump:<out>/check.txt
-cmd: @after:8100:assert.check:!FAIL
-cmd: @after:8200:assert.check:PASS env
-cmd: @after:8300:quit
+cmd: @after:14000:check.dump:<out>/check.txt
+cmd: @after:14100:assert.check:!FAIL
+cmd: @after:14200:assert.check:PASS env
+cmd: @after:14300:quit
 check: check.txt: PASS env
 check: check.txt: PASS plugin
 check: check.txt: !FAIL
