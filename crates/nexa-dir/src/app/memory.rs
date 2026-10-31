@@ -170,6 +170,10 @@ impl App {
                     }
                     // 그림 캐시는 보이는 1~2장 몫만 남긴다(축소본 ≈ 1 MB/장 · 돌아왔을 때 재디코드 없이 그린다).
                     nexa_ctl::raster::image_cache::evict_to(IDLE_IMAGE_KEEP);
+                    // macOS IOSurface 풀(nexa-sys 193 · T-184 · 10-31): 앞 장만 남긴다(장당 ≈ 16 MB · 최대 4장).
+                    if let Some(s) = self.surface.as_mut() {
+                        s.trim_idle();
+                    }
                 }
                 self.platform.ctxmenu.release();
                 platform::procmem::trim();

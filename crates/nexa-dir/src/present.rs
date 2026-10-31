@@ -73,6 +73,15 @@ impl Presenter {
         })
     }
 
+    /// 유휴 표면 정리(nexa-sys 193 `LayerPresenter::trim_idle` · T-184 · 10-31): IOSurface 풀에서 앞 장·잠긴 장만 남기고 놓는다
+    /// (레티나 메인 창 장당 ≈ 16 MB · 풀 최대 4장) — 돌아오면 다음 프레임이 새 장을 만든다. softbuffer = 0.
+    pub(crate) fn trim_idle(&mut self) -> usize {
+        match &mut self.kind {
+            Kind::Layer { p, .. } => p.trim_idle(),
+            Kind::Soft { .. } => 0,
+        }
+    }
+
     /// 픽셀 크기를 맞춘다.
     pub(crate) fn resize(&mut self, w: NonZeroU32, h: NonZeroU32) -> Result<(), ()> {
         match &mut self.kind {
