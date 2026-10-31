@@ -248,6 +248,7 @@ pref.termFallbackFonts = Terminal fallback fonts
 pref.termFallbackFonts.desc = Fonts used for characters the terminal font lacks (prompt icons etc.), comma separated. Empty = an installed Nerd Font is picked automatically. Takes effect after restart.
 info.selected = {0} selected
 info.name = Name: {0}
+info.nfd = Normalization: NFD (decomposed name) — convert it with "Convert name to NFC" in the context menu
 info.kind = Kind: {0}
 info.path = Path: {0}
 info.size = Size: {0}
@@ -438,7 +439,7 @@ pref.cat.lang = Language
 pref.search.placeholder = Search settings
 pref.showHidden = Show hidden file or folder
 pref.nfcDisplay = Show names as NFC
-pref.nfcDisplay.desc = Compose decomposed (NFD) names — Hangul jamo and combining marks — for display. The Status column marks such items as NFD; use the context menu to convert them.
+pref.nfcDisplay.desc = Compose decomposed (NFD) names — Hangul jamo and combining marks — for display. The Info panel marks such items as NFD; use the context menu to convert them.
 pref.showDotfiles = Show dot (.) file or folder
 pref.showProtected = Show protected operating system files
 pref.dock = Show bottom dock

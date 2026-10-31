@@ -115,11 +115,13 @@ pub(crate) fn info_lines_from(
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| one.display().to_string());
-                let mut v = vec![
-                    trf("info.name", &[&name]),
-                    trf("info.kind", &[&kind_of(one, &b)]),
-                    trf("info.path", &[&one.display().to_string()]),
-                ];
+                let mut v = vec![trf("info.name", &[&name])];
+                // 분해형(NFD) 이름 표시(사용자 10-31 결정 ① — 상태 열 "NFD" 대신 정보 패널 한 줄 · 이름만 판정, 상위 폴더 무관).
+                if ndir_ops::nfc::is_decomposed(&name) {
+                    v.push(tr("info.nfd"));
+                }
+                v.push(trf("info.kind", &[&kind_of(one, &b)]));
+                v.push(trf("info.path", &[&one.display().to_string()]));
                 if let Some(sz) = b.size {
                     v.push(trf("info.size", &[&fmt_size_long(sz)]));
                     if let Some(used) = on_disk(one) {
@@ -206,6 +208,40 @@ mod tests {
         assert_eq!(group_thousands(1234567), "1,234,567");
         assert_eq!(fmt_size_long(512), "512 bytes");
         assert_eq!(fmt_size_long(1536), "1.5 KB (1,536 bytes)");
+    }
+
+    /// 분해형(NFD) 이름 = 정보 패널 이름 줄 바로 아래 NFD 줄(사용자 10-31 결정 ①) · NFC 이름 · 상위 폴더만 분해형 = 줄 없음.
+    #[test]
+    fn info_marks_nfd_name_only() {
+        ndir_i18n::activate(ndir_i18n::load("en", Path::new("nowhere")));
+        let basic = |_: &Path| {
+            Some(Basic {
+                is_dir: false,
+                size: Some(1),
+                created: None,
+                modified: None,
+                accessed: None,
+            })
+        };
+        let none = |_: &Path| None;
+        let nosz = |_: &Path| Vec::new();
+        let nfd_name = "\u{1103}\u{1169}\u{1100}\u{1169}\u{11A8}.txt"; // "도곡.txt" 분해형
+        let nfc_name = "\u{B3C4}\u{ACE1}.txt"; // "도곡.txt" 합성형
+        let base = Path::new("/tmp");
+        let lines = |p: PathBuf| info_lines_from(&[p], base, &basic, &none, &nosz);
+        let nfd = lines(base.join(nfd_name));
+        assert!(nfd[0].starts_with("Name: "), "{nfd:?}");
+        assert!(nfd[1].starts_with("Normalization: NFD"), "{nfd:?}");
+        assert!(nfd[2].starts_with("Kind: "), "{nfd:?}");
+        let nfc = lines(base.join(nfc_name));
+        assert!(!nfc.iter().any(|l| l.contains("NFD")), "{nfc:?}");
+        assert!(nfc[1].starts_with("Kind: "), "{nfc:?}");
+        // 상위 폴더만 분해형(Finder/SMB 폴더 안의 NFC 파일) = 이 항목 이름은 NFC라 줄 없음.
+        let parent_only = lines(base.join(nfd_name.trim_end_matches(".txt")).join("a.txt"));
+        assert!(
+            !parent_only.iter().any(|l| l.contains("NFD")),
+            "{parent_only:?}"
+        );
     }
 
     #[test]
