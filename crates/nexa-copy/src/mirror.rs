@@ -3,72 +3,15 @@
 //! 휴지통 없음 — CLI). `--dry-run` = 계획만(탭 줄 · stdout) · `--include/--exclude` = 상대 경로의 이름으로 거른다 · `--verify` = 복사한 파일 대조.
 
 use crate::cli::{human_bytes, human_secs, Options};
-use ndir_ops::compare::{self, CmpOpts, CmpProgress, Direction, SyncPlan};
-use ndir_ops::fastcopy::NameFilter;
+use ndir_ops::compare::{self, SyncPlan};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-/// 계획 만들기(순수에 가까움 · 파일 시스템은 읽기만): 비교 → 필터 → 계획.
-pub(crate) fn mirror_plan(
-    src: &Path,
-    dst: &Path,
-    filter: &NameFilter,
-    cancel: &AtomicBool,
-) -> std::io::Result<SyncPlan> {
-    let progress = CmpProgress::default();
-    let mut entries = compare::compare(src, dst, CmpOpts::default(), &progress, cancel)?;
-    if !filter.is_empty() {
-        entries.retain(|e| {
-            let name = e.rel.rsplit('/').next().unwrap_or(&e.rel);
-            let is_dir = e.left.or(e.right).is_some_and(|m| m.is_dir);
-            filter.allows(name, is_dir)
-        });
-    }
-    let mut plan = compare::plan(&entries, src, dst, Direction::LeftToRight, true, None);
-    // 표시용 구분자 정리(협업 점검 10-25 `dst\\sub/gone.log`): compare의 상대 경로는 `/` — OS 구분자로 다시 조립한다(동작은 같다).
-    for (a, b, _) in &mut plan.copies {
-        *a = normalize_sep(a);
-        *b = normalize_sep(b);
-    }
-    for d in &mut plan.deletes {
-        *d = normalize_sep(d);
-    }
-    Ok(plan)
-}
-
-/// 경로의 구분자를 이 OS 것으로(`components()` 재조립 · 순수).
-fn normalize_sep(p: &Path) -> PathBuf {
-    p.components().collect()
-}
-
-/// 사용자 홈(환경 변수 · 없으면 None).
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map(PathBuf::from)
-}
-
-/// 미러 대상으로 위험한 자리(순수): 드라이브/파일 시스템 루트(부모 없음) · 사용자 홈 그 자체 — 사유 글(없으면 None).
-pub(crate) fn dangerous_dest(dest: &Path, home: Option<&Path>) -> Option<&'static str> {
-    let d = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
-    let trimmed = d
-        .to_string_lossy()
-        .trim_end_matches(['\\', '/'])
-        .to_string();
-    if d.parent().is_none() || trimmed.is_empty() || trimmed.ends_with(':') {
-        return Some("a drive or file system root");
-    }
-    if let Some(h) = home {
-        let h = h.canonicalize().unwrap_or_else(|_| h.to_path_buf());
-        if ndir_ops::is_same_or_sub(&h, &d) && ndir_ops::is_same_or_sub(&d, &h) {
-            return Some("the user home folder");
-        }
-    }
-    None
-}
+// 계획 · 구분자 정규화 · 홈 · 위험 대상 판정은 ndir-xfer(`mirror` 모듈)로 옮겼다(10-31 T-97 — 앱·CLI·cdylib 공용).
+pub(crate) use ndir_xfer::mirror::{dangerous_dest, home_dir, mirror_plan};
 
 /// 계획을 탭 줄로(dry-run · `action · bytes · source · destination`): copy · overwrite · delete.
 pub(crate) fn plan_rows(plan: &SyncPlan) -> Vec<String> {
@@ -218,7 +161,7 @@ pub(crate) fn run_mirror(
             .filter(|(s, _, _)| s.is_file())
             .map(|(s, d, _)| (s.clone(), d.clone()))
             .collect();
-        match crate::verify::verify_pairs(&pairs, &mut |_| {}, cancel) {
+        match ndir_xfer::verify::verify_pairs(&pairs, &mut |_| {}, cancel) {
             Ok(rep) => {
                 for (p, why) in &rep.failures {
                     let _ = writeln!(err, "verify failed: {}: {why}", p.display());
@@ -266,6 +209,7 @@ pub(crate) fn run_mirror(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ndir_ops::fastcopy::NameFilter;
 
     fn sandbox(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("nexa-copy-mirror-{tag}-{}", std::process::id()));

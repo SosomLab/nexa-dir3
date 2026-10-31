@@ -14,6 +14,8 @@
 //!   --yes                confirm permanent deletions for --mirror (without it, deletions are listed and the exit code is 2)
 //!   --include <glob>     copy only files whose name matches (repeatable · folders are always entered)
 //!   --exclude <glob>     skip files and folders whose name matches (repeatable)
+//!   --job <file.json>    run a job spec (ndir-xfer JobSpec JSON · all options above as keys · no --ask) instead of arguments
+//!   --progress           machine-readable: one JSON line per progress step on stdout, then the final report JSON (T-97 · 10-31)
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
 //! exit code: 0 = all items done · 1 = one or more items failed · 2 = usage/argument error · 130 = canceled (Ctrl+C)
@@ -27,6 +29,7 @@ use ndir_ops::fastcopy::{NameFilter, Tuning, THREADS_MAX};
 use ndir_ops::{
     plan_transfer, transfer_with, Conflict, Event, ItemStatus, Op, Outcome, PlanAction,
 };
+use ndir_xfer::{ConflictPolicy, JobSpec};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -61,6 +64,8 @@ Options:
   --verify             after copying, compare each copied file with its source (size + SHA-256);
                        folders are checked recursively · a mismatch is reported and the exit code is 1
                        (ignored with --move: the source is gone)
+  --job <file.json>    run an ndir-xfer JobSpec JSON instead of arguments (no --ask)
+  --progress           JSON progress lines + final report on stdout (machine-readable)
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
@@ -91,11 +96,43 @@ pub(crate) struct Options {
     pub yes: bool,
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
+    /// `--progress`: JSON 줄 출력(ndir-xfer 경로 · `--ask`와 함께 못 씀).
+    pub progress: bool,
+}
+
+impl Options {
+    /// 인자 → ndir-xfer 명세(`--ask`는 명세에 없다 · 호출자가 거른다).
+    pub(crate) fn to_spec(&self) -> JobSpec {
+        JobSpec {
+            op: self.op,
+            sources: self.sources.clone(),
+            dest: self.dest.clone(),
+            conflict: if self.overwrite {
+                ConflictPolicy::Overwrite
+            } else {
+                ConflictPolicy::Skip
+            },
+            threads: self.threads,
+            native: self.native,
+            unbuffered_mb: self.unbuffered_mb,
+            filter: self.filter.clone(),
+            verify: self.verify,
+            mirror: self.mirror,
+            dry_run: self.dry_run,
+            yes: self.yes,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Parsed {
     Run(Options),
+    /// `--job <file>`(JobSpec JSON · 10-31 T-97) — `progress` = JSON 줄 출력 · `quiet` = 요약 생략.
+    Job {
+        file: PathBuf,
+        progress: bool,
+        quiet: bool,
+    },
     Help,
     Version,
 }
@@ -114,6 +151,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut filter = NameFilter::default();
     let mut mirror = false;
     let mut yes = false;
+    let mut progress = false;
+    let mut job: Option<PathBuf> = None;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -137,6 +176,11 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--verify" => verify = true,
             "--mirror" => mirror = true,
             "-y" | "--yes" => yes = true,
+            "--progress" => progress = true,
+            "--job" => {
+                let v = it.next().ok_or("--job needs a file")?;
+                job = Some(PathBuf::from(v));
+            }
             "--include" | "--exclude" => {
                 let v = it.next().ok_or_else(|| format!("{a} needs a glob"))?;
                 // `;`로 여러 글롭(앱의 패턴 선택 · 빠른 필터와 같은 습관 · 협업 점검 10-25 — 종전엔 `;`를 글자로 봐 0개 복사).
@@ -172,6 +216,19 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             other => return Err(format!("unknown option '{other}'")),
         }
     }
+    if let Some(file) = job {
+        if !paths.is_empty() || ask || mirror || dry_run || verify || overwrite {
+            return Err(
+                "--job takes no sources/destination or operation flags (put them in the JSON)"
+                    .into(),
+            );
+        }
+        return Ok(Parsed::Job {
+            file,
+            progress,
+            quiet,
+        });
+    }
     if paths.len() < 2 {
         return Err("need at least one source and a destination folder".into());
     }
@@ -191,7 +248,72 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         yes,
         sources: paths,
         dest,
+        progress,
     }))
+}
+
+/// `--job`/`--progress` 실행(ndir-xfer `run` · 10-31 T-97): 진행 = stdout JSON 줄(단계가 바뀌거나 100 ms마다) · 끝 = Report JSON 한 줄 ·
+/// `--progress`가 아니면 사람용 요약(stderr) · 종료 코드 = `Report::exit_code`(명세 오류 = 2).
+pub(crate) fn run_job_with(
+    spec: &JobSpec,
+    progress: bool,
+    quiet: bool,
+    cancel: &AtomicBool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> ExitCode {
+    let mut last: Option<(Instant, ndir_xfer::Phase)> = None;
+    let mut on_progress = |p: &ndir_xfer::Progress| {
+        if !progress {
+            return;
+        }
+        let due = match last {
+            None => true,
+            Some((t, ph)) => ph != p.phase || t.elapsed() >= Duration::from_millis(100),
+        };
+        if due {
+            last = Some((Instant::now(), p.phase));
+            let _ = writeln!(out, "{}", p.to_json_line());
+            let _ = out.flush();
+        }
+    };
+    let rep = ndir_xfer::run(spec, &mut on_progress, cancel);
+    if progress {
+        let _ = writeln!(out, "{}", rep.to_json());
+        let _ = out.flush();
+    } else if !quiet {
+        for e in &rep.errors {
+            let _ = writeln!(err, "nexa-copy: {e}");
+        }
+        for it in rep.items.iter().filter(|i| i.status == "failed") {
+            let _ = writeln!(err, "error: {}: {}", it.dest.display(), it.note);
+        }
+        if let Some(v) = &rep.verify {
+            for (p, why) in &v.mismatches {
+                let _ = writeln!(err, "verify failed: {}: {why}", p.display());
+            }
+        }
+        let _ = writeln!(
+            err,
+            "{}: {} item(s) · {} done · {} skipped · {} failed · {} deleted · {} in {}",
+            if rep.dry_run { "dry run" } else { "job" },
+            rep.items.len(),
+            rep.items.iter().filter(|i| i.status == "done").count(),
+            rep.skipped,
+            rep.failed,
+            rep.deleted,
+            human_bytes(rep.transferred_bytes),
+            human_secs(Duration::from_millis(rep.elapsed_ms))
+        );
+    } else {
+        for e in &rep.errors {
+            let _ = writeln!(err, "nexa-copy: {e}");
+        }
+    }
+    if !rep.errors.is_empty() && rep.items.is_empty() && !rep.canceled {
+        return ExitCode::from(2); // 명세/인자 수준 오류
+    }
+    ExitCode::from(rep.exit_code())
 }
 
 /// 진입점(시험 가능): 해석 → 도움말/버전은 stdout · 실행은 [`run`].
@@ -208,6 +330,47 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
         Ok(Parsed::Version) => {
             println!("nexa-copy {VERSION}");
             ExitCode::SUCCESS
+        }
+        Ok(Parsed::Job {
+            file,
+            progress,
+            quiet,
+        }) => {
+            let text = match std::fs::read_to_string(&file) {
+                Ok(t) => t,
+                Err(e) => {
+                    let _ = writeln!(err, "nexa-copy: --job {}: {e}", file.display());
+                    return ExitCode::from(2);
+                }
+            };
+            let spec = match JobSpec::from_json(&text) {
+                Ok(s) => s,
+                Err(e) => {
+                    let _ = writeln!(err, "nexa-copy: --job {}: {e}", file.display());
+                    return ExitCode::from(2);
+                }
+            };
+            crate::ctrlc::install();
+            let stdout = std::io::stdout();
+            let mut out = stdout.lock();
+            run_job_with(&spec, progress, quiet, crate::ctrlc::flag(), &mut out, err)
+        }
+        Ok(Parsed::Run(o)) if o.progress => {
+            if o.ask {
+                let _ = writeln!(err, "nexa-copy: --progress cannot be combined with --ask");
+                return ExitCode::from(2);
+            }
+            crate::ctrlc::install();
+            let stdout = std::io::stdout();
+            let mut out = stdout.lock();
+            run_job_with(
+                &o.to_spec(),
+                true,
+                o.quiet,
+                crate::ctrlc::flag(),
+                &mut out,
+                err,
+            )
         }
         Ok(Parsed::Run(o)) => {
             crate::ctrlc::install(); // Ctrl+C → 취소 깃발(항목/청크 경계에서 멈추고 요약 · 130)
@@ -366,7 +529,7 @@ pub(crate) fn run_with(
                 let _ = err.flush();
             }
         };
-        match crate::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
+        match ndir_xfer::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
             Ok(rep) => {
                 if !o.quiet && read > 0 {
                     let _ = writeln!(err);
@@ -1005,5 +1168,84 @@ mod tests {
         assert_eq!(main_with(&a(&["x"]), &mut err), ExitCode::from(2));
         assert!(String::from_utf8_lossy(&err).contains("Usage"));
         let _ = fs::remove_dir_all(&d);
+    }
+
+    /// `--job`/`--progress`(10-31 T-97): 해석 · 간단 인자 → 명세 동등 · 실행 = JSON 진행 줄 + 마지막 Report 줄 · 명세 오류 = 2.
+    #[test]
+    fn job_and_progress_paths() {
+        let p = parse(&["--job".into(), "j.json".into(), "--progress".into()]).unwrap();
+        assert_eq!(
+            p,
+            Parsed::Job {
+                file: PathBuf::from("j.json"),
+                progress: true,
+                quiet: false
+            }
+        );
+        assert!(parse(&["--job".into(), "j.json".into(), "a".into(), "b".into()]).is_err());
+        let Parsed::Run(o) = parse(&[
+            "--move".into(),
+            "--overwrite".into(),
+            "--threads".into(),
+            "2".into(),
+            "--include".into(),
+            "*.txt".into(),
+            "--progress".into(),
+            "/s".into(),
+            "/d".into(),
+        ])
+        .unwrap() else {
+            panic!("run")
+        };
+        assert!(o.progress);
+        let spec = o.to_spec();
+        assert_eq!(spec.op, Op::Move);
+        assert_eq!(spec.conflict, ConflictPolicy::Overwrite);
+        assert_eq!((spec.threads, spec.filter.include.len()), (2, 1));
+        assert_eq!(spec.unbuffered_mb, 0, "간단 인자와 명세 기본 = 같다");
+        // 실행: 임시 폴더 dry-run → stdout에 진행 JSON 줄 + Report 줄 · 종료 0.
+        let d = std::env::temp_dir().join(format!("nexa-copy-job-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("dst")).unwrap();
+        std::fs::write(d.join("a.txt"), b"hi").unwrap();
+        let spec = JobSpec {
+            sources: vec![d.join("a.txt")],
+            dest: d.join("dst"),
+            dry_run: true,
+            ..JobSpec::default()
+        };
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = run_job_with(
+            &spec,
+            true,
+            false,
+            &AtomicBool::new(false),
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, ExitCode::SUCCESS);
+        let text = String::from_utf8(out).unwrap();
+        let last = text.lines().last().unwrap();
+        assert!(
+            last.starts_with("{\"ok\":true") && last.contains("\"dry_run\":true"),
+            "{text}"
+        );
+        // 명세 오류(대상 없음) = 2 · 사람용 요약은 stderr.
+        let bad = JobSpec {
+            dest: d.join("nope"),
+            ..spec.clone()
+        };
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = run_job_with(
+            &bad,
+            false,
+            false,
+            &AtomicBool::new(false),
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, ExitCode::from(2));
+        assert!(String::from_utf8(err).unwrap().contains("destination"));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

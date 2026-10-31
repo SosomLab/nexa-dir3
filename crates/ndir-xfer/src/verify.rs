@@ -1,4 +1,4 @@
-//! 복사 검증(`--verify` · T-97 "검증" · 10-25): 전송이 끝난 뒤 (원본, 사본) 쌍마다 **크기 + SHA-256**을 대조한다 — 파일은 그대로 ·
+//! 복사 검증(T-97 "검증" · 10-25 nexa-copy에서 이동 10-31 · 앱·CLI 공용): 전송이 끝난 뒤 (원본, 사본) 쌍마다 **크기 + SHA-256**을 대조한다 — 파일은 그대로 ·
 //! 폴더는 재귀(원본 쪽 항목 기준 · 사본에만 있는 것은 무시 — 건너뜀 정책으로 남아 있던 파일) · 이동은 원본이 없어 검증하지 않는다.
 //! 엔진(`ndir_ops::hash::hash_file`)과 같은 해시 · 취소 깃발을 본다.
 
@@ -8,20 +8,21 @@ use std::sync::atomic::AtomicBool;
 
 /// 검증 결과 — 대조한 파일 수 · 읽은 바이트 · 불일치/오류 목록(사본 경로 · 사유).
 #[derive(Debug, Default)]
-pub(crate) struct VerifyReport {
+pub struct VerifyReport {
     pub files: u64,
     pub bytes: u64,
     pub failures: Vec<(PathBuf, String)>,
 }
 
 impl VerifyReport {
-    pub(crate) fn ok(&self) -> bool {
+    #[must_use]
+    pub fn ok(&self) -> bool {
         self.failures.is_empty()
     }
 }
 
 /// (원본, 사본) 쌍들을 검증한다 — `on_bytes` = 읽은 증분(진행 표시) · 취소되면 `Err(Interrupted)`.
-pub(crate) fn verify_pairs(
+pub fn verify_pairs(
     pairs: &[(PathBuf, PathBuf)],
     on_bytes: &mut dyn FnMut(u64),
     cancel: &AtomicBool,

@@ -18,3 +18,4 @@ workspace = true
 
 [dependencies]
 ndir-ops = { workspace = true }
+ndir-xfer = { workspace = true }
