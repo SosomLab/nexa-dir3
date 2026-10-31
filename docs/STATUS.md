@@ -2,9 +2,9 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 + Linux PC 저녁 · [journal 10-31 §0~§29](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 + Linux PC 저녁 · [journal 10-31 §0~§30](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
 
-- **★ Linux PC 진행 중(10-31 §25~§29 · 개발 "개발" a33027 · 협업 "협업")**: T-202 ① cdylib d130d9f + 패키지 동봉 be60dc2(deb/rpm `/usr/lib/nexa-dir` · macOS `Contents/Frameworks` · MSI/zip · release.yml ctypes 스모크) · **T-202 ② 재개 abc69f3 · ③ 속도 제한 071fc30 · ⑦ 미러 내용 비교 4f2f3ac**(`journal`/`resume` · `max_bps` · `--by-content` · GAP-026 ✅ · 시험 788/0 · T4 43/0) · **GAP-027 미처방**(`--verify --exclude` 거짓 불일치) · CI 34b48db ✓ · b685e2f run 41207866824 ✓ · deb 실기 ✓ · **rpm(이 PC rpmbuild 없음) · MSI · dmg = 선검증에서 확인** · 앱 = 협업 격리 4f2f3ac PID 35386 · **태그 주의**: 아래 v0.28.0 선검증은 fb51b4e 기준 — 패키징 변경이 포함되므로 **태그 전 재선검증 필수**(docs/16 §5-2) · 태그 대상은 사용자 승인 때 함께 정한다 · **사용자 결정 대기**: 이 PC xvfb 설치(T-137 · `sudo apt-get install -y xvfb`).
+- **★ Linux PC 진행 중(10-31 §25~§30 · 개발 "개발" a33027 · 협업 "협업")**: T-202 ① cdylib d130d9f + 패키지 동봉 be60dc2(deb/rpm `/usr/lib/nexa-dir` · macOS `Contents/Frameworks` · MSI/zip · release.yml ctypes 스모크) · **T-202 ② 재개 abc69f3 · ③ 속도 제한 071fc30 · ⑤ 이동 검증 7b28766 · ⑦ 미러 내용 비교 4f2f3ac**(`journal`/`resume` · `max_bps` · `--move --verify` · `--by-content` · GAP-026 ✅ · 시험 790/0 · T4 43/0) · **GAP-027 절반**(제외 파일 ✅ · 복사 중 신생 파일 ☐) · 릴리스 노트 메모 = `--move --verify` 동작 변경 · CI 34b48db ✓ · b685e2f run 41207866824 ✓ · deb 실기 ✓ · **rpm(이 PC rpmbuild 없음) · MSI · dmg = 선검증에서 확인** · 앱 = 협업 격리 7b28766 PID 45442 · **태그 주의**: 아래 v0.28.0 선검증은 fb51b4e 기준 — 패키징 변경이 포함되므로 **태그 전 재선검증 필수**(docs/16 §5-2) · 태그 대상은 사용자 승인 때 함께 정한다 · **사용자 결정 대기**: 이 PC xvfb 설치(T-137 · `sudo apt-get install -y xvfb`).
 
 - **★ v0.28.0 = 승격 · 선검증 완료 · 태그 보류(사용자 10-31 · §24)** — **남은 것 = 태그 push만**(사용자 승인 뒤 · 절차 = [docs/16 §5](16-doc-git-conventions.md)):
   - 승격 71df088(Cargo · lock · lang @app 3 · rpm changelog 영어) · origin/main = fb51b4e(코드 마지막) → 기록 d85b869 · 마감 정리 14fc919(CLAUDE.md 현 단계 · TODO 머리글) · 세 저장소 origin 동기 · gate-20 full ✓(clippy 3-OS · 시험 771/0 · smoke 0.28.0 · selfcheck 30/0/2/7 · T4 43/0) · CI fb51b4e ✓ 3-OS(run 41198824783).
