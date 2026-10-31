@@ -3081,8 +3081,8 @@ fn status_segments_and_tab_status_bar() {
     );
     assert_eq!(
         app.settings.int("status.blink_min_bps"),
-        16_384,
-        "기본 문턱 16 KB/s"
+        1_048_576,
+        "기본 문턱 1 MB/s(사용자 10-31 — 개발 중 배경 디스크 I/O 6~16 MB/s에도 16 KB/s는 깜빡였다)"
     );
     let row_delta = (app.status_row_font_delta() * 100.0).round() as i32;
     assert!(row_delta < 0, "두 줄용 글꼴은 상태줄 글꼴보다 작다");

@@ -1484,7 +1484,7 @@ pref.macPresent.desc = IOSurface(기본) = CPU가 그린 픽셀을 표면에 바
 pref.macPresent.iosurface = IOSurface (권장)
 pref.macPresent.softbuffer = softbuffer (종전)
 pref.blinkMinBps = 표식 깜빡임 문턱(B/s)
-pref.blinkMinBps.desc = 상태줄 디스크·네트워크 표식(▲▼)은 전송 속도가 이 값(바이트/초) 이상일 때만 깜빡입니다. 배경 I/O가 늘 있는 환경(특히 macOS)에서 쉬지 않고 깜빡이며 화면을 다시 그리는 것을 막습니다. 0 = 1 B/s부터 깜빡임(종전). 기본 16384(16 KB/s).
+pref.blinkMinBps.desc = 상태줄 디스크·네트워크 표식(▲▼)은 전송 속도가 이 값(바이트/초) 이상일 때만 깜빡입니다. 배경 I/O가 늘 있는 환경(특히 macOS)에서 쉬지 않고 깜빡이며 화면을 다시 그리는 것을 막습니다. 0 = 1 B/s부터 깜빡임(종전). 기본 1048576(1 MB/s).
 pref.idleTrim = 유휴 메모리 정리(초)
 pref.idleTrim.desc = 마지막 입력 뒤 이 시간이 지나면 글자 캐시 · 셸 메뉴 객체 · 힙의 빈 조각 · 작업 집합을 운영체제에 돌려줍니다. 돌아올 때 잠깐 다시 읽어 들이는 비용이 있습니다. 0 = 끔.
 pref.idleTrimScope = 유휴 정리 범위

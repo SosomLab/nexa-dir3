@@ -807,7 +807,8 @@ pub const REGISTRY: &[Entry] = &[
         "on"
     ),
     // 상태줄 디스크·네트워크 표식 깜빡임 문턱(바이트/초 · 10-31 사용자 결정 ④ · 고급): 이 속도 미만이면 표식이 깜빡이지 않는다(단계 0).
-    // macOS는 유휴에도 배경 I/O가 수~수십 KB/s라 표식 4개가 늘 깜빡여 초당 10여 번 다시 그렸다 — 기본 16 KB/s · 0 = 종전(1 B/s부터).
+    // macOS는 유휴에도 배경 I/O가 늘 있어 표식 4개가 늘 깜빡여 초당 10여 번 다시 그렸다 — 기본 1 MB/s(사용자 10-31: 개발 중 PC는
+    // 빌드·편집기 배경 디스크 I/O가 6~16 MB/s라 16 KB/s로는 여전히 깜빡였다 · 복사·다운로드 같은 실제 전송에만) · 0 = 종전(1 B/s부터).
     e!(
         "status.blink_min_bps",
         CAT_STATUSBAR,
@@ -817,7 +818,7 @@ pub const REGISTRY: &[Entry] = &[
             min: 0,
             max: 1_073_741_824
         },
-        "16384"
+        "1048576"
     ),
     // macOS 화면 내보내기(Q-8 재검토 · 10-31 맥 실측 · 고급): softbuffer의 CoreGraphics 뒷단은 프레임마다 새 버퍼 + DeviceRGB
     // `CGImage` → CoreAnimation이 창 전체를 CPU(vImage)로 색 변환한다(2400×1600 present 28 ms · 유휴 ~11 fps면 코어의 40 %).

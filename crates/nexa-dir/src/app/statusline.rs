@@ -174,7 +174,7 @@ pub(crate) fn load_style(
 
 /// 속도(바이트/초) → 표식 깜빡임 단계(순수): 0 = 송수신 없음 **또는 문턱(`min_bps`) 미만**(깜빡이지 않음) · 1 = 느림 … 9 = 빠름.
 /// 4배마다 한 단계 — 1: ~4 KB/s · 2: ~16 KB/s · 3: ~64 KB/s · 4: ~256 KB/s · 5: ~1 MB/s · 6: ~4 MB/s · 7: ~16 MB/s · 8: ~64 MB/s · 9: 그 이상.
-/// 문턱 = 설정 `status.blink_min_bps`(기본 16 KB/s · 10-31 사용자 결정 ④ — macOS는 유휴에도 디스크·네트워크 배경 I/O가 수~수십 KB/s라
+/// 문턱 = 설정 `status.blink_min_bps`(기본 1 MB/s · 10-31 사용자 결정 ④ — macOS는 유휴에도 디스크·네트워크 배경 I/O가 수~수십 KB/s라
 /// 표식 4개가 늘 깜빡여 초당 10여 번 다시 그렸다 · 실제 전송 때만 깜빡이게). 단계 자체는 문턱과 무관(문턱을 넘으면 종전 눈금).
 pub(crate) fn rate_level(bps: u64, min_bps: u64) -> u8 {
     if bps == 0 || bps < min_bps {

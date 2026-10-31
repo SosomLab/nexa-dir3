@@ -1485,7 +1485,7 @@ pref.macPresent.desc = IOSurface (default) draws CPU pixels straight into a surf
 pref.macPresent.iosurface = IOSurface (recommended)
 pref.macPresent.softbuffer = softbuffer (previous)
 pref.blinkMinBps = Marker blink threshold (B/s)
-pref.blinkMinBps.desc = The disk and network markers (▲▼) in the status bar blink only when the transfer rate is at least this many bytes per second. Stops them from blinking and repainting constantly where background I/O is always present (notably on macOS). 0 = blink from 1 B/s (previous behaviour). Default 16384 (16 KB/s).
+pref.blinkMinBps.desc = The disk and network markers (▲▼) in the status bar blink only when the transfer rate is at least this many bytes per second. Stops them from blinking and repainting constantly where background I/O is always present (notably on macOS). 0 = blink from 1 B/s (previous behaviour). Default 1048576 (1 MB/s).
 pref.idleTrim = Idle memory trim (seconds)
 pref.idleTrim.desc = After this many seconds without input, return the glyph cache, shell menu objects, free heap blocks and the working set to the OS. Coming back costs a brief reload. 0 = off.
 pref.idleTrimScope = Idle trim scope
