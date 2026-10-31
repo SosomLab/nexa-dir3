@@ -4,6 +4,7 @@
 
 ## 2026-10-31
 
+- **사용자 결정 4건**: 726b7f1 정보 패널 NFD 줄(협업) · 1402671 패널 상태 줄 "NFD n" + 클릭 필터 · 085e99c 상태 열 NFD 제거 · 87b7b22 `status.blink_min_bps` 표식 깜빡임 문턱(16 KB/s · T-201 ⓑ ✅) → [10-31 §17](journal/2026-10-31.md)
 - 실기 NFD 검색 ✓ · **dad9369 검색창 토글 툴팁**(호버 미전달 + 오버레이 판정 누락 → macOS 부분 프레임 깜빡임 · nexa-ui 249 2ffbbbc) → [10-31 §16](journal/2026-10-31.md)
 - **74c5da6 macOS present IOSurface 기본**(`gfx.mac_present` · present 24.3 → 1.2 ms · Q-8 재검토) · **ba99d38 NFD 이름 필터·타입어헤드 NFC 비교** · 유휴 redraw 원인 = 상태바 표식 깜빡임 + macOS 부분 그리기 불가(softbuffer CG age 0 · 협업 계측) → **71add88 macOS 부분 다시 그리기**(nexa-ui 248 `Frame::age` · 이력 · 컬링 · 유휴 프레임 합 8.4 → 2.49 ms) · c926d98 pty 점검 플레이크 → [10-31 §15](journal/2026-10-31.md)
 - **e47ee38 macOS 저장 장치 판정**(IOKit Medium Type · SSD = 자동 8 · docs/24 §6 ✅) · **selfcheck 실제 점검 4그룹**(pty 8f9b44b · fonts 121c6b4 · preview 22f57d7 · archive 8b7bd7c · pass 20 → 30 · pty 3-OS CI ✓) → [10-31 §14](journal/2026-10-31.md)

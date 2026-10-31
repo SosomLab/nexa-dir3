@@ -2,7 +2,7 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§16](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§17](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
 
 - **🖐 사용자 아침 실기 체크(10-31 macOS · 입력 주입 금지라 협업 판정 인스턴스로 못 본 것 · 앱 = 협업 격리 인스턴스 또는 새 빌드)**:
   - (a) **드래그 수식키**(8d929f8 · Finder 규칙): ① 같은 볼륨 Option 드래그 = 복사(원본 남음) ② Cmd 드래그 = 이동 ③ 수식키 없음 = 같은 볼륨 이동 ④ Finder → dir3 폴더 행 위 드롭 = 그 폴더 · 끄는 중 Option을 눌렀다 떼면 이름 상자 표시가 바뀜.
@@ -13,6 +13,9 @@
   - (f) **메모리 창**: 글꼴 막대가 수 MB(4a2c6b0 mincore · 덤프 판정 ✓ · 눈 확인).
   - (g) **macOS present IOSurface 기본**(74c5da6 · §15): 빈 창 · 그림 깨짐 · 보조 창(설정 · 메모리) 정상 여부(Intel + AMD Radeon) · 설정 고급 켜고 "macOS 화면 내보내기 방식" 보임 · 이상 시 `settings.conf` `gfx.mac_present=softbuffer` · 재시작.
   - ~~(h) NFD 이름 빠른 필터(ba99d38)~~ ✅ 사용자 10-31 "NFD파일 검색 기능, 완료"(§16).
+  - (j) **정보 패널 NFD 줄**(726b7f1 · §17): NFD 이름 항목 선택 → 이름 아래 "정규화: NFD" · NFC 이름엔 없음.
+  - (k) **패널 상태 줄 "NFD n"**(1402671 · 085e99c): 분해형 이름이 있는 폴더에서 칸 표시 · 클릭 = NFD 행만(폴더 칸 "n / m") · 다시 클릭 = 전부 · 상태 열에 NFD 표식 없음.
+  - (l) **표식 깜빡임 문턱**(87b7b22): 유휴 때 D/N 표식이 배경 I/O로 깜빡이지 않음 · 설정 고급 "표식 깜빡임 문턱"(기본 16 KB/s · 0 = 종전).
   - (i) **검색창 토글 툴팁**(dad9369 · nexa-ui 249): Aa · ab · .* · 범위 토글 위에 머물면 툴팁이 뜨고 깜빡이지 않음(§16).
   - 그 밖 T-114: 클립보드 한글(pbcopy/pbpaste) · Finder "다음으로 열기"/`open -a "Nexa Dir" <경로>` 파일 전달.
 - **★ 10-31 낮 회차([§15](journal/2026-10-31.md))**: 74c5da6 `gfx.mac_present` 기본 iosurface(present 24.3 → 1.2 ms) · ba99d38 NFD 필터 · **71add88 macOS 부분 다시 그리기**(nexa-ui 248 af368ff `Frame::age` · 유휴 프레임 합 31.2(softbuffer) → 8.4(iosurface) → **2.49 ms** · 상태줄만 부분 프레임 paint 0.75 ms) · c926d98 pty 플레이크 · gate-9 full 751/0 · T4 41/0 → **마지막 push = 954e48f · CI 41150671788 ✓ 3-OS** · 후속 T-201(알파 채우기 damage만 · 표식 깜빡임 문턱 = 사용자 결정 · 빈 프레임) · NFD 표시 방식 = 사용자 결정 대기(A 정보 패널 줄 추천) · 앱 = 협업 격리 954e48f PID 60374.
