@@ -73,6 +73,8 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `mirror` | `bool` | false | `--mirror` | `sources` 1개 · 대상을 원본과 같게(새것/바뀐 것 복사 + 대상에만 있는 것 영구 삭제) |
 | `dry_run` | `bool` | false | `-n` | 파일 시스템 불변 · Report 항목 `status` = `planned` |
 | `yes` | `bool` | false | `--yes` | 미러 삭제 확인 — false면 지울 것이 있을 때 실행 안 하고 목록 + 오류 |
+| `journal` | `Option<PathBuf>` | 없음 | `--journal <file>` | 최상위 항목 완료마다(`Event::ItemEnd`) `{"source","dest","status","bytes"}` 한 줄 덧붙임 · 상대 경로 = 잡 파일 폴더 · dry-run이면 쓰지 않음 · `verify`면 검증 통과 뒤에만 `done` · 못 열면 시작 안 함 · 쓰기 실패 = Report errors + `ok: false` · `resume`과 같은 파일 가능(읽기 → 덧붙이기) |
+| `resume` | `Option<PathBuf>` | 없음 | `--resume <file>` | 이전 Report JSON 또는 저널 · `(source, dest)`가 `done`인 항목 건너뜀(Report `status: skipped` · `note: resumed` · bytes/dest는 저널 값 · items 앞에 먼저 적힘) · 같은 쌍은 마지막 기록 우선 · 잘린 끝 줄 무시(그 밖의 깨진 줄 = 오류) · 끝난 쌍은 `validate` 존재 검사에서 뺀다(이동 재개) · 복사/이동만(미러 + journal/resume = `validate` 오류) · `--job`과 함께 명령줄로 주면 키를 덮음 · `--ask`와 못 씀 |
 
 - **JSON 규칙**: 빠진 키 = 기본값 · 모르는 키 = 무시 · 판 키(`version`) 없음(넣어도 무시) · `JobSpec::from_json(&str) -> Result<JobSpec, String>` · `to_json(&self) -> String`. 파서는 `ndir_xfer::json::{Json, parse, dump}`(외부 crate 0 · ndir-settings `json.rs` 꼴).
 - **검증**: `validate(&JobSpec) -> Option<String>`(오류 문구 · 없으면 None) — `run`도 먼저 부른다.
@@ -131,9 +133,10 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 
 ## 8. 남은 기능 설계(이번 회차 구현 안 함)
 
+- **재개 ✅ T-202 ②(abc69f3 · §4 `journal` · `resume` · `ndir_xfer::resume`)** — 한계: 최상위 항목 단위 · 파일 중간 재개 없음(스테이징 교체가 원자적) · 폴더가 끊기면 그 폴더는 다시 돌고 `conflict: skip`이면 있는 파일을 건너뜀(`overwrite`면 다시 씀) · 그사이 원본이 바뀌어도 `done`이면 건너뜀(감지 안 함). cdylib = JobSpec 키라 자동 적용(ABI 1 불변).
+
 | 기능 | 설계 | 걸림돌 |
 | --- | --- | --- |
-| **재개** | `Report`(§6 `items[].status`)를 **저널**로도 쓴다 — 항목 단위 완료 기록(원자적 덧붙임) · `--resume <report>`면 `done` 항목은 건너뛰고 나머지만 · 파일 중간 재개는 하지 않는다(스테이징 교체가 원자적이라 부분 파일이 남지 않음) | 폴더 안 병렬은 파일 단위 기록이 필요 — `fastcopy` 작업 스레드에서 완료 통지 |
 | **속도 제한** | JobSpec `max_bps`(신설 후보) — 전략 계층 바이트 보고 지점(`on_bytes`)에서 토큰 버킷으로 잠깐 쉼 · OS 복사 경로는 청크 단위 콜백(Windows 진행 콜백 · Linux 32 MiB 청크 · macOS 상태 콜백) 사이에서만 걸 수 있다 | 복제(clone)는 순간이라 제한 무의미(문서화) |
 | **작업 큐** | 앱 = JobSpec 큐(순차 기본 · 장치가 다르면 병렬 후보) · 큐 상태 저장 = JobSpec + 저널 | 진행 창(T-96 카드형)과 함께 설계 |
 | **이동 검증** | 교차 볼륨 이동 = 복사 → 검증 → 원본 삭제 순서(엔진에 "원본 정리 전 훅") · 같은 볼륨 rename은 대상 아님 | `transfer_with` 이동 경로에 훅 추가(ndir-ops · DR-11 패리티 유지) |
@@ -146,6 +149,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - **T1(ndir-xfer · 골격 시험 8/0)**: JobSpec JSON 왕복(빠진 키 = 기본 · 모르는 키 무시) · `validate`(빈 sources · 미러 원본 2개 · 위험 대상) · Report JSON · `exit_code` · Progress 줄 키.
 - **T1 동등성**: 같은 작업을 **간단 인자 경로와 `--job` 경로**로 각각 만들었을 때 JobSpec이 같다(DR-34 ⑦ 한 길 보장).
 - **프로세스(T4급 · `crates/nexa-copy/tests/cli.rs`)**: `--job` 복사/미러/검증/dry-run · `--progress` 줄이 모두 JSON으로 파싱되고 `phase`가 단계 순서(plan → transfer → verify/mirror/delete) · 종료 코드 = Report `exit_code()` · 취소 = 130.
+- **재개(abc69f3)**: `resume::{done_items_from_report_and_journal, journal_appends_and_reads_back}` · spec 왕복/검증/상대 경로 · `journal_then_resume_skips_done_items`(이동 재개 포함) · `journal_waits_for_verify` · 프로세스 `journal_and_resume_skip_finished_items`.
 - **T6(성능)**: `bench_copy`를 `scripts/perf-baseline.sh`에 편입 · `ndir-xfer` 포장 전후 같은 작업의 시간 차 ≤ 2 %(포장층 비용 0 확인) · Linux/macOS 실측은 그 PC 회차.
 
 ## 10. 성능 기준선 확장 계획(T-97 "+ 성능 기준선 확장")

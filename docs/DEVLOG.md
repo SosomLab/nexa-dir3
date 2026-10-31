@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **T-202 ② 재개**(abc69f3 · `journal`/`resume` · `--journal`/`--resume` · (source, dest) 쌍 · 이동 재개 · verify 뒤 done · 시험 782/0 · T4 43/0) · CI 34b48db ✓ · 다음 = ③ 속도 제한 → [10-31 §27](journal/2026-10-31.md)
+
 - **T-202 ① 패키지 동봉**(be60dc2 · deb/rpm/pkg/dmg/MSI/zip · release.yml ctypes 스모크 · gate full 777/0) · deb 실기 ✓(ctypes 로드 · 내보내기 5) · rpm · MSI · dmg = 태그 전 선검증에서 확인 · xvfb = 이 PC 미설치(CI는 ✓) → [10-31 §26](journal/2026-10-31.md)
 
 - **T-202 ① cdylib C ABI**(d130d9f · Linux PC · `ndir_xfer_run` 등 API 5 · 헤더 `include/ndir_xfer.h` · cancel = `const bool*` · release 패닉 = 프로세스 종료 문서화 · gate full 777/0 · T4 43/0) · 다음 = 패키지 동봉 커밋 · docs/26 §7 재작성 → [10-31 §25](journal/2026-10-31.md)
