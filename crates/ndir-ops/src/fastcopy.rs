@@ -89,6 +89,27 @@ thread_local! {
     static FILTER: std::cell::RefCell<Option<NameFilter>> = const { std::cell::RefCell::new(None) };
     /// 이 스레드의 속도 제한기([`with_pacer`] · T-202 ③) — 폴더 병렬 복사의 작업 스레드는 부른 쪽 것을 같이 쓴다(`copy_jobs_parallel`).
     static PACER: std::cell::RefCell<Option<Arc<Pacer>>> = const { std::cell::RefCell::new(None) };
+    /// 이 스레드의 이동 검증 깃발([`with_move_verify`] · T-202 ⑤) — 교차 볼륨 이동이 원본을 지우기 전에 사본을 대조한다(`crate::verify`).
+    static MOVE_VERIFY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `f`가 도는 동안 이 스레드의 교차 볼륨 이동이 **원본 정리 전에 사본을 검증**한다(크기 + SHA-256 · 불일치 = 그 항목 오류 · 원본·사본 유지).
+/// 같은 볼륨 이동(rename)은 대상이 아니다 · 끝나면 이전 값으로.
+pub fn with_move_verify<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            MOVE_VERIFY.with(|c| c.set(self.0));
+        }
+    }
+    let _restore = Restore(MOVE_VERIFY.with(|c| c.replace(on)));
+    f()
+}
+
+/// 이 스레드의 이동 검증 깃발.
+#[must_use]
+pub fn move_verify() -> bool {
+    MOVE_VERIFY.with(std::cell::Cell::get)
 }
 
 /// 속도 제한기(T-202 ③ · docs/26 §8): 실제로 바이트를 옮기는 경로(읽고 쓰는 루프 · Linux `copy_file_range` · Windows `CopyFileExW` ·
@@ -238,8 +259,8 @@ pub fn with_filter<R>(filter: NameFilter, f: impl FnOnce() -> R) -> R {
     f()
 }
 
-/// 계획 단계의 필터 판정(없으면 전부 허용).
-fn filter_allows(name: &std::ffi::OsStr, is_dir: bool) -> bool {
+/// 계획 단계의 필터 판정(없으면 전부 허용) — `crate::verify`도 같은 판정으로 제외 항목을 건너뛴다(GAP-027).
+pub fn filter_allows(name: &std::ffi::OsStr, is_dir: bool) -> bool {
     FILTER.with(|c| {
         c.borrow()
             .as_ref()

@@ -1,8 +1,8 @@
-//! 복사 검증(T-97 "검증" · 10-25 nexa-copy에서 이동 10-31 · 앱·CLI 공용): 전송이 끝난 뒤 (원본, 사본) 쌍마다 **크기 + SHA-256**을 대조한다 — 파일은 그대로 ·
+//! 복사 검증(T-97 "검증" · 10-25 nexa-copy → 10-31 ndir-xfer → **ndir-ops**(T-202 ⑤ 이동 검증이 엔진 안에서 쓴다 · ndir-xfer는 재수출) · 앱·CLI 공용): 전송이 끝난 뒤 (원본, 사본) 쌍마다 **크기 + SHA-256**을 대조한다 — 파일은 그대로 ·
 //! 폴더는 재귀(원본 쪽 항목 기준 · 사본에만 있는 것은 무시 — 건너뜀 정책으로 남아 있던 파일) · 이동은 원본이 없어 검증하지 않는다.
-//! 엔진(`ndir_ops::hash::hash_file`)과 같은 해시 · 취소 깃발을 본다.
+//! 엔진(`crate::hash::hash_file`)과 같은 해시 · 취소 깃발을 본다 · 이동 검증 = [`crate::fastcopy::with_move_verify`](교차 볼륨 이동의 원본 정리 전).
 
-use ndir_ops::hash::{hash_file, Algo};
+use crate::hash::{hash_file, Algo};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -66,7 +66,12 @@ fn verify_one(
             .collect();
         names.sort();
         for n in names {
-            verify_one(&src.join(&n), &dst.join(&n), rep, on_bytes, cancel)?;
+            // 이름 필터(`fastcopy::with_filter` 범위 · GAP-027 협업 실측 10-31): 복사에서 뺀 항목은 사본에 없는 것이 정상 — "missing" 오판 금지.
+            let child = src.join(&n);
+            if !crate::fastcopy::filter_allows(&n, child.is_dir()) {
+                continue;
+            }
+            verify_one(&child, &dst.join(&n), rep, on_bytes, cancel)?;
         }
         return Ok(());
     }
@@ -140,6 +145,25 @@ mod tests {
         assert!(!rep.ok());
         cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         assert!(verify_pairs(&[(s, t)], &mut |_| {}, &cancel).is_err());
+        // GAP-027: 필터 범위 안에서는 제외한 항목(원본에만 있음)을 "missing"으로 보지 않는다 · 범위 밖이면 종전대로 missing.
+        let cancel = AtomicBool::new(false);
+        let (s2, t2) = (d.join("s2"), d.join("t2"));
+        std::fs::create_dir_all(&s2).unwrap();
+        std::fs::create_dir_all(&t2).unwrap();
+        std::fs::write(s2.join("keep.txt"), b"k").unwrap();
+        std::fs::write(t2.join("keep.txt"), b"k").unwrap();
+        std::fs::write(s2.join("big.iso"), b"excluded").unwrap();
+        let f = crate::fastcopy::NameFilter {
+            include: vec![],
+            exclude: vec!["*.iso".into()],
+        };
+        let rep = crate::fastcopy::with_filter(f, || {
+            verify_pairs(&[(s2.clone(), t2.clone())], &mut |_| {}, &cancel)
+        })
+        .unwrap();
+        assert!(rep.ok() && rep.files == 1, "{rep:?}");
+        let rep = verify_pairs(&[(s2, t2)], &mut |_| {}, &cancel).unwrap();
+        assert_eq!(rep.failures.len(), 1, "필터 없음 = missing");
         let _ = std::fs::remove_dir_all(&d);
     }
 }

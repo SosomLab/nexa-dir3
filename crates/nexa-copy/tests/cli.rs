@@ -160,7 +160,8 @@ fn copy_skip_overwrite_move_and_errors() {
     assert!(!src.join("one.txt").exists());
     assert_eq!(fs::read(moved.join("one.txt")).expect("read"), b"ONE");
     assert!(
-        r.err.contains("note: --verify is ignored with --move"),
+        r.err
+            .contains("note: --move --verify: cross-volume moves were verified"),
         "{}",
         r.err
     );

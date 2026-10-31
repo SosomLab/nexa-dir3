@@ -13,6 +13,7 @@ pub mod fastcopy;
 pub mod hash;
 pub mod history;
 pub mod namefilter;
+pub mod verify;
 /// 유니코드 정규화 — 10-31 ndir-core로 옮김(ndir-tree도 씀) · 종전 경로 `ndir_ops::nfc::*` 유지.
 pub mod nfc {
     pub use ndir_core::nfc::*;
@@ -521,15 +522,53 @@ fn move_by_copy(
     if is_link(src) {
         // ⚠ 링크(심볼릭 링크·정션)를 다른 볼륨으로 옮길 때: 대상 내용을 새 자리에 복사하고 원본에서는 **링크만** 없앤다.
         // 종전에는 링크를 폴더처럼 보고 `링크\자식` 경로를 하나씩 지워 **링크가 가리키는 실제 파일이 삭제**됐다(dir2와 공통 결함).
+        // 이동 검증(T-202 ⑤)도 건다 — `fs::metadata`가 링크를 따라가 "가리키는 내용 vs 사본"이 바로 맞는 대조(협업 판단 ②).
         copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)?;
+        verify_moved(src, dest, None, cancel)?;
         remove_link(src)
     } else if src.is_dir() {
         let mut copied = Vec::new();
         copy_onto_inner(src, dest, overwrite, on_bytes, cancel, Some(&mut copied))?; // 스테이징 교체
+        verify_moved(src, dest, Some(&copied), cancel)?; // 원본 정리 **전**(T-202 ⑤)
         remove_copied(src, &copied)
     } else {
         copy_onto_inner(src, dest, overwrite, on_bytes, cancel, None)?;
+        verify_moved(src, dest, None, cancel)?;
         fs::remove_file(src)
+    }
+}
+
+/// 이동 검증(T-202 ⑤ · [`fastcopy::with_move_verify`] 범위에서만): 교차 볼륨 이동이 **원본을 지우기 전에** 사본을 원본과 대조한다
+/// (크기 + SHA-256 · `copied`가 있으면 복사한 **파일만** — 필터로 뺀 항목은 대상에 없는 것이 정상). 불일치 = 오류(원본 **유지** · 사본도 남김 ·
+/// 사용자가 판단) · 검증 읽기는 진행 바이트에 더하지 않는다(전송 총량 기준 유지).
+fn verify_moved(
+    src: &Path,
+    dest: &Path,
+    copied: Option<&[PathBuf]>,
+    cancel: &AtomicBool,
+) -> io::Result<()> {
+    if !fastcopy::move_verify() {
+        return Ok(());
+    }
+    let pairs: Vec<(PathBuf, PathBuf)> = match copied {
+        None => vec![(src.to_path_buf(), dest.to_path_buf())],
+        Some(c) => c
+            .iter()
+            .filter(|p| p.is_file())
+            .map(|p| (p.clone(), dest.join(p.strip_prefix(src).unwrap_or(p))))
+            .collect(),
+    };
+    let rep = verify::verify_pairs(&pairs, &mut |_| {}, cancel)?;
+    match rep.failures.first() {
+        None => Ok(()),
+        Some((p, why)) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "move verify failed: {}: {why} ({} mismatch(es); source kept, copy left in place)",
+                p.display(),
+                rep.failures.len()
+            ),
+        )),
     }
 }
 
@@ -1481,6 +1520,58 @@ mod tests {
     }
 
     /// 정상 이동 결과 불변: 전부 복사되면 원본은 폴더까지 사라지고 사본이 온전하다.
+    /// 이동 검증(T-202 ⑤): `with_move_verify` 안에서만 — 같은 사본 = 통과(원본 소멸) · 사본이 다르면 오류 + 원본·사본 유지 ·
+    /// `copied` 목록에 없는(필터로 뺀) 파일은 대조하지 않음 · 범위 밖(기본)이면 검사 없음(DR-11 패리티).
+    #[test]
+    fn move_verify_checks_copies_before_cleanup() {
+        let d = fixture("a14_verify");
+        let (src, dest) = (d.join("src"), d.join("dest"));
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.txt"), "a").unwrap();
+        fs::write(src.join("sub/b.txt"), "bb").unwrap();
+        let never = AtomicBool::new(false);
+        // 통과: 실제 이동(복사 → 검증 → 원본 정리).
+        fastcopy::with_move_verify(true, || {
+            move_by_copy(&src, &dest, false, &mut |_| {}, &never)
+        })
+        .unwrap();
+        assert!(!src.exists() && dest.join("sub/b.txt").is_file());
+        // 불일치: 사본이 다른 상태에서 검증만 호출 — 오류 · 양쪽 유지.
+        let (s2, d2) = (d.join("s2"), d.join("d2"));
+        fs::create_dir_all(&s2).unwrap();
+        fs::create_dir_all(&d2).unwrap();
+        fs::write(s2.join("x.txt"), "same").unwrap();
+        fs::write(d2.join("x.txt"), "diff").unwrap();
+        fs::write(s2.join("skip.log"), "not copied").unwrap();
+        let copied = vec![s2.join("x.txt")];
+        let r = fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, Some(&copied), &never));
+        let e = r.unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            e.to_string().contains("move verify failed") && e.to_string().contains("source kept"),
+            "{e}"
+        );
+        assert!(
+            s2.join("x.txt").is_file() && d2.join("x.txt").is_file(),
+            "양쪽 유지"
+        );
+        // 필터로 뺀 skip.log는 copied에 없어 대조하지 않는다(대상에 없어도 통과).
+        fs::write(d2.join("x.txt"), "same").unwrap();
+        fastcopy::with_move_verify(true, || verify_moved(&s2, &d2, Some(&copied), &never)).unwrap();
+        // 파일 하나(copied 없음) · 범위 밖 = 검사 없음.
+        fs::write(d2.join("x.txt"), "diff").unwrap();
+        assert!(fastcopy::with_move_verify(true, || verify_moved(
+            &s2.join("x.txt"),
+            &d2.join("x.txt"),
+            None,
+            &never
+        ))
+        .is_err());
+        verify_moved(&s2.join("x.txt"), &d2.join("x.txt"), None, &never).unwrap();
+        assert!(!fastcopy::move_verify(), "끝나면 복원");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
     #[test]
     fn move_by_copy_full_success_removes_source_tree() {
         let d = fixture("a14_ok");

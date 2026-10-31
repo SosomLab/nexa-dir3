@@ -72,7 +72,9 @@ Options:
   --exclude <glob>     skip files and folders whose name matches (repeatable or ;-separated · wins over --include)
   --verify             after copying, compare each copied file with its source (size + SHA-256);
                        folders are checked recursively · a mismatch is reported and the exit code is 1
-                       (ignored with --move: the source is gone)
+                       (with --move: each cross-volume move is verified before its source is removed —
+                       a mismatch fails that item and keeps both the source and the copy; same-volume
+                       moves are renames and need no verification)
   --job <file.json>    run an ndir-xfer JobSpec JSON instead of arguments (no --ask)
   --progress           JSON progress lines + final report on stdout (machine-readable)
   --report <file>      also write the final report JSON to a file (relative job paths = job file folder)
@@ -104,7 +106,7 @@ pub(crate) struct Options {
     pub quiet: bool,
     /// 계획만 보고하고 바꾸지 않는다(`--dry-run`).
     pub dry_run: bool,
-    /// 복사 뒤 원본↔사본 대조(`--verify` · 크기 + SHA-256 · 이동은 무시).
+    /// 복사 뒤 원본↔사본 대조(`--verify` · 크기 + SHA-256) · 이동이면 교차 볼륨 이동의 원본 정리 전 대조(T-202 ⑤).
     pub verify: bool,
     /// 이름 필터(`--include/--exclude` · 글롭 · 폴더 안과 최상위 원본 모두).
     pub filter: NameFilter,
@@ -607,17 +609,20 @@ pub(crate) fn run_with(
         }
     }
     // 속도 제한(`--max-bps` · T-202 ③): 복사 단계만 · 복제 경로는 세지 않음 · 병렬 합계(`fastcopy::Pacer`).
-    let out = ndir_ops::fastcopy::with_pacer(o.max_bps, || {
-        ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
-            transfer_with(
-                &sources,
-                &o.dest,
-                o.op,
-                &mut resolve,
-                &mut |ev| printer.event(&ev, err),
-                cancel,
-                &tuning,
-            )
+    // 이동 검증(`--verify --move` · T-202 ⑤): 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 오류 · 양쪽 유지).
+    let out = ndir_ops::fastcopy::with_move_verify(o.verify && o.op == Op::Move, || {
+        ndir_ops::fastcopy::with_pacer(o.max_bps, || {
+            ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+                transfer_with(
+                    &sources,
+                    &o.dest,
+                    o.op,
+                    &mut resolve,
+                    &mut |ev| printer.event(&ev, err),
+                    cancel,
+                    &tuning,
+                )
+            })
         })
     });
     printer.summary(&out, started.elapsed(), err);
@@ -631,13 +636,15 @@ pub(crate) fn run_with(
             "note: --include matched no files (only folders were created)"
         );
     }
-    // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1. 이동은 원본이 없어 못 하고(안내 한 줄) ·
+    // 검증(`--verify` · T-97): 복사한 쌍마다 크기 + SHA-256 · 불일치는 오류로 세어 종료 1. 이동은 전송 안에서 원본 정리 전에 검증했다(T-202 ⑤ · 안내 한 줄) ·
     // 취소된 전송은 하지 않는다 · 건너뛴 항목(대상에 이미 있음)은 대조 대상이 아님을 요약에 적는다(협업 점검 10-25 — 조용히 통과로 오해 방지).
     if o.verify && o.op == Op::Move {
-        let _ = writeln!(
-            err,
-            "note: --verify is ignored with --move (the source is gone after a move)"
-        );
+        if !o.quiet {
+            let _ = writeln!(
+                err,
+                "note: --move --verify: cross-volume moves were verified before removing their source (same-volume moves are renames)"
+            );
+        }
     } else if o.verify && out.canceled {
         let _ = writeln!(err, "note: verification skipped (canceled)");
     } else if o.verify {
@@ -664,7 +671,10 @@ pub(crate) fn run_with(
                 let _ = err.flush();
             }
         };
-        match ndir_xfer::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
+        // 필터 범위 안에서 검증(GAP-027 협업 실측): `--exclude`로 뺀 파일을 "missing"으로 보지 않는다.
+        match ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+            ndir_xfer::verify::verify_pairs(&out.transferred, &mut on_bytes, cancel)
+        }) {
             Ok(rep) => {
                 if !o.quiet && read > 0 {
                     let _ = writeln!(err);

@@ -43,6 +43,8 @@ pub struct JobSpec {
     pub native: bool,
     pub unbuffered_mb: u64,
     pub filter: NameFilter,
+    /// 복사 = 끝난 뒤 원본↔사본 대조(크기 + SHA-256 · Report `verify`) · 이동 = 교차 볼륨 이동이 원본을 지우기 **전** 대조(T-202 ⑤ ·
+    /// 불일치 = 그 항목 failed · 원본·사본 유지 · 같은 볼륨 rename은 대상 아님 · 요약 없음).
     pub verify: bool,
     pub mirror: bool,
     /// 미러에서 크기·시각이 같은 파일도 SHA-256으로 대조(T-202 ⑦ · 같다고 본 쌍만 해시 · 미러가 아니면 무시).

@@ -14,7 +14,8 @@ pub mod mirror;
 pub mod report;
 pub mod resume;
 pub mod spec;
-pub mod verify;
+/// 복사 검증 — ndir-ops로 옮김(T-202 ⑤ · 이동 검증이 엔진 안에서 쓴다) · 경로 호환을 위해 재수출.
+pub use ndir_ops::verify;
 
 pub use report::{ItemReport, Phase, Progress, Report, VerifySummary};
 pub use spec::{ConflictPolicy, JobSpec};
@@ -263,17 +264,20 @@ pub fn run_with(
         }
     };
     // 속도 제한(T-202 ③): 전송 단계만(검증 읽기는 제한하지 않음) · 복제 경로는 세지 않음 · 병렬 작업 스레드 합계(`fastcopy::Pacer`).
-    let out = fastcopy::with_pacer(spec.max_bps, || {
-        fastcopy::with_filter(spec.filter.clone(), || {
-            transfer_with(
-                &sources,
-                &spec.dest,
-                spec.op,
-                &mut resolve,
-                &mut on_event,
-                cancel,
-                &tuning,
-            )
+    // 이동 검증(T-202 ⑤): `verify` + move = 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 failed · 원본·사본 유지).
+    let out = fastcopy::with_move_verify(spec.verify && spec.op == Op::Move, || {
+        fastcopy::with_pacer(spec.max_bps, || {
+            fastcopy::with_filter(spec.filter.clone(), || {
+                transfer_with(
+                    &sources,
+                    &spec.dest,
+                    spec.op,
+                    &mut resolve,
+                    &mut on_event,
+                    cancel,
+                    &tuning,
+                )
+            })
         })
     });
     rep.canceled = out.canceled;
@@ -288,7 +292,17 @@ pub fn run_with(
             ("skipped", "exists".to_string())
         } else if out.transferred.iter().any(|(s, _)| s == src) {
             rep.transferred_bytes += bytes;
-            ("done", String::new())
+            // 이동 + verify(T-202 ⑤): 같은 볼륨은 rename이라 검증하지 않았음을 적는다(엔진과 같은 `same_volume` 판정 · 협업 지적).
+            let note = if spec.verify && spec.op == Op::Move {
+                if ndir_ops::same_volume(src, &spec.dest) {
+                    "renamed on the same volume (not verified)"
+                } else {
+                    "verified"
+                }
+            } else {
+                ""
+            };
+            ("done", note.to_string())
         } else if out.canceled {
             ("canceled", String::new())
         } else {
@@ -331,7 +345,10 @@ pub fn run_with(
                 current: None,
             });
         };
-        match verify::verify_pairs(&out.transferred, &mut on_bytes, cancel) {
+        // 필터 범위 안에서 검증(GAP-027): 복사에서 뺀 항목을 "missing"으로 보지 않는다.
+        match fastcopy::with_filter(spec.filter.clone(), || {
+            verify::verify_pairs(&out.transferred, &mut on_bytes, cancel)
+        }) {
             Ok(v) => {
                 if !v.ok() {
                     rep.ok = false;
@@ -867,6 +884,42 @@ mod tests {
         assert!(r.ok, "{r:?}");
         assert_eq!(hashed, 6010, "제외한 same.txt(4 × 2)만 빠짐 = 읽지 않음");
         assert_eq!(fs::read(d.join("dst/same.txt")).unwrap(), b"BBBB");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// 이동 + verify(T-202 ⑤): 같은 볼륨 이동은 rename이라 검증 대상이 아니고 그대로 성공(깃발이 경로를 깨지 않음) · Report verify 요약은 없음(move).
+    #[test]
+    fn move_with_verify_still_moves() {
+        let d = sandbox("move-verify");
+        let spec = JobSpec {
+            op: Op::Move,
+            sources: vec![d.join("src/a.txt")],
+            dest: d.join("dst"),
+            verify: true,
+            ..JobSpec::default()
+        };
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(r.ok && r.verify.is_none(), "{r:?}");
+        assert!(!d.join("src/a.txt").exists() && d.join("dst/a.txt").is_file());
+        assert!(r.items[0].note.contains("not verified"), "{:?}", r.items);
+        assert!(!fastcopy::move_verify(), "끝나면 복원");
+        // GAP-027: 복사 + verify + exclude — 제외한 파일은 검증에서도 빠진다(ok · files 1).
+        let spec = JobSpec {
+            sources: vec![d.join("src/dir")],
+            dest: d.join("dst"),
+            verify: true,
+            filter: ndir_ops::fastcopy::NameFilter {
+                include: vec![],
+                exclude: vec!["*.bin".into()],
+            },
+            ..JobSpec::default()
+        };
+        fs::write(d.join("src/dir/c.txt"), b"c").unwrap();
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(r.ok, "{r:?}");
+        let v = r.verify.as_ref().unwrap();
+        assert_eq!((v.files, v.mismatches.len()), (1, 0), "{v:?}");
+        assert!(!d.join("dst/dir/b.bin").exists());
         let _ = fs::remove_dir_all(&d);
     }
 
