@@ -312,7 +312,7 @@ jobs:
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
           | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | Unzip and run \`nexa-dir.exe\` (settings go to a \`data\` folder next to the exe if present, otherwise %APPDATA%\\\\nexa-dir); in a console (PowerShell) use \`ndir.exe\`, e.g. \`ndir --selfcheck\` |
 
-          Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` \`--mirror\` \`--dry-run\` \`--include/--exclude\` \`--job <file.json>\` \`--progress\` \`--report <file>\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
+          Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` (also verifies cross-volume moves before the source is removed) \`--mirror\` \`--by-content\` \`--dry-run\` \`--include/--exclude\` \`--max-bps <rate>\` \`--journal <file>\`/\`--resume <file>\` \`--job <file.json>\` \`--progress\` \`--report <file>\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
 
           The same engine is also bundled as a C library, **\`ndir_xfer\`** (\`ndir_xfer.dll\` next to the exe on Windows · \`Contents/Frameworks/libndir_xfer.dylib\` on macOS · \`/usr/lib/nexa-dir/libndir_xfer.so\` on Linux) with its header \`include/ndir_xfer.h\`: \`ndir_xfer_run(job_json, progress_cb, user, cancel)\` takes the same job JSON as \`nexa-copy --job\` and returns a report JSON (\`ndir_xfer_abi_version()\` = 1).
 
