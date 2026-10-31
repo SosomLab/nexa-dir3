@@ -3,7 +3,7 @@
 //! ```json
 //! {"op":"copy","sources":["/a/x.txt","/a/dir"],"dest":"/b","conflict":"skip","threads":0,"native":true,"unbuffered_mb":64,
 //!  "include":["*.txt"],"exclude":[],"verify":false,"mirror":false,"dry_run":false,"yes":false,
-//!  "journal":null,"resume":null}   (unbuffered_mb 기본 0 · journal/resume = 재개 T-202 ② · 경로 문자열 또는 null)
+//!  "journal":null,"resume":null,"max_bps":0}   (unbuffered_mb 기본 0 · journal/resume = 재개 T-202 ② · max_bps = 속도 제한 T-202 ③ · 0 = 없음)
 //! ```
 //! 빠진 키 = 기본값 · 모르는 키 = 무시(앞으로 호환) · `op` = `copy`|`move` · `conflict` = `skip`|`overwrite`.
 
@@ -51,6 +51,8 @@ pub struct JobSpec {
     pub journal: Option<PathBuf>,
     /// 재개 입력(이전 Report JSON 또는 저널): 끝 상태가 `done`인 (source, dest) 쌍은 건너뛴다(`status` skipped · `note` resumed) · 미러에는 못 씀.
     pub resume: Option<PathBuf>,
+    /// 속도 제한(T-202 ③ · 바이트/초 · 0 = 없음): 전송·미러 복사 단계에서 `fastcopy::with_pacer` — 복제 경로는 세지 않음 · 검증 읽기는 제한 안 함.
+    pub max_bps: u64,
 }
 
 impl Default for JobSpec {
@@ -70,6 +72,7 @@ impl Default for JobSpec {
             yes: false,
             journal: None,
             resume: None,
+            max_bps: 0,
         }
     }
 }
@@ -153,6 +156,9 @@ impl JobSpec {
         s.yes = flag(j.get("yes"), "yes", false)?;
         s.journal = path(j.get("journal"), "journal")?;
         s.resume = path(j.get("resume"), "resume")?;
+        if let Some(m) = j.get("max_bps") {
+            s.max_bps = m.as_u64().ok_or("max_bps: expected a number")?;
+        }
         if s.mirror && s.sources.len() != 1 {
             return Err("mirror: needs exactly one source folder".into());
         }
@@ -222,6 +228,7 @@ impl JobSpec {
             ("yes".into(), Json::Bool(self.yes)),
             ("journal".into(), opt_path(self.journal.as_deref())),
             ("resume".into(), opt_path(self.resume.as_deref())),
+            ("max_bps".into(), Json::Num(self.max_bps as f64)),
         ]))
     }
 }
@@ -254,8 +261,14 @@ mod tests {
             yes: false,
             journal: Some(PathBuf::from("/j/log")),
             resume: Some(PathBuf::from("/j/prev.json")),
+            max_bps: 1_500_000,
         };
         assert_eq!(JobSpec::from_json(&s.to_json()).unwrap(), s);
+        assert!(
+            JobSpec::from_json(r#"{"sources":["/a"],"dest":"/b","max_bps":"fast"}"#)
+                .unwrap_err()
+                .starts_with("max_bps")
+        );
         // journal/resume: 빠짐 · null · 빈 글 = None · 문자열 아님 = 오류.
         let d = JobSpec::from_json(r#"{"sources":["/a"],"dest":"/b","journal":null,"resume":""}"#)
             .unwrap();

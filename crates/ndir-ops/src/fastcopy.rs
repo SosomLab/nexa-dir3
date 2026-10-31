@@ -23,7 +23,8 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
+use std::time::{Duration, Instant};
 
 /// 읽고 쓰는 루프의 버퍼 상한(dir2 `CopyBufferSize` — 4 MiB).
 const COPY_BUF: usize = 4 * 1024 * 1024;
@@ -86,6 +87,97 @@ thread_local! {
     static OVERRIDE: std::cell::Cell<Option<Tuning>> = const { std::cell::Cell::new(None) };
     /// 이 스레드의 폴더 복사 이름 필터([`with_filter`] · nexa-copy `--include/--exclude` · 10-25) — 계획 단계(호출 스레드)에서만 읽는다.
     static FILTER: std::cell::RefCell<Option<NameFilter>> = const { std::cell::RefCell::new(None) };
+    /// 이 스레드의 속도 제한기([`with_pacer`] · T-202 ③) — 폴더 병렬 복사의 작업 스레드는 부른 쪽 것을 같이 쓴다(`copy_jobs_parallel`).
+    static PACER: std::cell::RefCell<Option<Arc<Pacer>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// 속도 제한기(T-202 ③ · docs/26 §8): 실제로 바이트를 옮기는 경로(읽고 쓰는 루프 · Linux `copy_file_range` · Windows `CopyFileExW` ·
+/// macOS `copyfile` 진행 콜백)가 보고한 **뒤** 일정보다 앞서 있으면 쉰다 — 100 ms 조각으로 자며 `stop`을 본다(취소가 늦지 않게).
+/// 복제(FICLONE · APFS clone · ReFS 블록 복제)는 전송이 없어 세지 않는다 · 작업 스레드가 **하나를 함께** 써 합계가 제한된다 ·
+/// 청크도 제한 속도에 맞춰 줄인다([`Pacer::chunk`] — 32 MiB 청크 뒤 30초 멈춤 같은 덩어리를 막는다).
+#[derive(Debug)]
+pub struct Pacer {
+    bps: u64,
+    start: Instant,
+    sent: AtomicU64,
+}
+
+impl Pacer {
+    /// 쉬는 조각의 상한 — 이 간격마다 `stop`을 본다.
+    const SLICE: Duration = Duration::from_millis(100);
+
+    #[must_use]
+    pub fn new(bps: u64) -> Pacer {
+        Pacer {
+            bps: bps.max(1),
+            start: Instant::now(),
+            sent: AtomicU64::new(0),
+        }
+    }
+
+    /// 순수: `sent` 바이트를 `elapsed` 동안 보냈을 때 일정(`bps`)까지 더 쉬어야 할 시간(앞서 있지 않으면 0 · `bps` 0 = 제한 없음).
+    #[must_use]
+    pub fn delay_for(sent: u64, elapsed: Duration, bps: u64) -> Duration {
+        if bps == 0 {
+            return Duration::ZERO;
+        }
+        Duration::from_secs_f64(sent as f64 / bps as f64).saturating_sub(elapsed)
+    }
+
+    /// 청크 상한(순수): 제한 속도의 ¼초 분량 — 하한 64 KiB · 상한 `default`.
+    #[must_use]
+    pub fn chunk_for(bps: u64, default: usize) -> usize {
+        if bps == 0 {
+            return default;
+        }
+        let floor = (64 * 1024).min(default);
+        usize::try_from(bps / 4)
+            .unwrap_or(default)
+            .clamp(floor, default)
+    }
+
+    #[must_use]
+    pub fn chunk(&self, default: usize) -> usize {
+        Self::chunk_for(self.bps, default)
+    }
+
+    /// 보고한 바이트를 더하고 일정보다 앞서 있으면 쉰다 — `stop`이 서면 바로 돌아온다.
+    pub fn pace(&self, bytes: u64, stop: Stop<'_>) {
+        let sent = self
+            .sent
+            .fetch_add(bytes, Ordering::Relaxed)
+            .saturating_add(bytes);
+        loop {
+            let wait = Self::delay_for(sent, self.start.elapsed(), self.bps);
+            if wait.is_zero() || stop() {
+                return;
+            }
+            std::thread::sleep(wait.min(Self::SLICE));
+        }
+    }
+}
+
+/// `f`가 도는 동안 이 스레드(와 그 안의 폴더 병렬 작업 스레드)의 복사를 초당 `bps` 바이트로 제한한다 — 0 = 제한 없음 · 끝나면 이전 값으로.
+pub fn with_pacer<R>(bps: u64, f: impl FnOnce() -> R) -> R {
+    with_pacer_shared((bps > 0).then(|| Arc::new(Pacer::new(bps))), f)
+}
+
+fn with_pacer_shared<R>(p: Option<Arc<Pacer>>, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Arc<Pacer>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            PACER.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+    let _restore = Restore(PACER.with(|c| c.replace(p)));
+    f()
+}
+
+/// 이 스레드의 속도 제한기(없으면 None).
+#[must_use]
+pub fn pacer() -> Option<Arc<Pacer>> {
+    PACER.with(|c| c.borrow().clone())
 }
 
 /// 폴더 복사의 **이름 필터**(nexa-copy `--include/--exclude` · T-97 "필터" 1차 · 10-25): 글롭(`*` `?` · 대소문자 무시 · 이름만) 목록.
@@ -283,9 +375,11 @@ pub(crate) fn copy_file_portable(
             .open(dest)?
     };
     let len = meta.as_ref().map_or(u64::MAX, fs::Metadata::len);
-    let cap = usize::try_from(len)
-        .unwrap_or(COPY_BUF)
-        .clamp(64 * 1024, COPY_BUF);
+    let pacer = pacer();
+    let cap = usize::try_from(len).unwrap_or(COPY_BUF).clamp(
+        64 * 1024,
+        pacer.as_deref().map_or(COPY_BUF, |p| p.chunk(COPY_BUF)),
+    );
     let mut buf = vec![0u8; cap];
     let run = (|| -> io::Result<()> {
         loop {
@@ -298,6 +392,9 @@ pub(crate) fn copy_file_portable(
             }
             output.write_all(&buf[..n])?;
             on_bytes(n as u64);
+            if let Some(p) = &pacer {
+                p.pace(n as u64, stop);
+            }
         }
     })();
     if run.is_err() {
@@ -452,43 +549,47 @@ fn copy_jobs_parallel(
     let big = std::sync::Mutex::new(());
     let (tx, rx) = mpsc::channel::<Msg>();
     let mut first: Option<io::Error> = None;
+    // 속도 제한기(T-202 ③)는 부른 스레드 것을 작업 스레드가 함께 쓴다(합계 기준) — 스레드 지역은 상속되지 않아 안에서 다시 건다.
+    let pacer = pacer();
     std::thread::scope(|s| {
         for _ in 0..threads {
             let tx = tx.clone();
-            let (next, abort, big) = (&next, &abort, &big);
+            let (next, abort, big, pacer) = (&next, &abort, &big, &pacer);
             s.spawn(move || {
-                let halt = || abort.load(Ordering::Relaxed) || stop();
-                loop {
-                    if halt() {
-                        break;
-                    }
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(job) = jobs.get(i) else { break };
-                    let _one_big = (job.len >= BIG_FILE).then(|| {
-                        big.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    });
-                    let r = copy_file(
-                        &job.src,
-                        &job.dest,
-                        true,
-                        &mut |n| {
-                            let _ = tx.send(Msg::Bytes(n));
-                        },
-                        &halt,
-                        t,
-                    );
-                    match r {
-                        Ok(()) => {
-                            let _ = tx.send(Msg::Done(i));
-                        }
-                        Err(e) => {
-                            abort.store(true, Ordering::Relaxed);
-                            let _ = tx.send(Msg::Fail(e));
+                with_pacer_shared(pacer.clone(), || {
+                    let halt = || abort.load(Ordering::Relaxed) || stop();
+                    loop {
+                        if halt() {
                             break;
                         }
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(job) = jobs.get(i) else { break };
+                        let _one_big = (job.len >= BIG_FILE).then(|| {
+                            big.lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        });
+                        let r = copy_file(
+                            &job.src,
+                            &job.dest,
+                            true,
+                            &mut |n| {
+                                let _ = tx.send(Msg::Bytes(n));
+                            },
+                            &halt,
+                            t,
+                        );
+                        match r {
+                            Ok(()) => {
+                                let _ = tx.send(Msg::Done(i));
+                            }
+                            Err(e) => {
+                                abort.store(true, Ordering::Relaxed);
+                                let _ = tx.send(Msg::Fail(e));
+                                break;
+                            }
+                        }
                     }
-                }
+                });
             });
         }
         drop(tx);
@@ -586,6 +687,9 @@ mod os {
                 .create_new(true)
                 .open(dest)?
         };
+        // 속도 제한(T-202 ③): 복제(①)는 세지 않음 · ②는 청크를 제한에 맞춰 줄이고 청크마다 쉰다.
+        let pacer = super::pacer();
+        let chunk = pacer.as_deref().map_or(CHUNK, |p| p.chunk(CHUNK));
         let run = (|| -> io::Result<()> {
             // ① 블록 복제 — 같은 파일 시스템 · reflink 지원일 때만 성공(아니면 EXDEV/EOPNOTSUPP/EINVAL — 조용히 ②로).
             // SAFETY: 두 fd는 열린 파일이고 호출 동안 살아 있다 · FICLONE의 인자는 원본 fd(int) 하나다.
@@ -610,7 +714,7 @@ mod os {
                         std::ptr::null_mut(),
                         output.as_raw_fd(),
                         std::ptr::null_mut(),
-                        CHUNK,
+                        chunk,
                         0,
                     )
                 };
@@ -625,6 +729,9 @@ mod os {
                 }
                 written += n as u64;
                 on_bytes(n as u64);
+                if let Some(p) = &pacer {
+                    p.pace(n as u64, stop);
+                }
             }
         })();
         if let Err(e) = run {
@@ -748,6 +855,8 @@ mod os {
         on_bytes: &'a mut dyn FnMut(u64),
         stop: Stop<'a>,
         sent: u64,
+        /// 속도 제한(T-202 ③) — 진행 콜백 사이에서만 쉴 수 있다(간격은 OS가 정한다) · 복제로 끝난 합계 채움은 세지 않는다.
+        pacer: Option<std::sync::Arc<super::Pacer>>,
     }
 
     /// 진행 콜백 — 데이터 복사 진행 단계에서 누적 바이트(`COPYFILE_STATE_COPIED`)의 증분을 보고 · 중단이면 `COPYFILE_QUIT`.
@@ -769,8 +878,12 @@ mod os {
             {
                 let c = u64::try_from(copied).unwrap_or(0);
                 if c > ctx.sent {
-                    (ctx.on_bytes)(c - ctx.sent);
+                    let delta = c - ctx.sent;
+                    (ctx.on_bytes)(delta);
                     ctx.sent = c;
+                    if let Some(p) = &ctx.pacer {
+                        p.pace(delta, ctx.stop);
+                    }
                 }
             }
         }
@@ -812,6 +925,7 @@ mod os {
             on_bytes,
             stop,
             sent: 0,
+            pacer: super::pacer(),
         };
         // SAFETY: 상태 객체는 이 함수 안에서만 쓰고 끝에 해제한다 · 콜백/컨텍스트 포인터는 호출 동안 유효하다.
         let state = unsafe { copyfile_state_alloc() };
@@ -1121,6 +1235,8 @@ mod os {
         stop: Stop<'a>,
         /// 지금까지 보고한 기본 스트림 바이트.
         sent: u64,
+        /// 속도 제한(T-202 ③) — 진행 콜백 사이에서만 쉴 수 있다(간격은 OS가 정한다) · 블록 복제의 합계 채움은 세지 않는다.
+        pacer: Option<std::sync::Arc<super::Pacer>>,
     }
 
     /// `CopyFileExW` 진행 콜백 — 기본 데이터 스트림(1번)의 증분만 보고한다(대체 스트림은 계획한 총량에 없다).
@@ -1140,8 +1256,12 @@ mod os {
         if stream_no == 1 {
             let now = u64::try_from(stream_done).unwrap_or(0);
             if now > ctx.sent {
-                (ctx.on_bytes)(now - ctx.sent);
+                let delta = now - ctx.sent;
+                (ctx.on_bytes)(delta);
                 ctx.sent = now;
+                if let Some(p) = &ctx.pacer {
+                    p.pace(delta, ctx.stop);
+                }
             }
         }
         if (ctx.stop)() {
@@ -1173,6 +1293,7 @@ mod os {
             on_bytes,
             stop,
             sent: 0,
+            pacer: super::pacer(),
         };
         let mut cancel = 0i32;
         // SAFETY: 두 경로는 NUL로 끝나는 UTF-16 버퍼이고 호출 동안 살아 있다 · `ctx` · `cancel`도 호출 동안 유효하다.
@@ -1316,7 +1437,7 @@ mod tests {
     }
 
     use super::*;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, Instant, SystemTime};
 
     fn fixture(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("nexa_fast_{}_{name}", std::process::id()));
@@ -1441,6 +1562,105 @@ mod tests {
         let nested = with_tuning(t, || with_tuning(Tuning::default(), tuning));
         assert_eq!(nested, Tuning::default());
         assert_eq!(tuning(), before);
+    }
+
+    /// 속도 제한(T-202 ③): 순수 일정 계산 · 청크 축소 · 범위(안/밖 · 다른 스레드 불가시 · 0 = 없음) · `stop`이 서면 긴 잠에서 바로 ·
+    /// 1 MiB를 4 MiB/s로(루프 경로) = ≥ 200 ms · 폴더 병렬(8 × 128 KiB · 4 스레드)도 합계로 제한 — 시간은 하한만 단언(흔들림 방지).
+    #[test]
+    fn pacer_limits_loop_and_parallel_copies() {
+        assert_eq!(Pacer::delay_for(0, Duration::ZERO, 1000), Duration::ZERO);
+        assert_eq!(
+            Pacer::delay_for(1000, Duration::ZERO, 1000),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            Pacer::delay_for(1000, Duration::from_millis(400), 1000),
+            Duration::from_millis(600)
+        );
+        assert_eq!(
+            Pacer::delay_for(1000, Duration::from_secs(2), 1000),
+            Duration::ZERO
+        );
+        assert_eq!(Pacer::delay_for(5, Duration::ZERO, 0), Duration::ZERO);
+        assert_eq!(Pacer::chunk_for(0, COPY_BUF), COPY_BUF);
+        assert_eq!(Pacer::chunk_for(1_000_000, COPY_BUF), 250_000);
+        assert_eq!(Pacer::chunk_for(1, COPY_BUF), 64 * 1024);
+        assert_eq!(Pacer::chunk_for(u64::MAX, COPY_BUF), COPY_BUF);
+        assert_eq!(
+            Pacer::chunk_for(1, 1024),
+            1024,
+            "기본이 하한보다 작으면 기본"
+        );
+        assert!(pacer().is_none());
+        with_pacer(1024, || {
+            assert!(pacer().is_some());
+            let other = std::thread::spawn(|| pacer().is_none()).join().unwrap();
+            assert!(other, "다른 스레드는 못 본다");
+        });
+        assert!(pacer().is_none(), "끝나면 복원");
+        with_pacer(0, || assert!(pacer().is_none(), "0 = 제한 없음"));
+        let p = Pacer::new(1);
+        let t0 = Instant::now();
+        p.pace(10_000_000, &|| true);
+        assert!(t0.elapsed() < Duration::from_secs(1), "stop이 서면 바로");
+        let d = fixture("pacer");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("one.bin"), vec![1u8; 1024 * 1024]).unwrap();
+        let one = Tuning {
+            native: false,
+            unbuffered_min: 0,
+            threads: 1,
+        };
+        let t0 = Instant::now();
+        let mut got = 0u64;
+        with_pacer(4 * 1024 * 1024, || {
+            copy_file(
+                &a.join("one.bin"),
+                &b.join("one.bin"),
+                false,
+                &mut |n| got += n,
+                GO,
+                &one,
+            )
+        })
+        .unwrap();
+        assert_eq!(got, 1024 * 1024);
+        assert!(
+            t0.elapsed() >= Duration::from_millis(200),
+            "{:?}",
+            t0.elapsed()
+        );
+        fs::create_dir_all(a.join("many")).unwrap();
+        for i in 0..8 {
+            fs::write(a.join("many").join(format!("f{i}")), vec![2u8; 128 * 1024]).unwrap();
+        }
+        let par = Tuning {
+            native: false,
+            unbuffered_min: 0,
+            threads: 4,
+        };
+        let t0 = Instant::now();
+        let mut got = 0u64;
+        with_pacer(4 * 1024 * 1024, || {
+            copy_tree(
+                &a.join("many"),
+                &b.join("many"),
+                &mut |n| got += n,
+                GO,
+                None,
+                &par,
+            )
+        })
+        .unwrap();
+        assert_eq!(got, 1024 * 1024);
+        assert!(
+            t0.elapsed() >= Duration::from_millis(200),
+            "병렬도 합계 제한: {:?}",
+            t0.elapsed()
+        );
+        let _ = fs::remove_dir_all(&d);
     }
 
     /// 파일 1개: 내용 · 보고 합계 = 크기 · **수정 시각 보존** · `overwrite = false`가 있던 대상을 건드리지 않음 — 모든 전략에서 같다.

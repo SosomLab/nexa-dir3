@@ -115,7 +115,10 @@ pub(crate) fn run_mirror(
             let _ = err.flush();
         }
     };
-    let failed = match compare::apply_copies(&plan, &mut on_bytes, cancel) {
+    // 속도 제한(`--max-bps` · T-202 ③): 미러 복사도 같은 제한기.
+    let failed = match ndir_ops::fastcopy::with_pacer(o.max_bps, || {
+        compare::apply_copies(&plan, &mut on_bytes, cancel)
+    }) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
             let _ = writeln!(err, "\ncanceled");

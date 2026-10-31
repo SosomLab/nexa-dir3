@@ -473,6 +473,33 @@ fn journal_and_resume_skip_finished_items() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--max-bps`(T-202 ③): 1 MiB를 4 MiB/s로(루프 경로 · 복제 배제) = 벽시계 ≥ 200 ms(하한만) · 내용 같음 · 잘못된 값 = 2.
+#[test]
+fn max_bps_limits_copy_speed() {
+    let d = sandbox("bps");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    fs::create_dir_all(&src).expect("mkdir");
+    fs::create_dir_all(&dst).expect("mkdir");
+    fs::write(src.join("one.bin"), vec![9u8; 1024 * 1024]).expect("write");
+    let t0 = std::time::Instant::now();
+    let r = run(
+        &[&src.join("one.bin"), &dst],
+        &["--max-bps", "4M", "--no-native", "-q"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(
+        t0.elapsed() >= std::time::Duration::from_millis(200),
+        "{:?}",
+        t0.elapsed()
+    );
+    same_tree(&src, &dst);
+    let r = run(&[&src.join("one.bin"), &dst], &["--max-bps", "fast"], &[]);
+    assert_eq!(r.code, 2, "{}", r.err);
+    assert!(r.err.contains("--max-bps"), "{}", r.err);
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// 취소(Ctrl+C 대역 = `NEXA_COPY_CANCEL_AFTER_MS`): 큰 파일을 루프 경로로 복사하다 멈춤 → 종료 130 · 요약 `canceled` · 부분 파일 없음 · 원본 그대로.
 #[test]
 fn cancel_mid_copy_cleans_partial_and_exits_130() {

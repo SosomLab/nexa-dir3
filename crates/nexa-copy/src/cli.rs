@@ -19,6 +19,7 @@
 //!   --report <file>      also write the final report JSON to a file (works with or without --progress)
 //!   --journal <file>     append one report-item JSON line per finished top-level item (resume input · T-202 ②)
 //!   --resume <file>      skip top-level items already done according to a previous report or journal (not with --mirror)
+//!   --max-bps <rate>     limit the copy speed to <rate> bytes per second (K/M/G = ×1024 · 0 = unlimited · T-202 ③)
 //!                        relative paths inside a --job file are resolved against the folder that contains the job file
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
@@ -76,6 +77,9 @@ Options:
   --resume <file>      skip top-level items a previous report or journal lists as done (same source and
                        destination) · folders that were interrupted are copied again (existing files are
                        skipped unless --overwrite) · not with --mirror (a mirror re-compares by itself)
+  --max-bps <rate>     limit the copy speed to <rate> bytes per second; K/M/G suffixes = x1024 (e.g. 10M);
+                       0 = unlimited · applies to copying (also --mirror), not to --verify reads · block clones
+                       on the same file system are instant and not limited
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
@@ -114,6 +118,8 @@ pub(crate) struct Options {
     pub journal: Option<PathBuf>,
     /// `--resume <file>`: 재개 입력(ndir-xfer 경로 · T-202 ②).
     pub resume: Option<PathBuf>,
+    /// `--max-bps <rate>`: 속도 제한(바이트/초 · 0 = 없음 · T-202 ③ · `fastcopy::with_pacer`).
+    pub max_bps: u64,
 }
 
 impl Options {
@@ -138,8 +144,30 @@ impl Options {
             yes: self.yes,
             journal: self.journal.clone(),
             resume: self.resume.clone(),
+            max_bps: self.max_bps,
         }
     }
+}
+
+/// `--max-bps` 값(순수): 숫자(소수 허용) + 선택 접미 K/M/G(×1024 거듭제곱 · 대소문자 무시 · 끝의 B 허용) → 바이트/초 · 못 읽으면 None.
+pub(crate) fn parse_rate(v: &str) -> Option<u64> {
+    let s = v.trim().to_ascii_uppercase();
+    let s = s.strip_suffix('B').unwrap_or(&s);
+    let (num, mul) = match s.chars().last()? {
+        'K' => (&s[..s.len() - 1], 1u64 << 10),
+        'M' => (&s[..s.len() - 1], 1u64 << 20),
+        'G' => (&s[..s.len() - 1], 1u64 << 30),
+        _ => (s, 1),
+    };
+    let n: f64 = num.parse().ok()?;
+    if n < 0.0 || !n.is_finite() {
+        return None;
+    }
+    let r = n * mul as f64;
+    if r >= u64::MAX as f64 {
+        return None;
+    }
+    Some(r as u64)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -178,6 +206,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut report: Option<PathBuf> = None;
     let mut journal: Option<PathBuf> = None;
     let mut resume: Option<PathBuf> = None;
+    let mut max_bps = 0u64;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -213,6 +242,12 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--resume" => {
                 let v = it.next().ok_or("--resume needs a file")?;
                 resume = Some(PathBuf::from(v));
+            }
+            "--max-bps" => {
+                let v = it.next().ok_or("--max-bps needs a rate")?;
+                max_bps = parse_rate(v).ok_or_else(|| {
+                    format!("--max-bps: expected bytes per second with optional K/M/G, got '{v}'")
+                })?;
             }
             "--job" => {
                 let v = it.next().ok_or("--job needs a file")?;
@@ -254,7 +289,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         }
     }
     if let Some(file) = job {
-        if !paths.is_empty() || ask || mirror || dry_run || verify || overwrite {
+        if !paths.is_empty() || ask || mirror || dry_run || verify || overwrite || max_bps > 0 {
             return Err(
                 "--job takes no sources/destination or operation flags (put them in the JSON)"
                     .into(),
@@ -292,6 +327,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         report,
         journal,
         resume,
+        max_bps,
     }))
 }
 
@@ -549,16 +585,19 @@ pub(crate) fn run_with(
             let _ = writeln!(err, "filtered out: {}", p.display());
         }
     }
-    let out = ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
-        transfer_with(
-            &sources,
-            &o.dest,
-            o.op,
-            &mut resolve,
-            &mut |ev| printer.event(&ev, err),
-            cancel,
-            &tuning,
-        )
+    // 속도 제한(`--max-bps` · T-202 ③): 복사 단계만 · 복제 경로는 세지 않음 · 병렬 합계(`fastcopy::Pacer`).
+    let out = ndir_ops::fastcopy::with_pacer(o.max_bps, || {
+        ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+            transfer_with(
+                &sources,
+                &o.dest,
+                o.op,
+                &mut resolve,
+                &mut |ev| printer.event(&ev, err),
+                cancel,
+                &tuning,
+            )
+        })
     });
     printer.summary(&out, started.elapsed(), err);
     // `--include`가 파일을 하나도 안 골랐다(옮긴 바이트 0 · 폴더 뼈대만) — 조용히 0으로 끝나면 "복사됐다"로 오해(협업 점검 10-25).
@@ -1291,6 +1330,28 @@ mod tests {
             parse(&["--resume".into()]).is_err(),
             "--resume needs a file"
         );
+        // `--max-bps`(T-202 ③): 접미 · 소수 · 오류 · `--job`과 함께는 JSON 키로.
+        assert_eq!(parse_rate("1000"), Some(1000));
+        assert_eq!(parse_rate("10M"), Some(10 << 20));
+        assert_eq!(parse_rate("1.5k"), Some(1536));
+        assert_eq!(parse_rate("2GB"), Some(2 << 30));
+        assert_eq!(parse_rate("0"), Some(0));
+        assert!(parse_rate("").is_none() && parse_rate("K").is_none());
+        assert!(parse_rate("-1").is_none() && parse_rate("fast").is_none());
+        let Parsed::Run(o) =
+            parse(&["--max-bps".into(), "2M".into(), "/s".into(), "/d".into()]).unwrap()
+        else {
+            panic!("run")
+        };
+        assert_eq!((o.max_bps, o.to_spec().max_bps), (2 << 20, 2 << 20));
+        assert!(parse(&["--max-bps".into(), "x".into(), "/s".into(), "/d".into()]).is_err());
+        assert!(parse(&[
+            "--job".into(),
+            "j.json".into(),
+            "--max-bps".into(),
+            "1".into()
+        ])
+        .is_err());
         assert!(parse(&["--job".into(), "j.json".into(), "a".into(), "b".into()]).is_err());
         let Parsed::Run(o) = parse(&[
             "--move".into(),

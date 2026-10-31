@@ -247,16 +247,19 @@ pub fn run(spec: &JobSpec, on_progress: &mut dyn FnMut(&Progress), cancel: &Atom
             }
         }
     };
-    let out = fastcopy::with_filter(spec.filter.clone(), || {
-        transfer_with(
-            &sources,
-            &spec.dest,
-            spec.op,
-            &mut resolve,
-            &mut on_event,
-            cancel,
-            &tuning,
-        )
+    // 속도 제한(T-202 ③): 전송 단계만(검증 읽기는 제한하지 않음) · 복제 경로는 세지 않음 · 병렬 작업 스레드 합계(`fastcopy::Pacer`).
+    let out = fastcopy::with_pacer(spec.max_bps, || {
+        fastcopy::with_filter(spec.filter.clone(), || {
+            transfer_with(
+                &sources,
+                &spec.dest,
+                spec.op,
+                &mut resolve,
+                &mut on_event,
+                cancel,
+                &tuning,
+            )
+        })
     });
     rep.canceled = out.canceled;
     for (i, src) in sources.iter().enumerate() {
@@ -425,7 +428,9 @@ fn run_mirror(
             current: None,
         });
     };
-    let out = match mirror::apply_mirror(&plan, &mut on_bytes, cancel) {
+    let out = match fastcopy::with_pacer(spec.max_bps, || {
+        mirror::apply_mirror(&plan, &mut on_bytes, cancel)
+    }) {
         Ok(o) => o,
         Err(e) => {
             rep.ok = false;
@@ -681,6 +686,29 @@ mod tests {
         assert!(r.ok && r.verify.is_some(), "{r:?}");
         let text = fs::read_to_string(&journal).unwrap();
         assert_eq!(text.lines().count(), 2, "{text}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// 속도 제한(T-202 ③): `max_bps`가 전송 단계에 걸린다 — 512 KiB를 2 MiB/s로 = ≥ 200 ms(하한만) · native를 꺼 복제 경로를 배제.
+    #[test]
+    fn max_bps_slows_transfer() {
+        let d = sandbox("bps");
+        fs::write(d.join("src/big.bin"), vec![3u8; 512 * 1024]).unwrap();
+        let spec = JobSpec {
+            sources: vec![d.join("src/big.bin")],
+            dest: d.join("dst"),
+            native: false,
+            max_bps: 2 * 1024 * 1024,
+            ..JobSpec::default()
+        };
+        let t0 = std::time::Instant::now();
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(r.ok && r.transferred_bytes == 512 * 1024, "{r:?}");
+        assert!(
+            t0.elapsed() >= std::time::Duration::from_millis(200),
+            "{:?}",
+            t0.elapsed()
+        );
         let _ = fs::remove_dir_all(&d);
     }
 
