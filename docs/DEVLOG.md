@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **T-202 ① 패키지 동봉**(be60dc2 · deb/rpm/pkg/dmg/MSI/zip · release.yml ctypes 스모크 · gate full 777/0) · deb 실기 ✓(ctypes 로드 · 내보내기 5) · rpm · MSI · dmg = 태그 전 선검증에서 확인 · xvfb = 이 PC 미설치(CI는 ✓) → [10-31 §26](journal/2026-10-31.md)
+
 - **T-202 ① cdylib C ABI**(d130d9f · Linux PC · `ndir_xfer_run` 등 API 5 · 헤더 `include/ndir_xfer.h` · cancel = `const bool*` · release 패닉 = 프로세스 종료 문서화 · gate full 777/0 · T4 43/0) · 다음 = 패키지 동봉 커밋 · docs/26 §7 재작성 → [10-31 §25](journal/2026-10-31.md)
 
 - **v0.28.0 승격 71df088 · 선검증 run 41198851370 ✓ · 초안 삭제 · 태그 보류(사용자)** · ed45954 `--report` · 상대 경로 = 잡 파일 폴더 · 태그 주석 = docs/release/tag-v0.28.0.txt → [10-31 §24](journal/2026-10-31.md)

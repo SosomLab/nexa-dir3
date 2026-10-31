@@ -127,7 +127,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
   | `ndir_xfer_free(char*)` | 위 두 함수가 돌려준 문자열 해제(호출자 free 금지) |
 
 - **주의**: ① 릴리스 프로필 = `panic = "abort"`(프로필 전체라 크레이트별 불가) → 라이브러리 패닉 = **호출 프로세스 종료** · 입력 오류는 전부 Result/Report로 돌려준다(모듈 안 unwrap 0 · `catch_unwind` 울타리 `guarded`는 dev/test용) ② 진행 콜백은 다른 스레드에서 불릴 수 있다 ③ JobSpec 상대 경로 기준 = 호출 프로세스의 작업 디렉터리(`nexa-copy --job`은 잡 파일 폴더 — §11-1 · C ABI에는 잡 파일이 없다).
-- **동봉 자리(설계 — 패키징 커밋 전)**(§11-4): deb/rpm = `/usr/lib/nexa-dir/libndir_xfer.so`(전용 폴더 · 소비자는 전체 경로 dlopen · rpm `%files`에 `%{_prefix}/lib/nexa-dir/…`) · pkg/dmg/brew = `Contents/Frameworks/libndir_xfer.dylib`(`@rpath` · 서명 전 lipo) · MSI/zip = 설치 폴더 `ndir_xfer.dll` + 헤더(`.dll.lib` 제외 · LoadLibrary) · 빌드 명령에 `-p ndir-xfer` · 임포트 게이트에 dll 추가 · 릴리스 스모크 = 설치 뒤 Python ctypes 로드 → 판 대조.
+- **동봉 자리(구현 확정 · be60dc2)**(§11-4): deb/rpm = `/usr/lib/nexa-dir/libndir_xfer.so`(전용 폴더 · SONAME/ldconfig/multiarch 무관 · 소비자는 전체 경로 dlopen · rpm `%files`는 `%{_prefix}/lib/nexa-dir`) + `/usr/share/nexa-dir/include/ndir_xfer.h` · pkg/dmg/brew = `Contents/Frameworks/libndir_xfer.dylib`(Universal lipo · `install_name_tool -id @rpath/` · codesign --deep 앞) + `Contents/Resources/include/` · MSI = 설치 폴더 `ndir_xfer.dll`(`XferLib` Component) + `include\`(`XferHeader`) · `.dll.lib` 제외(LoadLibrary) · 임포트 게이트에 dll 포함 · 포터블 zip = 스테이징 그대로 · 빌드 명령 4곳 `-p ndir-xfer` · 릴리스 스모크 3-OS = 설치 뒤 Python ctypes 로드 → `ndir_xfer_version()` == 판 · 릴리스 노트 C 라이브러리 문단(영어).
 
 ## 8. 남은 기능 설계(이번 회차 구현 안 함)
 
