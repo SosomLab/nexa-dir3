@@ -300,7 +300,7 @@ jobs:
           | Linux x86_64 (rpm) | \`nexa-dir-$VERSION-1.x86_64.rpm\` | \`sudo dnf install ./…rpm\` |
           | Windows x64 (portable) | \`nexa-dir-$VERSION-windows-x64-portable.zip\` | Unzip and run \`nexa-dir.exe\` (settings go to a \`data\` folder next to the exe if present, otherwise %APPDATA%\\\\nexa-dir); in a console (PowerShell) use \`ndir.exe\`, e.g. \`ndir --selfcheck\` |
 
-          Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` \`--mirror\` \`--dry-run\` \`--include/--exclude\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
+          Every package also bundles **\`nexa-copy\`**, the command-line copy/move tool built on the same transfer engine (\`nexa-copy --help\`: \`--move\` \`--verify\` \`--mirror\` \`--dry-run\` \`--include/--exclude\` \`--job <file.json>\` \`--progress\` \`--report <file>\`). MSI/pkg/deb/rpm put it on PATH; the portable zip (winget/choco) exposes it as a command alias.
 
           Verify downloads with \`sha256sums.txt\`. Uninstall: Windows Apps & features · macOS \`sudo "/Applications/Nexa Dir.app/Contents/Resources/uninstall.sh"\` · Linux \`dpkg -r nexa-dir\` / \`dnf remove nexa-dir\`.
           User data (settings, sessions, favorites, rename presets) lives in the settings folder and is kept on uninstall. Settings from 0.22.0 and earlier (nexa-dir2) are imported once on first start.
