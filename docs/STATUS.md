@@ -2,22 +2,22 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§17](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§18](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
 
 - **🖐 사용자 아침 실기 체크(10-31 macOS · 입력 주입 금지라 협업 판정 인스턴스로 못 본 것 · 앱 = 협업 격리 인스턴스 또는 새 빌드)**:
-  - (a) **드래그 수식키**(8d929f8 · Finder 규칙): ① 같은 볼륨 Option 드래그 = 복사(원본 남음) ② Cmd 드래그 = 이동 ③ 수식키 없음 = 같은 볼륨 이동 ④ Finder → dir3 폴더 행 위 드롭 = 그 폴더 · 끄는 중 Option을 눌렀다 떼면 이름 상자 표시가 바뀜.
-  - (b) **번들 .app**(5e48780): ⑤ Finder → `.app` 행 위 드롭 = 부모 폴더(앱 안 아님) ⑥ `/Applications`에서 `.app` 더블클릭 = 실행 · 우클릭 "패키지 내용 보기" → 안으로 ⑦ 런처 VS Code/Terminal = 앱 아이콘 · 클릭 = 실행.
-  - (c) **OS 드래그 발신**(e612629 · NSDraggingSession): 파일을 창 밖 Finder로 끌어 놓기(같은 볼륨 = 이동 · Option = 복사 · Cmd = 이동) · 다른 앱(터미널 · 메모)에 끌어 넣기 · 창 밖으로 나갔다가 우리 창으로 돌아와 놓기 · 드래그 그림 위치(포인터 왼쪽 위)와 방향 · 놓은 뒤 두 패널 재열람.
-  - (d) **패키징**(§12): `target/packaging/macos/nexa-dir-0.27.0-macos-x86_64.dmg`(57ffbfe 이름) 열어 Applications로 끌어 넣기 · 첫 실행 Gatekeeper 안내(애드혹 서명).
-  - (e) **설정 창**: 터미널 페이지 "14 pt" 강제 카드 · 설명 문구 macOS(덤프 판정 ✓ · 눈 확인).
-  - (f) **메모리 창**: 글꼴 막대가 수 MB(4a2c6b0 mincore · 덤프 판정 ✓ · 눈 확인).
-  - (g) **macOS present IOSurface 기본**(74c5da6 · §15): 빈 창 · 그림 깨짐 · 보조 창(설정 · 메모리) 정상 여부(Intel + AMD Radeon) · 설정 고급 켜고 "macOS 화면 내보내기 방식" 보임 · 이상 시 `settings.conf` `gfx.mac_present=softbuffer` · 재시작.
+  - ~~(a) 드래그 수식키(8d929f8 · Finder 규칙)~~ ✅ 사용자 실기 10-31(§18).
+  - (b) **번들 .app**(5e48780): ⑤ Finder → `.app` 행 위 드롭 = 부모 폴더(앱 안 아님) ⑥ `/Applications`에서 `.app` 더블클릭 = 실행 · 우클릭 "패키지 내용 보기" → 안으로 ⑦ 런처 VS Code/Terminal = 앱 아이콘 · 클릭 = 실행. · ⏳ 사용자 재설명 요청(10-31 · T-186 Quick Look과 함께 · 개발이 설명 중).
+  - ~~(c) OS 드래그 발신(e612629 · NSDraggingSession)~~ ✅ 사용자 실기 10-31(§18).
+  - ~~(d) 패키징(§12)~~ ✅ 사용자 실기 10-31(§18).
+  - ~~(e) 설정 창~~ ✅ 사용자 실기 10-31(§18).
+  - ~~(f) 메모리 창~~ ✅ 사용자 실기 10-31(§18).
+  - ~~(g) macOS present IOSurface 기본(74c5da6 · §15)~~ ✅ 사용자 실기 10-31(§18).
   - ~~(h) NFD 이름 빠른 필터(ba99d38)~~ ✅ 사용자 10-31 "NFD파일 검색 기능, 완료"(§16).
-  - ~~(j) 정보 패널 NFD 줄(726b7f1)~~ ✅ 협업 판정 인스턴스 덤프(§17) — 눈 확인만 남음.
+  - ~~(j) 정보 패널 NFD 줄(726b7f1)~~ ✅ 협업 판정 + 사용자 실기 10-31(§18).
   - ~~(k) 패널 상태 줄 "NFD n"(1402671)~~ ✅ 협업 판정(5dfe9c7 칸 밀림 수정 뒤 같은 자리 두 번 클릭 = 켬→끔 · §17) — 눈 확인만 남음.
-  - (l) **표식 깜빡임 문턱**(87b7b22): 유휴 때 D/N 표식이 배경 I/O로 깜빡이지 않음 · 설정 고급 "표식 깜빡임 문턱"(기본 **1 MB/s** · 1843fd7 · 0 = 종전) · ※ 협업 사전 판정 = 문턱 동작 ✓ · 빌드·CI 중엔 실제 I/O(디스크 MB/s)가 문턱 위라 깜빡이는 게 정상 → PC가 한가할 때 확인(§17).
+  - ~~(l) 표식 깜빡임 문턱(87b7b22)~~ ✅ 사용자 실기 10-31(§18).
   - ~~(i) 검색창 토글 툴팁(dad9369)~~ ✅ 사용자 10-31 캡처 · 괄호 설명 제거 0bbbf25(이름만 · §17).
-  - 그 밖 T-114: 클립보드 한글(pbcopy/pbpaste) · Finder "다음으로 열기"/`open -a "Nexa Dir" <경로>` 파일 전달.
+  - ~~그 밖 T-114: 클립보드 한글 · Finder "다음으로 열기"/`open -a`~~ ✅ 사용자 실기 10-31 → **T-114 ✅**(§18).
 - **★ 10-31 낮 회차([§15](journal/2026-10-31.md))**: 74c5da6 `gfx.mac_present` 기본 iosurface(present 24.3 → 1.2 ms) · ba99d38 NFD 필터 · **71add88 macOS 부분 다시 그리기**(nexa-ui 248 af368ff `Frame::age` · 유휴 프레임 합 31.2(softbuffer) → 8.4(iosurface) → **2.49 ms** · 상태줄만 부분 프레임 paint 0.75 ms) · c926d98 pty 플레이크 · gate-9 full 751/0 · T4 41/0 → **마지막 push = 954e48f · CI 41150671788 ✓ 3-OS** · 후속 T-201(알파 채우기 damage만 · 표식 깜빡임 문턱 = 사용자 결정 · 빈 프레임) · NFD 표시 방식 = 사용자 결정 대기(A 정보 패널 줄 추천) · 앱 = 협업 격리 b63ad2b PID 10954 · 마지막 push = b63ad2b · CI 41171280185 ✓(7730f7a 폴더 칸 왼쪽 정렬 · nexa-ui 252 · b63ad2b T4 대기 14 s) · ⚠ 설치본 `/Applications/Nexa Dir.app`(이전 릴리스)이 유휴 CPU ~21 % — 다음 릴리스 전까지 닫아 두면 체감·측정이 깨끗 · 디스크 배경 I/O 10~45 MB/s(Spotlight 색인 추정 · `target/` 제외 = 사용자 결정).
 - **★ 10-31 macOS PC(사용자 "맥에서 필요한 시험 자동화 · 오류 수정 · 아침까지 진행" · 개발 b5b080 · 협업 427dc3 · [10-31 §0~§14](journal/2026-10-31.md))**: 8dc1b23 **macOS 상태바 디스크 칸**(IOKit `IOBlockStorageDriver` · 실기 ✓ = D 칸 값 · 팝업 Read/Written since boot) · 1c1c0d7 **터미널 도크 글꼴 = Terminal.app 기본 프로필**(T-114 ②) · eb13dcf T4 launcher 배율 무관. 이 Mac 첫 `gate.sh full` = 727/0 · T4 38 중 1(launcher → eb13dcf) → 2차 full 732/0 · T4 38/0 · 세 커밋 push 완료. CI 8dc1b23 ubuntu T4 `path-suggest` 빨강(제안 순서 = `read_dir` 순서 · dir2도 같음 · §3) → **6c59ebe 자연 정렬 · CI 41092453597 ✓ 3-OS**. **판정(§4)** = 제안 순서 ✓ · 터미널 글꼴 이름 ✓ · 크기 1.33배 ✗ → **58fe883 처방 · 칸 폭 7 DIP ✓(§6)**. **nexa-ui 246 = 0a18346**(macOS OS 아이콘 · 행 아이콘 Finder 꼴 ✓ · `.app` = 폴더 아이콘 결함 처방 예정). **사고(§6)** = 58fe883이 gate 적신호인 채 push(CI macos ✗) → 4cdd5c9(런처 시험 기대값 · **CI 41095815380 ✓ 3-OS**) · 재발 방지 = gate와 push 분리. **판정(§7)** = 행 아이콘 ✓ · Kind = 확장자(dir2 패리티 · NEW-059 후보) · 런처 `.app` 글리프 결함 · GAP-025 `.app` 번들이 폴더처럼 동작 → **5e48780 ✅**(판정 = 드롭 부모 · 쉐브론 없음 · 앱 아이콘 · 런처 아이콘 · §8). **8d929f8** 드래그 수식키 Finder 규칙(CI ✓). 🖐 사용자 실기 7건(§8 · Option/Cmd 드래그 · Finder 드롭 · .app 실행 · 패키지 내용 보기 · 런처). **b892a76 MacMenu** ✅(§9 판정 ✓ · T-114 ③) · TermFont 91 MB = 측정 착시 → **4a2c6b0 mincore ✓**. **d597bfe `unix-perf.sh` = T-176 ⑤ ✅**(§10). 순서 편집기 macOS 집합 b4892d5 + eed5fed(**사고 2** = 수정 없이 push → 회복 · §11). **e612629 OS 드래그 발신 ✅**(§12) · CI windows 빨강(4a2c6b0~eed5fed) → **1f16bc4 처방**(CI 확인 = §12/§13) · 패키징 로컬 ✓(57ffbfe · 98c422e). CI windows 회복 ✓(57ffbfe). **b2b962d** CI macOS 러너 T4 신설 · **첫 실행 41/0** · gate KNOWN Darwin = 없음(§13). **e47ee38** macOS 장치 판정(SSD = 자동 8) · **selfcheck 실제 점검 4그룹**(pty 8f9b44b · fonts 121c6b4 · preview 22f57d7 · archive 8b7bd7c · 이 Mac pass 20 → **30** · skip 12 → 7 · 4그룹 3-OS CI ✓ · 51cb8dc 프로필 빈 이름 표시 · §14) · **마지막 push = 51cb8dc · CI 41109347039 ✓ 3-OS** · 앱 = 격리 8b7bd7c PID 69711 · 🖐 실기 = T-114 클립보드 한글 · Finder "다음으로 열기". 결정(§5) = MacMenu `xdg.*` 재사용 · macOS 드래그 수식키 Finder 규칙(추천안) · GAP-024. 채널 0.27.0 = winget #462011/#462012 MERGED · choco 2건 Approved(검수 종결). 다음 = T-114 ① 행 아이콘(nexa-ui nexa-fs) → ③ MacMenu("다음으로 열기" 1차) → NSDragging T-52/T-147 → T-153 mac 수식키 → T-176 ⑤. 앱 = 격리 57ffbfe + nexa-ui 0a18346 PID 84678(협업 scratchpad `ndir-home`).
 - **macOS PC 세션 분담**(10-31 · Linux/Windows 관례 그대로): 개발 = 설계 · `crates/` · `scripts/` · 시험 · 코드 커밋 · pull/push · 세 저장소 ff-pull · `gate.sh` · 검증 빌드 `CARGO_TARGET_DIR=target/dev` / 협업 = `docs/` 기록 커밋(push는 개발) · 사용자 인스턴스 `target/debug` + 격리 `NDIR_HOME` 재기동(빌드 성공 직후 · **자기 PID만 종료**) · CI 감시 · 사전 분석 · macOS 실기 판정(판정은 `NDIR_NO_ACTIVATE=1` 별도 인스턴스 + `capture:` → `scripts/cap2png.py`).
