@@ -6,6 +6,9 @@
 
 use crate::*;
 
+/// 포커스 전환 뒤 투명도 재확인까지의 간격(ms · T-199 · 10-31) — 창 관리자가 포커스를 옮기고 `_NET_ACTIVE_WINDOW`를 갱신할 시간.
+pub(crate) const TRANSPARENCY_RECHECK_MS: u64 = 150;
+
 /// 바꾸면 다시 시작해야 반영되는 키(의도된 목록 — 그 밖의 `false`는 누락).
 pub(crate) const NEEDS_RESTART: &[&str] = &["ui.font_face"];
 
@@ -330,6 +333,7 @@ impl App {
     /// 창 투명도(T-102 · NEW-013) — 유효값(성능 향상 모드 = 0)을 기억하고 메인 창 · 설정 창에 즉시 적용 · 다른 보조 창은 다음에 열 때.
     /// 돌려주는 값 = 적용한 투명도(%) — 시험은 전역 값 대신 이것을 본다(병렬 시험이 전역을 같이 쓴다).
     pub(crate) fn apply_transparency(&mut self) -> u8 {
+        // (재확인 간격은 `TRANSPARENCY_RECHECK_MS` · event_loop `Focused` → `about_to_wait` 틱.)
         let focused = self
             .settings
             .int("window.transparency")
@@ -349,6 +353,20 @@ impl App {
             let _ = platform::apply_window_opacity(w);
         }
         main_pct as u8
+    }
+
+    /// 포커스 전환 뒤 재확인(T-199 · 10-31 Linux 실기 "10회 중 2회 비활성인데 0 %"): `Focused` 이벤트의 순서/경합과 무관하게 X 서버의
+    /// **실제 활성 창**(`platform::window_has_focus` · `_NET_ACTIVE_WINDOW`/`GetInputFocus`)을 진실로 삼아 `main_active`를 바로잡고 다시 적용.
+    /// 창이 없거나(헤드리스) X11이 아니면 추적값 그대로 다시 적용. 돌려주는 값 = 적용한 투명도(%).
+    pub(crate) fn recheck_transparency(&mut self) -> u8 {
+        if let Some(actual) = self
+            .window
+            .as_ref()
+            .and_then(|w| platform::window_has_focus(w))
+        {
+            self.main_active = actual;
+        }
+        self.apply_transparency()
     }
 
     pub(crate) fn apply_icon_switches(&mut self) {

@@ -296,6 +296,8 @@ struct App {
     panel_toasts: [toast::Toasts; 2],
     started: Instant,
     main_active: bool,
+    /// 포커스 전환 뒤 투명도 **재확인** 시각(T-199 · 10-31 Linux 실기: 10회 중 2회 비활성인데 불투명 — `Focused` 이벤트 순서/경합 자가 치유) · None = 없음.
+    transparency_recheck_at: Option<Instant>,
     pending_chord: Option<Chord>,
     pressed: Option<Area>,
     /// 더블클릭 합성(winit은 더블클릭 사건이 없다 · dir2 Win32 `WM_LBUTTONDBLCLK` 대응): 마지막 좌클릭 시각·자리.
@@ -783,6 +785,7 @@ impl App {
             ctrl_mac: false,
             started: Instant::now(),
             main_active: true,
+            transparency_recheck_at: None,
             pending_chord: None,
             pressed: None,
             last_click: None,

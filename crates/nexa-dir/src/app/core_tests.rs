@@ -10407,6 +10407,11 @@ fn window_transparency_follows_setting_and_boost() {
         0,
         "포커스 = window.transparency(0)"
     );
+    // 포커스 전환 뒤 재확인(10-31 Linux 실기 · 간헐 불투명): 창 없음(헤드리스) = 추적값으로 다시 적용 · 재확인 간격은 0보다 크다.
+    app.main_active = false;
+    assert_eq!(app.recheck_transparency(), 55, "비활성 = blur 값");
+    app.main_active = true;
+    assert_eq!(app.recheck_transparency(), 0);
     assert_eq!(
         crate::platform::opacity_pct(),
         0,

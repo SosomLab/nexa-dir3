@@ -384,6 +384,15 @@ impl ApplicationHandler<Wake> for App {
         if self.flash.tick(now) {
             self.redraw();
         }
+        // 포커스 전환 뒤 투명도 재확인(T-199 · 10-31): 마감이 지났으면 실제 포커스로 다시 적용 · 아니면 그때 깬다.
+        if let Some(t) = self.transparency_recheck_at {
+            if now >= t {
+                self.transparency_recheck_at = None;
+                self.recheck_transparency();
+            } else {
+                next = next.min(t);
+            }
+        }
         if let Some(t) = self.aux_next_wake() {
             next = next.min(t);
         }
@@ -442,6 +451,10 @@ impl ApplicationHandler<Wake> for App {
             WindowEvent::Focused(on) => {
                 self.main_active = *on;
                 self.apply_transparency(); // 포커스별 투명도(T-199): 떠나면 blur 값 · 돌아오면 포커스 값
+                                           // 잠시 뒤 X 서버의 실제 활성 창으로 한 번 더(10-31 Linux 실기 · 간헐 불투명 · `recheck_transparency`).
+                self.transparency_recheck_at = Some(
+                    Instant::now() + Duration::from_millis(app::settings::TRANSPARENCY_RECHECK_MS),
+                );
                 if !*on {
                     // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
                     // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안

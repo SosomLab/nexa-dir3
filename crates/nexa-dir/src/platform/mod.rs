@@ -2550,6 +2550,44 @@ pub(crate) fn apply_window_opacity_pct(
     }
 }
 
+/// 메인 창이 **지금** 입력 포커스를 가진 창인가 — X 서버의 진실(루트 `_NET_ACTIVE_WINDOW` · 없으면 `GetInputFocus`)로. X11이 아니면
+/// (Wayland 네이티브 · 다른 OS) `None`. 포커스 전환 뒤 투명도 재확인(T-199 · 10-31 Linux 실기: 10회 중 2회 비활성인데 불투명 —
+/// `Focused` 이벤트 순서/경합)에 쓴다.
+pub(crate) fn window_has_focus(w: &winit::window::Window) -> Option<bool> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let id = crate::winfocus::x11_window_id(w)?;
+        x11_window_focused(id).ok()
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let _ = w;
+        None
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn x11_window_focused(win: u32) -> Result<bool, Box<dyn std::error::Error>> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+    let (conn, screen) = x11rb::connect(None)?;
+    let root = conn.setup().roots[screen].root;
+    let atom = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
+        .reply()?
+        .atom;
+    let active = conn
+        .get_property(false, root, atom, AtomEnum::WINDOW, 0, 1)?
+        .reply()
+        .ok()
+        .and_then(|r| r.value32().and_then(|mut v| v.next()));
+    if let Some(a) = active.filter(|a| *a != 0) {
+        return Ok(a == win);
+    }
+    let focus = conn.get_input_focus()?.reply()?.focus;
+    Ok(focus == win)
+}
+
 /// X11 `_NET_WM_WINDOW_OPACITY`(CARDINAL · 0xFFFFFFFF = 불투명 · 불투명이면 속성을 지운다). 자체 연결 한 번 · 짧게 쓰고 닫는다.
 #[cfg(all(unix, not(target_os = "macos")))]
 fn x11_set_opacity(win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
