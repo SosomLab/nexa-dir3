@@ -1496,7 +1496,19 @@ impl Panel {
                 &[&src.len().to_string(), &src.unfiltered_len().to_string()],
             )
         };
-        let mut segs = vec![nexa_ctl::StatusSeg::new(SEG_FOLDER, folder_text)];
+        // 폴더 칸 폭 견본(T-145 선례 · 10-31 협업 판정): 필터 켬/끔에 글이 "n개 항목" ↔ "m개 중 n개 항목(필터)"로 바뀌어도 칸 너비가
+        // 그대로라 오른쪽 "NFD n" 칸이 밀리지 않는다(종전엔 토글 뒤 같은 자리를 다시 누르면 폴더 칸이 눌렸다).
+        let folder_hint = ndir_i18n::trf(
+            "status.itemCountFiltered",
+            &[
+                &src.unfiltered_len().to_string(),
+                &src.unfiltered_len().to_string(),
+            ],
+        );
+        let mut segs = vec![nexa_ctl::StatusSeg::with_parts(
+            SEG_FOLDER,
+            vec![nexa_ctl::StatusPart::new(folder_text).hints(vec![folder_hint])],
+        )];
         if let Some((_, Some((_, branch)))) = &self.git {
             let mut text = ndir_i18n::trf("tabstatus.git", &[branch]);
             if !self.git_extra.is_empty() {

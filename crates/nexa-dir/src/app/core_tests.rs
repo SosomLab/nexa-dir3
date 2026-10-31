@@ -11028,9 +11028,21 @@ fn panel_status_nfd_count_and_click_toggles_nfd_only() {
         ndir_vfs::FileStatus::None,
         "상태 열 = 저장 상태 전용"
     );
+    // "NFD n" 칸 자리는 토글 전후 같아야 한다(협업 판정 10-31: 폴더 칸 글이 길어져 칸이 밀리면 같은 자리 재클릭이 폴더 칸을 누른다 →
+    // 폴더 칸에 필터 표기 폭 견본).
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let before = app.panels[0].status_seg_rect("nfd").expect("nfd seg");
     app.panels[0].toggle_nfd_only(&mut inv);
     assert!(app.panels[0].nfd_only());
     assert_eq!(app.panels[0].rows().source().len(), 1, "NFD 행만");
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let after = app.panels[0].status_seg_rect("nfd").expect("nfd seg");
+    assert!(
+        (after.x - before.x).abs() <= 2,
+        "NFD 칸이 밀리면 안 된다: {before:?} → {after:?}"
+    );
     let sum = app.panels[0].status_summary();
     assert!(
         sum[0].starts_with("folder=") && sum.iter().any(|s| s.starts_with("nfd=")),
