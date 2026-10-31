@@ -535,6 +535,8 @@ pref.iconOverrides = Custom Icons
 pref.iconOverrides.desc = Your own icons for the file list, highest priority. Rules separated by ';' in the form kind:pattern=image - kind is path (full path), name (file or folder name), dir (folder name) or ext (extension). Images: PNG/BMP/GIF/JPEG; relative paths are looked up in the icons folder of the settings folder. Example: ext:rs=rust.png; dir:node_modules=nm.png
 pref.rowIcons = Icons before file names
 pref.rowIcons.desc = Show a type icon before each name in the file list. When off, icons are neither looked up nor drawn (always off in performance mode).
+pref.osIcons = Query OS icons
+pref.osIcons.desc = Look up row icons and kind names from the OS (Explorer/Finder). Turn off to use only the built-in per-type icons and skip the lookups, which is lighter on slow disks and network folders.
 pref.folderSize = Calculate folder size in the info pane
 pref.folderSize.desc = When a single folder is selected, the info pane computes its total size and the number of files and folders in the background. Large folders take time and read the disk. When off, nothing is computed (always off in performance boost mode).
 pref.folderSizeThreads = Folder size: concurrent jobs

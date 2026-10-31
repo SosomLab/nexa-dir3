@@ -181,6 +181,8 @@ pub(crate) struct Panel {
     ta_opts: TaOpts,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드 — 탭이 생길 때마다 그 탭에도 적용).
     no_row_icons: bool,
+    /// 종류 열 OS 이름(NEW-059 · 설정 `list.os_icons` · 10-31) — 탭 원천마다 전파.
+    os_kind: bool,
     /// 이름 바꾸기 편집 필드 우클릭(글자 편집 메뉴 · 표시는 호스트 · 1회성 — dir2 `EditMenuTarget::Rename`).
     pending_rename_menu: bool,
     /// 경로 바에 넣은 `shell:` 별칭(해석은 호스트의 플랫폼 포트 · 1회성 — dir2 panel.rs:1530).
@@ -431,6 +433,7 @@ impl Panel {
             pending_header_menu: false,
             ta_opts: TaOpts::default(),
             no_row_icons: false,
+            os_kind: false,
             pending_rename_menu: false,
             pending_alias: None,
             pending_path_menu: false,
@@ -1743,11 +1746,21 @@ impl Panel {
         self.apply_typeahead(inv);
     }
 
+    /// 종류 열 OS 이름 켬/끔(NEW-059 · 10-31) — 모든 탭 원천에.
+    pub(crate) fn set_os_kind(&mut self, on: bool, inv: &mut Invalidations) {
+        self.os_kind = on;
+        self.apply_typeahead(inv);
+    }
+
     fn apply_typeahead(&mut self, inv: &mut Invalidations) {
         let o = self.ta_opts;
         let icons = !self.no_row_icons;
+        let os_kind = self.os_kind;
         for tab in &mut self.tabs {
             if tab.rows.source_mut().set_icons(icons) {
+                inv.push(tab.rows.bounds());
+            }
+            if tab.rows.source_mut().set_os_kind(os_kind) {
                 inv.push(tab.rows.bounds());
             }
             tab.rows.source_mut().set_find_scope(o.scope);
@@ -2850,8 +2863,9 @@ impl Panel {
             return Vec::new();
         }
         let (s, e) = rows.viewport();
+        // 번들(macOS `.app` · 파일로 다룸)도 폴더 크기 합계 대상(GAP-025 후속 · 10-31 — 종전 크기 열 = 디렉터리 메타 길이).
         (s..e)
-            .filter(|&i| src.row_is_dir(i))
+            .filter(|&i| src.row_is_dir(i) || src.row_is_bundle(i))
             .filter_map(|i| src.row_path(i))
             .collect()
     }

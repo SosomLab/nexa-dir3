@@ -933,6 +933,44 @@ impl App {
         Some((i, dest))
     }
 
+    /// 포인터 아래 행이 번들(`.app`)이면 그 경로(T-114 잔여 · 10-31) — 소스에 번들이 섞여 있으면 None(번들 위 번들 = 종전 드롭).
+    pub(crate) fn drop_app_at(&self, p: Point, sources: &[PathBuf]) -> Option<PathBuf> {
+        if sources.iter().any(|s| ndir_vfs::is_bundle_path(s)) {
+            return None;
+        }
+        let i = if self.panels[0].bounds().contains(p) {
+            0
+        } else if self.dual && self.panels[1].bounds().contains(p) {
+            1
+        } else {
+            return None;
+        };
+        let panel = &self.panels[i];
+        let root = panel.root_path();
+        if ndir_vfs::is_virtual_root(&root) {
+            return None;
+        }
+        let src = panel.rows().source();
+        let r = panel.rows().row_at(p.x, p.y)?;
+        src.row_is_bundle(r).then(|| src.row_path(r)).flatten()
+    }
+
+    /// 앱으로 열기(드롭 · 10-31): 플랫폼이 "받는다"고 할 때만 `open -a` — 처리했으면 true(실패도 true = 복사로 떨어지지 않는다).
+    fn open_with_app(&mut self, app: &Path, sources: &[PathBuf]) -> bool {
+        if self.platform.opener.app_accepts(app, sources) != Some(true) {
+            return false;
+        }
+        let name = app
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| app.to_string_lossy().into_owned());
+        match self.platform.opener.open_with(app, sources) {
+            Ok(()) => self.note_status(&trf("launcher.ran", &[&name])),
+            Err(_) => self.note_status(&trf("launcher.failed", &[&name])),
+        }
+        true
+    }
+
     /// 외부 드롭 실행 — 시작했으면 (대상, 연산). 거부 사유는 상태줄. 연산 = 수식키(Ctrl 복사 · Shift 이동 · 없으면 같은 볼륨 = 이동).
     pub(crate) fn external_drop(
         &mut self,
@@ -1050,6 +1088,13 @@ impl App {
         if self.transfer.is_some() {
             self.note_status(&tr("ops.busy"));
             return None;
+        }
+        // `.app` 행 위 드롭 = **그 앱으로 열기**(macOS · T-114 잔여 · 10-31 · 협업 조사): 앱이 항목을 모두 받을 때만(LaunchServices) ·
+        // 번들을 번들 위에 놓으면 종전(부모 폴더) · 원본 불변 · 실패 = 상태줄. 그 밖 OS/미수락 = 종전 드롭(부모 폴더).
+        if let Some(app) = self.drop_app_at(at, &sources) {
+            if self.open_with_app(&app, &sources) {
+                return None;
+            }
         }
         let (panel, dest) = match self.drop_dest_at(at) {
             Some(d) => d,

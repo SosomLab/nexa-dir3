@@ -11,11 +11,30 @@ struct CGPoint {
     y: f64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CGSize {
+    width: f64,
+    height: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CGRect {
+    origin: CGPoint,
+    size: CGSize,
+}
+
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
     fn CGEventCreate(source: *const std::ffi::c_void) -> *const std::ffi::c_void;
     fn CGEventGetLocation(event: *const std::ffi::c_void) -> CGPoint;
     fn CGEventSourceFlagsState(state: i32) -> u64;
+    /// 점이 든 디스플레이(최대 `max`개) — 보조 화면 배율(T-114 잔여 · 10-31).
+    fn CGGetDisplaysWithPoint(point: CGPoint, max: u32, displays: *mut u32, count: *mut u32)
+        -> i32;
+    fn CGDisplayPixelsWide(display: u32) -> usize;
+    fn CGDisplayBounds(display: u32) -> CGRect;
 }
 #[link(name = "CoreFoundation", kind = "framework")]
 extern "C" {
@@ -65,6 +84,30 @@ fn main_screen_scale() -> f64 {
     }
 }
 
+/// 배율(순수): 디스플레이의 물리 픽셀 폭 ÷ 포인트 폭(레티나 2 · 일반 1) — 0·비정상이면 None.
+pub(super) fn scale_from(pixels_wide: usize, points_wide: f64) -> Option<f64> {
+    if pixels_wide == 0 || !points_wide.is_finite() || points_wide <= 0.0 {
+        return None;
+    }
+    let s = pixels_wide as f64 / points_wide;
+    (s.is_finite() && s > 0.0).then_some(s)
+}
+
+/// 포인터가 있는 **그 화면**의 배율(T-114 잔여 · 10-31 — 종전 = 주 화면 배율이라 다른 배율의 보조 화면에서 어긋났다):
+/// `CGGetDisplaysWithPoint` → `CGDisplayPixelsWide ÷ CGDisplayBounds.width`. 못 찾으면 None(호출부 = 주 화면).
+fn display_scale_at(p: CGPoint) -> Option<f64> {
+    // SAFETY: 순수 조회 · 출력 인자는 우리 스택 변수.
+    unsafe {
+        let mut display: u32 = 0;
+        let mut count: u32 = 0;
+        if CGGetDisplaysWithPoint(p, 1, &mut display, &mut count) != 0 || count == 0 {
+            return None;
+        }
+        let bounds = CGDisplayBounds(display);
+        scale_from(CGDisplayPixelsWide(display), bounds.size.width)
+    }
+}
+
 /// 포인터 자리(전역 · 왼쪽 위 원점 · 포인트 × 배율 = 물리 px) + 수식키 → [`PointerState`](ctrl/shift = **복사/이동 키** · macOS =
 /// Option/Cmd · [`drag_mods`]). 한 번에 수 µs(1000회 0.36 ms · 10-31 실측).
 pub(super) fn pointer_state() -> Option<PointerState> {
@@ -80,7 +123,7 @@ pub(super) fn pointer_state() -> Option<PointerState> {
             return None;
         }
         let flags = CGEventSourceFlagsState(HID_SYSTEM_STATE);
-        let scale = main_screen_scale();
+        let scale = display_scale_at(p).unwrap_or_else(main_screen_scale);
         let (copy, mv) = drag_mods(
             flags & FLAG_COMMAND != 0,
             flags & FLAG_SHIFT != 0,

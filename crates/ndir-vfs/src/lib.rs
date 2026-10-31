@@ -300,13 +300,13 @@ pub fn read_dir_entries(
         let attrs = attrs | unix_link_attrs(&dirent, file_type.is_symlink());
         let kind = classify_kind(file_type.is_dir(), file_type.is_symlink(), attrs);
         let name = dirent.file_name().to_string_lossy().into_owned();
-        // 번들(macOS `.app` …)은 Finder처럼 파일로(GAP-025 · 10-31) — 폴더 링크(정션)는 대상이 번들이어도 그대로 폴더.
-        let (kind, attrs) =
-            if kind == FileKind::Dir && !is_link_attrs(attrs) && is_bundle_name(&name) {
-                (FileKind::File, attrs | ATTR_BUNDLE)
-            } else {
-                (kind, attrs)
-            };
+        // 번들(macOS `.app` …)은 Finder처럼 파일로(GAP-025 · 10-31) — 폴더 링크(정션 · 심볼릭 링크)도 **이름이 번들이면** 번들
+        // (Finder의 앱 별칭처럼 · 링크 비트는 그대로 두어 아이콘은 경로 조회 · 10-31 T-114 잔여). 이름이 번들이 아닌 링크는 폴더.
+        let (kind, attrs) = if kind == FileKind::Dir && is_bundle_name(&name) {
+            (FileKind::File, attrs | ATTR_BUNDLE)
+        } else {
+            (kind, attrs)
+        };
         Ok(Entry {
             name,
             kind,
@@ -656,6 +656,19 @@ mod tests {
         let foo = get("Foo.app");
         assert_eq!(foo.kind, if mac { FileKind::File } else { FileKind::Dir });
         assert_eq!(foo.is_bundle(), mac);
+        // 번들을 가리키는 심볼릭 링크(이름도 번들)는 번들(Finder 앱 별칭 · 10-31 T-114 잔여) · 링크 비트는 유지.
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(base.join("Foo.app"), base.join("Link.app")).unwrap();
+            let entries: Vec<Entry> = read_dir_entries(&base)
+                .unwrap()
+                .map(Result::unwrap)
+                .collect();
+            let link = entries.iter().find(|e| e.name == "Link.app").unwrap();
+            assert_eq!(link.is_bundle(), mac, "번들 링크 = 번들(macOS)");
+            assert!(is_link_attrs(link.attrs), "링크 비트 유지");
+            assert_eq!(link.kind, if mac { FileKind::File } else { FileKind::Dir });
+        }
         assert_eq!(is_bundle_path(&base.join("Foo.app")), mac);
         assert_eq!(get("plain").kind, FileKind::Dir);
         assert!(!get("plain").is_bundle());

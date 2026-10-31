@@ -1225,12 +1225,14 @@ impl App {
                             &|_| pr.basic.clone(),
                             &|p| pr.on_disk.unwrap_or_else(|| disk.size_on_disk(p)),
                             &|p| app::dirsize::size_lines(sizes.get(p)),
+                            self.settings.flag("list.os_icons"), // Kind 줄 = OS 종류 이름(NEW-059)
                         ),
-                        None => dockinfo::info_lines(
+                        None => dockinfo::info_lines_os(
                             &selected,
                             &current,
                             &|p| disk.size_on_disk(p),
                             &|p| app::dirsize::size_lines(sizes.get(p)),
+                            self.settings.flag("list.os_icons"),
                         ),
                     };
                     (lines, None)

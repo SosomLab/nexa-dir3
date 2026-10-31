@@ -532,6 +532,8 @@ pref.iconOverrides = 사용자 지정 아이콘
 pref.iconOverrides.desc = 파일 목록에 쓸 직접 지정한 아이콘(가장 우선). 규칙은 ';'로 구분하고 형식은 종류:패턴=이미지 - 종류는 path(전체 경로) · name(파일/폴더 이름) · dir(폴더 이름) · ext(확장자). 이미지는 PNG/BMP/GIF/JPEG이며 상대 경로는 설정 폴더의 icons 폴더에서 찾습니다. 예: ext:rs=rust.png; dir:node_modules=nm.png
 pref.rowIcons = 파일 이름 앞 아이콘
 pref.rowIcons.desc = 파일 목록의 이름 앞에 종류 아이콘을 보입니다. 끄면 아이콘을 조회하지도 그리지도 않습니다(성능 향상 모드에서는 항상 끕니다).
+pref.osIcons = OS 아이콘 조회
+pref.osIcons.desc = 행 아이콘과 종류 이름을 OS(탐색기·Finder)에서 조회합니다. 끄면 내장 종류별 아이콘만 쓰고 조회를 하지 않아 느린 디스크·네트워크 폴더에서 가볍습니다.
 pref.folderSize = 정보 창에서 폴더 크기 계산
 pref.folderSize.desc = 폴더 하나를 선택하면 정보 창이 그 안의 전체 크기와 파일·폴더 수를 뒤에서 계산해 보여 줍니다. 큰 폴더는 시간이 걸리고 디스크를 읽습니다. 끄면 계산하지 않습니다(성능 향상 모드에서는 항상 끕니다).
 pref.folderSizeThreads = 폴더 크기 동시 계산 수

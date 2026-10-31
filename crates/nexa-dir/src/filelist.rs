@@ -259,6 +259,11 @@ pub(crate) struct TreeSource {
     find_scope: FindScope,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
     no_icons: bool,
+    /// 종류 열 = OS 종류 이름(NEW-059 · 설정 `list.os_icons` · 10-31 — Windows `SHGetFileInfo` · macOS UTType `localizedDescription`) ·
+    /// 끄면/모르면 확장자 대문자(dir2 패리티).
+    os_kind: bool,
+    /// 확장자(소문자) → OS 종류 이름 캐시(`None` = OS가 모름 → 폴백).
+    kind_cache: std::cell::RefCell<std::collections::HashMap<String, Option<String>>>,
     /// 빈 폴더 글리프 판정 캐시(X-43 · 노드 → 가시 자식 있음): 미열거 폴더는 `probe_has_visible_child` 1회 뒤 캐시 · 재로드/옵션 변경 = 비움.
     probe_cache: std::cell::RefCell<std::collections::HashMap<ndir_tree::NodeId, bool>>,
     /// 프로브 워커 결과함(10-18 · 창이 있으면 그리기 중 `read_dir`을 하지 않고 워커에 맡긴다) · 세대(재로드 = 새 노드 id) · 워커에 가 있는 노드.
@@ -307,6 +312,8 @@ impl TreeSource {
             nfd_only: false,
             find_scope: FindScope::VisibleStream,
             no_icons: false,
+            os_kind: false,
+            kind_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             probe_cache: Default::default(),
             probe_inbox: Default::default(),
             probe_gen: 0,
@@ -759,6 +766,45 @@ impl TreeSource {
             ndir_vfs::FileStatus::None if self.on_network => ndir_vfs::FileStatus::Network,
             st => st,
         }
+    }
+
+    /// 종류 열 = OS 종류 이름 켬/끔(NEW-059 · 10-31) — 바뀌었으면 true(호스트가 목록 무효화).
+    pub(crate) fn set_os_kind(&mut self, on: bool) -> bool {
+        if self.os_kind == on {
+            return false;
+        }
+        self.os_kind = on;
+        true
+    }
+
+    /// 종류 글(NEW-059): 켜져 있고 파일(바로 가기 아님)이면 OS 종류 이름(확장자별 캐시 · 번들 `.app` = "응용 프로그램") · 없으면 종전 라벨.
+    fn kind_text(&self, kind: FileKind, name: &str) -> String {
+        if self.os_kind
+            && kind == FileKind::File
+            && !(crate::platform::hides_shortcut_ext() && split_shortcut_ext(name).is_some())
+        {
+            if let Some((stem, ext)) = name.rsplit_once('.') {
+                if !stem.is_empty() && !ext.is_empty() {
+                    let key = ext.to_ascii_lowercase();
+                    let mut cache = self.kind_cache.borrow_mut();
+                    let found = cache
+                        .entry(key.clone())
+                        .or_insert_with(|| nexa_fs::shell::kind_name(&key, false));
+                    if let Some(n) = found {
+                        return n.clone();
+                    }
+                }
+            }
+        }
+        kind_label(kind, name)
+    }
+
+    /// 행이 번들(macOS `.app` 등 · 파일로 다루는 폴더 · GAP-025)인가 — 폴더 크기 합계 대상 판정.
+    pub(crate) fn row_is_bundle(&self, index: usize) -> bool {
+        self.tree
+            .as_ref()
+            .and_then(|t| t.row_ref(index))
+            .is_some_and(|r| ndir_vfs::is_bundle_attrs(r.attrs))
     }
 
     /// 현재 목록(가시 행)에서 이름이 분해형(NFD)인 행 수 — 패널 상태 줄 "NFD n" 집계(10-31 사용자 결정 ②).
@@ -1269,7 +1315,22 @@ impl RowSource for TreeSource {
                     None => String::new(),
                 }
             }
-            COL_SIZE => format_size(r.size),
+            COL_SIZE => {
+                // 번들(macOS `.app` · GAP-025): 폴더 크기 계산이 합계를 줬으면 그것(10-31 T-114 잔여) · 아니면 메타 길이(종전).
+                if ndir_vfs::is_bundle_attrs(r.attrs) {
+                    if let Some((bytes, partial)) = self
+                        .row_path(index)
+                        .and_then(|p| self.dir_sizes.get(&p).copied())
+                    {
+                        return if partial {
+                            format!("\u{2265} {}", format_size(bytes))
+                        } else {
+                            format_size(bytes)
+                        };
+                    }
+                }
+                format_size(r.size)
+            }
             COL_MODIFIED => format_time_local(r.modified_unix_ms),
             COL_KIND
                 if (self.drive_space.contains_key(r.name) || r.name.ends_with(":\\"))
@@ -1277,7 +1338,7 @@ impl RowSource for TreeSource {
             {
                 ndir_i18n::tr("kind.drive")
             }
-            COL_KIND => kind_label(r.kind, r.name),
+            COL_KIND => self.kind_text(r.kind, r.name),
             COL_TOTAL => self
                 .drive_space
                 .get(r.name)
@@ -2025,5 +2086,79 @@ mod probe_tests {
         assert_eq!(cache.get(&id_of("full")), Some(&true));
         drop(cache);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 번들 크기(10-31 T-114 잔여): 폴더 크기 합계가 오면 그것 · 없으면 메타 길이 · 비번들 폴더 행은 종전 그대로(크기 열 빈칸 아님).
+    #[test]
+    fn bundle_size_cell_uses_dir_size_sum_when_known() {
+        if !cfg!(target_os = "macos") {
+            return; // 번들은 macOS에서만 파일로 다룬다.
+        }
+        let base = std::env::temp_dir().join(format!("ndir-bundle-size-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("Foo.app/Contents")).unwrap();
+        std::fs::write(base.join("Foo.app/Contents/bin"), vec![7u8; 3000]).unwrap();
+        let o = ListOpts {
+            show_hidden: true,
+            show_dotfiles: true,
+            show_protected: true,
+            folders_first: true,
+            case_sensitive: false,
+            natural: false,
+            hide_empty_glyph: false,
+            nfc_display: true,
+        };
+        let mut src = TreeSource::open(&base, o);
+        assert!(src.row_is_bundle(0), "Foo.app = 번들 행");
+        let before = src.cell(0, COL_SIZE);
+        let mut sizes = std::collections::HashMap::new();
+        sizes.insert(base.join("Foo.app"), (3000u64, false));
+        src.set_dir_sizes(sizes);
+        let after = src.cell(0, COL_SIZE);
+        assert_ne!(before, after, "합계가 오면 셀이 바뀐다: {before} → {after}");
+        assert_eq!(after, format_size(3000));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 종류 열 OS 이름(NEW-059 · 10-31): 켜면 Windows/macOS는 OS 종류 이름(확장자 대문자와 다름) · Linux(`SUPPORTED` 아님)는 종전 ·
+    /// 끄면 종전 "TXT" · 폴더는 늘 "폴더" 라벨.
+    #[test]
+    fn kind_column_uses_os_names_when_enabled() {
+        let base = std::env::temp_dir().join(format!("ndir-kind-os-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        std::fs::write(base.join("a.txt"), b"x").unwrap();
+        let o = ListOpts {
+            show_hidden: true,
+            show_dotfiles: true,
+            show_protected: true,
+            folders_first: true,
+            case_sensitive: false,
+            natural: false,
+            hide_empty_glyph: false,
+            nfc_display: true,
+        };
+        let mut src = TreeSource::open(&base, o);
+        assert_eq!(
+            src.cell(1, COL_KIND),
+            "TXT",
+            "기본 = 확장자 대문자(dir2 패리티)"
+        );
+        assert!(src.set_os_kind(true) && !src.set_os_kind(true));
+        let os = src.cell(1, COL_KIND);
+        if cfg!(any(windows, target_os = "macos")) {
+            assert_ne!(os, "TXT", "OS 종류 이름: {os}");
+            assert!(!os.is_empty());
+        } else {
+            assert_eq!(os, "TXT", "OS 조회가 없는 OS = 종전");
+        }
+        assert_eq!(
+            src.cell(0, COL_KIND),
+            ndir_i18n::tr("kind.folder"),
+            "폴더 라벨은 그대로"
+        );
+        assert!(src.set_os_kind(false));
+        assert_eq!(src.cell(1, COL_KIND), "TXT");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

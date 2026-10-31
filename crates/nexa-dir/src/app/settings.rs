@@ -158,7 +158,7 @@ impl App {
                     self.redraw();
                 }
             }
-            "list.row_icons" | "menu.icons" => self.apply_icon_switches(),
+            "list.row_icons" | "menu.icons" | "list.os_icons" => self.apply_icon_switches(),
             "ui.motion" => self.apply_motion(),
             "dock.folder_size" => {
                 self.dirsizes.clear();
@@ -353,9 +353,13 @@ impl App {
 
     pub(crate) fn apply_icon_switches(&mut self) {
         let (rows, menus) = Self::icon_switches(&self.settings);
+        // OS 아이콘·종류 이름 조회 스위치(GAP-024 · 10-31): nexa-fs 셸 조회 전체를 끈다(종전엔 dir3가 부르지 않아 늘 켜짐).
+        let os = self.settings.flag("list.os_icons");
+        nexa_fs::shell::set_os_icons(os);
         let mut inv = Invalidations::default();
         for p in &mut self.panels {
             p.set_row_icons(rows, &mut inv);
+            p.set_os_kind(os, &mut inv); // 종류 열 OS 이름(NEW-059)도 같은 스위치
         }
         nexa_ctl::controls::set_menu_icons(menus);
         // 메뉴 바 그림은 색을 미리 칠한 RGBA다 → 켬/끔 · 테마 글자색이 바뀌면 메뉴를 다시 만든다(단축키 · 체크는 메뉴 바가 기억).

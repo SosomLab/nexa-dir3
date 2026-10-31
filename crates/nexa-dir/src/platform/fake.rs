@@ -250,6 +250,21 @@ impl Watcher for FakeWatch {
 }
 
 impl Opener for FakeOpen {
+    /// 앱으로 열기 기록(`"open_with:<앱>:<n>"`) · `open_fails`면 실패.
+    fn open_with(&self, app: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        let mut l = self.0.borrow_mut();
+        l.calls
+            .push(format!("open_with:{}:{}", app.display(), paths.len()));
+        if l.open_fails {
+            Err(PlatformError::Failed("fake open_with".into()))
+        } else {
+            Ok(())
+        }
+    }
+    /// 가짜는 모든 항목을 받는다(판정 경로 시험용).
+    fn app_accepts(&self, _app: &Path, paths: &[PathBuf]) -> Option<bool> {
+        Some(!paths.is_empty())
+    }
     fn resolve_alias(&self, input: &str) -> Option<PathBuf> {
         let key = input.trim().to_lowercase();
         self.0

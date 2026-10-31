@@ -407,6 +407,15 @@ pub(crate) trait Opener {
     fn open_in_viewer(&self, _path: &Path) -> Result<(), PlatformError> {
         Err(PlatformError::Unsupported("viewer"))
     }
+    /// 앱으로 열기(T-114 잔여 · 10-31 — `.app` 행 위 드롭): macOS `open -a <앱> <항목…>` 한 번(비차단 · 뒤늦은 실패 통지). 없는 OS = Unsupported.
+    fn open_with(&self, _app: &Path, _paths: &[PathBuf]) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported("open with"))
+    }
+    /// 그 앱이 이 항목들을 **모두** 받는가(macOS LaunchServices `URLsForApplicationsToOpenURL` — Finder가 드롭 때 아이콘을 강조하는 규칙).
+    /// 모르는 OS/환경 = None(호출부 = 드롭을 종전대로 부모 폴더에).
+    fn app_accepts(&self, _app: &Path, _paths: &[PathBuf]) -> Option<bool> {
+        None
+    }
     /// 뷰어가 있는가(메뉴 표시 판정).
     fn viewer_available(&self) -> bool {
         false
@@ -1508,6 +1517,14 @@ impl CommandOpener {
 impl Opener for CommandOpener {
     fn open(&self, path: &Path) -> Result<(), PlatformError> {
         Self::run(&self.open, path)
+    }
+    #[cfg(target_os = "macos")]
+    fn open_with(&self, app: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+        macmenu::open_with_app(app, paths)
+    }
+    #[cfg(target_os = "macos")]
+    fn app_accepts(&self, app: &Path, paths: &[PathBuf]) -> Option<bool> {
+        Some(macmenu::app_accepts(app, paths))
     }
     fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
         Self::run(&self.reveal, path)

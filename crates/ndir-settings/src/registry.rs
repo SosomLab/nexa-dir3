@@ -1143,6 +1143,15 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "on"
     ),
+    // OS 아이콘·종류 이름 조회(GAP-024 · nexa-sql `file.os_icons` 대응 · 10-31): 끄면 nexa-fs 셸 조회를 하지 않고 종류별 내장 아이콘만.
+    e!(
+        "list.os_icons",
+        CAT_LIST,
+        "pref.osIcons",
+        "pref.osIcons.desc",
+        Bool,
+        "on"
+    ),
     // 행 아이콘 계층 1 — 직접 설정한 아이콘(dir3 신규 · 사용자 10-03): `종류:패턴=이미지` · `;` 구분 · 종류 = path|name|dir|ext.
     e!(
         "list.icon_overrides",

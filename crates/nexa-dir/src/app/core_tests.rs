@@ -877,7 +877,18 @@ fn dock_layout_and_contents() {
     app.update_docks(); // 디바운스(T-177) 예약을 바로 흘려보낸다.
     rec.clear();
     app.paint_into(&mut rec, 1200, 800, 1.0);
-    assert!(rec.drew_text("Name: a.txt") && rec.drew_text("Kind: TXT"));
+    assert!(rec.drew_text("Name: a.txt"));
+    // Kind 줄 = OS 종류 이름(NEW-059 · `list.os_icons` 기본 켬 · 10-31): Windows/macOS는 OS 이름 · 그 밖은 확장자 "TXT".
+    let kind = rec
+        .strings()
+        .find(|s| s.starts_with("Kind: "))
+        .map(str::to_string)
+        .expect("Kind 줄");
+    if cfg!(any(windows, target_os = "macos")) {
+        assert!(kind.len() > "Kind: ".len() && kind != "Kind: TXT", "{kind}");
+    } else {
+        assert_eq!(kind, "Kind: TXT");
+    }
     // 종류 스트립 클릭(둘째 라벨 = 미리보기 · 클릭 범위는 paint 때 캐시 → 왼쪽부터 훑어 찾기) → 파일 내용.
     let strip_y = app.docks[0].bounds().y + 4;
     let mut x = app.docks[0].bounds().x + 2;
@@ -11051,6 +11062,63 @@ fn panel_status_nfd_count_and_click_toggles_nfd_only() {
     app.panels[0].toggle_nfd_only(&mut inv);
     assert!(!app.panels[0].nfd_only());
     assert_eq!(app.panels[0].rows().source().len(), all, "해제 = 전부");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `.app` 행 위 드롭 = **그 앱으로 열기**(macOS · T-114 잔여 · 10-31): 플랫폼이 "받는다"면 원본 불변 + `open_with` 기록 · 상태줄 "실행" ·
+/// 번들을 번들 위에 놓으면 종전(부모 폴더 = 제자리 → 무동작). 다른 OS = 번들이 폴더라 종전 드롭(이 시험은 macOS만).
+#[test]
+fn drop_onto_bundle_opens_with_app_instead_of_copying() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let (mut app, dir) = fixture("dropapp");
+    std::fs::create_dir_all(dir.join("Foo.app/Contents")).expect("app");
+    std::fs::create_dir_all(dir.join("Bar.app/Contents")).expect("app");
+    std::fs::create_dir_all(dir.join("src")).expect("src");
+    std::fs::write(dir.join("src/x.txt"), b"x").expect("write");
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let row_of = |app: &App, name: &str| {
+        (0..app.panels[0].rows().source().len())
+            .find(|&i| app.panels[0].rows().source().row(i).text == name)
+            .expect("row")
+    };
+    let point_of = |app: &App, name: &str| {
+        let r = row_of(app, name);
+        let b = app.panels[0].rows().bounds();
+        (b.y..b.bottom())
+            .map(|y| Point { x: b.x + 40, y })
+            .find(|p| app.panels[0].rows().row_at(p.x, p.y) == Some(r))
+            .expect("point")
+    };
+    let p_app = point_of(&app, "Foo.app");
+    let x = dir.join("src/x.txt");
+    assert_eq!(
+        app.drop_app_at(p_app, std::slice::from_ref(&x)),
+        Some(dir.join("Foo.app")),
+        "번들 행 = 앱"
+    );
+    assert_eq!(
+        app.drop_app_at(p_app, &[dir.join("Bar.app")]),
+        None,
+        "번들을 번들 위에 = 종전 드롭"
+    );
+    assert!(
+        app.external_drop(vec![x.clone()], p_app).is_none(),
+        "전송 없음"
+    );
+    assert!(x.exists(), "원본 불변");
+    assert!(!dir.join("Foo.app/x.txt").exists() && !dir.join("x.txt").exists());
+    let calls = log.borrow().calls.clone();
+    assert!(
+        calls
+            .iter()
+            .any(|c| c.starts_with("open_with:") && c.ends_with("Foo.app:1")),
+        "{calls:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

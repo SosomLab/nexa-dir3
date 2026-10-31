@@ -68,12 +68,20 @@ pub(crate) fn fmt_size_long(bytes: u64) -> String {
 }
 
 /// 종류 라벨(폴더 · 확장자 대문자 · 파일).
-fn kind_of(path: &Path, b: &Basic) -> String {
+fn kind_of(path: &Path, b: &Basic, os_kind: bool) -> String {
     if b.is_dir {
         return tr("kind.folder");
     }
     match path.extension().and_then(|e| e.to_str()) {
-        Some(ext) if !ext.is_empty() => ext.to_ascii_uppercase(),
+        Some(ext) if !ext.is_empty() => {
+            // OS 종류 이름(NEW-059 · 설정 `list.os_icons` · 10-31) · 없으면 확장자 대문자(종전).
+            if os_kind {
+                if let Some(n) = nexa_fs::shell::kind_name(&ext.to_ascii_lowercase(), false) {
+                    return n;
+                }
+            }
+            ext.to_ascii_uppercase()
+        }
         _ => tr("kind.file"),
     }
 }
@@ -82,13 +90,25 @@ fn kind_of(path: &Path, b: &Basic) -> String {
 ///
 /// `on_disk` = 디스크 할당 크기 조회(플랫폼 `Disk::size_on_disk` · dir2 SHELL-081) — 파일이고 값이 있을 때만 크기 아래 한 줄.
 /// `dir_size` = 폴더의 크기 줄들(`app::dirsize::size_lines` · T-166 — 계산 중/끝/모름) · 폴더일 때 종류 · 경로 뒤에 넣는다.
+#[cfg(test)] // 앱은 `info_lines_os`(설정 스위치) · 시험은 종전 모양 그대로
 pub(crate) fn info_lines(
     selected: &[PathBuf],
     current: &Path,
     on_disk: &dyn Fn(&Path) -> Option<u64>,
     dir_size: &dyn Fn(&Path) -> Vec<String>,
 ) -> Vec<String> {
-    info_lines_from(selected, current, &basic, on_disk, dir_size)
+    info_lines_from(selected, current, &basic, on_disk, dir_size, false)
+}
+
+/// [`info_lines`] + Kind 줄 OS 종류 이름 스위치(NEW-059 · 설정 `list.os_icons` · 10-31).
+pub(crate) fn info_lines_os(
+    selected: &[PathBuf],
+    current: &Path,
+    on_disk: &dyn Fn(&Path) -> Option<u64>,
+    dir_size: &dyn Fn(&Path) -> Vec<String>,
+    os_kind: bool,
+) -> Vec<String> {
+    info_lines_from(selected, current, &basic, on_disk, dir_size, os_kind)
 }
 
 /// [`info_lines`]의 몸 — 메타데이터 조회(`basic_of`)를 바깥에서 준다(T-189 ③ · 워커가 미리 잰 값을 쓰려고).
@@ -98,6 +118,7 @@ pub(crate) fn info_lines_from(
     basic_of: &dyn Fn(&Path) -> Option<Basic>,
     on_disk: &dyn Fn(&Path) -> Option<u64>,
     dir_size: &dyn Fn(&Path) -> Vec<String>,
+    os_kind: bool,
 ) -> Vec<String> {
     match selected {
         // 가상 최상위는 내부 표식(`::PC::`)이 아니라 경로 바와 같은 표시명으로(10-03 캡처 검토에서 적발).
@@ -120,7 +141,7 @@ pub(crate) fn info_lines_from(
                 if ndir_ops::nfc::is_decomposed(&name) {
                     v.push(tr("info.nfd"));
                 }
-                v.push(trf("info.kind", &[&kind_of(one, &b)]));
+                v.push(trf("info.kind", &[&kind_of(one, &b, os_kind)]));
                 v.push(trf("info.path", &[&one.display().to_string()]));
                 if let Some(sz) = b.size {
                     v.push(trf("info.size", &[&fmt_size_long(sz)]));
@@ -228,7 +249,7 @@ mod tests {
         let nfd_name = "\u{1103}\u{1169}\u{1100}\u{1169}\u{11A8}.txt"; // "도곡.txt" 분해형
         let nfc_name = "\u{B3C4}\u{ACE1}.txt"; // "도곡.txt" 합성형
         let base = Path::new("/tmp");
-        let lines = |p: PathBuf| info_lines_from(&[p], base, &basic, &none, &nosz);
+        let lines = |p: PathBuf| info_lines_from(&[p], base, &basic, &none, &nosz, false);
         let nfd = lines(base.join(nfd_name));
         assert!(nfd[0].starts_with("Name: "), "{nfd:?}");
         assert!(nfd[1].starts_with("Normalization: NFD"), "{nfd:?}");

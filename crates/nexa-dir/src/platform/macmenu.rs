@@ -239,6 +239,37 @@ fn launch_services_apps(path: &Path) -> AppsFor {
 }
 
 /// 자식 프로세스 시작 + 늦은 실패 감시(`open`은 성공하면 바로 끝나고 · 실패 코드는 수 초 뒤 올 수 있다).
+/// 앱으로 열기(`open -a <앱> <항목…>` 한 번 · T-114 잔여 10-31 — `.app` 행 위 드롭 · 메뉴 `xdg.app:`과 같은 꼴).
+pub(crate) fn open_with_app(app: &Path, paths: &[PathBuf]) -> Result<(), PlatformError> {
+    let first = paths
+        .first()
+        .ok_or_else(|| PlatformError::Failed("open with needs items".into()))?;
+    let mut argv = vec![
+        "open".to_string(),
+        "-a".into(),
+        app.to_string_lossy().into_owned(),
+    ];
+    argv.extend(paths.iter().map(|p| p.to_string_lossy().into_owned()));
+    spawn_watched(&argv, first)
+}
+
+/// 그 앱이 항목을 **모두** 받는가 — 항목마다 LaunchServices 후보(기본 앱 + 전체)에 그 앱이 있어야 한다(Finder 드롭 강조 규칙 ·
+/// 등록되지 않은 번들(시험용 빈 `.app`)은 후보에 없으니 거짓 = 종전 드롭).
+pub(crate) fn app_accepts(app: &Path, paths: &[PathBuf]) -> bool {
+    let same = |a: &Path| {
+        a == app
+            || match (a.canonicalize(), app.canonicalize()) {
+                (Ok(x), Ok(y)) => x == y,
+                _ => false,
+            }
+    };
+    !paths.is_empty()
+        && paths.iter().all(|p| {
+            let (default, all) = launch_services_apps(p);
+            default.as_ref().is_some_and(|d| same(&d.path)) || all.iter().any(|a| same(&a.path))
+        })
+}
+
 fn spawn_watched(argv: &[String], report: &Path) -> Result<(), PlatformError> {
     let (prog, args) = argv
         .split_first()
