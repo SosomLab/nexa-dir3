@@ -253,6 +253,8 @@ pub(crate) struct TreeSource {
     filter_opts: ndir_ops::namefilter::FilterOpts,
     /// 정규식 오류(틀을 붉게 · 아무것도 안 맞음).
     filter_err: bool,
+    /// 분해형(NFD) 이름 행만 보기(패널 상태 줄 "NFD n" 클릭 · 10-31 사용자 결정 ②) — 글 필터와 AND.
+    nfd_only: bool,
     /// 타입어헤드 찾기 범위(설정 `typeahead.scope` · GAP-015 · 10-25 — 종전엔 늘 가시 스트림).
     find_scope: FindScope,
     /// 이름 앞 아이콘 끔(설정 `list.row_icons` · 성능 향상 모드) — 끄면 [`RowSource::icon`]이 없음을 돌려준다(조회 · 그리기 · 자리 모두 없다).
@@ -302,6 +304,7 @@ impl TreeSource {
             name_filter: String::new(),
             filter_opts: ndir_ops::namefilter::FilterOpts::default(), // 패널이 자기 토글을 넣는다(`Panel::apply_nav` · 전역 없음 · 10-26)
             filter_err: false,
+            nfd_only: false,
             find_scope: FindScope::VisibleStream,
             no_icons: false,
             probe_cache: Default::default(),
@@ -458,6 +461,20 @@ impl TreeSource {
         self.filter_err
     }
 
+    /// 분해형 이름 행만 보는 중인가.
+    pub(crate) fn nfd_only(&self) -> bool {
+        self.nfd_only
+    }
+
+    /// 분해형 이름 행만 보기 켬/끔 — 바뀌었으면 true(호스트가 목록 무효화).
+    pub(crate) fn set_nfd_only(&mut self, on: bool) -> bool {
+        if self.nfd_only == on {
+            return false;
+        }
+        self.nfd_only = on;
+        self.apply_matcher()
+    }
+
     /// 글 + 토글로 판정기를 만들어 트리에 넣고(정규식 오류 = `filter_err` + 아무것도 안 맞음) · 하위 폴더 범위(`subdirs`)를 전하고 · 깊은 판정이
     /// 없는 폴더의 검색을 건다(`schedule_deep`). 새 판정 = 새 세대(워커의 낡은 깊은 검색은 중단 · 결과는 버림). 가시 목록이 바뀌었으면 `true`.
     fn apply_matcher(&mut self) -> bool {
@@ -469,15 +486,34 @@ impl TreeSource {
         self.deep_pending.clear();
         self.deep_matcher = None;
         let mut changed = tree.set_deep_scope(self.filter_opts.subdirs);
+        let nfd_only = self.nfd_only;
         if self.name_filter.is_empty() {
             self.filter_err = false;
-            return tree.set_name_matcher(None, None) || changed;
+            // 글 없이 "NFD만"이면 분해형 판정만(깊은 검색은 걸지 않는다 · 현재 폴더의 가시 행).
+            let m = if nfd_only {
+                tree.set_name_matcher(
+                    Some("\u{1}nfd"),
+                    Some(std::sync::Arc::new(|n: &str| {
+                        ndir_ops::nfc::is_decomposed(n)
+                    })),
+                )
+            } else {
+                tree.set_name_matcher(None, None)
+            };
+            return m || changed;
         }
-        let key = format!("{}\u{1}{}", self.name_filter, self.filter_opts.tag());
+        let key = format!(
+            "{}\u{1}{}{}",
+            self.name_filter,
+            self.filter_opts.tag(),
+            if nfd_only { "\u{1}nfd" } else { "" }
+        );
         changed |= match ndir_ops::namefilter::compile(&self.name_filter, self.filter_opts) {
             Ok(Some(m)) => {
                 self.filter_err = false;
-                let f: ndir_tree::NameMatcherFn = std::sync::Arc::new(move |n: &str| m.matches(n));
+                let f: ndir_tree::NameMatcherFn = std::sync::Arc::new(move |n: &str| {
+                    (!nfd_only || ndir_ops::nfc::is_decomposed(n)) && m.matches(n)
+                });
                 self.deep_matcher = Some(DeepMatcher(f.clone()));
                 tree.set_name_matcher(Some(&key), Some(f))
             }

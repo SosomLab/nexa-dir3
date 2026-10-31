@@ -116,7 +116,6 @@ status.cloudOnly = Online only
 status.availableLocally = On this device
 status.alwaysKeep = Always keep on this device
 status.network = Network
-status.nfd = NFD
 
 # ── Kind cells (original kind.* keys) ──
 kind.folder = Folder
@@ -270,6 +269,8 @@ ctx.redoOf = Redo: {0}
 # ── Status bar · title ──
 status.itemCount = {0} items
 status.itemCountFiltered = {0} of {1} items (filtered)
+status.nfdCount = NFD {0}
+status.nfdOnly = NFD {0} (only)
 status.selectedCount = {0} selected
 status.tab = Tab {0}/{1}
 status.avg = avg {0}µs

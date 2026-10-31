@@ -10988,6 +10988,46 @@ fn memory_window_command_and_dump() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 패널 상태 줄 "NFD n"(10-31 사용자 결정 ②): 분해형 이름이 있으면 집계 칸 · 클릭 = 그 행만 보기 토글(글 필터와 같은 "n / m" 표기) ·
+/// 다시 클릭 = 해제. 상태 열에는 NFD 표식이 없다(③).
+#[test]
+fn panel_status_nfd_count_and_click_toggles_nfd_only() {
+    let (mut app, dir) = fixture("nfdseg");
+    let nfd = "\u{1103}\u{1169}\u{1100}\u{1169}\u{11A8}.txt";
+    std::fs::write(dir.join(nfd), b"x").expect("write");
+    std::fs::write(dir.join("plain.txt"), b"y").expect("write");
+    let _ = app.settings.set("layout.tab_statusbar", "on");
+    app.after_setting_changed("layout.tab_statusbar");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    app.panels[0].sync_status(&mut inv);
+    let sum = app.panels[0].status_summary();
+    assert!(
+        sum.iter().any(|s| s.starts_with("nfd=")),
+        "집계 칸: {sum:?}"
+    );
+    let all = app.panels[0].rows().source().len();
+    assert!(all >= 2, "픽스처 파일 + 둘: {all}");
+    assert_eq!(
+        app.panels[0].rows().source().status_of(0),
+        ndir_vfs::FileStatus::None,
+        "상태 열 = 저장 상태 전용"
+    );
+    app.panels[0].toggle_nfd_only(&mut inv);
+    assert!(app.panels[0].nfd_only());
+    assert_eq!(app.panels[0].rows().source().len(), 1, "NFD 행만");
+    let sum = app.panels[0].status_summary();
+    assert!(
+        sum[0].starts_with("folder=") && sum.iter().any(|s| s.starts_with("nfd=")),
+        "{sum:?}"
+    );
+    app.panels[0].toggle_nfd_only(&mut inv);
+    assert!(!app.panels[0].nfd_only());
+    assert_eq!(app.panels[0].rows().source().len(), all, "해제 = 전부");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 검색창 토글 툴팁 = 오버레이(10-31 사용자 macOS "툴팁이 안 보이거나 깜빡임"): 토글 위에 머물고 지연이 지나면 `popups_open` →
 /// `overlay_active` = 전체 프레임(부분 프레임의 클립에 잘리지 않게) · 벗어나면 다시 부분 가능.
 #[test]

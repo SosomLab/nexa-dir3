@@ -116,7 +116,6 @@ status.cloudOnly = オンラインのみ
 status.availableLocally = このデバイスにあり
 status.alwaysKeep = 常にこのデバイスに保持
 status.network = ネットワーク
-status.nfd = NFD
 
 # ── Kind cells (original kind.* keys) ──
 kind.folder = フォルダー
@@ -270,6 +269,8 @@ ctx.redoOf = やり直し: {0}
 # ── Status bar · title ──
 status.itemCount = {0} 個の項目
 status.itemCountFiltered = {1} 個中 {0} 個の項目(フィルター)
+status.nfdCount = NFD {0}
+status.nfdOnly = NFD {0}（のみ）
 status.selectedCount = {0} 個を選択
 status.tab = タブ {0}/{1}
 status.avg = 平均 {0}µs

@@ -227,6 +227,8 @@ const TAB_STATUS_H: f32 = 22.0;
 /// 탭 상태바 칸 id.
 pub(crate) const SEG_FOLDER: &str = "folder";
 pub(crate) const SEG_GIT: &str = "git";
+/// 분해형(NFD) 이름 집계 칸 — 클릭 = 그 행만 보기 토글(10-31 사용자 결정 ②).
+pub(crate) const SEG_NFD: &str = "nfd";
 
 /// 네비 버튼 1개 폭(고정 — 배치가 측정 없이 계산 · dir2 `nav_btn_w`).
 fn nav_btn_w(m: &PanelMetrics) -> i32 {
@@ -1485,8 +1487,8 @@ impl Panel {
         }
         self.ensure_git_info();
         let src = self.rows().source();
-        // 빠른 필터 중이면 "n / m 항목"(협업 제안 10-25 — 빈 목록이 필터 때문임을 알린다).
-        let folder_text = if src.name_filter().is_empty() {
+        // 빠른 필터 중이면 "n / m 항목"(협업 제안 10-25 — 빈 목록이 필터 때문임을 알린다) · "NFD만"도 필터다.
+        let folder_text = if src.name_filter().is_empty() && !src.nfd_only() {
             ndir_i18n::trf("status.itemCount", &[&src.len().to_string()])
         } else {
             ndir_i18n::trf(
@@ -1502,6 +1504,19 @@ impl Panel {
                 text.push_str(&self.git_extra);
             }
             segs.push(nexa_ctl::StatusSeg::new(SEG_GIT, text));
+        }
+        // 분해형 이름 집계(10-31 ②): 있을 때만 · "NFD만" 보기 중이면 켜진 글.
+        let nfd = src.nfd_count();
+        if nfd > 0 || src.nfd_only() {
+            let key = if src.nfd_only() {
+                "status.nfdOnly"
+            } else {
+                "status.nfdCount"
+            };
+            segs.push(nexa_ctl::StatusSeg::new(
+                SEG_NFD,
+                ndir_i18n::trf(key, &[&nfd.to_string()]),
+            ));
         }
         let sel = src.selection_count();
         let left = if sel > 0 {
@@ -1576,6 +1591,22 @@ impl Panel {
             }
         }
         (active, background)
+    }
+
+    /// "NFD n" 칸 클릭 = 분해형 이름 행만 보기 토글(10-31 ②) — 목록·상태 줄 무효화.
+    pub(crate) fn toggle_nfd_only(&mut self, inv: &mut Invalidations) {
+        let on = !self.rows().source().nfd_only();
+        let rows = &mut self.tabs[self.active].rows;
+        if rows.source_mut().set_nfd_only(on) {
+            inv.push(self.bounds);
+        }
+        self.sync_status(inv);
+    }
+
+    /// 분해형 이름 행만 보는 중인가(시험).
+    #[cfg(test)]
+    pub(crate) fn nfd_only(&self) -> bool {
+        self.rows().source().nfd_only()
     }
 
     /// 탭 상태바 칸 클릭(1회성 수거).

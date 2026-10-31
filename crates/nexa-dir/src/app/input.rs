@@ -1080,8 +1080,13 @@ impl App {
                 }
             }
             if let Some((seg, _right)) = self.panels[i].take_status_click() {
-                self.open_tab_status_menu(i, &seg);
-                inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+                if seg == panel::SEG_NFD {
+                    // "NFD n" = 분해형 이름 행만 보기 토글(10-31 사용자 결정 ②) — 메뉴가 아니다.
+                    self.panels[i].toggle_nfd_only(inv);
+                } else {
+                    self.open_tab_status_menu(i, &seg);
+                    inv.push(Rect::new(0, 0, self.viewport.0, self.viewport.1));
+                }
             }
             if let Some(t) = self.panels[i].take_tab_menu() {
                 self.open_tab_menu(i, t);
