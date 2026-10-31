@@ -7,7 +7,7 @@
 
 - **목적**: 앱 · 명령행 · 다른 프로그램이 **같은 전송 엔진을 같은 규칙으로** 쓰게 한다. 작업을 **직렬화 가능한 한 덩어리(JobSpec)**로 표현해 저장 · 재실행 · 다른 프로세스 전달이 되게 하고, 진행과 결과도 기계가 읽는 모양(Progress · Report)으로 낸다.
 - **이번 회차(DR-34 ①⑦)**: ① 이 설계 문서 ② `ndir-xfer` rlib 골격 — JobSpec/Progress/Report 직렬화 · 복사 · 이동 · 검증 · 미러 4엔진 포장 · dry-run ③ `nexa-copy` `--job job.json` · `--progress`(JSON 줄). **cdylib은 다음 회차.**
-- **범위 밖(설계만)**: 재개 · 속도 제한 · 작업 큐 · 이동 검증 · 최상위 항목 병렬 · 내용 비교 미러 · 휴지통 미러(§8).
+- **범위 밖(설계만 · §8)**: 작업 큐 · 이동 검증 · 최상위 항목 병렬 · 휴지통 미러 앱 배선(재개 · 속도 제한 · 내용 비교 미러는 T-202 ②③⑦로 구현됨).
 
 ## 2. 지금 있는 것(재사용 · 바꾸지 않는다)
 
@@ -76,6 +76,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `journal` | `Option<PathBuf>` | 없음 | `--journal <file>` | 최상위 항목 완료마다(`Event::ItemEnd`) `{"source","dest","status","bytes"}` 한 줄 덧붙임 · 상대 경로 = 잡 파일 폴더 · dry-run이면 쓰지 않음 · `verify`면 검증 통과 뒤에만 `done` · 못 열면 시작 안 함 · 쓰기 실패 = Report errors + `ok: false` · `resume`과 같은 파일 가능(읽기 → 덧붙이기) |
 | `resume` | `Option<PathBuf>` | 없음 | `--resume <file>` | 이전 Report JSON 또는 저널 · `(source, dest)`가 `done`인 항목 건너뜀(Report `status: skipped` · `note: resumed` · bytes/dest는 저널 값 · items 앞에 먼저 적힘) · 같은 쌍은 마지막 기록 우선 · 잘린 끝 줄 무시(그 밖의 깨진 줄 = 오류) · 끝난 쌍은 `validate` 존재 검사에서 뺀다(이동 재개) · 복사/이동만(미러 + journal/resume = `validate` 오류) · `--job`과 함께 명령줄로 주면 키를 덮음 · `--ask`와 못 씀 |
 | `max_bps` | `u64`(바이트/초 · 0 = 없음) | 0 | `--max-bps <rate>`(K/M/G ×1024 · 소수 · 끝 B 허용) | 실제 전송만 제한(병렬이면 합계) · 복제 · 검증 읽기 제외 · §8 한계 |
+| `mirror_by_content` | `bool` | false | `--by-content`(`--mirror` 없이 = 해석 오류 2) | 미러가 아니면 무시 · 필터 뒤 크기 · 시각이 같은 파일 쌍만 양쪽 SHA-256 · 한쪽이라도 못 읽으면 **다름**(복사 시도) · 해시 진행 = `phase: plan`의 `done` · 비용 = 양쪽 전량 읽기(대상이 네트워크면 큼) · `max_bps` 비제한 |
 
 - **JSON 규칙**: 빠진 키 = 기본값 · 모르는 키 = 무시 · 판 키(`version`) 없음(넣어도 무시) · `JobSpec::from_json(&str) -> Result<JobSpec, String>` · `to_json(&self) -> String`. 파서는 `ndir_xfer::json::{Json, parse, dump}`(외부 crate 0 · ndir-settings `json.rs` 꼴).
 - **검증**: `validate(&JobSpec) -> Option<String>`(오류 문구 · 없으면 None) — `run`도 먼저 부른다.
@@ -136,14 +137,14 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 
 - **재개 ✅ T-202 ②(abc69f3 · §4 `journal` · `resume` · `ndir_xfer::resume`)** — 한계: 최상위 항목 단위 · 파일 중간 재개 없음(스테이징 교체가 원자적) · 폴더가 끊기면 그 폴더는 다시 돌고 `conflict: skip`이면 있는 파일을 건너뜀(`overwrite`면 다시 씀) · 그사이 원본이 바뀌어도 `done`이면 건너뜀(감지 안 함). cdylib = JobSpec 키라 자동 적용(ABI 1 불변).
 - **속도 제한 ✅ T-202 ③(071fc30 · §4 `max_bps` · `ndir_ops::fastcopy::Pacer` + `with_pacer(bps, f)` 스레드 지역 범위 · Tuning 필드 추가 없음)** — 실제 전송 지점(루프 · `copy_file_range` 청크 · `CopyFileExW`/`copyfile` 진행 콜백)에서 `on_bytes` 뒤 `pace` · 병렬은 작업 스레드 TLS에 같은 Pacer(Arc)를 걸어 **합계 기준** · 청크 = `Pacer::chunk_for`(¼초 분량 · 하한 64 KiB · 상한 기본) · 100 ms 조각으로 자며 `stop` 확인. 한계: ① 같은 파일 시스템 복제(FICLONE · clonefile · 블록 복제)는 순간이라 제한 없음 ② Windows · macOS 콜백 간격은 OS가 정해 덩어리질 수 있음(**실기 필요**) ③ 전역 `set_tuning`에는 제한 없음(`with_pacer` 범위만) · 검증 읽기 비제한.
+- **미러 내용 비교 ✅ T-202 ⑦(4f2f3ac · §4 `mirror_by_content` · `mirror_plan_with`)** — 엔진 `CmpOpts::by_content`를 쓰지 않고 필터 뒤 직접 해시(제외 파일 미해시). 판정 공용 `compare::content_verdict`(둘 다 읽혔고 같을 때만 Same · GAP-026).
+- **휴지통 미러 = Rust API만(4f2f3ac)**: `apply_mirror_with(plan, on_bytes, cancel, delete)` · `run_with(spec, on_progress, cancel, Option<DeleteFn>)`(`run` = None 위임 · 영구 삭제) — CLI · cdylib은 영구 삭제 그대로(ABI 1). **앱 배선 = T-202 ④ 작업 큐/진행 창 때**(휴지통 포트는 `platform/` · DR-5).
 
 | 기능 | 설계 | 걸림돌 |
 | --- | --- | --- |
 | **작업 큐** | 앱 = JobSpec 큐(순차 기본 · 장치가 다르면 병렬 후보) · 큐 상태 저장 = JobSpec + 저널 | 진행 창(T-96 카드형)과 함께 설계 |
 | **이동 검증** | 교차 볼륨 이동 = 복사 → 검증 → 원본 삭제 순서(엔진에 "원본 정리 전 훅") · 같은 볼륨 rename은 대상 아님 | `transfer_with` 이동 경로에 훅 추가(ndir-ops · DR-11 패리티 유지) |
 | **최상위 항목 병렬** | 질문 없는 항목만 묶어 보내기 | docs/24 §6-3 — 충돌 질문 · 스테이징 · 실행 취소가 항목 순서에 묶임 |
-| **미러 내용 비교** | `compare` `by_content` 옵션을 JobSpec 불 `mirror_by_content`(후보)로 | 비용(전부 해시) — 크기·시각 같을 때만 해시하는 2단계 |
-| **휴지통 미러** | JobSpec 불 `mirror_trash`(후보) | 휴지통은 `platform/` 포트(DR-5) — `ndir-xfer`는 포트를 모르므로 앱 · CLI가 삭제 콜백을 주입 |
 
 ## 9. 시험 계획
 
@@ -152,6 +153,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - **프로세스(T4급 · `crates/nexa-copy/tests/cli.rs`)**: `--job` 복사/미러/검증/dry-run · `--progress` 줄이 모두 JSON으로 파싱되고 `phase`가 단계 순서(plan → transfer → verify/mirror/delete) · 종료 코드 = Report `exit_code()` · 취소 = 130.
 - **재개(abc69f3)**: `resume::{done_items_from_report_and_journal, journal_appends_and_reads_back}` · spec 왕복/검증/상대 경로 · `journal_then_resume_skips_done_items`(이동 재개 포함) · `journal_waits_for_verify` · 프로세스 `journal_and_resume_skip_finished_items`.
 - **속도 제한(071fc30)**: ndir-ops `pacer_limits_loop_and_parallel_copies`(8 × 128 KiB · 4스레드 ≥ 200 ms · 1 B/s stop < 1 s) · `Pacer::delay_for` 순수 판정 · ndir-xfer `max_bps_slows_transfer` · nexa-copy `parse_rate` · 프로세스 `max_bps_limits_copy_speed` — 실측 시험은 하한만 단언(흔들림 방지).
+- **미러 내용 비교(4f2f3ac)**: ndir-xfer `mirror_by_content_and_delete_callback`(기본 미러 유지 · by_content 덮어씀 · 해시 진행 · 삭제 콜백 · 제외 파일 미해시) · 프로세스 `mirror_by_content_overwrites_same_size_and_time` · ndir-ops `content_verdict_treats_unreadable_as_differ`(5경우).
 - **T6(성능)**: `bench_copy`를 `scripts/perf-baseline.sh`에 편입 · `ndir-xfer` 포장 전후 같은 작업의 시간 차 ≤ 2 %(포장층 비용 0 확인) · Linux/macOS 실측은 그 PC 회차.
 
 ## 10. 성능 기준선 확장 계획(T-97 "+ 성능 기준선 확장")

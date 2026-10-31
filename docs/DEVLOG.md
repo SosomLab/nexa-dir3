@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **T-202 ⑦ 미러 내용 비교**(4f2f3ac · `--by-content` · 삭제 콜백 Rust API · **GAP-026** 비교 창 양쪽 읽기 실패 = 같음 처방 · 시험 788/0 · T4 43/0) · **GAP-027 발견**(`--verify --exclude` 거짓 불일치 · 미처방) · CI b685e2f ✓ → [10-31 §29](journal/2026-10-31.md)
+
 - **T-202 ③ 속도 제한**(071fc30 · `max_bps` · `--max-bps` · `Pacer` · 병렬 합계 · 복제 제외 · 100 ms 취소 · 시험 785/0 · T4 43/0) · Windows/macOS 콜백 간격 = 실기 필요 → [10-31 §28](journal/2026-10-31.md)
 
 - **T-202 ② 재개**(abc69f3 · `journal`/`resume` · `--journal`/`--resume` · (source, dest) 쌍 · 이동 재개 · verify 뒤 done · 시험 782/0 · T4 43/0) · CI 34b48db ✓ · 다음 = ③ 속도 제한 → [10-31 §27](journal/2026-10-31.md)

@@ -43,7 +43,7 @@
 | `crates/nexa-app/src/icon.rs` | 47 | 7 | ✅ |
 | `crates/nexa-app/src/icons.rs` | 597 | 20 | ✅ |
 | `crates/nexa-app/src/launcher.rs` | 169 | 73 | ✅ |
-| `crates/nexa-app/src/main.rs` | 123 | 51 | ✅ |
+| `crates/nexa-app/src/main.rs` | 123 | 52 | ✅ |
 | `crates/nexa-app/src/menuthread.rs` | 353 | 19 | ✅ |
 | `crates/nexa-app/src/nav.rs` | 105 | 5 | ✅ |
 | `crates/nexa-app/src/oauth.rs` | 1299 | 63 | ✅ |
@@ -144,6 +144,8 @@
 | GAP-023 | **Windows 배경 메뉴 항목 누락**(dir3 · dir2 대응 없음 — NEW-041/042 신설 항목) — 중복 파일 찾기 · 반대 패널과 폴더 비교를 `open_bg_menu`에만 덧붙여, 셸 배경 항목이 비동기로 오는 Windows 경로(`ctx_open_waited` · `ctx_shell_tick` = `bg_menu_items`만 호출)에서는 메뉴에 없었음 · 적발 = CI windows T4(319b12a run 37796267449) | dir3 5fec0ea = `bg_menu_items` 끝에서 조립(세 경로 같은 메뉴) · 매트릭스 GAP-023 · NEW-041/042 행 | ✅ 10-08 §18(5fec0ea) |
 | GAP-024 | **OS 아이콘 끄기 설정 없음**(dir3 · dir2 대응 없음 — nexa-sql `file.os_icons` → `nexa_fs::shell::set_os_icons`(nexa-sql main.rs:2290 · 성능 모드 off)) — dir3는 `set_os_icons`를 부르지 않아 행·런처 아이콘의 OS 조회를 끌 방법이 없다(Windows 종전부터 · 10-31 nexa-ui 246 macOS OS 아이콘으로 macOS도 해당) · 적발 = 협업 246 문서 초안 작성(10-31) | 후속 = 설정 `list.os_icons`(기본 on · 성능 향상 모드 = off 후보) 신설 → 기동·변경 때 `set_os_icons` · 아이콘 캐시 비우기 | ✅ 10-31 §19 ec461e4(`list.os_icons` 기본 on · 같은 스위치로 NEW-059 OS 종류 이름) |
 | GAP-025 | **macOS `.app` 번들 = 폴더처럼 동작**(dir3 · dir2 대응 없음 — Windows 전용) — 패널 트리에 펼침 쉐브론이 붙고 더블클릭(`cmd.activate`) = 안으로 이동 · 행 아이콘 = 일반 폴더(`filelist.rs:1095 icon_key` 폴더 = `"dir"`) · 런처 `.app` 항목 = 2자 글리프(`launcher.rs:86 exe_path` = `is_file()`만) · Finder = 번들을 파일처럼(더블클릭 = 실행 · "패키지 내용 보기" = 안으로) · 적발 = 협업 10-31 판정 캡처(`/Applications`) | 처방 안 = platform 번들 판정 1개(`per_path_icon` · 런처 `exe_path` · 활성화 = `open` · 트리 펼침 없음 · 크기 = 후속) · 활성화 변경 = 사용자 결정 거리 | ✅ 10-31 §8(5e48780 · ndir-vfs File + `ATTR_BUNDLE` · 판정 = 드롭 부모 · 쉐브론 없음 · 앱 아이콘 · 런처 아이콘 · 활성화/우클릭 = 사용자 실기) · §19 ec461e4 번들 링크 · 번들 크기 합계 · `.app` 위 드롭 = 앱이 받으면 열기 |
+| GAP-026 | **내용 비교 양쪽 읽기 실패 = 같음**(dir3 · 협업 발견 10-31) — `ndir-ops::compare`가 `by_content`에서 `None == None`을 Same으로 판정해 앱 폴더 비교 창 [내용 비교]가 "같음"으로 표시 · 한쪽 실패는 이미 다름 | 4f2f3ac = 순수 `content_verdict(left, right)`(둘 다 있고 같을 때만 Same) · 시험 `content_verdict_treats_unreadable_as_differ` · 미러 내용 비교와 같은 규칙 | ✅ 10-31 §29(4f2f3ac) |
+| GAP-027 | **`nexa-copy --verify --exclude` 거짓 불일치**(dir3 · 협업 실측 10-31) — 폴더 복사에서 제외한 파일을 검증이 `missing`으로 보고(`verified 2 file(s) · 1 mismatch` · ok false). 원인 = `ndir_xfer::verify::verify_one`이 원본 트리를 `read_dir`로 다시 훑음(복사 중 새로 생긴 파일도 같음). 데이터 손상은 아님 | 처방 = 트리 대신 복사한 항목 목록으로 검증(T-202 ⑤ 이동 검증과 공용 제안) | 🚧 개발 판단 대기(10-31 §29) |
 
 ## 결함(BUG)
 
