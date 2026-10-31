@@ -5,7 +5,7 @@
 ## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§24](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
 
 - **★ v0.28.0 = 승격 · 선검증 완료 · 태그 보류(사용자 10-31 · §24)** — **남은 것 = 태그 push만**(사용자 승인 뒤 · 절차 = [docs/16 §5](16-doc-git-conventions.md)):
-  - 승격 71df088(Cargo · lock · lang @app 3 · rpm changelog 영어) · origin/main = fb51b4e · gate-20 full ✓(clippy 3-OS · 시험 771/0 · smoke 0.28.0 · selfcheck 30/0/2/7 · T4 43/0) · CI fb51b4e ✓ 3-OS(run 41198824783).
+  - 승격 71df088(Cargo · lock · lang @app 3 · rpm changelog 영어) · origin/main = fb51b4e(코드 마지막) → 기록 d85b869 · 마감 정리 14fc919(CLAUDE.md 현 단계 · TODO 머리글) · 세 저장소 origin 동기 · gate-20 full ✓(clippy 3-OS · 시험 771/0 · smoke 0.28.0 · selfcheck 30/0/2/7 · T4 43/0) · CI fb51b4e ✓ 3-OS(run 41198824783).
   - 선검증 release.yml 디스패치 run **41198851370 ✓**(meta · package macOS/Windows/ubuntu-22.04 · publish = 초안 · linux-repo/windows-packages/homebrew = skipped 설계대로) → **초안 v0.28.0 삭제 완료**(개발 · `gh release list` 최신 = 0.27.0 Latest · 협업 대조).
   - 태그 주석(영어 · 하이라이트) = [release/tag-v0.28.0.txt](release/tag-v0.28.0.txt) → `git tag -a v0.28.0 -F docs/release/tag-v0.28.0.txt <커밋>` · 태그 커밋 = 그때의 main(문서 커밋이 더 쌓였으면 그 위 — 0.28.0 코드와 같음).
   - 채널 상태: winget 0.27.0 #462011/#462012 MERGED · choco 0.27.0 Approved → 보류 사유 없음(docs/16 §5 ④ 외부 심사 대기 아님).
