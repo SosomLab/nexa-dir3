@@ -1,9 +1,13 @@
 [package]
 name = "ndir-xfer"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Nexa Dir transfer engine facade: serializable job spec, progress and report over ndir-ops (copy, move, verify, mirror, dry-run)"
-license = "PolyForm-Noncommercial-1.0.0"
 
 [dependencies]
 ndir-ops = { workspace = true }
