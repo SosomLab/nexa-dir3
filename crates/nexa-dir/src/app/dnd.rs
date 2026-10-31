@@ -685,7 +685,7 @@ impl App {
         }
     }
 
-    fn dnd_over(
+    pub(crate) fn dnd_over(
         &mut self,
         at: (i32, i32),
         ctrl: bool,
@@ -890,6 +890,9 @@ impl App {
             return false;
         }
         let sources = std::mem::take(&mut self.dnd_drop);
+        // 드롭 표식(강조 사각형 · 머묾 · 안내)을 먼저 걷는다(사용자 10-31 "Finder에서 끌어놓기 후 폴더 선택 사각형이 안 없어짐" — winit
+        // `DroppedFile` 경로는 플랫폼 드롭 싱크(`DropEvent::Drop`)와 달리 `dnd_end`를 거치지 않았다). 상태줄 안내는 아래 드롭이 다시 쓴다.
+        self.dnd_end();
         let (x, y) = self.cursor;
         let saved = (self.shift, self.primary);
         let polled = if self.platform.log.is_none() {

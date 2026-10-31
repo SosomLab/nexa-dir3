@@ -4897,8 +4897,12 @@ fn external_drop_moves_or_copies_into_folder_under_cursor() {
     }
     app.cursor = (p_sub.x, p_sub.y);
     app.dnd_hover(dir.join("b.md"));
+    // 끄는 동안 폴더 강조 표식이 서고(10-31 사용자: Finder 드롭 뒤 사각형이 안 없어짐) → 드롭 처리 뒤에는 걷혀야 한다.
+    app.dnd_over((p_sub.x, p_sub.y), false, false, std::time::Instant::now());
+    assert!(app.dnd_mark.is_some(), "끄는 중 = 표식");
     app.dnd_dropped(dir.join("b.md"));
     assert!(app.dnd_flush());
+    assert!(app.dnd_mark.is_none(), "드롭 뒤 표식 걷힘");
     assert!(!app.dnd_flush(), "두 번 처리하지 않는다");
     wait(&mut app);
     assert!(
