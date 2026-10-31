@@ -174,3 +174,57 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 2. `--progress` 출력 자리 = **stdout**(현행 유지 · 사람용 진행은 stderr).
 3. **`--report <file>` 추가** — 끝에 Report JSON(§6)을 그 파일에 쓴다(dry-run 기계용 보고서 포함) · 구현 ✅ ed45954 — `--progress` 유무와 무관 · 간단 인자에서도 ndir-xfer 경로 · `--ask`와 함께 못 씀 · 쓰기 실패는 안내만(종료 코드 불변).
 4. cdylib = 진입 **`ndir_xfer_run`** · **패키지에 동봉** — 다음 회차(T-202 ①).
+
+## 12. 작업 큐(T-202 ④ · 설계 초안 11-01 · 구현 = 다음 회차)
+
+> 설계 = 개발 세션 · 코드 아님. 사용자 결정 4건은 확정이고, §12.2 이하 구조는 초안이다. §12.7은 협업 검토에서 나온 미채택 항목이다.
+
+### 12.1 사용자 결정(11-01)
+
+1. 전송 중 새 전송 = **큐에 추가**(설정 `transfer.queue` 기본 on · off = 종전 거부).
+2. 충돌 = **실행 차례에 인라인 질문**(대기 중엔 묻지 않음 · 질문이 떠 있으면 큐가 멈춤).
+3. 재시작 = **물어보고 재개**(저널 기준 · "미완 전송 n건 — 재개 / 버림").
+4. 진행 창 = **기존 창 + 대기 목록 줄**(카드형 T-96은 보류 유지).
+
+### 12.2 자료 구조와 저장
+
+- 큐 항목 = `QueuedJob { id, spec: JobSpec, cut: bool, state: Queued|Running|Done(Report)|Failed|Canceled, added_at }`.
+- 저장 = `NDIR_HOME/queue/<id>.job.json`(JobSpec) + `<id>.journal`(ndir-xfer `journal` 키) · Done/Canceled는 지운다.
+
+### 12.3 실행
+
+- 워커 = 1개(순차). 머리 작업을 `run_with(spec, progress, cancel, delete, resolve)`로 실행한다.
+- **ndir-xfer API 확장 1건 = `ResolveFn`**: 충돌 콜백 · `conflict` 정책 대신 호출자가 결정(앱 인라인 질문 채널 그대로).
+- 기존 `start_transfer` · `TransferShared` · `ops_tick`은 "큐 머리 1건 실행"으로 재배선한다. 진행 창 · 상태바 `xfer` 칸 · 완료 토스트 → undo는 그대로 · `MoveBatchOp`/`CopyBatchOp` undo 기록은 Report `items`에서 (src, dest)를 복원한다.
+- 미러 삭제 콜백(`platform` 휴지통 포트 주입) = 비교 창이 큐로 올 때(지금 앱 미러는 T-172로 이미 휴지통 · §8).
+
+### 12.4 화면과 재시작
+
+- 진행 창: 아래에 "대기 중 n건" 목록(라벨 · 크기 · [위로] [아래로] [삭제]) · 상태바 `xfer` 칸 = 실행 중 % + "대기 n".
+- 재시작: 기동 시 `queue/`에 Running/Queued가 남아 있으면 토스트/대화상자 "미완 전송 n건 — 재개 / 버림" → 재개 = `resume: <journal>`을 넣어 다시 큐.
+
+### 12.5 설정 키(REGISTRY · `CAT_TRANSFER`)
+
+| 키 | 형식 · 기본 | 뜻 |
+| --- | --- | --- |
+| `transfer.queue` | Bool · on | 전송 중 새 전송을 큐에 추가 · off = 종전 거부 |
+| `transfer.queue_restore` | Enum `ask`\|`auto`\|`discard` · `ask` | 재시작 때 미완 전송 처리 |
+| `transfer.queue_parallel` | HIDDEN · 1 | 동시 실행 수 |
+
+### 12.6 시험 · 범위 · 슬라이스
+
+- **시험**: T3 = 큐 추가/순서/삭제 · 실행 중 질문 대기 · 재시작 복원(격리 홈 `queue/` 고정물) · `transfer.queue` off = 종전 거부. T4 시나리오 1건 = 두 번 연속 copy → 둘 다 완료.
+- **범위 밖**: 폴더 비교 창 `sync_job`(별도 유지) · 장치별 병렬 · 카드형 진행 창 · 일시 정지.
+- **구현 순서**: (1) ndir-xfer `ResolveFn` + 앱이 ndir-xfer로 전송(동작 동일 · 큐 없음) → (2) 큐 자료 구조 + 저장 + 설정 키 + 진행 창 대기 줄 → (3) 재시작 복원 → (4) 휴지통 콜백 주입(비교 창이 큐로 올 때).
+
+### 12.7 구현 전 확인(협업 검토 11-01 · 코드 읽기 · 미채택)
+
+| # | 위험 | 근거 | 제안 |
+| --- | --- | --- | --- |
+| 1 | **다중 인스턴스 이중 실행** — 둘째 프로세스가 첫째의 실행 중 항목을 "미완"으로 보고 재개 | 앱에 단일 인스턴스 장치를 찾지 못함(grep 기준) | 소유 표시(pid + 생존 확인 또는 파일 잠금) |
+| 2 | **저장본 경로 손상** — UTF-8이 아닌 경로가 재개 때 다른 경로가 됨 | `spec.rs` `to_string_lossy`(202 · 214 · 248) | 인코딩 추가 또는 해당 항목 복원 제외 |
+| 3 | **바쁨 판정이 큐를 모름** — 두 작업 사이 `transfer` = None · T4 `ops.wait` 조기 종료 · 압축/비교 동기 끼어듦 | `transfer.is_some()` = dnd · extract · zip · compare · watch · statusline · startup_cmd · `ops.rs:256` | "실행 중"과 "큐 비어 있지 않음"을 나눠 호출부별 선택 · 머리 작업은 `extract_job`/`sync_job` 끝까지 대기 · DnD 처리 결정 |
+| 4 | **undo 자료** — Report `dest`는 사전 계획값 · 지금 undo는 실제 결과 | `lib.rs:289` `dests.get(i)` · `ops.rs:537~543` `out.transferred` | `run_with`가 `Outcome.transferred`도 반환 |
+| 5 | **재개 시 반쯤 복사된 항목** — 저널이 최상위 항목 단위 · "건너뜀"이면 불완전한 사본이 정상처럼 남음 | §4 `journal` | 재개 항목 질문 문구 구분 · 끝에 불완전 안내 |
+| 6 | **상태 · 위치** — `Failed` 파일 처리 없음 · 저장 위치 · `cut`이 `spec.op`와 겹침 · 대기 중 원본/대상 변경 | §12.2 · DR-9 | `Failed` 규칙 정의 · **설정 폴더/queue** · `cut` 용도 명시 · 실행 차례에 재검사 |
+| 7 | **쓰지 않는 키** — 워커 1개인데 `transfer.queue_parallel` | §12.3 · §12.5 | 병렬을 만들 때 추가 |
