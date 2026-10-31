@@ -178,7 +178,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   stdin 한 줄 · y/n · a/s = 남은 전부 · c = 취소(130 · 이후 항목 손대지 않음) · 빈 줄/EOF/모르는 답 = 건너뜀 · 정책(`--overwrite`)보다 우선 · dry-run은
   건너뜀으로 봄 · 프롬프트는 진행 출력과 다른 핸들(실제 stderr). 시험 `ask_conflict_maps_answers`(T1) · `ask_prompts_on_conflicts_and_honors_answers`(프로세스 ·
   stdin 파이프).
-- **`--job` · `--progress` ✅ 10-31**(T-97 · 6b1a22d): `--job <file.json>` = `ndir-xfer` JobSpec(13키 · 인자 혼용 금지 · `--ask` 불가) · `--progress` = stdout에 진행 JSON 줄(단계 변화 또는 100 ms) + 마지막 Report JSON · 간단 인자도 내부에서 JobSpec을 만들어 같은 `run`으로(한 길) · 설계 = [26](26-xfer-design.md).
+- **`--job` · `--progress` ✅ 10-31**(T-97 · 6b1a22d): `--job <file.json>` = `ndir-xfer` JobSpec(13키 · 인자 혼용 금지 · `--ask` 불가) · `--progress` = stdout에 진행 JSON 줄(단계 변화 또는 100 ms) + 마지막 Report JSON · 간단 인자도 내부에서 JobSpec을 만들어 같은 `run`으로(한 길) · 설계 = [26](26-xfer-design.md). **`--report <file>` ✅ 10-31 ed45954**(결과 Report JSON 파일 · `--progress` 무관 · `--ask` 불가) · `--job` 안 상대 경로 = 잡 파일 폴더 기준(사용자 결정 · docs/26 §11).
 - **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
   포터블 zip · `release.yml` — 채널 결정) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
   복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).

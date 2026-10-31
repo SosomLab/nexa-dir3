@@ -1,7 +1,7 @@
 # 26. 대량 전송 엔진 설계 — `ndir-xfer` · `nexa-copy` · (후) cdylib
 
 > T-97 · DR-17(대량 전송 엔진 내장) · DR-34 ①⑦(10-31 사용자 결정) · 원장 NEW-006 · NEW-007. 앞 문서 = [24 빠른 복사](24-fast-copy.md)(§6 전략 계층 · §7 `nexa-copy` 1차).
-> 상태: **10-31 협업 작성 · §4~§6 = `crates/ndir-xfer` 코드에 맞춤**(6b1a22d · spec.rs · report.rs · lib.rs · 시험 8/0 · nexa-copy `job_and_progress_paths`). §11 결정 거리는 사용자 답 대기.
+> 상태: **10-31 협업 작성 · §4~§6 = `crates/ndir-xfer` 코드에 맞춤**(6b1a22d · spec.rs · report.rs · lib.rs · 시험 8/0 · nexa-copy `job_and_progress_paths`). §11 = 사용자 결정 반영(10-31).
 
 ## 1. 목적과 범위
 
@@ -62,8 +62,8 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | 필드(JSON 키 = Rust 필드 · snake_case) | 타입 · 값 | 기본 | CLI 대응 | 규칙 |
 | --- | --- | --- | --- | --- |
 | `op` | `Op` — `copy` \| `move` | `copy` | `--move` | 미러는 `op`가 아니라 `mirror` 불 |
-| `sources` | `Vec<PathBuf>` | — | `<source>...` | 비면 `validate` 오류 · 미러면 1개 |
-| `dest` | `PathBuf` | — | `<destination-folder>` | 미러 안전장치 `mirror::dangerous_dest`(드라이브 루트 · 홈 · 원본과 겹침 = 거부) |
+| `sources` | `Vec<PathBuf>` | — | `<source>...` | 비면 `validate` 오류 · 미러면 1개 · 상대 경로 = **잡 파일이 있는 폴더 기준**(§11 ①) |
+| `dest` | `PathBuf` | — | `<destination-folder>` · 상대 경로 = 잡 파일 폴더 기준 | 미러 안전장치 `mirror::dangerous_dest`(드라이브 루트 · 홈 · 원본과 겹침 = 거부) |
 | `conflict` | `ConflictPolicy` — `skip` \| `overwrite` | `skip` | `--overwrite` | `ask`는 명세에 없다(대화형은 CLI `--ask`만 · `ConflictPolicy::resolve` → 엔진 `Conflict`) |
 | `threads` | `usize`(0 = 자동 · 최대 16) | 0 | `--threads` | |
 | `native` | `bool` | true | `--no-native` | |
@@ -111,7 +111,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 
 - `to_json()` = Report JSON · `exit_code() -> u8` = **취소 130 · 실패/불일치/오류 1 · 그 밖 0**(nexa-copy와 같다). 인자 오류 2는 CLI 해석 단계 몫(라이브러리는 0/1/130).
 - 함수 전체: `run(&JobSpec, &mut dyn FnMut(&Progress), &AtomicBool) -> Report` · `validate` · 모듈 `verify::verify_pairs`(nexa-copy에서 이동 · `VerifyReport{files, bytes, failures}`) · `mirror::{mirror_plan, dangerous_dest, apply_mirror(→ MirrorOutcome{failed, deleted, delete_failed, canceled}), home_dir, normalize_sep}`.
-- `nexa-copy --report <file>`(결과 JSON을 파일로)은 결정 거리(§11).
+- `nexa-copy --report <file>` = 끝에 Report JSON을 그 파일에 쓴다(§11 ③ · 사용자 결정 10-31 · ed45954 · `--ask` 불가 · 쓰기 실패 = 안내만).
 
 ## 7. cdylib(후속 · 이번 회차 아님)
 
@@ -147,9 +147,9 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | 미러 | 없음 | 변경 1 % · 10 % 트리에서 비교 + 적용 시간 |
 | 회귀선 | docs/25 규칙(벤치 +20 %) | 위 항목을 `perf-baseline` 기준선 파일에 추가 |
 
-## 11. 결정 거리(사용자)
+## 11. 결정(사용자 10-31 · 개발 세션 질문 → 답)
 
-1. JobSpec 상대 경로 기준 — **잡 파일 위치(추천)** vs 작업 디렉터리.
-2. `--progress` 출력 자리 — **stdout(추천 · 사람용 진행은 stderr 유지)** vs 별도 파일 `--progress-file`.
-3. `--report <file>` 추가 여부(추천 = 추가 · dry-run 기계용 판).
-4. cdylib 진입 함수 이름 — `ndir_xfer_run`(개발 제안) · 동봉 채널.
+1. JobSpec 상대 경로 기준 = **잡 파일이 있는 폴더**(작업 디렉터리 아님 — 저장한 잡을 어디서 실행해도 같은 자리) · 구현 ✅ ed45954 `JobSpec::resolved_against(base)`(절대 경로는 그대로) · `nexa-copy --job`이 잡 파일의 부모로 푼다.
+2. `--progress` 출력 자리 = **stdout**(현행 유지 · 사람용 진행은 stderr).
+3. **`--report <file>` 추가** — 끝에 Report JSON(§6)을 그 파일에 쓴다(dry-run 기계용 보고서 포함) · 구현 ✅ ed45954 — `--progress` 유무와 무관 · 간단 인자에서도 ndir-xfer 경로 · `--ask`와 함께 못 씀 · 쓰기 실패는 안내만(종료 코드 불변).
+4. cdylib = 진입 **`ndir_xfer_run`** · **패키지에 동봉** — 다음 회차(T-202 ①).
