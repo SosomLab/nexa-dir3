@@ -78,7 +78,12 @@ step "matrix-audit --check" "$ROOT" python scripts/matrix-audit.py --check
 step "coverage-files --check" "$ROOT" python scripts/coverage-files.py --check
 step "qa-checklist --check" "$ROOT" python scripts/qa-checklist.py --check
 if [[ $QUICK -eq 0 ]]; then
-    step "ndir-check --ci" "$ROOT" cargo run -q -p ndir-check -- --ci
+    # T4 화면 격리(T-137): Linux + xvfb-run = 가상 X 화면 · `env -u WAYLAND_DISPLAY`는 보조 프로세스용 예방 조치(gate.sh와 같은 규칙 · 메인 창은 DISPLAY 있으면 X11 강제).
+    if [[ "$(uname -s)" == Linux && -z "${NDIR_GATE_NO_XVFB:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
+        step "ndir-check --ci (xvfb)" "$ROOT" xvfb-run -a -s "-screen 0 1280x900x24" env -u WAYLAND_DISPLAY cargo run -q -p ndir-check -- --ci
+    else
+        step "ndir-check --ci" "$ROOT" cargo run -q -p ndir-check -- --ci
+    fi
 fi
 
 END_ALL=$(date +%s)

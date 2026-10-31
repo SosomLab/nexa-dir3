@@ -97,14 +97,26 @@ T="$(echo "$OUT" | grep -E '^test result' | awk '{p+=$4;f+=$6} END{print p+0" "f
 echo "  ✓ 시험(전체) — 통과/실패 $T"
 SM="$(cargo run -q -p nexa-dir -- --smoke 2>&1 | tail -1)"; [[ "$SM" == "smoke ok"* ]] || fail "smoke: $SM"; echo "  ✓ $SM"
 SC="$(cargo run -q -p nexa-dir -- --selfcheck --ci 2>&1 | tail -1)"; [[ "$SC" == *"fail 0"* ]] || fail "selfcheck: $SC"; echo "  ✓ selfcheck $SC"
-T4="$(cargo run -q -p ndir-check -- --ci 2>&1 | grep -E '^FAIL|scenario')"
+# T4 화면 격리(T-137 · 10-31 사용자 Xvfb 설치): Linux에 xvfb-run이 있으면 가상 X 화면(:99 자동 할당)에서 돌린다 — 시나리오 창이 사용자
+#   데스크톱에 뜨지 않는다(실측 43/0 · 24초). 앱은 DISPLAY가 있으면 X11 백엔드를 강제하므로(main.rs `with_x11` · 협업 xwininfo 실측) 메인 창은
+#   WAYLAND_DISPLAY와 무관하게 Xvfb에 뜬다 — `env -u WAYLAND_DISPLAY`는 시나리오가 띄우는 보조 프로세스가 Wayland를 보지 않게 하는
+#   **예방 조치**(관찰된 결함 아님 · 무해). NDIR_GATE_NO_XVFB=1 = 끔(실제 화면에서 보고 싶을 때). Windows(대체 데스크톱 CreateDesktop) ·
+#   macOS(오프스크린/비표시 창 · Cocoa는 WindowServer 필수라 Xvfb 상당 없음)는 그 PC 회차에서 실측 뒤 적용(TODO T-137).
+if [[ "$(uname -s)" == Linux && -z "${NDIR_GATE_NO_XVFB:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
+    T4_HOW="(xvfb) "
+    T4_CMD=(xvfb-run -a -s "-screen 0 1280x900x24" env -u WAYLAND_DISPLAY cargo run -q -p ndir-check -- --ci)
+else
+    T4_HOW=""
+    T4_CMD=(cargo run -q -p ndir-check -- --ci)
+fi
+T4="$("${T4_CMD[@]}" 2>&1 | grep -E '^FAIL|scenario')"
 # Windows 전제 시나리오 3개는 다른 OS에서 실패가 기준선이다(T-117).
 # 알려진 실패 기준선(T-117): Windows · macOS = 없음(이 Mac gate 4~11차 T4 38/0 · MacMenu 뒤 ctx-menu `check@unix`도 맞음 · 10-31) ·
 # Linux = Windows 전제 2개(ctx-menu · selfcheck-win). `launcher`는 10-31 배율 무관 검사로 3-OS 통과.
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) KNOWN='^$';; *) KNOWN='^FAIL (ctx-menu|selfcheck-win) ';; esac
 BAD="$(echo "$T4" | grep '^FAIL' | grep -vE "$KNOWN")"
 [[ -z "$BAD" ]] || { echo "$T4"; fail "T4 시나리오"; }
-echo "  ✓ T4 — $(echo "$T4" | tail -1)"
+echo "  ✓ T4 $T4_HOW$(echo "$T4" | tail -1)"
 mkdir -p "$(dirname "$REC")"
 echo "$(date +%s) $(git rev-parse HEAD) $(sib nexa-ui) $(sib nexa-license)" > "$REC"
 echo "★ GATE OK(full) — 전수 기록 갱신($REC)"
