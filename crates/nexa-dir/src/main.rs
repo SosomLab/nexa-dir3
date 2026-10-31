@@ -296,10 +296,6 @@ struct App {
     panel_toasts: [toast::Toasts; 2],
     started: Instant,
     main_active: bool,
-    /// 포커스 진실 **폴링**(T-199 · 11-01 Linux 실기: 창 전환(특히 Alt+Tab)에서 `Focused`가 오지 않는 경우 관찰 · 이유 미확정) — 두 투명도
-    /// 값이 다르고 X11 창일 때만 `TRANSPARENCY_POLL_MS`마다 실제 활성 창을 보고 다르면 `on_focus_change` · X11 아니면 첫 조회가 None → 끔.
-    transparency_poll_on: bool,
-    transparency_poll_at: Instant,
     pending_chord: Option<Chord>,
     pressed: Option<Area>,
     /// 더블클릭 합성(winit은 더블클릭 사건이 없다 · dir2 Win32 `WM_LBUTTONDBLCLK` 대응): 마지막 좌클릭 시각·자리.
@@ -787,8 +783,6 @@ impl App {
             ctrl_mac: false,
             started: Instant::now(),
             main_active: true,
-            transparency_poll_on: false,
-            transparency_poll_at: Instant::now(),
             pending_chord: None,
             pressed: None,
             last_click: None,

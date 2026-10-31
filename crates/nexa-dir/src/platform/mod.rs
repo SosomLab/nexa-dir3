@@ -2550,126 +2550,77 @@ pub(crate) fn apply_window_opacity_pct(
     }
 }
 
-/// 메인 창이 **지금** 입력 포커스를 가진 창인가 — X 서버의 진실(루트 `_NET_ACTIVE_WINDOW` · 없으면 `GetInputFocus`)로. X11이 아니면
-/// (Wayland 네이티브 · 다른 OS) `None`. 포커스 진실 폴링(T-199 · 11-01 Linux 실기: 창 전환에서 `Focused`가 오지 않는 경우 관찰)에 쓴다.
-pub(crate) fn window_has_focus(w: &winit::window::Window) -> Option<bool> {
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let id = crate::winfocus::x11_window_id(w)?;
-        x11_window_focused(id).ok()
-    }
-    #[cfg(not(all(unix, not(target_os = "macos"))))]
-    {
-        let _ = w;
-        None
-    }
+/// X11 `_NET_WM_WINDOW_OPACITY`(CARDINAL · 0xFFFFFFFF = 불투명 · 불투명이면 속성을 지운다) — **지속 연결 + 동기 확인**(`check()` 왕복).
+/// 11-01 Linux 실기(GNOME 50.1 · XWayland)로 확정한 결함: 종전엔 매번 새 연결을 열어 쓰고 flush 직후 닫았는데, 연결 종료가 버퍼의 요청 처리와
+/// 경합해 쓰기가 가끔 **버려졌다**(상태는 맞는데 투명도만 틀린 채 유지 · Alt+Tab처럼 빠른 전환에서 잦음). 같은 연결에서 응답을 기다린 뒤에는
+/// 36/36 반영(계측 빌드 실측) → 연결을 하나 열어 두고 요청마다 `check()`로 처리를 확인한다.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn x11_set_opacity(win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
+    x11_link::set_opacity(win, alpha)
 }
 
+/// X11 보조 연결(투명도 속성 쓰기 · T-199): 프로세스에 하나 · 처음 쓸 때 연다 · 요청이 실패하면(X 재시작 · 끊김) 버리고 다음에 다시 연다 ·
+/// 열 수 없으면(X 없음 · Wayland 네이티브) 오류. root 이벤트 구독 없음(소비하지 않는 이벤트가 큐에 쌓이지 않게 · 협업 지적 11-01).
 #[cfg(all(unix, not(target_os = "macos")))]
-fn x11_window_focused(win: u32) -> Result<bool, Box<dyn std::error::Error>> {
-    x11_active::active_window()
-        .map(|a| a == win)
-        .ok_or_else(|| "no X11 connection".into())
-}
-
-/// 활성 X 창 조회(T-199 폴링 · 11-01): 연결 하나를 열어 두고 루트에 PropertyNotify를 구독 → 폴링은 비차단 `poll_for_event`만(X 왕복 없음) ·
-/// `_NET_ACTIVE_WINDOW`가 바뀐 통지가 왔을 때만 다시 읽는다(없거나 0이면 `GetInputFocus`). 연결에 실패하면(X 없음 · Wayland 네이티브) None —
-/// 호출자가 폴링을 끈다. 11-01 실측: XWayland에서 `_NET_ACTIVE_WINDOW`는 클릭 · Alt+Tab마다 즉시 바뀌고(진실 소스로 적합) Wayland 창이
-/// 활성이면 WM_CLASS 없는 대리 창 id가 된다(= 우리 창 아님 → 비활성 · 맞다).
-#[cfg(all(unix, not(target_os = "macos")))]
-mod x11_active {
-    use std::sync::{Mutex, OnceLock};
-    use x11rb::connection::Connection;
-    use x11rb::protocol::xproto::{AtomEnum, ChangeWindowAttributesAux, ConnectionExt, EventMask};
-    use x11rb::protocol::Event;
+mod x11_link {
+    use std::sync::Mutex;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, PropMode};
     use x11rb::rust_connection::RustConnection;
+    use x11rb::wrapper::ConnectionExt as _;
 
     struct Link {
         conn: RustConnection,
-        root: u32,
-        atom: u32,
-        /// 마지막으로 읽은 활성 창 — 통지가 오기 전까지 그대로 돌려준다.
-        cached: Option<u32>,
+        opacity: u32,
     }
 
-    static LINK: OnceLock<Option<Mutex<Link>>> = OnceLock::new();
+    static LINK: Mutex<Option<Link>> = Mutex::new(None);
 
-    fn link() -> Option<&'static Mutex<Link>> {
-        LINK.get_or_init(|| {
-            let (conn, screen) = x11rb::connect(None).ok()?;
-            let root = conn.setup().roots[screen].root;
-            let atom = conn
-                .intern_atom(false, b"_NET_ACTIVE_WINDOW")
-                .ok()?
-                .reply()
-                .ok()?
-                .atom;
-            conn.change_window_attributes(
-                root,
-                &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
-            )
-            .ok()?
-            .check()
-            .ok()?;
-            Some(Mutex::new(Link {
-                conn,
-                root,
-                atom,
-                cached: None,
-            }))
-        })
-        .as_ref()
+    fn open() -> Result<Link, Box<dyn std::error::Error>> {
+        let (conn, _) = x11rb::connect(None)?;
+        let opacity = conn
+            .intern_atom(false, b"_NET_WM_WINDOW_OPACITY")?
+            .reply()?
+            .atom;
+        Ok(Link { conn, opacity })
     }
 
-    fn read(l: &Link) -> Option<u32> {
-        let active = l
-            .conn
-            .get_property(false, l.root, l.atom, AtomEnum::WINDOW, 0, 1)
-            .ok()?
-            .reply()
-            .ok()
-            .and_then(|r| r.value32().and_then(|mut v| v.next()));
-        match active {
-            Some(a) if a != 0 => Some(a),
-            _ => l.conn.get_input_focus().ok()?.reply().ok().map(|r| r.focus),
+    fn write(l: &Link, win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
+        if alpha == 255 {
+            l.conn.delete_property(win, l.opacity)?.check()?;
+        } else {
+            let v = u32::from(alpha) * 0x0101_0101;
+            l.conn
+                .change_property32(PropMode::REPLACE, win, l.opacity, AtomEnum::CARDINAL, &[v])?
+                .check()?;
         }
+        // 진단(`NDIR_TRACE_IME=1`): 되읽어 확인 — 11-01 원인 판정에 쓴 줄 · 유지.
+        if crate::input::trace_ime() {
+            let back = l
+                .conn
+                .get_property(false, win, l.opacity, AtomEnum::CARDINAL, 0, 1)?
+                .reply()?
+                .value32()
+                .and_then(|mut v| v.next());
+            eprintln!("[focus] x11 opacity write alpha={alpha} readback={back:?}");
+        }
+        Ok(())
     }
 
-    pub(super) fn active_window() -> Option<u32> {
-        let mut l = link()?.lock().ok()?;
-        // 쌓인 통지를 비우며 우리 속성이 바뀌었는지만 본다(비차단 · 왕복 없음).
-        let mut changed = l.cached.is_none();
-        while let Ok(Some(ev)) = l.conn.poll_for_event() {
-            match ev {
-                Event::PropertyNotify(n) if n.atom == l.atom => changed = true,
-                Event::Error(_) => changed = true,
-                _ => {}
+    pub(super) fn set_opacity(win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
+        let mut guard = LINK.lock().map_err(|_| "X11 link poisoned")?;
+        if guard.is_none() {
+            *guard = Some(open()?);
+        }
+        let Some(l) = guard.as_ref() else {
+            return Err("no X11 connection".into());
+        };
+        match write(l, win, alpha) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // 끊긴 연결은 버린다 — 다음 호출이 다시 연다(X 재시작 · 소켓 오류).
+                *guard = None;
+                Err(e)
             }
         }
-        if changed {
-            l.cached = read(&l);
-        }
-        l.cached
     }
-}
-
-/// X11 `_NET_WM_WINDOW_OPACITY`(CARDINAL · 0xFFFFFFFF = 불투명 · 불투명이면 속성을 지운다). 자체 연결 한 번 · 짧게 쓰고 닫는다.
-#[cfg(all(unix, not(target_os = "macos")))]
-fn x11_set_opacity(win: u32, alpha: u8) -> Result<(), Box<dyn std::error::Error>> {
-    use x11rb::connection::Connection;
-    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, PropMode};
-    use x11rb::wrapper::ConnectionExt as _;
-    let (conn, _) = x11rb::connect(None)?;
-    let atom = conn
-        .intern_atom(false, b"_NET_WM_WINDOW_OPACITY")?
-        .reply()?
-        .atom;
-    if alpha == 255 {
-        conn.delete_property(win, atom)?;
-    } else {
-        let v = u32::from(alpha) * 0x0101_0101;
-        conn.change_property32(PropMode::REPLACE, win, atom, AtomEnum::CARDINAL, &[v])?;
-    }
-    conn.flush()?;
-    Ok(())
 }

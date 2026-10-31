@@ -6,12 +6,6 @@
 
 use crate::*;
 
-/// 포커스 전환(`Focused`) 뒤 다음 포커스 조회까지의 간격(ms · T-199 · 10-31) — 창 관리자가 `_NET_ACTIVE_WINDOW`를 갱신할 시간.
-pub(crate) const TRANSPARENCY_RECHECK_MS: u64 = 150;
-/// 포커스 진실 폴링 간격(ms · T-199 · 11-01 Linux 실기): 창 전환에서 `Focused`가 오지 않는 경우(관찰 · 이유 미확정)를 메운다 — 두 투명도 값이
-/// 다를 때만 돈다 · X 왕복은 PropertyNotify로 바뀐 때만(`platform::x11_active`).
-pub(crate) const TRANSPARENCY_POLL_MS: u64 = 250;
-
 /// 바꾸면 다시 시작해야 반영되는 키(의도된 목록 — 그 밖의 `false`는 누락).
 pub(crate) const NEEDS_RESTART: &[&str] = &["ui.font_face"];
 
@@ -336,7 +330,6 @@ impl App {
     /// 창 투명도(T-102 · NEW-013) — 유효값(성능 향상 모드 = 0)을 기억하고 메인 창 · 설정 창에 즉시 적용 · 다른 보조 창은 다음에 열 때.
     /// 돌려주는 값 = 적용한 투명도(%) — 시험은 전역 값 대신 이것을 본다(병렬 시험이 전역을 같이 쓴다).
     pub(crate) fn apply_transparency(&mut self) -> u8 {
-        // (재확인 간격은 `TRANSPARENCY_RECHECK_MS` · event_loop `Focused` → `about_to_wait` 틱.)
         let focused = self
             .settings
             .int("window.transparency")
@@ -350,10 +343,16 @@ impl App {
         platform::set_opacity_pct(focused);
         let main_pct = if self.main_active { focused } else { blur };
         if let Some(w) = &self.window {
-            let _ = platform::apply_window_opacity_pct(w, main_pct);
+            let r = platform::apply_window_opacity_pct(w, main_pct);
+            // 진단(`NDIR_TRACE_IME=1` · 11-01 Linux 실기 — 쓰기 유실 원인 확정에 쓴 줄 · 유지): 적용값 · 결과.
+            if crate::input::trace_ime() {
+                eprintln!(
+                    "[focus] apply pct={main_pct} active={} result={:?}",
+                    self.main_active,
+                    r.as_ref().err()
+                );
+            }
         }
-        // 포커스 진실 폴링(11-01): 두 값이 다르고 창이 있을 때만(같으면 포커스를 알 필요가 없다 · 성능 향상 모드 = 둘 다 0 → 끔).
-        self.transparency_poll_on = self.window.is_some() && focused != blur;
         if let Some(w) = self.prefs_win.window() {
             let _ = platform::apply_window_opacity(w);
         }

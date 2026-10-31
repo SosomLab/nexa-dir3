@@ -384,32 +384,6 @@ impl ApplicationHandler<Wake> for App {
         if self.flash.tick(now) {
             self.redraw();
         }
-        // 포커스 진실 폴링(T-199 · 11-01 Linux 실기 · GNOME 50 Wayland/XWayland): 창 전환(특히 Alt+Tab)에서 `Focused`가 **오지 않는 경우가
-        // 관찰됨**(루트 `_NET_ACTIVE_WINDOW`는 즉시 바뀌는데 우리 속성은 그대로 · 이유 미확정 — winit 0.30.13에 그랩 필터는 없음 · 협업 확인) →
-        // 투명도 두 값이 다를 때만 `TRANSPARENCY_POLL_MS`마다 실제 활성 창을 보고(PropertyNotify 구독 · 바뀐 때만 X 왕복) 추적값과 다르면
-        // `Focused`와 **같은 처리**(`on_focus_change` — 투명도 · 메뉴 닫기 · git/테마/시각 갱신). X11이 아니면 첫 조회가 None → 끔 · 두 값이
-        // 같아지면(성능 향상 모드 포함) `apply_transparency`가 끈다.
-        if self.transparency_poll_on {
-            if now >= self.transparency_poll_at {
-                match self
-                    .window
-                    .as_ref()
-                    .and_then(|w| platform::window_has_focus(w))
-                {
-                    Some(actual) => {
-                        if actual != self.main_active {
-                            self.on_focus_change(actual);
-                        }
-                        self.transparency_poll_at =
-                            now + Duration::from_millis(app::settings::TRANSPARENCY_POLL_MS);
-                    }
-                    None => self.transparency_poll_on = false,
-                }
-            }
-            if self.transparency_poll_on {
-                next = next.min(self.transparency_poll_at);
-            }
-        }
         if let Some(t) = self.aux_next_wake() {
             next = next.min(t);
         }
@@ -631,16 +605,14 @@ impl ApplicationHandler<Wake> for App {
 }
 
 impl App {
-    /// 메인 창 포커스 전환 처리 — winit `Focused`와 포커스 진실 폴링(`about_to_wait` · T-199 · 11-01)이 **같은 길**을 탄다:
+    /// 메인 창 포커스 전환 처리(winit `Focused` · 한 함수로 — 11-01 T-199 진단 때 뺐다 · `NDIR_TRACE_IME=1`이면 `[focus]` 로그):
     /// 투명도 · 드래그 취소 · 메뉴 닫기(T-192) · 잘라낸 표시 동기 · git 갱신 · OS 테마 · 시각 캐시 · 휠 줄 수 · 포인터 · 다시 그리기.
     pub(crate) fn on_focus_change(&mut self, on: bool) {
+        if self.trace_ime {
+            eprintln!("[focus] change on={on} was={}", self.main_active);
+        }
         self.main_active = on;
         self.apply_transparency(); // 포커스별 투명도(T-199): 떠나면 blur 값 · 돌아오면 포커스 값
-                                   // 잠시 뒤 실제 활성 창으로 한 번 더(11-01 · 폴링 중이면 다음 조회를 앞당긴다 — 이벤트와 진실이 어긋난 채 남지 않게).
-        if self.transparency_poll_on {
-            self.transparency_poll_at =
-                Instant::now() + Duration::from_millis(app::settings::TRANSPARENCY_RECHECK_MS);
-        }
         if !on {
             // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
             // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안
