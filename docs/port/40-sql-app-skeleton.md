@@ -226,7 +226,7 @@
 | ID | 요소 | nexa-sql 구현 방식 | 위치 | dir3 적용 방법 |
 | --- | --- | --- | --- | --- |
 | SKEL-121 | `Presenter` 한 곳 | 모든 창이 `present::Presenter`로 픽셀을 낸다(창 코드에 `softbuffer::Context/Surface` 직접 금지) · 모양 = `resize` → `buffer_mut` → 그림 → `Buffer::present` · `Buffer`는 `Deref<[u32]>`(`0x00RRGGBB`) | `S/present.rs:30-143` · `D/61-core-design-and-working-rules.md:172` | 그대로 · 승격 후보 |
-| SKEL-122 | 뒷단 선택 | 기본 softbuffer · macOS + 설정 `gfx.mac_present = iosurface`면 `nexa_sys::layer_present::LayerPresenter`(실패 = 조용히 softbuffer) · 순수 판정 `use_layer` + MC/DC · 방식은 **창을 만들 때** 고정 | `S/present.rs:17-28` · `55-72` · `145-157` · `159-169` · `S/main.rs:1923-1924` | 그대로 |
+| SKEL-122 | 뒷단 선택 | 기본 softbuffer · macOS + 설정 `gfx.mac_present = iosurface`면 `nexa_sys::layer_present::LayerPresenter`(실패 = 조용히 softbuffer) · 순수 판정 `use_layer` + MC/DC · 방식은 **창을 만들 때** 고정 | `S/present.rs:17-28` · `55-72` · `145-157` · `159-169` · `S/main.rs:1923-1924` | 그대로 · **10-31 적용**(74c5da6 · dir3 main.rs 첫 창 전 `present::set_mode` · 설정 `gfx.mac_present` 고급 · 기본 iosurface · 종전 미호출이라 softbuffer만) |
 | SKEL-123 | 앱 활성 판정 | `nexa_sys::layer_present::app_active()`(mac `NSApplication.isActive` · 그 밖 `None`) — 뒤에 있으면 깜빡임 그리기 생략 | `S/app/event_loop.rs:220-226` · `S/app/paint.rs:52-55` · `U/nexa-sys/src/layer_present.rs:49` | 그대로 |
 
 ### 1-11. 워커 스레드 · 통지
@@ -360,7 +360,7 @@ crates/nexa-sql/
 | SKEL-204 | 모달 중 다른 창 차단 | `EnableWindow(FALSE)` | 사건 가드 + `setMovable(false)`(이동 잠금) | 사건 가드만 | `S/winfocus.rs:53-79` · `S/app/event_loop.rs:604-627` | 그대로 |
 | SKEL-205 | 그룹 올리기 | `SetWindowPos(HWND_TOP, NOSIZE|NOMOVE|NOACTIVATE)` | `orderFront:` | no-op(WM 정책) | `S/winfocus.rs:124-173` | 그대로 |
 | SKEL-206 | 창·작업표시줄 아이콘 | 창 아이콘 32 + `with_taskbar_icon(64)` + exe 리소스 `.ico` | 창 아이콘 무시 → `NSApplication.setApplicationIconImage`(첫 `resumed`에서 · 256px) | X11 = 창 아이콘 · Wayland = `app_id`와 같은 이름의 `.desktop`의 `Icon=` · `with_name("nexa-sql","nexa-sql")` | `S/icon.rs:8-12` · `157-253` · `S/app/event_loop.rs:12-14` | 개명(`nexa-dir` app_id — dir2 값 확인) |
-| SKEL-207 | present 뒷단 | softbuffer | softbuffer 또는 IOSurface(`gfx.mac_present`) | softbuffer | `S/present.rs:57-72` | 그대로 |
+| SKEL-207 | present 뒷단 | softbuffer | softbuffer 또는 IOSurface(`gfx.mac_present`) | softbuffer | `S/present.rs:57-72` | 그대로 · 10-31 dir3 기본 = **iosurface**(macOS · 74c5da6 · Q-8) |
 | SKEL-208 | 앱 활성 판정 | `None`(창 포커스로만) | `NSApplication.isActive` | `None` | `S/app/event_loop.rs:223` | 그대로 |
 | SKEL-209 | OS 다크/라이트 조회 | 레지스트리 `HKCU\…\Themes\Personalize\AppsUseLightTheme`(advapi32 FFI) | `defaults read -g AppleInterfaceStyle` | `gsettings get org.gnome.desktop.interface color-scheme` | `S/theme.rs:46-158` | 그대로 |
 | SKEL-210 | 클립보드 텍스트 | user32/kernel32 FFI | `pbcopy`/`pbpaste` | X11 selection 직접 → CLI 폴백 | `S/clipboard.rs:52-299` · `S/clipboard_x11.rs` | 그대로 + 파일 형식 추가 |

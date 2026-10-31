@@ -4,6 +4,7 @@
 
 ## 2026-10-31
 
+- **74c5da6 macOS present IOSurface 기본**(`gfx.mac_present` · present 24.3 → 1.2 ms · Q-8 재검토) · **ba99d38 NFD 이름 필터·타입어헤드 NFC 비교** · 유휴 redraw 원인 = 상태바 표식 깜빡임 + macOS 부분 그리기 불가(softbuffer CG age 0 · 협업 계측) → [10-31 §15](journal/2026-10-31.md)
 - **e47ee38 macOS 저장 장치 판정**(IOKit Medium Type · SSD = 자동 8 · docs/24 §6 ✅) · **selfcheck 실제 점검 4그룹**(pty 8f9b44b · fonts 121c6b4 · preview 22f57d7 · archive 8b7bd7c · pass 20 → 30 · pty 3-OS CI ✓) → [10-31 §14](journal/2026-10-31.md)
 
 - **b2b962d macOS 자동화**(CI macOS T4 단계 · gate KNOWN Darwin = 없음 · ctx-menu check@macos · 번들 T4 2 · status-load) · **CI macOS 러너 T4 첫 실행 41/0** · Windows 회복(57ffbfe CI ✓) → [10-31 §13](journal/2026-10-31.md)
