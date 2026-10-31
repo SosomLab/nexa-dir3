@@ -384,13 +384,30 @@ impl ApplicationHandler<Wake> for App {
         if self.flash.tick(now) {
             self.redraw();
         }
-        // 포커스 전환 뒤 투명도 재확인(T-199 · 10-31): 마감이 지났으면 실제 포커스로 다시 적용 · 아니면 그때 깬다.
-        if let Some(t) = self.transparency_recheck_at {
-            if now >= t {
-                self.transparency_recheck_at = None;
-                self.recheck_transparency();
-            } else {
-                next = next.min(t);
+        // 포커스 진실 폴링(T-199 · 11-01 Linux 실기 · GNOME 50 Wayland/XWayland): 창 전환(특히 Alt+Tab)에서 `Focused`가 **오지 않는 경우가
+        // 관찰됨**(루트 `_NET_ACTIVE_WINDOW`는 즉시 바뀌는데 우리 속성은 그대로 · 이유 미확정 — winit 0.30.13에 그랩 필터는 없음 · 협업 확인) →
+        // 투명도 두 값이 다를 때만 `TRANSPARENCY_POLL_MS`마다 실제 활성 창을 보고(PropertyNotify 구독 · 바뀐 때만 X 왕복) 추적값과 다르면
+        // `Focused`와 **같은 처리**(`on_focus_change` — 투명도 · 메뉴 닫기 · git/테마/시각 갱신). X11이 아니면 첫 조회가 None → 끔 · 두 값이
+        // 같아지면(성능 향상 모드 포함) `apply_transparency`가 끈다.
+        if self.transparency_poll_on {
+            if now >= self.transparency_poll_at {
+                match self
+                    .window
+                    .as_ref()
+                    .and_then(|w| platform::window_has_focus(w))
+                {
+                    Some(actual) => {
+                        if actual != self.main_active {
+                            self.on_focus_change(actual);
+                        }
+                        self.transparency_poll_at =
+                            now + Duration::from_millis(app::settings::TRANSPARENCY_POLL_MS);
+                    }
+                    None => self.transparency_poll_on = false,
+                }
+            }
+            if self.transparency_poll_on {
+                next = next.min(self.transparency_poll_at);
             }
         }
         if let Some(t) = self.aux_next_wake() {
@@ -448,41 +465,7 @@ impl ApplicationHandler<Wake> for App {
                 self.persist_window();
                 el.exit();
             }
-            WindowEvent::Focused(on) => {
-                self.main_active = *on;
-                self.apply_transparency(); // 포커스별 투명도(T-199): 떠나면 blur 값 · 돌아오면 포커스 값
-                                           // 잠시 뒤 X 서버의 실제 활성 창으로 한 번 더(10-31 Linux 실기 · 간헐 불투명 · `recheck_transparency`).
-                self.transparency_recheck_at = Some(
-                    Instant::now() + Duration::from_millis(app::settings::TRANSPARENCY_RECHECK_MS),
-                );
-                if !*on {
-                    // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
-                    // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안
-                    // 끊기면 안 된다(10-10 xdnd-send 흔들림 · Windows처럼 Alt-Tab 중에도 드래그 유지).
-                    if self.xdnd.is_none() {
-                        self.dnd_internal_cancel();
-                    }
-                    // 다른 창으로 가면 열린 메뉴를 닫는다(T-192 · `ui.menus_close_on_blur` 끔 = 유지) — 아래 `redraw`가 전체를 그린다.
-                    self.menus_on_blur();
-                }
-                if *on {
-                    // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
-                    self.sync_cut_marks();
-                    // 다른 앱(터미널 · IDE)에서 커밋/체크아웃했을 수 있다 — git 요약 다시(10-06).
-                    self.git_refresh_on_focus();
-                    // OS 테마가 그 사이 바뀌었을 수 있다(GAP-021 · System 모드만 반응).
-                    self.refresh_system_theme();
-                    // 시간대 · DST 설정도 그 사이 바뀌었을 수 있다(T-189 ④ 시각 열 기억).
-                    filelist::clear_time_cache();
-                    // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
-                    if let Some(n) = platform::wheel_lines() {
-                        nexa_ctl::set_wheel_lines(n);
-                    }
-                } else {
-                    self.pointer_gone();
-                }
-                self.redraw();
-            }
+            WindowEvent::Focused(on) => self.on_focus_change(*on),
             WindowEvent::CursorLeft { .. } => self.pointer_gone(),
             // 외부 끌어다 놓기 1차(SHELL-060 · 3-OS 공통): 파일마다 한 건 — 틱에서 모아 처리.
             WindowEvent::HoveredFile(p) => self.dnd_hover(p.clone()),
@@ -648,6 +631,45 @@ impl ApplicationHandler<Wake> for App {
 }
 
 impl App {
+    /// 메인 창 포커스 전환 처리 — winit `Focused`와 포커스 진실 폴링(`about_to_wait` · T-199 · 11-01)이 **같은 길**을 탄다:
+    /// 투명도 · 드래그 취소 · 메뉴 닫기(T-192) · 잘라낸 표시 동기 · git 갱신 · OS 테마 · 시각 캐시 · 휠 줄 수 · 포인터 · 다시 그리기.
+    pub(crate) fn on_focus_change(&mut self, on: bool) {
+        self.main_active = on;
+        self.apply_transparency(); // 포커스별 투명도(T-199): 떠나면 blur 값 · 돌아오면 포커스 값
+                                   // 잠시 뒤 실제 활성 창으로 한 번 더(11-01 · 폴링 중이면 다음 조회를 앞당긴다 — 이벤트와 진실이 어긋난 채 남지 않게).
+        if self.transparency_poll_on {
+            self.transparency_poll_at =
+                Instant::now() + Duration::from_millis(app::settings::TRANSPARENCY_RECHECK_MS);
+        }
+        if !on {
+            // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
+            // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안
+            // 끊기면 안 된다(10-10 xdnd-send 흔들림 · Windows처럼 Alt-Tab 중에도 드래그 유지).
+            if self.xdnd.is_none() {
+                self.dnd_internal_cancel();
+            }
+            // 다른 창으로 가면 열린 메뉴를 닫는다(T-192 · `ui.menus_close_on_blur` 끔 = 유지) — 아래 `redraw`가 전체를 그린다.
+            self.menus_on_blur();
+        }
+        if on {
+            // 다른 앱(탐색기)이 잘라낸 것도 흐리게(SHELL-044) — 돌아올 때 한 번 동기.
+            self.sync_cut_marks();
+            // 다른 앱(터미널 · IDE)에서 커밋/체크아웃했을 수 있다 — git 요약 다시(10-06).
+            self.git_refresh_on_focus();
+            // OS 테마가 그 사이 바뀌었을 수 있다(GAP-021 · System 모드만 반응).
+            self.refresh_system_theme();
+            // 시간대 · DST 설정도 그 사이 바뀌었을 수 있다(T-189 ④ 시각 열 기억).
+            filelist::clear_time_cache();
+            // 시스템 마우스 설정(한 번에 스크롤할 줄 수)이 그 사이 바뀌었을 수 있다.
+            if let Some(n) = platform::wheel_lines() {
+                nexa_ctl::set_wheel_lines(n);
+            }
+        } else {
+            self.pointer_gone();
+        }
+        self.redraw();
+    }
+
     /// 조합 한 번의 처리(키맵 조회 → 명령) — 처리했으면 `true`(호출부는 그 키를 컨트롤로 흘리지 않는다). 창 사건 처리에서 떼어
     /// **시험이 실제 키 경로를 그대로** 밟게 했다(10-03: Enter · Alt+↓가 키맵에 걸린 뒤 처리 분기가 없어 아무 일도 안 했는데,
     /// 시험은 컨트롤 사건을 직접 넣어 통과하고 있었다).

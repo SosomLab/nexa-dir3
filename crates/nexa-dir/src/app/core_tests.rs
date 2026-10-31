@@ -10407,11 +10407,20 @@ fn window_transparency_follows_setting_and_boost() {
         0,
         "포커스 = window.transparency(0)"
     );
-    // 포커스 전환 뒤 재확인(10-31 Linux 실기 · 간헐 불투명): 창 없음(헤드리스) = 추적값으로 다시 적용 · 재확인 간격은 0보다 크다.
+    // 포커스 진실 재확인/폴링(10-31 · 11-01 Linux 실기: winit X11이 그랩 중 Focused를 버림): 창 없음(헤드리스) = 추적값으로 다시 적용 ·
+    // 폴링은 창이 있고 두 값이 다를 때만 켜진다(헤드리스 = 꺼짐 · 조회 None).
     app.main_active = false;
-    assert_eq!(app.recheck_transparency(), 55, "비활성 = blur 값");
+    assert_eq!(app.apply_transparency(), 55, "비활성 = blur 값");
     app.main_active = true;
-    assert_eq!(app.recheck_transparency(), 0);
+    assert_eq!(app.apply_transparency(), 0);
+    assert!(!app.transparency_poll_on, "창 없음 = 폴링 안 함");
+    // 폴링이 잡은 전환도 `Focused`와 같은 길(`on_focus_change`): 추적값 · 투명도 값이 함께 바뀐다(헤드리스 = 창 호출만 생략).
+    app.on_focus_change(false);
+    assert!(!app.main_active);
+    assert_eq!(app.apply_transparency(), 55);
+    app.on_focus_change(true);
+    assert!(app.main_active);
+    assert_eq!(app.apply_transparency(), 0);
     assert_eq!(
         crate::platform::opacity_pct(),
         0,
