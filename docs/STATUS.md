@@ -2,7 +2,9 @@
 
 > 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md).
 
-## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 · [journal 10-31 §0~§24](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+## ▶ 다음 세션 시작점(10-31 macOS PC 밤샘 + 낮 회차 + Linux PC 저녁 · [journal 10-31 §0~§25](journal/2026-10-31.md) — 그 전 10-26 v0.27.0 릴리스 마감은 아래 항목에 그대로)
+
+- **★ Linux PC 진행 중(10-31 §25 · 개발 "개발" 2ee6a6 · 협업 "협업")**: T-202 ① cdylib d130d9f(API 5 · 헤더 · gate full 777/0 · T4 43/0 · **아직 push 전** — 패키지 동봉 커밋과 함께) · 앱 = 협업 격리 61e5b73 PID 9831 · **태그 주의**: 아래 v0.28.0 선검증은 fb51b4e 기준 — main에 코드가 더 쌓이면 태그 대상 · 재선검증을 사용자 승인 때 함께 정한다.
 
 - **★ v0.28.0 = 승격 · 선검증 완료 · 태그 보류(사용자 10-31 · §24)** — **남은 것 = 태그 push만**(사용자 승인 뒤 · 절차 = [docs/16 §5](16-doc-git-conventions.md)):
   - 승격 71df088(Cargo · lock · lang @app 3 · rpm changelog 영어) · origin/main = fb51b4e(코드 마지막) → 기록 d85b869 · 마감 정리 14fc919(CLAUDE.md 현 단계 · TODO 머리글) · 세 저장소 origin 동기 · gate-20 full ✓(clippy 3-OS · 시험 771/0 · smoke 0.28.0 · selfcheck 30/0/2/7 · T4 43/0) · CI fb51b4e ✓ 3-OS(run 41198824783).

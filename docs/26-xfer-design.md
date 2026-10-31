@@ -113,10 +113,21 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - 함수 전체: `run(&JobSpec, &mut dyn FnMut(&Progress), &AtomicBool) -> Report` · `validate` · 모듈 `verify::verify_pairs`(nexa-copy에서 이동 · `VerifyReport{files, bytes, failures}`) · `mirror::{mirror_plan, dangerous_dest, apply_mirror(→ MirrorOutcome{failed, deleted, delete_failed, canceled}), home_dir, normalize_sep}`.
 - `nexa-copy --report <file>` = 끝에 Report JSON을 그 파일에 쓴다(§11 ③ · 사용자 결정 10-31 · ed45954 · `--ask` 불가 · 쓰기 실패 = 안내만).
 
-## 7. cdylib(후속 · 이번 회차 아님)
+## 7. cdylib(T-202 ① · d130d9f · 사용자 10-31 "패키지 동봉" §11-4)
 
-- **제안 이름 `ndir_xfer_run`** — C ABI 최소면: `ndir_xfer_run(job_json: *const c_char, cb: extern "C" fn(*const c_char, *mut c_void), user: *mut c_void, cancel: *const AtomicBool) -> *mut c_char`(Report JSON · 호출자가 해제 함수로 돌려줌) + 판 조회 함수. 문자열은 UTF-8 JSON만 오간다(§4 `JobSpec` JSON · §5 진행 줄 · §6 Report JSON — 구조체 ABI를 노출하지 않아 판 호환이 쉽다).
-- 진행 콜백은 다른 스레드에서 불릴 수 있음(문서화) · 배포 채널 동봉 여부는 그때 결정.
+- **산출물**: `crate-type = ["rlib", "cdylib"]`(같은 크레이트 · nexa-sql D-350 꼴) — `libndir_xfer.so` · `libndir_xfer.dylib` · `ndir_xfer.dll`. 문자열은 UTF-8 JSON만 오간다(§4 `JobSpec` JSON · §5 진행 줄 · §6 Report JSON — 구조체 ABI를 노출하지 않아 판 호환이 쉽다). C 헤더 = `crates/ndir-xfer/include/ndir_xfer.h`(수작업 · 동봉).
+- **API 5개**:
+
+  | 함수 | 뜻 |
+  |---|---|
+  | `ndir_xfer_abi_version() -> u32` | ABI 판(지금 1) |
+  | `ndir_xfer_version() -> const char*` | 제품 판(정적 문자열 · 해제 금지) |
+  | `ndir_xfer_run(job, cb, user, cancel) -> char*` | JobSpec JSON 실행 · Report JSON 반환(오류도 `ok:false` Report · NULL 없음) · `cancel` = C `const bool*`(Rust `AtomicBool::from_ptr`) |
+  | `ndir_xfer_validate(job) -> char*` | JobSpec 검사만(실행 없음) |
+  | `ndir_xfer_free(char*)` | 위 두 함수가 돌려준 문자열 해제(호출자 free 금지) |
+
+- **주의**: ① 릴리스 프로필 = `panic = "abort"`(프로필 전체라 크레이트별 불가) → 라이브러리 패닉 = **호출 프로세스 종료** · 입력 오류는 전부 Result/Report로 돌려준다(모듈 안 unwrap 0 · `catch_unwind` 울타리 `guarded`는 dev/test용) ② 진행 콜백은 다른 스레드에서 불릴 수 있다 ③ JobSpec 상대 경로 기준 = 호출 프로세스의 작업 디렉터리(`nexa-copy --job`은 잡 파일 폴더 — §11-1 · C ABI에는 잡 파일이 없다).
+- **동봉 자리(설계 — 패키징 커밋 전)**(§11-4): deb/rpm = `/usr/lib/nexa-dir/libndir_xfer.so`(전용 폴더 · 소비자는 전체 경로 dlopen · rpm `%files`에 `%{_prefix}/lib/nexa-dir/…`) · pkg/dmg/brew = `Contents/Frameworks/libndir_xfer.dylib`(`@rpath` · 서명 전 lipo) · MSI/zip = 설치 폴더 `ndir_xfer.dll` + 헤더(`.dll.lib` 제외 · LoadLibrary) · 빌드 명령에 `-p ndir-xfer` · 임포트 게이트에 dll 추가 · 릴리스 스모크 = 설치 뒤 Python ctypes 로드 → 판 대조.
 
 ## 8. 남은 기능 설계(이번 회차 구현 안 함)
 

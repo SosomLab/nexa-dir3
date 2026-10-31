@@ -20,7 +20,7 @@
 | L | 33 | 33 | 0 | 0 | 33 | 0 | 0 |
 | LIC | 149 | 149 | 134 | 15 | 0 | 0 | 0 |
 | N | 15 | 15 | 2 | 13 | 0 | 0 | 0 |
-| NEW | 49 | 49 | 42 | 6 | 0 | 0 | 0 |
+| NEW | 57 | 55 | 48 | 5 | 0 | 0 | 2 |
 | O | 20 | 20 | 0 | 0 | 0 | 0 | 0 |
 | OPS | 162 | 162 | 86 | 57 | 19 | 0 | 0 |
 | OS | 19 | 19 | 2 | 17 | 0 | 0 | 0 |
@@ -30,18 +30,18 @@
 | PROC | 105 | 105 | 94 | 0 | 11 | 0 | 0 |
 | RENDER | 54 | 54 | 16 | 0 | 38 | 0 | 0 |
 | RT | 28 | 28 | 0 | 28 | 0 | 0 | 0 |
-| SET | 104 | 104 | 92 | 0 | 12 | 0 | 0 |
-| SHELL | 75 | 75 | 48 | 16 | 11 | 0 | 0 |
+| SET | 104 | 104 | 64 | 0 | 12 | 0 | 0 |
+| SHELL | 75 | 75 | 49 | 15 | 11 | 0 | 0 |
 | SKEL | 291 | 291 | 153 | 88 | 50 | 0 | 0 |
 | T | 48 | 48 | 5 | 43 | 0 | 0 | 0 |
 | TERM | 90 | 90 | 90 | 0 | 0 | 0 | 0 |
 | UIC | 235 | 235 | 5 | 0 | 230 | 0 | 0 |
-| UIK | 67 | 67 | 14 | 8 | 45 | 0 | 0 |
+| UIK | 67 | 67 | 15 | 7 | 45 | 0 | 0 |
 | UIX | 23 | 23 | 10 | 1 | 12 | 0 | 0 |
 | WINA | 96 | 96 | 12 | 84 | 0 | 0 | 0 |
 | WINB | 125 | 125 | 66 | 52 | 0 | 0 | 0 |
 | WINC | 174 | 174 | 58 | 116 | 0 | 0 | 0 |
-| **합계** | 4338 | 4338 | 2530 | 921 | 761 | 0 | 0 |
+| **합계** | 4346 | 4344 | 2510 | 918 | 761 | 0 | 2 |
 
 ## 행
 
@@ -220,7 +220,7 @@
 | TERM-060~068 · 090~095 · 130~131 | 렌더 세부 · 클립보드/컨텍스트 메뉴 · 품질 자산 | `termview.rs` | T2 | HTML 복사 시험 | ✅ | 셀 텍스트/italic(T-31) · 터미널 우클릭 메뉴 ☐ · 10-05 §12 정리: 093(터미널 우클릭 편집 메뉴)만 ☐ · 나머지 = `italic_cells_select_italic_font` · `sgr_italic_on_off` · `terminal_copy_format_selects_html_and_rtf` · `export_html_rtf_and_cf_html_offsets` · `pump_is_time_boxed_and_reports_backlog` ✅ 후보 · 10-05 §24: 093 터미널 우클릭 편집 메뉴 ✅(CMD-086~096 행) |
 | CLICK-SELECT · TERM-090(일부) · GUI-125(일부) | 더블클릭 = 단어 · 트리플 클릭 = 줄 선택 — 정보 · 미리보기 도크 · 터미널(사용자 10-05 · dir2에도 없던 동작) · 단어 = 글자/숫자/`_`(한글 포함) · 터미널 한글 두 칸 글자 보정 · 트리플 = 물리 행(줄바꿈 플래그 없음) | nexa-ui nexa-explorer `InfoDock::select_word_at`/`select_line_at` · `dock::word_span`(159차 06376cb) · `app/input.rs::{next_click_count, text_click_select}` · `termview.rs::{select_word_at, select_line_at, line_cells}` | T1 · T3 + 실기 | `double_and_triple_click_select_text` · `rename_field_double_click_selects_word_not_opens`(이름 바꾸기 필드 · nexa-grid 238 · 10-26) · `double_click_selects_word_and_triple_selects_line` · nexa-explorer 시험(159) | ✅ | 10-05 §43(a837ac5) · 경로(`\ / . : -`)는 단어 경계라 조각 선택(통째 선택은 결정 거리) · 실기 사용자 |
 | FASTCOPY · NEW-007(1차) · OPS(전송) | 고속 복사 전략 계층 — 파일 1개 = Windows `CopyFileExW`(블록 복제 · 서버 쪽 복사 · 속성/대체 스트림 · 긴 경로 · 취소) · 다른 OS = 루프 + 수정 시각/권한 보존 · 폴더 = 작업 목록 + 작업 스레드 병렬(자동 = SSD 8 / 그 밖 4 · 32 MiB 이상 한 번에 하나 · 실패 하나에 전부 멈춤) · 고급 설정 `transfer.native` · `transfer.threads` · `transfer.unbuffered_mb` | `ndir-ops/src/fastcopy.rs` · `ndir-ops/src/lib.rs::{copy_file_with_progress, copy_dir_with_progress}` | T1 · T3 + 실기 | fastcopy 7개(`copy_tree_sequential_and_parallel_agree` · `copy_tree_parallel_stop_and_failure` · `copy_file_keeps_content_mtime_and_respects_existing` 등) · `transfer_tuning_follows_settings` · `bench_copy`(ignored · 수동) | ✅ | 10-05 §45(f458537 · docs/24 실측) · 2차 = T-164 · 실기 = 큰 폴더 체감 · 사본 수정 시각 · **T-164 2차(10-24)**: Linux `FICLONE` → `copy_file_range`(청크 진행 · 폴백) · macOS `copyfile(ALL \| CLONE)` + 진행 콜백(심볼릭 링크 = 루프) · Linux `queue/rotational` 장치 판정 · 시험 `unix_native_copy_large_file_symlink_and_seek`(unix) + 기존 copy_file/copy_tree 시험이 native 경로를 탐(CI ubuntu/macOS) · 3-OS clippy ✓ · **CLI 1차(10-24)**: `crates/nexa-copy` · 시험 `cli::tests::{parse_options_and_errors, human_readable_helpers, run_copies_skips_overwrites_and_moves}` · macOS CI 교훈 = 블록 복제는 중단할 틈이 없다 → `copy_file_stop_removes_partial`은 Ok(완전 사본)도 허용 · 엔진 취소 시험은 루프 경로로 · **CLI 프로세스 시험(10-24)** `nexa-copy/tests/cli.rs` 3건(도움말/오류 · 복사→건너뜀→덮어쓰기→이동→전략→오류 · 취소 130 = `NEXA_COPY_CANCEL_AFTER_MS` 훅) · 🖐 **실기 ✓ 10-24 사용자**: 수동 실행 + Ctrl+C 취소 "잘 동작" · **dry-run(10-24)** 엔진 `plan_transfer` + `placement` 공통 판정 · 시험 `plan_transfer_mirrors_transfer_decisions_without_touching`(ndir-ops) · `dry_run_reports_plan_and_changes_nothing`(cli 단위) · `dry_run_prints_plan_and_changes_nothing`(프로세스) · **엔진 오류 어휘 `OpsError`(10-24 협업 점검)** 영어 문구 8종(+10-25 `ReservedName`/`NameTooLong` · `validate_name` 시험 `validate_name_rules_per_os`) · 앱 `ops_err_text` → `ops.err.*` i18n(3개 언어) · 시험 `ops_error_messages_round_trip` · `ops_err_text_maps_engine_vocabulary_to_i18n` · **`--verify`(10-25)** 크기 + SHA-256 재귀 대조 · 시험 `verify_detects_mismatch_missing_and_type`(T1) · 프로세스 시험 확장 · **`--include/--exclude`(10-25)** `NameFilter`/`with_filter` · 시험 `name_filter_rules_and_tree_copy_honors_them`(T1) · `include_exclude_filters_files_and_top_level_sources`(프로세스) · **`--mirror`(10-25)** `mirror.rs` compare+plan+apply_copies+delete_permanent · 시험 `mirror_plan_and_rows`(T1) · `mirror_makes_destination_identical`(프로세스) · **`--ask`(10-25)** `ask_conflict` · 시험 `ask_conflict_maps_answers`(T1) · `ask_prompts_on_conflicts_and_honors_answers`(프로세스 stdin) · **10-31 macOS 장치 판정**(e47ee38 · statfs → IOKit `Medium Type` · SSD = 자동 8 · 네트워크 FS = 없음 · 순수 `seek_from` MC/DC · docs/24 §6) |
-| NEW-007(②) · T-97 · XFER | 전송 엔진 겉모양 `ndir-xfer`(rlib · 의존 = ndir-ops뿐 · 외부 crate 0) — `JobSpec`(13키 JSON ↔ · 빠진 키 = 기본 · 모르는 키 무시 · `validate`) · `Progress`(plan/transfer/verify/mirror/delete 스냅샷 · JSON 줄) · `Report`(항목 action/status · 합계 · 검증 요약 · 오류 · `exit_code` 0/1/130 · JSON) · `run(&JobSpec, &mut dyn FnMut(&Progress), &AtomicBool)` · `verify`/`mirror` 모듈(nexa-copy에서 이동) · `nexa-copy --job`/`--progress` · 간단 인자 → `Options::to_spec`(한 길) | `crates/ndir-xfer/src/{lib,spec,report,json,verify,mirror}.rs` · `crates/nexa-copy/src/cli.rs` | T1 · 프로세스 | ndir-xfer 8(왕복 · dry-run → 복사 + 검증 · 미러 yes · 검증 오류 · 위험 대상) · nexa-copy `job_and_progress_paths` | ✅ 10-31 6b1a22d | 설계 = docs/26 · 협업 지적 = `unbuffered_mb` 잡 기본 64 → 0(엔진·CLI와 같게) · 남은 = cdylib `ndir_xfer_run` · 재개 · 속도 제한 · 작업 큐(T-202) |
+| NEW-007(②) · T-97 · XFER | 전송 엔진 겉모양 `ndir-xfer`(rlib · 의존 = ndir-ops뿐 · 외부 crate 0) — `JobSpec`(13키 JSON ↔ · 빠진 키 = 기본 · 모르는 키 무시 · `validate`) · `Progress`(plan/transfer/verify/mirror/delete 스냅샷 · JSON 줄) · `Report`(항목 action/status · 합계 · 검증 요약 · 오류 · `exit_code` 0/1/130 · JSON) · `run(&JobSpec, &mut dyn FnMut(&Progress), &AtomicBool)` · `verify`/`mirror` 모듈(nexa-copy에서 이동) · `nexa-copy --job`/`--progress` · 간단 인자 → `Options::to_spec`(한 길) | `crates/ndir-xfer/src/{lib,spec,report,json,verify,mirror}.rs` · `crates/nexa-copy/src/cli.rs` | T1 · 프로세스 | ndir-xfer 8(왕복 · dry-run → 복사 + 검증 · 미러 yes · 검증 오류 · 위험 대상) · nexa-copy `job_and_progress_paths` · cdylib `capi::tests::{version_and_abi, null_and_bad_input_give_failed_report, validate_reports_missing_dest, run_copies_and_calls_progress, preset_cancel_flag_is_honored}` | ✅ 10-31 6b1a22d | 설계 = docs/26 · 협업 지적 = `unbuffered_mb` 잡 기본 64 → 0(엔진·CLI와 같게) · 남은 = cdylib `ndir_xfer_run` · 재개 · 속도 제한 · 작업 큐(T-202) · 10-31 §25(d130d9f · T-202 ①): cdylib C ABI 5함수 + 헤더 · Linux 실측 = release .so ctypes 로드 · 복사 ok · 남음 = 패키지 동봉 · 3-OS 스모크 |
 | PLUG-090~105 | 압축 목록 리더 | `preview/archive.rs` | T1 | `archive::tests`(zip 생성·암호·중첩) | ✅ | |
 | PREFS-001~032 · 040~079 · 201~211 | 설정 창 · 설정/세션 영속 · i18n · session 키 | `prefs_win.rs` · `ndir-settings` · `session.rs` · `ndir-i18n` | T1·T3·T4 | prefs core 시험 · `prefs-open.scn` · settings/keymap/session/i18n 시험 | ✅ | DR-3 구조 차용 |
 | PREFS-401~423 · 501~521 · 701~732 | nexa-ui 매핑 · OS 분기점 · 회귀 테스트 후보 | `prefs_win.rs` · `platform/` | — | — | 🚧 | 회귀 후보 32건 중 미작성분 = 91 |

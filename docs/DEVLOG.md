@@ -4,6 +4,8 @@
 
 ## 2026-10-31
 
+- **T-202 ① cdylib C ABI**(d130d9f · Linux PC · `ndir_xfer_run` 등 API 5 · 헤더 `include/ndir_xfer.h` · cancel = `const bool*` · release 패닉 = 프로세스 종료 문서화 · gate full 777/0 · T4 43/0) · 다음 = 패키지 동봉 커밋 · docs/26 §7 재작성 → [10-31 §25](journal/2026-10-31.md)
+
 - **v0.28.0 승격 71df088 · 선검증 run 41198851370 ✓ · 초안 삭제 · 태그 보류(사용자)** · ed45954 `--report` · 상대 경로 = 잡 파일 폴더 · 태그 주석 = docs/release/tag-v0.28.0.txt → [10-31 §24](journal/2026-10-31.md)
 - **T-201 · T-114 · T-184 ✅**: 811f196 알파 채우기 = 그린 사각형만(nexa-ui 254) · 빈 프레임 제거 · d8a0f45 IOSurface 풀 유휴 정리 · dirwatch/caret_asked 종결 · ec461e4 `list.os_icons` · OS 종류 이름 · 번들 링크/크기 · `.app` 위 드롭 = 앱으로 열기 · 보조 화면 배율 → [10-31 §19](journal/2026-10-31.md)
 - **사용자 결정 4건**: 726b7f1 정보 패널 NFD 줄(협업) · 1402671 패널 상태 줄 "NFD n" + 클릭 필터 · 085e99c 상태 열 NFD 제거 · 87b7b22 `status.blink_min_bps` 표식 깜빡임 문턱(16 KB/s · T-201 ⓑ ✅) → [10-31 §17](journal/2026-10-31.md)
