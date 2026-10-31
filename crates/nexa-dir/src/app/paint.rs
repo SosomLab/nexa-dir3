@@ -105,6 +105,12 @@ pub(crate) fn history_entry(
     }
 }
 
+/// 프레임이 필요한가(순수 · T-201 ⓒ · 10-31): 전체 요청이 있거나 더러워진 사각형이 있을 때만 — 틱 요청만(사각형 0)은 프레임이 아니라
+/// 깨움(`about_to_wait`의 `live` → `ui.frame_ms`)으로 충분하다(위젯 틱은 유휴 틱에서 돈다 · 그릴 것이 없는데 버퍼만 잡던 빈 프레임 제거).
+pub(crate) fn frame_needed(full: bool, has_rects: bool) -> bool {
+    full || has_rects
+}
+
 /// 오버레이 프레임 판정(순수): 지금 오버레이가 있거나 **지난 프레임에 있었으면** 전체를 그린다 — 자기 사각형 밖에 그리는 층
 /// (툴팁 · 드롭다운 · 토스트 …)이 사라진 자리를 damage가 모르기 때문(사용자 10-24 툴팁 잔상).
 pub(crate) fn overlay_frame(now: bool, prev: bool) -> bool {
@@ -509,6 +515,14 @@ mod damage_tests {
             vec![Rect::new(0, 0, 15, 15), Rect::new(50, 0, 5, 5)]
         );
         assert!(!d.full);
+    }
+
+    /// 프레임 필요 판정(T-201 ⓒ · MC/DC): 전체 · 사각형 각각 혼자 참 · 둘 다 없음(틱만) = 거짓.
+    #[test]
+    fn frame_needed_only_for_full_or_rects() {
+        assert!(frame_needed(true, false));
+        assert!(frame_needed(false, true));
+        assert!(!frame_needed(false, false), "틱만 = 프레임 없음(깨움만)");
     }
 
     /// 이력 항목(10-31): 전체 = 창 · 부분 = 자기 damage(창 안으로) · 빈 부분 = 없음. 자기 damage를 넣어야 전체 프레임이 3프레임 뒤 사라진다.

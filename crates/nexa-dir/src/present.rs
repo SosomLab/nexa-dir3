@@ -144,7 +144,10 @@ impl Buffer<'_> {
                 b.present_with_damage(&dmg).map_err(|_| ())
             }
             Buffer::Layer(f) => {
-                f.present();
+                // IOSurface: 그린 사각형만 알파 채우기(nexa-sys 254 `present_damage` · T-201 ⓐ · 종전 = 표면 전체 ~1.6 ms).
+                let dmg: Vec<(i32, i32, i32, i32)> =
+                    rects.iter().map(|r| (r.x, r.y, r.w, r.h)).collect();
+                f.present_damage(&dmg);
                 Ok(())
             }
         }

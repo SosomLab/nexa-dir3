@@ -228,10 +228,14 @@ impl ApplicationHandler<Wake> for App {
                 return;
             }
         }
-        if redraw {
-            self.redraw();
-        } else if !inv.is_empty() || inv.tick_requested() {
-            self.redraw_inv(&mut inv);
+        // 틱만 요청됐고 사각형이 없으면 프레임을 잡지 않는다(T-201 ⓒ · 10-31): 위젯 틱은 여기서 돌고 깨움은 아래 `live`가 예약한다 —
+        // 종전엔 프레임을 요청해 버퍼만 잡고 안 냈다(유휴 12초에 16개 `partial0[]`).
+        if crate::app::paint::frame_needed(redraw, !inv.is_empty()) {
+            if redraw {
+                self.redraw();
+            } else {
+                self.redraw_inv(&mut inv);
+            }
         }
         // 애니메이션 중에만 프레임 간격으로 깬다 · 아니면 다음 예약(기동 지연 명령)까지 잔다.
         let live = inv.tick_requested()
