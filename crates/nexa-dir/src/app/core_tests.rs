@@ -10988,6 +10988,32 @@ fn memory_window_command_and_dump() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 검색창 토글 툴팁 = 오버레이(10-31 사용자 macOS "툴팁이 안 보이거나 깜빡임"): 토글 위에 머물고 지연이 지나면 `popups_open` →
+/// `overlay_active` = 전체 프레임(부분 프레임의 클립에 잘리지 않게) · 벗어나면 다시 부분 가능.
+#[test]
+fn filter_toggle_tooltip_counts_as_overlay() {
+    let (mut app, dir) = fixture("ftip");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].toggle_filter(&mut inv);
+    app.panels[0].filter_box_mut().set_tooltip_delay_ms(0);
+    assert!(!app.overlay_active(), "툴팁 전 = 오버레이 없음");
+    let r = app.panels[0]
+        .filter_box_mut()
+        .toggle_rect(nexa_ctl::SearchToggle::Case)
+        .expect("토글");
+    app.route(InputEvent::MouseMove {
+        x: r.x + r.w / 2,
+        y: r.y + r.h / 2,
+    });
+    app.panels[0].tick(1, &mut inv);
+    assert!(app.panels[0].popups_open(), "머묾 + 틱 = 툴팁 팝업");
+    assert!(app.overlay_active(), "툴팁 = 오버레이 → 전체 프레임");
+    app.route(InputEvent::MouseMove { x: 5, y: 5 });
+    assert!(!app.overlay_active(), "벗어남 = 다시 부분 가능");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 도구 모음 툴팁(T-150 남김 "툴팁" · 10-25): 버튼 위에 머물면 바로 보이고(nexa-ctl 규약 · 지연 없음) 글 = 그 명령의 i18n 라벨
 /// (`menu.view.modeTree` · 키가 아닌 번역 글) · 목록으로 벗어나면 사라진다 · 처음(머문 항목 없음)엔 없음.
 #[test]

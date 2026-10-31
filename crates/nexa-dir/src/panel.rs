@@ -1606,7 +1606,17 @@ impl Panel {
     /// 팝업 층(툴팁 · 경로 제안) — 호스트가 맨 뒤에 그린다.
     /// 자기 사각형 밖에 그리는 팝업이 보이는가(네비 버튼 툴팁 · 경로 제안) — 호스트의 부분 다시 그리기가 전체로 바꾸는 판정(10-18 결정 ①).
     pub(crate) fn popups_open(&self) -> bool {
-        self.navbtns.tooltip_visible() || self.pathbar.suggest_open()
+        self.navbtns.tooltip_visible()
+            || self.pathbar.suggest_open()
+            // 검색창 편집 메뉴 · 토글 툴팁(10-31 사용자 macOS "툴팁이 안 보이거나 깜빡임": 빠져 있어 부분 프레임 클립에 잘려
+            // IOSurface 표면마다 다르게 그려졌다 · nexa-ui 249 `tooltip_visible`).
+            || (self.filter_on && (self.filter.popup_open() || self.filter.tooltip_visible()))
+    }
+
+    /// 검색창(시험 · 툴팁 지연·토글 자리).
+    #[cfg(test)]
+    pub(crate) fn filter_box_mut(&mut self) -> &mut nexa_ctl::SearchBox {
+        &mut self.filter
     }
 
     pub(crate) fn paint_popups(&self, ctx: &mut dyn DrawCtx, theme: &Theme) {
@@ -2913,6 +2923,11 @@ impl Panel {
                     if self.status_on {
                         use nexa_ctl::Widget as _;
                         self.status.on_event(ev, inv);
+                    }
+                    // 검색창도 hover를 받는다(토글 hover 페이드 · 토글 툴팁 — 10-31 사용자 macOS "툴팁이 안 보임": 종전엔 누른 채
+                    // 움직일 때와 편집 메뉴가 열렸을 때만 가서 호버로는 툴팁이 뜰 수 없었다).
+                    if self.filter_on {
+                        self.send(Part::Filter, ev, inv);
                     }
                 }
             }
