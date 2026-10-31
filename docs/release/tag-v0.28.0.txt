@@ -1,0 +1,12 @@
+Nexa Dir 0.28.0 — macOS round: IOSurface presentation and partial redraws · Finder-rule drag and drop in both directions · text drop · .app bundles as files and "open with" drop · OS icons and kind names · in-process Quick Look (⌘Y) · NFD-aware search · nexa-copy --job/--progress/--report with the new ndir-xfer engine facade
+
+Highlights since 0.27.0 (2026-10-26 → 2026-10-31):
+- macOS rendering: IOSurface presentation by default (frame present 24 ms → 1 ms on Retina), partial redraws with damage history and widget culling (idle status-bar frames 8 ms → 0.75 ms), status-bar marker blink threshold (default 1 MB/s), IOSurface pool trimmed on idle.
+- macOS drag and drop: Finder modifier rules (Option = copy, Cmd = move), drag-out to Finder and other apps (NSDraggingSession), pointer scale per display, text drop (an existing path navigates or selects, other text goes to the terminal dock), drop highlight cleared after a Finder drop.
+- macOS bundles: .app and other bundles behave like files (no chevron, double-click runs, "Show Package Contents"), symlinks to bundles too, bundle size from the folder-size column, dropping files onto an app row opens them with that app when the app accepts them.
+- macOS integration: OS row icons and kind names (Finder-like, "Query OS icons" setting), Finder-style context menu (Open With, Show in Finder, Terminal, Get Info), Terminal.app font profile for the terminal dock, Disk status cell via IOKit, SSD-aware copy thread count, in-process Quick Look panel (⌘Y, follows the selection, ↑/↓ inside the panel; Redo is now ⇧⌘Z).
+- Decomposed (NFD) names: search box and type-ahead match composed input against decomposed names; the status column no longer shows "NFD"; Info panel "Normalization: NFD" line; "NFD n" counter in the panel status strip that filters to those rows.
+- Search box: toggle tooltips appear on hover and no longer flicker; tooltip texts are the toggle names only.
+- Self-check: real probes for pty echo, fonts, preview and archive (30 passing checks on macOS).
+- nexa-copy: --job <file.json> runs a serializable job spec (relative paths resolve against the job file), --progress prints JSON progress lines and a final report, --report <file> writes the report; the new ndir-xfer crate is the engine facade shared by the app and the CLI.
+- Fixes: memory window font bars show true resident bytes, launcher scenario is scale-independent, Windows resident-bytes count for empty ranges, test harness condition waits (@until/@idle) replace fixed sleeps.
