@@ -60,6 +60,24 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Sat Oct 31 2026 Sangyong Bae <kiros33@gmail.com> - 0.28.0-1
+- macOS: IOSurface presentation by default and partial redraws (idle frames ~15x cheaper),
+  status-bar marker blink threshold, Finder-rule drag modifiers, drag-out to Finder and
+  other apps, text drop (paths navigate, text goes to the terminal), .app bundles behave
+  like files with "Show Package Contents", drop onto an app opens with it, OS row icons and
+  kind names, Finder-style context menu, Terminal.app font profile, Disk status cell,
+  in-process Quick Look (Cmd+Y, follows the selection), SSD-aware copy threads.
+- Decomposed (NFD) file names: the search box and type-ahead match composed input; the
+  status column no longer shows "NFD"; Info panel "Normalization" line; "NFD n" counter
+  in the panel status strip that filters to those rows.
+- Search box toggle tooltips show on hover without flicker; shorter tooltip texts.
+- Self-check runs real probes for pty, fonts, preview and archive.
+- nexa-copy: --job <file.json> (serializable job spec), --progress JSON lines plus a final
+  report, --report <file>; new ndir-xfer engine facade crate.
+- New settings: "Query OS icons", macOS presentation path, marker blink threshold.
+- Fixes: memory window font bars show true resident bytes, launcher is scale-independent,
+  drop highlight no longer sticks after a Finder drop, test harness condition waits.
+
 * Mon Oct 26 2026 Sangyong Bae <kiros33@gmail.com> - 0.27.0-1
 - Quick filter is now a search box (Ctrl+F): match-case, whole-word and regex toggles,
   all-words matching with Hangul jamo sequences, a progress ring on the frame, and a new
