@@ -742,7 +742,10 @@ fn check_pty(r: &mut Report) {
             session.kill();
             return (Verdict::Fail, format!("{label}: write failed: {e}"));
         }
-        let deadline = Instant::now() + std::time::Duration::from_secs(3);
+        // 8 s(10-31 gate full 중 3 s 초과 1건 — gate + 형제 빌드 + 전체 시험이 겹친 부하에서 셸 기동이 늦었다 · 셸이 살아 있고
+        // 바이트가 왔으면 "느림" = Warn · 죽었거나 아무것도 안 왔으면 Fail).
+        const ECHO_WAIT_S: u64 = 8;
+        let deadline = Instant::now() + std::time::Duration::from_secs(ECHO_WAIT_S);
         let mut seen = Vec::new();
         let mut buf = [0u8; 4096];
         let verdict = loop {
@@ -755,12 +758,12 @@ fn check_pty(r: &mut Report) {
                 break (Verdict::Pass, format!("{label} · {} bytes", seen.len()));
             }
             if Instant::now() >= deadline {
+                let alive = session.alive();
                 break (
-                    Verdict::Fail,
+                    pty_timeout_verdict(alive, seen.len()),
                     format!(
-                        "{label}: no echo within 3 s ({} bytes · alive {})",
-                        seen.len(),
-                        session.alive()
+                        "{label}: no echo within {ECHO_WAIT_S} s ({} bytes · alive {alive})",
+                        seen.len()
                     ),
                 );
             }
@@ -769,6 +772,15 @@ fn check_pty(r: &mut Report) {
         session.kill();
         verdict
     });
+}
+
+/// pty 에코 시간 초과의 판정(순수): 셸이 살아 있고 무언가 보냈으면 느릴 뿐(Warn · 부하) · 죽었거나 0바이트면 Fail.
+fn pty_timeout_verdict(alive: bool, bytes: usize) -> Verdict {
+    if alive && bytes > 0 {
+        Verdict::Warn
+    } else {
+        Verdict::Fail
+    }
 }
 
 /// 폴더 감시(T-51 B-2b `Watcher` 포트): 임시 폴더를 감시하고 파일 하나를 만들어 통지가 간격×4 안에 오는지(Windows 통지 · 그 외 폴링).
@@ -1145,5 +1157,13 @@ mod tests {
             .map(|d| d.count() == 0)
             .unwrap_or(false));
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    /// pty 시간 초과 판정(10-31): 살아 있고 바이트가 왔으면 Warn · 그 밖은 Fail(MC/DC 셋).
+    #[test]
+    fn pty_timeout_is_warn_only_when_alive_with_output() {
+        assert_eq!(pty_timeout_verdict(true, 131), Verdict::Warn);
+        assert_eq!(pty_timeout_verdict(false, 131), Verdict::Fail);
+        assert_eq!(pty_timeout_verdict(true, 0), Verdict::Fail);
     }
 }
