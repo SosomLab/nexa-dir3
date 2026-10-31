@@ -116,6 +116,7 @@
 | 메뉴 글자 키(종전 = 글자 키가 메뉴 닫음) | nexa-ctl `ContextMenu::set_char_jump` · `app/settings.rs` | 메뉴에서 글자 키로 항목 고르기 여부(NEW-031) | — | 설정(취향) | `menu.char_jump`(기본 on) | ✅ 10-05 §30(8370165) |
 | 타입어헤드 켜기/끄기(종전 = 늘 켜짐) · 유지 시간 1000 → 2000 ms | nexa-grid VirtualRows(nexa-ui 157) · `app/settings.rs::apply_typeahead` | 목록 글자 입력 이동 여부 · 입력 유지 시간(nexa-sql 기준 2000 · 상한 60000) | `typeahead.reset_ms`(기존 · 기본값 변경 · dir2 가져온 1000은 변경분으로 유지) | 설정(취향) | `typeahead.enabled`(신규 · 기본 on · NEW-032) | ✅ 10-05 §35(adea995) |
 | 행 아이콘 늘 켜짐 · 메뉴 아이콘 없음 | `App::icon_switches` · `app/menu_icons.rs` | 행 아이콘 · 메뉴 아이콘 켜기/끄기(성능 향상 모드가 강제 끔 · 저장값 유지) | — | 설정(취향 · DEPENDS `perf.boost` Eq off) | `list.row_icons` · `menu.icons`(기본 on · NEW-033/034) | ✅ 10-05 §38(d4aca0d) |
+| OS 아이콘 조회 끌 수 없음(dir3 종전 · `set_os_icons` 미호출 · GAP-024) · 종류 = 확장자 대문자(dir2 패리티) | `app/settings.rs` · `filelist.rs` `set_os_kind` · `dockinfo.rs` | 행 · 런처 아이콘의 OS 조회 + 종류 열 · Info Kind의 OS 종류 이름(끄면 자체 아이콘 · 확장자 대문자) | on | 설정(목록) | `list.os_icons`(GAP-024 · NEW-059 · 10-31) | ✅ 10-31 §19(ec461e4) |
 | 폴더 크기 표시 없음(dir2 · dir3 종전) | `app/dirsize.rs` · `dockinfo.rs` | 정보 도크에서 폴더 크기를 자동으로 잴지 | — | 설정(취향 · 기본 on · DEPENDS `perf.boost` Eq off) | `dock.folder_size`(NEW-037) | ✅ 10-05 §54(85e405d) |
 | — | `app/dirsize.rs` | 폴더 크기 동시 계산 개수(1~8) | 2 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_threads`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | — | `app/dirsize.rs` | 대기 큐 상한(넘치면 오래된 요청 버림 · 1~500) | 50 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_queue`(T-166 2차) | ✅ 10-05 §82(5359834) |
