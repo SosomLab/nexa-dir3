@@ -2,7 +2,8 @@
 //!
 //! ```json
 //! {"op":"copy","sources":["/a/x.txt","/a/dir"],"dest":"/b","conflict":"skip","threads":0,"native":true,"unbuffered_mb":64,
-//!  "include":["*.txt"],"exclude":[],"verify":false,"mirror":false,"dry_run":false,"yes":false}   (unbuffered_mb 기본 0)
+//!  "include":["*.txt"],"exclude":[],"verify":false,"mirror":false,"dry_run":false,"yes":false,
+//!  "journal":null,"resume":null}   (unbuffered_mb 기본 0 · journal/resume = 재개 T-202 ② · 경로 문자열 또는 null)
 //! ```
 //! 빠진 키 = 기본값 · 모르는 키 = 무시(앞으로 호환) · `op` = `copy`|`move` · `conflict` = `skip`|`overwrite`.
 
@@ -46,6 +47,10 @@ pub struct JobSpec {
     pub dry_run: bool,
     /// 미러의 영구 삭제 확인.
     pub yes: bool,
+    /// 완료 저널(T-202 ② · `resume.rs`): 최상위 항목이 끝날 때마다 Report 항목 모양 JSON 한 줄을 덧붙인다 · dry-run이면 쓰지 않음 · None = 안 씀.
+    pub journal: Option<PathBuf>,
+    /// 재개 입력(이전 Report JSON 또는 저널): 끝 상태가 `done`인 (source, dest) 쌍은 건너뛴다(`status` skipped · `note` resumed) · 미러에는 못 씀.
+    pub resume: Option<PathBuf>,
 }
 
 impl Default for JobSpec {
@@ -63,6 +68,8 @@ impl Default for JobSpec {
             mirror: false,
             dry_run: false,
             yes: false,
+            journal: None,
+            resume: None,
         }
     }
 }
@@ -79,6 +86,15 @@ fn strs(v: Option<&Json>, key: &str) -> Result<Vec<String>, String> {
             })
             .collect(),
         Some(_) => Err(format!("{key}: expected an array of strings")),
+    }
+}
+
+fn path(v: Option<&Json>, key: &str) -> Result<Option<PathBuf>, String> {
+    match v {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::Str(s)) if s.is_empty() => Ok(None),
+        Some(Json::Str(s)) => Ok(Some(PathBuf::from(s))),
+        Some(_) => Err(format!("{key}: expected a path string")),
     }
 }
 
@@ -135,6 +151,8 @@ impl JobSpec {
         s.mirror = flag(j.get("mirror"), "mirror", false)?;
         s.dry_run = flag(j.get("dry_run"), "dry_run", false)?;
         s.yes = flag(j.get("yes"), "yes", false)?;
+        s.journal = path(j.get("journal"), "journal")?;
+        s.resume = path(j.get("resume"), "resume")?;
         if s.mirror && s.sources.len() != 1 {
             return Err("mirror: needs exactly one source folder".into());
         }
@@ -156,6 +174,8 @@ impl JobSpec {
         };
         self.sources = self.sources.iter().map(fix).collect();
         self.dest = fix(&self.dest);
+        self.journal = self.journal.as_ref().map(fix);
+        self.resume = self.resume.as_ref().map(fix);
         self
     }
 
@@ -200,8 +220,14 @@ impl JobSpec {
             ("mirror".into(), Json::Bool(self.mirror)),
             ("dry_run".into(), Json::Bool(self.dry_run)),
             ("yes".into(), Json::Bool(self.yes)),
+            ("journal".into(), opt_path(self.journal.as_deref())),
+            ("resume".into(), opt_path(self.resume.as_deref())),
         ]))
     }
+}
+
+fn opt_path(p: Option<&std::path::Path>) -> Json {
+    p.map_or(Json::Null, |p| Json::Str(p.to_string_lossy().into_owned()))
 }
 
 #[cfg(test)]
@@ -226,8 +252,19 @@ mod tests {
             mirror: false,
             dry_run: true,
             yes: false,
+            journal: Some(PathBuf::from("/j/log")),
+            resume: Some(PathBuf::from("/j/prev.json")),
         };
         assert_eq!(JobSpec::from_json(&s.to_json()).unwrap(), s);
+        // journal/resume: 빠짐 · null · 빈 글 = None · 문자열 아님 = 오류.
+        let d = JobSpec::from_json(r#"{"sources":["/a"],"dest":"/b","journal":null,"resume":""}"#)
+            .unwrap();
+        assert!(d.journal.is_none() && d.resume.is_none());
+        assert!(
+            JobSpec::from_json(r#"{"sources":["/a"],"dest":"/b","resume":1}"#)
+                .unwrap_err()
+                .starts_with("resume")
+        );
         // 빠진 키 = 기본값 · 모르는 키 무시.
         let d = JobSpec::from_json(r#"{"sources":["/a"],"dest":"/b","future":1}"#).unwrap();
         assert_eq!(d.op, Op::Copy);
@@ -262,7 +299,7 @@ mod tests {
             "/abs/x"
         };
         let r = JobSpec::from_json(&format!(
-            r#"{{"sources":["src/a","{}"],"dest":"out"}}"#,
+            r#"{{"sources":["src/a","{}"],"dest":"out","journal":"job.log"}}"#,
             abs.replace('\\', "\\\\")
         ))
         .unwrap()
@@ -270,5 +307,6 @@ mod tests {
         assert_eq!(r.sources[0], PathBuf::from("/jobs").join("src/a"));
         assert_eq!(r.sources[1], PathBuf::from(abs));
         assert_eq!(r.dest, PathBuf::from("/jobs").join("out"));
+        assert_eq!(r.journal, Some(PathBuf::from("/jobs").join("job.log")));
     }
 }

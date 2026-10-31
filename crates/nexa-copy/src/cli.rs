@@ -17,6 +17,8 @@
 //!   --job <file.json>    run a job spec (ndir-xfer JobSpec JSON · all options above as keys · no --ask) instead of arguments
 //!   --progress           machine-readable: one JSON line per progress step on stdout, then the final report JSON (T-97 · 10-31)
 //!   --report <file>      also write the final report JSON to a file (works with or without --progress)
+//!   --journal <file>     append one report-item JSON line per finished top-level item (resume input · T-202 ②)
+//!   --resume <file>      skip top-level items already done according to a previous report or journal (not with --mirror)
 //!                        relative paths inside a --job file are resolved against the folder that contains the job file
 //!   -q, --quiet          no progress or summary (errors still go to stderr)
 //!   -h, --help / -V, --version
@@ -69,6 +71,11 @@ Options:
   --job <file.json>    run an ndir-xfer JobSpec JSON instead of arguments (no --ask)
   --progress           JSON progress lines + final report on stdout (machine-readable)
   --report <file>      also write the final report JSON to a file (relative job paths = job file folder)
+  --journal <file>     append one JSON line per finished top-level item (same shape as report items);
+                       use it as --resume input after an interruption
+  --resume <file>      skip top-level items a previous report or journal lists as done (same source and
+                       destination) · folders that were interrupted are copied again (existing files are
+                       skipped unless --overwrite) · not with --mirror (a mirror re-compares by itself)
   -q, --quiet          no progress or summary (errors still go to stderr)
   -h, --help           show this help
   -V, --version        show version
@@ -103,6 +110,10 @@ pub(crate) struct Options {
     pub progress: bool,
     /// `--report <file>`: 결과 JSON 파일(ndir-xfer 경로).
     pub report: Option<PathBuf>,
+    /// `--journal <file>`: 완료 저널(ndir-xfer 경로 · T-202 ②).
+    pub journal: Option<PathBuf>,
+    /// `--resume <file>`: 재개 입력(ndir-xfer 경로 · T-202 ②).
+    pub resume: Option<PathBuf>,
 }
 
 impl Options {
@@ -125,6 +136,8 @@ impl Options {
             mirror: self.mirror,
             dry_run: self.dry_run,
             yes: self.yes,
+            journal: self.journal.clone(),
+            resume: self.resume.clone(),
         }
     }
 }
@@ -132,12 +145,15 @@ impl Options {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Parsed {
     Run(Options),
-    /// `--job <file>`(JobSpec JSON · 10-31 T-97) — `progress` = JSON 줄 출력 · `quiet` = 요약 생략 · `report` = 결과 JSON 파일.
+    /// `--job <file>`(JobSpec JSON · 10-31 T-97) — `progress` = JSON 줄 출력 · `quiet` = 요약 생략 · `report` = 결과 JSON 파일 ·
+    /// `journal`/`resume` = 명령줄에서 주면 잡 파일의 키를 덮는다(잡은 그대로 두고 재개만 걸 수 있게 · 작업 디렉터리 기준).
     Job {
         file: PathBuf,
         progress: bool,
         quiet: bool,
         report: Option<PathBuf>,
+        journal: Option<PathBuf>,
+        resume: Option<PathBuf>,
     },
     Help,
     Version,
@@ -160,6 +176,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut progress = false;
     let mut job: Option<PathBuf> = None;
     let mut report: Option<PathBuf> = None;
+    let mut journal: Option<PathBuf> = None;
+    let mut resume: Option<PathBuf> = None;
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut only_paths = false;
     let mut it = args.iter();
@@ -187,6 +205,14 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--report" => {
                 let v = it.next().ok_or("--report needs a file")?;
                 report = Some(PathBuf::from(v));
+            }
+            "--journal" => {
+                let v = it.next().ok_or("--journal needs a file")?;
+                journal = Some(PathBuf::from(v));
+            }
+            "--resume" => {
+                let v = it.next().ok_or("--resume needs a file")?;
+                resume = Some(PathBuf::from(v));
             }
             "--job" => {
                 let v = it.next().ok_or("--job needs a file")?;
@@ -239,6 +265,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             progress,
             quiet,
             report,
+            journal,
+            resume,
         });
     }
     if paths.len() < 2 {
@@ -262,6 +290,8 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
         dest,
         progress,
         report,
+        journal,
+        resume,
     }))
 }
 
@@ -356,6 +386,8 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
             progress,
             quiet,
             report,
+            journal,
+            resume,
         }) => {
             let text = match std::fs::read_to_string(&file) {
                 Ok(t) => t,
@@ -364,7 +396,7 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            let spec = match JobSpec::from_json(&text) {
+            let mut spec = match JobSpec::from_json(&text) {
                 // 상대 경로 = 잡 파일이 있는 폴더 기준(사용자 결정 10-31 §11 ①).
                 Ok(s) => s.resolved_against(file.parent().unwrap_or(Path::new("."))),
                 Err(e) => {
@@ -372,6 +404,13 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
+            // 명령줄 `--journal`/`--resume`은 잡 파일의 키를 덮는다(작업 디렉터리 기준 · T-202 ②).
+            if journal.is_some() {
+                spec.journal = journal;
+            }
+            if resume.is_some() {
+                spec.resume = resume;
+            }
             crate::ctrlc::install();
             let stdout = std::io::stdout();
             let mut out = stdout.lock();
@@ -385,11 +424,13 @@ pub(crate) fn main_with(args: &[String], err: &mut dyn Write) -> ExitCode {
                 err,
             )
         }
-        Ok(Parsed::Run(o)) if o.progress || o.report.is_some() => {
+        Ok(Parsed::Run(o))
+            if o.progress || o.report.is_some() || o.journal.is_some() || o.resume.is_some() =>
+        {
             if o.ask {
                 let _ = writeln!(
                     err,
-                    "nexa-copy: --progress/--report cannot be combined with --ask"
+                    "nexa-copy: --progress/--report/--journal/--resume cannot be combined with --ask"
                 );
                 return ExitCode::from(2);
             }
@@ -1214,19 +1255,42 @@ mod tests {
                 file: PathBuf::from("j.json"),
                 progress: true,
                 quiet: false,
-                report: None
+                report: None,
+                journal: None,
+                resume: None,
             }
         );
-        let Parsed::Job { report, .. } = parse(&[
+        let Parsed::Job {
+            report,
+            journal,
+            resume,
+            ..
+        } = parse(&[
             "--job".into(),
             "j.json".into(),
             "--report".into(),
             "r.json".into(),
+            "--journal".into(),
+            "j.log".into(),
+            "--resume".into(),
+            "prev.json".into(),
         ])
-        .unwrap() else {
+        .unwrap()
+        else {
             panic!("job")
         };
         assert_eq!(report, Some(PathBuf::from("r.json")));
+        assert_eq!(
+            (journal, resume),
+            (
+                Some(PathBuf::from("j.log")),
+                Some(PathBuf::from("prev.json"))
+            )
+        );
+        assert!(
+            parse(&["--resume".into()]).is_err(),
+            "--resume needs a file"
+        );
         assert!(parse(&["--job".into(), "j.json".into(), "a".into(), "b".into()]).is_err());
         let Parsed::Run(o) = parse(&[
             "--move".into(),
@@ -1244,6 +1308,7 @@ mod tests {
         };
         assert!(o.progress);
         let spec = o.to_spec();
+        assert!(spec.journal.is_none() && spec.resume.is_none());
         assert_eq!(spec.op, Op::Move);
         assert_eq!(spec.conflict, ConflictPolicy::Overwrite);
         assert_eq!((spec.threads, spec.filter.include.len()), (2, 1));

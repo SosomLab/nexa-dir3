@@ -72,6 +72,36 @@ pub struct ItemReport {
     pub note: String,
 }
 
+impl ItemReport {
+    /// 항목 → JSON 값(Report `items[]` 원소 · 재개 저널 한 줄 · 같은 모양 · T-202 ②).
+    #[must_use]
+    pub fn to_json_value(&self) -> Json {
+        let p = |p: &Path| Json::Str(p.to_string_lossy().into_owned());
+        Json::Obj(vec![
+            ("action".into(), Json::Str(self.action.clone())),
+            ("status".into(), Json::Str(self.status.clone())),
+            ("bytes".into(), Json::Num(self.bytes as f64)),
+            ("source".into(), p(&self.source)),
+            ("dest".into(), p(&self.dest)),
+            ("note".into(), Json::Str(self.note.clone())),
+        ])
+    }
+
+    /// JSON 값 → 항목(`source` · `status` 필수 · 나머지는 기본) — Report/저널 되읽기(재개).
+    #[must_use]
+    pub fn from_json_value(j: &Json) -> Option<ItemReport> {
+        let s = |k: &str| j.get(k).and_then(Json::as_str).map(str::to_string);
+        Some(ItemReport {
+            action: s("action").unwrap_or_default(),
+            status: s("status")?,
+            bytes: j.get("bytes").and_then(Json::as_u64).unwrap_or(0),
+            source: PathBuf::from(s("source")?),
+            dest: PathBuf::from(s("dest").unwrap_or_default()),
+            note: s("note").unwrap_or_default(),
+        })
+    }
+}
+
 /// 검증 요약.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VerifySummary {
@@ -122,21 +152,7 @@ impl Report {
     #[must_use]
     pub fn to_json(&self) -> String {
         let p = |p: &Path| Json::Str(p.to_string_lossy().into_owned());
-        let items = Json::Arr(
-            self.items
-                .iter()
-                .map(|i| {
-                    Json::Obj(vec![
-                        ("action".into(), Json::Str(i.action.clone())),
-                        ("status".into(), Json::Str(i.status.clone())),
-                        ("bytes".into(), Json::Num(i.bytes as f64)),
-                        ("source".into(), p(&i.source)),
-                        ("dest".into(), p(&i.dest)),
-                        ("note".into(), Json::Str(i.note.clone())),
-                    ])
-                })
-                .collect(),
-        );
+        let items = Json::Arr(self.items.iter().map(ItemReport::to_json_value).collect());
         let verify = match &self.verify {
             None => Json::Null,
             Some(v) => Json::Obj(vec![

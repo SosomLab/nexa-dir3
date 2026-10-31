@@ -413,6 +413,66 @@ fn dry_run_prints_plan_and_changes_nothing() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// `--journal`/`--resume`(T-202 ②): 1차 복사 = 저널 done 2줄 · 대상을 비우고 `--resume` = 둘 다 resumed(복사 안 됨 · 종료 0 · Report `skipped` 2) ·
+/// `--mirror --resume` = 2 · `--resume`과 `--ask` = 2.
+#[test]
+fn journal_and_resume_skip_finished_items() {
+    let d = sandbox("resume");
+    let (src, dst) = (d.join("src"), d.join("dst"));
+    make_tree(&src);
+    fs::create_dir_all(&dst).expect("mkdir");
+    let journal = d.join("job.log");
+    let jpath = journal.to_str().expect("utf-8 path");
+    let r = run(
+        &[&src.join("tree"), &src.join("one.txt"), &dst],
+        &["--journal", jpath],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    same_tree(&src, &dst);
+    let lines: Vec<String> = fs::read_to_string(&journal)
+        .expect("journal")
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines.iter().all(|l| l.contains("\"status\":\"done\"")),
+        "{lines:?}"
+    );
+    fs::remove_dir_all(&dst).expect("rm");
+    fs::create_dir_all(&dst).expect("mkdir");
+    let r = run(
+        &[&src.join("tree"), &src.join("one.txt"), &dst],
+        &["--resume", jpath, "--progress"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(
+        fs::read_dir(&dst).expect("read_dir").next().is_none(),
+        "resumed = 복사 안 함"
+    );
+    let last = r.out.lines().last().expect("report line");
+    assert!(
+        last.contains("\"skipped\":2") && last.contains("\"note\":\"resumed\""),
+        "{last}"
+    );
+    let r = run(
+        &[&src.join("tree"), &dst],
+        &["--mirror", "--resume", jpath],
+        &[],
+    );
+    assert_eq!(r.code, 2, "{}", r.err);
+    assert!(r.err.contains("mirror"), "{}", r.err);
+    let r = run(
+        &[&src.join("one.txt"), &dst],
+        &["--ask", "--resume", jpath],
+        &[],
+    );
+    assert_eq!(r.code, 2, "{}", r.err);
+    let _ = fs::remove_dir_all(&d);
+}
+
 /// 취소(Ctrl+C 대역 = `NEXA_COPY_CANCEL_AFTER_MS`): 큰 파일을 루프 경로로 복사하다 멈춤 → 종료 130 · 요약 `canceled` · 부분 파일 없음 · 원본 그대로.
 #[test]
 fn cancel_mid_copy_cleans_partial_and_exits_130() {

@@ -1,7 +1,9 @@
 /* ndir_xfer.h — C ABI of the Nexa Dir transfer engine (libndir_xfer.so / libndir_xfer.dylib / ndir_xfer.dll).
  *
  * Every string that crosses this boundary is UTF-8 JSON:
- *   - job      : JobSpec JSON   (docs/26 §4 — sources, dest, op, conflict, filter, verify, mirror, dry_run, ...)
+ *   - job      : JobSpec JSON   (docs/26 §4 — sources, dest, op, conflict, filter, verify, mirror, dry_run, journal, resume, ...)
+ *                "journal": a file that gets one Report-item JSON line per finished top-level item; "resume": a previous
+ *                Report JSON or journal whose "done" (source, dest) pairs are skipped (same ABI — keys only).
  *   - progress : one Progress JSON line per callback (docs/26 §5 — {"phase":..,"done":..,"total":..,"item":..,"items":..,"current":..})
  *   - result   : Report JSON    (docs/26 §6 — {"ok":bool,"canceled":bool,"dry_run":bool,"items":[..],"errors":[..],...})
  * Errors never come back as NULL: a failed call still returns a Report with "ok":false and "errors":[...].
