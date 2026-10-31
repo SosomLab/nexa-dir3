@@ -38,8 +38,12 @@ pub(crate) enum FramePlan {
     Partial(Vec<Rect>),
 }
 
-/// 프레임 계획(순수 · MC/DC): 부분은 설정 on · 전체 요청 없음 · 버퍼가 지난 프레임 그대로(`age` 1) · 오버레이 없음일 때만 —
-/// 사각형을 창 안으로 자르고(빈 것 제거) [`MAX_DAMAGE_RECTS`]를 넘으면 합집합 하나로.
+/// 지난 프레임 damage 이력의 길이 상한(IOSurface 삼중 회전 = age 3 · 건너뛴 프레임이 있으면 조금 더) — 넘는 age는 전체.
+pub(crate) const DAMAGE_HISTORY: usize = 8;
+
+/// 프레임 계획(순수 · MC/DC): 부분은 설정 on · 전체 요청 없음 · 버퍼 내용을 아는 때(`age` ≥ 1) · 오버레이 없음일 때만 —
+/// `age` n이면 **이번 사각형 ∪ 지난 n−1 프레임에 그린 사각형**(`prev` · 최신 먼저 · 이력이 모자라면 전체 · 10-31 macOS IOSurface
+/// 삼중 버퍼 age 3)을 창 안으로 자르고(빈 것 제거 · 다른 것에 포함된 것 제거) [`MAX_DAMAGE_RECTS`]를 넘으면 합집합 하나로.
 pub(crate) fn frame_plan(
     enabled: bool,
     full: bool,
@@ -47,20 +51,58 @@ pub(crate) fn frame_plan(
     overlay: bool,
     rects: &[Rect],
     win: Rect,
+    prev: &[Vec<Rect>],
 ) -> FramePlan {
-    if !enabled || full || age != 1 || overlay {
+    if !enabled || full || age == 0 || overlay {
         return FramePlan::Full;
     }
-    let mut out: Vec<Rect> = rects
+    let back = usize::from(age) - 1;
+    if back > prev.len() {
+        return FramePlan::Full;
+    }
+    let mut out: Vec<Rect> = Vec::new();
+    for r in rects
         .iter()
+        .chain(prev[..back].iter().flatten())
         .map(|r| r.intersection(&win))
         .filter(|r| !r.is_empty())
-        .collect();
+    {
+        // 이미 든 것에 포함되면 버리고 · 새것이 기존 것을 품으면 그것들을 뺀다(같은 상태줄 사각형이 프레임마다 반복되는 꼴).
+        if out.iter().any(|k| k.intersection(&r) == r) {
+            continue;
+        }
+        out.retain(|k| r.intersection(k) != *k);
+        out.push(r);
+    }
     if out.len() > MAX_DAMAGE_RECTS {
         let u = out.iter().skip(1).fold(out[0], |a, r| a.union(r));
         out = vec![u];
     }
     FramePlan::Partial(out)
+}
+
+/// 이력에 넣을 "이 프레임에서 **바뀐** 사각형"(순수 · 10-31): 전체 프레임 = 창 전체 · 부분 = 이번 프레임의 **자기 damage**(그린 사각형이
+/// 아니다 — 그린 것(= 지난 이력과의 합집합)을 넣으면 전체 프레임 하나가 이력을 타고 영원히 창 전체로 번진다 · 실측 `partial1[0,0,2400x1600]`) ·
+/// 내지 않은 프레임(그릴 것 없음) = None. `content_full` = 내용이 실제로 전부 바뀐 전체(전체 요청 · 오버레이) — **age 부족만으로**
+/// 전체를 그린 프레임은 바뀐 것이 자기 damage뿐이라 그것만 넣는다(협업 지적 · 기동/표면 회전 뒤 수렴 full×3 → full×1).
+pub(crate) fn history_entry(
+    plan: &FramePlan,
+    own: &[Rect],
+    win: Rect,
+    content_full: bool,
+) -> Option<Vec<Rect>> {
+    let own_clipped = || {
+        own.iter()
+            .map(|r| r.intersection(&win))
+            .filter(|r| !r.is_empty())
+            .collect()
+    };
+    match plan {
+        FramePlan::Full if content_full => Some(vec![win]),
+        FramePlan::Full => Some(own_clipped()),
+        FramePlan::Partial(r) if r.is_empty() => None,
+        FramePlan::Partial(_) => Some(own_clipped()),
+    }
 }
 
 /// 오버레이 프레임 판정(순수): 지금 오버레이가 있거나 **지난 프레임에 있었으면** 전체를 그린다 — 자기 사각형 밖에 그리는 층
@@ -148,6 +190,11 @@ impl App {
         self.overlay_prev = overlay_now;
         let mut mode = String::from("full");
         if let Some(mut buf) = surface.frame(size) {
+            // 크기가 바뀌면 지난 사각형 이력은 다른 좌표계 — 비운다(표면도 새것이라 age 0 = 전체).
+            if self.damage_hist_size != (wi, hi) {
+                self.damage_hist.clear();
+                self.damage_hist_size = (wi, hi);
+            }
             let plan = frame_plan(
                 partial_on,
                 dmg.full,
@@ -155,6 +202,13 @@ impl App {
                 overlay,
                 &dmg.rects,
                 Rect::new(0, 0, wi, hi),
+                &self.damage_hist,
+            );
+            let hist_entry = history_entry(
+                &plan,
+                &dmg.rects,
+                Rect::new(0, 0, wi, hi),
+                dmg.full || overlay,
             );
             let rects = match plan {
                 FramePlan::Full => None,
@@ -195,10 +249,20 @@ impl App {
                         // 사각형마다 클립을 걸고 같은 합성을 돌린다 — 클립 밖 픽셀은 쓰지 않는다(래스터 어휘 전부 클립 준수).
                         for r in rs {
                             dc.push_clip(*r);
+                            self.paint_clip = Some(*r);
                             self.paint_into(&mut dc, wi, hi, s);
+                            self.paint_clip = None;
                             dc.pop_clip();
                         }
-                        mode = format!("partial{}", rs.len());
+                        // 진단(`NDIR_TRACE_FRAMES`): 사각형 좌표까지 — 어느 영역이 깨우는지 바로 보이게(10-31).
+                        mode = format!(
+                            "partial{}[{}]",
+                            rs.len(),
+                            rs.iter()
+                                .map(|r| format!("{},{},{}x{}", r.x, r.y, r.w, r.h))
+                                .collect::<Vec<_>>()
+                                .join(";")
+                        );
                     }
                 }
             }
@@ -217,6 +281,11 @@ impl App {
                 Some(rs) => {
                     let _ = buf.present_damage(rs);
                 }
+            }
+            // 이 프레임에서 바뀐 사각형을 이력 맨 앞에(`history_entry` · 내지 않은 프레임은 없다) · age ≥ 2 부분 그리기의 재료.
+            if let Some(d) = hist_entry {
+                self.damage_hist.insert(0, d);
+                self.damage_hist.truncate(DAMAGE_HISTORY);
             }
             painted = t1;
         }
@@ -242,6 +311,11 @@ impl App {
     /// 한 프레임을 `dc`에(창 무관). `wi`×`hi` = 표면 크기(장치 px) · `s` = 배율.
     pub(crate) fn paint_into(&mut self, dc: &mut dyn DrawCtx, wi: i32, hi: i32, s: f32) {
         let th = self.theme;
+        // 부분 프레임 컬링(10-31): 지금 그리는 사각형과 겹치지 않는 최상위 위젯은 건너뛴다 — 클립은 픽셀만 막고 글 배치·글리프
+        // 비용은 그대로라(맥 실측 partial1 래스터 7.99 ms = full과 같음) 위젯 단위로 걸러야 상태줄 깜빡임 한 번이 상태줄 값이 된다.
+        // 팝업 층(메뉴 · 툴팁 · 토스트 · 팔레트)은 오버레이 규칙이 전체 프레임으로 돌리므로 그대로 그린다.
+        let clip = self.paint_clip;
+        let vis = move |r: Rect| clip.is_none_or(|c| c.intersects(&r));
         dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
         // 크기 열의 폴더 크기(T-166 3차): 스크롤로 드러난 행을 그리기 직전에 요청/반영(무효화는 지금 그리는 프레임이 덮는다).
         if self.dirsize_col_enabled() {
@@ -249,9 +323,13 @@ impl App {
             self.dirsize_col_sync(&mut col_inv);
         }
         // 본문
-        self.panels[0].paint(dc, &th);
+        if vis(self.panels[0].bounds()) {
+            self.panels[0].paint(dc, &th);
+        }
         if self.dual {
-            self.panels[1].paint(dc, &th);
+            if vis(self.panels[1].bounds()) {
+                self.panels[1].paint(dc, &th);
+            }
             self.splitter.paint(dc, &th);
         }
         // 탭 바 줄 수가 바뀌었으면(여러 줄 — 그리기가 측정한다) 다시 배치하고 한 번 더 그린다(dir2 win.rs:4941-4947).
@@ -281,15 +359,23 @@ impl App {
         self.dock_split_h.paint(dc, &th);
         self.dock_split_v.paint(dc, &th);
         for d in &self.docks {
-            if d.bounds().h > 0 {
+            if d.bounds().h > 0 && vis(d.bounds()) {
                 d.paint(dc, &th);
             }
         }
-        self.paint_terms(dc, &th, panel_metrics(&self.settings, s).row_h);
+        if self
+            .docks
+            .iter()
+            .any(|d| d.bounds().h > 0 && vis(d.bounds()))
+        {
+            self.paint_terms(dc, &th, panel_metrics(&self.settings, s).row_h);
+        }
         // 크롬(창 전폭)
         dc.fill_rect(self.toolbar.bounds(), th.chrome_bg);
-        self.toolbar.paint(dc, &th);
-        if self.launcherbar.bounds().h > 0 {
+        if vis(self.toolbar.bounds()) {
+            self.toolbar.paint(dc, &th);
+        }
+        if self.launcherbar.bounds().h > 0 && vis(self.launcherbar.bounds()) {
             dc.fill_rect(self.launcherbar.bounds(), th.chrome_bg);
             self.launcherbar.paint(dc, &th);
         }
@@ -310,7 +396,9 @@ impl App {
         let sb = self.statusbar.bounds();
         dc.fill_rect(sb, th.chrome_bg);
         dc.fill_rect(Rect::new(0, sb.y, wi, 1), th.border);
-        self.statusbar.paint(dc, &th);
+        if vis(sb) {
+            self.statusbar.paint(dc, &th);
+        }
         // 팝업 층
         self.paint_toasts(dc, &th, Rect::new(0, 0, wi, sb.y), s);
         self.toolbar.paint_tooltip(dc, &th);
@@ -339,37 +427,37 @@ mod damage_tests {
             Rect::new(200, 0, 5, 5),
         ];
         assert_eq!(
-            frame_plan(true, false, 1, false, &rs, win),
+            frame_plan(true, false, 1, false, &rs, win, &[]),
             FramePlan::Partial(vec![Rect::new(10, 10, 20, 20), Rect::new(90, 40, 10, 10)]),
             "창 안으로 자르고 창 밖은 버린다"
         );
         assert_eq!(
-            frame_plan(false, false, 1, false, &rs, win),
+            frame_plan(false, false, 1, false, &rs, win, &[]),
             FramePlan::Full,
             "설정 끔"
         );
         assert_eq!(
-            frame_plan(true, true, 1, false, &rs, win),
+            frame_plan(true, true, 1, false, &rs, win, &[]),
             FramePlan::Full,
             "전체 요청"
         );
         assert_eq!(
-            frame_plan(true, false, 0, false, &rs, win),
+            frame_plan(true, false, 0, false, &rs, win, &[]),
             FramePlan::Full,
             "새 버퍼"
         );
         assert_eq!(
-            frame_plan(true, false, 2, false, &rs, win),
+            frame_plan(true, false, 2, false, &rs, win, &[]),
             FramePlan::Full,
             "이중 버퍼"
         );
         assert_eq!(
-            frame_plan(true, false, 1, true, &rs, win),
+            frame_plan(true, false, 1, true, &rs, win, &[]),
             FramePlan::Full,
             "오버레이"
         );
         assert_eq!(
-            frame_plan(true, false, 1, false, &[], win),
+            frame_plan(true, false, 1, false, &[], win, &[]),
             FramePlan::Partial(vec![]),
             "사각형 없음 = 그릴 것 없음"
         );
@@ -377,7 +465,7 @@ mod damage_tests {
             .map(|i| Rect::new(i * 10, 0, 5, 5))
             .collect();
         assert_eq!(
-            frame_plan(true, false, 1, false, &many, win),
+            frame_plan(true, false, 1, false, &many, win, &[]),
             FramePlan::Partial(vec![Rect::new(0, 0, 85, 5)]),
             "상한 넘으면 합집합 하나"
         );
@@ -421,5 +509,83 @@ mod damage_tests {
             vec![Rect::new(0, 0, 15, 15), Rect::new(50, 0, 5, 5)]
         );
         assert!(!d.full);
+    }
+
+    /// 이력 항목(10-31): 전체 = 창 · 부분 = 자기 damage(창 안으로) · 빈 부분 = 없음. 자기 damage를 넣어야 전체 프레임이 3프레임 뒤 사라진다.
+    #[test]
+    fn history_entry_records_own_damage_not_drawn_union() {
+        let win = Rect::new(0, 0, 100, 50);
+        let own = [Rect::new(0, 40, 100, 10), Rect::new(90, 45, 30, 30)];
+        let clipped = vec![Rect::new(0, 40, 100, 10), Rect::new(90, 45, 10, 5)];
+        assert_eq!(
+            history_entry(&FramePlan::Full, &own, win, true),
+            Some(vec![win]),
+            "내용이 전부 바뀐 전체(전체 요청 · 오버레이)"
+        );
+        assert_eq!(
+            history_entry(&FramePlan::Full, &own, win, false),
+            Some(clipped.clone()),
+            "age 부족만으로 전체 = 바뀐 건 자기 damage뿐"
+        );
+        assert_eq!(
+            history_entry(&FramePlan::Partial(vec![win]), &own, win, false),
+            Some(clipped),
+            "그린 것(창 전체)이 아니라 자기 damage(창 안으로 자름)"
+        );
+        assert_eq!(
+            history_entry(&FramePlan::Partial(vec![]), &own, win, false),
+            None
+        );
+        // 수렴: 전체 3 → 상태줄만 바뀌는 프레임이 이어지면 3번째부터 상태줄 사각형만 그린다.
+        let st = Rect::new(0, 40, 100, 10);
+        let mut hist: Vec<Vec<Rect>> = vec![vec![win], vec![win], vec![win]];
+        let mut drawn = Vec::new();
+        for _ in 0..4 {
+            let plan = frame_plan(true, false, 3, false, &[st], win, &hist);
+            drawn.push(plan == FramePlan::Partial(vec![st]));
+            hist.insert(0, history_entry(&plan, &[st], win, false).unwrap());
+        }
+        assert_eq!(drawn, vec![false, false, true, true]);
+    }
+
+    /// age ≥ 2(10-31 macOS IOSurface 삼중 회전): 이번 ∪ 지난 n−1 프레임의 사각형 · 이력이 모자라면 전체 · 포함된 중복은 하나로.
+    #[test]
+    fn frame_plan_age_n_unions_recent_history() {
+        let win = Rect::new(0, 0, 100, 50);
+        let status = Rect::new(0, 40, 100, 10);
+        let now = [status];
+        let hist = vec![
+            vec![status],
+            vec![Rect::new(10, 10, 5, 5)],
+            vec![Rect::new(50, 0, 10, 10)],
+        ];
+        assert_eq!(
+            frame_plan(true, false, 3, false, &now, win, &hist),
+            FramePlan::Partial(vec![status, Rect::new(10, 10, 5, 5)]),
+            "age 3 = 이번 + 지난 2프레임 · 같은 상태줄 사각형은 한 번 · 3프레임 전 것은 안 든다"
+        );
+        assert_eq!(
+            frame_plan(true, false, 3, false, &now, win, &hist[..1]),
+            FramePlan::Full,
+            "이력 1개뿐이면 age 3은 전체"
+        );
+        assert_eq!(
+            frame_plan(true, false, 2, false, &[], win, &[vec![win]]),
+            FramePlan::Partial(vec![win]),
+            "지난 프레임이 전체였으면 창 전체 사각형 하나(= 전체 다시 그리기와 같은 비용)"
+        );
+        assert_eq!(
+            frame_plan(
+                true,
+                false,
+                2,
+                false,
+                &[Rect::new(0, 0, 100, 50)],
+                win,
+                &[vec![status]]
+            ),
+            FramePlan::Partial(vec![win]),
+            "새것이 기존 것을 품으면 기존 것을 뺀다"
+        );
     }
 }

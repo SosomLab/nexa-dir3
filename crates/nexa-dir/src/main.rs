@@ -338,6 +338,14 @@ struct App {
     frame_no: u64,
     /// 다음 프레임의 더러워진 영역(10-18 결정 ① 부분 다시 그리기 · `app::paint::Damage`): `redraw()` = 전체 · `redraw_inv` = 사각형만.
     damage: std::cell::RefCell<app::paint::Damage>,
+    /// 지난 프레임들에 **실제로 그린** 사각형(최신 먼저 · 상한 `paint::DAMAGE_HISTORY`) — 버퍼 `age` ≥ 2(IOSurface 삼중 회전)일 때
+    /// 부분 다시 그리기의 재료(10-31). 내지 않은 프레임은 들지 않는다.
+    damage_hist: Vec<Vec<Rect>>,
+    /// 이력이 유효한 창 크기 — 다르면 이력을 비운다(옛 크기 사각형이 섞이지 않게 · 협업 지적 ③).
+    damage_hist_size: (i32, i32),
+    /// 부분 프레임에서 지금 그리는 사각형(`paint_into` 컬링 — 겹치지 않는 최상위 위젯은 건너뛴다 · 10-31 맥 실측: 클립만으로는
+    /// 래스터 8 ms가 그대로였다). 전체 프레임 = `None`.
+    paint_clip: Option<Rect>,
     /// 보조 창(설정 · 단축키) + 열기 깃발(펌프 `open_requested_windows`가 소비).
     prefs_win: PrefsWin,
     /// 툴바 그룹 플로팅 창(T-108 2/2 · 그룹당 1) · 띄우기 요청(창은 이벤트 루프 핸들에서).
@@ -801,6 +809,9 @@ impl App {
             menu_rect_prev: Rect::new(0, 0, 0, 0),
             overlay_prev: false,
             damage: std::cell::RefCell::new(app::paint::Damage::default()),
+            damage_hist: Vec::new(),
+            damage_hist_size: (0, 0),
+            paint_clip: None,
             frame_no: 0,
             prefs_win: PrefsWin::new(),
             tool_floats: Vec::new(),

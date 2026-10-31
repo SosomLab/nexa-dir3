@@ -114,11 +114,12 @@ impl Presenter {
 
 impl Buffer<'_> {
     /// 이 버퍼가 몇 프레임 전 것인가(softbuffer `age` · 1 = 지난 프레임 그대로 → 부분 다시 그리기 가능 · 0 = 새 버퍼(내용 미정 ·
-    /// 크기 변경 뒤 · macOS CG) · 2+ = 이중 버퍼(Wayland) · IOSurface 레이어 = 0).
+    /// 크기 변경 뒤 · macOS CG) · 2+ = 다중 버퍼(Wayland 2 · IOSurface 삼중 회전 3 — nexa-sys 248 `Frame::age` · 10-31) →
+    /// 지난 n−1 프레임의 damage를 합치면 부분 다시 그리기 가능(`paint::frame_plan`).
     pub(crate) fn age(&self) -> u8 {
         match self {
             Buffer::Soft(b) => b.age(),
-            Buffer::Layer(_) => 0,
+            Buffer::Layer(f) => f.age(),
         }
     }
 
