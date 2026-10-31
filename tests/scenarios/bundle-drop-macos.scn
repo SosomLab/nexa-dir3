@@ -1,8 +1,9 @@
 # T4 · GAP-025 번들 위 드롭(macOS `.app` = 파일 취급 · 5e48780 · 10-31): 왼쪽 패널의 a.txt를 오른쪽 패널의 `Foo.app` 행 위로 끌어 놓으면
 # **번들 안(Foo.app/Contents)에 들어가지 않는다**(앱 손상 방지). 지금 규칙 = 파일 행 위 드롭과 같이 그 행이 든 폴더(right)로 이동.
-# 다른 OS에서는 `Foo.app`이 일반 폴더라 그 안으로 들어간다(대조). Windows는 OS 모달 드래그라 끌지 않는다(dnd-internal과 같음).
-# ※ "`.app` 위 드롭 = 그 앱으로 열기"(T-114 잔여)가 들어오면 macOS 기대값이 바뀐다 — 그때 `right.txt: a.txt` 판정을
-#    "이동 없음(left에 남음) + 열기 요청" 쪽으로 고친다. `inner.txt: !a.txt`(번들 안에 안 들어감)는 어느 쪽이든 유지.
+# 다른 OS에서는 `Foo.app`이 일반 폴더라 그 폴더 바로 아래(Foo.app/a.txt · Contents 안 아님)로 들어간다(대조 · 10-31 CI ubuntu에서
+# 종전 판정 `inner.txt: a.txt`가 경로를 잘못 짚어 빨강 → `bundle.txt`로 정정). Windows는 OS 모달 드래그라 끌지 않는다(dnd-internal과 같음).
+# ※ "`.app` 위 드롭 = 그 앱으로 열기"(ec461e4)는 앱이 그 항목을 받을 때만(LaunchServices 후보) — 이 `Foo.app`은 등록되지 않은
+#    빈 번들이라 미수락 → 종전 규칙(부모로 이동) 판정이 그대로 유효. 열기 경로 자체는 T3 `drop_onto_bundle_opens_with_app_instead_of_copying`.
 id: bundle-drop-macos
 title: 번들(.app) 행 위 드롭 — macOS = 번들 안에 안 들어감(부모 폴더) · 다른 OS = 폴더 안
 tree: file left/a.txt 3
@@ -20,11 +21,15 @@ cmd: @ready:panel:0
 cmd: @ready:list.dump:<out>/left.txt
 cmd: @ready:panel:1
 cmd: @ready:list.dump:<out>/right.txt
+cmd: @ready:nav:<root>/right/Foo.app
+cmd: @ready:list.dump:<out>/bundle.txt
 cmd: @ready:nav:<root>/right/Foo.app/Contents
 cmd: @ready:list.dump:<out>/inner.txt
 cmd: @ready:quit
+check@macos: bundle.txt: !a.txt
 check@macos: inner.txt: !a.txt
 check@macos: right.txt: a.txt
 check@macos: left.txt: !a.txt
-check@linux: inner.txt: a.txt
+check@linux: bundle.txt: a.txt
+check@linux: inner.txt: !a.txt
 check@linux: left.txt: !a.txt
