@@ -1,7 +1,7 @@
 # 26. 대량 전송 엔진 설계 — `ndir-xfer` · `nexa-copy` · (후) cdylib
 
 > T-97 · DR-17(대량 전송 엔진 내장) · DR-34 ①⑦(10-31 사용자 결정) · 원장 NEW-006 · NEW-007. 앞 문서 = [24 빠른 복사](24-fast-copy.md)(§6 전략 계층 · §7 `nexa-copy` 1차).
-> 상태: **10-31 협업 작성 · §4~§6 = `crates/ndir-xfer` 골격 코드에 맞춤**(spec.rs · report.rs · lib.rs · 시험 8/0). §11 결정 거리는 열려 있다.
+> 상태: **10-31 협업 작성 · §4~§6 = `crates/ndir-xfer` 코드에 맞춤**(6b1a22d · spec.rs · report.rs · lib.rs · 시험 8/0 · nexa-copy `job_and_progress_paths`). §11 결정 거리는 사용자 답 대기.
 
 ## 1. 목적과 범위
 
@@ -49,7 +49,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
   "conflict": "skip",
   "threads": 0,
   "native": true,
-  "unbuffered_mb": 64,
+  "unbuffered_mb": 0,
   "include": ["*.jpg", "*.heic"],
   "exclude": [".DS_Store"],
   "verify": true,
@@ -67,7 +67,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `conflict` | `ConflictPolicy` — `skip` \| `overwrite` | `skip` | `--overwrite` | `ask`는 명세에 없다(대화형은 CLI `--ask`만 · `ConflictPolicy::resolve` → 엔진 `Conflict`) |
 | `threads` | `usize`(0 = 자동 · 최대 16) | 0 | `--threads` | |
 | `native` | `bool` | true | `--no-native` | |
-| `unbuffered_mb` | `u64`(Windows만 의미 · 0 = 끔) | **64** | `--unbuffered-mb` | ⚠ CLI 간단 인자 · 엔진 기본은 0(docs/24 §6-2 "실측 손해라 기본 끔") — 잡 경로만 64라 두 경로 차이(§9 동등성 시험으로 확인할 것 · 개발 확인 중) |
+| `unbuffered_mb` | `u64`(Windows만 의미 · 0 = 끔) | **0** | `--unbuffered-mb` | 엔진 · 간단 인자와 같은 기본(docs/24 §6-2 "실측 손해라 기본 끔") — 초안 골격의 64를 협업 지적으로 0으로 맞춤(6b1a22d) |
 | `include` · `exclude` | `Vec<String>` 글롭 → `NameFilter` | `[]` | `--include` · `--exclude` | 규칙 = docs/24 §7(exclude 우선 · include는 파일만 · 대소문자 무시) |
 | `verify` | `bool` | false | `--verify` | `move`면 무시 |
 | `mirror` | `bool` | false | `--mirror` | `sources` 1개 · 대상을 원본과 같게(새것/바뀐 것 복사 + 대상에만 있는 것 영구 삭제) |
@@ -91,8 +91,8 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `item_count` | `usize` | `items` | 항목 수 |
 | `current` | `Option<PathBuf>` | `current`(있을 때만) | 지금 다루는 경로 |
 
-- **`nexa-copy --progress`**: `Progress::to_json_line()` = stdout에 한 줄 하나(`{"phase":"transfer","done":…,"total":…,"item":…,"items":…,"current":"…"}`) · 사람용 진행은 종전대로 stderr.
-- **흐름 규칙**: 스냅샷이라 중간 값을 버려도 된다(마지막 값만 의미) · 끝남은 `Report`로 안다(진행 줄에 "끝" 사건이 없다 — 소비자는 프로세스 종료 · `run` 반환으로 판단).
+- **`nexa-copy --progress`**: `Progress::to_json_line()` = stdout에 한 줄 하나(`{"phase":"transfer","done":…,"total":…,"item":…,"items":…,"current":"…"}` · 단계가 바뀔 때 또는 100 ms마다) · **마지막 줄 = Report JSON**(§6) · `--ask`와 함께 못 씀 · 사람용 진행은 종전대로 stderr.
+- **흐름 규칙**: 스냅샷이라 중간 값을 버려도 된다(마지막 값만 의미) · 끝남 = 마지막 Report JSON 줄(CLI) 또는 `run` 반환(라이브러리) — 진행 줄에 따로 "끝" 사건은 없다.
 - **앱 연결**: 앱은 콜백에서 공유 상태(원자값 · `Mutex`)에 적고 유휴 틱이 거둔다(CLAUDE.md §3 스레딩 규약) — 진행 창 · 상태줄 진행 칸이 같은 스냅샷을 본다.
 
 ## 6. Report — 결과(`ndir_xfer::report::Report`)
@@ -133,7 +133,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 ## 9. 시험 계획
 
 - **T1(ndir-xfer · 골격 시험 8/0)**: JobSpec JSON 왕복(빠진 키 = 기본 · 모르는 키 무시) · `validate`(빈 sources · 미러 원본 2개 · 위험 대상) · Report JSON · `exit_code` · Progress 줄 키.
-- **T1 동등성**: 같은 작업을 **간단 인자 경로와 `--job` 경로**로 각각 만들었을 때 JobSpec이 같다(DR-34 ⑦ 한 길 보장 · `unbuffered_mb` 기본 차이(§4 ⚠)가 여기서 드러난다).
+- **T1 동등성**: 같은 작업을 **간단 인자 경로와 `--job` 경로**로 각각 만들었을 때 JobSpec이 같다(DR-34 ⑦ 한 길 보장).
 - **프로세스(T4급 · `crates/nexa-copy/tests/cli.rs`)**: `--job` 복사/미러/검증/dry-run · `--progress` 줄이 모두 JSON으로 파싱되고 `phase`가 단계 순서(plan → transfer → verify/mirror/delete) · 종료 코드 = Report `exit_code()` · 취소 = 130.
 - **T6(성능)**: `bench_copy`를 `scripts/perf-baseline.sh`에 편입 · `ndir-xfer` 포장 전후 같은 작업의 시간 차 ≤ 2 %(포장층 비용 0 확인) · Linux/macOS 실측은 그 PC 회차.
 
@@ -151,6 +151,5 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 
 1. JobSpec 상대 경로 기준 — **잡 파일 위치(추천)** vs 작업 디렉터리.
 2. `--progress` 출력 자리 — **stdout(추천 · 사람용 진행은 stderr 유지)** vs 별도 파일 `--progress-file`.
-   (덧) `unbuffered_mb` 잡 기본 64 vs CLI · 엔진 기본 0 — 하나로 맞출 것(추천 = 0 · docs/24 실측).
 3. `--report <file>` 추가 여부(추천 = 추가 · dry-run 기계용 판).
 4. cdylib 진입 함수 이름 — `ndir_xfer_run`(개발 제안) · 동봉 채널.
