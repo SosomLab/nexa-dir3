@@ -281,10 +281,10 @@ panel.left = 좌
 panel.right = 우
 list.reading = 폴더 읽는 중…
 filter.placeholder = 이름으로 필터(공백 낱말 전부 포함 · * ? = 이름 전체 패턴, 토글 켜면 꺼짐 · ; = 또는 · Esc = 지움)
-filter.tip.case = 대소문자 구분(와일드카드 꺼짐)
-filter.tip.word = 단어 단위(와일드카드 꺼짐)
-filter.tip.regex = 정규식 사용(* ?는 와일드카드가 아니라 정규식)
-filter.tip.subdirs = 하위 폴더 검색(맞는 항목이 있는 폴더는 접힌 채 표시 · 펼침은 직접)
+filter.tip.case = 대소문자 구분
+filter.tip.word = 단어 단위
+filter.tip.regex = 정규식 사용
+filter.tip.subdirs = 하위 폴더 검색
 
 tab.lock = 탭 잠금
 tab.unlock = 탭 잠금 해제

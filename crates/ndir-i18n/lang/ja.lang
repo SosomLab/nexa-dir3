@@ -282,10 +282,10 @@ panel.left = 左
 panel.right = 右
 list.reading = フォルダーを読み込み中…
 filter.placeholder = 名前でフィルター(空白区切りの語をすべて含む · * ? = 名前全体のパターン、トグルをオンにすると無効 · ; = または · Esc で消去)
-filter.tip.case = 大文字と小文字を区別(ワイルドカードはオフ)
-filter.tip.word = 単語単位(ワイルドカードはオフ)
-filter.tip.regex = 正規表現を使用(* ? はワイルドカードではなく正規表現)
-filter.tip.subdirs = サブフォルダーも検索(一致を含むフォルダーは折りたたんだまま表示 · 展開は手動)
+filter.tip.case = 大文字と小文字を区別
+filter.tip.word = 単語単位
+filter.tip.regex = 正規表現を使用
+filter.tip.subdirs = サブフォルダーも検索
 
 tab.lock = タブをロック
 tab.unlock = タブのロックを解除

@@ -282,10 +282,10 @@ panel.left = L
 panel.right = R
 list.reading = Reading folder…
 filter.placeholder = Filter by name (all words must match · * ? = whole-name pattern, off when a toggle is on · ; = or · Esc clears)
-filter.tip.case = Match Case (wildcards off)
-filter.tip.word = Match Whole Word (wildcards off)
-filter.tip.regex = Use Regular Expression (* ? are regex here, not wildcards)
-filter.tip.subdirs = Search Subfolders (a folder with a match stays listed, collapsed · expand it yourself)
+filter.tip.case = Match Case
+filter.tip.word = Match Whole Word
+filter.tip.regex = Use Regular Expression
+filter.tip.subdirs = Search Subfolders
 
 tab.lock = Lock tab
 tab.unlock = Unlock tab
