@@ -6,7 +6,7 @@
 //! (Windows/Linux Ctrl · macOS ⌘) · macOS Control 단독 = `control+…`.
 //!
 //! dir2와 다른 점(의도된 차이 · 검증 매트릭스에 등재): `tab.prev`(⌃⇧Tab · CMD-487 권장) · `edit.redo`의 둘째 코드 `ctrl+shift+z`(dir2 CMD-304에
-//! 있으나 메뉴 표기 없음) · macOS 코드는 CMD-480~497 대응안. 동적 명령(언어 i · 런처 i · 클라우드 i)은 표에 없다 — 호스트가 `lang:<code>`·
+//! 있으나 메뉴 표기 없음) · macOS `edit.redo` = ⇧⌘Z만(⌘Y = `view.quicklook` · 10-31) · macOS 코드는 CMD-480~497 대응안. 동적 명령(언어 i · 런처 i · 클라우드 i)은 표에 없다 — 호스트가 `lang:<code>`·
 //! `launcher:<n>`·`cloud.<동작>:<n>` 꼴로 만든다(단축키 재정의 대상 아님).
 
 /// 명령 하나 — 기본 코드가 없는 명령은 `""`(메뉴·도구 모음 전용이지만 `key.<id>`로 지정할 수 있다).
@@ -89,7 +89,7 @@ pub const COMMANDS: &[Command] = &[
         "edit.redo",
         "menu.edit.redo",
         "ctrl+y|ctrl+shift+z",
-        "cmd+shift+z|cmd+y",
+        "cmd+shift+z", // 10-31: ⌘Y는 훑어보기에(macOS 관례 = ⇧⌘Z · 사용자 결정)
         "ctrl+y|ctrl+shift+z",
         repeat
     ),
@@ -199,7 +199,8 @@ pub const COMMANDS: &[Command] = &[
     // Quick Look(dir3 신규 · 10-18 · Finder = Space/⌘Y 토글 · 노틸러스 = Space(Sushi) · Windows = 바인딩 없음 — Space는 목록 선택 토글 그대로 ·
     // Quick Look이 없는 OS/환경은 앱 미리보기 창(F3)으로 대신).
     // ⌘Y는 이 앱에서 `edit.redo`의 둘째 코드라(키맵 충돌 시험) Finder의 ⌘Y 보조 바인딩은 두지 않는다 — Space만.
-    c!("view.quicklook", "cmd.quickLook", "", "space", "space"),
+    // macOS = ⌘Y(Finder · 10-31 T-187 인-프로세스 패널 · Space는 목록 선택 토글이라 충돌) · Linux = Space(Sushi · 종전).
+    c!("view.quicklook", "cmd.quickLook", "", "cmd+y", "space"),
     // 로그 창(dir3 신규 · T-92 · nexa-sql `view.log` F10 계승 · macOS는 ⇧⌘L 보조).
     c!("view.log", "cmd.log", "f10", "cmd+shift+l|f10", "f10"),
     // ── 탐색(CMD-326~329 Alt 조합 · macOS는 ⌘[ ⌘] ⌘↑ ⌘↓ — ⌥←→는 편집 필드 단어 이동)

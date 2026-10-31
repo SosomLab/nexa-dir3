@@ -96,6 +96,8 @@ impl ApplicationHandler<Wake> for App {
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
         if self.exit_requested {
+            #[cfg(target_os = "macos")]
+            platform::macql::hide();
             self.persist_window();
             el.exit();
             return;
@@ -114,6 +116,10 @@ impl ApplicationHandler<Wake> for App {
         }
         // OS 파일 열기 큐(macOS Finder/Dock/`open -a` · nexa-sys 212차 · 10-18) — 비어 있으면 잠금 한 번.
         self.pump_os_open_files(&mut inv);
+        // macOS 훑어보기 패널 안 키(↑/↓/Space · T-187).
+        if self.quick_look_keys_tick() {
+            self.redraw();
+        }
         // macOS Quick Look 썸네일(preview::quicklook)이 끝났으면 도크를 다시 계산해 그린다(10-18).
         if crate::preview::quicklook::poll() {
             self.update_docks();
@@ -223,6 +229,8 @@ impl ApplicationHandler<Wake> for App {
             }
             // 지연 명령이 종료를 요청했으면 지금(다음 깨움이 없을 수 있다 — 10-03 실증: `@after:…:app.exit`가 잠든 채 남았다).
             if self.exit_requested {
+                #[cfg(target_os = "macos")]
+                platform::macql::hide(); // 패널의 assign 참조가 우리 객체보다 먼저 끊기게
                 self.persist_window();
                 el.exit();
                 return;
@@ -417,6 +425,8 @@ impl ApplicationHandler<Wake> for App {
         match &event {
             WindowEvent::CloseRequested => {
                 self.exit_requested = true;
+                #[cfg(target_os = "macos")]
+                platform::macql::hide(); // 패널의 assign 참조가 우리 객체보다 먼저 끊기게
                 self.persist_window();
                 el.exit();
             }

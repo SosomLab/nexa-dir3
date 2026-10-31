@@ -634,6 +634,8 @@ impl App {
             }
             "term" => self.term_dump(),
             "check" => self.check_win.table(),
+            // 훑어보기(T-187 · macOS 인-프로세스): 설치 뒤 가용/표시 여부 — 패널을 띄우지 않는다(판정 인스턴스 · CI macOS 안전).
+            "ql" => self.quick_look_dump(),
             "license" => self.license_dump(),
             "archive" => self.archive_win.dump(),
             "progress" => self.progress_win.dump(),

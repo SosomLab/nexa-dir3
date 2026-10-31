@@ -32,6 +32,8 @@ mod macmenu;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
+pub(crate) mod macql;
+#[cfg(target_os = "macos")]
 mod macwatch;
 pub(crate) mod procmem;
 pub(crate) mod sysload;

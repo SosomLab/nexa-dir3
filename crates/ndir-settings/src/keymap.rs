@@ -456,6 +456,7 @@ mod tests {
             km.conflict(&Chord::parse("ctrl+n").unwrap(), "file.new_file"),
             None
         );
+        // 이 시험은 `key.preset=windows` → Ctrl+Y(macOS 표시 ⌘Y). macOS 프리셋은 아래 시험.
         assert_eq!(
             km.menu_display_of("edit.redo"),
             if cfg!(target_os = "macos") {
@@ -463,6 +464,21 @@ mod tests {
             } else {
                 "Ctrl+Y"
             }
+        );
+    }
+
+    /// macOS 프리셋(10-31 T-187 · 사용자 결정): 훑어보기 = ⌘Y · 다시 실행 = ⇧⌘Z만(종전 ⇧⌘Z|⌘Y) · 충돌 0.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_preset_quicklook_takes_cmd_y() {
+        let s = Settings::from_text(PathBuf::from("x"), "key.preset=macos\n");
+        let km = Keymap::from_settings(&s);
+        assert_eq!(km.menu_display_of("view.quicklook"), "⌘Y");
+        assert_eq!(km.menu_display_of("edit.redo"), "⌘⇧Z");
+        assert_eq!(
+            km.conflict(&Chord::parse("cmd+y").unwrap(), "view.quicklook"),
+            None,
+            "⌘Y는 훑어보기만"
         );
     }
 

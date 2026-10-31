@@ -1,0 +1,11 @@
+# T4 · T-187 macOS 인-프로세스 훑어보기(QLPreviewPanel): 설치(응답자 메서드 · 데이터소스)만 판정 — 패널은 띄우지 않는다(판정 인스턴스
+# 포커스 탈취 금지 · CI macOS). 다른 OS = available false(종전 qlmanage/Sushi 경로).
+id: quicklook-macos
+title: 훑어보기 — macOS QLPreviewPanel 설치 가용
+tree: file a.txt 3
+settings: ui.lang=en
+cmd: @ready:ql.dump:<out>/ql.txt
+cmd: @ready:quit
+check@macos: ql.txt: available true
+check@macos: ql.txt: visible false
+check@linux: ql.txt: available false

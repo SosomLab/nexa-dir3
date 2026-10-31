@@ -1123,6 +1123,7 @@ impl App {
     pub(crate) fn update_docks_filtered(&mut self, info_only: bool) {
         self.docks_due = None;
         self.docks_first = None;
+        self.quick_look_follow(); // macOS 훑어보기 패널이 열려 있으면 선택을 따라간다(T-187)
         let t0 = crate::input::trace_frames().then(Instant::now);
         let single_info =
             !self.dual || self.settings.get("layout.info_mode").unwrap_or("dual") != "dual";
