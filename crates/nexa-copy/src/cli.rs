@@ -78,11 +78,11 @@ Options:
   --job <file.json>    run an ndir-xfer JobSpec JSON instead of arguments (no --ask)
   --progress           JSON progress lines + final report on stdout (machine-readable)
   --report <file>      also write the final report JSON to a file (relative job paths = job file folder)
-  --journal <file>     append one JSON line per finished top-level item (same shape as report items);
-                       use it as --resume input after an interruption
+  --journal <file>     append one JSON line when a top-level item starts and when it finishes (same shape as
+                       report items); use it as --resume input after an interruption
   --resume <file>      skip top-level items a previous report or journal lists as done (same source and
-                       destination) · folders that were interrupted are copied again (existing files are
-                       skipped unless --overwrite) · not with --mirror (a mirror re-compares by itself)
+                       destination) · items the interrupted run had started are copied again, overwriting the
+                       partial copy it left and removing its staging leftovers · not with --mirror
   --max-bps <rate>     limit the copy speed to <rate> bytes per second; K/M/G suffixes = x1024 (e.g. 10M);
                        0 = unlimited · applies to copying (also --mirror), not to --verify reads · block clones
                        on the same file system are instant and not limited
@@ -830,7 +830,7 @@ impl Printer {
                     human_bytes(*total_bytes)
                 );
             }
-            Event::ItemStart { index, dest } => {
+            Event::ItemStart { index, dest, .. } => {
                 self.end_line(err);
                 let _ = writeln!(err, "[{}/{}] {}", index + 1, self.items, dest.display());
             }

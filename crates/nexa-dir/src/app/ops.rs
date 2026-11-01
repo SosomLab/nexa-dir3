@@ -331,7 +331,7 @@ impl App {
                                 .collect();
                         }
                     }
-                    Event::ItemStart { index, dest } => {
+                    Event::ItemStart { index, dest, .. } => {
                         sh.current.store(index + 1, Ordering::Relaxed);
                         if let Ok(mut n) = sh.current_name.lock() {
                             *n = dest.display().to_string();

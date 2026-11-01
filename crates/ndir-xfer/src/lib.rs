@@ -37,14 +37,26 @@ fn verb(op: Op) -> &'static str {
 /// 존재 검사에서 뺀다(이동 재개 = 원본이 이미 없다 · 협업 지적 10-31 ①).
 #[must_use]
 pub fn validate(spec: &JobSpec) -> Option<String> {
-    match resumed(spec) {
-        Ok(done) => validate_with(spec, &done),
-        Err(e) => Some(e),
+    match (resumed(spec), interrupted(spec)) {
+        (Ok(done), Ok(cut)) => validate_with(spec, &done, &cut),
+        (Err(e), _) | (_, Err(e)) => Some(e),
     }
 }
 
 /// 재개 입력 읽기 — `resume` 없음 또는 미러(`validate_with`가 거른다) = 빈 목록.
 fn resumed(spec: &JobSpec) -> Result<Vec<ItemReport>, String> {
+    resume_read(spec, resume::done_items)
+}
+
+/// 재개 입력의 끊긴 항목(`started`만 · GAP-030) — 없으면 빈 목록.
+fn interrupted(spec: &JobSpec) -> Result<Vec<ItemReport>, String> {
+    resume_read(spec, resume::interrupted_items)
+}
+
+fn resume_read(
+    spec: &JobSpec,
+    pick: fn(&str) -> Result<Vec<ItemReport>, String>,
+) -> Result<Vec<ItemReport>, String> {
     let Some(path) = &spec.resume else {
         return Ok(Vec::new());
     };
@@ -53,7 +65,7 @@ fn resumed(spec: &JobSpec) -> Result<Vec<ItemReport>, String> {
     }
     std::fs::read_to_string(path)
         .map_err(|e| e.to_string())
-        .and_then(|t| resume::done_items(&t))
+        .and_then(|t| pick(&t))
         .map_err(|e| format!("resume: {}: {e}", path.display()))
 }
 
@@ -63,7 +75,7 @@ fn resumed_item<'a>(done: &'a [ItemReport], spec: &JobSpec, src: &Path) -> Optio
         .find(|i| i.source == src && i.dest.parent().is_some_and(|p| p == spec.dest))
 }
 
-fn validate_with(spec: &JobSpec, done: &[ItemReport]) -> Option<String> {
+fn validate_with(spec: &JobSpec, done: &[ItemReport], cut: &[ItemReport]) -> Option<String> {
     if !spec.dest.is_dir() {
         return Some(format!(
             "destination is not an existing folder: {}",
@@ -76,11 +88,10 @@ fn validate_with(spec: &JobSpec, done: &[ItemReport]) -> Option<String> {
                 .into(),
         );
     }
-    if let Some(p) = spec
-        .sources
-        .iter()
-        .find(|p| !p.exists() && resumed_item(done, spec, p).is_none())
-    {
+    // 끝난 항목 · 끊긴 항목(GAP-030: 이동 중 죽어 원본이 이미 없을 수 있음)은 존재 검사에서 뺀다.
+    if let Some(p) = spec.sources.iter().find(|p| {
+        !p.exists() && resumed_item(done, spec, p).is_none() && resumed_item(cut, spec, p).is_none()
+    }) {
         return Some(format!("source not found: {}", p.display()));
     }
     if spec.mirror {
@@ -122,15 +133,15 @@ pub fn run_with(
         dry_run: spec.dry_run,
         ..Report::default()
     };
-    let done = match resumed(spec) {
-        Ok(d) => d,
-        Err(e) => {
+    let (done, interrupted) = match (resumed(spec), interrupted(spec)) {
+        (Ok(d), Ok(c)) => (d, c),
+        (Err(e), _) | (_, Err(e)) => {
             rep.ok = false;
             rep.errors.push(e);
             return finish(rep, started);
         }
     };
-    if let Some(e) = validate_with(spec, &done) {
+    if let Some(e) = validate_with(spec, &done, &interrupted) {
         rep.ok = false;
         rep.errors.push(e);
         return finish(rep, started);
@@ -152,11 +163,53 @@ pub fn run_with(
                 dest: prev.dest.clone(),
                 note: "resumed".into(),
             });
+        } else if let Some(prev) = resumed_item(&interrupted, spec, p).filter(|_| !p.exists()) {
+            // 끊긴 항목인데 원본이 없다(GAP-030 · 협업 지적): 같은 볼륨 이동은 rename 직후 죽으면 대상이 유일한 사본 → **건드리지 않고** 알린다.
+            rep.skipped += 1;
+            rep.items.push(ItemReport {
+                action: verb(spec.op).into(),
+                status: "skipped".into(),
+                bytes: prev.bytes,
+                source: p.clone(),
+                dest: prev.dest.clone(),
+                note: "interrupted run: source is gone, destination kept — check it".into(),
+            });
         } else if spec.filter.allows(&ndir_ops::leaf_name(p), p.is_dir()) {
             sources.push(p.clone());
         }
     }
-    let mut resolve = |_: &std::path::Path| spec.conflict.resolve();
+    // 끊긴 항목(GAP-030 · 저널 `started`만 · 사용자 결정 11-01 "이전 전송이 만든 대상만 덮어쓰기"):
+    // - note `new`(시작 전엔 대상이 없었음 · 같은 폴더 복제 " (2)" 포함) = 부분 대상은 전부 우리 것 → **미리 지운다**(자리 판정이 같은 이름을
+    //   다시 내고 Duplicate도 " (3)"으로 밀리지 않는다 · 협업 지적 ①).
+    // - note `overwrite`(원래 있던 대상 · 스테이징 교체 중 죽음) = 대상은 옛 내용 그대로 → 충돌 정책과 무관하게 덮어쓰기 강제.
+    // - 둘 다 스테이징 잔여(`.<이름>.nexa-tmp-*` · 살아 있는 pid 것은 제외)를 치우고, 끝난 뒤 `old` 잔여도.
+    // 선삭제·강제 덮어쓰기는 **복사 + 원본이 지금 있을 때만**(협업 지적 11-01): 이동은 교차 볼륨 원본 정리 중 죽으면 대상이 전체이고 원본은
+    // 일부라, 대상을 지우거나 교체하면 이미 지워진 원본이 영구 손실된다 → 이동의 끊긴 항목은 평소 정책대로 두고 note로 확인을 요청한다.
+    let interrupted: Vec<ItemReport> = interrupted
+        .into_iter()
+        .filter(|i| sources.contains(&i.source))
+        .collect();
+    let resumable = |i: &ItemReport| spec.op == Op::Copy && i.source.exists();
+    let force_overwrite: Vec<PathBuf> = interrupted
+        .iter()
+        .filter(|i| i.note == "overwrite" && resumable(i))
+        .map(|i| i.dest.clone())
+        .collect();
+    if !spec.dry_run {
+        for i in interrupted.iter().filter(|i| resumable(i)) {
+            ndir_ops::remove_staging_leftovers(&i.dest, &["tmp"]);
+            if i.note == "new" {
+                let _ = ndir_ops::delete_permanent(&i.dest);
+            }
+        }
+    }
+    let mut resolve = |dest: &std::path::Path| {
+        if force_overwrite.iter().any(|d| d == dest) {
+            ndir_ops::Conflict::Overwrite
+        } else {
+            spec.conflict.resolve()
+        }
+    };
     if spec.dry_run {
         let plan = plan_transfer(&sources, &spec.dest, spec.op, &mut resolve);
         for it in &plan.items {
@@ -226,9 +279,27 @@ pub fn run_with(
                 current: None,
             });
         }
-        Event::ItemStart { index, dest } => {
+        Event::ItemStart {
+            index,
+            dest,
+            overwrite,
+        } => {
             if let Some(d) = dests.get_mut(index) {
                 *d = dest.to_path_buf();
+            }
+            // 저널 시작 줄(GAP-030): 끝나지 않은 채 죽으면 재개가 "이전 전송이 만든 부분 대상"으로 알고 덮어쓴다 · note = 당시 결정.
+            if let (Some(j), Some(src)) = (journal.as_mut(), sources.get(index)) {
+                let item = ItemReport {
+                    action: verb(spec.op).into(),
+                    status: "started".into(),
+                    bytes: sizes.get(index).copied().unwrap_or(0),
+                    source: src.clone(),
+                    dest: dest.to_path_buf(),
+                    note: if overwrite { "overwrite" } else { "new" }.into(),
+                };
+                if let Err(e) = j.record(&item) {
+                    journal_errors.push(e.to_string());
+                }
             }
         }
         Event::Bytes(p) => on_progress(&Progress {
@@ -292,11 +363,20 @@ pub fn run_with(
             ("failed", why.clone())
         } else if out.skipped.iter().any(|p| p == src) {
             rep.skipped += 1;
-            ("skipped", "exists".to_string())
+            // 끊긴 이동이 충돌(대상 있음)로 건너뜀(GAP-030): 대상이 전체 · 원본이 일부일 수 있다 — 사용자가 판단하도록 알린다.
+            if interrupted.iter().any(|i| i.source == *src) {
+                (
+                    "skipped",
+                    "exists · interrupted run: destination kept — check source and destination"
+                        .to_string(),
+                )
+            } else {
+                ("skipped", "exists".to_string())
+            }
         } else if out.transferred.iter().any(|(s, _)| s == src) {
             rep.transferred_bytes += bytes;
             // 이동 + verify(T-202 ⑤): 같은 볼륨은 rename이라 검증하지 않았음을 적는다(엔진과 같은 `same_volume` 판정 · 협업 지적).
-            let note = if spec.verify && spec.op == Op::Move {
+            let mut note = if spec.verify && spec.op == Op::Move {
                 if ndir_ops::same_volume(src, &spec.dest) {
                     "renamed on the same volume (not verified)"
                 } else {
@@ -304,8 +384,23 @@ pub fn run_with(
                 }
             } else {
                 ""
-            };
-            ("done", note.to_string())
+            }
+            .to_string();
+            // 끊긴 항목을 다시 돌렸다(GAP-030): 복사 = 부분 대상을 덮어썼고 옛 대상 잔여(`old`)는 **done일 때만** 치운다 · 이동 = 평소 경로로 끝남.
+            if let Some(prev) = interrupted.iter().find(|i| i.source == *src) {
+                let tail = if spec.op == Op::Copy {
+                    ndir_ops::remove_staging_leftovers(&prev.dest, &["old"]);
+                    "resumed: overwrote the partial copy left by the interrupted run"
+                } else {
+                    "resumed: interrupted move completed"
+                };
+                note = if note.is_empty() {
+                    tail.to_string()
+                } else {
+                    format!("{note} · {tail}")
+                };
+            }
+            ("done", note)
         } else if out.canceled {
             ("canceled", String::new())
         } else {
@@ -654,9 +749,12 @@ mod tests {
         let r = run(&spec, &mut |_| {}, &cancel);
         assert!(r.ok, "{r:?}");
         let text = fs::read_to_string(&journal).unwrap();
-        assert_eq!(text.lines().count(), 2, "{text}");
-        assert!(
-            text.lines().all(|l| l.contains("\"status\":\"done\"")),
+        assert_eq!(text.lines().count(), 4, "항목마다 started + done: {text}");
+        assert_eq!(
+            text.lines()
+                .filter(|l| l.contains("\"status\":\"done\""))
+                .count(),
+            2,
             "{text}"
         );
         fs::remove_dir_all(d.join("dst")).unwrap();
@@ -675,7 +773,7 @@ mod tests {
         );
         assert!(!d.join("dst/a.txt").exists(), "재개 = 복사 안 함");
         assert!(d.join("dst/c.txt").is_file(), "새 항목만 복사");
-        assert_eq!(fs::read_to_string(&journal).unwrap().lines().count(), 3);
+        assert_eq!(fs::read_to_string(&journal).unwrap().lines().count(), 6);
         // 다른 dest = 다른 쌍 → 다시 복사.
         fs::create_dir_all(d.join("dst2")).unwrap();
         let other = JobSpec {
@@ -745,7 +843,210 @@ mod tests {
         let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
         assert!(r.ok && r.verify.is_some(), "{r:?}");
         let text = fs::read_to_string(&journal).unwrap();
-        assert_eq!(text.lines().count(), 2, "{text}");
+        assert_eq!(
+            text.lines().count(),
+            4,
+            "started 2 + (검증 뒤) done 2: {text}"
+        );
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// GAP-030(11-01): 저널에 `started`만 남은 항목(프로세스 사망) = 이전 전송이 만든 부분 대상 → 재개가 충돌 정책(skip)과 무관하게
+    /// 덮어쓰고 스테이징 잔여(`.<이름>.nexa-tmp-*` · 끝난 뒤 `old`)를 치운다 · 그 항목 note에 표시 · 시작 전 항목은 평소대로.
+    #[test]
+    fn resume_overwrites_partial_copy_and_cleans_staging() {
+        let d = sandbox("gap030");
+        let journal = d.join("job.log");
+        let started = ItemReport {
+            action: "copy".into(),
+            status: "started".into(),
+            bytes: 5,
+            source: d.join("src/a.txt"),
+            dest: d.join("dst/a.txt"),
+            note: "new".into(),
+        };
+        fs::write(
+            &journal,
+            format!("{}\n", json::dump(&started.to_json_value())),
+        )
+        .unwrap();
+        fs::write(d.join("dst/a.txt"), b"he").unwrap(); // 부분 파일(대상 이름 그대로)
+        fs::write(d.join("dst/.a.txt.nexa-tmp-4000000000-0"), b"stale").unwrap(); // 스테이징 잔여
+        fs::write(d.join("dst/.a.txt.nexa-old-4000000001-1"), b"old").unwrap();
+        fs::write(d.join("dst/b.bin"), b"keep").unwrap(); // 시작 전 항목의 기존 대상 = 평소대로 건너뜀
+        fs::write(d.join("src/b.bin"), b"new b").unwrap();
+        // 덮어쓰기 중 죽은 폴더 항목: 대상에 옛 내용이 그대로(스테이징 미커밋) → 재개 = 강제 덮어쓰기(스테이징 교체 · 옛 파일 사라짐).
+        fs::create_dir_all(d.join("dst/dir")).unwrap();
+        fs::write(d.join("dst/dir/stale.txt"), b"old content").unwrap();
+        let started_dir = ItemReport {
+            action: "copy".into(),
+            status: "started".into(),
+            bytes: 3000,
+            source: d.join("src/dir"),
+            dest: d.join("dst/dir"),
+            note: "overwrite".into(),
+        };
+        {
+            use std::io::Write as _;
+            fs::OpenOptions::new()
+                .append(true)
+                .open(&journal)
+                .unwrap()
+                .write_all(format!("{}\n", json::dump(&started_dir.to_json_value())).as_bytes())
+                .unwrap();
+        }
+        let spec = JobSpec {
+            sources: vec![d.join("src/a.txt"), d.join("src/b.bin"), d.join("src/dir")],
+            dest: d.join("dst"),
+            resume: Some(journal),
+            ..JobSpec::default()
+        };
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(r.ok, "{r:?}");
+        assert_eq!(
+            fs::read(d.join("dst/a.txt")).unwrap(),
+            b"hello",
+            "부분 파일을 덮어씀"
+        );
+        assert!(
+            !d.join("dst/.a.txt.nexa-tmp-4000000000-0").exists(),
+            "스테이징 사본 잔여 정리"
+        );
+        assert!(
+            !d.join("dst/.a.txt.nexa-old-4000000001-1").exists(),
+            "옛 대상 잔여 정리(끝난 뒤)"
+        );
+        assert_eq!(
+            fs::read(d.join("dst/b.bin")).unwrap(),
+            b"keep",
+            "시작 전 항목 = skip 정책 그대로"
+        );
+        let a = r
+            .items
+            .iter()
+            .find(|i| i.source.ends_with("a.txt"))
+            .unwrap();
+        assert!(a.status == "done" && a.note.contains("partial"), "{a:?}");
+        assert_eq!(r.skipped, 1);
+        assert!(
+            d.join("dst/dir/b.bin").is_file() && !d.join("dst/dir/stale.txt").exists(),
+            "overwrite 항목 = 스테이징 교체로 통째 다시"
+        );
+        // 같은 폴더 복제(Duplicate " (2)") 중 죽음: started(new · dest = " (2)") → 재개가 부분 " (2)"를 지우고 같은 이름으로 다시(" (3)" 없음).
+        let dup_journal = d.join("dup.log");
+        let dup_dest = d.join("src/a (2).txt");
+        let started_dup = ItemReport {
+            action: "duplicate".into(),
+            status: "started".into(),
+            bytes: 5,
+            source: d.join("src/a.txt"),
+            dest: dup_dest.clone(),
+            note: "new".into(),
+        };
+        fs::write(
+            &dup_journal,
+            format!("{}\n", json::dump(&started_dup.to_json_value())),
+        )
+        .unwrap();
+        fs::write(&dup_dest, b"he").unwrap();
+        let spec = JobSpec {
+            sources: vec![d.join("src/a.txt")],
+            dest: d.join("src"),
+            resume: Some(dup_journal),
+            ..JobSpec::default()
+        };
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(r.ok, "{r:?}");
+        assert_eq!(fs::read(&dup_dest).unwrap(), b"hello", "같은 이름으로 다시");
+        assert!(!d.join("src/a (3).txt").exists(), "\" (3)\" 없음");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// GAP-030 안전 규칙(협업 지적 11-01): 끊긴 항목이라도 **대상이 유일한 사본일 수 있으면 건드리지 않는다** —
+    /// ① 이동 · 원본 없음 · 대상 있음(같은 볼륨 rename 직후 사망) = 대상 유지 · skipped + note ② 이동 · 원본 일부 · 대상 전체(교차 볼륨
+    /// 원본 정리 중 사망) = 대상 유지(평소 skip 정책) + note ③ 복사 · 원본 없음 · 대상 있음 = 대상 유지(선삭제 안 함) · validate 통과.
+    #[test]
+    fn resume_never_touches_destination_when_source_may_be_gone() {
+        let d = sandbox("gap030-safe");
+        let line = |src: &Path, dest: &Path| {
+            let it = ItemReport {
+                action: "move".into(),
+                status: "started".into(),
+                bytes: 0,
+                source: src.to_path_buf(),
+                dest: dest.to_path_buf(),
+                note: "new".into(),
+            };
+            format!("{}\n", json::dump(&it.to_json_value()))
+        };
+        let cancel = AtomicBool::new(false);
+        // ① 이동 · 원본 없음 · 대상 있음.
+        fs::write(d.join("dst/gone.txt"), b"only copy").unwrap();
+        let j1 = d.join("j1.log");
+        fs::write(&j1, line(&d.join("src/gone.txt"), &d.join("dst/gone.txt"))).unwrap();
+        let r = run(
+            &JobSpec {
+                op: Op::Move,
+                sources: vec![d.join("src/gone.txt")],
+                dest: d.join("dst"),
+                resume: Some(j1),
+                ..JobSpec::default()
+            },
+            &mut |_| {},
+            &cancel,
+        );
+        assert!(r.ok && r.skipped == 1, "{r:?}");
+        assert_eq!(
+            fs::read(d.join("dst/gone.txt")).unwrap(),
+            b"only copy",
+            "대상 유지"
+        );
+        assert!(r.items[0].note.contains("source is gone"), "{:?}", r.items);
+        // ② 이동 · 원본 일부(폴더에 파일 1개 남음) · 대상 전체.
+        fs::create_dir_all(d.join("src/mv")).unwrap();
+        fs::write(d.join("src/mv/left.txt"), b"left").unwrap();
+        fs::create_dir_all(d.join("dst/mv")).unwrap();
+        fs::write(d.join("dst/mv/left.txt"), b"left").unwrap();
+        fs::write(d.join("dst/mv/moved.txt"), b"already moved").unwrap();
+        let j2 = d.join("j2.log");
+        fs::write(&j2, line(&d.join("src/mv"), &d.join("dst/mv"))).unwrap();
+        let r = run(
+            &JobSpec {
+                op: Op::Move,
+                sources: vec![d.join("src/mv")],
+                dest: d.join("dst"),
+                resume: Some(j2),
+                ..JobSpec::default()
+            },
+            &mut |_| {},
+            &cancel,
+        );
+        assert!(r.ok && r.skipped == 1, "{r:?}");
+        assert!(
+            d.join("dst/mv/moved.txt").is_file() && d.join("src/mv/left.txt").is_file(),
+            "대상 전체 · 원본 일부 모두 유지"
+        );
+        assert!(
+            r.items[0].note.contains("destination kept"),
+            "{:?}",
+            r.items
+        );
+        // ③ 복사 · 원본 없음 · 대상 있음 = 선삭제 없음 · validate 통과.
+        fs::write(d.join("dst/c.txt"), b"keep me").unwrap();
+        let j3 = d.join("j3.log");
+        fs::write(&j3, line(&d.join("src/c.txt"), &d.join("dst/c.txt"))).unwrap();
+        let r = run(
+            &JobSpec {
+                sources: vec![d.join("src/c.txt")],
+                dest: d.join("dst"),
+                resume: Some(j3),
+                ..JobSpec::default()
+            },
+            &mut |_| {},
+            &cancel,
+        );
+        assert!(r.ok && r.skipped == 1, "{r:?}");
+        assert_eq!(fs::read(d.join("dst/c.txt")).unwrap(), b"keep me");
         let _ = fs::remove_dir_all(&d);
     }
 

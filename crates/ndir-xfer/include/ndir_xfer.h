@@ -2,8 +2,9 @@
  *
  * Every string that crosses this boundary is UTF-8 JSON:
  *   - job      : JobSpec JSON   (docs/26 §4 — sources, dest, op, conflict, filter, verify, mirror, dry_run, journal, resume, ...)
- *                "journal": a file that gets one Report-item JSON line per finished top-level item; "resume": a previous
- *                Report JSON or journal whose "done" (source, dest) pairs are skipped (same ABI — keys only).
+ *                "journal": a file that gets one Report-item JSON line when a top-level item starts ("started", note
+ *                new|overwrite) and when it finishes ("done"); "resume": a previous Report JSON or journal — "done" pairs are
+ *                skipped, pairs left at "started" (interrupted run) are overwritten and their staging leftovers removed.
  *                "max_bps": transfer speed limit in bytes per second (0 = unlimited; copy phase only, block clones are
  *                not counted, the verify phase is not limited). "mirror_by_content": a mirror also hashes files whose
  *                size and time match and copies them if the content differs. Mirror deletions through this ABI are

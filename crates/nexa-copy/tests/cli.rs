@@ -467,9 +467,13 @@ fn journal_and_resume_skip_finished_items() {
         .lines()
         .map(str::to_string)
         .collect();
-    assert_eq!(lines.len(), 2, "{lines:?}");
-    assert!(
-        lines.iter().all(|l| l.contains("\"status\":\"done\"")),
+    assert_eq!(lines.len(), 4, "항목마다 started + done: {lines:?}");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.contains("\"status\":\"done\""))
+            .count(),
+        2,
         "{lines:?}"
     );
     fs::remove_dir_all(&dst).expect("rm");

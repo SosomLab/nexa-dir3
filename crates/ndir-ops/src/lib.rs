@@ -622,6 +622,99 @@ pub fn move_onto_with_progress(
     }
 }
 
+/// 스테이징 잔여 정리(GAP-030 · 11-01 협업 kill -9 실측): 프로세스가 죽으면 `dest` 옆에 `.<이름>.nexa-<tag>-<pid>-<n>`이 남는다(오류·취소 경로만
+/// 치우므로). `tags`에 든 종류(`tmp` = 교체용 사본 · `old` = 치워 둔 옛 대상)만 지운다(파일·폴더 · 링크는 링크만) · 돌려주는 값 = 지운 수.
+/// 재개(`ndir-xfer`)가 중단된 항목을 다시 돌리기 **전**에 `tmp`를, 끝난 **뒤**에 `old`를 치운다.
+pub fn remove_staging_leftovers(dest: &Path, tags: &[&str]) -> usize {
+    let (Some(parent), Some(name)) = (dest.parent(), dest.file_name()) else {
+        return 0;
+    };
+    let name = name.to_string_lossy();
+    let Ok(rd) = fs::read_dir(parent) else {
+        return 0;
+    };
+    let mut n = 0;
+    for e in rd.flatten() {
+        let fname = e.file_name().to_string_lossy().into_owned();
+        let Some(rest) = tags
+            .iter()
+            .find_map(|t| fname.strip_prefix(&format!(".{name}.nexa-{t}-")))
+        else {
+            continue;
+        };
+        // 이름의 pid가 **살아 있으면** 다른 프로세스가 같은 대상을 쓰는 중 — 건드리지 않는다(협업 지적 11-01 · 단일 인스턴스 장치 없음).
+        if rest
+            .split('-')
+            .next()
+            .and_then(|p| p.parse::<u32>().ok())
+            .is_some_and(process_alive)
+        {
+            continue;
+        }
+        let p = e.path();
+        let r = if is_link(&p) {
+            remove_link(&p)
+        } else if p.is_dir() {
+            fs::remove_dir_all(&p)
+        } else {
+            fs::remove_file(&p)
+        };
+        if r.is_ok() {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// 프로세스 생존 확인(GAP-030 스테이징 잔여 정리 · T-202 ④ 큐 소유 표시 · 11-01): unix = `kill(pid, 0)`(0 또는 EPERM = 살아 있음) ·
+/// Windows = `OpenProcess` + `GetExitCodeProcess == STILL_ACTIVE`. 외부 crate 0(DR-8 · FFI 직접 선언 · `fastcopy` os 모듈 선례). pid 재사용은
+/// 못 가른다(호출자가 기동 시각 등을 함께 대조).
+#[must_use]
+pub fn process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn kill(pid: i32, sig: i32) -> i32;
+        }
+        let Ok(p) = i32::try_from(pid) else {
+            return false;
+        };
+        if p <= 0 {
+            return false;
+        }
+        // SAFETY: 시그널 0 = 존재·권한 확인만(아무 일도 보내지 않는다).
+        let r = unsafe { kill(p, 0) };
+        r == 0 || io::Error::last_os_error().raw_os_error() == Some(1) // EPERM = 있지만 남의 것
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut core::ffi::c_void;
+            fn GetExitCodeProcess(h: *mut core::ffi::c_void, code: *mut u32) -> i32;
+            fn CloseHandle(h: *mut core::ffi::c_void) -> i32;
+        }
+        const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+        const STILL_ACTIVE: u32 = 259;
+        // SAFETY: 핸들을 열어 종료 코드만 읽고 바로 닫는다.
+        unsafe {
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                return false;
+            }
+            let mut code = 0u32;
+            let ok = GetExitCodeProcess(h, &raw mut code) != 0;
+            CloseHandle(h);
+            ok && code == STILL_ACTIVE
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
 /// 완전 삭제(휴지통 아님, 폴더 재귀) — 없으면 무동작(원본 DeletePermanent).
 /// 휴지통 삭제는 셸 API가 필요해 앱 계층(win.rs) 담당.
 pub fn delete_permanent(path: &Path) -> io::Result<()> {
@@ -693,8 +786,12 @@ pub enum ItemStatus {
 pub enum Event<'a> {
     /// 전송 시작 전 계획 — 항목별 크기(세그먼트 비율)·총 바이트. 정확히 1회.
     Plan { sizes: &'a [u64], total_bytes: u64 },
-    /// 항목 쓰기 시작 — 실제 대상 경로(완료 전 열기/이동 차단용).
-    ItemStart { index: usize, dest: &'a Path },
+    /// 항목 쓰기 시작 — 실제 대상 경로(완료 전 열기/이동 차단용) · `overwrite` = 기존 대상을 교체하는 전송(저널 시작 줄 note · GAP-030).
+    ItemStart {
+        index: usize,
+        dest: &'a Path,
+        overwrite: bool,
+    },
     /// 바이트 진행(4MB 청크 단위 — `done_bytes`는 전체 누적).
     Bytes(Progress),
     /// 항목 종결(성공/건너뜀/실패·취소).
@@ -903,6 +1000,7 @@ fn transfer_inner(
             on_event(Event::ItemStart {
                 index: i,
                 dest: &dest,
+                overwrite,
             });
             let mut bytes = |d: u64| {
                 done += d;
@@ -1285,7 +1383,7 @@ mod tests {
             &mut no_conflict,
             &mut |ev| match ev {
                 Event::Plan { sizes, total_bytes } => plan = Some((sizes.to_vec(), total_bytes)),
-                Event::ItemStart { index, dest } => starts.push((index, dest.to_path_buf())),
+                Event::ItemStart { index, dest, .. } => starts.push((index, dest.to_path_buf())),
                 Event::Bytes(p) => last = Some(p),
                 Event::ItemEnd { index, status } => ends.push((index, status)),
             },
@@ -1714,6 +1812,36 @@ mod tests {
             &LOOP,
         );
         assert!(out2.copied_paths.is_empty());
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-030: 스테이징 잔여 정리는 이름의 pid가 **죽은** 것만(살아 있는 pid = 다른 프로세스가 쓰는 중 · 자기 pid 포함) · tag 종류별 · 파일·폴더.
+    #[test]
+    fn staging_leftovers_skip_live_pids() {
+        let d = fixture("gap030_leftovers");
+        let dest = d.join("a.txt");
+        let me = std::process::id();
+        assert!(process_alive(me));
+        assert!(!process_alive(u32::MAX - 7), "없는 pid");
+        fs::write(d.join(format!(".a.txt.nexa-tmp-{me}-0")), "live").unwrap();
+        fs::write(d.join(".a.txt.nexa-tmp-4000000000-0"), "dead").unwrap();
+        fs::create_dir_all(d.join(".a.txt.nexa-old-4000000001-1")).unwrap();
+        fs::write(d.join(".b.txt.nexa-tmp-4000000002-0"), "other name").unwrap();
+        assert_eq!(remove_staging_leftovers(&dest, &["tmp"]), 1);
+        assert!(
+            d.join(format!(".a.txt.nexa-tmp-{me}-0")).exists(),
+            "살아 있는 pid = 유지"
+        );
+        assert!(!d.join(".a.txt.nexa-tmp-4000000000-0").exists());
+        assert!(
+            d.join(".a.txt.nexa-old-4000000001-1").exists(),
+            "tag 다름 = 유지"
+        );
+        assert_eq!(remove_staging_leftovers(&dest, &["old"]), 1);
+        assert!(
+            d.join(".b.txt.nexa-tmp-4000000002-0").exists(),
+            "다른 이름 = 유지"
+        );
         fs::remove_dir_all(&d).unwrap();
     }
 
