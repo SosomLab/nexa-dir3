@@ -1719,6 +1719,41 @@ fn canceled_transfer_counts_untouched_items_as_skipped() {
     assert_eq!(crate::app::ops::result_parts(1, &out).len(), 2);
 }
 
+/// 앱 전송 = ndir-xfer `run_full`(T-202 ④ 슬라이스 1 · docs/26 §12.3): 없는 원본은 **그 항목만** 실패(종전 엔진 직접 호출과 같은 격리 ·
+/// `Hooks::lenient_sources` · 협업 실측 11-01: CLI 경로는 전체 거부) · 나머지는 복사 · 결과 안내 = "transferred 1 · 1 failed" · undo 가능.
+#[test]
+fn transfer_isolates_missing_source_through_xfer() {
+    let (mut app, dir) = fixture("xferlenient");
+    app.layout_for(1200, 800, 1.0);
+    app.start_transfer(
+        vec![dir.join("a.txt"), dir.join("ghost.txt")],
+        dir.join("sub"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    assert!(app.transfer.is_some());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app.ops_tick() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "transfer did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(dir.join("sub/a.txt").is_file(), "있는 원본은 복사됨");
+    assert!(!dir.join("sub/ghost.txt").exists());
+    let bodies = app.panel_toasts[app.active].bodies();
+    assert_eq!(bodies.len(), 1, "{bodies:?}");
+    assert!(
+        bodies[0].contains(&trf("ops.total", &["2"]))
+            && bodies[0].contains(&trf("ops.done", &["1"]))
+            && bodies[0].contains(&trf("ops.errors", &["1"])),
+        "{bodies:?}"
+    );
+    assert!(app.history().can_undo(), "복사 1건 = 되돌리기 기록");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만
 /// 앱 언어로 · 이름 복사는 그 **바로 아래**(설정 순서보다 우선) · 셸에 없으면 둘 다 아래 고유 구역 · 이름 복사를 숨기면 어디에도 없다 ·
 /// 복사 내용 = 한 줄에 하나(전체 경로 / 이름만).

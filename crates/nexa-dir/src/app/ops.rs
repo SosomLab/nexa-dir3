@@ -2,7 +2,8 @@
 //!
 //! - **클립보드**: `edit.copy`/`edit.cut` = 선택 경로를 OS 파일 클립보드(FileClipboard 포트 · Windows CF_HDROP)에 쓰고 **앱 내 사본**도 둔다
 //!   (포트 `Unsupported`인 OS는 앱 내 사본만 — T-52/53 뒤 OS 클립보드로). `edit.paste` = OS 클립보드 우선 · 없으면 앱 내 사본.
-//! - **전송**: 대상 = 선택한 폴더 1개 또는 활성 패널 폴더(dir2 `paste_dest`) · `ndir_ops::transfer`를 **작업 스레드**에서(진행 = 공유 원자값 ·
+//! - **전송**: 대상 = 선택한 폴더 1개 또는 활성 패널 폴더(dir2 `paste_dest`) · `ndir_xfer::run_full`(T-202 ④ 슬라이스 1 · 충돌 콜백 · 엔진
+//!   이벤트 통과 · `lenient_sources` = 없는 원본은 그 항목만 실패 · 조절값은 설정 → `JobSpec`)을 **작업 스레드**에서(진행 = 공유 원자값 ·
 //!   틱마다 상태줄 `ops.progress`) · 완료 = 두 패널 재열람 + 토스트(`ops.done/skipped/errors/canceled`) + 히스토리 기록(이동 = `MoveBatchOp` ·
 //!   복사 = `CopyBatchOp` + 휴지통 삭제 주입). 동시 1건(`ops.busy`).
 //! - **충돌**: 확인 창(T-29 nexa-dlg)이 오기 전까지 **건너뜀**(`Conflict::Skip` — 조용히 덮어쓰지 않는다 · 건너뛴 수는 토스트에) ⚠ OPS-004.
@@ -275,107 +276,125 @@ impl App {
         }
         let sh = Arc::clone(&shared);
         let count = sources.len();
+        // 명세(T-202 ④): 충돌은 콜백이 결정하므로 정책은 자리만 · 조절값은 전역 `set_tuning`과 같은 설정 키(시작 시점 스냅숏 — 종전과 같다).
+        let t = Self::transfer_tuning(&self.settings);
+        let spec = ndir_xfer::JobSpec {
+            op,
+            sources,
+            dest,
+            conflict: ndir_xfer::ConflictPolicy::Skip,
+            threads: t.threads,
+            native: t.native,
+            unbuffered_mb: t.unbuffered_min / (1024 * 1024),
+            ..ndir_xfer::JobSpec::default()
+        };
         let (req_tx, conflict_rx) = mpsc::channel::<ConflictReq>();
         std::thread::spawn(move || {
             // 충돌 = UI 대화상자 4버튼(dir2 QA 07-14 개정): "모두 덮어쓰기"만 이후 무확인 · 취소 = 전체 중단 + 그 항목 건너뜀.
             let mut decided: Option<Conflict> = None;
             let sh2 = Arc::clone(&sh);
-            let out = ndir_ops::transfer(
-                &sources,
-                &dest,
-                op,
-                &mut |p: &std::path::Path| {
-                    if let Some(c) = decided {
-                        return c;
+            let mut resolve = |p: &std::path::Path| {
+                if let Some(c) = decided {
+                    return c;
+                }
+                let (tx, rx) = mpsc::channel();
+                if req_tx.send((p.to_path_buf(), tx)).is_err() {
+                    return Conflict::Skip;
+                }
+                match rx.recv() {
+                    Ok(ConflictChoice::Overwrite) => Conflict::Overwrite,
+                    Ok(ConflictChoice::OverwriteAll) => {
+                        decided = Some(Conflict::Overwrite);
+                        Conflict::Overwrite
                     }
-                    let (tx, rx) = mpsc::channel();
-                    if req_tx.send((p.to_path_buf(), tx)).is_err() {
-                        return Conflict::Skip;
+                    Ok(ConflictChoice::Skip) => Conflict::Skip,
+                    Ok(ConflictChoice::Cancel) | Err(_) => {
+                        sh2.cancel.store(true, Ordering::Relaxed);
+                        Conflict::Skip
                     }
-                    match rx.recv() {
-                        Ok(ConflictChoice::Overwrite) => Conflict::Overwrite,
-                        Ok(ConflictChoice::OverwriteAll) => {
-                            decided = Some(Conflict::Overwrite);
-                            Conflict::Overwrite
-                        }
-                        Ok(ConflictChoice::Skip) => Conflict::Skip,
-                        Ok(ConflictChoice::Cancel) | Err(_) => {
-                            sh2.cancel.store(true, Ordering::Relaxed);
-                            Conflict::Skip
+                }
+            };
+            let mut on_event = |ev: &Event<'_>| match ev {
+                Event::Plan { sizes, total_bytes } => {
+                    sh.total.store(*total_bytes, Ordering::Relaxed);
+                    if let Ok(mut off) = sh.offsets.lock() {
+                        let mut acc = 0u64;
+                        *off = sizes
+                            .iter()
+                            .map(|&s| {
+                                let o = acc;
+                                acc = acc.saturating_add(s);
+                                o
+                            })
+                            .collect();
+                    }
+                    sh.dirty.store(true, Ordering::Relaxed);
+                    if let Ok(mut it) = sh.items.lock() {
+                        *it = sizes
+                            .iter()
+                            .map(|&size| SegItem {
+                                size,
+                                done: 0,
+                                status: SegStatus::Pending,
+                            })
+                            .collect();
+                    }
+                }
+                Event::ItemStart { index, dest, .. } => {
+                    sh.current.store(*index + 1, Ordering::Relaxed);
+                    if let Ok(mut n) = sh.current_name.lock() {
+                        *n = dest.display().to_string();
+                    }
+                    sh.dirty.store(true, Ordering::Relaxed);
+                    if let Ok(mut it) = sh.items.lock() {
+                        if let Some(i) = it.get_mut(*index) {
+                            i.status = SegStatus::Active;
                         }
                     }
-                },
-                &mut |ev| match ev {
-                    Event::Plan { sizes, total_bytes } => {
-                        sh.total.store(total_bytes, Ordering::Relaxed);
-                        if let Ok(mut off) = sh.offsets.lock() {
-                            let mut acc = 0u64;
-                            *off = sizes
-                                .iter()
-                                .map(|&s| {
-                                    let o = acc;
-                                    acc = acc.saturating_add(s);
-                                    o
-                                })
-                                .collect();
-                        }
-                        sh.dirty.store(true, Ordering::Relaxed);
-                        if let Ok(mut it) = sh.items.lock() {
-                            *it = sizes
-                                .iter()
-                                .map(|&size| SegItem {
-                                    size,
-                                    done: 0,
-                                    status: SegStatus::Pending,
-                                })
-                                .collect();
+                }
+                Event::Bytes(p) => {
+                    sh.done.store(p.done_bytes, Ordering::Relaxed);
+                    sh.dirty.store(true, Ordering::Relaxed);
+                    // 항목 내 진행 = 전체 누적 − 앞 항목 크기 합(세그먼트 부분 채움) — 누적 합은 계획 때 만든 표에서 O(1).
+                    let before: u64 = sh
+                        .offsets
+                        .lock()
+                        .ok()
+                        .and_then(|o| o.get(p.item_index).copied())
+                        .unwrap_or(0);
+                    if let Ok(mut it) = sh.items.lock() {
+                        if let Some(i) = it.get_mut(p.item_index) {
+                            i.done = p.done_bytes.saturating_sub(before).min(i.size);
                         }
                     }
-                    Event::ItemStart { index, dest, .. } => {
-                        sh.current.store(index + 1, Ordering::Relaxed);
-                        if let Ok(mut n) = sh.current_name.lock() {
-                            *n = dest.display().to_string();
-                        }
-                        sh.dirty.store(true, Ordering::Relaxed);
-                        if let Ok(mut it) = sh.items.lock() {
-                            if let Some(i) = it.get_mut(index) {
-                                i.status = SegStatus::Active;
+                }
+                Event::ItemEnd { index, status } => {
+                    sh.dirty.store(true, Ordering::Relaxed);
+                    if let Ok(mut it) = sh.items.lock() {
+                        if let Some(i) = it.get_mut(*index) {
+                            i.status = match status {
+                                ItemStatus::Done => SegStatus::Done,
+                                ItemStatus::Skipped => SegStatus::Skipped,
+                                ItemStatus::Failed => SegStatus::Failed,
+                            };
+                            if i.status == SegStatus::Done {
+                                i.done = i.size;
                             }
                         }
                     }
-                    Event::Bytes(p) => {
-                        sh.done.store(p.done_bytes, Ordering::Relaxed);
-                        sh.dirty.store(true, Ordering::Relaxed);
-                        // 항목 내 진행 = 전체 누적 − 앞 항목 크기 합(세그먼트 부분 채움) — 누적 합은 계획 때 만든 표에서 O(1).
-                        let before: u64 = sh
-                            .offsets
-                            .lock()
-                            .ok()
-                            .and_then(|o| o.get(p.item_index).copied())
-                            .unwrap_or(0);
-                        if let Ok(mut it) = sh.items.lock() {
-                            if let Some(i) = it.get_mut(p.item_index) {
-                                i.done = p.done_bytes.saturating_sub(before).min(i.size);
-                            }
-                        }
-                    }
-                    Event::ItemEnd { index, status } => {
-                        sh.dirty.store(true, Ordering::Relaxed);
-                        if let Ok(mut it) = sh.items.lock() {
-                            if let Some(i) = it.get_mut(index) {
-                                i.status = match status {
-                                    ItemStatus::Done => SegStatus::Done,
-                                    ItemStatus::Skipped => SegStatus::Skipped,
-                                    ItemStatus::Failed => SegStatus::Failed,
-                                };
-                                if i.status == SegStatus::Done {
-                                    i.done = i.size;
-                                }
-                            }
-                        }
-                    }
-                },
+                }
+            };
+            // 결과는 엔진 `Outcome`(실제 (원본, 최종 대상) · undo) — Report는 앱이 쓰지 않는다(§12.3 ②). 취소 = 콜백이 세운 `sh.cancel`.
+            let (_report, out) = ndir_xfer::run_full(
+                &spec,
+                &mut |_| {},
                 &sh.cancel,
+                ndir_xfer::Hooks {
+                    resolve: Some(&mut resolve),
+                    on_event: Some(&mut on_event),
+                    lenient_sources: true,
+                    ..ndir_xfer::Hooks::default()
+                },
             );
             if let Ok(mut slot) = sh.outcome.lock() {
                 *slot = Some(out);

@@ -922,6 +922,7 @@ dependencies = [
  "ndir-term",
  "ndir-tree",
  "ndir-vfs",
+ "ndir-xfer",
  "nexa-conf",
  "nexa-ctl",
  "nexa-dlg",

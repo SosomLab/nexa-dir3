@@ -7,6 +7,8 @@
 //! - 취소 = `AtomicBool`(협력적) · 진행 = 콜백(`&mut dyn FnMut(&Progress)`) · 항목별 실패 격리(배치는 계속).
 //! - 재개(T-202 ② · `resume.rs`): `journal` = 최상위 항목 완료마다 한 줄 · `resume` = 이전 Report/저널의 `done` 쌍 건너뜀.
 //! - 미러(T-202 ⑦): `mirror_by_content` = 크기·시각 같은 파일도 해시 대조 · [`run_with`]의 `delete` 콜백 = 휴지통 미러(앱이 포트 주입 · 기본 영구 삭제).
+//! - 앱 경로(T-202 ④ 슬라이스 1 · docs/26 §12.3): [`run_full`] = [`Hooks`](충돌 콜백 `resolve` · 엔진 `Event` 통과 `on_event` · 원본 존재 검사 완화)
+//!   + `(Report, Outcome)` 반환 — 앱 undo는 `Outcome.transferred`(실제 결과)로 적는다. `run`/`run_with`는 그대로(CLI · cdylib).
 
 pub mod capi;
 pub mod json;
@@ -21,7 +23,8 @@ pub use report::{ItemReport, Phase, Progress, Report, VerifySummary};
 pub use spec::{ConflictPolicy, JobSpec};
 
 use ndir_ops::fastcopy::{self, Tuning};
-use ndir_ops::{plan_transfer, transfer_with, Event, ItemStatus, Op, PlanAction};
+use ndir_ops::{plan_transfer, transfer_with, Event, ItemStatus, Op, Outcome, PlanAction};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
@@ -38,7 +41,7 @@ fn verb(op: Op) -> &'static str {
 #[must_use]
 pub fn validate(spec: &JobSpec) -> Option<String> {
     match (resumed(spec), interrupted(spec)) {
-        (Ok(done), Ok(cut)) => validate_with(spec, &done, &cut),
+        (Ok(done), Ok(cut)) => validate_with(spec, &done, &cut, false).map(|(_, m)| m),
         (Err(e), _) | (_, Err(e)) => Some(e),
     }
 }
@@ -75,37 +78,64 @@ fn resumed_item<'a>(done: &'a [ItemReport], spec: &JobSpec, src: &Path) -> Optio
         .find(|i| i.source == src && i.dest.parent().is_some_and(|p| p == spec.dest))
 }
 
-fn validate_with(spec: &JobSpec, done: &[ItemReport], cut: &[ItemReport]) -> Option<String> {
+/// 작업 전체 거부 사유 = (관련 경로, 글). `lenient_sources` = 원본 존재 검사를 건너뛴다(앱 · [`Hooks`] · 없는 원본은 엔진이 그 항목만
+/// 실패로 격리 · 협업 실측 11-01: CLI는 끊어진 심볼릭 링크 하나로 전체가 `source not found`였다 — CLI 동작은 그대로).
+fn validate_with(
+    spec: &JobSpec,
+    done: &[ItemReport],
+    cut: &[ItemReport],
+    lenient_sources: bool,
+) -> Option<(PathBuf, String)> {
     if !spec.dest.is_dir() {
-        return Some(format!(
-            "destination is not an existing folder: {}",
-            spec.dest.display()
+        return Some((
+            spec.dest.clone(),
+            format!(
+                "destination is not an existing folder: {}",
+                spec.dest.display()
+            ),
         ));
     }
     if spec.mirror && (spec.journal.is_some() || spec.resume.is_some()) {
-        return Some(
+        return Some((
+            spec.dest.clone(),
             "journal/resume do not apply to mirror (a mirror re-compares; just run it again)"
                 .into(),
-        );
+        ));
     }
     // 끝난 항목 · 끊긴 항목(GAP-030: 이동 중 죽어 원본이 이미 없을 수 있음)은 존재 검사에서 뺀다.
-    if let Some(p) = spec.sources.iter().find(|p| {
-        !p.exists() && resumed_item(done, spec, p).is_none() && resumed_item(cut, spec, p).is_none()
-    }) {
-        return Some(format!("source not found: {}", p.display()));
+    if !lenient_sources {
+        if let Some(p) = spec.sources.iter().find(|p| {
+            !p.exists()
+                && resumed_item(done, spec, p).is_none()
+                && resumed_item(cut, spec, p).is_none()
+        }) {
+            return Some((p.clone(), format!("source not found: {}", p.display())));
+        }
     }
     if spec.mirror {
         let [src] = spec.sources.as_slice() else {
-            return Some("mirror needs exactly one source folder".into());
+            return Some((
+                spec.dest.clone(),
+                "mirror needs exactly one source folder".into(),
+            ));
         };
         if !src.is_dir() {
-            return Some(format!("mirror source is not a folder: {}", src.display()));
+            return Some((
+                src.clone(),
+                format!("mirror source is not a folder: {}", src.display()),
+            ));
         }
         if ndir_ops::is_same_or_sub(src, &spec.dest) || ndir_ops::is_same_or_sub(&spec.dest, src) {
-            return Some("mirror source and destination overlap".into());
+            return Some((
+                spec.dest.clone(),
+                "mirror source and destination overlap".into(),
+            ));
         }
         if let Some(why) = mirror::dangerous_dest(&spec.dest, mirror::home_dir().as_deref()) {
-            return Some(format!("mirror refused: destination is {why}"));
+            return Some((
+                spec.dest.clone(),
+                format!("mirror refused: destination is {why}"),
+            ));
         }
     }
     None
@@ -120,6 +150,37 @@ pub fn run(spec: &JobSpec, on_progress: &mut dyn FnMut(&Progress), cancel: &Atom
     run_with(spec, on_progress, cancel, None)
 }
 
+/// 충돌 콜백(T-202 ④ · docs/26 §12.3 ①): 대상이 이미 있을 때 **호출자가** 결정(앱 = 진행 창 인라인 질문 · 취소는 `cancel`을 세우고 Skip).
+/// 재개가 강제한 판정(끊긴 이동 = Skip · 끊긴 복사의 옛 대상 = Overwrite · GAP-030)이 먼저고, 그 밖에서만 불린다.
+pub type ResolveFn<'a> = &'a mut dyn FnMut(&Path) -> ndir_ops::Conflict;
+/// 엔진 이벤트 통과(T-202 ④): 앱 진행 창의 세그먼트 바(`Plan` · `ItemStart` · `Bytes` · `ItemEnd` 4종 전부)가 종전 `ndir_ops::transfer`
+/// 직접 호출 때와 같은 이벤트를 받는다 · [`Progress`] 콜백은 그대로 따로 온다.
+pub type EventFn<'a> = &'a mut dyn FnMut(&Event<'_>);
+
+/// [`run_full`]의 호출자 주입점(전부 선택 · 기본 = [`run`]과 같다).
+#[derive(Default)]
+pub struct Hooks<'a> {
+    /// 미러 삭제(None = 영구 삭제 · T-202 ⑦).
+    pub delete: Option<DeleteFn<'a>>,
+    /// 충돌 결정(None = `spec.conflict` 정책).
+    pub resolve: Option<ResolveFn<'a>>,
+    /// 엔진 이벤트 통과(None = 안 받음).
+    pub on_event: Option<EventFn<'a>>,
+    /// 원본 존재 검사 생략 — 없는 원본은 작업 전체 거부가 아니라 **그 항목만** 실패(앱 · 종전 `ndir_ops::transfer` 직접 호출과 같은 격리).
+    pub lenient_sources: bool,
+}
+
+impl std::fmt::Debug for Hooks<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Hooks")
+            .field("delete", &self.delete.is_some())
+            .field("resolve", &self.resolve.is_some())
+            .field("on_event", &self.on_event.is_some())
+            .field("lenient_sources", &self.lenient_sources)
+            .finish()
+    }
+}
+
 /// [`run`] + 미러 삭제 콜백(`delete` · None = 영구 삭제). CLI · cdylib은 [`run`] · 앱은 휴지통 포트를 넣는다(T-202 ⑦).
 pub fn run_with(
     spec: &JobSpec,
@@ -127,6 +188,65 @@ pub fn run_with(
     cancel: &AtomicBool,
     delete: Option<DeleteFn<'_>>,
 ) -> Report {
+    run_full(
+        spec,
+        on_progress,
+        cancel,
+        Hooks {
+            delete,
+            ..Hooks::default()
+        },
+    )
+    .0
+}
+
+/// 작업 전체 거부(명세 · 저널 · 재개 읽기): Report `errors`와 **`Outcome.errors` 둘 다**에 적는다 — 앱은 Outcome으로 결과를 가르므로
+/// Outcome이 비면 실패가 "완료 0" 안내로 보였다(협업 지적 11-01 ②).
+fn fail(mut rep: Report, started: Instant, at: PathBuf, why: String) -> (Report, Outcome) {
+    rep.ok = false;
+    rep.errors.push(why.clone());
+    let out = Outcome {
+        errors: vec![(at, why)],
+        ..Outcome::default()
+    };
+    (finish(rep, started), out)
+}
+
+/// 미러 · dry-run은 엔진 `Outcome`을 거치지 않는다 — Report 항목에서 같은 모양으로 만든다(done → `transferred` · failed → `errors` ·
+/// skipped → `skipped`).
+fn outcome_from_report(rep: &Report) -> Outcome {
+    let mut out = Outcome {
+        canceled: rep.canceled,
+        ..Outcome::default()
+    };
+    for it in &rep.items {
+        match it.status.as_str() {
+            "done" | "planned" => out.transferred.push((it.source.clone(), it.dest.clone())),
+            "failed" => out.errors.push((it.source.clone(), it.note.clone())),
+            "skipped" => out.skipped.push(it.source.clone()),
+            _ => {}
+        }
+    }
+    for e in &rep.errors {
+        out.errors.push((PathBuf::new(), e.clone()));
+    }
+    out
+}
+
+/// [`run_with`] + [`Hooks`] · 결과 = `(Report, Outcome)`(T-202 ④ 슬라이스 1 · docs/26 §12.3 ②): Report `dest`는 계획값이라 앱 undo는
+/// 엔진 `Outcome.transferred`(실제 (원본, 최종 대상))로 적는다. 전송 경로의 Outcome은 엔진 것 그대로 · 미러/dry-run은 Report에서 만든다.
+pub fn run_full(
+    spec: &JobSpec,
+    on_progress: &mut dyn FnMut(&Progress),
+    cancel: &AtomicBool,
+    hooks: Hooks<'_>,
+) -> (Report, Outcome) {
+    let Hooks {
+        delete,
+        resolve: mut resolve_cb,
+        on_event: mut event_cb,
+        lenient_sources,
+    } = hooks;
     let started = Instant::now();
     let mut rep = Report {
         ok: true,
@@ -136,19 +256,17 @@ pub fn run_with(
     let (done, interrupted) = match (resumed(spec), interrupted(spec)) {
         (Ok(d), Ok(c)) => (d, c),
         (Err(e), _) | (_, Err(e)) => {
-            rep.ok = false;
-            rep.errors.push(e);
-            return finish(rep, started);
+            let at = spec.resume.clone().unwrap_or_default();
+            return fail(rep, started, at, e);
         }
     };
-    if let Some(e) = validate_with(spec, &done, &interrupted) {
-        rep.ok = false;
-        rep.errors.push(e);
-        return finish(rep, started);
+    if let Some((at, e)) = validate_with(spec, &done, &interrupted, lenient_sources) {
+        return fail(rep, started, at, e);
     }
     if spec.mirror {
         run_mirror(spec, &mut rep, on_progress, cancel, delete);
-        return finish(rep, started);
+        let out = outcome_from_report(&rep);
+        return (finish(rep, started), out);
     }
     // 재개(T-202 ②): 이미 끝난 (source, dest) 쌍 = skipped/resumed(먼저 적힘) · 그 밖은 최상위 원본 필터(폴더 안은 엔진 계획 단계 `with_filter`).
     let mut sources: Vec<PathBuf> = Vec::new();
@@ -185,22 +303,23 @@ pub fn run_with(
     // - 둘 다 스테이징 잔여(`.<이름>.nexa-tmp-*` · 살아 있는 pid 것은 제외)를 치우고, 끝난 뒤 `old` 잔여도.
     // 선삭제·강제 덮어쓰기는 **복사 + 원본이 지금 있을 때만**(협업 지적 11-01): 이동은 교차 볼륨 원본 정리 중 죽으면 대상이 전체이고 원본은
     // 일부라, 대상을 지우거나 교체하면 이미 지워진 원본이 영구 손실된다 → 이동의 끊긴 항목은 평소 정책대로 두고 note로 확인을 요청한다.
+    let source_set: HashSet<&Path> = sources.iter().map(PathBuf::as_path).collect();
     let interrupted: Vec<ItemReport> = interrupted
         .into_iter()
-        .filter(|i| sources.contains(&i.source))
+        .filter(|i| source_set.contains(i.source.as_path()))
         .collect();
     let resumable = |i: &ItemReport| spec.op == Op::Copy && i.source.exists();
-    let force_overwrite: Vec<PathBuf> = interrupted
+    let force_overwrite: HashSet<PathBuf> = interrupted
         .iter()
         .filter(|i| i.note == "overwrite" && resumable(i))
         .map(|i| i.dest.clone())
         .collect();
     // 끊긴 **이동**은 대상 불가침을 실제로 보증한다(협업 재현 11-01 d3: `conflict: overwrite`로 재개하면 스테이징 교체가 전체 대상을 남은 원본
     // 일부로 바꿔 5,439개 소실) → 충돌 정책과 무관하게 **Skip** · 원본이 온전한지 가릴 방법이 없다 · 대상이 없으면 평소대로 이동한다.
-    let force_skip: Vec<PathBuf> = if spec.op == Op::Move {
+    let force_skip: HashSet<PathBuf> = if spec.op == Op::Move {
         interrupted.iter().map(|i| i.dest.clone()).collect()
     } else {
-        Vec::new()
+        HashSet::new()
     };
     if !spec.dry_run {
         for i in interrupted.iter().filter(|i| resumable(i)) {
@@ -210,11 +329,14 @@ pub fn run_with(
             }
         }
     }
+    // 재개 강제 판정이 먼저 · 그 밖은 호출자 콜백(앱 질문) 또는 명세 정책(CLI).
     let mut resolve = |dest: &std::path::Path| {
-        if force_skip.iter().any(|d| d == dest) {
+        if force_skip.contains(dest) {
             ndir_ops::Conflict::Skip
-        } else if force_overwrite.iter().any(|d| d == dest) {
+        } else if force_overwrite.contains(dest) {
             ndir_ops::Conflict::Overwrite
+        } else if let Some(cb) = resolve_cb.as_mut() {
+            cb(dest)
         } else {
             spec.conflict.resolve()
         }
@@ -246,16 +368,16 @@ pub fn run_with(
         }
         rep.transferred_bytes = plan.active_bytes;
         rep.ok = rep.failed == 0;
-        return finish(rep, started);
+        let out = outcome_from_report(&rep);
+        return (finish(rep, started), out);
     }
     // 저널(T-202 ②): dry-run은 여기 오지 않는다(파일 시스템 불변) · 못 열면 작업을 시작하지 않는다(재개를 믿을 수 없다).
     let mut journal = match &spec.journal {
         Some(path) => match resume::Journal::open(path) {
             Ok(j) => Some(j),
             Err(e) => {
-                rep.ok = false;
-                rep.errors.push(format!("journal: {}: {e}", path.display()));
-                return finish(rep, started);
+                let why = format!("journal: {}: {e}", path.display());
+                return fail(rep, started, path.clone(), why);
             }
         },
         None => None,
@@ -272,72 +394,77 @@ pub fn run_with(
     let mut total = 0u64;
     let mut dests: Vec<PathBuf> = vec![PathBuf::new(); sources.len()];
     let mut statuses: Vec<Option<ItemStatus>> = vec![None; sources.len()];
-    let mut on_event = |ev: Event| match ev {
-        Event::Plan {
-            sizes: s,
-            total_bytes,
-        } => {
-            sizes = s.to_vec();
-            total = total_bytes;
-            on_progress(&Progress {
-                phase: Phase::Plan,
-                done_bytes: 0,
+    let mut on_event = |ev: Event| {
+        if let Some(cb) = event_cb.as_mut() {
+            cb(&ev);
+        }
+        match ev {
+            Event::Plan {
+                sizes: s,
                 total_bytes,
-                item_index: 0,
-                item_count: s.len(),
-                current: None,
-            });
-        }
-        Event::ItemStart {
-            index,
-            dest,
-            overwrite,
-        } => {
-            if let Some(d) = dests.get_mut(index) {
-                *d = dest.to_path_buf();
+            } => {
+                sizes = s.to_vec();
+                total = total_bytes;
+                on_progress(&Progress {
+                    phase: Phase::Plan,
+                    done_bytes: 0,
+                    total_bytes,
+                    item_index: 0,
+                    item_count: s.len(),
+                    current: None,
+                });
             }
-            // 저널 시작 줄(GAP-030): 끝나지 않은 채 죽으면 재개가 "이전 전송이 만든 부분 대상"으로 알고 덮어쓴다 · note = 당시 결정.
-            if let (Some(j), Some(src)) = (journal.as_mut(), sources.get(index)) {
-                let item = ItemReport {
-                    action: verb(spec.op).into(),
-                    status: "started".into(),
-                    bytes: sizes.get(index).copied().unwrap_or(0),
-                    source: src.clone(),
-                    dest: dest.to_path_buf(),
-                    note: if overwrite { "overwrite" } else { "new" }.into(),
-                };
-                if let Err(e) = j.record(&item) {
-                    journal_errors.push(e.to_string());
+            Event::ItemStart {
+                index,
+                dest,
+                overwrite,
+            } => {
+                if let Some(d) = dests.get_mut(index) {
+                    *d = dest.to_path_buf();
                 }
-            }
-        }
-        Event::Bytes(p) => on_progress(&Progress {
-            phase: Phase::Transfer,
-            done_bytes: p.done_bytes,
-            total_bytes: p.total_bytes,
-            item_index: p.item_index,
-            item_count: p.item_count,
-            current: dests
-                .get(p.item_index)
-                .filter(|d| !d.as_os_str().is_empty())
-                .cloned(),
-        }),
-        Event::ItemEnd { index, status } => {
-            if let Some(s) = statuses.get_mut(index) {
-                *s = Some(status);
-            }
-            if !journal_at_verify && matches!(status, ItemStatus::Done) {
+                // 저널 시작 줄(GAP-030): 끝나지 않은 채 죽으면 재개가 "이전 전송이 만든 부분 대상"으로 알고 덮어쓴다 · note = 당시 결정.
                 if let (Some(j), Some(src)) = (journal.as_mut(), sources.get(index)) {
                     let item = ItemReport {
                         action: verb(spec.op).into(),
-                        status: "done".into(),
+                        status: "started".into(),
                         bytes: sizes.get(index).copied().unwrap_or(0),
                         source: src.clone(),
-                        dest: dests.get(index).cloned().unwrap_or_default(),
-                        note: String::new(),
+                        dest: dest.to_path_buf(),
+                        note: if overwrite { "overwrite" } else { "new" }.into(),
                     };
                     if let Err(e) = j.record(&item) {
                         journal_errors.push(e.to_string());
+                    }
+                }
+            }
+            Event::Bytes(p) => on_progress(&Progress {
+                phase: Phase::Transfer,
+                done_bytes: p.done_bytes,
+                total_bytes: p.total_bytes,
+                item_index: p.item_index,
+                item_count: p.item_count,
+                current: dests
+                    .get(p.item_index)
+                    .filter(|d| !d.as_os_str().is_empty())
+                    .cloned(),
+            }),
+            Event::ItemEnd { index, status } => {
+                if let Some(s) = statuses.get_mut(index) {
+                    *s = Some(status);
+                }
+                if !journal_at_verify && matches!(status, ItemStatus::Done) {
+                    if let (Some(j), Some(src)) = (journal.as_mut(), sources.get(index)) {
+                        let item = ItemReport {
+                            action: verb(spec.op).into(),
+                            status: "done".into(),
+                            bytes: sizes.get(index).copied().unwrap_or(0),
+                            source: src.clone(),
+                            dest: dests.get(index).cloned().unwrap_or_default(),
+                            note: String::new(),
+                        };
+                        if let Err(e) = j.record(&item) {
+                            journal_errors.push(e.to_string());
+                        }
                     }
                 }
             }
@@ -364,16 +491,32 @@ pub fn run_with(
         })
     });
     rep.canceled = out.canceled;
+    // 항목 조립은 색인으로(협업 지적 11-01 ③: 원본마다 `transferred`/`errors`를 훑으면 수만 개 전송의 끝에서 O(n²) 경로 비교).
+    let err_of: HashMap<&Path, &str> = out
+        .errors
+        .iter()
+        .map(|(p, w)| (p.as_path(), w.as_str()))
+        .collect();
+    let skipped_set: HashSet<&Path> = out.skipped.iter().map(PathBuf::as_path).collect();
+    let moved_to: HashMap<&Path, &Path> = out
+        .transferred
+        .iter()
+        .map(|(s, d)| (s.as_path(), d.as_path()))
+        .collect();
+    let cut_of: HashMap<&Path, &ItemReport> = interrupted
+        .iter()
+        .map(|i| (i.source.as_path(), i))
+        .collect();
     for (i, src) in sources.iter().enumerate() {
         let bytes = sizes.get(i).copied().unwrap_or(0);
         let dest = dests.get(i).cloned().unwrap_or_default();
-        let (status, note) = if let Some((_, why)) = out.errors.iter().find(|(p, _)| p == src) {
+        let (status, note) = if let Some(why) = err_of.get(src.as_path()) {
             rep.failed += 1;
-            ("failed", why.clone())
-        } else if out.skipped.iter().any(|p| p == src) {
+            ("failed", (*why).to_string())
+        } else if skipped_set.contains(src.as_path()) {
             rep.skipped += 1;
             // 끊긴 이동이 충돌(대상 있음)로 건너뜀(GAP-030): 대상이 전체 · 원본이 일부일 수 있다 — 사용자가 판단하도록 알린다.
-            if interrupted.iter().any(|i| i.source == *src) {
+            if cut_of.contains_key(src.as_path()) {
                 (
                     "skipped",
                     "exists · interrupted run: destination kept — check source and destination"
@@ -382,7 +525,7 @@ pub fn run_with(
             } else {
                 ("skipped", "exists".to_string())
             }
-        } else if out.transferred.iter().any(|(s, _)| s == src) {
+        } else if moved_to.contains_key(src.as_path()) {
             rep.transferred_bytes += bytes;
             // 이동 + verify(T-202 ⑤): 같은 볼륨은 rename이라 검증하지 않았음을 적는다(엔진과 같은 `same_volume` 판정 · 협업 지적).
             let mut note = if spec.verify && spec.op == Op::Move {
@@ -396,7 +539,7 @@ pub fn run_with(
             }
             .to_string();
             // 끊긴 항목을 다시 돌렸다(GAP-030): 복사 = 부분 대상을 덮어썼고 옛 대상 잔여(`old`)는 **done일 때만** 치운다 · 이동 = 평소 경로로 끝남.
-            if let Some(prev) = interrupted.iter().find(|i| i.source == *src) {
+            if let Some(prev) = cut_of.get(src.as_path()) {
                 let tail = if spec.op == Op::Copy {
                     ndir_ops::remove_staging_leftovers(&prev.dest, &["old"]);
                     "resumed: overwrote the partial copy left by the interrupted run"
@@ -416,10 +559,9 @@ pub fn run_with(
             ("skipped", "same folder".to_string())
         };
         let dest = if dest.as_os_str().is_empty() {
-            out.transferred
-                .iter()
-                .find(|(s, _)| s == src)
-                .map(|(_, d)| d.clone())
+            moved_to
+                .get(src.as_path())
+                .map(|d| d.to_path_buf())
                 .unwrap_or_default()
         } else {
             dest
@@ -496,7 +638,7 @@ pub fn run_with(
     if rep.failed > 0 || rep.canceled {
         rep.ok = false;
     }
-    finish(rep, started)
+    (finish(rep, started), out)
 }
 
 fn run_mirror(
@@ -671,6 +813,109 @@ mod tests {
         fs::write(d.join("src/a.txt"), b"hello").unwrap();
         fs::write(d.join("src/dir/b.bin"), vec![7u8; 3000]).unwrap();
         d
+    }
+
+    /// `run_full`(T-202 ④ 슬라이스 1): ① 충돌 콜백이 명세 정책 대신 결정 ② 엔진 이벤트 4종이 통과 ③ 결과 `Outcome.transferred`는
+    /// 실제 (원본, 최종 대상) ④ `lenient_sources` = 없는 원본은 그 항목만 실패(협업 실측 11-01: CLI는 전체 거부) ⑤ 전체 거부(대상 없음)는
+    /// Report와 Outcome 둘 다에 적힌다 · `run_with`는 종전과 같다(엄격).
+    #[test]
+    fn run_full_hooks_resolve_events_and_lenient_sources() {
+        let d = sandbox("full");
+        fs::write(d.join("dst/a.txt"), b"old").unwrap();
+        let missing = d.join("src/nope.txt");
+        let spec = JobSpec {
+            sources: vec![d.join("src/a.txt"), d.join("src/dir"), missing.clone()],
+            dest: d.join("dst"),
+            conflict: ConflictPolicy::Skip,
+            ..JobSpec::default()
+        };
+        let cancel = AtomicBool::new(false);
+        // 엄격(run_with = CLI): 없는 원본 하나로 전체 거부 · 아무것도 복사하지 않는다.
+        let r = run_with(&spec, &mut |_| {}, &cancel, None);
+        assert!(!r.ok && r.errors[0].contains("source not found"), "{r:?}");
+        assert_eq!(fs::read(d.join("dst/a.txt")).unwrap(), b"old");
+        // 완화(앱): 콜백이 Overwrite로 답해 a.txt를 교체 · dir 복사 · 없는 원본은 그 항목만 실패.
+        let mut asked: Vec<PathBuf> = Vec::new();
+        let mut kinds: Vec<&'static str> = Vec::new();
+        let (r, out) = run_full(
+            &spec,
+            &mut |_| {},
+            &cancel,
+            Hooks {
+                resolve: Some(&mut |p: &Path| {
+                    asked.push(p.to_path_buf());
+                    ndir_ops::Conflict::Overwrite
+                }),
+                on_event: Some(&mut |ev: &Event<'_>| {
+                    kinds.push(match ev {
+                        Event::Plan { .. } => "plan",
+                        Event::ItemStart { .. } => "start",
+                        Event::Bytes(_) => "bytes",
+                        Event::ItemEnd { .. } => "end",
+                    })
+                }),
+                lenient_sources: true,
+                ..Hooks::default()
+            },
+        );
+        assert_eq!(
+            asked,
+            vec![d.join("dst/a.txt")],
+            "충돌 콜백 = 대상 경로 1회"
+        );
+        assert_eq!(
+            fs::read(d.join("dst/a.txt")).unwrap(),
+            b"hello",
+            "콜백 Overwrite"
+        );
+        assert!(d.join("dst/dir/b.bin").is_file());
+        assert!(
+            ["plan", "start", "bytes", "end"]
+                .iter()
+                .all(|k| kinds.contains(k)),
+            "{kinds:?}"
+        );
+        assert_eq!(kinds[0], "plan");
+        assert_eq!(out.transferred.len(), 2, "{out:?}");
+        assert!(out
+            .transferred
+            .iter()
+            .any(|(s, t)| s == &d.join("src/a.txt") && t == &d.join("dst/a.txt")));
+        assert_eq!(out.errors.len(), 1, "{out:?}");
+        assert_eq!(out.errors[0].0, missing);
+        assert!(!r.ok && r.failed == 1, "{r:?}");
+        let failed = r.items.iter().find(|i| i.status == "failed").unwrap();
+        assert_eq!(
+            (failed.source.clone(), failed.note.as_str()),
+            (missing, out.errors[0].1.as_str())
+        );
+        // 전체 거부(대상 폴더 없음): Report `errors` + Outcome `errors`(앱이 Outcome으로 가르므로 · 협업 지적 ②).
+        let bad = JobSpec {
+            dest: d.join("dst/none"),
+            ..spec.clone()
+        };
+        let (r, out) = run_full(&bad, &mut |_| {}, &cancel, Hooks::default());
+        assert!(!r.ok && !r.errors.is_empty() && r.items.is_empty(), "{r:?}");
+        assert_eq!(out.errors.len(), 1, "{out:?}");
+        assert_eq!(out.errors[0].0, d.join("dst/none"));
+        assert!(out.errors[0].1.contains("destination"), "{out:?}");
+        assert!(out.transferred.is_empty() && !out.canceled);
+        // dry-run도 Outcome을 Report에서 만든다(planned = transferred 쌍).
+        fs::create_dir_all(d.join("fresh")).unwrap();
+        let dry = JobSpec {
+            dry_run: true,
+            sources: vec![d.join("src/dir")],
+            dest: d.join("fresh"),
+            ..spec
+        };
+        let (r, out) = run_full(&dry, &mut |_| {}, &cancel, Hooks::default());
+        assert!(r.ok && r.dry_run, "{r:?}");
+        assert_eq!(
+            out.transferred,
+            vec![(d.join("src/dir"), d.join("fresh/dir"))]
+        );
+        assert!(!d.join("fresh/dir").exists(), "dry-run = 불변");
+        let _ = fs::remove_dir_all(&d);
     }
 
     /// dry-run → 계획만(파일 불변) · 실행 → 복사 + 검증 · 진행 콜백이 단계를 지난다.
