@@ -4,6 +4,7 @@
 
 ## 2026-11-02
 
+- **디스크 예산 규칙**(사용자): ded7080 disk-check.sh · CLAUDE.md §5 · docs/15 §2-9 · 첫 측정 nexa-dir3/target ≈ 70.5 GB(incremental 30.6 · collab 9.8) · 삭제 후보 58 GB+ · CI macOS 흔들림 1회(재실행) → [11-02 §3](journal/2026-11-02.md)
 - **회차 마감**: origin/main 8cc2c64 · main 전 커밋 CI ✓ · 공개 최신 v0.28.1 · 형제 저장소 차이 0 · 열린 결정 0 · 이월 = GUI 실기 나머지 · 0.28.1 채널 검수 · T-203 ⑤ → [11-02 §2](journal/2026-11-02.md)
 - **v0.28.1 패치 공개 ✅**(GAP-036 · GAP-037): 태그 68d926b · 선검증 41320202068 ✓(perf-copy 첫 실행) · run 41320761542 전 잡 ✓ · 자산 9 · winget #468005/#468006 · choco 2건 검수 대기 · brew d567279 · linux-repo ✓ · 0.28.0 채널 승인 완료 · t203-bench 삭제 · T-203 ⑥ perf/copy-0.28.1.md · 04a318d bench-copy.sh 0 ms 표시 → [11-02 §1](journal/2026-11-02.md)
 

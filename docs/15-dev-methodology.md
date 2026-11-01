@@ -83,6 +83,12 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - **시험은 프로세스 전역 상태를 단언하지 않는다** — `cargo test`는 같은 프로세스에서 병렬로 돈다. 전역 원자값 · static · 마지막 명령 기록(`crash::last_command`) · 전역 조절값(`fastcopy::set_tuning`) · 로그 마스크(`ndir_log` DETAIL_MASK)를 쓰거나 읽어 단언하면 다른 시험이 끼어든다(T-198 · f36a9ae · 7d89e05 · ecbf93c CI 흔들림). 처방 순서: ① 값을 인자로 넘김(`transfer_with(&Tuning)`) ② 시험 빌드에서만 스레드 지역(feature `test-local-mask` · `with_tuning`) ③ 단언을 이 시험이 만든 결과(보고 본문 · 반환값)로 바꿈 ④ 마지막 수단 = 그 시험군만 Mutex 직렬화.
 - **픽스처 태그는 시험마다 고유**(f34cf61 "extract" 충돌) · **`thread_local!` 앞에 `///` 금지**(unused_doc_comments · 0096e50) · **`DEPENDS` 자식 키는 부모 뒤 등재**(1b7ed98) · **메뉴 항목 추가 = `MENU_SECTIONS` 함께**(T-200 처방 전까지).
 
+### 2-9. 디스크 예산(사용자 11-02 · CLAUDE.md §5와 같은 문구)
+
+- 개발 산출물(저장소·워크트리 `target/` · 벤치 자료 · 게이트 로그 · 편집기 색인)이 수십 GB를 차지하지 않게 관리한다. ① 회차 마감 때 `bash scripts/disk-check.sh`(크기 보고 · 예산 기본 30 GB `NDIR_DISK_BUDGET_GB` · `--trim` = 워크트리 target · `target/perf/bench-*` · tmp · 게이트 로그 · incremental · 교차 타깃 폴더 삭제 · 측정은 느리니 백그라운드) ② 워크트리(`_collab/*` · `*-wt-*`)에서는 **빌드하지 않는다**(target 중복) · 끝난 워크트리는 `git worktree remove` ③ 실기·벤치 자료는 끝나면 스스로 지운다(bench-copy · perf-baseline · T4 샌드박스) ④ Sublime은 저장소의 `nexa-dir3.sublime-project`로 열어 `target/`을 색인에서 제외(전역 `index_exclude_patterns`도 같게 · `*.sublime-workspace`는 커밋하지 않음) ⑤ 측정·기록 = 협업 세션 · 삭제 실행 = 개발 세션(사용자 확인). 게이트의 여유 5 GB 하한(`NDIR_GATE_MIN_FREE_GB`)은 그대로.
+- **왜**: 사용자 "개발에 사용된 폴더가 Sublime에 캐시되거나 Clean 되지 않은 상태로 수십 GB를 차지하는 경우가 많아 과다한 디스크 사용이 되지 않도록 관리해줘. 규칙에 넣어줘"(11-02). 첫 측정(journal 11-02 §3) = `target/debug/incremental` 하나가 30.6 GB · 세션별 `CARGO_TARGET_DIR`(target/collab · dev) · 교차 타깃 메타데이터가 쌓인다.
+- **세션별 `CARGO_TARGET_DIR`**(`target/collab` · `target/dev*` 같은 격리 빌드)도 같은 예산에 든다 — 격리 인스턴스를 닫으면 그 폴더도 지울 후보로 보고한다(협업 측정 → 개발 삭제).
+
 ## 3. 이식 절차(한 기능)
 
 1. 원장에서 ID를 고른다(예 `PANEL-031`) → dir2 원본 코드를 **읽는다**(요약 믿지 않음).
