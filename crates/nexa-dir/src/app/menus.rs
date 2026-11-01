@@ -230,6 +230,16 @@ fn list_message(key: &str, paths: &[PathBuf]) -> String {
     trf(key, &[&paths.len().to_string(), &lines.join("\n")])
 }
 
+/// 휴지통 삭제의 출처(GAP-029 · 11-01): 결과 문구 · 뒤처리(재비교)를 출처별로 — 표식은 **작업에 묶는다**(전역 표식은 앞서 돌던 다른 삭제의
+/// 결과를 가로챈다 · 협업 분석 A).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TrashOrigin {
+    /// 일반 삭제(메뉴 · 키).
+    Normal,
+    /// 폴더 비교 미러 삭제(T-172) — 계획 건수 · `after_sync` = 복사 뒤 삭제(재비교는 창이 열려 있을 때만) / false = 삭제만(늘 재비교).
+    Mirror { planned: usize, after_sync: bool },
+}
+
 impl App {
     /// 메뉴바 정의(dir2 File · Edit · View · [Go] · Help — Cloud 메뉴는 M5 플러그인/클라우드에서).
     pub(crate) fn build_menus(settings: &Settings) -> Vec<MenuDef> {
@@ -513,12 +523,19 @@ impl App {
     /// 삭제 전 잠금 확인(dir2 WINB-024 · win.rs:3777-3811): 다른 프로그램이 쓰고 있는 항목이 있으면 먼저 묻는다 —
     /// [건너뛰고 삭제(n개)](남는 것이 있을 때만) · [다시 시도] · [취소]. 없으면 바로 휴지통으로. 휴지통 삭제에만 적용한다(dir2와 같음).
     pub(crate) fn trash_checked(&mut self, paths: Vec<PathBuf>) {
+        self.trash_checked_from(paths, TrashOrigin::Normal);
+    }
+
+    /// [`Self::trash_checked`] + 출처(GAP-029 · 11-01): 결과 문구 · 뒤처리는 출처별로 `trash_finish`가 낸다. 돌려주는 값 = 삭제가 진행/대기/질문에
+    /// 들어갔는가(`false` = 빈 목록 또는 다른 대화상자가 열려 있어 묻지 못함 → 호출자가 취소로 처리).
+    pub(crate) fn trash_checked_from(&mut self, paths: Vec<PathBuf>, origin: TrashOrigin) -> bool {
         if paths.is_empty() {
-            return;
+            return false;
         }
         let locked = self.platform.trash.probe_locked(&paths);
         if locked.is_empty() {
-            return self.trash_now(paths);
+            self.trash_now_from(paths, origin);
+            return true;
         }
         let rest = paths.len() - locked.len();
         let mut buttons = Vec::new();
@@ -537,13 +554,33 @@ impl App {
             delay: None,
             arm: None,
         };
-        self.ask(spec, app::dialogs::DlgReply::DeleteLocked { paths, locked });
+        self.ask(
+            spec,
+            app::dialogs::DlgReply::DeleteLocked {
+                paths,
+                locked,
+                origin,
+            },
+        )
     }
 
-    /// 휴지통으로(검사 없이 — [`Self::trash_checked`]가 부른다). 성패는 **삭제 뒤에도 남아 있는가**로 가른다(dir2 X-35
+    /// 삭제가 시작되지 못했다(잠금 질문 취소 · 다른 대화상자가 열려 있음) — 미러 출처면 문구 + 재비교(GAP-029 출구 B·C · 협업 분석).
+    pub(crate) fn trash_canceled(&mut self, origin: TrashOrigin, n: usize) {
+        if let TrashOrigin::Mirror { after_sync, .. } = origin {
+            let mut inv = Invalidations::default();
+            let text = trf("cmp.mirrorTrashCanceled", &[&n.to_string()]);
+            self.statusbar.set_left(&text, &mut inv);
+            self.toasts
+                .push(toast::ToastKind::Warn, tr("cmp.title"), text);
+            self.recompare_after_trash(after_sync);
+        }
+    }
+
+    /// 휴지통으로(검사 없이 — [`Self::trash_checked_from`]가 부른다). 성패는 **삭제 뒤에도 남아 있는가**로 가른다(dir2 X-35
     /// `on_delete_message` · win.rs:3926-3976): 지워진 것만 실행 취소 기록에 올리고, 남은 것은 다시 읽은 목록에서 선택해 보인 뒤
     /// [다시 시도](실패분만 · 잠금 검사부터) / [닫기]를 묻는다. 종전 dir3 = 포트 반환값만 믿어 일부 실패를 알리지 않았다.
-    pub(crate) fn trash_now(&mut self, paths: Vec<PathBuf>) {
+    /// 휴지통으로 + 출처(GAP-029) — 워커면 작업 튜플에 출처를 묶어 둔다(앞서 돌던 일반 삭제의 결과를 미러로 보고하지 않게).
+    pub(crate) fn trash_now_from(&mut self, paths: Vec<PathBuf>, origin: TrashOrigin) {
         if paths.is_empty() {
             return;
         }
@@ -552,18 +589,18 @@ impl App {
             if let Some(rx) = self.platform.trash.trash_async(paths.clone()) {
                 let mut inv = Invalidations::default();
                 self.statusbar.set_left(&tr("del.progress"), &mut inv);
-                self.trash_job = Some((rx, paths));
+                self.trash_job = Some((rx, paths, origin));
                 self.redraw();
                 return;
             }
         }
         let result = self.platform.trash.trash(&paths);
-        self.trash_finish(paths, result);
+        self.trash_finish(paths, result, origin);
     }
 
     /// 휴지통 워커 결과 수거(틱) — 끝났으면 `true`(다시 그림).
     pub(crate) fn trash_tick(&mut self) -> bool {
-        let Some((rx, _)) = &self.trash_job else {
+        let Some((rx, _, _)) = &self.trash_job else {
             return false;
         };
         let result = match rx.try_recv() {
@@ -573,8 +610,8 @@ impl App {
                 Err(platform::PlatformError::Failed("trash worker".into()))
             }
         };
-        let (_, paths) = self.trash_job.take().expect("checked above");
-        self.trash_finish(paths, result);
+        let (_, paths, origin) = self.trash_job.take().expect("checked above");
+        self.trash_finish(paths, result, origin);
         true
     }
 
@@ -583,10 +620,12 @@ impl App {
     }
 
     /// 삭제 결과 반영(동기·워커 공용): 남은 항목으로 성패를 가르고 실행 취소 · 토스트 · 재열람 · 실패 안내.
+    /// 출처가 미러(GAP-029)면 문구를 **실제 결과**(지운 수 · 실패 수)로 내고 재비교를 여기서 한다(종전엔 호출 시점에 계획 건수로 알렸다).
     fn trash_finish(
         &mut self,
         paths: Vec<PathBuf>,
         result: Result<usize, platform::PlatformError>,
+        origin: TrashOrigin,
     ) {
         let mut inv = Invalidations::default();
         let failed = self.platform.trash.remaining(&paths);
@@ -595,6 +634,32 @@ impl App {
             .filter(|p| !failed.contains(p))
             .cloned()
             .collect();
+        let mirror = matches!(origin, TrashOrigin::Mirror { .. });
+        let after_sync = matches!(
+            origin,
+            TrashOrigin::Mirror {
+                after_sync: true,
+                ..
+            }
+        );
+        if mirror {
+            let (kind, text) = if failed.is_empty() {
+                (
+                    toast::ToastKind::Info,
+                    trf("cmp.mirrorTrashed", &[&deleted.len().to_string()]),
+                )
+            } else {
+                (
+                    toast::ToastKind::Warn,
+                    trf(
+                        "cmp.mirrorTrashFailed",
+                        &[&deleted.len().to_string(), &failed.len().to_string()],
+                    ),
+                )
+            };
+            self.statusbar.set_left(&text, &mut inv);
+            self.toasts.push(kind, tr("cmp.title"), text);
+        }
         if !deleted.is_empty() {
             let n = deleted.len().to_string();
             self.history.push(Box::new(trashop::TrashOp::new(
@@ -602,13 +667,15 @@ impl App {
                 trf("del.recycleOp", &[&n]),
                 Rc::clone(&self.platform.trash),
             )));
-            let a = self.active;
-            self.toast_panel(
-                a,
-                toast::ToastKind::Info,
-                tr("menu.edit.delete"),
-                trf("status.deletedCount", &[&n]),
-            );
+            if !mirror {
+                let a = self.active;
+                self.toast_panel(
+                    a,
+                    toast::ToastKind::Info,
+                    tr("menu.edit.delete"),
+                    trf("status.deletedCount", &[&n]),
+                );
+            }
         } else if failed.is_empty() {
             // 지운 것도 남은 것도 없다(대상이 이미 없음 등) — 포트 오류만 알린다.
             if let Err(e) = &result {
@@ -627,9 +694,9 @@ impl App {
                 p.reopen(&mut inv);
             }
         }
-        // 미러 삭제가 미뤄 둔 재비교(Windows 워커 · 협업 검토 10-26) — 휴지통 결과가 나온 뒤에야 비교가 정확하다.
-        if std::mem::take(&mut self.compare_after_trash) {
-            self.recompare_after_trash(true);
+        // 미러 삭제 뒤 재비교(협업 검토 10-26 · GAP-029 11-01: 출처로 묶음) — 휴지통 결과가 나온 뒤에야 비교가 정확하다(워커 · 잠금 질문 뒤 포함).
+        if mirror {
+            self.recompare_after_trash(after_sync);
         }
         if failed.is_empty() {
             return;
@@ -645,7 +712,10 @@ impl App {
             delay: None,
             arm: None,
         };
-        if !self.ask(spec, app::dialogs::DlgReply::DeleteFailed(failed)) {
+        if !self.ask(
+            spec,
+            app::dialogs::DlgReply::DeleteFailed { failed, origin },
+        ) {
             // 다른 대화상자가 열려 있다 — 알림으로라도 남긴다.
             let a = self.active;
             self.toast_panel(

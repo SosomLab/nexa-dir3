@@ -14,9 +14,14 @@ pub(crate) enum DlgReply {
     DeleteLocked {
         paths: Vec<PathBuf>,
         locked: Vec<PathBuf>,
+        /// 출처(GAP-029) — 취소(0)면 미러는 문구 + 재비교.
+        origin: crate::app::menus::TrashOrigin,
     },
-    /// 휴지통 삭제 실패 안내(dir2 X-35) — 1 = 실패분만 다시 시도(잠금 검사부터).
-    DeleteFailed(Vec<PathBuf>),
+    /// 휴지통 삭제 실패 안내(dir2 X-35) — 1 = 실패분만 다시 시도(잠금 검사부터) · 출처 유지.
+    DeleteFailed {
+        failed: Vec<PathBuf>,
+        origin: crate::app::menus::TrashOrigin,
+    },
     /// 전송 충돌 — 작업 스레드가 기다린다(1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 그 외 취소).
     Conflict(mpsc::Sender<ConflictChoice>),
     /// 압축 암호(마스킹 입력) — 확인(1)이면 입력 텍스트로 재조회(T-62 B).
@@ -109,19 +114,26 @@ impl App {
                     self.delete_permanent(&paths);
                 }
             }
-            DlgReply::DeleteLocked { paths, locked } => match id {
+            DlgReply::DeleteLocked {
+                paths,
+                locked,
+                origin,
+            } => match id {
                 1 => {
                     let rest: Vec<PathBuf> =
                         paths.into_iter().filter(|p| !locked.contains(p)).collect();
-                    self.trash_now(rest);
+                    self.trash_now_from(rest, origin);
                 }
                 // 다시 시도 = 처음부터 다시 검사(그 사이 풀렸으면 바로 삭제 · 아니면 다시 묻는다).
-                2 => self.trash_checked(paths),
-                _ => {}
+                2 => {
+                    self.trash_checked_from(paths, origin);
+                }
+                // 취소 = 그대로 — 미러면 "취소" 문구 + 재비교(GAP-029 출구 B·C).
+                _ => self.trash_canceled(origin, paths.len()),
             },
-            DlgReply::DeleteFailed(failed) => {
+            DlgReply::DeleteFailed { failed, origin } => {
                 if id == 1 {
-                    self.trash_checked(failed);
+                    self.trash_checked_from(failed, origin);
                 }
             }
             DlgReply::ArchivePassword(path) => self.archive_password_result(path, id, text),

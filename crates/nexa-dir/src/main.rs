@@ -421,8 +421,6 @@ struct App {
     compare_win: compare_win::CompareWin,
     open_compare: bool,
     cmp_job: Option<app::compare::CmpJob>,
-    /// 미러 삭제 뒤 재비교를 휴지통 워커가 끝난 뒤로 미룸(Windows `trash_async` · 협업 검토 10-26 · 5144d97 ②).
-    compare_after_trash: bool,
     sync_job: Option<app::compare::SyncJob>,
     open_license: bool,
     file_win: FileWin,
@@ -540,7 +538,7 @@ struct App {
     /// 진행 중 전송(동시 1건).
     transfer: Option<app::ops::TransferJob>,
     /// 휴지통 워커(10-18 · `Trash::trash_async`) — (결과 채널, 대상) · 끝나면 `trash_finish`.
-    trash_job: Option<(platform::TrashRx, Vec<PathBuf>)>,
+    trash_job: Option<(platform::TrashRx, Vec<PathBuf>, app::menus::TrashOrigin)>,
     /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
     dirsizes: app::dirsize::DirSizes,
     /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
@@ -860,7 +858,6 @@ impl App {
             compare_win: compare_win::CompareWin::new(),
             open_compare: false,
             cmp_job: None,
-            compare_after_trash: false,
             sync_job: None,
             open_license: false,
             file_win: FileWin::new(),

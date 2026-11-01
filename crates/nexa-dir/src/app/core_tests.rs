@@ -5961,11 +5961,14 @@ fn trash_failure_selects_leftovers_and_offers_retry() {
             .collect()
     };
     // 전부 성공 = 묻지 않는다.
-    app.trash_now(vec![a.clone()]);
+    app.trash_now_from(vec![a.clone()], crate::app::menus::TrashOrigin::Normal);
     assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
     // b가 남는다: 실패 안내 + 남은 행 선택 · 실행 취소 기록은 지워진 1개만.
     log.borrow_mut().trash_fail = vec![b.clone()];
-    app.trash_now(vec![a.clone(), b.clone()]);
+    app.trash_now_from(
+        vec![a.clone(), b.clone()],
+        crate::app::menus::TrashOrigin::Normal,
+    );
     let d = app.dump_of("dlg").unwrap();
     assert!(
         d.contains(&tr("del.failTitle")) && d.contains("b.md") && !d.contains("a.txt"),
@@ -5992,7 +5995,7 @@ fn trash_failure_selects_leftovers_and_offers_retry() {
     assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
     // 닫기 = 더 시도하지 않는다.
     log.borrow_mut().trash_fail = vec![a.clone(), b.clone()];
-    app.trash_now(vec![a, b]);
+    app.trash_now_from(vec![a, b], crate::app::menus::TrashOrigin::Normal);
     let before = trashed(&log).len();
     app.startup_cmd("dlg.pick:0");
     assert_eq!(trashed(&log).len(), before);
@@ -9003,10 +9006,65 @@ fn compare_two_folders_and_sync_left_to_right() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     // (fake 플랫폼의 휴지통은 파일을 지우지 않는다 — 실제 삭제는 삭제 목록 + `trash_checked` 호출로 보증 · 실기 = 휴지통 복원 가능)
+    // GAP-029(11-01): 문구는 결과로 — 동기 휴지통 1건 성공 = "1개 휴지통으로(미러)" 토스트(상태줄은 동기화 요약이 덮는다).
     assert!(
-        !app.compare_after_trash,
-        "동기 휴지통 = 미뤄 둔 재비교 없음(Windows 워커 경로는 trash_finish가 부른다)"
+        app.toasts
+            .bodies()
+            .contains(&trf("cmp.mirrorTrashed", &["1"])),
+        "{:?}",
+        app.toasts.bodies()
     );
+    // 일부 실패(fake `trash_fail`): "0개 · 1개 실패" 문구 + 실패 대화상자.
+    let log = app.platform.log.clone().expect("fake log");
+    log.borrow_mut().trash_fail = vec![r.join("extra.txt")];
+    rescan(&mut app);
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        app.toasts
+            .bodies()
+            .contains(&trf("cmp.mirrorTrashFailed", &["0", "1"])),
+        "{:?}",
+        app.toasts.bodies()
+    );
+    assert!(
+        app.dump_of("dlg").unwrap().contains(&tr("del.failTitle")),
+        "실패 대화상자"
+    );
+    app.startup_cmd("dlg.pick:0");
+    log.borrow_mut().trash_fail.clear();
+    // 잠김 → 질문 → 취소(0): "취소" 문구(종전엔 "1개 휴지통으로") + 재비교가 돈다.
+    log.borrow_mut().locked = vec![r.join("extra.txt")];
+    rescan(&mut app);
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        app.dump_of("dlg").unwrap().contains(&tr("del.lockedTitle")),
+        "잠금 질문"
+    );
+    app.startup_cmd("dlg.pick:0");
+    assert!(
+        app.toasts
+            .bodies()
+            .contains(&trf("cmp.mirrorTrashCanceled", &["1"])),
+        "{:?}",
+        app.toasts.bodies()
+    );
+    assert!(app.cmp_job.is_some(), "취소 뒤 재비교");
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    log.borrow_mut().locked.clear();
     app.close_compare();
     assert!(app.cmp_job.is_none());
 }

@@ -128,7 +128,7 @@ impl App {
                 let job = self.sync_job.take().expect("checked above");
                 self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
-                let (mut text, warn) = match result {
+                let (text, warn) = match result {
                     Some(Ok(failed)) if failed.is_empty() => {
                         (trf("cmp.syncDone", &[&job.count.to_string()]), false)
                     }
@@ -151,12 +151,20 @@ impl App {
                     ),
                     None => (tr("cmp.failed"), true),
                 };
-                // 미러 삭제 = 복사가 전부 성공한 뒤에만(실패·취소면 건드리지 않는다).
+                // 미러 삭제 = 복사가 전부 성공한 뒤에만(실패·취소면 건드리지 않는다). 문구·재비교는 결과가 나온 뒤 `trash_finish`(출처 = 미러)가
+                // 낸다(GAP-029 · 11-01 — 종전엔 호출 시점에 계획 건수로 알려 잠김·취소·실패에도 "n개 휴지통으로"가 떴다).
+                let mut mirror_dispatched = false;
                 if !warn && !job.deletes.is_empty() {
                     let n = job.deletes.len();
-                    self.trash_checked(job.deletes);
-                    text.push_str(" · ");
-                    text.push_str(&trf("cmp.mirrorTrashed", &[&n.to_string()]));
+                    let origin = app::menus::TrashOrigin::Mirror {
+                        planned: n,
+                        after_sync: true,
+                    };
+                    if self.trash_checked_from(job.deletes, origin) {
+                        mirror_dispatched = true;
+                    } else {
+                        self.trash_canceled(origin, n);
+                    }
                 }
                 if self.progress_win.is_active() {
                     let ms = self.settings.int("transfer.close_ms").max(0) as u64;
@@ -180,8 +188,10 @@ impl App {
                 );
                 self.statusbar.set_left(&text, &mut inv);
                 self.update_status();
-                // 끝났으면 다시 비교해 창을 최신으로(미러 삭제가 워커로 돌고 있으면 그 뒤에).
-                self.recompare_after_trash(true);
+                // 끝났으면 다시 비교해 창을 최신으로 — 미러 삭제를 보냈으면 그 결과 뒤 `trash_finish`가 한다(GAP-029).
+                if !mirror_dispatched {
+                    self.recompare_after_trash(true);
+                }
                 self.redraw();
             } else {
                 live = true;
@@ -211,14 +221,15 @@ impl App {
         let mut plan = cmpx::plan(&entries, &l, &r, dir, mirror, only_ref);
         if plan.copies.is_empty() {
             if !plan.deletes.is_empty() {
+                // 삭제만 있는 경로 — 문구·재비교는 `trash_finish`(출처 = 미러)가(GAP-029).
                 let n = plan.deletes.len();
-                self.trash_checked(plan.deletes);
-                let mut inv = Invalidations::default();
-                let text = trf("cmp.mirrorTrashed", &[&n.to_string()]);
-                self.statusbar.set_left(&text, &mut inv);
-                self.toasts
-                    .push(toast::ToastKind::Info, tr("cmp.title"), text);
-                self.recompare_after_trash(false);
+                let origin = app::menus::TrashOrigin::Mirror {
+                    planned: n,
+                    after_sync: false,
+                };
+                if !self.trash_checked_from(plan.deletes, origin) {
+                    self.trash_canceled(origin, n);
+                }
                 self.redraw();
                 return;
             }
@@ -267,13 +278,9 @@ impl App {
         self.redraw();
     }
 
-    /// 미러 삭제 뒤 재비교(협업 검토 10-26 · 5144d97 ②): 휴지통이 워커(Windows)로 돌고 있으면 표식만 두고 `trash_finish`가 부른다 · 동기면 바로.
-    /// `only_if_open` = 창이 열려 있을 때만(동기화 완료 뒤) · false = 늘(삭제만 있던 경로).
+    /// 미러 삭제 뒤 재비교(협업 검토 10-26 · 5144d97 ② · GAP-029 11-01: 출처가 미러인 `trash_finish`/취소가 부른다 — 결과 뒤라 정확).
+    /// `only_if_open` = 창이 열려 있을 때만(복사 뒤 삭제) · false = 늘(삭제만 있던 경로).
     pub(crate) fn recompare_after_trash(&mut self, only_if_open: bool) {
-        if self.trash_busy() {
-            self.compare_after_trash = true;
-            return;
-        }
         if only_if_open && !self.compare_win.is_open() {
             return;
         }
