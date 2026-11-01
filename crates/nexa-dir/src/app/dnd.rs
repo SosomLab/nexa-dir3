@@ -764,7 +764,7 @@ impl App {
         let choice = platform::drop_choice(
             self.primary,
             self.shift,
-            ndir_ops::same_volume(&sources[0], &dest),
+            platform::same_volume_memo(&sources[0], &dest),
         );
         (Some((panel, dest)), choice)
     }
@@ -1123,7 +1123,7 @@ impl App {
         }
         let op = forced.unwrap_or(if self.primary {
             Op::Copy
-        } else if self.shift || ndir_ops::same_volume(&sources[0], &dest) {
+        } else if self.shift || platform::same_volume_memo(&sources[0], &dest) {
             Op::Move
         } else {
             Op::Copy

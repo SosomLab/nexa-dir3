@@ -7376,6 +7376,14 @@ fn overwrite_question_names_the_destination_folder() {
 #[test]
 fn drop_events_choose_effect_and_mark_the_target() {
     use crate::platform::{drop_choice, zone_choice, DropChoice, DropEvent, DropZone};
+    // 볼륨 판정 메모(GAP-031 · 11-01): 같은 쌍은 다시 묻지 않고 같은 답 · 다른 쌍은 다시 판정.
+    let t = std::env::temp_dir();
+    assert!(crate::platform::same_volume_memo(&t, &t));
+    assert!(crate::platform::same_volume_memo(&t, &t));
+    assert!(crate::platform::same_volume_memo(
+        &t,
+        &t.join("nested-missing")
+    ));
     // 순수 규칙(MC/DC): Ctrl이 먼저 · Shift = 이동 · 그 밖 = 볼륨.
     assert_eq!(drop_choice(false, false, true), DropChoice::Move);
     assert_eq!(drop_choice(false, false, false), DropChoice::Copy);

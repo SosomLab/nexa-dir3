@@ -538,8 +538,28 @@ pub(crate) struct DropShared {
     pub dragging: Vec<PathBuf>,
 }
 
-/// 요약만으로 정하는 효과(순수): 포인터가 어느 패널 위에도 없으면 불가 · 끌려오는 것이 그 폴더 자신이거나 그 폴더를 품으면 불가 ·
-/// 아니면 [`drop_choice`].
+thread_local! {
+    /// 드래그 중 볼륨 판정 메모(마지막 쌍 1개 · GAP-031 뒤 Unix `same_volume`은 stat을 부른다 — 포인터 이동마다 같은 쌍을 다시 묻지 않게).
+    static VOLUME_MEMO: RefCell<Option<(PathBuf, PathBuf, bool)>> = const { RefCell::new(None) };
+}
+
+/// 드래그 효과 판정용 [`ndir_ops::same_volume`](같은 (원본, 대상) 쌍이면 메모 · 쌍이 바뀔 때만 다시 판정) — 느린 마운트 위에서 포인터 이동마다
+/// stat이 돌지 않게(11-01 협업 지적). 새 쌍의 첫 판정은 여전히 stat(응답 없는 마운트 = 실기).
+pub(crate) fn same_volume_memo(a: &Path, b: &Path) -> bool {
+    VOLUME_MEMO.with(|m| {
+        if let Some((pa, pb, r)) = m.borrow().as_ref() {
+            if pa == a && pb == b {
+                return *r;
+            }
+        }
+        let r = ndir_ops::same_volume(a, b);
+        *m.borrow_mut() = Some((a.to_path_buf(), b.to_path_buf(), r));
+        r
+    })
+}
+
+/// 요약만으로 정하는 효과: 포인터가 어느 패널 위에도 없으면 불가 · 끌려오는 것이 그 폴더 자신이거나 그 폴더를 품으면 불가 ·
+/// 아니면 [`drop_choice`](볼륨 판정은 [`same_volume_memo`]).
 pub(crate) fn zone_choice(
     zones: &[DropZone],
     dragging: &[PathBuf],
@@ -562,7 +582,7 @@ pub(crate) fn zone_choice(
     {
         return DropChoice::None;
     }
-    drop_choice(ctrl, shift, ndir_ops::same_volume(first, &zone.root))
+    drop_choice(ctrl, shift, same_volume_memo(first, &zone.root))
 }
 
 /// 실시간 수신기 — 우리 창에서 시작한 드래그가 도는 동안 앱이 걸어 둔다(사건을 그 자리에서 처리하고 효과를 답한다).

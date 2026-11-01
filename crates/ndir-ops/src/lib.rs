@@ -21,7 +21,7 @@ pub mod nfc {
 
 use std::fs;
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 전송 연산(docs/33 — 진입점이 달라도 이 두 연산으로 수렴).
@@ -244,6 +244,40 @@ pub fn is_same_or_sub(ancestor: &Path, child: &Path) -> bool {
 /// 두 경로가 같은 볼륨인가(원본 SameVolume — 루트 비교, 판단 실패 시 true 보수적).
 /// Windows = 드라이브/UNC 프리픽스, 그 외 플랫폼 = 단일 루트로 간주.
 pub fn same_volume(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        same_volume_by_device(a, b)
+    }
+    #[cfg(not(unix))]
+    {
+        same_volume_by_prefix(a, b)
+    }
+}
+
+/// Unix(GAP-031 · 11-01 협업 실측): 루트 `/` 비교는 늘 같다고 봐서 tmpfs → ext4 이동이 `rename` EXDEV로 **항상 실패**했다(dir2 Windows 전제
+/// 그대로 이식) → 가장 가까운 있는 조상의 `st_dev`로 가른다. 못 읽으면 보수적으로 같다고 보고 [`move_onto_with_progress`]의 EXDEV 안전망이 받는다.
+#[cfg(unix)]
+fn same_volume_by_device(a: &Path, b: &Path) -> bool {
+    fn dev_nearest(path: &Path) -> Option<u64> {
+        use std::os::unix::fs::MetadataExt as _;
+        let mut p = path;
+        loop {
+            if let Ok(m) = fs::symlink_metadata(p) {
+                return Some(m.dev());
+            }
+            p = p.parent()?;
+        }
+    }
+    match (dev_nearest(a), dev_nearest(b)) {
+        (Some(da), Some(db)) => da == db,
+        _ => true,
+    }
+}
+
+/// Windows: 드라이브 접두(`C:` · UNC)로 — dir2 원형.
+#[cfg(not(unix))]
+fn same_volume_by_prefix(a: &Path, b: &Path) -> bool {
+    use std::path::Component;
     fn root(p: &Path) -> Option<String> {
         match p.components().next() {
             Some(Component::Prefix(pr)) => Some(pr.as_os_str().to_string_lossy().to_lowercase()),
@@ -255,6 +289,18 @@ pub fn same_volume(a: &Path, b: &Path) -> bool {
         (Some(ra), Some(rb)) => ra == rb,
         _ => true, // 보수적(원본 동일)
     }
+}
+
+/// `rename`이 "다른 장치"로 거부됐는가(GAP-031 안전망): Unix `EXDEV`(18) · Windows `ERROR_NOT_SAME_DEVICE`(17). 바인드 마운트처럼 `st_dev`가
+/// 같아도 EXDEV가 날 수 있어 [`move_onto_with_progress`]가 이때 복사 이동으로 되돌린다.
+fn is_cross_device(e: &io::Error) -> bool {
+    #[cfg(unix)]
+    let code = 18;
+    #[cfg(windows)]
+    let code = 17;
+    #[cfg(not(any(unix, windows)))]
+    let code = -1;
+    e.raw_os_error() == Some(code)
 }
 
 /// `dest_dir` 안에서 `name`이 충돌하면 " (2)"…를 부여한 경로(원본 UniqueDest).
@@ -600,26 +646,36 @@ pub fn move_onto_with_progress(
         return Err(OpsError::IntoSelf.io());
     }
     if same_volume(src, dest) {
-        // 옛 대상은 새 대상이 자리를 잡은 뒤에만 사라진다(점검 1차 #1 — 종전은 선삭제 후 rename).
-        if overwrite && dest.is_dir() {
-            let old = staging_path(dest, "old");
-            fs::rename(dest, &old)?;
-            if let Err(e) = fs::rename(src, dest) {
-                let _ = fs::rename(&old, dest); // 원복
-                return Err(e);
+        match rename_onto(src, dest, overwrite, is_dir) {
+            Ok(()) => {
+                on_bytes(size_of(dest)); // 메타데이터 이동(즉시) — 전체 크기 1회 보고
+                return Ok(());
             }
-            let _ = fs::remove_dir_all(&old);
-        } else if overwrite && is_dir && dest.is_file() {
-            fs::remove_file(dest)?; // 형 불일치(파일 위에 폴더) — 새 내용은 원본에 온전히 있음
-            fs::rename(src, dest)?;
-        } else {
-            fs::rename(src, dest)?; // 파일 위 파일 = std rename(REPLACE_EXISTING) 원자 교체
+            // 안전망(GAP-031): 장치 판정이 같다고 했어도 rename이 EXDEV면(바인드 마운트 · 판정 불가 경로) 복사 이동으로.
+            Err(e) if is_cross_device(&e) => {}
+            Err(e) => return Err(e),
         }
-        on_bytes(size_of(dest)); // 메타데이터 이동(즉시) — 전체 크기 1회 보고
-        Ok(())
-    } else {
-        move_by_copy(src, dest, overwrite, on_bytes, cancel)
     }
+    move_by_copy(src, dest, overwrite, on_bytes, cancel)
+}
+
+/// 같은 볼륨 이동 = `rename`(옛 대상은 새 대상이 자리를 잡은 뒤에만 사라진다 · 점검 1차 #1 — 종전은 선삭제 후 rename).
+fn rename_onto(src: &Path, dest: &Path, overwrite: bool, is_dir: bool) -> io::Result<()> {
+    if overwrite && dest.is_dir() {
+        let old = staging_path(dest, "old");
+        fs::rename(dest, &old)?;
+        if let Err(e) = fs::rename(src, dest) {
+            let _ = fs::rename(&old, dest); // 원복
+            return Err(e);
+        }
+        let _ = fs::remove_dir_all(&old);
+    } else if overwrite && is_dir && dest.is_file() {
+        fs::remove_file(dest)?; // 형 불일치(파일 위에 폴더) — 새 내용은 원본에 온전히 있음
+        fs::rename(src, dest)?;
+    } else {
+        fs::rename(src, dest)?; // 파일 위 파일 = std rename(REPLACE_EXISTING) 원자 교체
+    }
+    Ok(())
 }
 
 /// 스테이징 잔여 정리(GAP-030 · 11-01 협업 kill -9 실측): 프로세스가 죽으면 `dest` 옆에 `.<이름>.nexa-<tag>-<pid>-<n>`이 남는다(오류·취소 경로만
@@ -1903,6 +1959,57 @@ mod tests {
             fs::read_to_string(src.join("sub/locked.txt")).unwrap(),
             "잠김"
         );
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-031(11-01): Unix `same_volume` = `st_dev`(가장 가까운 있는 조상) · 다른 장치(`/dev/shm` ≠ 임시 폴더일 때만)로의 이동은
+    /// 복사 이동으로 끝난다(종전 = `rename` EXDEV로 항상 실패 · 원본 그대로).
+    #[cfg(unix)]
+    #[test]
+    fn cross_device_move_uses_copy_on_unix() {
+        let d = fixture("gap031");
+        assert!(
+            same_volume(&d, &d.join("missing/deeper")),
+            "없는 경로 = 가까운 조상의 장치"
+        );
+        let shm = Path::new("/dev/shm");
+        if !shm.is_dir() || same_volume(&d, shm) {
+            fs::remove_dir_all(&d).unwrap();
+            return; // 둘째 장치 없음 — 건너뜀(CI ubuntu는 /dev/shm이 tmpfs · /tmp는 디스크)
+        }
+        let other = shm.join(format!("nexa_ops_gap031_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&other);
+        fs::create_dir_all(&other).unwrap();
+        fs::create_dir_all(d.join("tree/sub")).unwrap();
+        fs::write(d.join("tree/sub/f.txt"), "f").unwrap();
+        fs::write(d.join("one.txt"), "one").unwrap();
+        let never = AtomicBool::new(false);
+        move_onto_with_progress(
+            &d.join("tree"),
+            &other.join("tree"),
+            false,
+            &mut |_| {},
+            &never,
+        )
+        .unwrap();
+        move_onto_with_progress(
+            &d.join("one.txt"),
+            &other.join("one.txt"),
+            false,
+            &mut |_| {},
+            &never,
+        )
+        .unwrap();
+        assert!(
+            !d.join("tree").exists() && !d.join("one.txt").exists(),
+            "원본 소멸"
+        );
+        assert_eq!(
+            fs::read_to_string(other.join("tree/sub/f.txt")).unwrap(),
+            "f"
+        );
+        assert_eq!(fs::read_to_string(other.join("one.txt")).unwrap(), "one");
+        let _ = fs::remove_dir_all(&other);
         fs::remove_dir_all(&d).unwrap();
     }
 
