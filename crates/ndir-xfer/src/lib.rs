@@ -103,9 +103,11 @@ fn validate_with(
         ));
     }
     // 끝난 항목 · 끊긴 항목(GAP-030: 이동 중 죽어 원본이 이미 없을 수 있음)은 존재 검사에서 뺀다.
+    // 존재 = 링크 비추종(`ndir_ops::exists` · GAP-033 · 협업 실측 11-01): 끊어진 심볼릭 링크도 원본이다(엔진은 링크를 링크로 복사) —
+    // `Path::exists`는 링크를 따라가 "없음"으로 보고 작업 전체를 거부했다.
     if !lenient_sources {
         if let Some(p) = spec.sources.iter().find(|p| {
-            !p.exists()
+            !ndir_ops::exists(p)
                 && resumed_item(done, spec, p).is_none()
                 && resumed_item(cut, spec, p).is_none()
         }) {
@@ -813,6 +815,42 @@ mod tests {
         fs::write(d.join("src/a.txt"), b"hello").unwrap();
         fs::write(d.join("src/dir/b.bin"), vec![7u8; 3000]).unwrap();
         d
+    }
+
+    /// GAP-033(협업 실측 11-01): 끊어진 심볼릭 링크 원본은 "없음"이 아니다 — 엄격 검증(CLI)도 통과시키고 **그 항목만** 실패한다(엔진은
+    /// 최상위 링크를 추종해 내용을 복사하므로 가리키는 것이 없으면 NotFound · 다른 항목은 복사됨 · 종전 = 전체 거부 exit 2) · 진짜 없는
+    /// 원본은 종전대로 전체 거부.
+    #[cfg(unix)]
+    #[test]
+    fn broken_symlink_source_is_not_missing() {
+        let d = sandbox("brokenlink");
+        let link = d.join("src/dangling");
+        std::os::unix::fs::symlink(d.join("src/nowhere"), &link).unwrap();
+        assert!(!link.exists() && ndir_ops::exists(&link), "끊어진 링크");
+        let spec = JobSpec {
+            sources: vec![d.join("src/a.txt"), link],
+            dest: d.join("dst"),
+            ..JobSpec::default()
+        };
+        assert!(validate(&spec).is_none(), "{:?}", validate(&spec));
+        let r = run(&spec, &mut |_| {}, &AtomicBool::new(false));
+        assert!(!r.ok && r.failed == 1 && r.errors.is_empty(), "{r:?}");
+        assert!(d.join("dst/a.txt").is_file(), "정상 파일은 복사됨");
+        let bad = r.items.iter().find(|i| i.status == "failed").unwrap();
+        assert!(
+            bad.source.ends_with("dangling") && !bad.note.is_empty(),
+            "{bad:?}"
+        );
+        assert!(
+            !ndir_ops::exists(&d.join("dst/dangling")),
+            "실패 항목 잔여 없음"
+        );
+        let gone = JobSpec {
+            sources: vec![d.join("src/really-missing")],
+            ..spec
+        };
+        assert!(validate(&gone).unwrap().contains("source not found"));
+        let _ = fs::remove_dir_all(&d);
     }
 
     /// `run_full`(T-202 ④ 슬라이스 1): ① 충돌 콜백이 명세 정책 대신 결정 ② 엔진 이벤트 4종이 통과 ③ 결과 `Outcome.transferred`는
