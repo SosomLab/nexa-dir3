@@ -1861,6 +1861,203 @@ fn transfer_queue_waits_runs_in_order_and_edits() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 재시작 복원(T-202 ④ 슬라이스 3 · docs/26 §12.2 · §12.4 · 사용자 11-01 ③ "물어보고 재개"): 설정 폴더 `queue/`에 남은 작업 + 죽은 소유자 →
+/// 인수(owner.lock = 우리 pid) → "끝나지 않은 전송 n건 — 재개 / 버림" → 재개 = 같은 id · `resume`/`journal` = 그 저널 → 끊긴 덮어쓰기 사본은
+/// 질문에 "중단된 사본" 줄(기본 1 덮어쓰기) → 완료 뒤 파일 정리 · `discard` = 파일 삭제 · `auto` = 바로 실행 · 살아 있는 소유자 = 메모리 큐만.
+#[test]
+fn queue_restore_asks_resumes_and_discards() {
+    let (mut app, dir) = fixture("xferrestore");
+    app.layout_for(1200, 800, 1.0);
+    let qdir = dir.join("queue");
+    std::fs::create_dir_all(&qdir).unwrap();
+    app.transfer_queue.set_dir(Some(qdir.clone()));
+    // 지난 실행이 남긴 것: 작업 파일 · started(overwrite) 저널 · 옛 내용 그대로인 대상 · 죽은 pid 잠금.
+    std::fs::write(dir.join("sub/a.txt"), b"old").unwrap();
+    let spec = ndir_xfer::JobSpec {
+        sources: vec![dir.join("a.txt")],
+        dest: dir.join("sub"),
+        ..Default::default()
+    };
+    std::fs::write(qdir.join("77.job.json"), spec.to_json()).unwrap();
+    ndir_xfer::resume::Journal::open(&qdir.join("77.journal"))
+        .unwrap()
+        .record(&ndir_xfer::ItemReport {
+            action: "copy".into(),
+            status: "started".into(),
+            bytes: 5,
+            source: dir.join("a.txt"),
+            dest: dir.join("sub/a.txt"),
+            note: "overwrite".into(),
+        })
+        .unwrap();
+    std::fs::write(qdir.join("owner.lock"), format!("{}\n0\n", u32::MAX - 7)).unwrap();
+    app.queue_restore_startup();
+    assert!(!app.transfer_queue.memory_only(), "죽은 소유자 = 인수");
+    assert!(std::fs::read_to_string(qdir.join("owner.lock"))
+        .unwrap()
+        .starts_with(&format!("{}\n", std::process::id())));
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains(&tr("ops.queueRestoreTitle")) && d.contains(&trf("ops.queueRestore", &["1"])),
+        "{d}"
+    );
+    app.startup_cmd("dlg.pick:1"); // 재개
+    assert!(
+        app.transfer.is_some() && app.transfer_queue.is_empty(),
+        "재개 = 같은 id로 머리 실행"
+    );
+    // 끊긴 덮어쓰기 사본 → 질문(중단된 사본 줄 · 크기 3 B) → 1 덮어쓰기.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.dlg_pending.is_none() {
+        assert!(
+            app.ops_tick() && std::time::Instant::now() < deadline,
+            "재개 충돌 질문"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let d = app.dump_of("dlg").unwrap();
+    assert!(
+        d.contains("Confirm Overwrite") && d.contains("interrupted transfer") && d.contains("3 B"),
+        "{d}"
+    );
+    app.startup_cmd("dlg.pick:1");
+    while app.ops_tick() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "재개 전송이 끝나지 않음"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        std::fs::read(dir.join("sub/a.txt")).unwrap(),
+        b"hello",
+        "덮어씀"
+    );
+    assert!(
+        !qdir.join("77.job.json").exists() && !qdir.join("77.journal").exists(),
+        "끝난 작업 파일 정리"
+    );
+    assert!(app.panel_toasts[app.active].len() >= 2, "재개 n건 + 완료");
+    // discard = 파일 삭제 · 상태줄.
+    std::fs::write(qdir.join("78.job.json"), spec.to_json()).unwrap();
+    let _ = app.settings.set("transfer.queue_restore", "discard");
+    app.queue_restore_startup();
+    assert!(!qdir.join("78.job.json").exists() && app.transfer_queue.is_empty());
+    assert_eq!(app.statusbar.left(), trf("ops.queueDiscarded", &["1"]));
+    // auto = 바로 실행.
+    let spec_b = ndir_xfer::JobSpec {
+        sources: vec![dir.join("b.md")],
+        dest: dir.join("sub"),
+        ..Default::default()
+    };
+    std::fs::write(qdir.join("79.job.json"), spec_b.to_json()).unwrap();
+    let _ = app.settings.set("transfer.queue_restore", "auto");
+    app.queue_restore_startup();
+    assert!(app.transfer.is_some(), "auto = 질문 없이 머리 실행");
+    while app.ops_tick() {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(dir.join("sub/b.md").is_file() && !qdir.join("79.job.json").exists());
+    // 살아 있는 다른 소유자(부모 프로세스 = 시험 러너) = 메모리 큐만 · 상태줄 안내 · 작업 파일은 건드리지 않음.
+    #[cfg(unix)]
+    {
+        let parent = std::os::unix::process::parent_id();
+        let start = crate::platform::procid::process_start_time(parent).unwrap_or(0);
+        std::fs::write(qdir.join("owner.lock"), format!("{parent}\n{start}\n")).unwrap();
+        std::fs::write(qdir.join("80.job.json"), spec_b.to_json()).unwrap();
+        app.queue_restore_startup();
+        assert!(app.transfer_queue.memory_only(), "다른 인스턴스 = 메모리만");
+        assert_eq!(app.statusbar.left(), tr("ops.queueOtherInstance"));
+        assert!(qdir.join("80.job.json").exists(), "남의 작업은 그대로");
+        assert!(
+            app.ops_dump().contains("queue 0 memory"),
+            "{}",
+            app.ops_dump()
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 종료 때 실행 중 전송(T-202 ④ 슬라이스 3 · 협업 확인 11-01): 충돌 질문에 멈춘 전송 + 대기 1건에서 `transfer_abort_for_exit` = 취소 답으로
+/// 깨워 취소 경로로 끝냄(outcome canceled) · 큐 파일(둘) · owner.lock 유지 → "재기동"(transfer 비움 · `queue_restore_startup`) = 2건 질문 → 재개 →
+/// 첫 건은 다시 충돌(건너뜀) · 둘째 완료 · 파일 정리.
+#[test]
+fn exit_aborts_running_transfer_and_restart_resumes_queue() {
+    let (mut app, dir) = fixture("xferexit");
+    app.layout_for(1200, 800, 1.0);
+    let qdir = dir.join("queue");
+    app.transfer_queue.set_dir(Some(qdir.clone()));
+    std::fs::write(dir.join("sub/a.txt"), b"old").unwrap();
+    app.start_transfer(
+        vec![dir.join("a.txt")],
+        dir.join("sub"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.dlg_pending.is_none() {
+        assert!(app.ops_tick() && std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.start_transfer(
+        vec![dir.join("b.md")],
+        dir.join("sub"),
+        ndir_ops::Op::Copy,
+        false,
+    );
+    assert_eq!(app.transfer_queue.len(), 1);
+    let files = || {
+        std::fs::read_dir(&qdir)
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_name().to_string_lossy().ends_with(".job.json"))
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+    assert_eq!(files(), 2, "실행 중 1 + 대기 1");
+    // 종료 길.
+    app.transfer_abort_for_exit();
+    // 워커가 끝났다(질문에 취소 답 → 그 항목 건너뜀 · 남은 항목이 없어 `canceled`는 엔진 의미상 거짓일 수 있다 · 부분 파일 없음).
+    let finished = app
+        .transfer
+        .as_ref()
+        .and_then(|j| j.shared.outcome.lock().ok().map(|s| s.is_some()))
+        .unwrap_or(false);
+    assert!(finished, "취소 답으로 깨어나 끝남");
+    assert!(app.dlg_pending.is_none(), "질문은 취소 답으로 거둠");
+    assert_eq!(std::fs::read(dir.join("sub/a.txt")).unwrap(), b"old");
+    assert_eq!(files(), 2, "큐 파일은 그대로(ⓑ)");
+    app.transfer_queue.release_owner();
+    // "재기동": 프로세스가 끝났다고 치고 새 상태로.
+    app.transfer = None;
+    app.transfer_queue = crate::app::queue::TransferQueue::new(Some(qdir.clone()));
+    app.queue_restore_startup();
+    assert!(
+        app.dump_of("dlg")
+            .unwrap()
+            .contains(&trf("ops.queueRestore", &["2"])),
+        "{}",
+        app.dump_of("dlg").unwrap()
+    );
+    app.startup_cmd("dlg.pick:1");
+    assert!(app.transfer.is_some() && app.transfer_queue.len() == 1);
+    // 첫 건 = 다시 충돌(저널에 started가 없어 평소 질문) → 건너뜀 → 둘째 자동.
+    while app.dlg_pending.is_none() {
+        assert!(app.ops_tick() && std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.startup_cmd("dlg.pick:3");
+    while app.ops_tick() {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(dir.join("sub/b.md").is_file());
+    assert_eq!(files(), 0, "끝난 작업 파일 정리");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만
 /// 앱 언어로 · 이름 복사는 그 **바로 아래**(설정 순서보다 우선) · 셸에 없으면 둘 다 아래 고유 구역 · 이름 복사를 숨기면 어디에도 없다 ·
 /// 복사 내용 = 한 줄에 하나(전체 경로 / 이름만).
@@ -10795,6 +10992,7 @@ fn statusbar_transfer_segment_shows_only_while_transferring() {
         cut: false,
         count: 1,
         queue_id: 0,
+        interrupted: Default::default(),
     });
     app.update_status();
     let v = ids(&app);

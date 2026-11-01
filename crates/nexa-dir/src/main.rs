@@ -1521,6 +1521,10 @@ impl App {
 
     /// 창을 닫을 때 자리·크기 기억(`window.main_size`/`main_pos` · dir2 계승).
     fn persist_window(&mut self) {
+        // 정상 종료 길 4곳이 다 여기를 지난다(협업 ⑴): 실행 중 전송은 취소 경로로 멈추고(부분 파일 정리 · 큐 파일은 유지 → 다음 기동 복원 ⓑ) ·
+        // `queue/owner.lock` 해제.
+        self.transfer_abort_for_exit();
+        self.transfer_queue.release_owner();
         if let Some(w) = &self.window {
             let (lw, lh) = wingeom::logical_size(w);
             let _ = self
@@ -1691,7 +1695,8 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     app.session_dir = session_dir;
     app.transfer_queue
         .set_dir(app.session_dir.as_ref().map(|d| d.join("queue")));
-    // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
+    app.queue_restore_startup(); // 소유 판정 · 미완 전송 복원(T-202 ④ 슬라이스 3 · 대화상자는 창이 뜬 뒤 다음 틱에)
+                                 // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
     if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {
         app.toasts.push(
             toast::ToastKind::Warn,

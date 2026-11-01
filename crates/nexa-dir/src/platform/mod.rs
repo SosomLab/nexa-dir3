@@ -37,6 +37,7 @@ pub(crate) mod macql;
 pub(crate) mod mactextdrop;
 #[cfg(target_os = "macos")]
 mod macwatch;
+pub(crate) mod procid;
 pub(crate) mod procmem;
 pub(crate) mod sysload;
 #[cfg(unix)]

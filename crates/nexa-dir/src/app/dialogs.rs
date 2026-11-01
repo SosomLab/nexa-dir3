@@ -38,6 +38,8 @@ pub(crate) enum DlgReply {
     SelectPattern,
     /// 체크섬 검증 파일 저장 — 이미 있을 때 덮어쓰기 확인(1 = 쓴다 · T-167 · 10-26).
     HashSave { dest: PathBuf, text: String },
+    /// 기동 때 남은 큐 작업(T-202 ④ 슬라이스 3 · docs/26 §12.4): 1 = 재개 · 2 = 버림 · 그 외 = 그대로(다음 기동에 다시 묻는다).
+    QueueRestore(Vec<(u64, ndir_xfer::JobSpec)>),
 }
 
 /// 덮어쓰기 질문 글 — 이름 + **대상 폴더**(사용자 10-05 "대상 폴더 식별이 되지 않아": 종전에는 이름만 있어 어느 폴더에
@@ -130,6 +132,11 @@ impl App {
                 }
                 // 취소 = 그대로 — 미러면 "취소" 문구 + 재비교(GAP-029 출구 B·C).
                 _ => self.trash_canceled(origin, paths.len()),
+            },
+            DlgReply::QueueRestore(jobs) => match id {
+                1 => self.queue_resume(jobs),
+                2 => self.queue_discard(jobs),
+                _ => {}
             },
             DlgReply::DeleteFailed { failed, origin } => {
                 if id == 1 {
@@ -259,6 +266,32 @@ impl App {
         self.update_status();
     }
 
+    /// 질문 글 — 재개 중 끊긴 덮어쓰기 사본(docs/26 §12.7 · 저널 started 줄 · `TransferJob.interrupted`)이면 "이전 전송에서 중단된 사본 ·
+    /// 덮어쓰기 권장" + 지금 대상의 크기 · 시각 줄을 덧붙인다(사람이 보고 가른다 · 기본 버튼 = 1 덮어쓰기는 dir2와 같다 · 협업 확인 ⑶).
+    fn conflict_question(&self, path: &std::path::Path) -> String {
+        let mut q = overwrite_question(path);
+        if self
+            .transfer
+            .as_ref()
+            .is_some_and(|j| j.interrupted.contains(path))
+        {
+            let (size, when) = std::fs::metadata(path)
+                .map(|m| {
+                    let when = m
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| crate::filelist::format_time_local(d.as_millis() as i64))
+                        .unwrap_or_default();
+                    (crate::filelist::format_size(m.len()), when)
+                })
+                .unwrap_or_default();
+            q.push('\n');
+            q.push_str(&trf("ops.overwriteResumed", &[&size, &when]));
+        }
+        q
+    }
+
     /// 전송 충돌 요청 → 4버튼(dir2 QA 07-14 개정): 덮어쓰기(1) · 모두 덮어쓰기(2) · 건너뛰기(3) · 취소(4).
     pub(crate) fn conflict_ask(
         &mut self,
@@ -270,15 +303,15 @@ impl App {
         // ★ "떠 있으면"이 아니라 **이 전송이 진행 창을 쓰면**으로 판정한다 — 첫 질문은 진행 창이 만들어지기 전에(같은 틱에)
         // 도착해서, 창이 떠 있는지로 보면 첫 질문만 따로 뜬 확인 창으로 갔다(사용자 10-04 캡처). 진행 창은 질문을 먼저
         // 받아 두었다가 그 크기로 열린다. 메인 창이 없는 시험은 종전 대화상자 길 그대로.
+        let question = self.conflict_question(path);
         if self.progress_win.is_active() && self.window.is_some() {
-            self.progress_win
-                .set_conflict(Some(overwrite_question(path)));
+            self.progress_win.set_conflict(Some(question));
             self.conflict_inline = Some(tx);
             return;
         }
         let spec = DlgSpec {
             title: tr("ops.overwriteTitle"),
-            text: overwrite_question(path),
+            text: question,
             buttons: vec![
                 (1, tr("ops.yes")),
                 (2, tr("ops.yesAll")),

@@ -60,6 +60,13 @@ const TA_SCOPE_OPTS: &[(&str, &str)] = &[
     ("level", "pref.taScope.level"),
     ("visible", "pref.taScope.visible"),
 ];
+/// 재시작 때 미완 전송(T-202 ④ 슬라이스 3 · 사용자 11-01 ③ "물어보고 재개" 기본).
+const QUEUE_RESTORE_OPTS: &[(&str, &str)] = &[
+    ("ask", "pref.queueRestore.ask"),
+    ("auto", "pref.queueRestore.auto"),
+    ("discard", "pref.queueRestore.discard"),
+];
+
 const TAB_DBL_OPTS: &[(&str, &str)] = &[
     ("close", "pref.tabDbl.close"),
     ("pin", "pref.tabDbl.pin"),
@@ -1484,6 +1491,14 @@ pub const REGISTRY: &[Entry] = &[
         "pref.xferQueue.desc",
         Bool,
         "on"
+    ),
+    e!(
+        "transfer.queue_restore",
+        CAT_TRANSFER,
+        "pref.xferQueueRestore",
+        "pref.xferQueueRestore.desc",
+        Choice(QUEUE_RESTORE_OPTS),
+        "ask"
     ),
     // 고속 복사 전략(dir3 신규 · NEW-007 1차 · 사용자 10-05) — 셋 다 고급: 드물게 조절하지만 영향이 크다.
     e!(

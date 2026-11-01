@@ -170,6 +170,10 @@ pub struct Hooks<'a> {
     pub on_event: Option<EventFn<'a>>,
     /// 원본 존재 검사 생략 — 없는 원본은 작업 전체 거부가 아니라 **그 항목만** 실패(앱 · 종전 `ndir_ops::transfer` 직접 호출과 같은 격리).
     pub lenient_sources: bool,
+    /// 재개의 끊긴 **덮어쓰기** 항목(저널 started · note `overwrite` · 옛 대상 그대로)을 강제로 덮어쓰지 않고 `resolve`에 **묻는다**(앱 · docs/26
+    /// §12.4 "기본 버튼 = 덮어쓰기" · §12.7 "앱은 묻는다" · CLI 기본 = 강제). note `new`의 부분 사본은 전부 이전 전송 것이라 지우고 다시
+    /// 복사한다(묻지 않음) · 끊긴 **이동**은 이 값과 무관하게 Skip(안전 규칙 · 4ac8bd9).
+    pub ask_interrupted: bool,
 }
 
 impl std::fmt::Debug for Hooks<'_> {
@@ -179,6 +183,7 @@ impl std::fmt::Debug for Hooks<'_> {
             .field("resolve", &self.resolve.is_some())
             .field("on_event", &self.on_event.is_some())
             .field("lenient_sources", &self.lenient_sources)
+            .field("ask_interrupted", &self.ask_interrupted)
             .finish()
     }
 }
@@ -248,6 +253,7 @@ pub fn run_full(
         resolve: mut resolve_cb,
         on_event: mut event_cb,
         lenient_sources,
+        ask_interrupted,
     } = hooks;
     let started = Instant::now();
     let mut rep = Report {
@@ -335,7 +341,7 @@ pub fn run_full(
     let mut resolve = |dest: &std::path::Path| {
         if force_skip.contains(dest) {
             ndir_ops::Conflict::Skip
-        } else if force_overwrite.contains(dest) {
+        } else if force_overwrite.contains(dest) && !(ask_interrupted && resolve_cb.is_some()) {
             ndir_ops::Conflict::Overwrite
         } else if let Some(cb) = resolve_cb.as_mut() {
             cb(dest)
@@ -850,6 +856,95 @@ mod tests {
             ..spec
         };
         assert!(validate(&gone).unwrap().contains("source not found"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// `ask_interrupted`(앱 · 슬라이스 3 · §12.7): 끊긴 **덮어쓰기** 항목을 강제 덮어쓰기 대신 콜백에 묻는다(기본 CLI = 강제 · 콜백 안 불림) ·
+    /// 끊긴 **이동**은 콜백과 무관하게 Skip.
+    #[test]
+    fn ask_interrupted_routes_resumed_overwrite_to_callback() {
+        let d = sandbox("askint");
+        fs::write(d.join("dst/a.txt"), b"old").unwrap();
+        let journal = d.join("j.journal");
+        let started = ItemReport {
+            action: "copy".into(),
+            status: "started".into(),
+            bytes: 5,
+            source: d.join("src/a.txt"),
+            dest: d.join("dst/a.txt"),
+            note: "overwrite".into(),
+        };
+        resume::Journal::open(&journal)
+            .unwrap()
+            .record(&started)
+            .unwrap();
+        let spec = JobSpec {
+            sources: vec![d.join("src/a.txt")],
+            dest: d.join("dst"),
+            resume: Some(journal),
+            ..JobSpec::default()
+        };
+        let cancel = AtomicBool::new(false);
+        let mut asked = 0;
+        let (r, _) = run_full(
+            &spec,
+            &mut |_| {},
+            &cancel,
+            Hooks {
+                resolve: Some(&mut |_p: &Path| {
+                    asked += 1;
+                    ndir_ops::Conflict::Skip
+                }),
+                ..Hooks::default()
+            },
+        );
+        assert!(
+            r.ok && asked == 0,
+            "기본 = 강제 덮어쓰기 · 콜백 안 불림 {r:?}"
+        );
+        assert_eq!(fs::read(d.join("dst/a.txt")).unwrap(), b"hello");
+        // 다시 옛 내용으로(저널은 started 그대로) → ask_interrupted = 콜백이 결정(Skip → 옛 내용 유지).
+        fs::write(d.join("dst/a.txt"), b"old").unwrap();
+        let mut asked: Vec<PathBuf> = Vec::new();
+        let (r, out) = run_full(
+            &spec,
+            &mut |_| {},
+            &cancel,
+            Hooks {
+                resolve: Some(&mut |p: &Path| {
+                    asked.push(p.to_path_buf());
+                    ndir_ops::Conflict::Skip
+                }),
+                ask_interrupted: true,
+                ..Hooks::default()
+            },
+        );
+        assert_eq!(asked, vec![d.join("dst/a.txt")]);
+        assert_eq!(fs::read(d.join("dst/a.txt")).unwrap(), b"old");
+        assert!(r.ok && r.skipped == 1 && out.skipped.len() == 1, "{r:?}");
+        // 끊긴 이동 = 묻지 않고 Skip(원본 유지).
+        let mv = JobSpec {
+            op: Op::Move,
+            ..spec
+        };
+        let mut asked = 0;
+        let (r, _) = run_full(
+            &mv,
+            &mut |_| {},
+            &cancel,
+            Hooks {
+                resolve: Some(&mut |_p: &Path| {
+                    asked += 1;
+                    ndir_ops::Conflict::Overwrite
+                }),
+                ask_interrupted: true,
+                ..Hooks::default()
+            },
+        );
+        assert!(
+            asked == 0 && r.skipped == 1 && d.join("src/a.txt").is_file(),
+            "{r:?}"
+        );
         let _ = fs::remove_dir_all(&d);
     }
 

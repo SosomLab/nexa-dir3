@@ -10,6 +10,7 @@
 //! - **충돌**: 확인 창(T-29 nexa-dlg)이 오기 전까지 **건너뜀**(`Conflict::Skip` — 조용히 덮어쓰지 않는다 · 건너뛴 수는 토스트에) ⚠ OPS-004.
 //! - **undo/redo**: `OperationHistory`(세션 한정 100) · 결과 문구 `undo.done/fail` · `history.*`.
 
+use crate::app::dialogs::DlgReply;
 use crate::platform::PlatformError;
 use crate::*;
 use ndir_ops::history::{CopyBatchOp, MoveBatchOp, OpError, OperationHistory};
@@ -57,6 +58,8 @@ pub(crate) struct TransferJob {
     pub count: usize,
     /// 큐 항목 id(끝나면 `queue/<id>.*` 파일 정리 · T-202 ④).
     pub queue_id: u64,
+    /// 재개(슬라이스 3 · §12.7): 저널의 끊긴 항목 **대상** 집합 — 충돌 질문에 "중단된 사본" 줄을 덧붙인다(끊긴 이동은 엔진이 Skip).
+    pub interrupted: std::collections::HashSet<PathBuf>,
 }
 
 /// 전송 폴링 간격(ms).
@@ -236,7 +239,7 @@ impl App {
         self.start_transfer(sources, dest, op, cut);
     }
 
-    fn status_note(&mut self, text: &str) {
+    pub(crate) fn status_note(&mut self, text: &str) {
         let mut inv = Invalidations::default();
         self.statusbar.set_left(text, &mut inv);
         self.redraw();
@@ -360,6 +363,14 @@ impl App {
         } = job;
         let op = spec.op;
         let count = spec.sources.len();
+        // 재개(슬라이스 3): 저널의 끊긴 항목 대상 = 질문 글 표시용(강제 덮어쓰기 대신 묻는다 = `ask_interrupted`).
+        let interrupted: std::collections::HashSet<PathBuf> = spec
+            .resume
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|t| ndir_xfer::resume::interrupted_items(&t).ok())
+            .map(|v| v.into_iter().map(|i| i.dest).collect())
+            .unwrap_or_default();
         let shared = Arc::new(TransferShared {
             cancel: AtomicBool::new(false),
             done: AtomicU64::new(0),
@@ -482,6 +493,7 @@ impl App {
                     resolve: Some(&mut resolve),
                     on_event: Some(&mut on_event),
                     lenient_sources: true,
+                    ask_interrupted: true,
                     ..ndir_xfer::Hooks::default()
                 },
             );
@@ -496,8 +508,46 @@ impl App {
             cut,
             count,
             queue_id,
+            interrupted,
         });
         self.status_note(&trf("ops.progress", &["0"]));
+    }
+
+    /// 종료 때(협업 확인 11-01 · ⓑ): 돌고 있는 전송을 **취소 경로로** 멈춘다 — 그냥 끊으면 매 정상 종료가 GAP-030의 끊긴 항목(부분 파일 ·
+    /// `.nexa-tmp-<pid>` 잔여)을 만든다. 취소 = 엔진이 부분 파일·스테이징을 치우고 저널은 started 그대로 → 다음 기동 복원이 이어 받는다.
+    /// 충돌 질문에 멈춰 있으면(진행 창 · 대화상자 · 아직 수거 전) 취소 답을 보내 깨운다 · 최대 3초 기다린다 · **큐 파일은 지우지 않는다**.
+    pub(crate) fn transfer_abort_for_exit(&mut self) {
+        let Some(job) = &self.transfer else {
+            return;
+        };
+        job.shared.cancel.store(true, Ordering::Relaxed);
+        if let Some(tx) = self.conflict_inline.take() {
+            let _ = tx.send(ConflictChoice::Cancel);
+        }
+        if matches!(self.dlg_reply, Some(DlgReply::Conflict(_))) {
+            if let Some(DlgReply::Conflict(tx)) = self.dlg_reply.take() {
+                let _ = tx.send(ConflictChoice::Cancel);
+            }
+        }
+        if matches!(self.dlg_pending, Some((_, DlgReply::Conflict(_)))) {
+            if let Some((_, DlgReply::Conflict(tx))) = self.dlg_pending.take() {
+                let _ = tx.send(ConflictChoice::Cancel);
+            }
+        }
+        while let Ok((_, tx)) = job.conflict_rx.try_recv() {
+            let _ = tx.send(ConflictChoice::Cancel);
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while job
+            .shared
+            .outcome
+            .lock()
+            .map(|s| s.is_none())
+            .unwrap_or(false)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     /// 전송 취소 요청(진행 중일 때).
@@ -764,8 +814,13 @@ impl App {
             None => "none".into(),
         };
         format!(
-            "transfer {transfer}\nqueue {}\nundo {} {}\nredo {}\nclip {clip}\n",
+            "transfer {transfer}\nqueue {}{}\nundo {} {}\nredo {}\nclip {clip}\n",
             self.transfer_queue.len(),
+            if self.transfer_queue.memory_only() {
+                " memory"
+            } else {
+                ""
+            },
             self.history.can_undo(),
             self.history.undo_description().unwrap_or(""),
             self.history.can_redo()
