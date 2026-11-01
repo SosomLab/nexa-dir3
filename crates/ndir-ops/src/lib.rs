@@ -800,7 +800,7 @@ pub fn remove_staging_leftovers(dest: &Path, tags: &[&str]) -> usize {
 }
 
 /// 프로세스 생존 확인(GAP-030 스테이징 잔여 정리 · T-202 ④ 큐 소유 표시 · 11-01): unix = `kill(pid, 0)`(0 또는 EPERM = 살아 있음) ·
-/// Windows = `OpenProcess` + `GetExitCodeProcess == STILL_ACTIVE`. 외부 crate 0(DR-8 · FFI 직접 선언 · `fastcopy` os 모듈 선례). pid 재사용은
+/// Windows = `OpenProcess` + `GetExitCodeProcess == STILL_ACTIVE`(열기 거부 ERROR_ACCESS_DENIED = 살아 있음 · GAP-035). 외부 crate 0(DR-8 · FFI 직접 선언 · `fastcopy` os 모듈 선례). pid 재사용은
 /// 못 가른다(호출자가 기동 시각 등을 함께 대조).
 #[must_use]
 pub fn process_alive(pid: u32) -> bool {
@@ -829,11 +829,14 @@ pub fn process_alive(pid: u32) -> bool {
         }
         const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
         const STILL_ACTIVE: u32 = 259;
+        const ERROR_ACCESS_DENIED: i32 = 5;
         // SAFETY: 핸들을 열어 종료 코드만 읽고 바로 닫는다.
         unsafe {
             let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
             if h.is_null() {
-                return false;
+                // GAP-035: 접근 거부(다른 계정 · 보호 프로세스)는 "있지만 남의 것" = 살아 있음(unix EPERM과 같은 판정) ·
+                // 그 밖(ERROR_INVALID_PARAMETER 87 = 없는 pid)만 죽음.
+                return io::Error::last_os_error().raw_os_error() == Some(ERROR_ACCESS_DENIED);
             }
             let mut code = 0u32;
             let ok = GetExitCodeProcess(h, &raw mut code) != 0;
@@ -2053,6 +2056,12 @@ mod tests {
         let me = std::process::id();
         assert!(process_alive(me));
         assert!(!process_alive(u32::MAX - 7), "없는 pid");
+        // GAP-035(Windows): 시스템 프로세스(pid 4)는 열기가 거부돼도(다른 계정 · 보호) 살아 있음 — 죽음으로 보면 그 pid의 잔여를 가로챈다.
+        #[cfg(windows)]
+        assert!(
+            process_alive(4),
+            "System(pid 4) = 살아 있음(접근 거부 포함)"
+        );
         fs::write(d.join(format!(".a.txt.nexa-tmp-{me}-0")), "live").unwrap();
         fs::write(d.join(".a.txt.nexa-tmp-4000000000-0"), "dead").unwrap();
         fs::create_dir_all(d.join(".a.txt.nexa-old-4000000001-1")).unwrap();
