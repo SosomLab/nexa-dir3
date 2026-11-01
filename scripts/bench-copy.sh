@@ -9,6 +9,7 @@
 #   --dir     = 자료를 만들 폴더 = **측정할 볼륨**(기본 시스템 임시 폴더 · 벤치가 하위 폴더를 만들고 끝나면 지운다)
 #   --out     = JSON 경로(기본 target/perf/copy-last.json · 원문 줄은 그 옆 copy-last.txt)
 #   --md      = 마크다운 표를 이 파일에도(표준 출력에는 늘 찍는다 · GITHUB_STEP_SUMMARY가 있으면 거기에도 덧붙인다)
+#   중앙값 0 ms(macOS APFS clone)면 MB/s · vs plain = "—"(JSON은 null) — 배수는 의미 없다.
 # 전략 라벨(OS 중립): 트리 = plain(일반 = 루프 1스레드) · os1(OS 경로 1스레드) · loop4(루프 4스레드) · auto(향상 = 기본값) / 큰 파일 =
 #   plain · os · os_unbuffered. 회차마다 대상 fsync 포함 · 전략을 회차마다 번갈아 돈다.
 # 판정은 하지 않는다(D5): CI = 기록만(공유 VM · 같은 실행 안의 비율 `vs plain`만 의미) · 실기기 = perf-baseline.sh가 기준선과 비교.
@@ -75,8 +76,10 @@ with open(out, "w", encoding="utf-8") as f:
 L = [f"### Copy bench — {doc['os']} · cores {doc['cores']} · seek {doc['seek']} · runs {runs} · {profile} · {head}", "",
      "| set | case | median ms | min | max | MB/s | vs plain | threads |",
      "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+# 중앙값 0 ms(macOS APFS clonefile = 복사가 아님)면 MB/s · 배수는 정의되지 않는다 → "—"(T-203 · 11-02 선검증 perf-copy-macOS).
+fmt = lambda v, suf="": "—" if v is None else f"{v}{suf}"
 for r in rows:
-    L.append(f"| {r['set']} | {r['case']} | {r['median_ms']} | {r['min_ms']} | {r['max_ms']} | {r['mb_s']} | {r['vs_plain']}x | {r['threads']} |")
+    L.append(f"| {r['set']} | {r['case']} | {r['median_ms']} | {r['min_ms']} | {r['max_ms']} | {fmt(r['mb_s'])} | {fmt(r['vs_plain'], 'x')} | {r['threads']} |")
 if not rows:
     L.append(f"| (no rows — see {os.path.basename(txt)}) | | | | | | | |")
 text = "\n".join(L) + "\n"
