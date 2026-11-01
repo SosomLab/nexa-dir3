@@ -98,7 +98,7 @@ impl App {
         let Some((first, rest)) = archives.split_first() else {
             return;
         };
-        if self.transfer.is_some()
+        if self.transfer_busy()
             || self.extract_job.is_some()
             || self.sync_job.is_some()
             || self.zip_job.is_some()
@@ -119,7 +119,7 @@ impl App {
 
     /// 지정 폴더로 풀기(우클릭 드래그 드롭 메뉴 "여기에 풀기" = 놓은 폴더 · 10-18).
     pub(crate) fn start_extract_to(&mut self, archive: &Path, dest: &Path) {
-        if self.transfer.is_some()
+        if self.transfer_busy()
             || self.extract_job.is_some()
             || self.sync_job.is_some()
             || self.zip_job.is_some()

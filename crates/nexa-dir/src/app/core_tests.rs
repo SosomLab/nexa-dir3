@@ -1754,6 +1754,113 @@ fn transfer_isolates_missing_source_through_xfer() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 전송 대기 큐(T-202 ④ 슬라이스 2 · docs/26 §12 · 사용자 11-01 ①②④): 첫 전송이 덮어쓰기 질문에 멈춘 동안 둘째·셋째 = 큐(`ops_dump`
+/// "queue 2" · `ops.wait` 대기) · 진행 창 대기 줄 · 순서 편집(아래로 · 삭제 = 진행 창 행 버튼 경로) · 답하면 차례로 자동 실행 · 모두 끝나면
+/// `ops_tick` false · 완료 토스트 2장 · `transfer.queue=off` = 종전 거부(`ops.busy`).
+#[test]
+fn transfer_queue_waits_runs_in_order_and_edits() {
+    let (mut app, dir) = fixture("xferqueue");
+    app.layout_for(1200, 800, 1.0);
+    std::fs::write(dir.join("sub/a.txt"), b"old").unwrap(); // 첫 전송 = 충돌 질문에서 멈춘다
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let go = |app: &mut App, src: &str, dest: &str| {
+        app.start_transfer(
+            vec![dir.join(src)],
+            dir.join(dest),
+            ndir_ops::Op::Copy,
+            false,
+        );
+    };
+    go(&mut app, "a.txt", "sub");
+    assert!(
+        app.transfer.is_some() && app.transfer_queue.is_empty(),
+        "비어 있으면 바로 시작"
+    );
+    // 질문이 뜨기를 기다린다(창 없음 = 대화상자 대기 사양).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.dlg_pending.is_none() {
+        assert!(
+            app.ops_tick() && std::time::Instant::now() < deadline,
+            "충돌 질문"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    go(&mut app, "b.md", "out");
+    go(&mut app, "sub/inner.rs", "out");
+    assert_eq!(app.transfer_queue.len(), 2, "실행 중 = 큐에 추가");
+    assert!(app.ops_dump().contains("queue 2"), "{}", app.ops_dump());
+    assert!(app.startup_wait_busy("ops.wait") && app.startup_wait_busy("jobs.wait"));
+    assert_eq!(app.progress_win.queue_len(), 2, "진행 창 대기 줄");
+    assert!(
+        app.statusbar.left().contains(&trf("ops.queued", &["2"])),
+        "{}",
+        app.statusbar.left()
+    );
+    // 순서 편집 = 진행 창 행 버튼 → 틱이 거둔다: 첫 행 [아래로] → inner.rs가 먼저 · 둘째 행 [삭제] → b.md 빠짐.
+    let labels = app.transfer_queue.labels();
+    assert!(
+        labels[0].contains("b.md") || labels[0].contains("→"),
+        "{labels:?}"
+    );
+    app.progress_win
+        .press_queue(0, crate::progress_win::QueueAct::Down);
+    assert!(app.ops_tick());
+    let ids = app.transfer_queue.ids();
+    assert_eq!(ids.len(), 2);
+    app.progress_win
+        .press_queue(1, crate::progress_win::QueueAct::Remove);
+    assert!(app.ops_tick());
+    assert_eq!(app.transfer_queue.len(), 1);
+    assert_eq!(app.progress_win.queue_len(), 1);
+    // 질문에 [건너뛰기] → 첫 전송 종결 → 같은 틱에 머리(inner.rs) 시작 → 끝나면 큐 비고 false.
+    app.startup_cmd("dlg.pick:3");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app.ops_tick() {
+        assert!(std::time::Instant::now() < deadline, "큐가 끝나지 않음");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        std::fs::read(dir.join("sub/a.txt")).unwrap(),
+        b"old",
+        "건너뜀"
+    );
+    assert!(
+        dir.join("out/inner.rs").is_file(),
+        "대기 작업이 자동 실행됨"
+    );
+    assert!(
+        !dir.join("out/b.md").exists(),
+        "삭제한 대기 작업은 돌지 않음"
+    );
+    assert!(app.transfer.is_none() && app.transfer_queue.is_empty());
+    assert!(
+        app.ops_dump().contains("transfer idle\nqueue 0"),
+        "{}",
+        app.ops_dump()
+    );
+    assert_eq!(
+        app.panel_toasts[app.active].len(),
+        2,
+        "작업마다 완료 토스트"
+    );
+    // 큐 끔 = 종전 거부.
+    let _ = app.settings.set("transfer.queue", "off");
+    go(&mut app, "a.txt", "sub"); // 다시 충돌 → 질문에서 멈춤
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.dlg_pending.is_none() {
+        assert!(app.ops_tick() && std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    go(&mut app, "b.md", "out");
+    assert!(app.transfer_queue.is_empty(), "off = 큐에 넣지 않음");
+    assert_eq!(app.statusbar.left(), tr("ops.busy"));
+    app.startup_cmd("dlg.pick:4");
+    while app.ops_tick() {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 경로 복사 · 이름 복사 = dir2 기준(win.rs:2996-3024 · 3105-3124): 셸이 준 "경로로 복사"(`copyaspath`)는 **그 자리 그대로** 라벨만
 /// 앱 언어로 · 이름 복사는 그 **바로 아래**(설정 순서보다 우선) · 셸에 없으면 둘 다 아래 고유 구역 · 이름 복사를 숨기면 어디에도 없다 ·
 /// 복사 내용 = 한 줄에 하나(전체 경로 / 이름만).
@@ -8826,14 +8933,16 @@ fn extract_archive_into_named_folder() {
         app.extract_job.as_ref().map(|j| j.dest.clone()),
         Some(dir.join("pack"))
     );
-    // 진행 중 전송 시작 = 거부.
+    // 풀기 중 전송 시작 = 거부가 아니라 **대기**(T-202 ④ 슬라이스 2 · docs/26 §12.3) → 풀기가 끝난 틱에 머리가 돈다.
     app.start_transfer(
         vec![tp.clone()],
         dir.join("pack"),
         ndir_ops::Op::Copy,
         false,
     );
-    assert!(app.transfer.is_none());
+    assert!(app.transfer.is_none() && app.transfer_queue.len() == 1);
+    assert!(app.ops_tick(), "대기 중 = 계속 폴링");
+    assert!(app.transfer.is_none(), "풀기 중엔 머리를 돌리지 않는다");
     let at = std::time::Instant::now();
     while app.extract_tick() {
         assert!(at.elapsed().as_secs() < 30);
@@ -8843,6 +8952,15 @@ fn extract_archive_into_named_folder() {
         std::fs::read(dir.join("pack").join("a.txt")).expect("read"),
         b"hello"
     );
+    assert!(
+        app.ops_tick() && app.transfer.is_some(),
+        "풀기 끝 → 머리 시작"
+    );
+    while app.ops_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(dir.join("pack").join("pack.tar").is_file() && app.transfer_queue.is_empty());
     // 여러 개 차례로(10-25 · T-187 한계 해소): 큐 · 번호 n/m · 둘 다 풀림 · 끝나면 큐/번호 초기화 · 메뉴 = 2개 선택도 하위 메뉴.
     let (t2, t3) = (dir.join("two.tar"), dir.join("three.tar"));
     std::fs::write(&t2, &tar).expect("write");
@@ -10676,6 +10794,7 @@ fn statusbar_transfer_segment_shows_only_while_transferring() {
         op: ndir_ops::Op::Copy,
         cut: false,
         count: 1,
+        queue_id: 0,
     });
     app.update_status();
     let v = ids(&app);

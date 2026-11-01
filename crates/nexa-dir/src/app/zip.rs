@@ -97,7 +97,7 @@ impl App {
         let Some(dest) = zip_dest(&paths) else {
             return;
         };
-        if self.transfer.is_some()
+        if self.transfer_busy()
             || self.extract_job.is_some()
             || self.sync_job.is_some()
             || self.zip_job.is_some()

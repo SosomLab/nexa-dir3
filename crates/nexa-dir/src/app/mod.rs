@@ -30,6 +30,7 @@ pub(crate) mod paint;
 pub(crate) mod palette;
 pub(crate) mod plugins;
 mod previewcmd;
+pub(crate) mod queue;
 pub(crate) mod row_icons;
 mod sessions;
 mod settings;

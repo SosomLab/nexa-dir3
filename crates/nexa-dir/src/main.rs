@@ -535,8 +535,10 @@ struct App {
     term_mouse_down: Option<usize>,
     /// 앱 내 파일 클립보드 사본(경로, 잘라내기) — OS 클립보드 미지원 OS의 폴백 · 붙여넣기 2순위(M6).
     clip: Option<(Vec<PathBuf>, bool)>,
-    /// 진행 중 전송(동시 1건).
+    /// 진행 중 전송(동시 1건 = 큐 머리).
     transfer: Option<app::ops::TransferJob>,
+    /// 전송 대기 큐(T-202 ④ 슬라이스 2 · `app/queue.rs`) — 저장 폴더 = 설정 폴더 `queue/`(시험 = None = 메모리만).
+    transfer_queue: app::queue::TransferQueue,
     /// 휴지통 워커(10-18 · `Trash::trash_async`) — (결과 채널, 대상) · 끝나면 `trash_finish`.
     trash_job: Option<(platform::TrashRx, Vec<PathBuf>, app::menus::TrashOrigin)>,
     /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
@@ -908,6 +910,7 @@ impl App {
             drives_seen: None,
             clip: None,
             transfer: None,
+            transfer_queue: app::queue::TransferQueue::new(None),
             trash_job: None,
             dirsizes: app::dirsize::DirSizes::default(),
             docks_due: None,
@@ -1686,6 +1689,8 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
     let session = session_dir.as_deref().and_then(Session::load);
     let mut app = App::new(settings, ui.font, start, session, Platform::native());
     app.session_dir = session_dir;
+    app.transfer_queue
+        .set_dir(app.session_dir.as_ref().map(|d| d.join("queue")));
     // 지난 실행의 크래시 기록을 한 번 안내(토스트 · 자세한 것은 파일).
     if let Some(p) = app.session_dir.as_deref().and_then(crash::take_unreported) {
         app.toasts.push(

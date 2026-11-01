@@ -5,7 +5,8 @@
 //! - **전송**: 대상 = 선택한 폴더 1개 또는 활성 패널 폴더(dir2 `paste_dest`) · `ndir_xfer::run_full`(T-202 ④ 슬라이스 1 · 충돌 콜백 · 엔진
 //!   이벤트 통과 · `lenient_sources` = 없는 원본은 그 항목만 실패 · 조절값은 설정 → `JobSpec`)을 **작업 스레드**에서(진행 = 공유 원자값 ·
 //!   틱마다 상태줄 `ops.progress`) · 완료 = 두 패널 재열람 + 토스트(`ops.done/skipped/errors/canceled`) + 히스토리 기록(이동 = `MoveBatchOp` ·
-//!   복사 = `CopyBatchOp` + 휴지통 삭제 주입). 동시 1건(`ops.busy`).
+//!   복사 = `CopyBatchOp` + 휴지통 삭제 주입). 실행 1건 + **대기 큐**(`transfer.queue` on · T-202 ④ 슬라이스 2 · `app/queue.rs` · 머리는
+//!   `pump_queue`가 틱에서 자동 시작 · off = 종전 거부 `ops.busy`).
 //! - **충돌**: 확인 창(T-29 nexa-dlg)이 오기 전까지 **건너뜀**(`Conflict::Skip` — 조용히 덮어쓰지 않는다 · 건너뛴 수는 토스트에) ⚠ OPS-004.
 //! - **undo/redo**: `OperationHistory`(세션 한정 100) · 결과 문구 `undo.done/fail` · `history.*`.
 
@@ -54,6 +55,8 @@ pub(crate) struct TransferJob {
     pub op: Op,
     pub cut: bool,
     pub count: usize,
+    /// 큐 항목 id(끝나면 `queue/<id>.*` 파일 정리 · T-202 ④).
+    pub queue_id: u64,
 }
 
 /// 전송 폴링 간격(ms).
@@ -221,10 +224,6 @@ impl App {
 
     /// `edit.paste`.
     pub(crate) fn paste(&mut self) {
-        if self.transfer.is_some() {
-            self.status_note(&tr("ops.busy"));
-            return;
-        }
         let Some((sources, cut)) = self.clip_sources() else {
             self.status_note(&tr("clip.empty"));
             return;
@@ -243,7 +242,9 @@ impl App {
         self.redraw();
     }
 
-    /// 전송 시작(작업 스레드) — 모든 복사/이동 진입점(붙여넣기 · DnD T-51 B)이 여기로.
+    /// 전송 시작 — 모든 복사/이동 진입점(붙여넣기 · DnD T-51 B · 컨텍스트 메뉴 · 라이선스 창)이 여기로. 명세를 만들어 **큐에 넣고**
+    /// 머리를 돌린다(T-202 ④ 슬라이스 2 · docs/26 §12.3): 비어 있으면 바로 시작 · 실행 중/풀기/동기화 중이면 대기(`transfer.queue` on) ·
+    /// off = 종전 거부(`ops.busy`). 머리도 큐를 거친다(`queue/<id>.job.json` + 저널 → 재시작 복원 슬라이스 3).
     pub(crate) fn start_transfer(
         &mut self,
         sources: Vec<PathBuf>,
@@ -254,10 +255,111 @@ impl App {
         if sources.is_empty() {
             return;
         }
-        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
+        let waiting = self.transfer_busy() || self.extract_job.is_some() || self.sync_job.is_some();
+        if waiting && !self.settings.flag("transfer.queue") {
             self.status_note(&tr("ops.busy"));
             return;
         }
+        // 명세(T-202 ④): 충돌은 콜백이 결정하므로 정책은 자리만 · 조절값은 전역 `set_tuning`과 같은 설정 키(시작 시점 스냅숏 — 종전과 같다).
+        let t = Self::transfer_tuning(&self.settings);
+        let spec = ndir_xfer::JobSpec {
+            op,
+            sources,
+            dest,
+            conflict: ndir_xfer::ConflictPolicy::Skip,
+            threads: t.threads,
+            native: t.native,
+            unbuffered_mb: t.unbuffered_min / (1024 * 1024),
+            ..ndir_xfer::JobSpec::default()
+        };
+        let (_id, saved) = self.transfer_queue.push(spec, cut);
+        if saved == app::queue::Saved::NotUtf8 {
+            let a = self.active;
+            self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("ops.progressTitle"),
+                tr("ops.queueNotSaved"),
+            );
+        }
+        // 상태줄 안내는 `sync_queue_view`(update_status가 왼쪽 글을 다시 쓴다) **뒤에**.
+        let started = self.pump_queue();
+        self.sync_queue_view();
+        if !started {
+            let n = self.transfer_queue.len().to_string();
+            self.status_note(&trf("ops.queued", &[&n]));
+        }
+    }
+
+    /// 전송이 돌고 있다(머리 1건).
+    pub(crate) fn transfer_running(&self) -> bool {
+        self.transfer.is_some()
+    }
+
+    /// 대기 중인 작업이 있다.
+    pub(crate) fn queue_pending(&self) -> bool {
+        !self.transfer_queue.is_empty()
+    }
+
+    /// 실행 중 또는 대기 있음 — 다른 작업(풀기 · 동기화 · 압축 · undo)의 문지기(대기 작업의 원본을 건드리지 않게 · 협업 분석 11-01).
+    pub(crate) fn transfer_busy(&self) -> bool {
+        self.transfer_running() || self.queue_pending()
+    }
+
+    /// 새 드래그/드롭을 막아야 하는가 — 큐가 **꺼져** 있을 때만(켜져 있으면 드롭도 큐로 · 협업 분석 11-01: 종전 §12.3 "드롭은 자연히
+    /// 큐로"는 DnD 문지기 셋 때문에 사실이 아니었다).
+    pub(crate) fn transfer_blocks_new(&self) -> bool {
+        self.transfer_running() && !self.settings.flag("transfer.queue")
+    }
+
+    /// 큐 머리를 돌린다(실행 중 · 풀기 · 동기화가 없을 때) — 반환 = 시작했다. 실행 차례의 재검사는 ndir-xfer가 한다(대상 없음 =
+    /// `Outcome.errors` → 실패 토스트 · 없는 원본 = 그 항목만).
+    pub(crate) fn pump_queue(&mut self) -> bool {
+        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
+            return false;
+        }
+        let Some(job) = self.transfer_queue.pop_front() else {
+            return false;
+        };
+        self.launch_transfer(job);
+        self.sync_queue_view();
+        true
+    }
+
+    /// 진행 창 대기 목록 · 상태바 xfer 칸("대기 n") 갱신.
+    pub(crate) fn sync_queue_view(&mut self) {
+        self.progress_win.set_queue(self.transfer_queue.labels());
+        self.update_status();
+        self.redraw();
+    }
+
+    /// 진행 창의 대기 행 버튼([위로] [아래로] [삭제]) 수거 → 큐에 반영(행 번호 → id).
+    fn queue_actions_tick(&mut self) {
+        let Some((row, act)) = self.progress_win.take_queue_action() else {
+            return;
+        };
+        let Some(&id) = self.transfer_queue.ids().get(row) else {
+            return;
+        };
+        let changed = match act {
+            crate::progress_win::QueueAct::Up => self.transfer_queue.move_up(id),
+            crate::progress_win::QueueAct::Down => self.transfer_queue.move_down(id),
+            crate::progress_win::QueueAct::Remove => self.transfer_queue.remove(id),
+        };
+        if changed {
+            self.sync_queue_view();
+        }
+    }
+
+    /// 작업 스레드 시작(큐 머리 1건) — 진행 = 공유 원자값 · 충돌 = 질문 채널 · 결과 = `Outcome`(ndir-xfer `run_full`).
+    fn launch_transfer(&mut self, job: app::queue::QueuedJob) {
+        let app::queue::QueuedJob {
+            id: queue_id,
+            spec,
+            cut,
+        } = job;
+        let op = spec.op;
+        let count = spec.sources.len();
         let shared = Arc::new(TransferShared {
             cancel: AtomicBool::new(false),
             done: AtomicU64::new(0),
@@ -275,19 +377,6 @@ impl App {
             self.open_progress = true;
         }
         let sh = Arc::clone(&shared);
-        let count = sources.len();
-        // 명세(T-202 ④): 충돌은 콜백이 결정하므로 정책은 자리만 · 조절값은 전역 `set_tuning`과 같은 설정 키(시작 시점 스냅숏 — 종전과 같다).
-        let t = Self::transfer_tuning(&self.settings);
-        let spec = ndir_xfer::JobSpec {
-            op,
-            sources,
-            dest,
-            conflict: ndir_xfer::ConflictPolicy::Skip,
-            threads: t.threads,
-            native: t.native,
-            unbuffered_mb: t.unbuffered_min / (1024 * 1024),
-            ..ndir_xfer::JobSpec::default()
-        };
         let (req_tx, conflict_rx) = mpsc::channel::<ConflictReq>();
         std::thread::spawn(move || {
             // 충돌 = UI 대화상자 4버튼(dir2 QA 07-14 개정): "모두 덮어쓰기"만 이후 무확인 · 취소 = 전체 중단 + 그 항목 건너뜀.
@@ -406,6 +495,7 @@ impl App {
             op,
             cut,
             count,
+            queue_id,
         });
         self.status_note(&trf("ops.progress", &["0"]));
     }
@@ -453,8 +543,10 @@ impl App {
         // 진행 창 스냅숏은 **질문을 띄우기 전에도 · 답을 기다리는 동안에도** 맞춘다 — 종전에는 덮어쓰기 질문이 떠 있으면 건너뛰어,
         // 앞 항목의 결과(덮어씀 = 채움 · 건너뜀 = 진한 회색)와 "파일 n/m"이 다음 질문 뒤에야 반영됐다(사용자 10-04).
         self.sync_progress_win();
+        self.queue_actions_tick();
         let Some(job) = &self.transfer else {
-            return false;
+            // 실행 중이 없으면 머리를 돌린다(풀기/동기화에 막혀 있으면 대기 유지 = 계속 폴링 · T4 `ops.wait`는 큐도 본다).
+            return self.pump_queue() || self.queue_pending();
         };
         // 진행 창 안에서 묻던 덮어쓰기 질문의 답 → 워커에 회신(창이 닫혔으면 취소로 본다).
         if self.conflict_inline.is_some() {
@@ -484,9 +576,12 @@ impl App {
         match outcome {
             Some(out) => {
                 let job = self.transfer.take().expect("checked above");
+                let qid = job.queue_id;
                 self.finish_transfer(job, out);
+                self.transfer_queue.forget(qid);
                 self.mem_after_job();
-                false
+                // 다음 머리(T-202 ④): 같은 틱에 바로 시작해 폴링(`WaitUntil` · T3 `while ops_tick()`)이 끊기지 않는다.
+                self.pump_queue() || self.queue_pending()
             }
             None => {
                 let (done, total) = (
@@ -618,7 +713,7 @@ impl App {
 
     /// `edit.undo`/`edit.redo`.
     pub(crate) fn history_step(&mut self, redo: bool) {
-        if self.transfer.is_some() {
+        if self.transfer_busy() {
             self.status_note(&tr("ops.busy"));
             return;
         }
@@ -669,7 +764,8 @@ impl App {
             None => "none".into(),
         };
         format!(
-            "transfer {transfer}\nundo {} {}\nredo {}\nclip {clip}\n",
+            "transfer {transfer}\nqueue {}\nundo {} {}\nredo {}\nclip {clip}\n",
+            self.transfer_queue.len(),
             self.history.can_undo(),
             self.history.undo_description().unwrap_or(""),
             self.history.can_redo()

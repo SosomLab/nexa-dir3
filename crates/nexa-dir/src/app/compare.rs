@@ -202,7 +202,7 @@ impl App {
 
     /// 창의 동기화 버튼 — 계획을 세워 복사 워커를 시작한다(전송 · 풀기 · 다른 동기화 중이면 거부).
     pub(crate) fn compare_sync(&mut self, dir: Direction, only: Vec<String>) {
-        if self.transfer.is_some() || self.extract_job.is_some() || self.sync_job.is_some() {
+        if self.transfer_busy() || self.extract_job.is_some() || self.sync_job.is_some() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("ops.busy"), &mut inv);
             self.redraw();

@@ -1,0 +1,27 @@
+# T4 · T-202 ④ 슬라이스 2 전송 대기 큐(docs/26 §12 · 사용자 11-01 ①): 전송 중 새 전송 = 큐에 추가 → 앞 작업이 끝나면 자동 시작.
+# a.txt 복사 → sub 붙여넣기 → (끝나기 전이든 뒤든) b.md 복사 → sub 붙여넣기 → `ops.wait`(실행 + 대기 둘 다 비울 때까지) → sub에 둘 다.
+id: copy-queue
+title: 전송 대기 큐 — 연속 붙여넣기 둘 다 완료
+tree: dir sub
+tree: file a.txt 7
+tree: file b.md 3
+settings: ui.lang=en
+cmd: @ready:list.select:1
+cmd: @ready:edit.copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @ready:nav:<root>
+cmd: @ready:list.select:2
+cmd: @ready:edit.copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @ready:ops.wait
+cmd: @ready:ops.dump:<out>/ops.txt
+cmd: @ready:list.dump:<out>/list.txt
+cmd: @ready:assert.ops:transfer idle
+cmd: @ready:assert.ops:queue 0
+cmd: @ready:quit
+check: ops.txt: transfer idle
+check: ops.txt: queue 0
+check: list.txt: a.txt
+check: list.txt: b.md

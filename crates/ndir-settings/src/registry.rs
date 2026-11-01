@@ -1476,6 +1476,15 @@ pub const REGISTRY: &[Entry] = &[
         },
         "3000"
     ),
+    // 전송 대기 큐(T-202 ④ 슬라이스 2 · 사용자 11-01 ①): 전송 중 새 전송 = 큐에 추가 · off = 종전 거부.
+    e!(
+        "transfer.queue",
+        CAT_TRANSFER,
+        "pref.xferQueue",
+        "pref.xferQueue.desc",
+        Bool,
+        "on"
+    ),
     // 고속 복사 전략(dir3 신규 · NEW-007 1차 · 사용자 10-05) — 셋 다 고급: 드물게 조절하지만 영향이 크다.
     e!(
         "transfer.native",

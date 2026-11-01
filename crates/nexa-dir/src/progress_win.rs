@@ -2,6 +2,9 @@
 //! 2행 = `진행 / 전체 (pct%) · 파일 cur/count` · 세그먼트 바(nexa-ctl `SegProgress` · 높이 = 줄 높이) · 우하단 [취소].
 //! 완료 = `set_done(label, ms)` → [취소]가 **[닫기 (N)]**로(N = 올림 초 · 1초마다 감소 · 0 = 자동 닫힘 · 버튼/X = 즉시) · 진행값은 그대로.
 //! [취소]/X(진행 중) = `cancelled` 기록만(창은 닫지 않음) → 호스트가 폴링해 워커 취소 플래그에. 설정 `transfer.close_ms > 0`일 때만 열린다.
+//! **대기 목록**(T-202 ④ 슬라이스 2 · docs/26 §12.4 · 사용자 11-01 ④ "기존 창 + 대기 목록 줄"): 막대 아래 "대기 중 n건" + 행마다 라벨 ·
+//! [위로] [아래로] [삭제](글자 버튼 · 히트 사각형은 그릴 때 기록) → `take_queue_action()`으로 호스트가 거둬 큐에 반영. 창 높이 = `inner_h()`
+//! 한 함수(기본 + 질문 + 대기 줄) · 질문과 대기 줄은 동시에 뜰 수 있다(질문 중 큐 멈춤).
 
 use ndir_i18n::{tr, trf};
 use nexa_ctl::draw::{DrawCtx, FontSlot};
@@ -15,6 +18,14 @@ use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
+
+/// 대기 행의 버튼(호스트가 행 번호와 함께 거둔다).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueueAct {
+    Up,
+    Down,
+    Remove,
+}
 
 /// 창이 호스트에 요청하는 것.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +61,10 @@ pub(crate) struct ProgressWin {
     conflict: Option<String>,
     cf_btns: [Button; 4],
     cf_choice: Option<i32>,
+    /// 대기 목록 라벨(순서대로 · 호스트 `set_queue`) · 행별 버튼 히트 사각형(그릴 때 기록 · [위로] [아래로] [삭제]) · 눌린 것(1회성).
+    queue: Vec<String>,
+    queue_hits: Vec<[Rect; 3]>,
+    queue_act: Option<(usize, QueueAct)>,
 }
 
 /// 충돌 질문이 있을 때 창이 더 커지는 높이(논리 px · 질문 두 줄 + 버튼 행).
@@ -58,6 +73,10 @@ const CONFLICT_EXTRA_H: f32 = 98.0; // 질문 세 줄(이름 · 대상 폴더 ·
 const WIN_W: f32 = 400.0;
 /// 라벨 · 수치 줄 · **현재 파일 줄**(T-96 · 10-25) · 막대 · 버튼.
 const WIN_H: f32 = 150.0;
+/// 대기 목록: 머리글 한 줄 + 행 높이 · 창에 보이는 최대 행(넘치면 머리글의 n이 알린다).
+const QUEUE_HEAD_H: f32 = 22.0;
+const QUEUE_ROW_H: f32 = 22.0;
+const QUEUE_MAX_ROWS: usize = 4;
 /// 충돌 버튼의 답 id(대화상자와 같다): 1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 4 취소.
 const CF_IDS: [i32; 4] = [1, 2, 3, 4];
 const CF_KEYS: [&str; 4] = ["ops.yes", "ops.yesAll", "ops.skip", "ops.cancel"];
@@ -81,7 +100,71 @@ impl ProgressWin {
             conflict: None,
             cf_btns: CF_KEYS.map(|k| Button::new(tr(k))),
             cf_choice: None,
+            queue: Vec::new(),
+            queue_hits: Vec::new(),
+            queue_act: None,
         }
+    }
+
+    /// 창 안쪽 높이(논리 px) = 기본 + 질문 + 대기 줄 — `open` · `set_conflict` · `set_queue`가 같은 식을 쓴다.
+    fn inner_h(&self) -> f32 {
+        WIN_H + self.conflict_h() + self.queue_h()
+    }
+
+    fn conflict_h(&self) -> f32 {
+        if self.conflict.is_some() {
+            CONFLICT_EXTRA_H
+        } else {
+            0.0
+        }
+    }
+
+    fn queue_h(&self) -> f32 {
+        if self.queue.is_empty() {
+            0.0
+        } else {
+            QUEUE_HEAD_H + QUEUE_ROW_H * self.queue.len().min(QUEUE_MAX_ROWS) as f32
+        }
+    }
+
+    /// 대기 목록 교체(호스트 · 바뀐 때만 창 높이 · 다시 그림).
+    pub(crate) fn set_queue(&mut self, rows: Vec<String>) {
+        if self.queue == rows {
+            return;
+        }
+        self.queue = rows;
+        self.queue_hits.clear();
+        if let Some(w) = &self.window {
+            let _ = w.request_inner_size(winit::dpi::LogicalSize::new(WIN_W, self.inner_h()));
+        }
+        self.layout();
+        self.redraw();
+    }
+
+    /// 대기 행 버튼을 누른 것으로 기록(시험 — 마우스 히트와 같은 길).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn press_queue(&mut self, row: usize, act: QueueAct) {
+        self.queue_act = Some((row, act));
+    }
+
+    /// 대기 행 버튼이 눌렸다(행 번호 · 동작 · 1회성).
+    pub(crate) fn take_queue_action(&mut self) -> Option<(usize, QueueAct)> {
+        self.queue_act.take()
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn queue_len(&self) -> usize {
+        self.queue.len()
+    }
+
+    fn queue_hit(&self, p: Point) -> Option<(usize, QueueAct)> {
+        self.queue_hits.iter().enumerate().find_map(|(row, hits)| {
+            [QueueAct::Up, QueueAct::Down, QueueAct::Remove]
+                .into_iter()
+                .zip(hits)
+                .find(|(_, r)| r.contains(p))
+                .map(|(a, _)| (row, a))
+        })
     }
 
     /// 덮어쓰기 질문을 창 안에 띄운다(`Some(질문)`) · 거둔다(`None`) — 창 높이를 그만큼 늘리고 줄인다.
@@ -96,12 +179,7 @@ impl ProgressWin {
             b.clear_transient();
         }
         if let Some(w) = &self.window {
-            let h = WIN_H
-                + if self.conflict.is_some() {
-                    CONFLICT_EXTRA_H
-                } else {
-                    0.0
-                };
+            let h = self.inner_h();
             let _ = w.request_inner_size(winit::dpi::LogicalSize::new(WIN_W, h));
             w.focus_window();
         }
@@ -243,7 +321,7 @@ impl ProgressWin {
             .map(|i| format!("{:?}", i.status).to_ascii_lowercase())
             .collect();
         format!(
-            "{} {} | {done}/{total} {}% | file {}/{} | closing {} | cancelled {} | {}\n",
+            "{} {} | {done}/{total} {}% | file {}/{} | closing {} | cancelled {} | queue {} | {}\n",
             if self.window.is_some() {
                 "open"
             } else {
@@ -255,6 +333,7 @@ impl ProgressWin {
             self.count,
             self.closing.is_some(),
             self.cancelled,
+            self.queue.len(),
             items.join(",")
         )
     }
@@ -291,15 +370,7 @@ impl ProgressWin {
             return;
         }
         // dir2 DLG-059: 폭 400 · 소유자 중앙에서 110px 위.
-        let (lw, lh) = (
-            WIN_W,
-            WIN_H
-                + if self.conflict.is_some() {
-                    CONFLICT_EXTRA_H
-                } else {
-                    0.0
-                },
-        );
+        let (lw, lh) = (WIN_W, self.inner_h());
         let mut attrs = Window::default_attributes()
             .with_title(format!(
                 "{} — {}",
@@ -427,6 +498,14 @@ impl ProgressWin {
                 };
                 let mut inv = Invalidations::default();
                 let p = Point { x, y };
+                // 대기 행 버튼(T-202 ④): 누름에 바로 기록(질문 중에도 큐 편집은 가능).
+                if *state == ElementState::Pressed {
+                    if let Some(act) = self.queue_hit(p) {
+                        self.queue_act = Some(act);
+                        self.redraw();
+                        return ProgAction::None;
+                    }
+                }
                 if self.conflict.is_some() {
                     let up = matches!(e, InputEvent::MouseUp { .. });
                     let mut picked = None;
@@ -513,10 +592,42 @@ impl ProgressWin {
             self.bar
                 .set_bounds(Rect::new(pad, y, wi - pad * 2, th_txt.max(10)), &mut inv);
             self.bar.paint(&mut dc, th);
+            let mut below = y + th_txt.max(10) + (10.0 * s).round() as i32;
+            // 대기 목록(T-202 ④ 슬라이스 2): 머리글 + 행(라벨 · 가운데 생략 · 오른쪽에 글자 버튼 셋 — 히트 사각형 기록).
+            self.queue_hits.clear();
+            if !self.queue.is_empty() {
+                let head = trf("ops.queueWaiting", &[&self.queue.len().to_string()]);
+                dc.text(pad, below, clip, &head, th.text_dim);
+                below += (QUEUE_HEAD_H * s).round() as i32;
+                let labels = [
+                    tr("ops.queueUp"),
+                    tr("ops.queueDown"),
+                    tr("ops.queueRemove"),
+                ];
+                let gap = (10.0 * s).round() as i32;
+                let widths: Vec<i32> = labels.iter().map(|l| dc.text_width(l)).collect();
+                let btns_w: i32 = widths.iter().sum::<i32>() + gap * 3;
+                let row_h = (QUEUE_ROW_H * s).round() as i32;
+                for (i, row) in self.queue.iter().take(QUEUE_MAX_ROWS).enumerate() {
+                    let ry = below + row_h * i as i32;
+                    let label =
+                        nexa_ctl::draw::ellipsize_middle(&mut dc, row, wi - pad * 2 - btns_w);
+                    dc.text(pad, ry, clip, &label, th.text);
+                    let mut x = wi - pad - btns_w + gap;
+                    let mut hits = [Rect::new(0, 0, 0, 0); 3];
+                    for (k, (l, w)) in labels.iter().zip(&widths).enumerate() {
+                        dc.text(x, ry, clip, l, th.accent);
+                        hits[k] = Rect::new(x - gap / 2, ry, w + gap, row_h);
+                        x += w + gap;
+                    }
+                    self.queue_hits.push(hits);
+                }
+                below += row_h * self.queue.len().min(QUEUE_MAX_ROWS) as i32;
+            }
             match &self.conflict {
                 // 질문(막대 아래 세 줄까지 — 이름 · 대상 폴더 · 안내 · 길면 가운데 생략) + 4버튼.
                 Some(q) => {
-                    let mut qy = y + th_txt.max(10) + (10.0 * s).round() as i32;
+                    let mut qy = below;
                     for line in q.split('\n').take(3) {
                         let l = nexa_ctl::draw::ellipsize_middle(&mut dc, line, wi - pad * 2);
                         dc.text(pad, qy, clip, &l, th.text);
@@ -566,8 +677,19 @@ mod tests {
         let d = w.dump();
         assert_eq!(
             d,
-            "closed Transferring... | 50/200 25% | file 2/2 | closing false | cancelled false | done,active\n"
+            "closed Transferring... | 50/200 25% | file 2/2 | closing false | cancelled false | queue 0 | done,active\n"
         );
+        // 대기 목록(T-202 ④): 같은 목록 = 무변화 · 덤프 n · 동작은 호스트가 1회성으로 거둔다 · 높이 = 기본 + 머리글 + 행.
+        w.set_queue(vec!["Copy: 2 → /x".into(), "Cut: 1 → /y".into()]);
+        assert_eq!(w.queue_len(), 2);
+        assert!(w.dump().contains("| queue 2 |"), "{}", w.dump());
+        assert!((w.inner_h() - (WIN_H + QUEUE_HEAD_H + QUEUE_ROW_H * 2.0)).abs() < 1e-3);
+        assert_eq!(w.take_queue_action(), None);
+        w.press_queue(1, QueueAct::Remove);
+        assert_eq!(w.take_queue_action(), Some((1, QueueAct::Remove)));
+        assert_eq!(w.take_queue_action(), None, "1회성");
+        w.set_queue(Vec::new());
+        assert!((w.inner_h() - WIN_H).abs() < 1e-3);
         assert!(!w.take_cancelled());
         w.press_button();
         assert!(w.take_cancelled() && !w.take_cancelled(), "1회성");

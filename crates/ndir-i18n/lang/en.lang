@@ -131,6 +131,14 @@ ops.done = transferred {0}
 ops.skipped = {0} skipped
 ops.errors = {0} failed
 ops.busy = A transfer is in progress — try again when it finishes
+ops.queued = Queued — {0} waiting
+ops.queueShort = queue {0}
+ops.queueWaiting = Waiting: {0}
+ops.queueRow = {0}: {1} → {2}
+ops.queueUp = Up
+ops.queueDown = Down
+ops.queueRemove = Remove
+ops.queueNotSaved = Queued in memory only (a path is not UTF-8) — it will not be restored after a restart
 open.failed = Could not open “{0}” — the system handler exited with code {1}
 ops.canceled = canceled
 ops.overwriteTitle = Confirm Overwrite
@@ -886,6 +894,8 @@ pref.transferClose.desc = How long (in milliseconds) the progress window stays o
 # DnD hover switch (X-32) - dwell on tab/collapsed folder while dragging
 pref.dndHover = Drag hover switch delay (ms, 200-10000)
 pref.dndHover.desc = How long (in milliseconds) to hover over a tab or a collapsed folder while dragging before it switches or expands. Default 3000 ms (3 s).
+pref.xferQueue = Queue transfers started while another is running
+pref.xferQueue.desc = When a transfer is already running (or an archive is being extracted or folders synchronized), a new copy or move waits in a queue and starts when the previous one finishes. The progress window lists the waiting jobs; the status bar shows the count. Turn off to refuse new transfers while one is running (previous behavior).
 pref.xferNative = Use the operating system's fast copy
 pref.xferNative.desc = Use the operating system's copy path: Windows CopyFileEx (ReFS block clone, SMB server-side copy, attributes), Linux FICLONE/copy_file_range (reflink, in-kernel copy), macOS clonefile/copyfile (APFS clone, extended attributes). Turn off to use a plain read/write loop everywhere.
 pref.xferThreads = Parallel jobs for folder copy (0 = auto, 1-16)

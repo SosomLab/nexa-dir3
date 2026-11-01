@@ -213,7 +213,7 @@ impl App {
     /// OS 드래그가 없는 OS = 창 안 드래그. `right` = 오른쪽 버튼(놓을 때 대상이 복사/이동 메뉴).
     pub(crate) fn drag_out_begin(&mut self, i: usize, at: (i32, i32), right: bool) {
         let paths = self.panels[i].selected_paths_in_view_order();
-        if paths.is_empty() || self.transfer.is_some() {
+        if paths.is_empty() || self.transfer_blocks_new() {
             return;
         }
         self.rename_on_up = None;
@@ -748,7 +748,7 @@ impl App {
         at: Point,
     ) -> (Option<(usize, PathBuf)>, platform::DropChoice) {
         let none = (None, platform::DropChoice::None);
-        if sources.is_empty() || self.transfer.is_some() {
+        if sources.is_empty() || self.transfer_blocks_new() {
             return none;
         }
         let Some((panel, dest)) = self.drop_dest_at(at) else {
@@ -1088,7 +1088,7 @@ impl App {
         if sources.is_empty() {
             return None;
         }
-        if self.transfer.is_some() {
+        if self.transfer_blocks_new() {
             self.note_status(&tr("ops.busy"));
             return None;
         }

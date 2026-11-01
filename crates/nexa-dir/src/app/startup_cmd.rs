@@ -1001,7 +1001,7 @@ impl App {
     pub(crate) fn startup_wait_busy(&self, id: &str) -> bool {
         match id {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
-            "ops.wait" => self.transfer.is_some(),
+            "ops.wait" => self.transfer_busy(),
             // `xdnd.drop` 뒤: 소스 스레드가 끝나고(XdndFinished) 모인 드롭이 틱에서 처리돼 전송이 시작될 때까지(1초 유예).
             // 수신(주입) · 발신(세션) 양쪽의 결정적 대기: 주입 스레드 끝 + 드롭 처리 + 1초 유예 / 세션 = Status(받음)까지 · 놓은 뒤 Finished까지.
             "xdnd.wait" => {
@@ -1032,7 +1032,7 @@ impl App {
             "dlg.wait" => self.dlg_pending.is_some(),
             // 앱이 조용해질 때까지: 전송 · 메뉴 셸 항목 수집 · 자가 점검 · 대화상자 대기 · 도크 갱신 예약이 모두 없을 때.
             "idle.wait" => {
-                self.transfer.is_some()
+                self.transfer_busy()
                     || self.ctx_pending.is_some()
                     || self.ctx_wait.is_some()
                     || self.open_check
@@ -1051,7 +1051,7 @@ impl App {
             "jobs.wait" => {
                 self.extract_job.is_some()
                     || self.sync_job.is_some()
-                    || self.transfer.is_some()
+                    || self.transfer_busy()
                     || self.trash_busy()
             }
             // 휴지통 워커(Windows `trash_async` · 미러 삭제 실기 · 10-26).

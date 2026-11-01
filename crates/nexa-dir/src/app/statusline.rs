@@ -249,8 +249,8 @@ impl App {
         status_items_of(self.settings.get("statusbar.layout").unwrap_or(""))
             .into_iter()
             .filter(|(id, _)| !(boost && is_monitor_item(id)))
-            // 전송 진행 칸(T-96)은 전송 중에만.
-            .filter(|(id, _)| *id != "xfer" || self.transfer.is_some())
+            // 전송 진행 칸(T-96)은 전송 중 · 대기 있을 때만.
+            .filter(|(id, _)| *id != "xfer" || self.transfer_busy())
             .map(|(id, kids)| match id {
                 // 전송 진행(T-96 · NEW-006): "T 42%" — 폭 견본 100% · 누르면 진행 창(`status_click`).
                 "xfer" => {
@@ -261,15 +261,18 @@ impl App {
                         );
                         (done.min(total) * 100).checked_div(total).unwrap_or(0)
                     });
-                    StatusSeg::with_parts(
-                        id,
-                        vec![
-                            part(tr("status.abbr.xfer")),
-                            part(format!("{pct}%"))
-                                .color(self.theme.accent)
-                                .hints(vec!["100%".into()]),
-                        ],
-                    )
+                    let mut parts = vec![
+                        part(tr("status.abbr.xfer")),
+                        part(format!("{pct}%"))
+                            .color(self.theme.accent)
+                            .hints(vec!["100%".into()]),
+                    ];
+                    // 대기 큐(T-202 ④ 슬라이스 2): "대기 n" — 실행이 없고 대기만 있으면(풀기 중 등) 0%와 함께.
+                    let n = self.transfer_queue.len();
+                    if n > 0 {
+                        parts.push(part(ndir_i18n::trf("ops.queueShort", &[&n.to_string()])));
+                    }
+                    StatusSeg::with_parts(id, parts)
                 }
                 "tab" => {
                     let p = &self.panels[self.active];
