@@ -1,0 +1,81 @@
+# perf-copy — 복사 성능 측정(T-203 · docs/24 §4-1 · 사용자 결정 D4~D6 11-01 §15): 3-OS 러너에서 scripts/bench-copy.sh(일반 vs 향상 ·
+#   세트 3종 · fsync 포함 · N회 중앙값) → 아티팩트 perf-copy-<os>(JSON · md · 원문) + 잡 요약 표.
+# 수동 실행(workflow_dispatch) · release.yml 선검증(수동 실행)이 workflow_call로 부른다. 평소 CI(ci.yml)에는 끼우지 않는다(시간 무증가).
+# **기록만 한다**(D5): 러너가 매번 다른 공유 VM이라 절대 ms는 흔들리고 같은 실행 안의 비율(vs plain)만 의미 — 측정 단계는 실패해도
+#   잡을 빨갛게 만들지 않고(continue-on-error) 아티팩트는 늘 올린다. 하한("향상 / 일반 ≥ …")은 분포를 본 뒤 정한다.
+# ★ 형제 저장소 ../nexa-ui · ../nexa-license를 path 의존한다(DR-1·DR-4) → ci.yml과 같이 나란히 체크아웃.
+name: perf-copy
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "세트·전략마다 회수(중앙값)"
+        required: false
+        default: "3"
+        type: string
+      sets:
+        description: "세트 목록(small,big,mixed)"
+        required: false
+        default: "small,big,mixed"
+        type: string
+  workflow_call:
+    inputs:
+      runs:
+        required: false
+        default: "3"
+        type: string
+      sets:
+        required: false
+        default: "small,big,mixed"
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: nexa-dir3
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nexa-dir3
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-ui
+          path: nexa-ui
+      - uses: actions/checkout@v4
+        with:
+          repository: SosomLab/nexa-license
+          path: nexa-license
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nexa-dir3
+      - name: bench-copy
+        id: bench
+        shell: bash
+        continue-on-error: true
+        run: |
+          bash scripts/bench-copy.sh --runs "${{ inputs.runs }}" --sets "${{ inputs.sets }}" \
+            --out "target/perf/copy-${{ runner.os }}.json" --md "target/perf/copy-${{ runner.os }}.md"
+      - name: note
+        if: steps.bench.outcome != 'success'
+        shell: bash
+        run: echo "::warning::bench-copy did not finish cleanly on ${{ runner.os }} (recorded only; see artifact)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-copy-${{ runner.os }}
+          path: nexa-dir3/target/perf/copy-*
+          if-no-files-found: warn
+          retention-days: 90

@@ -406,3 +406,13 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -d "{\"event_type\":\"app-released\",\"client_payload\":{\"app\":\"nexa-dir\",\"tag\":\"$GITHUB_REF_NAME\",\"repo\":\"$GITHUB_REPOSITORY\",\"run_url\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}}"
+
+  # ── 복사 성능 측정(T-203 · D4): 선검증(수동 실행)에서만 · 기록만(D5) · publish 등 어느 잡도 이 잡을 기다리지 않는다(막지 않음 ·
+  #   태그 push 실행에서는 돌지 않아 공개 시간 무증가). 결과 = 아티팩트 perf-copy-<os> + 잡 요약 표 → 태그 때 docs/perf/copy-<버전>.md(D6). ──
+  perf-copy:
+    if: github.event_name == 'workflow_dispatch'
+    needs: meta
+    uses: ./.github/workflows/perf-copy.yml
+    with:
+      runs: "3"
+      sets: "small,big,mixed"
