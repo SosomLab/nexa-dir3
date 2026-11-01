@@ -938,8 +938,8 @@ mod tests {
         assert!(a.status == "done" && a.note.contains("partial"), "{a:?}");
         assert_eq!(r.skipped, 1);
         assert!(
-            d.join("dst/dir/b.bin").is_file() && !d.join("dst/dir/stale.txt").exists(),
-            "overwrite 항목 = 스테이징 교체로 통째 다시"
+            d.join("dst/dir/b.bin").is_file() && d.join("dst/dir/stale.txt").exists(),
+            "overwrite 항목 = 스테이징 교체(병합 · 11-01: 대상에만 있던 것은 남는다)"
         );
         // 같은 폴더 복제(Duplicate " (2)") 중 죽음: started(new · dest = " (2)") → 재개가 부분 " (2)"를 지우고 같은 이름으로 다시(" (3)" 없음).
         let dup_journal = d.join("dup.log");
