@@ -45,7 +45,7 @@ scripts/check-3os.sh                            # T0: fmt + 호스트 clippy + �
 cargo test --workspace                          # T1~T3
 cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자원·글꼴·플러그인 런타임·라이선스 루트 키
 cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용자 자원 필요 항목 SKIP)
-scripts/bench-copy.sh --runs 5 --dir <볼륨>     # T6 복사 성능(T-203 · release · 세트 3종 × 전략 · fsync · 중앙값 → target/perf/copy-last.json + 표 · 판정 없음 · docs/24 §4-1)
+scripts/bench-copy.sh --runs 5 --dir <볼륨>     # T6 복사 성능(T-203 · release · 세트 3종 × 전략 · fsync · 중앙값 → target/perf/copy-last.json + 표 · 판정 없음 · docs/24 §4-1) — 소요 = SSD 약 8분 · HDD 약 1시간 20분(small = fsync 4,000개) → HDD는 --sets big,mixed 또는 --runs 3 권장(11-01 §18)
 scripts/perf-baseline.sh --copy               # T6 기준선에 copy_ms["<세트> · <전략>"] 포함(bench-copy.sh JSON · NDIR_COPY_RUNS 기본 1) — 키가 바뀌어 옛 기준선과 첫 비교는 "신규" → 1회 --save-baseline
 gh workflow run perf-copy.yml -f runs=1 -f sets=small   # CI 수동 측정(3-OS · 아티팩트 perf-copy-<os> · 잡 요약 표) — 기본 브랜치(main)에 병합된 뒤에만 디스패치 가능(브랜치 ref = 404)
 ```
