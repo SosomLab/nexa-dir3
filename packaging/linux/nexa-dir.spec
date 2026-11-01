@@ -64,6 +64,14 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Sun Nov 02 2026 Sangyong Bae <kiros33@gmail.com> - 0.28.1-1
+- Fix: "This PC" did not re-read drive free space on refresh (F5 / Refresh button); the
+  value only changed after entering a drive and coming back. Refresh, drive changes and
+  stale-tab reloads now query the disk again (the old value stays until the new one arrives).
+- Fix: with a folder selected, clicking its chevron (expand/collapse) counted as a slow
+  second click and opened inline rename. Chevron and rename-field clicks are no longer row
+  clicks (as in nexa-dir2).
+
 * Sat Oct 31 2026 Sangyong Bae <kiros33@gmail.com> - 0.28.0-1
 - macOS: IOSurface presentation by default and partial redraws (idle frames ~15x cheaper),
   status-bar marker blink threshold, Finder-rule drag modifiers, drag-out to Finder and

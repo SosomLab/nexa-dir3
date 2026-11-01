@@ -1,0 +1,7 @@
+Nexa Dir 0.28.1 — patch: "This PC" free space refresh · chevron click no longer opens rename
+
+Fixes since 0.28.0 (2026-11-01 Windows field test):
+- "This PC": the free-space column did not change on Refresh (F5 / toolbar button) after space was freed outside the app; it only updated after entering a drive and coming back. Refresh, drive attach/detach and stale-tab reloads now query the disk again. The old value stays visible until the new one arrives (no blank cells).
+- Tree view: with a folder selected, clicking its chevron (expand/collapse) was treated as a slow second click on the selected row and opened inline rename. Clicks on the chevron or on an open rename field are no longer row clicks, matching nexa-dir2.
+
+No behavior changes otherwise. Packages: Windows MSI + portable zip, macOS Universal pkg/dmg, Linux deb/rpm (also via winget, Chocolatey, Homebrew tap and pkg.sosomlab.com).
