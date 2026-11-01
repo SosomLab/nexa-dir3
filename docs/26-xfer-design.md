@@ -192,7 +192,7 @@ cdylib(C ABI · `ndir_xfer_run`) ───────────────�
 - 큐 항목 = `QueuedJob { id, spec: JobSpec, clear_clipboard_after: bool, state: Queued|Running|Done(Report)|Failed|Canceled, added_at }`.
 - 저장 = **설정 폴더/queue**(DR-9 · `NDIR_HOME`이면 그 아래) · `<id>.job.json`(JobSpec) + `<id>.journal`(ndir-xfer `journal` 키). **Done · Canceled · Failed는 파일을 지운다**(결과는 완료 토스트 · 로그 창).
 - **UTF-8이 아닌 경로가 든 작업은 저장하지 않는다**: 메모리 큐에서만 실행 · 재시작 복원 제외 · 토스트 1회(`spec.rs`가 `to_string_lossy`라 저장본 경로가 달라진다). JobSpec 인코딩은 바꾸지 않는다(cdylib JSON 호환).
-- **소유 표시** = `queue/owner.lock`(pid · 기동 시각). 기동 시 `platform::process_alive(pid)` 포트(신설 · DR-5 · Linux `/proc` · macOS `kill(0)` · Windows `OpenProcess`)로 확인하되 **pid와 기동 시각을 둘 다 대조**한다(11-01 기술 결정 · pid가 재사용되면 다른 프로세스로 판정) — 살아 있으면 복원 대신 "다른 인스턴스가 전송 중" 안내 · 죽었으면 잠금을 인수한다(앱에 단일 인스턴스 장치가 없어 둘째 프로세스가 같은 전송을 다시 돌리는 것을 막는다).
+- **소유 표시(✅ eb8e127 · `platform/procid.rs` `process_start_time` = Linux `/proc/<pid>/stat` 22번째 · macOS `proc_pid_rusage(RUSAGE_INFO_V2).ri_proc_start_abstime` · Windows `OpenProcess` + `GetProcessTimes` · 새 외부 crate 0 · 잠금 = `pid\n기동시각` · 기동 때 claim · `persist_window`(종료 4경로)에서 해제 · 둘째 인스턴스 = 메모리 큐 + 상태줄 · `ops.dump` "queue n memory")** = `queue/owner.lock`(pid · 기동 시각). 기동 시 `platform::process_alive(pid)` 포트(신설 · DR-5 · Linux `/proc` · macOS `kill(0)` · Windows `OpenProcess`)로 확인하되 **pid와 기동 시각을 둘 다 대조**한다(11-01 기술 결정 · pid가 재사용되면 다른 프로세스로 판정) — 살아 있으면 복원 대신 "다른 인스턴스가 전송 중" 안내 · 죽었으면 잠금을 인수한다(앱에 단일 인스턴스 장치가 없어 둘째 프로세스가 같은 전송을 다시 돌리는 것을 막는다).
 - **둘째 인스턴스의 새 전송 = 메모리 큐만**(사용자 11-01): 저장하지 않고 · 종료 때 비우고 · 상태바로 안내한다.
 
 ### 12.3 실행
@@ -223,7 +223,7 @@ cdylib(C ABI · `ndir_xfer_run`) ───────────────�
 
 - **시험**: T3 = 큐 추가/순서/삭제 · 실행 중 질문 대기 · 재시작 복원(격리 홈 `queue/` 고정물) · `transfer.queue` off = 종전 거부. T4 시나리오 1건 = 두 번 연속 copy → 둘 다 완료.
 - **범위 밖**: 폴더 비교 창 `sync_job`(별도 유지) · 장치별 병렬 · 카드형 진행 창 · 일시 정지.
-- **구현 순서**: (1) ✅ b7f77c2 — ndir-xfer 확장 3건 + 앱이 ndir-xfer로 전송(동작 동일 · 큐 없음) · `process_alive` 포트는 (3)으로 미룸(호출자 없는 함수 = dead_code) → (2) ✅ 2d86426 — 큐 자료 구조(`app/queue.rs` · `설정 폴더/queue/<id>.job.json` + `<id>.journal` · 시험 = 메모리) + 설정 키 `transfer.queue` + 진행 창 대기 줄([위로][아래로][삭제]) + 상태바 "대기 n" · 저널 started 줄은 GAP-030에서 이미 · 큐 자료 구조 + 저장 + 설정 키 + 진행 창 대기 줄 + 저널 started 줄(§12.7) → (3) 재시작 복원 → (4) 휴지통 콜백 주입(비교 창이 큐로 올 때).
+- **구현 순서**: (1) ✅ b7f77c2 — ndir-xfer 확장 3건 + 앱이 ndir-xfer로 전송(동작 동일 · 큐 없음) · `process_alive` 포트는 (3)으로 미룸(호출자 없는 함수 = dead_code) → (2) ✅ 2d86426 — 큐 자료 구조(`app/queue.rs` · `설정 폴더/queue/<id>.job.json` + `<id>.journal` · 시험 = 메모리) + 설정 키 `transfer.queue` + 진행 창 대기 줄([위로][아래로][삭제]) + 상태바 "대기 n" · 저널 started 줄은 GAP-030에서 이미 · 큐 자료 구조 + 저장 + 설정 키 + 진행 창 대기 줄 + 저널 started 줄(§12.7) → (3) ✅ eb8e127 재시작 복원(`transfer.queue_restore` ask|auto|discard · 대화상자 "끝나지 않은 전송 n건 — 재개 / 버림" · Esc = 그대로 두고 다음 기동에 다시 · **정상 종료도 파일 유지 = 사용자 결정 ③을 크래시 · 종료 같은 경로로(ⓑ · 협업 권고와 같음 · 종료 때 질문 ⓐ는 미구현)** · 종료 = 실행 중 전송을 취소 경로로(부분 파일 · 스테이징 정리 · 최대 3초) · 재개 충돌 질문 = `Hooks.ask_interrupted` + 글에 "중단된 사본 · 크기 · 시각" · 끊긴 이동 Skip 규칙 유지) → (4) 휴지통 콜백 주입(비교 창이 큐로 올 때).
 
 ### 12.7 재개 충돌의 판별(협업 코드 읽기 · 실측 · 개발 11-01 · CLI 구현 = 44ac475)
 
