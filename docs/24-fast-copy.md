@@ -92,7 +92,8 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 - **보강 뒤에만 수치를 남긴다**: 경우마다 대상 fsync · N회(실기기 5) 중앙값 · 라벨 OS 중립(일반 / OS 경로 / 병렬 n) · 결과 = 키=값 줄. fsync 없는 종전 수치는 큰 파일에서 페이지 캐시를 잰다(11-01 Linux 1차 = 참고용).
 - **세트 3종**: 작은 16 KiB × 4,000 · 큰 512 MiB × 1 · 혼합(1~8 MiB × 200 + 작은 1,000).
 - **비교 축**: 일반 = `transfer.native off` + 1스레드(루프) · 향상 = 기본값(OS 경로 + 자동 스레드) · 중간 = OS 경로 1스레드 · 루프 n스레드. OS 기본 도구 대조(`robocopy` · `cp` · `ditto`)는 실기 회차 1회성.
-- **단계**: CI 수동 실행(`workflow_dispatch`) + release.yml 선검증(평소 CI 시간 무증가) · 실기기 절대 수치 = 각 OS PC `scripts/perf-baseline.sh --copy`.
+- **단계**: CI 수동 실행(`.github/workflows/perf-copy.yml` · `workflow_dispatch` runs/sets · 3-OS · 기본 브랜치에서만 디스패치 가능) + release.yml 선검증 잡 `perf-copy`(`if: workflow_dispatch` = 선검증만 · publish가 기다리지 않음 · 평소 CI 시간 무증가) · **실기기 = 각 OS PC `scripts/bench-copy.sh --runs 5 --dir <볼륨>`**(측정 볼륨을 반드시 지정 · 빈 값 = 임시 폴더) · 기준선 비교 = `scripts/perf-baseline.sh --copy`(bench-copy.sh JSON을 읽어 `copy_ms["<세트> · <전략>"]`).
+- **하네스(T-203 ①~④ · 930794e · 6994e86)**: `bench_copy`(ndir-ops `fastcopy.rs` · release `cargo test`로 실행) = 세트 × 전략 — 트리 세트(small · mixed) = `plain`(일반 = 루프 1스레드) · `os1`(OS 경로 1스레드) · `loop4`(루프 4스레드) · `auto`(향상 = 기본값) · big = `plain` · `os` · `os_unbuffered` · 회차마다 대상 fsync · 전략을 회차마다 번갈아 · N회 중앙값. 출력 = `copy set=… case=… runs= median_ms= min_ms= max_ms= files= bytes= threads= native=` 키=값 줄 + `copy_env os= cores= seek= runs= scale=`. 환경 = `NDIR_BENCH_DIR` · `NDIR_BENCH_RUNS` · `NDIR_BENCH_SETS`. `scripts/bench-copy.sh [--runs N] [--sets …] [--dir …] [--out json] [--md] [--debug]` → JSON(`target/perf/copy-last.json` · `cases[].median_ms/mb_s/vs_plain`) + 마크다운 표(stdout · `GITHUB_STEP_SUMMARY`) · 판정 없음(D5). 시험 `bench_harness_tiny`(비ignore · 규모 1/500 · 약 0.4 s).
 - **판정**: CI = 기록만(러너가 매번 다른 공유 VM이라 절대 ms는 흔들리고 같은 실행 안의 비율만 의미 · 분포를 본 뒤 "향상 / 일반 ≥ 1.0" 하한 재결정) · 실기기 = 같은 PC 기준선 대비 회귀 %.
 - **산출물**: CI 아티팩트 JSON + 잡 요약 표 · 태그 때만 `docs/perf/copy-<버전>.md` 1건 · 실기기 = journal + 이 절의 표.
 

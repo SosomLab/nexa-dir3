@@ -45,6 +45,9 @@ scripts/check-3os.sh                            # T0: fmt + 호스트 clippy + �
 cargo test --workspace                          # T1~T3
 cargo run -q -p nexa-dir -- --smoke             # 창 없음: 설정·i18n·자원·글꼴·플러그인 런타임·라이선스 루트 키
 cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용자 자원 필요 항목 SKIP)
+scripts/bench-copy.sh --runs 5 --dir <볼륨>     # T6 복사 성능(T-203 · release · 세트 3종 × 전략 · fsync · 중앙값 → target/perf/copy-last.json + 표 · 판정 없음 · docs/24 §4-1)
+scripts/perf-baseline.sh --copy               # T6 기준선에 copy_ms["<세트> · <전략>"] 포함(bench-copy.sh JSON · NDIR_COPY_RUNS 기본 1) — 키가 바뀌어 옛 기준선과 첫 비교는 "신규" → 1회 --save-baseline
+gh workflow run perf-copy.yml -f runs=1 -f sets=small   # CI 수동 측정(3-OS · 아티팩트 perf-copy-<os> · 잡 요약 표) — 기본 브랜치(main)에 병합된 뒤에만 디스패치 가능(브랜치 ref = 404)
 ```
 
 **Linux 개발 세션**(10-03 §101 · 이제 `gate.sh full`에 포함): `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4) — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 2개(`ctx-menu` · `selfcheck-win`)의 실패는 제외(T-117 · `launcher`는 10-31부터 3-OS 통과 기준).
@@ -61,7 +64,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 | T3 | **앱 시나리오(창 없음)**: `AppCore::new(FakePlatform, 샌드박스)` → `route(InputEvent)`/`command(id)` → 상태·가짜 호출 기록·**레이아웃 덤프 골든**(영역 이름 + Rect 트리 · 픽셀 아님) | `crates/nexa-dir/tests/scenarios_*.rs` · 골든 `tests/golden/*.layout` | ✅ | "컨트롤 배치 유지" 자동 검증 수단 |
 | T4 | 실제 프로세스: 창 · present · 설정 영속 · 세션 복원 | `ndir-check`(T-06) + `NDIR_HOME` + `NDIR_STARTUP_CMD` + `*.dump:<파일>` + 검사식 `파일:정규식`/`!` · 시나리오 `tests/scenarios/*.scn` | ✅ 3-OS CI(Linux = Xvfb T-137 · macOS 러너 10-31) · Windows · macOS 화면 격리 = 미실측 | 고정 sleep 대신 `@ready`/`@idle`/`quit` · 로컬 = `cargo build -p nexa-dir && cargo run -p ndir-check` |
 | T5 | 실제 OS 자원: 셸 · PTY · 휴지통 · 클립보드 · 컨텍스트 메뉴 · 플러그인 · 라이선스 | `nexa-dir --selfcheck [--ci] [--json] [--only 그룹] [--with-clipboard]` · Help ▸ 자가 점검 창(같은 함수) | ✅(`--ci`) | 격리 홈·임시 폴더 안에서만 · 네트워크 0 · 포트 공개 메서드를 그대로 호출 |
-| T6 | 성능·누수·용량·코드 건강 | `scripts/perf-baseline.sh`(기준선 저장/비교 · 회귀선) · `scripts/win-leak-cycle.ps1`(누수 주기) · `scripts/code-health.py` · `membench.ps1` — 절차 · 회귀선 = [25](25-perf-and-code-health.md)(T-176) | ✗(exe 예산만) | 마일스톤마다 · 배포 전 · Release |
+| T6 | 성능·누수·용량·코드 건강 | `scripts/perf-baseline.sh`(기준선 저장/비교 · 회귀선 · `--copy`) · `scripts/bench-copy.sh`(복사 성능 · T-203) · `.github/workflows/perf-copy.yml`(CI 수동 · release 선검증 잡) · `scripts/win-leak-cycle.ps1`(누수 주기) · `scripts/code-health.py` · `membench.ps1` — 절차 · 회귀선 = [25](25-perf-and-code-health.md)(T-176) | ✗(exe 예산만) | 마일스톤마다 · 배포 전 · Release |
 
 ## 5. 기동 명령 · 환경 변수(T4·T5 · 앱 훅)
 
