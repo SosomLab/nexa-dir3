@@ -2,7 +2,7 @@
 
 > 사용자 10-05: "고속 복사에 대한 부분은 운영체제별 기능 분석하고, 윈도우 용은 개발이 의미가 있을 것 같으니 먼저 진행."
 > 근거 결정 = [DR-17](10-decision-record.md) · 기능 정의 = [22 NEW-007](22-dir3-features.md) · 구현 = `crates/ndir-ops/src/fastcopy.rs`.
-> 이 문서는 T-97(대량 전송 엔진 설계)의 **복사 전략 부분**을 먼저 확정한 것이다 — 미러/차등 · 검증 · 재개 · 필터 · 큐는 T-97 본문에서 다룬다.
+> **역할**: 이 문서 = 복사 전략 계층 · OS별 구현 · 실측 · `nexa-copy` 1차 이력. 명세 · API · 구현 현황 · 남은 기능(재개 · 속도 제한 · 이동 검증 · 미러 · 큐) = [26](26-xfer-design.md) §4 · §8 · §12.
 
 ## 1. 무엇이 복사를 느리게 하는가
 
@@ -89,13 +89,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 
 ## 5. 남은 것
 
-| 항목 | 내용 |
-| --- | --- |
-| Linux · macOS 2차 | ✅ 10-24(T-164 · §6) — Linux `FICLONE` → `copy_file_range` · macOS `copyfile(ALL \| CLONE)` + 진행 콜백 · Linux `queue/rotational` 장치 판정 · macOS 장치 판정 ✅ 10-31(e47ee38) |
-| 최상위 항목 병렬 | 지금 병렬은 **폴더 안**에만 적용 — 파일 수천 개를 직접 선택해 복사하는 경우는 여전히 차례로(전송 진행 창의 항목 세그먼트 모델과 함께 T-96/T-98에서) |
-| ReFS 블록 복제 직접 호출 | Windows 11 24H2 이전에서의 같은 볼륨 즉시 복사 |
-| 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98 |
-| T6 성능 기준선 | `bench_copy`를 기준선 하네스(T-08)에 편입 |
+전략 계층의 남은 것 = [§6-3](#6-3-아직-안-한-것결정-거리--사용자-지시-대기) · 전송 기능의 남은 것 = [26 §8](26-xfer-design.md).
 
 ## 6. 2차 — 크로스플랫폼 설계와 운영체제별 구현 방식(T-164 · 10-24 · 사용자 "설계·개발 + OS별 방식 요약")
 
@@ -139,8 +133,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 | Windows ReFS 블록 복제 직접 호출 | 24H2 이전에서 같은 볼륨 즉시 복사(`FSCTL_DUPLICATE_EXTENTS_TO_FILE` · 클러스터 정렬 · 무결성 스트림 끔 조건). 이 PC에 ReFS 볼륨이 없어 실측 불가. |
 | ~~macOS 장치 판정~~ | ✅ 10-31 e47ee38(이 Mac `/` = apfs disk1s2s1 → "Solid State" → 자동 8 · `/System` 일치) · 외부 crate 0. |
 | 큰 파일 읽기/쓰기 분리(FastCopy 방식) | 서로 다른 물리 디스크 사이에서만 이득 · 구현 큼 · 측정 뒤 결정(T-98). |
-| 검증 · 미러/차등 · 재개 · 필터 · 속도 제한 · 큐 · `nexa-copy` CLI | T-97 설계 → T-98(NEW-007 ②~⑩). |
-| T6 기준선 | `bench_copy`를 perf-baseline에 편입 · Linux/macOS 실측은 그 PC 세션에서. |
+| T6 기준선 | `bench_copy`를 perf-baseline(T-08)에 편입 · Linux/macOS 실측은 그 PC 세션에서. |
 
 ## 7. 명령행 실행파일 `nexa-copy`(1차 · 10-24 · 사용자 "별도 실행파일로 제공해서 cli로")
 
@@ -180,6 +173,4 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
   건너뜀으로 봄 · 프롬프트는 진행 출력과 다른 핸들(실제 stderr). 시험 `ask_conflict_maps_answers`(T1) · `ask_prompts_on_conflicts_and_honors_answers`(프로세스 ·
   stdin 파이프).
 - **`--job` · `--progress` ✅ 10-31**(T-97 · 6b1a22d): `--job <file.json>` = `ndir-xfer` JobSpec(13키 · 인자 혼용 금지 · `--ask` 불가) · `--progress` = stdout에 진행 JSON 줄(단계 변화 또는 100 ms) + 마지막 Report JSON · 간단 인자도 내부에서 JobSpec을 만들어 같은 `run`으로(한 길) · 설계 = [26](26-xfer-design.md). **`--report <file>` ✅ 10-31 ed45954**(결과 Report JSON 파일 · `--progress` 무관 · `--ask` 불가) · `--job` 안 상대 경로 = 잡 파일 폴더 기준(사용자 결정 · docs/26 §11).
-- **남은 것**: 패키지 동봉(MSI/pkg/deb/rpm ·
-  포터블 zip · `release.yml` — 채널 결정) · **이동 검증**(협업 제안 10-25: 교차 볼륨 이동 =
-  복사 → 검증 → 원본 삭제 순서로 — 엔진에 "원본 정리 전 훅" 필요 · 같은 볼륨 rename은 데이터가 안 움직여 대상 아님).
+- **그 뒤**: 패키지 동봉 · 재개 · 속도 제한 · 이동 검증 · 미러 내용 비교 = 구현됨 · 현황은 [26 §8](26-xfer-design.md).

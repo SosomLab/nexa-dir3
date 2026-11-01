@@ -1,13 +1,14 @@
-# 26. 대량 전송 엔진 설계 — `ndir-xfer` · `nexa-copy` · (후) cdylib
+# 26. 대량 전송 엔진 설계 — `ndir-xfer` · `nexa-copy` · cdylib
 
 > T-97 · DR-17(대량 전송 엔진 내장) · DR-34 ①⑦(10-31 사용자 결정) · 원장 NEW-006 · NEW-007. 앞 문서 = [24 빠른 복사](24-fast-copy.md)(§6 전략 계층 · §7 `nexa-copy` 1차).
-> 상태: **10-31 협업 작성 · §4~§6 = `crates/ndir-xfer` 코드에 맞춤**(6b1a22d · spec.rs · report.rs · lib.rs · 시험 8/0 · nexa-copy `job_and_progress_paths`). §11 = 사용자 결정 반영(10-31).
+> **역할**: 이 문서 = 명세 · API · 구현 현황 · 남은 설계. 복사 전략 계층 · OS별 구현 · 실측 = [24](24-fast-copy.md).
+> 상태: §4~§7 = `crates/ndir-xfer` 코드 기준 · §8 = 구현 현황 · §11 = 사용자 결정(10-31) · §12 = 작업 큐 설계(11-01 · 구현 전).
 
 ## 1. 목적과 범위
 
 - **목적**: 앱 · 명령행 · 다른 프로그램이 **같은 전송 엔진을 같은 규칙으로** 쓰게 한다. 작업을 **직렬화 가능한 한 덩어리(JobSpec)**로 표현해 저장 · 재실행 · 다른 프로세스 전달이 되게 하고, 진행과 결과도 기계가 읽는 모양(Progress · Report)으로 낸다.
-- **이번 회차(DR-34 ①⑦)**: ① 이 설계 문서 ② `ndir-xfer` rlib 골격 — JobSpec/Progress/Report 직렬화 · 복사 · 이동 · 검증 · 미러 4엔진 포장 · dry-run ③ `nexa-copy` `--job job.json` · `--progress`(JSON 줄). **cdylib은 다음 회차.**
-- **범위 밖(설계만 · §8)**: 작업 큐 · 최상위 항목 병렬 · 앱 전송의 `ndir-xfer` 통합(재개 · 속도 제한 · 이동 검증 · 내용 비교 미러는 T-202 ②③⑤⑦로 구현됨).
+- **구현됨**: `ndir-xfer` rlib — JobSpec/Progress/Report 직렬화 · 복사 · 이동 · 검증 · 미러 4엔진 포장 · dry-run(DR-34 ①⑦) · `nexa-copy` `--job` · `--progress` · `--report` · cdylib(§7).
+- **아직 없음**: 작업 큐 · 앱 전송의 `ndir-xfer` 통합(§12) · 최상위 항목 병렬(§8).
 
 ## 2. 지금 있는 것(재사용 · 바꾸지 않는다)
 
@@ -24,17 +25,17 @@
 ## 3. 제공 형태와 계층
 
 ```
-앱(nexa-dir)  ── 진행 창 · 상태줄 · 작업 큐(후) ─┐
+앱(nexa-dir)  ── 진행 창 · 상태줄 · (후) 작업 큐 · 지금은 ndir-ops 직접 ─┐
 nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼──▶ ndir-xfer(rlib · 외부 crate 0)
-(후) cdylib(C ABI · `ndir_xfer_run`) ──────────────────┘        JobSpec ⇄ JSON · run(job, sink, cancel) → Report
+cdylib(C ABI · `ndir_xfer_run`) ───────────────────────┘        JobSpec ⇄ JSON · run(job, sink, cancel) → Report
                                                             └▶ ndir-ops(transfer_with · plan_transfer · compare · hash · fastcopy)
 ```
 
-| 형태 | 이름 | 소비자 | 이번 회차 |
+| 형태 | 이름 | 소비자 | 상태 |
 | --- | --- | --- | --- |
-| rlib | `ndir-xfer` | 앱 · `nexa-copy` · cdylib | 골격 ✅ 목표 |
-| bin | `nexa-copy` | 셸 · 스크립트 · CI | `--job` · `--progress` 추가 |
-| cdylib | (후보) 진입 `ndir_xfer_run` | 다른 언어 프로그램 | 다음 회차 — §7 |
+| rlib | `ndir-xfer` | `nexa-copy` · cdylib(앱 = §12 슬라이스 1) | ✅ |
+| bin | `nexa-copy` | 셸 · 스크립트 · CI | ✅ `--job` · `--progress` · `--report` · 재개 · 속도 제한 |
+| cdylib | 진입 `ndir_xfer_run` | 다른 언어 프로그램 | ✅ 전 채널 동봉 — §7 |
 
 - **의존 규칙**: `ndir-xfer` → `ndir-ops`(+ `ndir-core`)만. 창 · 설정 파일 · 라이선스 · `platform/` 포트를 모른다(휴지통 미러가 포트를 필요로 하는 이유 = §8).
 - **외부 crate 0**(DR-8): JSON은 손수 파서(ndir-settings `json.rs` 꼴 복사 · 개발 결정).
@@ -73,8 +74,8 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 | `mirror` | `bool` | false | `--mirror` | `sources` 1개 · 대상을 원본과 같게(새것/바뀐 것 복사 + 대상에만 있는 것 영구 삭제) |
 | `dry_run` | `bool` | false | `-n` | 파일 시스템 불변 · Report 항목 `status` = `planned` |
 | `yes` | `bool` | false | `--yes` | 미러 삭제 확인 — false면 지울 것이 있을 때 실행 안 하고 목록 + 오류 |
-| `journal` | `Option<PathBuf>` | 없음 | `--journal <file>` | 최상위 항목 완료마다(`Event::ItemEnd`) `{"source","dest","status","bytes"}` 한 줄 덧붙임 · 상대 경로 = 잡 파일 폴더 · dry-run이면 쓰지 않음 · `verify`면 검증 통과 뒤에만 `done` · 못 열면 시작 안 함 · 쓰기 실패 = Report errors + `ok: false` · `resume`과 같은 파일 가능(읽기 → 덧붙이기) |
-| `resume` | `Option<PathBuf>` | 없음 | `--resume <file>` | 이전 Report JSON 또는 저널 · `(source, dest)`가 `done`인 항목 건너뜀(Report `status: skipped` · `note: resumed` · bytes/dest는 저널 값 · items 앞에 먼저 적힘) · 같은 쌍은 마지막 기록 우선 · 잘린 끝 줄 무시(그 밖의 깨진 줄 = 오류) · 끝난 쌍은 `validate` 존재 검사에서 뺀다(이동 재개) · 복사/이동만(미러 + journal/resume = `validate` 오류) · `--job`과 함께 명령줄로 주면 키를 덮음 · `--ask`와 못 씀 |
+| `journal` | `Option<PathBuf>` | 없음 | `--journal <file>` | 항목 시작마다 `started` 줄(`note` = `new` \| `overwrite` · GAP-030) + 완료마다 `done` 줄 덧붙임(Report `items[]` 원소 모양 · 항목당 2줄) · 상대 경로 = 잡 파일 폴더 · dry-run이면 쓰지 않음 · `verify`면 검증 통과 뒤에만 `done` · 못 열면 시작 안 함 · 쓰기 실패 = Report errors + `ok: false` · `resume`과 같은 파일 가능(읽기 → 덧붙이기) |
+| `resume` | `Option<PathBuf>` | 없음 | `--resume <file>` | 이전 Report JSON 또는 저널 · `(source, dest)`가 `done`인 항목 건너뜀(Report `status: skipped` · `note: resumed` · bytes/dest는 저널 값 · items 앞에 먼저 적힘) · 같은 쌍은 마지막 기록 우선 · 잘린 끝 줄 무시(그 밖의 깨진 줄 = 오류) · 끝난 쌍은 `validate` 존재 검사에서 뺀다(이동 재개) · **끊긴 항목**(쌍별 마지막 상태 = `started`) 처리 = §8 재개 · 복사/이동만(미러 + journal/resume = `validate` 오류) · `--job`과 함께 명령줄로 주면 키를 덮음 · `--ask`와 못 씀 |
 | `max_bps` | `u64`(바이트/초 · 0 = 없음) | 0 | `--max-bps <rate>`(K/M/G ×1024 · 소수 · 끝 B 허용) | 실제 전송만 제한(병렬이면 합계) · 복제 · 검증 읽기 제외 · §8 한계 |
 | `mirror_by_content` | `bool` | false | `--by-content`(`--mirror` 없이 = 해석 오류 2) | 미러가 아니면 무시 · 필터 뒤 크기 · 시각이 같은 파일 쌍만 양쪽 SHA-256 · 한쪽이라도 못 읽으면 **다름**(복사 시도) · 해시 진행 = `phase: plan`의 `done` · 비용 = 양쪽 전량 읽기(대상이 네트워크면 큼) · `max_bps` 비제한 |
 
@@ -133,7 +134,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 - **주의**: ① 릴리스 프로필 = `panic = "abort"`(프로필 전체라 크레이트별 불가) → 라이브러리 패닉 = **호출 프로세스 종료** · 입력 오류는 전부 Result/Report로 돌려준다(모듈 안 unwrap 0 · `catch_unwind` 울타리 `guarded`는 dev/test용) ② 진행 콜백은 다른 스레드에서 불릴 수 있다 ③ JobSpec 상대 경로 기준 = 호출 프로세스의 작업 디렉터리(`nexa-copy --job`은 잡 파일 폴더 — §11-1 · C ABI에는 잡 파일이 없다).
 - **동봉 자리(구현 확정 · be60dc2)**(§11-4): deb/rpm = `/usr/lib/nexa-dir/libndir_xfer.so`(전용 폴더 · SONAME/ldconfig/multiarch 무관 · 소비자는 전체 경로 dlopen · rpm `%files`는 `%{_prefix}/lib/nexa-dir`) + `/usr/share/nexa-dir/include/ndir_xfer.h` · pkg/dmg/brew = `Contents/Frameworks/libndir_xfer.dylib`(Universal lipo · `install_name_tool -id @rpath/` · codesign --deep 앞) + `Contents/Resources/include/` · MSI = 설치 폴더 `ndir_xfer.dll`(`XferLib` Component) + `include\`(`XferHeader`) · `.dll.lib` 제외(LoadLibrary) · 임포트 게이트에 dll 포함 · 포터블 zip = 스테이징 그대로 · 빌드 명령 4곳 `-p ndir-xfer` · 릴리스 스모크 3-OS = 설치 뒤 Python ctypes 로드 → `ndir_xfer_version()` == 판 · 릴리스 노트 C 라이브러리 문단(영어).
 
-## 8. 남은 기능 설계(이번 회차 구현 안 함)
+## 8. 구현 현황과 남은 설계
 
 - **재개 ✅ T-202 ②(abc69f3 · §4 `journal` · `resume` · `ndir_xfer::resume`)** — **GAP-030 44ac475(11-01): 저널 started 줄 · 끊긴 복사 = 부분 대상 덮어쓰기 + 스테이징 잔여 정리(`Op::Copy` + 원본 존재일 때만 · 살아 있는 pid 제외) · 끊긴 이동 = 정책 무관 Skip + 확인 note(4ac8bd9) · §12.7.** 한계: **저널 없는 `--move --conflict overwrite` 재실행은 파일을 잃을 수 있다(실측 · 구분 불가)** · 최상위 항목 단위 · 파일 중간 재개 없음 · 중단 뒤 사용자가 고친 복사 대상도 덮어씀(OPS-004 잔여 위험 · 사용자 결정) · 이동은 자동 재개 안 함 · 검증 중 사망 = 전 항목 재복사 · pid 재사용 시 잔여가 남을 수 있음 · 폴더가 끊기면 그 폴더는 다시 돌고 `conflict: skip`이면 있는 파일을 건너뜀(`overwrite`면 다시 씀) · 그사이 원본이 바뀌어도 `done`이면 건너뜀(감지 안 함). cdylib = JobSpec 키라 자동 적용(ABI 1 불변).
 - **속도 제한 ✅ T-202 ③(071fc30 · §4 `max_bps` · `ndir_ops::fastcopy::Pacer` + `with_pacer(bps, f)` 스레드 지역 범위 · Tuning 필드 추가 없음)** — 실제 전송 지점(루프 · `copy_file_range` 청크 · `CopyFileExW`/`copyfile` 진행 콜백)에서 `on_bytes` 뒤 `pace` · 병렬은 작업 스레드 TLS에 같은 Pacer(Arc)를 걸어 **합계 기준** · 청크 = `Pacer::chunk_for`(¼초 분량 · 하한 64 KiB · 상한 기본) · 100 ms 조각으로 자며 `stop` 확인. 한계: ① 같은 파일 시스템 복제(FICLONE · clonefile · 블록 복제)는 순간이라 제한 없음 ② Windows · macOS 콜백 간격은 OS가 정해 덩어리질 수 있음(**실기 필요**) ③ 전역 `set_tuning`에는 제한 없음(`with_pacer` 범위만) · 검증 읽기 비제한.
@@ -143,7 +144,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 
 | 기능 | 설계 | 걸림돌 |
 | --- | --- | --- |
-| **작업 큐** | 앱 = JobSpec 큐(순차 기본 · 장치가 다르면 병렬 후보) · 큐 상태 저장 = JobSpec + 저널 | 진행 창(T-96 카드형)과 함께 설계 |
+| **작업 큐** | 설계 확정 = [§12](#12-작업-큐t-202---설계-확정-11-01--구현--다음-회차) · 구현 전 | — |
 | **최상위 항목 병렬** | 질문 없는 항목만 묶어 보내기 | docs/24 §6-3 — 충돌 질문 · 스테이징 · 실행 취소가 항목 순서에 묶임 |
 
 ## 9. 시험 계획
@@ -173,7 +174,7 @@ nexa-copy(bin) ── 인자/--job 해석 · 출력 ────────┼�
 1. JobSpec 상대 경로 기준 = **잡 파일이 있는 폴더**(작업 디렉터리 아님 — 저장한 잡을 어디서 실행해도 같은 자리) · 구현 ✅ ed45954 `JobSpec::resolved_against(base)`(절대 경로는 그대로) · `nexa-copy --job`이 잡 파일의 부모로 푼다.
 2. `--progress` 출력 자리 = **stdout**(현행 유지 · 사람용 진행은 stderr).
 3. **`--report <file>` 추가** — 끝에 Report JSON(§6)을 그 파일에 쓴다(dry-run 기계용 보고서 포함) · 구현 ✅ ed45954 — `--progress` 유무와 무관 · 간단 인자에서도 ndir-xfer 경로 · `--ask`와 함께 못 씀 · 쓰기 실패는 안내만(종료 코드 불변).
-4. cdylib = 진입 **`ndir_xfer_run`** · **패키지에 동봉** — 다음 회차(T-202 ①).
+4. cdylib = 진입 **`ndir_xfer_run`** · **패키지에 동봉** — 구현 ✅ T-202 ①(§7).
 
 ## 12. 작업 큐(T-202 ④ · 설계 확정 11-01 · 구현 = 다음 회차)
 

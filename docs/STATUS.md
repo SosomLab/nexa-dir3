@@ -2,7 +2,7 @@
 
 > 현황의 원본(TODO 머리글 · CLAUDE.md 현 단계는 여기를 가리킨다). 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md). 지난 회차는 [archive/](archive/)로 옮긴다.
 
-## ▶ 다음 세션 시작점(11-01 Linux PC · [journal 11-01 §1~§7](journal/2026-11-01.md) · 10-31 macOS/Linux 회차 [§0~§31](journal/2026-10-31.md) — 그 전 기록 = [archive/STATUS-to-2026-10-26](archive/STATUS-to-2026-10-26.md))
+## ▶ 다음 세션 시작점(11-01 Linux PC · [journal 11-01 §1~§8](journal/2026-11-01.md) · 10-31 macOS/Linux 회차 [§0~§31](journal/2026-10-31.md) — 그 전 기록 = [archive/STATUS-to-2026-10-26](archive/STATUS-to-2026-10-26.md))
 
 - **★ 다음 일**: T-202 ④ 작업 큐 슬라이스 1부터(docs/26 §12) · ⑥ 최상위 병렬 · T-137 Windows/macOS 실측(Linux ✅) · Windows PC = T-147 잔여(글자 드롭 · 가상 파일 · 드래그 이미지) · T-146 · GAP-029 워커 실기 · Linux PC = T-147 X11 발신 잔여 · 사용자 실기 2건(다른 마운트 드롭 Copy 표시 · 응답 없는 마운트 위 드래그) · v0.28.0 태그 = 보류.
 - **★ 11-01 §7**: GAP-031 ✅(3d4046f · Linux 이동 실측 ✓ · 다른 마운트 드롭 기본 Copy = 동작 변경 · 실기 2건 = 사용자) · 끊긴 이동 재개 = 정책 무관 Skip(4ac8bd9 · 5439개 소실 재현 뒤 · 시험 795/0 · T4(xvfb) 43/0) · **남은 손실 경로 = 저널 없는 `--move --conflict overwrite` 재실행(실측 5283개 · 처방 없음 · 사용자 보고)** · CI ce417c4 ✓(run 41262004511) · 3d4046f · 4ac8bd9 = push 뒤 확인 · 앱 = 협업 격리 4ac8bd9 PID 213342.
