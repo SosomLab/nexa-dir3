@@ -6,6 +6,7 @@
 //!    우클릭 메뉴 · 다시 읽기로 다른 행이 캐럿이 됐으면 버린다.
 //!
 //! 새 클릭 · 우클릭 · 가운데 클릭 · 더블클릭 · 키 입력은 모두 예약을 버린다("이름 바꾸기 의도 아님").
+//! 펼침 마커(쉐브론) · 편집 중인 이름 칸 위 클릭은 행 클릭으로 치지 않는다(GAP-037 · dir2 win.rs:8097).
 
 use crate::*;
 use std::path::Path;
@@ -82,6 +83,12 @@ impl App {
                         }
                         let rows = p.rows();
                         let row = rows.row_at(x, y)?;
+                        // 펼침 마커(쉐브론) · 편집 중인 이름 칸 위 클릭은 **행 클릭이 아니다**(dir2 win.rs:8097 `marker_hit` ·
+                        // `rename_field_hit` 제외 — GAP-037 11-01: 이식 때 빠져 선택된 폴더의 쉐브론을 1초 뒤 누르면 느린 재클릭으로
+                        // 잡혀 이름 바꾸기가 열렸다). 시드도 지운다(dir2 hit = None과 같음) · 끌기 후보도 아니다.
+                        if rows.marker_hit(x, y) || rows.rename_field_hit(x, y) {
+                            return None;
+                        }
                         let path = rows.source().row_path(row)?;
                         // 선택 여부는 행으로 바로(종전 `selected_paths().contains` = 선택 전체 PathBuf 복제 + 선형 검색 · 10-18).
                         let selected = rows.source().is_selected(row);

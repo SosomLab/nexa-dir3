@@ -6662,6 +6662,73 @@ fn path_bar_resolves_shell_alias() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-037(사용자 11-01 Windows 실기): 선택된 폴더의 쉐브론(펼침 마커)을 1초 뒤 누르면 "느린 재클릭"으로 잡혀 이름 바꾸기가 열렸다.
+/// dir2(win.rs:8097)는 `marker_hit` · `rename_field_hit`를 행 클릭에서 뺐는데 이식 때 빠졌다. 마커 누름 = 예약 없음 · 끌기 후보 없음 ·
+/// 시드도 지움 · 같은 조건으로 이름 칸을 다시 누르면 예약된다(대조 — 고침이 느린 재클릭 자체를 죽이지 않는다).
+#[test]
+fn chevron_click_on_selected_folder_does_not_arm_rename() {
+    let (mut app, dir) = fixture("chevren");
+    app.layout_for(1200, 800, 1.0);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    let (row, y, marker_x, name_x) = {
+        let rows = app.panels[0].rows();
+        let row = (0..rows.source().len())
+            .find(|&r| {
+                rows.source()
+                    .row_path(r)
+                    .is_some_and(|p| p.ends_with("sub"))
+            })
+            .expect("sub 행");
+        let a = rows.row_anchor(row).expect("anchor");
+        let b = rows.bounds();
+        let marker_x = (b.x..b.right())
+            .find(|&x| rows.marker_hit(x, a.y))
+            .expect("쉐브론 영역(트리 보기)");
+        let name_x = (marker_x..b.right())
+            .find(|&x| !rows.marker_hit(x, a.y) && rows.row_at(x, a.y) == Some(row))
+            .expect("이름 칸");
+        (row, a.y, marker_x, name_x)
+    };
+    let click = |app: &mut App, x: i32| {
+        app.route(down(x, y));
+        app.route(InputEvent::MouseUp { x, y });
+    };
+    let age = |app: &mut App| {
+        if let Some(c) = app.slow_click.as_mut() {
+            c.2 = c.2.checked_sub(Duration::from_millis(1500)).expect("clock");
+        }
+    };
+    // 이름 칸 클릭 = 선택 + 시드.
+    click(&mut app, name_x);
+    assert!(app.panels[0].rows().source().is_selected(row));
+    assert!(app.rename_due.is_none());
+    // 1초 넘게 지나 쉐브론 누름 = 예약 없음 · 끌기 후보 없음 · 시드 지움.
+    age(&mut app);
+    app.route(down(marker_x, y));
+    assert!(
+        app.rename_on_up.is_none(),
+        "쉐브론 누름 = 이름 바꾸기 예약 없음"
+    );
+    assert!(app.drag_press.is_none(), "쉐브론 누름 = 끌기 후보 없음");
+    app.route(InputEvent::MouseUp { x: marker_x, y });
+    assert!(app.rename_due.is_none(), "쉐브론 클릭 = 이름 바꾸기 없음");
+    assert!(
+        app.slow_click.is_none(),
+        "마커 클릭 = 행 클릭 아님(시드 지움)"
+    );
+    assert!(!app.panels[0].rows().is_renaming());
+    // 대조: 이름 칸 클릭(시드) → 1초 뒤 이름 칸 재클릭 = 예약.
+    click(&mut app, name_x);
+    age(&mut app);
+    click(&mut app, name_x);
+    assert!(
+        app.rename_due.is_some(),
+        "이름 칸 느린 재클릭 = 예약(그대로)"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 느린 재클릭 = 이름 바꾸기(dir2 win.rs:8132-8149 · 8572-8581 · 9583-9601 · T-149 4): 선택된 행을 1초 넘게 지나 다시 누르고
 /// 끌지 않고 떼면 더블클릭 시간 뒤 이름 바꾸기 · 그 사이 다른 입력 · 캐럿 이동은 버린다.
 #[test]
