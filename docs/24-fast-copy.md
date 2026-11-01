@@ -96,7 +96,7 @@ dir2 엔진(= 지금까지의 dir3)은 어디서나 "4 MiB 버퍼로 읽고 쓰�
 ### 6-1. 한 모양으로 맞춘 계층
 
 ```
-전송 엔진 lib.rs (OS 무관)        ──  항목 순회 · 충돌 · 스테이징 교체 · 교차 볼륨 이동 · 실행 취소 · 취소
+전송 엔진 lib.rs (OS 무관)        ──  항목 순회 · 충돌 · 스테이징 후 병합(DR-35) · 교차 볼륨 이동 · 실행 취소 · 취소
    └ fastcopy.rs 전략 계층 (OS 무관) ──  파일 1개 = copy_file(native?) · 폴더 = plan → 작업 스레드 N개 · 큰 파일 직렬화 · 진행 합산
         └ fastcopy::os (OS별 1모듈 · cfg)  ──  copy_file(src, dest, overwrite, on_bytes, stop) · unsupported(err) · seek_of(path)
              Windows  CopyFileExW            Linux  FICLONE → copy_file_range            macOS  copyfile(ALL | CLONE)

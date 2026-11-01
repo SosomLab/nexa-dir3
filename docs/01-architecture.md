@@ -12,6 +12,8 @@ nexa-dir3/
 │  ├─ ndir-vfs/               dir2 nexa-vfs — 가상 최상위·압축 스트림(zip/7z/rar/cab/tar)  [3-OS · cfg 4곳]
 │  ├─ ndir-tree/              dir2 nexa-tree — 인라인 트리 평면 스트림·교차 선택          [3-OS]
 │  ├─ ndir-ops/               dir2 nexa-ops — 전송(진행·취소·충돌)·히스토리·일괄 이름 변경 [3-OS · regex-lite]
+│  ├─ ndir-xfer/              dir3 — JobSpec/Progress/Report · 재개 · 미러 포장(ndir-ops 위) + cdylib `ndir_xfer` [3-OS]
+│  ├─ nexa-copy/              dir3 bin — 명령행 전송(`ndir-xfer` · 전 채널 동봉 · docs/26)   [3-OS]
 │  ├─ ndir-term/              dir2 nexa-term — VT 파서·화면 버퍼                          [3-OS]
 │  ├─ ndir-i18n/              dir2 lang/*.lang 임베드 + 키 검사 빌드 스크립트 + OS 언어   [의존 0]
 │  ├─ ndir-settings/          nsql-settings 엔진 복사(kind·registry·tree·tables·migrate·store·json·perf) + dir2 키 표

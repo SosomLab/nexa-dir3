@@ -9,6 +9,7 @@
 | `windows/` | WiX v4 MSI(`build-msi.ps1` · perMachine · UpgradeCode 고정 `7D1F7E3A-…`) + 포터블 zip(`build-zip.ps1` · zip 뿌리에 `nexa-dir.exe`) · 빌드가 `<msi>.productcode.txt`를 곁에 남긴다 |
 | `macos/` | Universal 2 `.app` → `.pkg`(`com.sosomlab.nexa-dir`) · `.dmg` · `uninstall.sh` |
 | `linux/` | deb · rpm |
+| 전 채널 동봉 | `nexa-copy` + C 라이브러리 `ndir_xfer`(T-202 ①): deb/rpm `/usr/lib/nexa-dir/libndir_xfer.so` + `/usr/share/nexa-dir/include/ndir_xfer.h` · macOS `Contents/Frameworks/libndir_xfer.dylib` + `Resources/include` · Windows · 포터블 zip = exe 옆 `ndir_xfer.dll` + `include\` · `release.yml` ctypes 스모크 · ABI 1 |
 | `winget/` · `choco/` · `homebrew/` | 패키지 관리자 **틀**(자리표시자 `@VERSION@` `@DATE@` `@SHA_*@` `@PRODUCT_CODE@`) |
 | `render-manifests.sh` | 릴리스 자산에서 해시 · ProductCode를 읽어 틀을 채운다 — **유일한 치환 지점**(릴리스 · 제출 워크플로가 함께 부른다) |
 
