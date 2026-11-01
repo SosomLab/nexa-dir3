@@ -4,64 +4,12 @@
 
 ## 2026-11-01
 
-- **GAP-031 ✅**(3d4046f · Unix 교차 파일시스템 이동 · 다른 마운트 드롭 기본 Copy) · **끊긴 이동 재개 5439개 소실 재현 → 정책 무관 Skip**(4ac8bd9 · 시험 795/0) · 남은 손실 경로 = 저널 없는 overwrite 재실행(실측 · 처방 없음) → [11-01 §7](journal/2026-11-01.md)
-- **GAP-030 ✅**(44ac475 · 재개 = 저널 started 줄 · 끊긴 복사 덮어쓰기 + 잔여 정리 · 끊긴 이동 대상 불가침 · 시험 794/0 · 복사 3경로 `kill -9` 실측 ✓) · **GAP-031 ☐**(Linux 교차 파일시스템 이동 실패 · 원본 안전 · dir2 계승) → [11-01 §6](journal/2026-11-01.md)
-- **GAP-029 ✅**(4a578d3 · 미러 삭제 문구 = 실제 결과 · `TrashOrigin` · 시험 791/0 · T4 43/0 · nexa-ui 7d9a1d1) · 사용자 결정: **v0.28.0 태그 보류** · 재개 충돌 기본 버튼 · 둘째 인스턴스 = 메모리 큐(docs/26 §12 · §12.7 구현 전 확인 4건) → [11-01 §5](journal/2026-11-01.md)
-- **T-202 ④ 작업 큐 설계**(docs/26 §12 · 사용자 결정 4건 · 슬라이스 4 · 협업 검토 7건 채택 · 구현 = 다음 회차) · **회차 마감** → [11-01 §4](journal/2026-11-01.md)
-- **GAP-027 ✅**(f745f3d · 복사 검증 = 옮긴 경로 목록 대조 · 이동 검증 링크 안 파일 · 빈 폴더 빈틈 봉합 · 시험 791/0) · **v0.28.0 재선검증 3회차 ✓**(2744425 · run 41218748888) · 태그 선택지 = 사용자 결정 대기 · 0.27.0 공개 노트 영어화 · 휴지통 미러 = T-172로 충족(코드 변경 없음) · GAP-029 등재 → [11-01 §3](journal/2026-11-01.md)
-- **T-199 창 투명도 Linux ✓**(ac2b2ff): 원인 = 속성 쓰기 유실(왕복 없이 닫는 연결 · X 서버 내부 미관측) · `Focused` 미도착 철회 · 지속 연결 + `check()` · 폴링 제거 · 실기 26전환 틀린 상태 유지 0 · GAP-028 → [11-01 §2](journal/2026-11-01.md)
-- **v0.28.0 재선검증 2회 ✓**(rpm · dmg · MSI 동봉 첫 확인 · 릴리스 노트 한글 7줄 → 영어 45ecd9a) · 태그 **보류(사용자)** · CI windows 흔들림 1회(재실행 ✓) · **창 투명도 Linux 첫 실기**: Mutter 반영 ✓ · 2/10 비활성 불투명 → 5183203 150 ms 재확인(빗나감 · 위 §2로 교체) → [11-01 §1](journal/2026-11-01.md)
+- **Linux 회차 후반**: T-199 창 투명도 Linux ✓(GAP-028 · ac2b2ff) · GAP-027 ✅ · GAP-029 ✅ · T-202 ④ 작업 큐 설계(docs/26 §12) · v0.28.0 재선검증 3회 ✓ · 태그 보류(사용자) · 0.27.0 노트 영어화 · **GAP-030 ✅**(재개 · 저널 started 줄 · 끊긴 이동 소실 재현 → 정책 무관 Skip 4ac8bd9) · **GAP-031 ✅**(Unix 교차 파일시스템 이동 3d4046f · 다른 마운트 드롭 기본 Copy) · 저널 없는 overwrite 재실행 소실 실측 · 시험 795/0 → [11-01 §1~§7](journal/2026-11-01.md)
 
 ## 2026-10-31
 
-- **T-137 Linux T4 화면 격리 = Xvfb**(7516bdc · 43/0 · 24초 · 창 0 · `NDIR_GATE_NO_XVFB=1`) · macOS · Windows 판단(미실측) 문서화 · CI 02ec1d4 · 7b2138b ✓ → [10-31 §31](journal/2026-10-31.md)
-
-- **T-202 ⑤ 이동 검증**(7b28766 · `ndir-ops::verify` · 교차 볼륨 원본 정리 전 대조 · 실패 = 원본 전부 유지 · `--move --verify` 동작 변경 = 릴리스 노트) · **GAP-027 절반**(제외 파일 ✅ · 신생 파일 ☐) · 시험 790/0 · T4 43/0 → [10-31 §30](journal/2026-10-31.md)
-
-- **T-202 ⑦ 미러 내용 비교**(4f2f3ac · `--by-content` · 삭제 콜백 Rust API · **GAP-026** 비교 창 양쪽 읽기 실패 = 같음 처방 · 시험 788/0 · T4 43/0) · **GAP-027 발견**(`--verify --exclude` 거짓 불일치 · 미처방) · CI b685e2f ✓ → [10-31 §29](journal/2026-10-31.md)
-
-- **T-202 ③ 속도 제한**(071fc30 · `max_bps` · `--max-bps` · `Pacer` · 병렬 합계 · 복제 제외 · 100 ms 취소 · 시험 785/0 · T4 43/0) · Windows/macOS 콜백 간격 = 실기 필요 → [10-31 §28](journal/2026-10-31.md)
-
-- **T-202 ② 재개**(abc69f3 · `journal`/`resume` · `--journal`/`--resume` · (source, dest) 쌍 · 이동 재개 · verify 뒤 done · 시험 782/0 · T4 43/0) · CI 34b48db ✓ · 다음 = ③ 속도 제한 → [10-31 §27](journal/2026-10-31.md)
-
-- **T-202 ① 패키지 동봉**(be60dc2 · deb/rpm/pkg/dmg/MSI/zip · release.yml ctypes 스모크 · gate full 777/0) · deb 실기 ✓(ctypes 로드 · 내보내기 5) · rpm · MSI · dmg = 태그 전 선검증에서 확인 · xvfb = 이 PC 미설치(CI는 ✓) → [10-31 §26](journal/2026-10-31.md)
-
-- **T-202 ① cdylib C ABI**(d130d9f · Linux PC · `ndir_xfer_run` 등 API 5 · 헤더 `include/ndir_xfer.h` · cancel = `const bool*` · release 패닉 = 프로세스 종료 문서화 · gate full 777/0 · T4 43/0) · 다음 = 패키지 동봉 커밋 · docs/26 §7 재작성 → [10-31 §25](journal/2026-10-31.md)
-
-- **v0.28.0 승격 71df088 · 선검증 run 41198851370 ✓ · 초안 삭제 · 태그 보류(사용자)** · ed45954 `--report` · 상대 경로 = 잡 파일 폴더 · 태그 주석 = docs/release/tag-v0.28.0.txt → [10-31 §24](journal/2026-10-31.md)
-- **T-201 · T-114 · T-184 ✅**: 811f196 알파 채우기 = 그린 사각형만(nexa-ui 254) · 빈 프레임 제거 · d8a0f45 IOSurface 풀 유휴 정리 · dirwatch/caret_asked 종결 · ec461e4 `list.os_icons` · OS 종류 이름 · 번들 링크/크기 · `.app` 위 드롭 = 앱으로 열기 · 보조 화면 배율 → [10-31 §19](journal/2026-10-31.md)
-- **사용자 결정 4건**: 726b7f1 정보 패널 NFD 줄(협업) · 1402671 패널 상태 줄 "NFD n" + 클릭 필터 · 085e99c 상태 열 NFD 제거 · 87b7b22 `status.blink_min_bps` 표식 깜빡임 문턱(16 KB/s · T-201 ⓑ ✅) → [10-31 §17](journal/2026-10-31.md)
-- 실기 NFD 검색 ✓ · **dad9369 검색창 토글 툴팁**(호버 미전달 + 오버레이 판정 누락 → macOS 부분 프레임 깜빡임 · nexa-ui 249 2ffbbbc) → [10-31 §16](journal/2026-10-31.md)
-- **74c5da6 macOS present IOSurface 기본**(`gfx.mac_present` · present 24.3 → 1.2 ms · Q-8 재검토) · **ba99d38 NFD 이름 필터·타입어헤드 NFC 비교** · 유휴 redraw 원인 = 상태바 표식 깜빡임 + macOS 부분 그리기 불가(softbuffer CG age 0 · 협업 계측) → **71add88 macOS 부분 다시 그리기**(nexa-ui 248 `Frame::age` · 이력 · 컬링 · 유휴 프레임 합 8.4 → 2.49 ms) · c926d98 pty 점검 플레이크 → [10-31 §15](journal/2026-10-31.md)
-- **e47ee38 macOS 저장 장치 판정**(IOKit Medium Type · SSD = 자동 8 · docs/24 §6 ✅) · **selfcheck 실제 점검 4그룹**(pty 8f9b44b · fonts 121c6b4 · preview 22f57d7 · archive 8b7bd7c · pass 20 → 30 · pty 3-OS CI ✓) → [10-31 §14](journal/2026-10-31.md)
-
-- **b2b962d macOS 자동화**(CI macOS T4 단계 · gate KNOWN Darwin = 없음 · ctx-menu check@macos · 번들 T4 2 · status-load) · **CI macOS 러너 T4 첫 실행 41/0** · Windows 회복(57ffbfe CI ✓) → [10-31 §13](journal/2026-10-31.md)
-
-- **macOS 패키징 로컬 검증 ✓**(app · pkg · dmg · 이름 꼬리표 57ffbfe · postinstall 755 98c422e) · **e612629 macOS OS 드래그 발신**(NSDraggingSession · 하이브리드 · 판정 = 창 안 불변 ✓) · **CI windows 빨강 4a2c6b0~eed5fed**(Unix에서 쓴 시험이 Windows 빈 범위 결함 노출) → 1f16bc4 · 사용자 아침 실기 체크 (a)~(f) → [10-31 §12](journal/2026-10-31.md)
-
-- **사고 2**: b4892d5가 수정 없이 push(amend 차단 → `git add` 누락 · 작업 트리로 gate 녹색) → eed5fed 회복 · 재발 방지 = 한 명령에 묶지 않기 · push 전 `git status` 비었는지 · amend 대신 후속 커밋 → [10-31 §11](journal/2026-10-31.md)
-
-- **4a2c6b0 Unix resident_bytes = mincore**(판정 Fonts 8.3 MB · TermFont 5.4 MB ✓) · **d597bfe `unix-perf.sh`**(T-176 ⑤ ✅ · docs/25 §5-6 · macOS 첫 실측) · b4892d5 + eed5fed 순서 편집기 macOS 집합 · NSDragging 발신 사전 분석 → [10-31 §10](journal/2026-10-31.md)
-
-- **b892a76 macOS 우클릭 메뉴 MacMenu**(xdg.* 어휘 · 번들 id · 기본 앱 + 다른 앱 ▸ · 터미널 · Finder · 정보) · 협업 판정 ✓(ctx.dump 4종 · Finder 선택) · 순서 편집기 Linux 전용 항목 노출(후보) · **TermFont 91 MB = 측정 착시**(Unix resident_bytes 미구현 · mincore 후보) · T-176 ⑤ 실행기 분석 → [10-31 §9](journal/2026-10-31.md)
-
-- **8d929f8 macOS 드래그 수식키 = Finder 규칙**(Option 복사 · Cmd 이동 · CG 포인터 폴링 · CI 41097478904 ✓) · **5e48780 번들(.app 등) = 파일처럼**(쉐브론 없음 · 실행 · 앱 아이콘 · 런처 · 드롭 = 부모 · 패키지 내용 보기 · GAP-025 ✅) · 협업 판정 ✓ · 사용자 실기 체크 7건 → [10-31 §8](journal/2026-10-31.md)
-
-- **4cdd5c9 종합 판정**(CI 41095815380 ✓ · 58fe883 macos ✗ 회복) · 행 아이콘 ✓ · 정보 Kind = 확장자(dir2 패리티 · NEW-059 후보) · 런처 `.app` 글리프 결함 · GAP-025 `.app` 번들 = 폴더처럼 동작 · nexa-ui 246 마감 d63928d → [10-31 §7](journal/2026-10-31.md)
-
-- **58fe883 터미널 글꼴 크기 처방**(포트 단위 환산 · 판정 = 칸 폭 7 DIP ✓ Terminal.app과 같음) · **nexa-ui 246 0a18346**(macOS OS 아이콘 · dir3 행 아이콘 = Finder 꼴 ✓) · **사고 = gate 적신호인 채 push**(gate와 push를 한 명령에 묶음 · 4cdd5c9 런처 시험 기대값 수정 · 재발 방지 = 분리) → [10-31 §6](journal/2026-10-31.md)
-
-- **사전 분석 → 결정**: MacMenu = `xdg.*` 어휘 재사용(B) · `.app` 번들 폴더 아이콘 결함(`per_path_icon` 처방 예정) · macOS 드래그 수식키가 Finder와 반대(추천안 = Option 복사 · Cmd 이동) · `pointer_state` macOS CG · GAP-024(OS 아이콘 끄기 설정 없음) → [10-31 §5](journal/2026-10-31.md)
-
-- **6c59ebe 경로 제안 자연 정렬**(CI 41092453597 ✓ 3-OS) · 협업 재기동 판정 = 제안 순서 ✓ · 터미널 글꼴 이름 ✓ · **크기 1.33배 ✗**(`term.rs` ×96/72가 macOS pt에도 적용) · 설명 문구 macOS 누락 → [10-31 §4](journal/2026-10-31.md)
-
-- **CI 8dc1b23 ubuntu T4 `path-suggest` 빨강**(제안 순서 = `read_dir` 순서 그대로 · ext4 해시 순서 · 잠복 결함 · 처방 = 이름 정렬 제안) → [10-31 §3](journal/2026-10-31.md)
-
-- **macOS 터미널 도크 글꼴 = Terminal.app 기본 프로필**(1c1c0d7 · 이름 + 크기 · `platform/bplist.rs` 순수 해석기 · T-114 ②) · T4 launcher 배율 무관(eb13dcf) · gate 2차 full 732/0 · T4 38/0 · push → [10-31 §2](journal/2026-10-31.md)
-
-- **macOS 상태바 디스크 칸 = IOKit**(8dc1b23 · `IOBlockStorageDriver` Statistics · 디스크 이미지 제외 · 이 Mac 첫 gate full 727/0 · 실기 ✓ = D 칸 KB/s · 팝업 Read/Written since boot) → [10-31 §1](journal/2026-10-31.md)
-
-- **macOS PC 회차 시작**(개발 b5b080 · 협업 427dc3 분담 · 세 저장소 ff-pull · winget/choco 0.27.0 검수 종결 · T-114 사전 분석 → 순서 = 터미널 글꼴 → 행 아이콘 → MacMenu) → [10-31 §0](journal/2026-10-31.md)
+- **Linux 회차 전반**: T-202 ① cdylib + 전 채널 동봉 · ② 재개 · ③ 속도 제한 · ⑤ 이동 검증 · ⑦ 미러 내용 비교 · GAP-026 · GAP-027 절반 · T-137 Linux T4 = Xvfb · 시험 790/0 → [10-31 §25~§31](journal/2026-10-31.md)
+- **macOS 회차**: IOSurface 제시 · 부분 다시 그리기 · Finder 규칙 DnD 양방향 · 글자 드롭 · 번들 = 파일 + 앱으로 열기 · OS 아이콘/종류 이름 · 인-프로세스 Quick Look · NFD 검색/표시 · 패키징 검증 · T-114 · T-184 · T-201 · T-161 · T-187 ✅ · T-97 `ndir-xfer` + `nexa-copy --job/--progress/--report` · v0.28.0 승격 · 선검증 ✓ · 사고 2건(gate 적신호 push · 수정 없는 push) → [10-31 §0~§24](journal/2026-10-31.md)
 
 ## 2026-10-26
 
