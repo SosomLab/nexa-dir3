@@ -195,6 +195,13 @@ pub fn run_with(
         .filter(|i| i.note == "overwrite" && resumable(i))
         .map(|i| i.dest.clone())
         .collect();
+    // 끊긴 **이동**은 대상 불가침을 실제로 보증한다(협업 재현 11-01 d3: `conflict: overwrite`로 재개하면 스테이징 교체가 전체 대상을 남은 원본
+    // 일부로 바꿔 5,439개 소실) → 충돌 정책과 무관하게 **Skip** · 원본이 온전한지 가릴 방법이 없다 · 대상이 없으면 평소대로 이동한다.
+    let force_skip: Vec<PathBuf> = if spec.op == Op::Move {
+        interrupted.iter().map(|i| i.dest.clone()).collect()
+    } else {
+        Vec::new()
+    };
     if !spec.dry_run {
         for i in interrupted.iter().filter(|i| resumable(i)) {
             ndir_ops::remove_staging_leftovers(&i.dest, &["tmp"]);
@@ -204,7 +211,9 @@ pub fn run_with(
         }
     }
     let mut resolve = |dest: &std::path::Path| {
-        if force_overwrite.iter().any(|d| d == dest) {
+        if force_skip.iter().any(|d| d == dest) {
+            ndir_ops::Conflict::Skip
+        } else if force_overwrite.iter().any(|d| d == dest) {
             ndir_ops::Conflict::Overwrite
         } else {
             spec.conflict.resolve()
@@ -1025,6 +1034,31 @@ mod tests {
         assert!(
             d.join("dst/mv/moved.txt").is_file() && d.join("src/mv/left.txt").is_file(),
             "대상 전체 · 원본 일부 모두 유지"
+        );
+        assert!(
+            r.items[0].note.contains("destination kept"),
+            "{:?}",
+            r.items
+        );
+        // ②' 같은 상황인데 정책이 overwrite(협업 재현 d3 · 5,439개 소실) = 그래도 대상 유지 · skipped.
+        let j2b = d.join("j2b.log");
+        fs::write(&j2b, line(&d.join("src/mv"), &d.join("dst/mv"))).unwrap();
+        let r = run(
+            &JobSpec {
+                op: Op::Move,
+                sources: vec![d.join("src/mv")],
+                dest: d.join("dst"),
+                conflict: ConflictPolicy::Overwrite,
+                resume: Some(j2b),
+                ..JobSpec::default()
+            },
+            &mut |_| {},
+            &cancel,
+        );
+        assert!(r.ok && r.skipped == 1, "{r:?}");
+        assert!(
+            d.join("dst/mv/moved.txt").is_file() && d.join("src/mv/left.txt").is_file(),
+            "overwrite 정책이어도 끊긴 이동의 대상은 불가침"
         );
         assert!(
             r.items[0].note.contains("destination kept"),
