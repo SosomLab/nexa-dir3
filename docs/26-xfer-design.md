@@ -198,7 +198,7 @@ cdylib(C ABI · `ndir_xfer_run`) ───────────────�
 ### 12.3 실행
 
 - 워커 = 1개(순차). 머리 작업을 `run_with(spec, progress, cancel, delete, resolve) -> (Report, Outcome)`로 실행한다.
-- **ndir-xfer API 확장 2건**: ① `ResolveFn` — 충돌 콜백 · `conflict` 정책 대신 호출자가 결정(앱 인라인 질문 채널 그대로) ② `Outcome` 반환 — Report `dest`는 사전 계획값이라, 앱 undo는 지금처럼 `Outcome.transferred`(실제 결과)로 `MoveBatchOp`/`CopyBatchOp`를 기록한다.
+- **ndir-xfer API 확장 3건(✅ 슬라이스 1 · b7f77c2 · `run_full(spec, progress, cancel, Hooks) -> (Report, Outcome)` · `run`/`run_with`는 그 위 포장 · CLI · cdylib 동작 불변)**: ③ `on_event` = 엔진 `Event` 4종 통과(앱 세그먼트 바) · `lenient_sources` = 앱만 원본 존재 검사 생략(그 항목만 `errors`로 격리) · 조기 반환도 `Outcome.errors` 채움 · ① `ResolveFn` — 충돌 콜백 · `conflict` 정책 대신 호출자가 결정(앱 인라인 질문 채널 그대로) ② `Outcome` 반환 — Report `dest`는 사전 계획값이라, 앱 undo는 지금처럼 `Outcome.transferred`(실제 결과)로 `MoveBatchOp`/`CopyBatchOp`를 기록한다.
 - 기존 `start_transfer` · `TransferShared` · `ops_tick`은 "큐 머리 1건 실행"으로 재배선한다(진행 창 · 상태바 `xfer` 칸 · 완료 토스트 · undo 유지). DnD 드롭은 같은 `start_transfer` 경로라 자연히 큐로 간다.
 - **바쁨 판정 분리**: `transfer_running()`(실행 중) / `queue_pending()`(대기 있음) · T4 `ops.wait` = 둘 다 비울 때까지 · `extract_job`/`sync_job` 중이면 머리 작업은 거부 대신 **대기**.
 - **실행 차례에 재검사**: 원본 · 대상이 없으면 Failed + 안내.
@@ -223,7 +223,7 @@ cdylib(C ABI · `ndir_xfer_run`) ───────────────�
 
 - **시험**: T3 = 큐 추가/순서/삭제 · 실행 중 질문 대기 · 재시작 복원(격리 홈 `queue/` 고정물) · `transfer.queue` off = 종전 거부. T4 시나리오 1건 = 두 번 연속 copy → 둘 다 완료.
 - **범위 밖**: 폴더 비교 창 `sync_job`(별도 유지) · 장치별 병렬 · 카드형 진행 창 · 일시 정지.
-- **구현 순서**: (1) ndir-xfer 확장 2건(`ResolveFn` · `Outcome` 반환) + `process_alive` 포트 + 앱이 ndir-xfer로 전송(동작 동일 · 큐 없음) → (2) 큐 자료 구조 + 저장 + 설정 키 + 진행 창 대기 줄 + 저널 started 줄(§12.7) → (3) 재시작 복원 → (4) 휴지통 콜백 주입(비교 창이 큐로 올 때).
+- **구현 순서**: (1) ✅ b7f77c2 — ndir-xfer 확장 3건 + 앱이 ndir-xfer로 전송(동작 동일 · 큐 없음) · `process_alive` 포트는 (3)으로 미룸(호출자 없는 함수 = dead_code) → (2) 큐 자료 구조 + 저장 + 설정 키 + 진행 창 대기 줄 + 저널 started 줄(§12.7) → (3) 재시작 복원 → (4) 휴지통 콜백 주입(비교 창이 큐로 올 때).
 
 ### 12.7 재개 충돌의 판별(협업 코드 읽기 · 실측 · 개발 11-01 · CLI 구현 = 44ac475)
 
