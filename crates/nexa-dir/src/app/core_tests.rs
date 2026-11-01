@@ -1802,8 +1802,13 @@ fn transfer_queue_waits_runs_in_order_and_edits() {
         labels[0].contains("b.md") || labels[0].contains("→"),
         "{labels:?}"
     );
-    app.progress_win
-        .press_queue(0, crate::progress_win::QueueAct::Down);
+    let before = app.transfer_queue.ids();
+    app.startup_cmd("queue.down:0"); // 기동 명령 = 진행 창 행 버튼과 같은 길(T4 `queue-edit`)
+    assert_eq!(
+        app.transfer_queue.ids(),
+        vec![before[1], before[0]],
+        "첫 행 아래로 = 순서 뒤바뀜"
+    );
     assert!(app.ops_tick());
     let ids = app.transfer_queue.ids();
     assert_eq!(ids.len(), 2);

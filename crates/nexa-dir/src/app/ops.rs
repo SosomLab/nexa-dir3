@@ -337,7 +337,7 @@ impl App {
     }
 
     /// 진행 창의 대기 행 버튼([위로] [아래로] [삭제]) 수거 → 큐에 반영(행 번호 → id).
-    fn queue_actions_tick(&mut self) {
+    pub(crate) fn queue_actions_tick(&mut self) {
         let Some((row, act)) = self.progress_win.take_queue_action() else {
             return;
         };

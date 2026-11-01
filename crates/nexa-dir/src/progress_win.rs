@@ -141,8 +141,7 @@ impl ProgressWin {
         self.redraw();
     }
 
-    /// 대기 행 버튼을 누른 것으로 기록(시험 — 마우스 히트와 같은 길).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 대기 행 버튼을 누른 것으로 기록(기동 명령 `queue.up/down/remove:<행>` · 시험 — 마우스 히트와 같은 길).
     pub(crate) fn press_queue(&mut self, row: usize, act: QueueAct) {
         self.queue_act = Some((row, act));
     }

@@ -54,6 +54,11 @@ echo "▶ gate: $MODE${WHY:+ — $WHY}"
 
 fail() { echo "★ GATE 실패($MODE): $1"; exit 1; }
 
+# 디스크 여유(11-01 사고: `/` 100%에서 smoke가 "컴파일 실패"로 위장 · 협업 제안) — 기준 미만이면 멈추고 알린다(`NDIR_GATE_MIN_FREE_GB` · 기본 5).
+MIN_FREE="${NDIR_GATE_MIN_FREE_GB:-5}"
+FREE_GB=$(( $(df -Pk . | awk 'NR==2 {print $4}') / 1024 / 1024 ))
+(( FREE_GB >= MIN_FREE )) || fail "디스크 여유 ${FREE_GB}G < ${MIN_FREE}G — target/ 캐시를 비우세요(target/debug/incremental · cargo clean --release)"
+
 if [[ "$MODE" == quick ]]; then
     BASE="$( [[ -f "$REC" ]] && cut -d' ' -f2 "$REC" || echo HEAD )"
     # OS 조건부 코드(`cfg(unix|windows|target_os …)` · `cfg!`)가 더해졌으면 quick에서도 **3-OS clippy**(Windows 호스트 clippy는 cfg(unix/macos)

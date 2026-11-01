@@ -48,6 +48,8 @@ pub(crate) fn is_wait_cmd(id: &str) -> bool {
             | "trash.wait"
             | "dirsize.wait"
             | "git.wait"
+            // 충돌 질문이 뜰 때까지(T-202 ④ · 큐 편집 T4): 전송이 질문 없이 끝나면 함께 풀린다.
+            | "cf.wait"
             // 조건 대기 3종(T-161/T-136 · 10-31 사용자 결정 ⑤): 자가 점검 끝 · 대화상자 열림 · 앱 조용함.
             | "check.wait"
             | "dlg.wait"
@@ -347,6 +349,20 @@ impl App {
             // 순서 편집 창(T-71 · `toolbar.layout` / `list.col_layout` / `ctxmenu.layout`).
             self.open_order_editor(key.trim());
             return;
+        }
+        // 큐 행 편집(T-202 ④ 슬라이스 2 진행 창 [위로][아래로][삭제]와 같은 길 · T4용): `queue.up:<행>` · `queue.down:<행>` · `queue.remove:<행>`.
+        if let Some((act, n)) = id.strip_prefix("queue.").and_then(|r| r.split_once(':')) {
+            let act = match act {
+                "up" => Some(crate::progress_win::QueueAct::Up),
+                "down" => Some(crate::progress_win::QueueAct::Down),
+                "remove" => Some(crate::progress_win::QueueAct::Remove),
+                _ => None,
+            };
+            if let (Some(act), Ok(row)) = (act, n.trim().parse::<usize>()) {
+                self.progress_win.press_queue(row, act);
+                self.queue_actions_tick();
+                return;
+            }
         }
         if let Some(n) = id.strip_prefix("dlg.pick:") {
             let id = n.trim().parse::<i32>().unwrap_or(0);
@@ -1002,6 +1018,12 @@ impl App {
         match id {
             "ctx.wait" => self.ctx_pending.is_some() || self.ctx_wait.is_some(),
             "ops.wait" => self.transfer_busy(),
+            "cf.wait" => {
+                self.transfer.is_some()
+                    && !(self.dlg_pending.is_some()
+                        || self.dlg.spec().is_some()
+                        || self.progress_win.conflict_pending())
+            }
             // `xdnd.drop` 뒤: 소스 스레드가 끝나고(XdndFinished) 모인 드롭이 틱에서 처리돼 전송이 시작될 때까지(1초 유예).
             // 수신(주입) · 발신(세션) 양쪽의 결정적 대기: 주입 스레드 끝 + 드롭 처리 + 1초 유예 / 세션 = Status(받음)까지 · 놓은 뒤 Finished까지.
             "xdnd.wait" => {

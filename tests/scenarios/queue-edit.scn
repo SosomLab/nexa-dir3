@@ -1,0 +1,41 @@
+# T4 · T-202 ④ 전송 대기 큐 편집(docs/26 §12.4 · 사용자 11-01 ②④): 첫 붙여넣기가 덮어쓰기 질문에 멈춘 동안(`cf.wait`) 둘을 더 붙여넣어 큐 2
+# → `queue.down:0`(첫 행 아래로) · `queue.remove:1`(이제 둘째 행 = b.md 삭제) → 큐 1 → 질문에 [건너뛰기] → 대기 작업(c.rs) 자동 실행 → sub에 c.rs만 추가.
+id: queue-edit
+title: 전송 대기 큐 편집 — 아래로/삭제 뒤 차례로 실행
+tree: dir sub
+tree: file sub/a.txt 3
+tree: file a.txt 7
+tree: file b.md 3
+tree: file c.rs 4
+settings: ui.lang=en
+settings: transfer.close_ms=0
+cmd: @ready:list.select:1
+cmd: @ready:edit.copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @ready:cf.wait
+cmd: @ready:nav:<root>
+cmd: @ready:list.select:2
+cmd: @ready:edit.copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @ready:nav:<root>
+cmd: @ready:list.select:3
+cmd: @ready:edit.copy
+cmd: @ready:nav:<root>/sub
+cmd: @ready:edit.paste
+cmd: @ready:ops.dump:<out>/q2.txt
+cmd: @ready:queue.down:0
+cmd: @ready:queue.remove:1
+cmd: @ready:ops.dump:<out>/q1.txt
+cmd: @ready:dlg.pick:3
+cmd: @ready:ops.wait
+cmd: @ready:list.dump:<out>/list.txt
+cmd: @ready:ops.dump:<out>/done.txt
+cmd: @ready:quit
+check: q2.txt: queue 2
+check: q1.txt: queue 1
+check: list.txt: c.rs
+check: list.txt: !b.md
+check: done.txt: transfer idle
+check: done.txt: queue 0
