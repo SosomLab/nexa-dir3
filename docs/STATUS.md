@@ -2,9 +2,10 @@
 
 > 현황의 원본(TODO 머리글 · CLAUDE.md 현 단계는 여기를 가리킨다). 최신 위. 상세는 [journal](journal/), 요약은 [DEVLOG](DEVLOG.md), 목표 대비는 [MILESTONES](MILESTONES.md) · [TODO](TODO.md). 지난 회차는 [archive/](archive/)로 옮긴다.
 
-## ▶ 다음 세션 시작점(11-01 Linux PC 회차 마감 · [journal 11-01 §1~§14](journal/2026-11-01.md) · 10-31 macOS/Linux 회차 [§0~§31](journal/2026-10-31.md) · 그 전 기록 = [archive/STATUS-to-2026-10-26](archive/STATUS-to-2026-10-26.md))
+## ▶ 다음 세션 시작점(11-01 Linux PC 회차 마감 · [journal 11-01 §1~§15](journal/2026-11-01.md) · 10-31 macOS/Linux 회차 [§0~§31](journal/2026-10-31.md) · 그 전 기록 = [archive/STATUS-to-2026-10-26](archive/STATUS-to-2026-10-26.md))
 
 - **★ 11-01 회차 마감(§14)**: origin/main = 이 기록 커밋(코드 마지막 = 47340c7 · 그 위 docs) · 트리 깨끗 · 형제 저장소(nexa-ui · nexa-license) 미반영 변경 0 · 디스크 여유 86G · **열린 사용자 결정 0** · 사용자 앱 = 협업 격리 47340c7 PID 295393. CI = 이번 회차 코드 커밋 전부 ✓(마지막 47340c7 run 41271962446 · 3-OS) · 시험 808/0 · T4(xvfb) 45/0.
+- **★ 다음 일 맨 앞 = T-203 복사 성능 측정 편입**(사용자 결정 D1~D7 = 권고안 · journal 11-01 §15 · 규약 docs/24 §4-1): ① `bench_copy` 보강(개발) → ④ 수동 워크플로 + release.yml 선검증 잡(개발) → ⑤ Linux 5회 중앙값 재측정 + docs/24 §4(협업). 열린 결정 0.
 - **미진행 작업(5묶음 · 개발이 사용자에게 보고한 것과 같음)**:
   1. **T-202 ④ 잔여**: GAP-034(상태줄 안내 덮임) · 바이트 전송 중 `kill -9` 뒤 복원 실측 · 큐 행 버튼 마우스 히트 실기 · T-202 ⑥ 최상위 병렬 = 보류.
   2. **다른 PC 회차 필수**: Windows · macOS 실기(재개 · 교차 볼륨 이동 · 덮어쓰기 병합 · 작업 큐 · GAP-029 워커 · 창 투명도 · 다른 마운트 드롭 Copy) · T-137 Windows/macOS 화면 격리 · Windows CI 흔들림(`launcher_bar_layout_and_launch`) · **v0.28.0 재선검증 → 태그**(주석에 동작 변경 8항목 영어 추가: `--move --verify` 교차 볼륨 검증 · `--verify` 신생 파일 무시(옮긴 경로 목록 대조) · 다른 마운트 드롭 기본 Copy · 폴더 덮어쓰기 = 병합 · 파일 ↔ 폴더 같은 이름 = 항목 실패 · 작업 큐 · 재시작 복원 · 끊어진 링크 원본 = 항목 격리).
