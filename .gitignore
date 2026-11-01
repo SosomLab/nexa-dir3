@@ -36,3 +36,6 @@ desktop.ini
 secrets/
 __pycache__/
 *.pyc
+
+# 편집기 작업 공간(사용자별 · 11-02 디스크 예산 규칙 · 프로젝트 파일은 커밋)
+*.sublime-workspace

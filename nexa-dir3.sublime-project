@@ -1,0 +1,19 @@
+{
+	// Sublime Text project for nexa-dir3 (user rule 2026-11-02, CLAUDE.md §5 "disk budget"):
+	// keep build output and the collaboration worktree out of the folder index so the editor
+	// does not cache tens of GB. Open the repo with this file (Project > Open Project...).
+	// Mirror the same patterns in the global settings ("index_exclude_patterns") for other repos.
+	"folders": [
+		{
+			"path": ".",
+			"folder_exclude_patterns": ["target", ".git", "_collab", "node_modules"],
+			"file_exclude_patterns": ["*.log", "*.pdb", "*.rlib", "*.rmeta", "*.d"],
+			"index_exclude_patterns": ["target/*", "*/target/*", "*.log"]
+		}
+	],
+	"settings": {
+		"index_files": true,
+		"tab_size": 4,
+		"translate_tabs_to_spaces": true
+	}
+}
