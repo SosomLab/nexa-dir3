@@ -532,74 +532,85 @@ fn staging_path(dest: &Path, tag: &str) -> PathBuf {
 /// 실패 시 원복 · 대상이 파일인데 폴더로 교체(형 불일치)면 파일 제거 후 rename.
 fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
     if dest.is_dir() {
-        let old = staging_path(dest, "old");
-        fs::rename(dest, &old)?;
-        // 덮어쓰기 = 병합(11-01 사용자 결정 · 협업 d4 재현: 중단된 이동을 같은 작업으로 다시 돌리면 통째 교체가 전체 대상을 남은 원본 일부로
-        // 바꿔 5,283개 소실) — 옛 대상에만 있던 항목을 새 내용(스테이징)으로 끌어온 뒤 커밋한다(같은 부모 = rename · 원자성 유지).
-        let moved = match merge_extras(&old, staged) {
-            Ok(m) => m,
-            Err(e) => {
-                let _ = fs::rename(&old, dest); // 원복 — 옛 대상 보존
-                return Err(e);
-            }
-        };
-        if let Err(e) = fs::rename(staged, dest) {
-            revert_moves(&moved);
-            let _ = fs::rename(&old, dest); // 원복 — 옛 대상 보존
-            return Err(e);
+        if !staged.is_dir() {
+            return Err(type_mismatch(dest)); // 파일로 폴더를 덮어쓰기 = 그 항목 실패(11-01 협업 m4 · 사용자 판단 거리)
         }
-        let _ = fs::remove_dir_all(&old); // 새 대상은 이미 커밋됨 — 남은 것은 교체된 항목뿐
+        // 덮어쓰기 = 병합(11-01 사용자 결정 · 협업 d4 재현 차단) — **새 내용을 옛 대상 안으로** 옮긴다(협업 m6 재현 11-01: 옛 대상을 스테이징으로
+        // 옮기던 첫 판은 병합 중 죽으면 대상이 사라지고 재개의 잔여 정리가 사용자 파일을 지웠다 — 6만 개 소실). 불변식: `tmp` = 새 내용만(지워도
+        // 안전) · `old` = 사용자가 덮어쓰기로 동의한 교체분만 · 대상 폴더는 어느 순간에도 존재 · 같은 작업을 다시 돌리면 수렴.
+        let old = staging_path(dest, "old");
+        merge_into(staged, dest, &old)?; // 실패 시 안에서 되돌림(옛 대상 그대로)
+        let _ = fs::remove_dir_all(&old); // 교체된 옛 항목(동의분) — 새 대상은 이미 자리를 잡았다
+        let _ = fs::remove_dir_all(staged); // 빈 뼈대만 남는다
         return Ok(());
     }
     if staged.is_dir() && dest.is_file() {
-        fs::remove_file(dest)?;
+        return Err(type_mismatch(dest)); // 폴더로 파일을 덮어쓰기 = 그 항목 실패
     }
     fs::rename(staged, dest)
 }
 
-/// 폴더 덮어쓰기의 **병합**(DR-35 후보 · 11-01): `from`(옛 대상)에만 있는 항목을 `into`(새 내용)로 옮긴다 — 같은 이름이 둘 다 폴더면 안으로
-/// 들어가 되풀이 · 같은 이름이 파일/링크면 새 것이 이긴다(교체) · 링크는 링크 자체를 옮긴다. 돌려주는 값 = 옮긴 (원래, 지금) 쌍(되돌리기용).
-/// `from`과 `into`는 같은 부모(스테이징) 또는 같은 볼륨이라 `rename`이 즉시다.
-fn merge_extras(from: &Path, into: &Path) -> io::Result<Vec<(PathBuf, PathBuf)>> {
-    let mut moved = Vec::new();
-    let mut stack = vec![(from.to_path_buf(), into.to_path_buf())];
-    while let Some((f, i)) = stack.pop() {
-        let rd = match fs::read_dir(&f) {
-            Ok(rd) => rd,
-            Err(e) => {
-                revert_moves(&moved);
-                return Err(e);
+/// 같은 이름이 파일 ↔ 폴더로 다르다(덮어쓰기 거부 · 탐색기도 묻거나 실패하는 경계).
+fn type_mismatch(dest: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        format!(
+            "cannot overwrite: a file and a folder share the name {}",
+            dest.display()
+        ),
+    )
+}
+
+/// 폴더 덮어쓰기의 **병합**(DR-35 · 11-01): `new_root`(스테이징 또는 같은 볼륨 원본)의 항목을 `dest` 안으로 옮긴다 — 없던 이름 = 그대로 들어감 ·
+/// 둘 다 폴더 = 안으로 되풀이 · 파일/링크 같은 이름 = 옛 것을 `old_root`(같은 상대 경로)로 치운 뒤 새 것 · 파일 ↔ 폴더 = 오류. `new_root`와 `dest`는
+/// 같은 볼륨이라 `rename`이 즉시다. 실패하면 옮긴 것을 역순으로 되돌린다(옛 대상 그대로 · 새 항목은 `new_root`로).
+fn merge_into(new_root: &Path, dest: &Path, old_root: &Path) -> io::Result<()> {
+    let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
+    if let Err(e) = merge_walk(new_root, dest, old_root, &mut moves) {
+        revert_moves(&moves);
+        let _ = fs::remove_dir_all(old_root); // 되돌린 뒤엔 빈 뼈대
+        return Err(e);
+    }
+    Ok(())
+}
+
+fn merge_walk(
+    new_dir: &Path,
+    dest_dir: &Path,
+    old_dir: &Path,
+    moves: &mut Vec<(PathBuf, PathBuf)>,
+) -> io::Result<()> {
+    for e in fs::read_dir(new_dir)? {
+        let e = e?;
+        let n = e.path();
+        let d = dest_dir.join(e.file_name());
+        let o = old_dir.join(e.file_name());
+        let n_dir = n.is_dir() && !is_link(&n);
+        match fs::symlink_metadata(&d) {
+            Err(_) => {
+                fs::rename(&n, &d)?;
+                moves.push((n, d));
             }
-        };
-        for e in rd {
-            let e = match e {
-                Ok(e) => e,
-                Err(err) => {
-                    revert_moves(&moved);
-                    return Err(err);
+            Ok(m) => {
+                let d_dir = m.is_dir() && !is_link(&d);
+                if n_dir && d_dir {
+                    merge_walk(&n, &d, &o, moves)?;
+                } else if n_dir != d_dir {
+                    return Err(type_mismatch(&d));
+                } else {
+                    fs::create_dir_all(old_dir)?;
+                    fs::rename(&d, &o)?; // 옛 항목(동의한 교체분) → old
+                    moves.push((d.clone(), o));
+                    fs::rename(&n, &d)?; // 새 항목 → 자리
+                    moves.push((n, d));
                 }
-            };
-            let src = e.path();
-            let dst = i.join(e.file_name());
-            match fs::symlink_metadata(&dst) {
-                Err(_) => {
-                    if let Err(err) = fs::rename(&src, &dst) {
-                        revert_moves(&moved);
-                        return Err(err);
-                    }
-                    moved.push((src, dst));
-                }
-                Ok(m) if m.is_dir() && !is_link(&dst) && src.is_dir() && !is_link(&src) => {
-                    stack.push((src, dst));
-                }
-                Ok(_) => {} // 같은 이름 = 새 것이 이긴다
             }
         }
     }
-    Ok(moved)
+    Ok(())
 }
 
-/// [`merge_extras`]가 옮긴 것을 되돌린다(실패 경로 · 최선 노력).
+/// [`merge_into`]가 옮긴 것을 역순으로 되돌린다(실패 경로 · 최선 노력).
 fn revert_moves(moved: &[(PathBuf, PathBuf)]) {
     for (orig, now) in moved.iter().rev() {
         let _ = fs::rename(now, orig);
@@ -607,8 +618,9 @@ fn revert_moves(moved: &[(PathBuf, PathBuf)]) {
 }
 
 /// 원본을 정확히 `dest`로 복사(순번 부여 없음). overwrite면 **스테이징 후 교체** — 취소/실패 시
-/// 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저 지워 취소 시 소실). 폴더 교체는 **병합**(11-01 · 옛 대상에만
-/// 있던 항목은 남고 같은 이름만 새 것으로 — 탐색기 "폴더 바꾸기"와 같음 · 부분 원본 재실행이 대상을 비우지 않는다).
+/// 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저 지워 취소 시 소실). 폴더 교체는 **병합**(11-01 · 새 내용을 옛 대상
+/// 안으로 · 옛 대상에만 있던 항목은 남고 같은 이름만 새 것으로 — 탐색기 "폴더 바꾸기"와 같음 · 대상 폴더는 어느 순간에도 존재 · 파일 ↔ 폴더 이름
+/// 충돌은 그 항목 실패).
 pub fn copy_onto_with_progress(
     src: &Path,
     dest: &Path,
@@ -722,25 +734,16 @@ pub fn move_onto_with_progress(
 /// 같은 볼륨 이동 = `rename`(옛 대상은 새 대상이 자리를 잡은 뒤에만 사라진다 · 점검 1차 #1 — 종전은 선삭제 후 rename).
 fn rename_onto(src: &Path, dest: &Path, overwrite: bool, is_dir: bool) -> io::Result<()> {
     if overwrite && dest.is_dir() {
-        let old = staging_path(dest, "old");
-        fs::rename(dest, &old)?;
-        // 병합(DR-35 후보): 옛 대상에만 있던 항목을 원본 폴더로 먼저 끌어온 뒤 rename — 커밋 결과에 포함된다(같은 볼륨 = 즉시).
-        let moved = match merge_extras(&old, src) {
-            Ok(m) => m,
-            Err(e) => {
-                let _ = fs::rename(&old, dest); // 원복
-                return Err(e);
-            }
-        };
-        if let Err(e) = fs::rename(src, dest) {
-            revert_moves(&moved);
-            let _ = fs::rename(&old, dest); // 원복
-            return Err(e);
+        if !is_dir {
+            return Err(type_mismatch(dest)); // 파일로 폴더를 덮어쓰기 = 그 항목 실패
         }
+        // 병합(DR-35): 같은 볼륨이라 원본 항목을 바로 대상 안으로 옮긴다(옛 대상은 제자리 · 교체분만 old · 실패 시 되돌림) → 원본은 빈 뼈대만.
+        let old = staging_path(dest, "old");
+        merge_into(src, dest, &old)?;
         let _ = fs::remove_dir_all(&old);
+        let _ = fs::remove_dir_all(src);
     } else if overwrite && is_dir && dest.is_file() {
-        fs::remove_file(dest)?; // 형 불일치(파일 위에 폴더) — 새 내용은 원본에 온전히 있음
-        fs::rename(src, dest)?;
+        return Err(type_mismatch(dest)); // 폴더로 파일을 덮어쓰기 = 그 항목 실패
     } else {
         fs::rename(src, dest)?; // 파일 위 파일 = std rename(REPLACE_EXISTING) 원자 교체
     }
@@ -1698,6 +1701,36 @@ mod tests {
         move_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).unwrap();
         assert_eq!(fs::read_to_string(b.join("t/same.txt")).unwrap(), "newest");
         assert!(b.join("t/only1.txt").exists() && b.join("t/sub/n.txt").exists());
+        assert_eq!(leftovers(&b), 0);
+        // 파일 ↔ 폴더 이름 충돌(협업 m4): 파일로 폴더 덮어쓰기 · 폴더로 파일 덮어쓰기 = 그 항목 실패 · 대상 그대로 · 잔여 없음.
+        fs::write(a.join("t"), "a file now").unwrap();
+        let e = copy_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never)
+            .unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::AlreadyExists, "{e}");
+        assert!(b.join("t/only1.txt").exists(), "폴더 그대로");
+        fs::create_dir_all(a.join("f")).unwrap();
+        fs::write(a.join("f/x"), "x").unwrap();
+        fs::write(b.join("f"), "a file").unwrap();
+        assert!(
+            copy_onto_with_progress(&a.join("f"), &b.join("f"), true, &mut |_| {}, &never).is_err()
+        );
+        assert_eq!(fs::read_to_string(b.join("f")).unwrap(), "a file");
+        // 병합 안쪽의 파일 ↔ 폴더 충돌 = 실패 + 되돌림(대상 전용 · 옛 파일 그대로 · 새 항목 없음).
+        fs::remove_file(a.join("t")).unwrap();
+        fs::create_dir_all(a.join("t/sub")).unwrap();
+        fs::write(a.join("t/sub/n.txt"), "n2").unwrap();
+        fs::write(a.join("t/clash"), "file").unwrap();
+        fs::create_dir_all(b.join("t/clash")).unwrap();
+        fs::write(b.join("t/clash/inner"), "inner").unwrap();
+        assert!(
+            copy_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).is_err()
+        );
+        assert_eq!(
+            fs::read_to_string(b.join("t/sub/n.txt")).unwrap(),
+            "new sub",
+            "되돌림"
+        );
+        assert!(b.join("t/clash/inner").exists() && b.join("t/only1.txt").exists());
         assert_eq!(leftovers(&b), 0);
         fs::remove_dir_all(&d).unwrap();
     }
