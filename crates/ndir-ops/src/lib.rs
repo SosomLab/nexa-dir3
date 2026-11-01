@@ -542,6 +542,8 @@ fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
         merge_into(staged, dest, &old)?; // 실패 시 안에서 되돌림(옛 대상 그대로)
         let _ = fs::remove_dir_all(&old); // 교체된 옛 항목(동의분) — 새 대상은 이미 자리를 잡았다
         let _ = fs::remove_dir_all(staged); // 빈 뼈대만 남는다
+                                            // 지난 실행(죽은 pid)이 남긴 같은 대상의 잔여도 성공 뒤에만 치운다(협업 m7: 같은 볼륨 이동 병합 중 사망 → 재실행 뒤 old 10,082개 잔여).
+        remove_staging_leftovers(dest, &["tmp", "old"]);
         return Ok(());
     }
     if staged.is_dir() && dest.is_file() {
@@ -742,6 +744,7 @@ fn rename_onto(src: &Path, dest: &Path, overwrite: bool, is_dir: bool) -> io::Re
         merge_into(src, dest, &old)?;
         let _ = fs::remove_dir_all(&old);
         let _ = fs::remove_dir_all(src);
+        remove_staging_leftovers(dest, &["tmp", "old"]); // 지난 실행의 죽은 pid 잔여(m7)
     } else if overwrite && is_dir && dest.is_file() {
         return Err(type_mismatch(dest)); // 폴더로 파일을 덮어쓰기 = 그 항목 실패
     } else {
@@ -1702,7 +1705,16 @@ mod tests {
         assert_eq!(fs::read_to_string(b.join("t/same.txt")).unwrap(), "newest");
         assert!(b.join("t/only1.txt").exists() && b.join("t/sub/n.txt").exists());
         assert_eq!(leftovers(&b), 0);
+        // 지난 실행(죽은 pid)의 잔여는 다음 성공 뒤 치운다(협업 m7) — 살아 있는 pid 것은 보호.
+        fs::create_dir_all(b.join(".t.nexa-old-4000000001-0")).unwrap();
+        fs::write(b.join(".t.nexa-old-4000000001-0/x"), "stale").unwrap();
+        fs::write(b.join(".t.nexa-tmp-4000000002-0"), "stale").unwrap();
+        fs::create_dir_all(a.join("t")).unwrap();
+        fs::write(a.join("t/same.txt"), "again").unwrap();
+        copy_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).unwrap();
+        assert_eq!(leftovers(&b), 0, "죽은 pid 잔여는 성공 뒤 정리");
         // 파일 ↔ 폴더 이름 충돌(협업 m4): 파일로 폴더 덮어쓰기 · 폴더로 파일 덮어쓰기 = 그 항목 실패 · 대상 그대로 · 잔여 없음.
+        fs::remove_dir_all(a.join("t")).unwrap();
         fs::write(a.join("t"), "a file now").unwrap();
         let e = copy_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never)
             .unwrap_err();
