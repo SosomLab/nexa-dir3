@@ -4,6 +4,7 @@
 
 ## 2026-11-01
 
+- **릴리스 후속**: CI 3-OS ✓(67fb104 · 71e2f38) · perf-copy.yml 첫 실행 ✓(run 41291607844 · 러너 Windows = seek Costly로 auto 0.8× · macOS auto 7.16×) · T-203 ⑥ = docs/perf/copy-0.28.0.md → [11-01 §20](journal/2026-11-01.md)
 - **v0.28.0 공개 ✅**: 태그 d78a7e9 · run 41290929525 전 잡 10 ✓ · 자산 9 · winget #467764/#467765 OPEN · choco 2건 검수 대기 · brew 274552e · linux-repo ✓ → [11-01 §19](journal/2026-11-01.md)
 - **T-203 ①~④ + D7 Windows 5회 중앙값**(브랜치 t203-bench · C: SSD auto 3.0×(small) · HDD small = fsync 지배 · 1회 관찰 철회) → [11-01 §18](journal/2026-11-01.md)
 - **Windows 자동화 실측 ✓**(개발 · 8e548c2 · nexa-copy 재개 · 교차 볼륨 이동 + 검증 · 병합 = 최상위 항목 실패 · 앱 강제 종료 → 복원 · 작업 큐 · 해시 전수) → 사용자 실기 = GUI 6건 · 체크리스트 ④ 문구 정정 → [11-01 §17](journal/2026-11-01.md)
