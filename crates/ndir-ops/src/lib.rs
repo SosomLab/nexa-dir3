@@ -534,11 +534,21 @@ fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
     if dest.is_dir() {
         let old = staging_path(dest, "old");
         fs::rename(dest, &old)?;
+        // 덮어쓰기 = 병합(11-01 사용자 결정 · 협업 d4 재현: 중단된 이동을 같은 작업으로 다시 돌리면 통째 교체가 전체 대상을 남은 원본 일부로
+        // 바꿔 5,283개 소실) — 옛 대상에만 있던 항목을 새 내용(스테이징)으로 끌어온 뒤 커밋한다(같은 부모 = rename · 원자성 유지).
+        let moved = match merge_extras(&old, staged) {
+            Ok(m) => m,
+            Err(e) => {
+                let _ = fs::rename(&old, dest); // 원복 — 옛 대상 보존
+                return Err(e);
+            }
+        };
         if let Err(e) = fs::rename(staged, dest) {
+            revert_moves(&moved);
             let _ = fs::rename(&old, dest); // 원복 — 옛 대상 보존
             return Err(e);
         }
-        let _ = fs::remove_dir_all(&old); // 새 대상은 이미 커밋됨 — 잔여는 정리 대상일 뿐
+        let _ = fs::remove_dir_all(&old); // 새 대상은 이미 커밋됨 — 남은 것은 교체된 항목뿐
         return Ok(());
     }
     if staged.is_dir() && dest.is_file() {
@@ -547,8 +557,58 @@ fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
     fs::rename(staged, dest)
 }
 
+/// 폴더 덮어쓰기의 **병합**(DR-35 후보 · 11-01): `from`(옛 대상)에만 있는 항목을 `into`(새 내용)로 옮긴다 — 같은 이름이 둘 다 폴더면 안으로
+/// 들어가 되풀이 · 같은 이름이 파일/링크면 새 것이 이긴다(교체) · 링크는 링크 자체를 옮긴다. 돌려주는 값 = 옮긴 (원래, 지금) 쌍(되돌리기용).
+/// `from`과 `into`는 같은 부모(스테이징) 또는 같은 볼륨이라 `rename`이 즉시다.
+fn merge_extras(from: &Path, into: &Path) -> io::Result<Vec<(PathBuf, PathBuf)>> {
+    let mut moved = Vec::new();
+    let mut stack = vec![(from.to_path_buf(), into.to_path_buf())];
+    while let Some((f, i)) = stack.pop() {
+        let rd = match fs::read_dir(&f) {
+            Ok(rd) => rd,
+            Err(e) => {
+                revert_moves(&moved);
+                return Err(e);
+            }
+        };
+        for e in rd {
+            let e = match e {
+                Ok(e) => e,
+                Err(err) => {
+                    revert_moves(&moved);
+                    return Err(err);
+                }
+            };
+            let src = e.path();
+            let dst = i.join(e.file_name());
+            match fs::symlink_metadata(&dst) {
+                Err(_) => {
+                    if let Err(err) = fs::rename(&src, &dst) {
+                        revert_moves(&moved);
+                        return Err(err);
+                    }
+                    moved.push((src, dst));
+                }
+                Ok(m) if m.is_dir() && !is_link(&dst) && src.is_dir() && !is_link(&src) => {
+                    stack.push((src, dst));
+                }
+                Ok(_) => {} // 같은 이름 = 새 것이 이긴다
+            }
+        }
+    }
+    Ok(moved)
+}
+
+/// [`merge_extras`]가 옮긴 것을 되돌린다(실패 경로 · 최선 노력).
+fn revert_moves(moved: &[(PathBuf, PathBuf)]) {
+    for (orig, now) in moved.iter().rev() {
+        let _ = fs::rename(now, orig);
+    }
+}
+
 /// 원본을 정확히 `dest`로 복사(순번 부여 없음). overwrite면 **스테이징 후 교체** — 취소/실패 시
-/// 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저 지워 취소 시 소실).
+/// 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저 지워 취소 시 소실). 폴더 교체는 **병합**(11-01 · 옛 대상에만
+/// 있던 항목은 남고 같은 이름만 새 것으로 — 탐색기 "폴더 바꾸기"와 같음 · 부분 원본 재실행이 대상을 비우지 않는다).
 pub fn copy_onto_with_progress(
     src: &Path,
     dest: &Path,
@@ -664,7 +724,16 @@ fn rename_onto(src: &Path, dest: &Path, overwrite: bool, is_dir: bool) -> io::Re
     if overwrite && dest.is_dir() {
         let old = staging_path(dest, "old");
         fs::rename(dest, &old)?;
+        // 병합(DR-35 후보): 옛 대상에만 있던 항목을 원본 폴더로 먼저 끌어온 뒤 rename — 커밋 결과에 포함된다(같은 볼륨 = 즉시).
+        let moved = match merge_extras(&old, src) {
+            Ok(m) => m,
+            Err(e) => {
+                let _ = fs::rename(&old, dest); // 원복
+                return Err(e);
+            }
+        };
         if let Err(e) = fs::rename(src, dest) {
+            revert_moves(&moved);
             let _ = fs::rename(&old, dest); // 원복
             return Err(e);
         }
@@ -1556,8 +1625,8 @@ mod tests {
         });
         assert_eq!(out.transferred.len(), 2, "{:?}", out.errors);
         assert!(
-            !b.join("x").join("keep.txt").exists(),
-            "옛 폴더 내용 교체됨"
+            b.join("x").join("keep.txt").exists(),
+            "병합(11-01): 옛 폴더에만 있던 것은 남는다"
         );
         assert_eq!(fs::read(b.join("x").join("big.bin")).unwrap(), b"new");
         assert_eq!(fs::read(b.join("f.bin")).unwrap(), b"newf");
@@ -1569,8 +1638,66 @@ mod tests {
         fs::write(b.join("y").join("o.txt"), "옛").unwrap();
         let out = run(&[a.join("y")], &b, Op::Move, &mut |_| Conflict::Overwrite);
         assert_eq!(out.transferred.len(), 1, "{:?}", out.errors);
-        assert!(b.join("y").join("n.txt").exists() && !b.join("y").join("o.txt").exists());
+        assert!(
+            b.join("y").join("n.txt").exists() && b.join("y").join("o.txt").exists(),
+            "같은 볼륨 rename 교체도 병합"
+        );
         assert!(!a.join("y").exists());
+        assert_eq!(leftovers(&b), 0);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// 덮어쓰기 = 병합(DR-35 후보 · 11-01 · 협업 d4 재현 차단): 부분 원본(파일 1개)을 전체 대상(파일 3개)에 덮어쓰기 이동/복사해도 대상에만 있던
+    /// 파일은 남고 같은 이름만 교체 · 하위 폴더도 재귀 병합 · 링크는 링크로 · 잔여 없음.
+    #[test]
+    fn overwrite_merges_destination_only_items() {
+        let d = fixture("merge");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(a.join("t/sub")).unwrap();
+        fs::write(a.join("t/same.txt"), "new").unwrap();
+        fs::write(a.join("t/sub/n.txt"), "new sub").unwrap();
+        fs::create_dir_all(b.join("t/sub")).unwrap();
+        fs::write(b.join("t/same.txt"), "old").unwrap();
+        fs::write(b.join("t/only1.txt"), "keep 1").unwrap();
+        fs::write(b.join("t/only2.txt"), "keep 2").unwrap();
+        fs::write(b.join("t/sub/o.txt"), "keep sub").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(b.join("t/only1.txt"), b.join("t/ln")).unwrap();
+        let never = AtomicBool::new(false);
+        let leftovers = |dir: &Path| -> usize {
+            fs::read_dir(dir)
+                .unwrap()
+                .flatten()
+                .filter(|e| e.file_name().to_string_lossy().contains(".nexa-"))
+                .count()
+        };
+        // 복사(스테이징 교체 경로).
+        copy_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).unwrap();
+        assert_eq!(fs::read_to_string(b.join("t/same.txt")).unwrap(), "new");
+        assert_eq!(fs::read_to_string(b.join("t/only1.txt")).unwrap(), "keep 1");
+        assert_eq!(fs::read_to_string(b.join("t/only2.txt")).unwrap(), "keep 2");
+        assert_eq!(
+            fs::read_to_string(b.join("t/sub/o.txt")).unwrap(),
+            "keep sub"
+        );
+        assert_eq!(
+            fs::read_to_string(b.join("t/sub/n.txt")).unwrap(),
+            "new sub"
+        );
+        #[cfg(unix)]
+        assert!(is_link(&b.join("t/ln")), "링크는 링크로 남는다");
+        assert_eq!(leftovers(&b), 0, "스테이징·old 잔여 없음");
+        // 이동(교차 볼륨 = move_by_copy · 같은 볼륨 = rename_onto 둘 다 병합) — d4: 부분 원본 재실행.
+        fs::write(a.join("t/same.txt"), "newer").unwrap();
+        move_by_copy(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).unwrap();
+        assert!(!a.join("t").exists());
+        assert_eq!(fs::read_to_string(b.join("t/same.txt")).unwrap(), "newer");
+        assert!(b.join("t/only2.txt").exists() && b.join("t/sub/o.txt").exists());
+        fs::create_dir_all(a.join("t")).unwrap();
+        fs::write(a.join("t/same.txt"), "newest").unwrap();
+        move_onto_with_progress(&a.join("t"), &b.join("t"), true, &mut |_| {}, &never).unwrap();
+        assert_eq!(fs::read_to_string(b.join("t/same.txt")).unwrap(), "newest");
+        assert!(b.join("t/only1.txt").exists() && b.join("t/sub/n.txt").exists());
         assert_eq!(leftovers(&b), 0);
         fs::remove_dir_all(&d).unwrap();
     }
@@ -1932,7 +2059,10 @@ mod tests {
         move_by_copy(&src2, &dest, true, &mut |_| {}, &AtomicBool::new(false)).unwrap();
         assert!(!src2.exists());
         assert_eq!(fs::read_to_string(dest.join("new.txt")).unwrap(), "new");
-        assert!(!dest.join("a.txt").exists(), "옛 대상은 교체됨");
+        assert!(
+            dest.join("a.txt").exists(),
+            "병합(11-01): 옛 대상에만 있던 것은 남는다"
+        );
         fs::remove_dir_all(&d).unwrap();
     }
 
