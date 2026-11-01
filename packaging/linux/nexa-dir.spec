@@ -81,6 +81,22 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 - New settings: "Query OS icons", macOS presentation path, marker blink threshold.
 - Fixes: memory window font bars show true resident bytes, launcher is scale-independent,
   drop highlight no longer sticks after a Finder drop, test harness condition waits.
+- nexa-copy: --journal/--resume resume by top-level item, --max-bps rate limit,
+  --mirror --by-content; --move --verify verifies cross-volume moves before removing the
+  source; --verify checks the paths actually transferred (files created in the source
+  during the copy are not reported as missing); ndir_xfer C library bundled.
+- Folder overwrite now merges: items that exist only in the destination are kept, and an
+  interruption cannot lose them; a file and a folder with the same name fail that item.
+- Transfer queue (on by default): a transfer started while another runs waits in a
+  queue (Up/Down/Remove in the progress window, "queue n" in the status bar); unfinished
+  transfers are offered for Resume/Discard at the next start; a second instance queues
+  in memory only.
+- Drag and drop to a different mount defaults to Copy (Shift = Move); moving between file
+  systems no longer fails with "Invalid cross-device link".
+- A broken symbolic link among the sources fails that item only.
+- Fixes: mirror-delete message reports the actual Trash result; --resume overwrites the
+  partial destination of an interrupted copy and cleans staging leftovers; unfocused
+  window transparency applies reliably on X11.
 
 * Mon Oct 26 2026 Sangyong Bae <kiros33@gmail.com> - 0.27.0-1
 - Quick filter is now a search box (Ctrl+F): match-case, whole-word and regex toggles,
