@@ -48,7 +48,7 @@ cargo run -q -p nexa-dir -- --selfcheck --ci    # T5 부분집합(표시·사용
 scripts/bench-copy.sh --runs 5 --dir <볼륨>     # T6 복사 성능(T-203 · release · 세트 3종 × 전략 · fsync · 중앙값 → target/perf/copy-last.json + 표 · 판정 없음 · docs/24 §4-1) — 소요 = SSD 약 8분 · HDD 약 1시간 20분(small = fsync 4,000개) → HDD는 --sets big,mixed 또는 --runs 3 권장(11-01 §18)
 scripts/perf-baseline.sh --copy               # T6 기준선에 copy_ms["<세트> · <전략>"] 포함(bench-copy.sh JSON · NDIR_COPY_RUNS 기본 1) — 키가 바뀌어 옛 기준선과 첫 비교는 "신규" → 1회 --save-baseline
 gh workflow run perf-copy.yml -f runs=1 -f sets=small   # CI 수동 측정(3-OS · 아티팩트 perf-copy-<os> · 잡 요약 표) — 기본 브랜치(main)에 병합된 뒤에만 디스패치 가능(브랜치 ref = 404)
-bash scripts/disk-check.sh [--trim] [--budget-gb N]   # 디스크 예산(사용자 11-02 · docs/15 §2-9) — 저장소·워크트리 target/ · Sublime 캐시 · 스크래치 · cargo home 크기 보고 · 예산 30 GB(NDIR_DISK_BUDGET_GB) 넘으면 exit 1 · --trim = 안전한 것만(워크트리 target · bench-* · tmp · 게이트 로그 · incremental · 교차 타깃) · Windows du는 수 분 → 백그라운드 · 회차 마감 때
+bash scripts/disk-check.sh [--trim] [--budget-gb N]   # 디스크 예산(사용자 11-02 · docs/15 §2-9) — 저장소·워크트리 target/ · Sublime 캐시 · 스크래치 · cargo home 크기 보고 · 예산 30 GB(NDIR_DISK_BUDGET_GB) 넘으면 exit 1 · --trim = 안전한 것만(워크트리 target · bench-* · tmp · 게이트 로그 · incremental · 교차 타깃 · ⑥ 세션별 target/collab · target/dev* — target/ 아래 nexa-dir 실행 중이면 ⑥만 건너뜀 · NDIR_DISK_IGNORE_RUNNING=1 무시) · Windows du는 수 분 → 백그라운드 · 회차 마감 때
 ```
 
 **Linux 개발 세션**(10-03 §101 · 이제 `gate.sh full`에 포함): `cargo build -p nexa-dir && cargo run -p ndir-check -- --ci`(T4) — CI는 T4를 Windows에서만 돌려, Linux에서 바꾼 기본값의 T4 기대값 누락이 main을 빨갛게 했다. Windows 전제 2개(`ctx-menu` · `selfcheck-win`)의 실패는 제외(T-117 · `launcher`는 10-31부터 3-OS 통과 기준).

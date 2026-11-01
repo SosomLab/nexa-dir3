@@ -87,7 +87,8 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 
 - 개발 산출물(저장소·워크트리 `target/` · 벤치 자료 · 게이트 로그 · 편집기 색인)이 수십 GB를 차지하지 않게 관리한다. ① 회차 마감 때 `bash scripts/disk-check.sh`(크기 보고 · 예산 기본 30 GB `NDIR_DISK_BUDGET_GB` · `--trim` = 워크트리 target · `target/perf/bench-*` · tmp · 게이트 로그 · incremental · 교차 타깃 폴더 삭제 · 측정은 느리니 백그라운드) ② 워크트리(`_collab/*` · `*-wt-*`)에서는 **빌드하지 않는다**(target 중복) · 끝난 워크트리는 `git worktree remove` ③ 실기·벤치 자료는 끝나면 스스로 지운다(bench-copy · perf-baseline · T4 샌드박스) ④ Sublime은 저장소의 `nexa-dir3.sublime-project`로 열어 `target/`을 색인에서 제외(전역 `index_exclude_patterns`도 같게 · `*.sublime-workspace`는 커밋하지 않음) ⑤ 측정·기록 = 협업 세션 · 삭제 실행 = 개발 세션(사용자 확인). 게이트의 여유 5 GB 하한(`NDIR_GATE_MIN_FREE_GB`)은 그대로.
 - **왜**: 사용자 "개발에 사용된 폴더가 Sublime에 캐시되거나 Clean 되지 않은 상태로 수십 GB를 차지하는 경우가 많아 과다한 디스크 사용이 되지 않도록 관리해줘. 규칙에 넣어줘"(11-02). 첫 측정(journal 11-02 §3) = `target/debug/incremental` 하나가 30.6 GB · 세션별 `CARGO_TARGET_DIR`(target/collab · dev) · 교차 타깃 메타데이터가 쌓인다.
-- **세션별 `CARGO_TARGET_DIR`**(`target/collab` · `target/dev*` 같은 격리 빌드)도 같은 예산에 든다 — 격리 인스턴스를 닫으면 그 폴더도 지울 후보로 보고한다(협업 측정 → 개발 삭제).
+- **세션별 `CARGO_TARGET_DIR`**(`target/collab` · `target/dev*` 같은 격리 빌드)도 같은 예산에 든다 — **협업 격리 빌드(`target/collab`)는 인스턴스 종료 뒤 trim 대상**(`--trim` ⑥ · 79b0ebd · 실행 중인 nexa-dir가 `target/` 아래에 있으면 ⑥만 건너뜀).
+- **형제 · 원본 저장소**(nexa-sql · nexa-dir2 · nexa-ui)의 `target/`은 disk-check 보고에 들지만 `--trim` 범위 밖 — 첫 측정에서 nexa-sql 245 GB · nexa-dir2 38 GB(journal 11-02 §3) · 정리는 사용자 판단.
 
 ## 3. 이식 절차(한 기능)
 
