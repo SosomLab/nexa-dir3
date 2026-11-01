@@ -840,6 +840,48 @@ fn my_pc_drive_columns_from_disk_port() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-036(사용자 11-01 Windows 실기): 내 PC에서 갱신(`view.refresh`)해도 여유 공간이 옛 값 그대로였다 — `fill_drive_space`가
+/// "값이 있으면 다시 묻지 않음"이라 재열람이 `drive_space_asked`를 지워도 조회가 없었다(드라이브에 들어갔다 나오면 새 소스라 맞았다).
+/// 고침: 재열람 뒤에는 다시 묻는다 · 옛 값은 새 값이 올 때까지 보인다 · 재열람 없이는 다시 묻지 않는다(상태 갱신마다 조회 금지).
+#[test]
+fn my_pc_refresh_requeries_drive_space() {
+    let (mut app, dir) = fixture("mypcref");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    log.borrow_mut().space = Some((4096, 1024));
+    app.command("nav.home");
+    assert!(app.panels[0].rows().source().is_virtual_root());
+    if app.panels[0].rows().source().len() == 0 {
+        let _ = std::fs::remove_dir_all(&dir);
+        return; // 비Windows: 드라이브 열거 없음(X-17).
+    }
+    let disk_calls = || {
+        log.borrow()
+            .calls
+            .iter()
+            .filter(|c| c.starts_with("disk:"))
+            .count()
+    };
+    assert_eq!(
+        app.panels[0].rows().source().cell(0, filelist::COL_FREE),
+        "1.0 KB"
+    );
+    let asked = disk_calls();
+    assert!(asked > 0);
+    app.update_status();
+    assert_eq!(disk_calls(), asked, "재열람 없이는 다시 묻지 않는다");
+    // 바깥에서 공간이 늘었다(섀도 복사본 삭제) → 갱신 = 다시 조회 → 새 값.
+    log.borrow_mut().space = Some((4096, 3072));
+    app.command("view.refresh");
+    assert!(disk_calls() > asked, "갱신 = 용량 다시 조회");
+    assert_eq!(
+        app.panels[0].rows().source().cell(0, filelist::COL_FREE),
+        "3.0 KB",
+        "갱신 뒤 여유 공간 = 새 값"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-60 도크: 기본 켜짐 = 전폭 밴드(듀얼 = 좌/우 · 단일 정보 = 좌 전폭) · 패널 높이가 줄어든다 · 정보 줄 = 선택 파일 · 미리보기 종류 전환 = 텍스트 · 끄면 0.
 #[test]
 fn dock_layout_and_contents() {

@@ -1167,13 +1167,16 @@ impl Panel {
 
     /// 내 PC 드라이브 용량 채우기 — Disk 포트의 워커 경로에 한 번만 묻고(`drive_space_asked`) 결과는 [`Self::tick`]이 수거한다
     /// (10-18: 종전엔 UI 스레드에서 드라이브마다 동기 조회 · 결과가 비면 사건마다 재시도).
+    /// 재열람(`reload_apply` = 갱신 · 드라이브 변경 · 낡은 탭)이 `drive_space_asked`를 지우면 **값이 있어도 다시 묻는다**(GAP-036 ·
+    /// 11-01: 종전엔 "값이 있으면 안 묻는" 조건이 앞서 갱신해도 여유 공간이 옛 값 그대로였다 · 들어갔다 나오면 새 소스라 맞았다).
+    /// 옛 값은 새 값이 올 때까지 그대로 보인다(빈 셀 깜빡임 없음).
     pub(crate) fn fill_drive_space(
         &mut self,
         disk: &dyn crate::platform::Disk,
         inv: &mut Invalidations,
     ) {
         let src = self.rows().source();
-        if !src.is_virtual_root() || src.drive_space_known() || src.drive_space_asked() {
+        if !src.is_virtual_root() || src.drive_space_asked() {
             return;
         }
         let names = src.drive_names();

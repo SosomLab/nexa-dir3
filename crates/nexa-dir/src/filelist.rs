@@ -881,6 +881,8 @@ impl TreeSource {
         (0..self.len()).map(|i| self.row(i).text).collect()
     }
 
+    /// 용량이 채워졌는가(시험 전용 — 채우기 판정은 `drive_space_asked`만 본다 · GAP-036).
+    #[cfg(test)]
     pub(crate) fn drive_space_known(&self) -> bool {
         !self.drive_space.is_empty()
     }
