@@ -5,7 +5,7 @@
 #      ※ 대량 폴더(1만/10만 항목) 목록·정렬은 헤드리스 경로가 없어 미측정 — fs 점검은 자기 임시 폴더만 쓴다(T-08 잔여)
 #   ③ 자가 점검 그룹별 ms(`--selfcheck --ci --json`)
 #   ④ 산출물 크기: release exe 바이트
-#   ⑤ 복사 벤치(`--copy` · T-164 · DR-31 ② 측정 자료): ndir-ops `bench_copy`(#[ignore] · release) — 작은 파일 4,000개 × 전략 5 · 큰 파일 512 MiB × 전략 3
+#   ⑤ 복사 벤치(`--copy` · T-164 · T-203): scripts/bench-copy.sh(release · 세트 3종 × 전략 · fsync 포함 · `NDIR_COPY_RUNS`회 중앙값 · 기본 1) → copy_ms
 #      (수십 초 · 임시 폴더 · 회귀선 +20 % · 기준 ≥ 200 ms)
 # 사용: scripts/perf-baseline.sh [--runs N] [--debug] [--save-baseline] [--baseline <json>] [--strict] [--out <json>]
 #   기본 runs 5 · release 빌드 사용
@@ -84,11 +84,11 @@ JSON="$HOME_DIR/selfcheck.json"
 # ④ 크기
 SIZE=$("$PY" -c "import os,sys; print(os.path.getsize(sys.argv[1]))" "$EXE")
 
-# ⑤ 복사 벤치(--copy · T-164): ndir-ops `bench_copy`의 "이름  ms" 줄만 거둔다(release · 임시 폴더는 벤치가 스스로 지운다).
+# ⑤ 복사 벤치(--copy · T-164 · T-203): scripts/bench-copy.sh의 JSON(세트 · 전략별 중앙값 · fsync 포함)을 거둔다 — 같은 스크립트를 CI(perf-copy.yml)도 쓴다.
 COPY_TXT=""
 if [ "$COPY" = 1 ]; then
-    COPY_TXT="$HOME_DIR/bench_copy.txt"
-    (cd "$ROOT" && NDIR_BENCH_DIR="$HOME_DIR" cargo test -q -p ndir-ops --release bench_copy -- --ignored --nocapture >"$COPY_TXT" 2>/dev/null) || true
+    COPY_TXT="$HOME_DIR/copy.json"
+    bash "$ROOT/scripts/bench-copy.sh" --runs "${NDIR_COPY_RUNS:-1}" --dir "$HOME_DIR" --out "$COPY_TXT" >/dev/null 2>&1 || true
 fi
 
 # 집계 · 기준선 비교 · JSON 저장(한 번의 파이썬) — 표준 출력 = 마크다운 표 · 마지막 줄 = `REGRESSIONS=<n> FAILED=<n>`
@@ -97,15 +97,13 @@ import json, re, sys, time
 from collections import defaultdict
 (sc_json, out_path, base_path, save, base_default, head, profile, runs, smoke, fs_ms, size, raw, copy_txt) = sys.argv[1:14]
 smoke, fs_ms, size, runs = int(smoke), int(fs_ms), int(size), int(runs)
-# ⑤ 복사 벤치 줄: "작은 파일 4000개  <전략>  <ms> ms" · "큰 파일 512 MiB   <전략>  <ms> ms"
+# ⑤ 복사 벤치 JSON(bench-copy.sh · T-203): copy_ms["<세트> · <전략>"] = 중앙값 ms(세트 = small/big/mixed · 전략 = plain/os1/loop4/auto · plain/os/os_unbuffered)
 copy_ms = {}
 if copy_txt:
     try:
-        with open(copy_txt, encoding="utf-8", errors="replace") as f:
-            for line in f:
-                m = re.match(r"^(작은 파일 4000개|큰 파일 512 MiB)\s+(.+?)\s+(\d+) ms\s*$", line.strip())
-                if m:
-                    copy_ms[f"{m.group(1)} · {m.group(2).strip()}"] = int(m.group(3))
+        with open(copy_txt, encoding="utf-8") as f:
+            for r in json.load(f).get("cases", []):
+                copy_ms[f"{r['set']} · {r['case']}"] = int(r["median_ms"])
     except Exception:
         copy_ms = {}
 groups = {}
@@ -173,7 +171,7 @@ bs, ds, _ = cmp(size, b.get("exe_bytes"), LINES["exe"])
 rows.append((f"exe 크기({profile})", f"{size} B", bs, ds, "예산 ≤ 10 MB(CI budget)"))
 for k, v in copy_ms.items():
     bs, ds, _ = cmp(v, (b.get("copy_ms") or {}).get(k), LINES["copy"], floor=200)
-    rows.append((f"복사 `{k}`", f"{v} ms{fail_mark(v)}", bs, ds, "bench_copy(release · --copy · T-164)"))
+    rows.append((f"복사 `{k}`", f"{v} ms{fail_mark(v)}", bs, ds, "bench-copy.sh(release · --copy · fsync 포함 · T-203)"))
 if base:
     print("| 항목 | 값 | 기준선 | Δ | 비고 |")
     print("| --- | --- | --- | --- | --- |")

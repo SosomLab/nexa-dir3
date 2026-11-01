@@ -1992,78 +1992,285 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
     }
 
-    /// 성능 비교(수동 · `cargo test -p ndir-ops --release bench_copy -- --ignored --nocapture`).
-    /// `NDIR_BENCH_DIR`(없으면 임시 폴더) 아래에 작은 파일 4,000개 + 큰 파일 1개(512 MiB)를 만들어 전략별 시간을 잰다.
+    // ── 복사 성능 측정(T-203 · docs/24 §4-1 · 사용자 결정 D1~D3 · journal 11-01 §15) ──────────────────────────────────
+    // 세트 3종(작은 16 KiB × 4,000 · 큰 512 MiB × 1 · 혼합 1~8 MiB × 200 + 16 KiB × 1,000) × 전략(트리 = 일반 `plain` = 루프 1스레드 ·
+    // `os1` = OS 경로 1스레드 · `loop4` = 루프 4스레드 · 향상 `auto` = 기본값(OS 경로 + 자동 스레드) / 큰 파일 하나 = `plain` · `os` ·
+    // `os_unbuffered`) · 회차마다 대상 fsync를 측정에 포함(페이지 캐시만 재지 않게) · 전략을 회차마다 번갈아 · N회 중앙값 · 결과 =
+    // `copy set=… case=… median_ms=…` 키=값 줄(OS 중립 라벨 · `scripts/bench-copy.sh`가 JSON · 표로). `scale`로 줄이면 시험에서도 같은
+    // 경로를 돈다(`bench_harness_tiny`).
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum BenchSet {
+        Small,
+        Big,
+        Mixed,
+    }
+
+    impl BenchSet {
+        const ALL: [BenchSet; 3] = [BenchSet::Small, BenchSet::Big, BenchSet::Mixed];
+
+        fn name(self) -> &'static str {
+            match self {
+                BenchSet::Small => "small",
+                BenchSet::Big => "big",
+                BenchSet::Mixed => "mixed",
+            }
+        }
+
+        /// `NDIR_BENCH_SETS`(쉼표 · 모르는 이름은 무시 · 비면 전부).
+        fn parse_list(s: &str) -> Vec<BenchSet> {
+            let v: Vec<BenchSet> = s
+                .split(',')
+                .filter_map(|n| BenchSet::ALL.iter().copied().find(|b| b.name() == n.trim()))
+                .collect();
+            if v.is_empty() {
+                BenchSet::ALL.to_vec()
+            } else {
+                v
+            }
+        }
+    }
+
+    /// 세트 자료를 `dir`에 만든다(내용 = 파일마다 다른 바이트) → (파일 수 · 바이트). `scale` = 규약 크기의 1/scale(1 = 규약).
+    fn bench_make_set(set: BenchSet, dir: &Path, scale: u32) -> (u64, u64) {
+        const KIB16: usize = 16 * 1024;
+        const MIB: usize = 1024 * 1024;
+        let scale = scale.max(1) as usize;
+        fs::create_dir_all(dir).unwrap();
+        let (mut files, mut bytes) = (0u64, 0u64);
+        let mut put = |path: PathBuf, len: usize, seed: usize| {
+            let mut f = fs::File::create(&path).unwrap();
+            let chunk: Vec<u8> = (0..MIB.min(len)).map(|i| (i ^ seed) as u8).collect();
+            let mut left = len;
+            while left > 0 {
+                let n = left.min(chunk.len());
+                f.write_all(&chunk[..n]).unwrap();
+                left -= n;
+            }
+            files += 1;
+            bytes += len as u64;
+        };
+        match set {
+            BenchSet::Small => {
+                for i in 0..(4000 / scale).max(1) {
+                    let d = dir.join(format!("d{}", i / 100));
+                    fs::create_dir_all(&d).unwrap();
+                    put(d.join(format!("f{i}.dat")), KIB16, i);
+                }
+            }
+            BenchSet::Big => put(dir.join("big.bin"), (512 * MIB / scale).max(MIB), 0x5A),
+            BenchSet::Mixed => {
+                for i in 0..(200 / scale).max(1) {
+                    put(dir.join(format!("m{i}.bin")), (i % 8 + 1) * MIB, i);
+                }
+                let d = dir.join("small");
+                fs::create_dir_all(&d).unwrap();
+                for i in 0..(1000 / scale).max(1) {
+                    put(d.join(format!("s{i}.dat")), KIB16, i + 7);
+                }
+            }
+        }
+        (files, bytes)
+    }
+
+    /// 대상의 파일을 전부 fsync(측정에 포함 · D1). Windows는 쓰기 핸들이어야 `FlushFileBuffers`가 된다 · 폴더 fsync는 unix만.
+    fn bench_fsync_tree(path: &Path) {
+        if path.is_dir() {
+            for e in fs::read_dir(path).unwrap() {
+                bench_fsync_tree(&e.unwrap().path());
+            }
+            #[cfg(unix)]
+            if let Ok(d) = fs::File::open(path) {
+                let _ = d.sync_all();
+            }
+        } else if let Ok(f) = fs::OpenOptions::new().write(true).open(path) {
+            let _ = f.sync_all();
+        }
+    }
+
+    struct BenchCase {
+        label: &'static str,
+        t: Tuning,
+    }
+
+    /// 비교 축(D3): 트리 = `plain`(일반) · `os1` · `loop4` · `auto`(향상 = 기본값) / 큰 파일 하나 = `plain` · `os` · `os_unbuffered`.
+    fn bench_cases(set: BenchSet) -> Vec<BenchCase> {
+        let t = |native: bool, unbuffered_min: u64, threads: usize| Tuning {
+            native,
+            unbuffered_min,
+            threads,
+        };
+        match set {
+            BenchSet::Big => vec![
+                BenchCase {
+                    label: "plain",
+                    t: t(false, 0, 1),
+                },
+                BenchCase {
+                    label: "os",
+                    t: t(true, 0, 1),
+                },
+                BenchCase {
+                    label: "os_unbuffered",
+                    t: t(true, 1, 1),
+                },
+            ],
+            BenchSet::Small | BenchSet::Mixed => vec![
+                BenchCase {
+                    label: "plain",
+                    t: t(false, 0, 1),
+                },
+                BenchCase {
+                    label: "os1",
+                    t: t(true, 0, 1),
+                },
+                BenchCase {
+                    label: "loop4",
+                    t: t(false, 0, 4),
+                },
+                BenchCase {
+                    label: "auto",
+                    t: Tuning::default(),
+                },
+            ],
+        }
+    }
+
+    /// 중앙값(ms · 짝수면 가운데 둘의 평균) — 빈 목록 = 0.
+    fn bench_median(v: &mut [u128]) -> u128 {
+        if v.is_empty() {
+            return 0;
+        }
+        v.sort_unstable();
+        let n = v.len();
+        if n % 2 == 1 {
+            v[n / 2]
+        } else {
+            (v[n / 2 - 1] + v[n / 2]) / 2
+        }
+    }
+
+    /// 측정 본체: 회차마다 전략을 번갈아(캐시 상태를 한 전략에 몰아주지 않게) · 대상은 매번 새로 · fsync 포함 · `out`에 키=값 줄 ·
+    /// 세트 자료는 끝나면 지운다.
+    fn bench_run(root: &Path, runs: usize, sets: &[BenchSet], scale: u32, out: &mut dyn Write) {
+        let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let seek = os::seek_of(root);
+        writeln!(
+            out,
+            "copy_env os={} cores={cores} seek={seek:?} runs={runs} scale={scale}",
+            std::env::consts::OS
+        )
+        .unwrap();
+        for &set in sets {
+            let src = root.join(set.name());
+            let (files, bytes) = bench_make_set(set, &src, scale);
+            let cases = bench_cases(set);
+            let mut ms: Vec<Vec<u128>> = vec![Vec::new(); cases.len()];
+            for _ in 0..runs.max(1) {
+                for (i, c) in cases.iter().enumerate() {
+                    let dest = root.join(format!("{}_out{i}", set.name()));
+                    let _ = fs::remove_dir_all(&dest);
+                    let _ = fs::remove_file(&dest);
+                    let at = Instant::now();
+                    if set == BenchSet::Big {
+                        copy_file(&src.join("big.bin"), &dest, false, &mut |_| {}, GO, &c.t)
+                            .unwrap();
+                    } else {
+                        copy_tree(&src, &dest, &mut |_| {}, GO, None, &c.t).unwrap();
+                    }
+                    bench_fsync_tree(&dest);
+                    ms[i].push(at.elapsed().as_millis());
+                    let _ = fs::remove_dir_all(&dest);
+                    let _ = fs::remove_file(&dest);
+                }
+            }
+            for (i, c) in cases.iter().enumerate() {
+                let v = &mut ms[i];
+                let (min, max) = (*v.iter().min().unwrap(), *v.iter().max().unwrap());
+                let median = bench_median(v);
+                let threads = if set == BenchSet::Big {
+                    1
+                } else {
+                    thread_count(c.t.threads, seek, seek, cores)
+                };
+                writeln!(
+                    out,
+                    "copy set={} case={} runs={} median_ms={median} min_ms={min} max_ms={max} files={files} bytes={bytes} threads={threads} native={}",
+                    set.name(),
+                    c.label,
+                    v.len(),
+                    c.t.native
+                )
+                .unwrap();
+            }
+            let _ = fs::remove_dir_all(&src);
+        }
+    }
+
+    /// 측정 하네스 자체의 시험(비(非)ignore · 축소 규모 1/500 · 1초 미만): 세트 3종 × 전략 수만큼 키=값 줄 · 숫자 칸 · 중앙값 규칙 ·
+    /// 세트 목록 해석 · 자료 정리.
+    #[test]
+    fn bench_harness_tiny() {
+        assert_eq!(bench_median(&mut [5, 1, 3]), 3);
+        assert_eq!(bench_median(&mut [4, 1, 3, 2]), 2);
+        assert_eq!(bench_median(&mut []), 0);
+        assert_eq!(
+            BenchSet::parse_list("big, nope,small"),
+            vec![BenchSet::Big, BenchSet::Small]
+        );
+        assert_eq!(BenchSet::parse_list("").len(), 3);
+        let root = fixture("bench_tiny");
+        let mut out = Vec::new();
+        bench_run(&root, 2, &BenchSet::ALL, 500, &mut out);
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("copy_env os="), "{text}");
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with("copy set="))
+            .collect();
+        assert_eq!(lines.len(), 4 + 3 + 4, "{text}");
+        for l in &lines {
+            let kv: std::collections::HashMap<&str, &str> = l
+                .split_whitespace()
+                .skip(1)
+                .filter_map(|p| p.split_once('='))
+                .collect();
+            assert_eq!(kv["runs"], "2", "{l}");
+            assert!(kv["median_ms"].parse::<u64>().is_ok(), "{l}");
+            assert!(kv["files"].parse::<u64>().unwrap() >= 1, "{l}");
+            assert!(
+                kv["min_ms"].parse::<u64>().unwrap() <= kv["max_ms"].parse::<u64>().unwrap(),
+                "{l}"
+            );
+        }
+        assert!(
+            text.contains("set=big case=os_unbuffered") && text.contains("set=mixed case=auto")
+        );
+        assert_eq!(
+            fs::read_dir(&root).unwrap().count(),
+            0,
+            "벤치가 자료를 치운다"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 성능 측정(수동 · `scripts/bench-copy.sh` 또는 `NDIR_BENCH_RUNS=5 cargo test -p ndir-ops --release bench_copy -- --ignored --nocapture`).
+    /// 환경: `NDIR_BENCH_DIR`(측정할 볼륨의 폴더 · 없으면 임시 폴더) · `NDIR_BENCH_RUNS`(기본 1 · 실기기 5) · `NDIR_BENCH_SETS`(small,big,mixed).
     #[test]
     #[ignore = "수동 성능 측정"]
     fn bench_copy() {
         let root = std::env::var_os("NDIR_BENCH_DIR")
+            .filter(|s| !s.is_empty())
             .map_or_else(std::env::temp_dir, PathBuf::from)
             .join(format!("nexa_fast_bench_{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let small = root.join("small");
-        for a in 0..40 {
-            let dir = small.join(format!("d{a}"));
-            fs::create_dir_all(&dir).unwrap();
-            for f in 0..100 {
-                fs::write(
-                    dir.join(format!("f{f}.dat")),
-                    vec![(a + f) as u8; 16 * 1024],
-                )
-                .unwrap();
-            }
-        }
-        let big = root.join("big.bin");
-        {
-            let mut f = fs::File::create(&big).unwrap();
-            let chunk = vec![0x5Au8; 8 * 1024 * 1024];
-            for _ in 0..64 {
-                f.write_all(&chunk).unwrap();
-            }
-        }
-        let cases = [
-            ("루프 · 1스레드(종전)", false, 0u64, 1usize),
-            ("CopyFileEx · 1스레드", true, 0, 1),
-            ("CopyFileEx · 4스레드", true, 0, 4),
-            ("CopyFileEx · 8스레드", true, 0, 8),
-            ("루프 · 4스레드", false, 0, 4),
-        ];
-        for (i, (name, native, unbuf, threads)) in cases.iter().enumerate() {
-            let t = Tuning {
-                native: *native,
-                unbuffered_min: *unbuf,
-                threads: *threads,
-            };
-            let dest = root.join(format!("out{i}"));
-            let at = std::time::Instant::now();
-            copy_tree(&small, &dest, &mut |_| {}, GO, None, &t).unwrap();
-            println!(
-                "작은 파일 4000개  {name:<28} {:>7} ms",
-                at.elapsed().as_millis()
-            );
-        }
-        for (i, (name, native, unbuf)) in [
-            ("루프(종전)", false, 0u64),
-            ("CopyFileEx 버퍼드", true, 0),
-            ("CopyFileEx 비버퍼드", true, 1),
-        ]
-        .iter()
-        .enumerate()
-        {
-            let t = Tuning {
-                native: *native,
-                unbuffered_min: *unbuf,
-                threads: 1,
-            };
-            let dest = root.join(format!("big{i}.bin"));
-            let at = std::time::Instant::now();
-            copy_file(&big, &dest, false, &mut |_| {}, GO, &t).unwrap();
-            println!(
-                "큰 파일 512 MiB   {name:<28} {:>7} ms",
-                at.elapsed().as_millis()
-            );
-        }
-        println!("seek: {:?}", os::seek_of(&root));
+        fs::create_dir_all(&root).unwrap();
+        let runs = std::env::var("NDIR_BENCH_RUNS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1);
+        let sets = BenchSet::parse_list(&std::env::var("NDIR_BENCH_SETS").unwrap_or_default());
+        bench_run(&root, runs, &sets, 1, &mut std::io::stdout());
         let _ = fs::remove_dir_all(&root);
     }
 }
