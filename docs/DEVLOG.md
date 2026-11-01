@@ -4,6 +4,7 @@
 
 ## 2026-11-01
 
+- **Windows PC 회차 마감**: origin/main c82b952 · CI ✓ · 공개 최신 v0.28.0 · t203-bench 삭제 = 사용자 결정 대기 · 형제 저장소 차이 0 · 열린 결정 0 · 이월 = GUI 실기 6건 · T-203 ⑤ · 채널 검수 → [11-01 §21](journal/2026-11-01.md)
 - **릴리스 후속**: CI 3-OS ✓(67fb104 · 71e2f38) · perf-copy.yml 첫 실행 ✓(run 41291607844 · 러너 Windows = seek Costly로 auto 0.8× · macOS auto 7.16×) · T-203 ⑥ = docs/perf/copy-0.28.0.md → [11-01 §20](journal/2026-11-01.md)
 - **v0.28.0 공개 ✅**: 태그 d78a7e9 · run 41290929525 전 잡 10 ✓ · 자산 9 · winget #467764/#467765 OPEN · choco 2건 검수 대기 · brew 274552e · linux-repo ✓ → [11-01 §19](journal/2026-11-01.md)
 - **T-203 ①~④ + D7 Windows 5회 중앙값**(브랜치 t203-bench · C: SSD auto 3.0×(small) · HDD small = fsync 지배 · 1회 관찰 철회) → [11-01 §18](journal/2026-11-01.md)
