@@ -773,13 +773,15 @@ pub fn remove_staging_leftovers(dest: &Path, tags: &[&str]) -> usize {
         else {
             continue;
         };
+        // 엔진이 만든 이름만(`<pid>-<seq>` 둘 다 숫자) — 해석이 안 되면 사용자 것일 수 있어 건너뛴다(협업 실측 11-01: `.t.nexa-old-notes`가 지워졌다).
+        let Some((pid, seq)) = rest.split_once('-') else {
+            continue;
+        };
+        let (Ok(pid), Ok(_)) = (pid.parse::<u32>(), seq.parse::<u64>()) else {
+            continue;
+        };
         // 이름의 pid가 **살아 있으면** 다른 프로세스가 같은 대상을 쓰는 중 — 건드리지 않는다(협업 지적 11-01 · 단일 인스턴스 장치 없음).
-        if rest
-            .split('-')
-            .next()
-            .and_then(|p| p.parse::<u32>().ok())
-            .is_some_and(process_alive)
-        {
+        if process_alive(pid) {
             continue;
         }
         let p = e.path();
@@ -2055,7 +2057,18 @@ mod tests {
         fs::write(d.join(".a.txt.nexa-tmp-4000000000-0"), "dead").unwrap();
         fs::create_dir_all(d.join(".a.txt.nexa-old-4000000001-1")).unwrap();
         fs::write(d.join(".b.txt.nexa-tmp-4000000002-0"), "other name").unwrap();
+        // 엔진 이름이 아닌 것(pid·seq가 숫자가 아님)은 건드리지 않는다(협업 실측 11-01).
+        fs::create_dir_all(d.join(".a.txt.nexa-tmp-notes")).unwrap();
+        fs::write(d.join(".a.txt.nexa-tmp-notes/k"), "user").unwrap();
+        fs::write(d.join(".a.txt.nexa-tmp-123-notes"), "user").unwrap();
+        fs::write(d.join(".a.txt.nexa-tmp-4000000003-0-extra"), "user").unwrap();
         assert_eq!(remove_staging_leftovers(&dest, &["tmp"]), 1);
+        assert!(
+            d.join(".a.txt.nexa-tmp-notes/k").exists()
+                && d.join(".a.txt.nexa-tmp-123-notes").exists()
+                && d.join(".a.txt.nexa-tmp-4000000003-0-extra").exists(),
+            "해석 안 되는 이름 = 유지"
+        );
         assert!(
             d.join(format!(".a.txt.nexa-tmp-{me}-0")).exists(),
             "살아 있는 pid = 유지"
