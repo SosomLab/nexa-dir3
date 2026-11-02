@@ -82,7 +82,7 @@ impl OpsError {
     /// 영어 문구(접두 — 뒤에 `: 세부`가 붙을 수 있다).
     pub const fn message(self) -> &'static str {
         match self {
-            OpsError::IntoSelf => "cannot move a folder into itself or one of its subfolders",
+            OpsError::IntoSelf => "cannot copy or move a folder into itself or one of its subfolders",
             OpsError::BadName => "invalid name",
             OpsError::RootRename => "cannot rename a root",
             OpsError::NameTaken => "an item with that name already exists",
@@ -941,7 +941,7 @@ enum Placement {
     NoOp,
     /// 같은 폴더 복사 = 순번 복제 자리(" (2)"…).
     Duplicate(PathBuf),
-    /// 자기 자신/하위 폴더로의 폴더 이동 — 실행하면 오류.
+    /// 자기 자신/하위 폴더로의 폴더 복사/이동 — 실행하면 오류(복사도 막는다 · GAP-038: 안 막으면 자기 안에 자기를 끝없이 복사).
     IntoSelf,
     /// 다른 폴더 → 자연 경로(`exists`면 충돌 → `resolve`).
     Into { dest: PathBuf, exists: bool },
@@ -958,7 +958,7 @@ fn placement(src: &Path, dest_dir: &Path, op: Op) -> Placement {
             Op::Copy => Placement::Duplicate(unique_dest(dest_dir, &leaf_name(src), is_dir)),
         };
     }
-    if is_dir && op == Op::Move && is_same_or_sub(src, dest_dir) {
+    if is_dir && is_same_or_sub(src, dest_dir) {
         return Placement::IntoSelf;
     }
     let dest = dest_dir.join(leaf_name(src));
@@ -979,7 +979,7 @@ pub enum PlanAction {
     Skip,
     /// 같은 폴더 이동 = 무동작.
     NoOp,
-    /// 실행하면 실패할 항목(자기/하위 폴더 이동) — 사유.
+    /// 실행하면 실패할 항목(자기/하위 폴더 복사/이동) — 사유.
     Error(String),
 }
 
@@ -1416,6 +1416,41 @@ mod tests {
         let out = run(&srcs, &b, Op::Copy, &mut |_| Conflict::Skip);
         assert_eq!(out.skipped, vec![a.join("f.txt")]);
         assert_eq!(out.transferred, vec![(a.join("sub"), b.join("sub"))]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-038(11-02): 폴더의 자기/하위 **복사**도 거절(종전 = 이동만 · 복사는 자기 안에 자기를 끝없이 복사) — 계획 = `Error` ·
+    /// 실행 = 항목 격리 실패 · 파일 시스템 불변. 같은 폴더(부모) 복사는 종전대로 순번 복제.
+    #[test]
+    fn copy_into_self_or_sub_is_refused() {
+        let d = fixture("intoself");
+        let a = d.join("a");
+        fs::create_dir_all(a.join("sub")).unwrap();
+        fs::write(a.join("f.txt"), "1").unwrap();
+        for dest in [a.clone(), a.join("sub")] {
+            let plan = plan_transfer(std::slice::from_ref(&a), &dest, Op::Copy, &mut no_conflict);
+            assert!(
+                matches!(plan.items[0].action, PlanAction::Error(_)),
+                "{dest:?}: {:?}",
+                plan.items[0].action
+            );
+            let out = run(std::slice::from_ref(&a), &dest, Op::Copy, &mut no_conflict);
+            assert_eq!(out.errors.len(), 1, "{dest:?}");
+            assert!(
+                out.errors[0].1.contains("into itself"),
+                "{}",
+                out.errors[0].1
+            );
+            assert!(out.transferred.is_empty());
+        }
+        assert!(
+            !a.join("a").exists() && !a.join("sub/a").exists(),
+            "자기 안에 사본 없음"
+        );
+        // 부모로의 복사 = 순번 복제(종전 규칙 유지).
+        let out = run(std::slice::from_ref(&a), &d, Op::Copy, &mut no_conflict);
+        assert_eq!(out.transferred, vec![(a, d.join("a (2)"))]);
+        assert_eq!(fs::read_to_string(d.join("a (2)/f.txt")).unwrap(), "1");
         fs::remove_dir_all(&d).unwrap();
     }
 

@@ -231,7 +231,18 @@ impl App {
             self.status_note(&tr("clip.empty"));
             return;
         };
-        let dest = self.paste_dest();
+        let mut dest = self.paste_dest();
+        // GAP-038(사용자 Windows 실기 11-02): 선택한 폴더가 붙여넣을 원본 **자신**이면(폴더 Ctrl+C → Ctrl+V) 그 안이 아니라
+        // 부모에 — 같은 폴더 복사 = 순번 복제 "(2)"(파일과 같은 동작) · 잘라내기 = 제자리 이동 = 무동작. 원본의 하위 폴더를 골랐으면
+        // 그대로 두고 엔진이 `IntoSelf`로 거절한다(dir2 `paste_dest`도 같은 빈틈 · 복사는 자기 안에 자기를 끝없이 복사했다).
+        if sources
+            .iter()
+            .any(|s| ndir_ops::is_same_or_sub(s, &dest) && ndir_ops::is_same_or_sub(&dest, s))
+        {
+            if let Some(parent) = dest.parent() {
+                dest = parent.to_path_buf();
+            }
+        }
         if !dest.is_dir() {
             return;
         }

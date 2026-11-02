@@ -7127,6 +7127,53 @@ fn paste_dest_folder_file_and_multi() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-038(사용자 Windows 실기 11-02): 폴더를 선택한 채 Ctrl+C → Ctrl+V = 자기 안이 아니라 **옆에 "sub (2)"**(파일과 같은 순번 복제) ·
+/// 원본은 그대로 · 자기 안에 사본 없음(종전 = 자기 안에 자기를 끝없이 복사 → 재귀 오류). 잘라내기 → 제자리 = 무동작.
+#[test]
+fn paste_folder_onto_itself_duplicates_beside() {
+    let (mut app, dir) = fixture("pasteself");
+    app.layout_for(1200, 800, 1.0);
+    let wait = |app: &mut App| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while app.ops_tick() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "transfer did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    app.command("edit.copy");
+    assert!(app.dump_of("ops").unwrap().contains("clip 1 copy"));
+    assert_eq!(
+        app.paste_dest(),
+        dir.join("sub"),
+        "선택 폴더 1개 = 그 폴더(종전 규칙 그대로)"
+    );
+    app.command("edit.paste");
+    wait(&mut app);
+    assert!(
+        dir.join("sub (2)/inner.rs").is_file(),
+        "옆에 순번 복제: {:?}",
+        std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect::<Vec<_>>()
+    );
+    assert!(dir.join("sub/inner.rs").is_file(), "원본 유지");
+    assert!(!dir.join("sub/sub").exists(), "자기 안에 사본 없음");
+    // 잘라내기 → 자기 자신에 붙여넣기 = 제자리 이동 = 무동작(원본 그대로 · 사본 없음).
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    app.command("edit.cut");
+    app.command("edit.paste");
+    wait(&mut app);
+    assert!(dir.join("sub/inner.rs").is_file() && !dir.join("sub/sub").exists());
+    assert!(!dir.join("sub (3)").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-150 ⑰ F3 · Tab · Ctrl+Tab이 키맵을 거쳐 명령에 닿는다(dir2 WINC-117/118 — 10-05 §11/§13의 "키맵 id와 분기 id 불일치" 유형 예방).
 #[test]
 fn f3_tab_and_ctrl_tab_through_the_keymap() {

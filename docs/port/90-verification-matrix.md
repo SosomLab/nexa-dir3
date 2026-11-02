@@ -393,7 +393,7 @@
 | DLG-001 · T-29 | 대화상자 창(제목 · 줄 바꿈 본문 · 버튼 N · 기본/취소 · 마스킹 입력란 · 모달 · 창 없이 결정) · 기동 명령 `dlg.pick/dlg.type` · 덤프 `dlg` | `dlg_win.rs` · `app/dialogs.rs` | T2·T4 | `spec_dump_and_headless_pick` · `delete-confirm.scn` | ✅ | 폴더 찾아보기(T-29 B) |
 | OPS-016 · 영구 삭제 | `edit.delete_permanent` = 확인 창 → `delete_permanent` → 토스트 `del.done/partialFail` | `app/dialogs.rs::delete_permanent_ask` | T2·T4 | 위 | ✅ | undo 없음(dir2 동일) |
 | OPS-030~035 · 039 | undo/redo(이동 되돌림 · 복사 = 휴지통 포트 삭제 주입 · 완료 시 기록 규칙 · 문구 변환) | `app/ops.rs::history_step` · `Platform.trash: Rc` | T2 | `copy_cut_paste_undo_through_ops` | ✅ | 휴지통 복원 undo(OPS-036) T-51 B |
-| M3-5 · 파일 클립보드 | `edit.copy/cut` = OS 파일 클립보드 + 앱 내 사본 · `edit.paste` 2단 · 대상 규칙(`paste_dest`) | `app/ops.rs::clip_write/clip_sources/paste_dest` | T2 | 위 | ✅ | mac/Linux OS 클립보드 = T-52/53 |
+| M3-5 · 파일 클립보드 · GAP-038 | `edit.copy/cut` = OS 파일 클립보드 + 앱 내 사본 · `edit.paste` 2단 · 대상 규칙(`paste_dest`) · 원본 자신에 붙여넣기 = 부모에 순번 복제 "(2)"(GAP-038) · 엔진 = 폴더 자기/하위 복사도 `IntoSelf` | `app/ops.rs::clip_write/clip_sources/paste_dest/paste` · `ndir-ops::placement` | T1 · T2 · T3 | 위 · `paste_folder_onto_itself_duplicates_beside` · ndir-ops `copy_into_self_or_sub_is_refused` | ✅ | mac/Linux OS 클립보드 = T-52/53 · GAP-038 11-02 |
 | OPS-017 · 034 | 인라인 이름 바꾸기(F2 · 이름부 선택 · Enter 확정 · Esc 취소 · 편집 키 · RenameOp · 같은 이름 무동작) | `app/ops.rs::begin_rename/apply_rename/rename_edit` · `panel.rs::key_event` | T2·T4 | `new_folder_rename_and_undo` · `new-rename.scn` | ✅ | `.lnk` 확장자 숨김 T-51 B |
 | OPS-018 · 035 | 새 폴더/새 파일(unique 이름 · CreateOp · 생성 즉시 이름 바꾸기) | `app/ops.rs::create_new` | T2·T4 | 위 | ✅ | |
 | CI-107 | 기동 명령 `ui.type:<text>` · `ui.press:<key>`(편집 흐름 재현) | `app/startup_cmd.rs` | T4 | `new-rename.scn` | ✅ | |
