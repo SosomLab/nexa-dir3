@@ -519,6 +519,7 @@ fn main() -> ExitCode {
             }
             "--filter" => filter = args.next(),
             "--ci" => {}
+            "--desktop-inner" => {} // T-137: 대체 데스크톱 안에서 다시 띄워진 자신(`desktop::relaunch_inside`)
             "--help" | "-h" => {
                 println!("ndir-check [--bin <nexa-dir>] [--out <dir>] [--filter <substr>] [--ci] [<.scn|dir>…]");
                 return ExitCode::SUCCESS;
@@ -530,6 +531,12 @@ fn main() -> ExitCode {
         inputs.push(PathBuf::from("tests/scenarios"));
     }
     let bin = bin.unwrap_or_else(default_bin);
+    // T-137 Windows(11-03): 시나리오 창을 사용자 데스크톱이 아닌 대체 데스크톱 `ndir-t4`에 띄운다(Linux Xvfb 상당 · 반복 실행이 화면을 안 가린다).
+    // 바깥 프로세스는 자신을 그 데스크톱 안에서 다시 띄우고 끝날 때까지 기다린다(`desktop` 모듈) · `NDIR_T4_DESKTOP=0` = 끔.
+    #[cfg(windows)]
+    if let Some(code) = desktop::relaunch_inside() {
+        return code;
+    }
     // 앱의 cwd는 샘플 트리다 → 홈·출력·자리표는 절대 경로여야 한다(10-03 1차 실행: 상대 `tests/out`가 트리 밑으로 갔다).
     let out_root = std::env::current_dir().map_or(out_root.clone(), |d| d.join(&out_root));
     // 구분자를 OS 표기로 통일(Windows `tests/out\x` 혼용 → 앱이 돌려주는 경로 `tests\out\x`와 검사식이 어긋났다 · 10-03).
@@ -731,5 +738,177 @@ mod tests {
         assert_eq!(std::fs::read(root.join("a.txt")).unwrap().len(), 5);
         assert!(root.join("b.md").is_file());
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// T-137 Windows 화면 격리(11-03): 시나리오 창을 사용자 데스크톱이 아닌 **대체 데스크톱 `ndir-t4`**에 띄운다(Linux Xvfb 상당 · 반복 실행이
+/// 화면을 안 가린다). 자식 프로세스는 부모 **프로세스**의 데스크톱을 물려받으므로(`SetThreadDesktop`은 소용없음 — 11-03 실측 `MainWindowHandle`
+/// ≠ 0) ndir-check가 **자기 자신**을 `CreateProcessW(lpDesktop = "ndir-t4")`로 다시 띄우고(`--desktop-inner` · 표준 입출력 상속 · 끝날 때까지
+/// 기다려 종료 코드 전달) 안쪽 ndir-check의 `Command::spawn` 자식들이 그 데스크톱에 창을 만든다. user32/kernel32 FFI 직접 선언(의존 0).
+/// `NDIR_T4_DESKTOP=0` = 끔(종전대로 사용자 데스크톱).
+#[cfg(windows)]
+mod desktop {
+    use std::os::windows::ffi::OsStrExt as _;
+    use std::process::ExitCode;
+
+    #[repr(C)]
+    struct StartupInfoW {
+        cb: u32,
+        reserved: *mut u16,
+        desktop: *const u16,
+        title: *mut u16,
+        x: u32,
+        y: u32,
+        x_size: u32,
+        y_size: u32,
+        x_count: u32,
+        y_count: u32,
+        fill: u32,
+        flags: u32,
+        show: u16,
+        cb_reserved2: u16,
+        reserved2: *mut u8,
+        std_in: isize,
+        std_out: isize,
+        std_err: isize,
+    }
+    #[repr(C)]
+    struct ProcessInformation {
+        process: isize,
+        thread: isize,
+        pid: u32,
+        tid: u32,
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn CreateDesktopW(
+            name: *const u16,
+            device: *const u16,
+            devmode: *const core::ffi::c_void,
+            flags: u32,
+            access: u32,
+            sa: *const core::ffi::c_void,
+        ) -> isize;
+        fn CloseDesktop(h: isize) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateProcessW(
+            app: *const u16,
+            cmd: *mut u16,
+            pa: *const core::ffi::c_void,
+            ta: *const core::ffi::c_void,
+            inherit: i32,
+            flags: u32,
+            env: *const core::ffi::c_void,
+            cwd: *const u16,
+            si: *const StartupInfoW,
+            pi: *mut ProcessInformation,
+        ) -> i32;
+        fn WaitForSingleObject(h: isize, ms: u32) -> u32;
+        fn GetExitCodeProcess(h: isize, code: *mut u32) -> i32;
+        fn CloseHandle(h: isize) -> i32;
+        fn GetStdHandle(n: u32) -> isize;
+    }
+    const GENERIC_ALL: u32 = 0x1000_0000;
+    const STARTF_USESTDHANDLES: u32 = 0x100;
+    const INFINITE: u32 = 0xFFFF_FFFF;
+    const STD_INPUT_HANDLE: u32 = -10i32 as u32;
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+
+    /// Windows 명령줄 인용(CommandLineToArgvW 역규칙): 공백·탭·따옴표가 없으면 그대로 · 있으면 `"…"` + 역슬래시/따옴표 이스케이프.
+    fn quote(a: &str) -> String {
+        if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+            return a.to_string();
+        }
+        let mut s = String::from("\"");
+        let mut bs = 0usize;
+        for c in a.chars() {
+            match c {
+                '\\' => bs += 1,
+                '"' => {
+                    s.push_str(&"\\".repeat(bs * 2 + 1));
+                    s.push('"');
+                    bs = 0;
+                }
+                _ => {
+                    s.push_str(&"\\".repeat(bs));
+                    bs = 0;
+                    s.push(c);
+                }
+            }
+        }
+        s.push_str(&"\\".repeat(bs * 2));
+        s.push('"');
+        s
+    }
+
+    /// 바깥 ndir-check: 대체 데스크톱을 만들고 자신을 그 안에서 다시 띄운 뒤 종료 코드를 돌려준다 — 안쪽(`--desktop-inner`) · 끔 · 실패 = `None`.
+    pub(crate) fn relaunch_inside() -> Option<ExitCode> {
+        let args: Vec<String> = std::env::args().collect();
+        if std::env::var_os("NDIR_T4_DESKTOP").is_some_and(|v| v == "0")
+            || args.iter().any(|a| a == "--desktop-inner")
+        {
+            return None;
+        }
+        let exe = std::env::current_exe().ok()?;
+        let exe_w: Vec<u16> = exe.as_os_str().encode_wide().chain([0]).collect();
+        let line = args
+            .iter()
+            .map(|a| quote(a))
+            .chain(["--desktop-inner".to_string()])
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut cmd: Vec<u16> = line.encode_utf16().chain([0]).collect();
+        let name: Vec<u16> = "ndir-t4\0".encode_utf16().collect();
+        // SAFETY: 모든 버퍼는 호출 동안 살아 있고 NUL로 끝난다 · 구조체는 0으로 채운 뒤 필요한 칸만 · 핸들은 끝에 닫는다.
+        unsafe {
+            let desk = CreateDesktopW(
+                name.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                GENERIC_ALL,
+                std::ptr::null(),
+            );
+            if desk == 0 {
+                eprintln!("(desktop) CreateDesktopW 실패 — 사용자 데스크톱에서 실행");
+                return None;
+            }
+            let mut si: StartupInfoW = std::mem::zeroed();
+            si.cb = std::mem::size_of::<StartupInfoW>() as u32;
+            si.desktop = name.as_ptr();
+            si.flags = STARTF_USESTDHANDLES;
+            si.std_in = GetStdHandle(STD_INPUT_HANDLE);
+            si.std_out = GetStdHandle(STD_OUTPUT_HANDLE);
+            si.std_err = GetStdHandle(STD_ERROR_HANDLE);
+            let mut pi: ProcessInformation = std::mem::zeroed();
+            let ok = CreateProcessW(
+                exe_w.as_ptr(),
+                cmd.as_mut_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+                &si,
+                &mut pi,
+            );
+            if ok == 0 {
+                CloseDesktop(desk);
+                eprintln!("(desktop) CreateProcessW 실패 — 사용자 데스크톱에서 실행");
+                return None;
+            }
+            eprintln!("(desktop ndir-t4) 시나리오 창은 대체 데스크톱에 — NDIR_T4_DESKTOP=0 = 끔");
+            WaitForSingleObject(pi.process, INFINITE);
+            let mut code = 1u32;
+            GetExitCodeProcess(pi.process, &mut code);
+            CloseHandle(pi.thread);
+            CloseHandle(pi.process);
+            CloseDesktop(desk);
+            Some(ExitCode::from(code.min(255) as u8))
+        }
     }
 }
