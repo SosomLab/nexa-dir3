@@ -64,6 +64,18 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Mon Nov 03 2026 Sangyong Bae <kiros33@gmail.com> - 0.29.0-1
+- Transfers: new setting "When a folder with the same name exists" — Merge (default, as
+  before), Replace (removes the old folder entirely) or Keep both ("Name (2)" beside, no
+  prompt); the folder overwrite prompt says Merge/Replace accordingly. nexa-copy
+  --dir-conflict merge|replace|keep. Completion window auto-closes after 0.5 s (was 2 s).
+- Status bar: notices stay 4 s (configurable) instead of being replaced by the item count
+  at once; "another instance is transferring" is also shown as a toast.
+- Window transparency: the main window no longer dims when focus moves to one of the app's
+  own dialogs or tool windows; it dims only when another application takes focus.
+- Fix: Ctrl+C / Ctrl+V with a folder selected copied it into itself endlessly; it now makes
+  "Name (2)" beside it and the engine refuses copies into self/subfolder on every path.
+
 * Sun Nov 02 2026 Sangyong Bae <kiros33@gmail.com> - 0.28.1-1
 - Fix: "This PC" did not re-read drive free space on refresh (F5 / Refresh button); the
   value only changed after entering a drive and coming back. Refresh, drive changes and

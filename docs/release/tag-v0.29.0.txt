@@ -1,0 +1,11 @@
+Nexa Dir 0.29.0 — folder-conflict policy · status-bar notice hold · window-group transparency · no console flashes
+
+Highlights since 0.28.1:
+- Transfers: new setting "When a folder with the same name exists" — Merge (default, same as before: replaces same-named files and keeps items that exist only in the destination), Replace (removes the old folder entirely) or Keep both (the new folder lands beside the old one as "Name (2)" without asking). The folder overwrite prompt now says Merge or Replace according to the setting; file conflicts are asked as before. CLI: nexa-copy --dir-conflict merge|replace|keep.
+- Transfers: the completion window auto-closes after 0.5 s (was 2 s). Settings imported from nexa-dir2 keep the value you had there.
+- Status bar: notices on the left (transfer summary, queue notices, errors) stay for 4 s (setting "Status bar notice hold", 0 = previous behavior) instead of being replaced at once by the item count. "Another instance is transferring" is also shown as a toast.
+- Window transparency: the main window no longer dims when focus moves to one of Nexa Dir's own dialogs or tool windows — the app's windows count as one group; it dims only when another application takes focus.
+- Windows: helper processes the app starts internally (git status, open/view, previews) no longer flash a console window.
+- Fix: with a folder selected, Ctrl+C then Ctrl+V copied the folder into itself endlessly. It now creates "Name (2)" beside it, and the engine refuses copies into itself or a subfolder on every path (drag and drop, CLI, queue).
+
+Packages: Windows MSI + portable zip, macOS Universal pkg/dmg, Linux deb/rpm (also via winget, Chocolatey, Homebrew tap and pkg.sosomlab.com).
