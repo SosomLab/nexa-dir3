@@ -337,21 +337,37 @@ pub(crate) mod tests {
             "빈 광고 + 실경로 = 지연 아님(확보 금지)"
         );
         assert!(is_delayed(&a, &c) && !is_delayed(&a, &a));
-        let tmp = Path::new("C:\\Users\\u\\AppData\\Local\\Temp");
-        assert!(under_dir(
-            Path::new("C:\\Users\\u\\AppData\\Local\\Temp\\7zO1\\a.txt"),
-            tmp
-        ));
-        assert!(under_dir(
-            Path::new("c:\\users\\U\\appdata\\local\\temp\\Temp1_x.zip\\b"),
-            tmp
-        ));
-        assert!(!under_dir(Path::new("D:\\Projects\\a.txt"), tmp));
-        assert!(
-            !under_dir(Path::new("C:\\Users\\u\\AppData\\Local\\Temporary\\a"), tmp),
-            "구성요소 불일치"
-        );
-        assert!(under_dir(tmp, tmp));
+        // `under_dir`는 OS 경로 구성요소 규칙을 따른다(Windows = 역슬래시 · unix = 슬래시 · CI 11-03 unix 빨강) → OS별 경로.
+        #[cfg(windows)]
+        {
+            let tmp = Path::new("C:\\Users\\u\\AppData\\Local\\Temp");
+            assert!(under_dir(
+                Path::new("C:\\Users\\u\\AppData\\Local\\Temp\\7zO1\\a.txt"),
+                tmp
+            ));
+            assert!(under_dir(
+                Path::new("c:\\users\\U\\appdata\\local\\temp\\Temp1_x.zip\\b"),
+                tmp
+            ));
+            assert!(!under_dir(Path::new("D:\\Projects\\a.txt"), tmp));
+            assert!(
+                !under_dir(Path::new("C:\\Users\\u\\AppData\\Local\\Temporary\\a"), tmp),
+                "구성요소 불일치"
+            );
+            assert!(under_dir(tmp, tmp));
+        }
+        #[cfg(not(windows))]
+        {
+            let tmp = Path::new("/tmp");
+            assert!(under_dir(Path::new("/tmp/7zO1/a.txt"), tmp));
+            assert!(
+                under_dir(Path::new("/TMP/Temp1_x.zip/b"), tmp),
+                "ASCII 대소문자 무시"
+            );
+            assert!(!under_dir(Path::new("/home/u/a.txt"), tmp));
+            assert!(!under_dir(Path::new("/tmpx/a"), tmp), "구성요소 불일치");
+            assert!(under_dir(tmp, tmp));
+        }
     }
 
     /// dir2 `steal_volatile_*`: 임시 폴더 안 파일·폴더는 스테이징으로 rename(원위치에서 사라짐 · 하위 보존) · 밖 항목은 손대지 않음 ·
