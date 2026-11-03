@@ -77,6 +77,19 @@ const WIN_H: f32 = 150.0;
 const QUEUE_HEAD_H: f32 = 22.0;
 const QUEUE_ROW_H: f32 = 22.0;
 const QUEUE_MAX_ROWS: usize = 4;
+
+/// 대기 행의 글자 버튼 셋([위로] [아래로] [삭제]) 히트 사각형(순수 · T-202 ④ · 11-03 시험 가능하게 분리): 오른쪽 끝 `right`에서 왼쪽으로
+/// `widths`(글자 폭) + 간격 `gap`만큼 차지 · 사각형은 글자 양옆 `gap/2`까지(이웃과 맞닿음 · 틈 없음) · 높이 = 행.
+fn queue_row_hits(right: i32, ry: i32, row_h: i32, gap: i32, widths: &[i32]) -> [Rect; 3] {
+    let btns_w: i32 = widths.iter().sum::<i32>() + gap * 3;
+    let mut x = right - btns_w + gap;
+    let mut hits = [Rect::new(0, 0, 0, 0); 3];
+    for (k, w) in widths.iter().take(3).enumerate() {
+        hits[k] = Rect::new(x - gap / 2, ry, w + gap, row_h);
+        x += w + gap;
+    }
+    hits
+}
 /// 충돌 버튼의 답 id(대화상자와 같다): 1 덮어쓰기 · 2 모두 덮어쓰기 · 3 건너뛰기 · 4 취소.
 const CF_IDS: [i32; 4] = [1, 2, 3, 4];
 const CF_KEYS: [&str; 4] = ["ops.yes", "ops.yesAll", "ops.skip", "ops.cancel"];
@@ -156,6 +169,7 @@ impl ProgressWin {
         self.queue.len()
     }
 
+    /// 대기 행 버튼 히트(마우스 누름 · `handle`) — 사각형은 그릴 때 [`queue_row_hits`]로 기록한다.
     fn queue_hit(&self, p: Point) -> Option<(usize, QueueAct)> {
         self.queue_hits.iter().enumerate().find_map(|(row, hits)| {
             [QueueAct::Up, QueueAct::Down, QueueAct::Remove]
@@ -612,12 +626,9 @@ impl ProgressWin {
                     let label =
                         nexa_ctl::draw::ellipsize_middle(&mut dc, row, wi - pad * 2 - btns_w);
                     dc.text(pad, ry, clip, &label, th.text);
-                    let mut x = wi - pad - btns_w + gap;
-                    let mut hits = [Rect::new(0, 0, 0, 0); 3];
-                    for (k, (l, w)) in labels.iter().zip(&widths).enumerate() {
-                        dc.text(x, ry, clip, l, th.accent);
-                        hits[k] = Rect::new(x - gap / 2, ry, w + gap, row_h);
-                        x += w + gap;
+                    let hits = queue_row_hits(wi - pad, ry, row_h, gap, &widths);
+                    for (l, r) in labels.iter().zip(&hits) {
+                        dc.text(r.x + gap / 2, ry, clip, l, th.accent);
                     }
                     self.queue_hits.push(hits);
                 }
@@ -724,5 +735,60 @@ mod tests {
                 .starts_with("closed Done - closing shortly | 50/200 25%"),
             "진행값 유지"
         );
+    }
+
+    /// T-202 ④ 잔여(11-03 · 종전 "행 버튼 클릭 = 실기만"): 대기 행 버튼 마우스 히트 — 사각형은 그릴 때와 같은 식 `queue_row_hits`(오른쪽 정렬 ·
+    /// 이웃과 맞닿음 · 틈 없음) · `queue_hit`이 (행, 동작)을 가른다 · 행 밖 · 버튼 왼쪽 = 없음 · 누름 기록은 `take_queue_action` 1회성.
+    #[test]
+    fn queue_row_buttons_hit_by_mouse() {
+        let widths = [30, 40, 50];
+        let (right, row_h, gap) = (300, 22, 10);
+        let r0 = queue_row_hits(right, 100, row_h, gap, &widths);
+        let r1 = queue_row_hits(right, 122, row_h, gap, &widths);
+        // 폭 = 글자 + gap · 맞닿음 · 마지막 버튼의 오른쪽 = right + gap/2(여백 안) · 높이 = 행.
+        assert_eq!(r0[0], Rect::new(right - 150 + 5, 100, 40, 22), "{r0:?}");
+        assert_eq!(r0[1].x, r0[0].x + r0[0].w);
+        assert_eq!(r0[2].x, r0[1].x + r0[1].w);
+        assert_eq!(r0[2].x + r0[2].w, right + gap / 2);
+        let mut w = ProgressWin::new();
+        w.set_queue(vec!["a".into(), "b".into()]);
+        w.queue_hits = vec![r0, r1];
+        let mid = |r: Rect| Point {
+            x: r.x + r.w / 2,
+            y: r.y + r.h / 2,
+        };
+        assert_eq!(w.queue_hit(mid(r0[0])), Some((0, QueueAct::Up)));
+        assert_eq!(w.queue_hit(mid(r0[1])), Some((0, QueueAct::Down)));
+        assert_eq!(w.queue_hit(mid(r0[2])), Some((0, QueueAct::Remove)));
+        assert_eq!(w.queue_hit(mid(r1[2])), Some((1, QueueAct::Remove)));
+        assert_eq!(
+            w.queue_hit(Point {
+                x: r0[0].x - 1,
+                y: 110
+            }),
+            None,
+            "버튼 왼쪽(라벨)"
+        );
+        assert_eq!(
+            w.queue_hit(Point {
+                x: mid(r0[0]).x,
+                y: 99
+            }),
+            None,
+            "행 위"
+        );
+        assert_eq!(
+            w.queue_hit(Point {
+                x: mid(r1[0]).x,
+                y: 144
+            }),
+            None,
+            "마지막 행 아래"
+        );
+        // 누름 기록(마우스 누름과 같은 길 `press_queue`) = 1회성.
+        let (row, act) = w.queue_hit(mid(r1[1])).unwrap();
+        w.press_queue(row, act);
+        assert_eq!(w.take_queue_action(), Some((1, QueueAct::Down)));
+        assert_eq!(w.take_queue_action(), None);
     }
 }
