@@ -11,7 +11,7 @@
 - OS 기본 컨트롤은 쓰지 않는다 — **전부 직접 그린다**(OS 간 차이 최소화 기조 · nexa-ui 계열 공통).
 - 원천(SSOT): 기능 = nexa-dir2 코드·문서(로컬 `../nexa-dir2`) · UI/기술 골격 = nexa-sql(`../nexa-sql`) · 컨트롤 = nexa-ui · 라이선스 = nexa-license. 조사 결과는 **[docs/port/](docs/port/00-index.md)** 이식 원장(접두 ID = 교차 검증 체크리스트).
 - 조직: **SosomLab** · 개발자: Sangyong Bae · kiros33@gmail.com · 라이선스: **PolyForm Noncommercial 1.0.0**(개인·비상업 무료 · 상업 유료).
-- 현 단계: **M7 배포 · M8 교차 검증 진행**. 공개 최신 = **v0.29.0**(11-03 태그 75ff1ef · DR-37 폴더 충돌 설정 · GAP-034 · GAP-039 창 묶음 투명도 · 콘솔 창 금지 · release run 41588710450 ✓ · winget #469333/#469334 OPEN(0.28.1 Portable #468006도 OPEN · GAP-041 가드 빈틈) · choco 0.29.0 Pending). **main = 0.30.0 후보**(11-03 코드 14: GAP-040 삭제 워커 · T-147 ① 글자 드롭+IDList · ② 가상 파일 드롭·클립보드 · T-93 메모리 창 · T-134 · T-137 · GAP-041 가드 — 실기 뒤 승격). 그 전 = v0.28.1(68d926b). 현황 · 다음 일 = [docs/STATUS.md](docs/STATUS.md)(원본) · 지난 회차 = [docs/archive/](docs/archive/).
+- 현 단계: **M7 배포 · M8 교차 검증 진행**. 공개 최신 = **v0.30.0**(11-03 태그 dff5251 · 가상 파일 드롭·붙여넣기 · 글자 드롭 · 완전 삭제 워커 · 메모리 창 · release run 41621963098 · winget·choco는 검수 중 직전 판 때문에 가드가 건너뜀 → 승인 뒤 수동 1회 · 그 전 v0.29.0 = 75ff1ef) · choco 0.29.0 Pending). 그 전 = v0.28.1(68d926b). 현황 · 다음 일 = [docs/STATUS.md](docs/STATUS.md)(원본) · 지난 회차 = [docs/archive/](docs/archive/).
 
 ## 2. 확정 결정 (요약 — 전문은 [docs/10](docs/10-decision-record.md))
 
