@@ -13180,3 +13180,47 @@ fn staged_drop_moves_into_panel_or_restores_on_reject() {
     assert!(dir.join("첨부.txt").is_file(), "앞서 옮긴 것은 그대로");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-147 ② 클립보드 가상 파일 붙여넣기(11-03): 워커 결과 채널을 `vpaste_tick`이 수거 — 진행 "n/m" 상태줄 · 끝(채널 닫힘) = 토스트(성공 · 실패 수) ·
+/// 생성된 최상위 = 실행 취소 `VPasteOp`(휴지통으로) · 바쁨 판정 · 가짜 클립보드 모드에서는 `vpaste_start`가 실 클립보드를 읽지 않는다(false).
+#[test]
+fn vpaste_job_tick_reports_and_records_undo() {
+    let (mut app, dir) = fixture("vpaste");
+    app.layout_for(1200, 800, 1.0);
+    assert!(
+        !app.vpaste_start(&dir),
+        "가짜 클립보드(시험) = 실 클립보드 안 읽음"
+    );
+    std::fs::write(dir.join("첨부.pdf"), b"pdf").unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.vpaste_job = Some(app::ops::VPasteJob {
+        rx,
+        cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        roots: vec![dir.join("첨부.pdf"), dir.join("없음.bin")],
+        total: 2,
+        done: 0,
+        failed: 0,
+    });
+    assert!(app.vpaste_busy() && app.startup_wait_busy("vpaste.wait"));
+    tx.send((0, true)).unwrap();
+    assert!(app.vpaste_tick(), "진행 수거");
+    assert_eq!(
+        app.statusbar.left(),
+        trf("clip.vpasteProgress", &["1", "2"])
+    );
+    tx.send((1, false)).unwrap();
+    drop(tx);
+    assert!(app.vpaste_tick(), "끝 = 채널 닫힘");
+    assert!(!app.vpaste_busy());
+    let toasts = app.panel_toasts[app.active].bodies();
+    assert!(
+        toasts
+            .iter()
+            .any(|t| t.contains(&trf("clip.vpasteDone", &["1"]))
+                && t.contains(&trf("clip.vpasteFail", &["1"]))),
+        "{toasts:?}"
+    );
+    assert!(app.history.can_undo(), "생성물 = 실행 취소 기록");
+    app.vpaste_cancel(); // 잡 없음 = 무동작
+    let _ = std::fs::remove_dir_all(&dir);
+}

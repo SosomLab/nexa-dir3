@@ -62,6 +62,63 @@ impl ReversibleOp for TrashOp {
     }
 }
 
+/// 가상 파일 붙여넣기 생성물(T-147 ② 클립보드 · dir2 X-42 2차-ⓒ `VPasteOp`): 원본 경로가 없어 재복사가 불가하므로 [`TrashOp`]의 **역방향** —
+/// undo = 생성물을 휴지통으로 · redo = 휴지통에서 원위치 복원.
+pub(crate) struct VPasteOp {
+    paths: Vec<PathBuf>,
+    description: String,
+    trash: Rc<dyn Trash>,
+}
+
+impl std::fmt::Debug for VPasteOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VPasteOp")
+            .field("paths", &self.paths)
+            .field("description", &self.description)
+            .finish_non_exhaustive()
+    }
+}
+
+impl VPasteOp {
+    pub(crate) fn new(paths: Vec<PathBuf>, description: String, trash: Rc<dyn Trash>) -> Self {
+        VPasteOp {
+            paths,
+            description,
+            trash,
+        }
+    }
+}
+
+impl ReversibleOp for VPasteOp {
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn undo(&mut self) -> Result<(), OpError> {
+        let present: Vec<PathBuf> = self.paths.iter().filter(|p| p.exists()).cloned().collect();
+        if present.is_empty() {
+            return Ok(());
+        }
+        match self.trash.trash(&present) {
+            Ok(n) if n >= present.len() => Ok(()),
+            Ok(n) => Err(OpError::Failed(present.len() - n)),
+            Err(_) => Err(OpError::Failed(present.len())),
+        }
+    }
+
+    fn redo(&mut self) -> Result<(), OpError> {
+        let missing: Vec<PathBuf> = self.paths.iter().filter(|p| !p.exists()).cloned().collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        match self.trash.restore(&missing) {
+            Ok(n) if n >= missing.len() => Ok(()),
+            Ok(n) => Err(OpError::Failed(missing.len() - n)),
+            Err(_) => Err(OpError::Failed(missing.len())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

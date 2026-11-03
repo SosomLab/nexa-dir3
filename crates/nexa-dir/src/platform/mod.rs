@@ -2761,3 +2761,52 @@ mod x11_link {
         }
     }
 }
+
+// ───────────────────────── 클립보드 가상 파일 붙여넣기(T-147 ② · Windows `winvirtual` · 다른 OS = 없음)
+
+/// 붙여넣기 계획(UI 스레드에서 만든다 · 워커가 소비). 다른 OS에는 가상 파일 클립보드가 없다.
+pub(crate) struct VPastePlan {
+    #[cfg(windows)]
+    inner: winvirtual::VPastePlan,
+    /// 생성될 최상위 경로(완료 뒤 실행 취소 기록 · 재열람).
+    pub(crate) roots: Vec<PathBuf>,
+    /// 항목 수(폴더 포함 · 진행 "n/m").
+    pub(crate) items: usize,
+}
+
+/// OS 클립보드에 가상 파일(FileGroupDescriptorW)이 있으면 `dest_dir` 기준 계획 — 없거나 Windows가 아니면 `None`. 실 클립보드를 읽으므로
+/// 가짜 클립보드 모드(`NDIR_FAKE_CLIPBOARD` · 시험)에서는 부르지 않는다(호출부가 거른다).
+pub(crate) fn vpaste_plan(dest_dir: &Path) -> Option<VPastePlan> {
+    #[cfg(windows)]
+    {
+        let inner = winvirtual::plan_clipboard_paste(dest_dir)?;
+        let roots = inner.roots.clone();
+        let items = inner.ops.len();
+        Some(VPastePlan {
+            inner,
+            roots,
+            items,
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = dest_dir;
+        None
+    }
+}
+
+/// 계획 실행(워커 스레드): 항목마다 `(index, ok)` · 끝 = 채널 닫힘 · `cancel` = 남은 항목 건너뜀.
+pub(crate) fn vpaste_run(
+    plan: VPastePlan,
+    tx: std::sync::mpsc::Sender<(usize, bool)>,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) {
+    #[cfg(windows)]
+    {
+        let _ = winvirtual::run_virtual_paste(plan.inner, tx, cancel);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (plan, tx, cancel);
+    }
+}

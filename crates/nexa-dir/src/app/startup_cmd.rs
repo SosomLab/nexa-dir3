@@ -1079,11 +1079,14 @@ impl App {
                     || self.transfer_busy()
                     || self.trash_busy()
                     || self.delete_busy()
+                    || self.vpaste_busy()
             }
             // 휴지통 워커(Windows `trash_async` · 미러 삭제 실기 · 10-26).
             "trash.wait" => self.trash_busy(),
             // 완전 삭제 워커(GAP-040 · 11-03).
             "delete.wait" => self.delete_busy(),
+            // 클립보드 가상 파일 붙여넣기 워커(T-147 ② · 11-03).
+            "vpaste.wait" => self.vpaste_busy(),
             "dirsize.wait" => self.dirsizes.running() || self.dirsizes.display_pending(),
             "git.wait" => !self.git_busy.is_empty(),
             _ => false,

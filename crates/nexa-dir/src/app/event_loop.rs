@@ -311,6 +311,13 @@ impl ApplicationHandler<Wake> for App {
         if self.delete_busy() {
             next = next.min(now + Duration::from_millis(50));
         }
+        // 클립보드 가상 파일 붙여넣기 워커(T-147 ②) — 항목별 결과 수거 · 끝나면 결과 반영.
+        if self.vpaste_tick() {
+            self.redraw();
+        }
+        if self.vpaste_busy() {
+            next = next.min(now + Duration::from_millis(50));
+        }
         if self
             .panels
             .iter()
@@ -457,6 +464,7 @@ impl ApplicationHandler<Wake> for App {
         match &event {
             WindowEvent::CloseRequested => {
                 self.exit_requested = true;
+                self.vpaste_cancel(); // 클립보드 가상 파일 붙여넣기 중이면 남은 항목은 건너뛴다(T-147 ②)
                 #[cfg(target_os = "macos")]
                 platform::macql::hide(); // 패널의 assign 참조가 우리 객체보다 먼저 끊기게
                 self.persist_window();

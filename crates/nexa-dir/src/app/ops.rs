@@ -228,7 +228,11 @@ impl App {
     /// `edit.paste`.
     pub(crate) fn paste(&mut self) {
         let Some((sources, cut)) = self.clip_sources() else {
-            self.status_note(&tr("clip.empty"));
+            // 실제 파일이 없으면 가상 파일 폴백(T-147 ② · Outlook 첨부 · zip 안 · MTP → 워커 붙여넣기) — 그것도 없으면 안내.
+            let dest = self.paste_dest();
+            if !self.vpaste_start(&dest) {
+                self.status_note(&tr("clip.empty"));
+            }
             return;
         };
         let mut dest = self.paste_dest();
@@ -1156,5 +1160,132 @@ impl App {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn history(&self) -> &OperationHistory {
         &self.history
+    }
+}
+
+/// 클립보드 가상 파일 붙여넣기 워커(T-147 ② · SHELL-046~049): 워커가 항목마다 `(index, ok)`를 보내고 끝나면 채널을 닫는다 — `vpaste_tick`이 수거.
+pub(crate) struct VPasteJob {
+    pub(crate) rx: std::sync::mpsc::Receiver<(usize, bool)>,
+    pub(crate) cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub(crate) roots: Vec<PathBuf>,
+    pub(crate) total: usize,
+    pub(crate) done: usize,
+    pub(crate) failed: usize,
+}
+
+impl App {
+    /// 클립보드에 실제 파일(CF_HDROP)이 없을 때의 폴백(dir2 X-42): 가상 파일(Outlook 첨부 · zip 안 · MTP)이 있으면 `dest`로 **워커** 붙여넣기 시작.
+    /// 돌려주는 값 = 시작했는가. 동시 1잡 · 가짜 클립보드 모드(시험)에서는 실 클립보드를 읽지 않는다.
+    pub(crate) fn vpaste_start(&mut self, dest: &std::path::Path) -> bool {
+        if platform::fake_clipboard() || self.vpaste_job.is_some() || !dest.is_dir() {
+            return false;
+        }
+        let Some(plan) = platform::vpaste_plan(dest) else {
+            return false;
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (roots, total) = (plan.roots.clone(), plan.items);
+        platform::vpaste_run(plan, tx, std::sync::Arc::clone(&cancel));
+        self.vpaste_job = Some(VPasteJob {
+            rx,
+            cancel,
+            roots,
+            total,
+            done: 0,
+            failed: 0,
+        });
+        self.status_note(&trf("clip.vpasteProgress", &["0", &total.to_string()]));
+        self.redraw();
+        true
+    }
+
+    pub(crate) fn vpaste_busy(&self) -> bool {
+        self.vpaste_job.is_some()
+    }
+
+    /// 워커 수거(틱) — 진행이 바뀌었거나 끝났으면 `true`.
+    pub(crate) fn vpaste_tick(&mut self) -> bool {
+        let (changed, finished, done, total) = {
+            let Some(job) = &mut self.vpaste_job else {
+                return false;
+            };
+            let mut changed = false;
+            let mut finished = false;
+            loop {
+                match job.rx.try_recv() {
+                    Ok((_, ok)) => {
+                        job.done += 1;
+                        if !ok {
+                            job.failed += 1;
+                        }
+                        changed = true;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        finished = true;
+                        break;
+                    }
+                }
+            }
+            (changed, finished, job.done, job.total)
+        };
+        if finished {
+            let job = self.vpaste_job.take().expect("checked above");
+            self.vpaste_finish(job);
+            return true;
+        }
+        if changed {
+            self.status_note(&trf(
+                "clip.vpasteProgress",
+                &[&done.to_string(), &total.to_string()],
+            ));
+        }
+        changed
+    }
+
+    /// 결과 반영: 토스트(붙여넣은 수 · 실패 수) · 생성된 최상위 = 실행 취소(`VPasteOp` · 휴지통으로) · 재열람.
+    fn vpaste_finish(&mut self, job: VPasteJob) {
+        let created: Vec<PathBuf> = job.roots.into_iter().filter(|p| p.exists()).collect();
+        let ok = job.done.saturating_sub(job.failed);
+        let mut text = trf("clip.vpasteDone", &[&ok.to_string()]);
+        if job.failed > 0 {
+            text.push_str(" · ");
+            text.push_str(&trf("clip.vpasteFail", &[&job.failed.to_string()]));
+        }
+        if !created.is_empty() {
+            let n = created.len().to_string();
+            self.history.push(Box::new(trashop::VPasteOp::new(
+                created,
+                trf("clip.vpasteOp", &[&n]),
+                Rc::clone(&self.platform.trash),
+            )));
+        }
+        let a = self.active;
+        self.toast_panel(
+            a,
+            if job.failed > 0 {
+                toast::ToastKind::Warn
+            } else {
+                toast::ToastKind::Info
+            },
+            tr("menu.edit.paste"),
+            text,
+        );
+        let mut inv = Invalidations::default();
+        for p in &mut self.panels {
+            p.reopen(&mut inv);
+        }
+        self.status_hold = None;
+        self.update_status();
+    }
+}
+
+impl App {
+    /// 붙여넣기 워커에 취소 신호(남은 항목 건너뜀 · 쓰다 만 파일 삭제) — 창 닫기 · 기동 명령 `vpaste.cancel`.
+    pub(crate) fn vpaste_cancel(&self) {
+        if let Some(job) = &self.vpaste_job {
+            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 }
