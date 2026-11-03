@@ -38,6 +38,8 @@ pub struct JobSpec {
     pub sources: Vec<PathBuf>,
     pub dest: PathBuf,
     pub conflict: ConflictPolicy,
+    /// 폴더 이름 충돌 처리(DR-37 · 11-02): 덮어쓰기의 뜻 = 교체 | 병합(기본) · 보관 = 묻지 않고 " (2)" 옆에(`fastcopy::with_dir_conflict`).
+    pub dir_conflict: ndir_ops::DirConflict,
     /// 0 = 자동(장치 판정).
     pub threads: usize,
     pub native: bool,
@@ -67,6 +69,7 @@ impl Default for JobSpec {
             sources: Vec::new(),
             dest: PathBuf::new(),
             conflict: ConflictPolicy::Skip,
+            dir_conflict: ndir_ops::DirConflict::Merge,
             threads: 0,
             native: true,
             unbuffered_mb: 0, // 엔진 기본과 같다(캐시 우회 = 실측 손해 · docs/24 §6-2 · 간단 인자와 한 길)
@@ -145,6 +148,11 @@ impl JobSpec {
             "overwrite" => ConflictPolicy::Overwrite,
             other => return Err(format!("conflict: expected skip|overwrite, got '{other}'")),
         };
+        if let Some(v) = j.get("dir_conflict") {
+            let v = v.as_str().ok_or("dir_conflict: expected a string")?;
+            s.dir_conflict = ndir_ops::DirConflict::parse(v)
+                .ok_or_else(|| format!("dir_conflict: expected replace|merge|keep, got '{v}'"))?;
+        }
         if let Some(t) = j.get("threads") {
             s.threads = t.as_u64().ok_or("threads: expected a number")?.min(64) as usize;
         }
@@ -224,6 +232,10 @@ impl JobSpec {
                     .into(),
                 ),
             ),
+            (
+                "dir_conflict".into(),
+                Json::Str(self.dir_conflict.as_str().into()),
+            ),
             ("threads".into(), Json::Num(self.threads as f64)),
             ("native".into(), Json::Bool(self.native)),
             ("unbuffered_mb".into(), Json::Num(self.unbuffered_mb as f64)),
@@ -259,6 +271,7 @@ mod tests {
             sources: vec![PathBuf::from("/a/x"), PathBuf::from("/a/y")],
             dest: PathBuf::from("/b"),
             conflict: ConflictPolicy::Overwrite,
+            dir_conflict: ndir_ops::DirConflict::KeepBoth,
             threads: 4,
             native: false,
             unbuffered_mb: 8,

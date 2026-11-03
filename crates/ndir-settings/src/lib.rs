@@ -1257,7 +1257,7 @@ mod tests {
         assert_eq!(s.get("typeahead.hud_pos"), Some("bottom_left"));
         assert_eq!(s.position_index("typeahead.hud_pos"), 6);
         assert_eq!(s.position_index("scroll.fast_hud_pos"), 2);
-        assert_eq!(s.int("transfer.close_ms"), 2000);
+        assert_eq!(s.int("transfer.close_ms"), 500); // 사용자 11-02(DR-36 · dir2 2000)
         assert_eq!(s.get("term.theme_dark"), Some("campbell"));
         assert_eq!(s.get("term.theme_light"), Some("github-light"));
         assert_eq!(s.get("tabs.dblclick"), Some("close"));

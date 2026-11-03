@@ -93,6 +93,8 @@ thread_local! {
     static MOVE_VERIFY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// 검증 목록 수집 깃발([`with_verify_collect`] · GAP-027 · 11-01) — 복사가 실제로 옮긴 원본 경로를 `Outcome::copied_paths`에 적는다.
     static VERIFY_COLLECT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// 이 스레드의 폴더 충돌 처리([`with_dir_conflict`] · DR-37 · 11-02) — 계획(`placement`)과 커밋(`commit_replace` · `rename_onto`)이 읽는다.
+    static DIR_CONFLICT: std::cell::Cell<crate::DirConflict> = const { std::cell::Cell::new(crate::DirConflict::Merge) };
     /// 검증 목록 싱크([`collect_verify`]) — `plan`이 들어간 폴더 · `copy_tree`가 끝낸 모든 작업의 원본(`record` 무관 · 링크 안쪽 포함).
     static VERIFY_SINK: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
 }
@@ -151,6 +153,25 @@ pub fn with_move_verify<R>(on: bool, f: impl FnOnce() -> R) -> R {
 #[must_use]
 pub fn move_verify() -> bool {
     MOVE_VERIFY.with(std::cell::Cell::get)
+}
+
+/// 폴더 충돌 처리(DR-37 · 설정 `transfer.dir_conflict` · CLI `--dir-conflict`): `f` 동안 이 스레드의 값을 바꾼다(끝나면 복원 ·
+/// 병렬 시험 격리). 폴더 병렬 복사의 작업 스레드는 파일만 다루므로 모드를 읽지 않는다.
+pub fn with_dir_conflict<R>(mode: crate::DirConflict, f: impl FnOnce() -> R) -> R {
+    struct Restore(crate::DirConflict);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            DIR_CONFLICT.with(|c| c.set(self.0));
+        }
+    }
+    let _restore = Restore(DIR_CONFLICT.with(|c| c.replace(mode)));
+    f()
+}
+
+/// 이 스레드의 폴더 충돌 처리(기본 병합).
+#[must_use]
+pub fn dir_conflict() -> crate::DirConflict {
+    DIR_CONFLICT.with(std::cell::Cell::get)
 }
 
 /// 속도 제한기(T-202 ③ · docs/26 §8): 실제로 바이트를 옮기는 경로(읽고 쓰는 루프 · Linux `copy_file_range` · Windows `CopyFileExW` ·

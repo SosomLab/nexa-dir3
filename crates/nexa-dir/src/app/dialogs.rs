@@ -52,6 +52,19 @@ pub(crate) fn overwrite_question(path: &std::path::Path) -> String {
     trf("ops.overwrite", &[&ndir_ops::leaf_name(path), &folder])
 }
 
+/// **폴더** 충돌 질문(DR-37 · 사용자 11-02 "병합 처리 안내"): 설정의 뜻(병합/교체)을 질문 글에 — 보관은 묻지 않으므로 오지 않는다(오면 병합 글).
+pub(crate) fn dir_question(path: &std::path::Path, mode: ndir_ops::DirConflict) -> String {
+    let folder = path
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let key = match mode {
+        ndir_ops::DirConflict::Replace => "ops.replaceDir",
+        _ => "ops.mergeDir",
+    };
+    trf(key, &[&ndir_ops::leaf_name(path), &folder])
+}
+
 impl App {
     /// 대화상자 요청(이미 하나가 열려 있거나 대기 중이면 거절 — 동시 1건 · 상태줄 안내).
     pub(crate) fn ask(&mut self, spec: DlgSpec, reply: DlgReply) -> bool {
@@ -268,8 +281,13 @@ impl App {
 
     /// 질문 글 — 재개 중 끊긴 덮어쓰기 사본(docs/26 §12.7 · 저널 started 줄 · `TransferJob.interrupted`)이면 "이전 전송에서 중단된 사본 ·
     /// 덮어쓰기 권장" + 지금 대상의 크기 · 시각 줄을 덧붙인다(사람이 보고 가른다 · 기본 버튼 = 1 덮어쓰기는 dir2와 같다 · 협업 확인 ⑶).
-    fn conflict_question(&self, path: &std::path::Path) -> String {
-        let mut q = overwrite_question(path);
+    pub(crate) fn conflict_question(&self, path: &std::path::Path) -> String {
+        // 폴더면 설정(DR-37)의 뜻을 질문에 — 파일은 종전 글.
+        let mut q = if path.is_dir() {
+            dir_question(path, Self::dir_conflict_mode(&self.settings))
+        } else {
+            overwrite_question(path)
+        };
         if self
             .transfer
             .as_ref()

@@ -150,6 +150,8 @@ open.failed = ‘{0}’을(를) 열 수 없음 — 시스템 핸들러가 코드
 ops.canceled = 취소됨
 ops.overwriteTitle = 덮어쓰기 확인
 ops.overwrite = '{0}'이(가) 대상 폴더에 이미 있습니다. 덮어쓸까요?\n대상 폴더: {1}\n(아니오=이 항목 건너뜀 · 취소=전체 중단)
+ops.mergeDir = '{0}' 폴더가 대상 폴더에 이미 있습니다. 병합할까요?\n대상 폴더: {1}\n병합 = 같은 이름의 파일만 새 것으로 바꾸고, 대상에만 있던 항목은 그대로 둡니다.\n(아니오=이 항목 건너뜀 · 취소=전체 중단)
+ops.replaceDir = '{0}' 폴더가 대상 폴더에 이미 있습니다. 교체할까요?\n대상 폴더: {1}\n교체 = 옛 폴더를 통째로 지웁니다(대상에만 있던 항목 포함).\n(아니오=이 항목 건너뜀 · 취소=전체 중단)
 del.title = 삭제
 del.confirm = {0}개 항목을 영구 삭제할까요?
 del.kindRecycle = 휴지통
@@ -898,6 +900,11 @@ ops.itemBusy = 전송 중인 항목 — 완료 후 열 수 있습니다
 pref.cat.transfer = 파일 전송
 pref.transferClose = 완료 창 닫기 시간(ms, 0~10000)
 pref.transferClose.desc = 복사/이동 완료 후 진행 창이 닫히기까지의 시간(밀리초)입니다. 0이면 진행 창을 표시하지 않습니다.
+pref.dirConflict = 같은 이름의 폴더가 있을 때
+pref.dirConflict.desc = 복사·이동하는 폴더가 대상에 이미 있을 때의 처리입니다. 병합은 대상에만 있던 항목을 남기고 같은 이름의 파일만 바꿉니다. 교체는 옛 폴더를 통째로 지웁니다. 보관은 옛 폴더를 그대로 두고 새 폴더를 "폴더 (2)"처럼 묻지 않고 옆에 둡니다.
+pref.dirConflict.replace = 교체(옛 폴더 삭제)
+pref.dirConflict.merge = 병합(기본)
+pref.dirConflict.keep = 보관(새 폴더에 " (2)")
 # DnD 호버 대기(X-32) — 드래그 중 탭/접힌 폴더 위 대기 시 전환·펼침
 pref.dndHover = 드래그 호버 전환 시간(ms, 200~10000)
 pref.dndHover.desc = 드래그 중 탭이나 접힌 폴더 위에 머물렀을 때 탭 전환·폴더 펼침까지 기다리는 시간(밀리초)입니다. 기본 3000ms(3초).

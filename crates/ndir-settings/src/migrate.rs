@@ -329,6 +329,8 @@ mod tests {
                 ("list.view_scope", "panel".to_string()),
                 // 타입어헤드 초기화 시간: dir3 기본 = 2000(nexa-sql 기준 · 사용자 10-05) — dir2에서 쓰던 1000을 지킨다.
                 ("typeahead.reset_ms", "1000".to_string()),
+                // 전송 완료 창 자동 닫기: dir3 기본 = 500(DR-36 · 사용자 11-02) — dir2에서 쓰던 2000을 지킨다(사용자 11-03 ⓐ).
+                ("transfer.close_ms", "2000".to_string()),
                 ("term.wrap", "on".to_string())
             ],
             "{modified:?}"

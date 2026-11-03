@@ -350,7 +350,9 @@ pub fn run_full(
         }
     };
     if spec.dry_run {
-        let plan = plan_transfer(&sources, &spec.dest, spec.op, &mut resolve);
+        let plan = fastcopy::with_dir_conflict(spec.dir_conflict, || {
+            plan_transfer(&sources, &spec.dest, spec.op, &mut resolve)
+        });
         for it in &plan.items {
             let (action, status, note) = match &it.action {
                 PlanAction::Transfer => (verb(spec.op), "planned", String::new()),
@@ -481,19 +483,21 @@ pub fn run_full(
     // 속도 제한(T-202 ③): 전송 단계만(검증 읽기는 제한하지 않음) · 복제 경로는 세지 않음 · 병렬 작업 스레드 합계(`fastcopy::Pacer`).
     // 이동 검증(T-202 ⑤): `verify` + move = 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 failed · 원본·사본 유지).
     // 복사 검증(GAP-027 · 11-01): 전송이 실제로 옮긴 경로 목록을 모아(`with_verify_collect`) 그 목록만 대조 — 원본 트리를 다시 훑지 않는다.
-    let out = fastcopy::with_verify_collect(spec.verify && spec.op == Op::Copy, || {
-        fastcopy::with_move_verify(spec.verify && spec.op == Op::Move, || {
-            fastcopy::with_pacer(spec.max_bps, || {
-                fastcopy::with_filter(spec.filter.clone(), || {
-                    transfer_with(
-                        &sources,
-                        &spec.dest,
-                        spec.op,
-                        &mut resolve,
-                        &mut on_event,
-                        cancel,
-                        &tuning,
-                    )
+    let out = fastcopy::with_dir_conflict(spec.dir_conflict, || {
+        fastcopy::with_verify_collect(spec.verify && spec.op == Op::Copy, || {
+            fastcopy::with_move_verify(spec.verify && spec.op == Op::Move, || {
+                fastcopy::with_pacer(spec.max_bps, || {
+                    fastcopy::with_filter(spec.filter.clone(), || {
+                        transfer_with(
+                            &sources,
+                            &spec.dest,
+                            spec.op,
+                            &mut resolve,
+                            &mut on_event,
+                            cancel,
+                            &tuning,
+                        )
+                    })
                 })
             })
         })

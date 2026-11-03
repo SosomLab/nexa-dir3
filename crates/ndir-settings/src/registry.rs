@@ -25,6 +25,12 @@ const TOAST_POS_OPTS: &[(&str, &str)] = &[
     ("top-left", "pref.toastPos.tl"),
 ];
 /// 플래시 메시지 배경 상자(nexa-sql `FLASH_SHAPE_OPTS` · 10-07).
+/// 폴더 이름 충돌 처리(DR-37 · 사용자 11-02): 교체 · 병합(기본) · 보관(" (2)" 옆에).
+const DIR_CONFLICT_OPTS: &[(&str, &str)] = &[
+    ("replace", "pref.dirConflict.replace"),
+    ("merge", "pref.dirConflict.merge"),
+    ("keep", "pref.dirConflict.keep"),
+];
 const FLASH_SHAPE_OPTS: &[(&str, &str)] = &[
     ("rect", "pref.flashShape.rect"),
     ("rounded", "pref.flashShape.rounded"),
@@ -1470,7 +1476,16 @@ pub const REGISTRY: &[Entry] = &[
         "pref.transferClose",
         "pref.transferClose.desc",
         Int { min: 0, max: 10000 },
-        "2000"
+        "500" // dir2 = 2000 · 사용자 결정 11-02(DR-36) = 0.5 s
+    ),
+    // 폴더 이름 충돌(DR-37 · 11-02): 덮어쓰기의 뜻 = 교체 | 병합(기본) · 보관 = 묻지 않고 " (2)" 옆에. 파일 충돌은 종전 질문 그대로.
+    e!(
+        "transfer.dir_conflict",
+        CAT_TRANSFER,
+        "pref.dirConflict",
+        "pref.dirConflict.desc",
+        Choice(DIR_CONFLICT_OPTS),
+        "merge"
     ),
     e!(
         "transfer.dnd_hover_ms",

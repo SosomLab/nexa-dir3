@@ -250,10 +250,26 @@ impl App {
         self.start_transfer(sources, dest, op, cut);
     }
 
+    /// 상태줄 왼쪽 안내 — `ui.status_note_ms` 동안 `update_status`(항목 수)가 덮지 않는다(GAP-034 · 협업 실측 11-01: 미러 삭제 결과 ·
+    /// 둘째 인스턴스 안내가 기동 직후 "n items"로 바로 덮였다). 0 = 종전대로 바로 덮임. 마감은 [`Self::status_tick`]이 본다.
     pub(crate) fn status_note(&mut self, text: &str) {
         let mut inv = Invalidations::default();
         self.statusbar.set_left(text, &mut inv);
+        let ms = self.settings.int("ui.status_note_ms").clamp(0, 30_000) as u64;
+        self.status_hold = (ms > 0).then(|| Instant::now() + Duration::from_millis(ms));
         self.redraw();
+    }
+
+    /// 안내 유지 마감 틱(GAP-034): 지났으면 항목 수로 되돌리고 `None` · 아직이면 깨울 시각.
+    pub(crate) fn status_tick(&mut self, now: Instant) -> Option<Instant> {
+        let d = self.status_hold?;
+        if now < d {
+            return Some(d);
+        }
+        self.status_hold = None;
+        self.update_status();
+        self.redraw();
+        None
     }
 
     /// 전송 시작 — 모든 복사/이동 진입점(붙여넣기 · DnD T-51 B · 컨텍스트 메뉴 · 라이선스 창)이 여기로. 명세를 만들어 **큐에 넣고**
@@ -281,6 +297,7 @@ impl App {
             sources,
             dest,
             conflict: ndir_xfer::ConflictPolicy::Skip,
+            dir_conflict: Self::dir_conflict_mode(&self.settings),
             threads: t.threads,
             native: t.native,
             unbuffered_mb: t.unbuffered_min / (1024 * 1024),
@@ -303,6 +320,14 @@ impl App {
             let n = self.transfer_queue.len().to_string();
             self.status_note(&trf("ops.queued", &[&n]));
         }
+    }
+
+    /// 폴더 이름 충돌 처리(DR-37 · 설정 `transfer.dir_conflict` · 모르는 값 = 병합).
+    pub(crate) fn dir_conflict_mode(settings: &ndir_settings::Settings) -> ndir_ops::DirConflict {
+        settings
+            .get("transfer.dir_conflict")
+            .and_then(ndir_ops::DirConflict::parse)
+            .unwrap_or_default()
     }
 
     /// 전송이 돌고 있다(머리 1건).
@@ -766,7 +791,8 @@ impl App {
                 "edit.undo",
             );
         }
-        self.statusbar.set_left(&parts.join(" · "), &mut inv);
+        // 결과 요약은 안내 경로(GAP-034 · 유지 시간 동안 항목 수로 안 덮임).
+        self.status_note(&parts.join(" · "));
         self.update_status();
         self.redraw();
         let _ = job.count;

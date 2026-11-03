@@ -51,6 +51,10 @@ Usage: nexa-copy [options] <source>... <destination-folder>
 Options:
   --move               move instead of copy
   --overwrite          overwrite existing items in the destination (default: skip)
+  --dir-conflict <m>   when a folder with the same name exists in the destination (Nexa Dir setting
+                       'When a folder with the same name exists'): merge (default) = replace same-named
+                       files only and keep the rest · replace = remove the old folder entirely ·
+                       keep = put the new folder beside it as 'name (2)' without asking
   --ask                ask on each conflict instead: prompt on stderr, answer on stdin —
                        y = overwrite · n = skip · a = overwrite all · s = skip all · c = cancel (exit 130)
   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, max 16
@@ -98,6 +102,8 @@ Exit code: 0 done · 1 some items failed (dry run: would fail) · 2 usage error 
 pub(crate) struct Options {
     pub op: Op,
     pub overwrite: bool,
+    /// 폴더 이름 충돌 처리(`--dir-conflict replace|merge|keep` · DR-37 · 기본 병합).
+    pub dir_conflict: ndir_ops::DirConflict,
     /// 충돌마다 묻기(`--ask` · stdin 한 줄 · 정책보다 우선 · dry-run에서는 건너뜀으로 본다).
     pub ask: bool,
     pub threads: usize,
@@ -142,6 +148,7 @@ impl Options {
             } else {
                 ConflictPolicy::Skip
             },
+            dir_conflict: self.dir_conflict,
             threads: self.threads,
             native: self.native,
             unbuffered_mb: self.unbuffered_mb,
@@ -200,6 +207,7 @@ pub(crate) enum Parsed {
 pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut op = Op::Copy;
     let mut overwrite = false;
+    let mut dir_conflict = ndir_ops::DirConflict::Merge;
     let mut ask = false;
     let mut threads = 0usize;
     let mut native = true;
@@ -232,6 +240,12 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
             "--move" => op = Op::Move,
             "--copy" => op = Op::Copy,
             "--overwrite" => overwrite = true,
+            "--dir-conflict" => {
+                let v = it.next().ok_or("--dir-conflict needs replace|merge|keep")?;
+                dir_conflict = ndir_ops::DirConflict::parse(v).ok_or_else(|| {
+                    format!("--dir-conflict: expected replace|merge|keep, got '{v}'")
+                })?;
+            }
             "--ask" => ask = true,
             "--skip" => overwrite = false,
             "--no-native" => native = false,
@@ -333,6 +347,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Parsed, String> {
     Ok(Parsed::Run(Options {
         op,
         overwrite,
+        dir_conflict,
         ask,
         threads,
         native,

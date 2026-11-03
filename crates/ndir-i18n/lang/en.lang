@@ -151,6 +151,8 @@ open.failed = Could not open “{0}” — the system handler exited with code {
 ops.canceled = canceled
 ops.overwriteTitle = Confirm Overwrite
 ops.overwrite = '{0}' already exists in the destination. Overwrite?\nDestination: {1}\n(No = skip this item · Cancel = stop all)
+ops.mergeDir = The folder '{0}' already exists in the destination. Merge?\nDestination: {1}\nMerge replaces same-named files only; items that exist only in the destination are kept.\n(No = skip this item · Cancel = stop all)
+ops.replaceDir = The folder '{0}' already exists in the destination. Replace it?\nDestination: {1}\nReplace removes the old folder entirely, including items that exist only there.\n(No = skip this item · Cancel = stop all)
 del.title = Delete
 del.confirm = Permanently delete {0} item(s)?
 del.kindRecycle = Recycle Bin
@@ -899,6 +901,11 @@ ops.itemBusy = Item is being transferred - available when complete
 pref.cat.transfer = File Transfer
 pref.transferClose = Close delay after transfer (ms, 0-10000)
 pref.transferClose.desc = How long (in milliseconds) the progress window stays open after a copy/move completes. 0 hides the progress window entirely.
+pref.dirConflict = When a folder with the same name exists
+pref.dirConflict.desc = What happens when a copied or moved folder already exists in the destination. Merge keeps items that exist only in the destination and replaces same-named files. Replace removes the old folder entirely. Keep both leaves the old folder untouched and names the new one like "Folder (2)" without asking.
+pref.dirConflict.replace = Replace (remove the old folder)
+pref.dirConflict.merge = Merge (default)
+pref.dirConflict.keep = Keep both (new folder gets " (2)")
 # DnD hover switch (X-32) - dwell on tab/collapsed folder while dragging
 pref.dndHover = Drag hover switch delay (ms, 200-10000)
 pref.dndHover.desc = How long (in milliseconds) to hover over a tab or a collapsed folder while dragging before it switches or expands. Default 3000 ms (3 s).

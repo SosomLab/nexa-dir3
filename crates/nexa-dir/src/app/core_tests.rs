@@ -4595,7 +4595,7 @@ fn font_sizes_use_em_convention_and_mono_font_loads() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// T-70 진행 창: 복사 시작 = 창 열기 요청(`transfer.close_ms` 기본 2000) · 틱마다 항목 세그먼트/파일 n/m 갱신 · 완료 = [닫기 (N)] 카운트다운 ·
+/// T-70 진행 창: 복사 시작 = 창 열기 요청(`transfer.close_ms` 기본 500 · 11-02 전 2000) · 틱마다 항목 세그먼트/파일 n/m 갱신 · 완료 = [닫기 (N)] 카운트다운 ·
 /// `transfer.close_ms=0` = 창 없음(제목줄 %만 — dir2).
 #[test]
 fn transfer_progress_window_updates_and_closes() {

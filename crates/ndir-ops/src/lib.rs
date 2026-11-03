@@ -38,6 +38,41 @@ pub enum Conflict {
     Skip,
 }
 
+/// **폴더** 이름 충돌 처리(사용자 결정 11-02 · DR-37 · 3-OS 공통): 대상에 같은 이름의 폴더가 있을 때 덮어쓰기(`Conflict::Overwrite`)의 뜻 ·
+/// 또는 묻지 않고 옆에 두기. 파일 충돌은 종전 그대로(덮어쓰기/건너뛰기). 현재 값 = [`fastcopy::dir_conflict`](스레드별 · ndir-xfer가 명세로 건다).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum DirConflict {
+    /// 교체: 옛 폴더를 통째로 치우고 새 폴더(dir2 OPS-011 · 대상에만 있던 항목은 사라진다).
+    Replace,
+    /// 병합(기본 · DR-35): 같은 이름 파일만 교체 · 둘 다 폴더면 안으로 · 대상에만 있던 항목은 남긴다.
+    #[default]
+    Merge,
+    /// 보관: 옛 폴더는 그대로 두고 새 폴더를 " (2)"처럼 순번 이름으로 옆에(묻지 않음 · 계획 = `Duplicate`).
+    KeepBoth,
+}
+
+impl DirConflict {
+    /// 설정 · CLI · JSON 값(`replace` · `merge` · `keep`).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "replace" => Some(DirConflict::Replace),
+            "merge" => Some(DirConflict::Merge),
+            "keep" => Some(DirConflict::KeepBoth),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DirConflict::Replace => "replace",
+            DirConflict::Merge => "merge",
+            DirConflict::KeepBoth => "keep",
+        }
+    }
+}
+
 /// 엔진이 만드는 오류의 **종류와 영어 문구**(라이브러리 규칙 · 프로그램 내부 문구는 영어 · 사용자 10-10 · 협업 점검 10-24 "CLI에 한글
 /// 리터럴"). CLI(`nexa-copy`)는 문구를 그대로 쓰고 · 앱은 [`OpsError::of`]로 종류를 되찾아 i18n 키(`ops.err.*`)로 바꾼다.
 /// 문구 뒤에 `: <경로>` 같은 꼬리가 붙을 수 있으므로 `of`는 접두 일치.
@@ -538,6 +573,10 @@ fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
         // 덮어쓰기 = 병합(11-01 사용자 결정 · 협업 d4 재현 차단) — **새 내용을 옛 대상 안으로** 옮긴다(협업 m6 재현 11-01: 옛 대상을 스테이징으로
         // 옮기던 첫 판은 병합 중 죽으면 대상이 사라지고 재개의 잔여 정리가 사용자 파일을 지웠다 — 6만 개 소실). 불변식: `tmp` = 새 내용만(지워도
         // 안전) · `old` = 사용자가 덮어쓰기로 동의한 교체분만 · 대상 폴더는 어느 순간에도 존재 · 같은 작업을 다시 돌리면 수렴.
+        // 교체(DR-37 `DirConflict::Replace` · 사용자 선택): 옛 폴더를 옆으로 치우고 새 폴더를 그 자리에 — 실패하면 옛 폴더 원복.
+        if fastcopy::dir_conflict() == DirConflict::Replace {
+            return replace_dir(staged, dest);
+        }
         let old = staging_path(dest, "old");
         merge_into(staged, dest, &old)?; // 실패 시 안에서 되돌림(옛 대상 그대로)
         let _ = fs::remove_dir_all(&old); // 교체된 옛 항목(동의분) — 새 대상은 이미 자리를 잡았다
@@ -550,6 +589,20 @@ fn commit_replace(staged: &Path, dest: &Path) -> io::Result<()> {
         return Err(type_mismatch(dest)); // 폴더로 파일을 덮어쓰기 = 그 항목 실패
     }
     fs::rename(staged, dest)
+}
+
+/// 폴더 **교체**(DR-37 `Replace`): `dest`(옛 폴더)를 `old` 스테이징으로 치우고 `new_root`(스테이징 사본 또는 같은 볼륨 원본)를 `dest`로 rename ·
+/// 실패하면 옛 폴더를 되돌린다 · 성공 뒤에만 옛 폴더를 지운다(옛 내용은 **전부 사라진다** — 사용자가 설정으로 고른 동작). 같은 부모라 rename 둘 다 즉시.
+fn replace_dir(new_root: &Path, dest: &Path) -> io::Result<()> {
+    let old = staging_path(dest, "old");
+    fs::rename(dest, &old)?;
+    if let Err(e) = fs::rename(new_root, dest) {
+        let _ = fs::rename(&old, dest);
+        return Err(e);
+    }
+    let _ = fs::remove_dir_all(&old);
+    remove_staging_leftovers(dest, &["tmp", "old"]);
+    Ok(())
 }
 
 /// 같은 이름이 파일 ↔ 폴더로 다르다(덮어쓰기 거부 · 탐색기도 묻거나 실패하는 경계).
@@ -738,6 +791,10 @@ fn rename_onto(src: &Path, dest: &Path, overwrite: bool, is_dir: bool) -> io::Re
     if overwrite && dest.is_dir() {
         if !is_dir {
             return Err(type_mismatch(dest)); // 파일로 폴더를 덮어쓰기 = 그 항목 실패
+        }
+        // 교체(DR-37 `Replace`): 옛 폴더를 치우고 원본 폴더를 rename — 실패 시 원복.
+        if fastcopy::dir_conflict() == DirConflict::Replace {
+            return replace_dir(src, dest);
         }
         // 병합(DR-35): 같은 볼륨이라 원본 항목을 바로 대상 안으로 옮긴다(옛 대상은 제자리 · 교체분만 old · 실패 시 되돌림) → 원본은 빈 뼈대만.
         let old = staging_path(dest, "old");
@@ -963,6 +1020,10 @@ fn placement(src: &Path, dest_dir: &Path, op: Op) -> Placement {
     }
     let dest = dest_dir.join(leaf_name(src));
     let exists = exists(&dest);
+    // 폴더 충돌 = 보관(DR-37 `DirConflict::KeepBoth`): 묻지 않고 옆에 순번 이름(" (2)"…) — 옛 폴더 불변.
+    if exists && is_dir && fastcopy::dir_conflict() == DirConflict::KeepBoth {
+        return Placement::Duplicate(unique_dest(dest_dir, &leaf_name(src), true));
+    }
     Placement::Into { dest, exists }
 }
 
@@ -1452,6 +1513,80 @@ mod tests {
         assert_eq!(out.transferred, vec![(a, d.join("a (2)"))]);
         assert_eq!(fs::read_to_string(d.join("a (2)/f.txt")).unwrap(), "1");
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// 폴더 충돌 처리 3종(DR-37 · 사용자 11-02): 병합(기본) = 같은 이름만 교체 · 대상에만 있던 것 유지 / 교체 = 옛 폴더 통째 소멸 /
+    /// 보관 = 묻지 않고 "a (2)" 옆에(옛 폴더 불변 · 계획 `Duplicate`). 복사(스테이징 커밋)와 같은 볼륨 이동(rename) 둘 다.
+    #[test]
+    fn dir_conflict_modes_replace_merge_keep() {
+        for op in [Op::Copy, Op::Move] {
+            for mode in [
+                DirConflict::Merge,
+                DirConflict::Replace,
+                DirConflict::KeepBoth,
+            ] {
+                let d = fixture(&format!("dirconf_{op:?}_{mode:?}"));
+                let (src, dst) = (d.join("src"), d.join("dst"));
+                fs::create_dir_all(src.join("a/deep")).unwrap();
+                fs::write(src.join("a/f.txt"), "new").unwrap();
+                fs::write(src.join("a/deep/n.txt"), "n").unwrap();
+                fs::create_dir_all(dst.join("a")).unwrap();
+                fs::write(dst.join("a/f.txt"), "old").unwrap();
+                fs::write(dst.join("a/only.txt"), "keep").unwrap();
+                let srcs = vec![src.join("a")];
+                let mut asked = 0;
+                let (plan, out) = fastcopy::with_dir_conflict(mode, || {
+                    let plan = plan_transfer(&srcs, &dst, op, &mut |_| Conflict::Overwrite);
+                    let out = run(&srcs, &dst, op, &mut |_| {
+                        asked += 1;
+                        Conflict::Overwrite
+                    });
+                    (plan, out)
+                });
+                assert!(out.errors.is_empty(), "{op:?} {mode:?}: {:?}", out.errors);
+                let a = dst.join("a");
+                match mode {
+                    DirConflict::Merge => {
+                        assert_eq!(plan.items[0].action, PlanAction::Overwrite);
+                        assert_eq!(asked, 1);
+                        assert_eq!(fs::read_to_string(a.join("f.txt")).unwrap(), "new");
+                        assert_eq!(fs::read_to_string(a.join("deep/n.txt")).unwrap(), "n");
+                        assert_eq!(fs::read_to_string(a.join("only.txt")).unwrap(), "keep");
+                    }
+                    DirConflict::Replace => {
+                        assert_eq!(plan.items[0].action, PlanAction::Overwrite);
+                        assert_eq!(asked, 1);
+                        assert_eq!(fs::read_to_string(a.join("f.txt")).unwrap(), "new");
+                        assert_eq!(fs::read_to_string(a.join("deep/n.txt")).unwrap(), "n");
+                        assert!(!a.join("only.txt").exists(), "교체 = 대상에만 있던 것 소멸");
+                    }
+                    DirConflict::KeepBoth => {
+                        assert_eq!(
+                            (&plan.items[0].action, &plan.items[0].dest),
+                            (&PlanAction::Duplicate, &dst.join("a (2)"))
+                        );
+                        assert_eq!(asked, 0, "보관 = 묻지 않음");
+                        assert_eq!(fs::read_to_string(a.join("f.txt")).unwrap(), "old");
+                        assert_eq!(fs::read_to_string(a.join("only.txt")).unwrap(), "keep");
+                        let b = dst.join("a (2)");
+                        assert_eq!(fs::read_to_string(b.join("f.txt")).unwrap(), "new");
+                        assert_eq!(fs::read_to_string(b.join("deep/n.txt")).unwrap(), "n");
+                    }
+                }
+                // 스테이징 잔여 없음 · 이동이면 원본 소멸.
+                let strays: Vec<_> = fs::read_dir(&dst)
+                    .unwrap()
+                    .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                    .filter(|n| n.contains(".nexa-"))
+                    .collect();
+                assert!(strays.is_empty(), "{op:?} {mode:?}: {strays:?}");
+                assert_eq!(src.join("a").exists(), op == Op::Copy, "{op:?} {mode:?}");
+                fs::remove_dir_all(&d).unwrap();
+            }
+        }
+        assert_eq!(DirConflict::parse("keep"), Some(DirConflict::KeepBoth));
+        assert_eq!(DirConflict::parse("x"), None);
+        assert_eq!(DirConflict::default().as_str(), "merge");
     }
 
     #[test]

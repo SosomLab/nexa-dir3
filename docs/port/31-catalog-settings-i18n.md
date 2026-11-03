@@ -1046,7 +1046,7 @@ i18n이 아닌 **하드코딩 사용자 문자열**(번역 대상 밖 · 이식 
 | KEY-517 | `term_theme_dark` | `term.theme_dark` | Choice(어두운 스킴 9종 KEY-133) | `campbell` | DEPENDS 없음(선택자가 `light`여도 값 유지) |
 | KEY-518 | `term_theme_light` | `term.theme_light` | Choice(밝은 스킴 6종 KEY-134) | `github-light` | |
 | KEY-519 | `term_copy_format` | `term.copy_format` | Choice `text`\|`html`\|`rtf`\|`both` | `text` | |
-| KEY-520 | `transfer_close_ms` | `transfer.close_ms` | Int 0..10000 | `2000` | 0 = 진행 창 미표시 · 시간 규칙(≤10초 = ms) 부합 |
+| KEY-520 | `transfer_close_ms` | `transfer.close_ms` | Int 0..10000 | `500`(dir2 2000 · 사용자 11-02 DR-36) | 0 = 진행 창 미표시 · 시간 규칙(≤10초 = ms) 부합 |
 | KEY-521 | `dnd_hover_ms` | `transfer.dnd_hover_ms` | Int 200..10000 | `3000` | dir2 설정 창에서 transfer 카테고리 소속(`nexa-dir2/crates/nexa-app/src/prefs.rs:566-572`) |
 | KEY-522 | `preview_map` | `preview.map` | Text(≤512) | `` | ADVANCED · 형식 `ext:id|…` 유지 |
 | KEY-523 | `plugins_disabled` | `plugins.disabled` | Text(≤512) | `` | nexa-sql `extensions.disabled` 선례(`nexa-sql/crates/nsql-settings/src/lib.rs:1069-1074`) · HIDDEN(플러그인 페이지 체크로 편집) |
