@@ -356,6 +356,11 @@ impl ProgressWin {
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
+    /// 이 창의 표면(프레임 버퍼) 바이트(T-93 · 메모리 창 "다른 창 표면").
+    pub(crate) fn surface_bytes(&self) -> u64 {
+        crate::winhost::surface_bytes(self.window.as_deref())
+    }
+
     pub(crate) fn is_open(&self) -> bool {
         self.window.is_some()
     }

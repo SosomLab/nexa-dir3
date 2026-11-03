@@ -1495,6 +1495,7 @@ mem.cat.launcherIcons = クイック起動アイコン
 mem.cat.preview = ドックのプレビュー
 mem.cat.termBuffer = 画面バッファ（スクロールバック）
 mem.cat.termFont = ターミナルフォントファイル
+mem.cat.termProcs = シェルプロセス（Nexa Dir 外）
 mem.mapped = マッピング {0} のうち常駐
 mem.cat.plugins = 読み込み済みプラグイン
 mem.cat.logs = ログウィンドウのバッファ

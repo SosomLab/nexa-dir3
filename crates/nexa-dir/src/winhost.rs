@@ -73,3 +73,11 @@ pub(crate) fn open_window(el: &ActiveEventLoop, spec: OpenSpec<'_>) -> Option<Op
 pub(crate) fn last_geom(w: &Window) -> Option<((i32, i32), (f64, f64))> {
     crate::wingeom::outer_pos(w).map(|p| (p, crate::wingeom::logical_size(w)))
 }
+
+/// 창의 표면(프레임 버퍼 · 가로 × 세로 × 4) 바이트 — 메모리 창 "다른 창 표면" 합(T-93). 창이 없으면 0.
+pub(crate) fn surface_bytes(window: Option<&Window>) -> u64 {
+    window.map_or(0, |w| {
+        let s = w.inner_size();
+        u64::from(s.width) * u64::from(s.height) * 4
+    })
+}

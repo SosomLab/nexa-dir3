@@ -57,6 +57,8 @@ pub(crate) enum Cat {
     Preview,
     TermBuffer,
     TermFont,
+    /// 셸과 자손 프로세스의 전용 메모리(우리 프로세스 밖 · T-93 11-03).
+    TermProcs,
     Plugins,
     /// 로그 창 버퍼(링 · 배치 · 필터 목록 어림 · T-92).
     Logs,
@@ -66,7 +68,7 @@ pub(crate) enum Cat {
 }
 
 impl Cat {
-    pub(crate) const ALL: [Cat; 14] = [
+    pub(crate) const ALL: [Cat; 15] = [
         Cat::Fonts,
         Cat::ListsActive,
         Cat::ListsBackground,
@@ -76,6 +78,7 @@ impl Cat {
         Cat::Preview,
         Cat::TermBuffer,
         Cat::TermFont,
+        Cat::TermProcs,
         Cat::Plugins,
         Cat::Logs,
         Cat::SurfaceMain,
@@ -99,7 +102,7 @@ impl Cat {
             Cat::Fonts => Group::Program,
             Cat::ListsActive | Cat::ListsBackground | Cat::History => Group::Lists,
             Cat::RowIcons | Cat::LauncherIcons | Cat::Preview => Group::Resources,
-            Cat::TermBuffer | Cat::TermFont => Group::Terminal,
+            Cat::TermBuffer | Cat::TermFont | Cat::TermProcs => Group::Terminal,
             Cat::Plugins => Group::Plugins,
             Cat::Logs => Group::Program,
             Cat::SurfaceMain | Cat::SurfaceAux | Cat::Glyphs => Group::Render,
@@ -117,6 +120,7 @@ impl Cat {
             Cat::Preview => "mem.cat.preview",
             Cat::TermBuffer => "mem.cat.termBuffer",
             Cat::TermFont => "mem.cat.termFont",
+            Cat::TermProcs => "mem.cat.termProcs",
             Cat::Plugins => "mem.cat.plugins",
             Cat::Logs => "mem.cat.logs",
             Cat::SurfaceMain => "mem.cat.surfaceMain",
@@ -137,6 +141,7 @@ impl Cat {
             Cat::Preview => (0xF2, 0xC6, 0x8C),
             Cat::TermBuffer => (0x2E, 0xA0, 0x6E),
             Cat::TermFont => (0x7C, 0xC4, 0x9A),
+            Cat::TermProcs => (0xB8, 0xE0, 0xC6),
             Cat::Plugins => (0x9B, 0x6F, 0xC9),
             Cat::Logs => (0x8A, 0x8A, 0x5C),
             Cat::SurfaceMain => (0xD9, 0x53, 0x53),

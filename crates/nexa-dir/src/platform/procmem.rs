@@ -229,8 +229,8 @@ mod imp {
 
     #[repr(C)]
     #[derive(Default)]
-    struct Pmc {
-        cb: u32,
+    pub(super) struct Pmc {
+        pub(super) cb: u32,
         page_fault_count: u32,
         peak_working_set_size: usize,
         working_set_size: usize,
@@ -240,7 +240,7 @@ mod imp {
         quota_non_paged_pool_usage: usize,
         pagefile_usage: usize,
         peak_pagefile_usage: usize,
-        private_usage: usize,
+        pub(super) private_usage: usize,
     }
     #[repr(C)]
     #[derive(Default)]
@@ -627,6 +627,188 @@ mod tests {
             assert!(rt.sum() <= s.footprint, "{rt:?} · {s:?}");
         } else {
             assert_eq!(rt, super::RtBreak::default());
+        }
+    }
+}
+
+// ── 셸 자식 프로세스 트리 메모리(T-93 잔여 · 11-03) ─────────────────────────────────────────────────────────
+//
+// 터미널 도크의 셸(pwsh · cmd · bash)과 그 자손(빌드 · git · 서버 …)이 쓰는 메모리는 우리 프로세스 밖이라 작업 관리자의 "Nexa Dir" 줄에
+// 안 보인다 — 메모리 창 터미널 묶음에 "셸 프로세스" 한 줄로 보여 준다(전용 바이트 합 · Windows `PrivateUsage` · Linux `VmRSS`).
+
+/// `root`(셸 pid)와 그 자손 프로세스들의 전용 메모리 합 — 살아 있는 것만 · 잴 수 없는 OS(macOS 1차)는 `None`.
+pub(crate) fn tree_private_bytes(root: u32) -> Option<u64> {
+    tree::tree_private_bytes(root)
+}
+
+#[cfg(windows)]
+mod tree {
+    use std::ffi::c_void;
+    /// `PROCESSENTRY32W`(tlhelp32.h · x64 568바이트).
+    #[repr(C)]
+    struct ProcessEntry32W {
+        size: u32,
+        usage: u32,
+        pid: u32,
+        default_heap_id: usize,
+        module_id: u32,
+        threads: u32,
+        parent_pid: u32,
+        pri_class_base: i32,
+        flags: u32,
+        exe: [u16; 260],
+    }
+    const TH32CS_SNAPPROCESS: u32 = 0x2;
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const INVALID_HANDLE: isize = -1;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> isize;
+        fn Process32FirstW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
+        fn Process32NextW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn K32GetProcessMemoryInfo(
+            process: *mut c_void,
+            counters: *mut super::imp::Pmc,
+            cb: u32,
+        ) -> i32;
+        fn CloseHandle(h: isize) -> i32;
+    }
+
+    /// (pid, 부모 pid) 전수 — 스냅샷 1회.
+    fn process_list() -> Vec<(u32, u32)> {
+        let mut out = Vec::new();
+        // SAFETY: 스냅샷 핸들은 끝에 닫는다 · 엔트리 구조체는 dwSize를 채운 뒤 넘긴다(tlhelp32 규약).
+        unsafe {
+            let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snap == INVALID_HANDLE || snap == 0 {
+                return out;
+            }
+            let mut e: ProcessEntry32W = std::mem::zeroed();
+            e.size = std::mem::size_of::<ProcessEntry32W>() as u32;
+            if Process32FirstW(snap, &mut e) != 0 {
+                loop {
+                    out.push((e.pid, e.parent_pid));
+                    if Process32NextW(snap, &mut e) == 0 {
+                        break;
+                    }
+                }
+            }
+            CloseHandle(snap);
+        }
+        out
+    }
+
+    fn private_bytes(pid: u32) -> Option<u64> {
+        // SAFETY: 제한 조회 권한으로 연 핸들 · 카운터 구조체는 cb를 채운다 · 핸들은 닫는다.
+        unsafe {
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                return None;
+            }
+            let mut c = super::imp::Pmc::default();
+            c.cb = std::mem::size_of::<super::imp::Pmc>() as u32;
+            let ok = K32GetProcessMemoryInfo(h, &mut c, c.cb) != 0;
+            CloseHandle(h as isize);
+            ok.then_some(c.private_usage as u64)
+        }
+    }
+
+    pub(super) fn tree_private_bytes(root: u32) -> Option<u64> {
+        let list = process_list();
+        if list.is_empty() {
+            return None;
+        }
+        let pids = super::descendants(root, &list);
+        Some(pids.iter().filter_map(|&p| private_bytes(p)).sum())
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod tree {
+    /// (pid, 부모 pid) 전수 — `/proc/<pid>/stat`의 4번째 칸(`comm`의 괄호 뒤).
+    fn process_list() -> Vec<(u32, u32)> {
+        let Ok(rd) = std::fs::read_dir("/proc") else {
+            return Vec::new();
+        };
+        rd.flatten()
+            .filter_map(|e| {
+                let pid: u32 = e.file_name().to_str()?.parse().ok()?;
+                let stat = std::fs::read_to_string(e.path().join("stat")).ok()?;
+                let after = &stat[stat.rfind(')')? + 2..];
+                let ppid: u32 = after.split_whitespace().nth(1)?.parse().ok()?;
+                Some((pid, ppid))
+            })
+            .collect()
+    }
+
+    fn private_bytes(pid: u32) -> Option<u64> {
+        let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+        let line = status.lines().find(|l| l.starts_with("VmRSS:"))?;
+        let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+        Some(kb * 1024)
+    }
+
+    pub(super) fn tree_private_bytes(root: u32) -> Option<u64> {
+        let list = process_list();
+        if list.is_empty() {
+            return None;
+        }
+        let pids = super::descendants(root, &list);
+        Some(pids.iter().filter_map(|&p| private_bytes(p)).sum())
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+mod tree {
+    pub(super) fn tree_private_bytes(_root: u32) -> Option<u64> {
+        None
+    }
+}
+
+/// `root`와 그 자손(pid, 부모 pid 목록 기준 · 순수 · 순환 방어).
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+pub(crate) fn descendants(root: u32, list: &[(u32, u32)]) -> Vec<u32> {
+    let mut out = vec![root];
+    let mut i = 0;
+    while i < out.len() {
+        let parent = out[i];
+        for &(pid, ppid) in list {
+            if ppid == parent && pid != parent && !out.contains(&pid) {
+                out.push(pid);
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+
+    /// 자손 판정(순수): 손자까지 · 형제 제외 · 순환(pid 재사용으로 부모가 자손을 가리킴) 무한 루프 없음.
+    #[test]
+    fn descendants_walks_children_and_guards_cycles() {
+        let list = [(10, 1), (11, 10), (12, 11), (20, 1), (10, 12)];
+        assert_eq!(descendants(10, &list), vec![10, 11, 12]);
+        assert_eq!(descendants(20, &list), vec![20]);
+        assert_eq!(
+            descendants(99, &list),
+            vec![99],
+            "목록에 없는 루트 = 자기만"
+        );
+    }
+
+    /// 자기 프로세스 트리 = 0보다 큰 전용 메모리(Windows · Linux) · 다른 OS = None.
+    #[test]
+    fn own_process_tree_has_private_bytes() {
+        let me = std::process::id();
+        let r = tree_private_bytes(me);
+        if cfg!(any(windows, target_os = "linux")) {
+            assert!(r.is_some_and(|b| b > 0), "{r:?}");
+        } else {
+            assert_eq!(r, None);
         }
     }
 }

@@ -1494,6 +1494,7 @@ mem.cat.launcherIcons = 빠른 실행 아이콘
 mem.cat.preview = 도크 미리보기
 mem.cat.termBuffer = 화면 버퍼(스크롤백)
 mem.cat.termFont = 터미널 글꼴 파일
+mem.cat.termProcs = 셸 프로세스(Nexa Dir 밖)
 mem.mapped = 매핑 {0} 중 상주
 mem.cat.plugins = 올라온 플러그인 모듈
 mem.cat.logs = 로그 창 버퍼

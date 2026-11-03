@@ -146,6 +146,10 @@ impl ForkPtySession {
 }
 
 impl PtySession for ForkPtySession {
+    fn pid(&self) -> Option<u32> {
+        u32::try_from(self.pid).ok()
+    }
+
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
         let mut off = 0;
         while off < bytes.len() {

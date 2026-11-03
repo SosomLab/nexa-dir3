@@ -208,6 +208,10 @@ pub(crate) trait PtySession {
     fn alive(&self) -> bool {
         true
     }
+    /// 셸 프로세스 id(T-93 셸 자식 프로세스 메모리 · 메모리 창) — 모르면 `None`(가짜).
+    fn pid(&self) -> Option<u32> {
+        None
+    }
 }
 
 /// 기본 셸 탐지(Windows `pwsh` → `powershell` → `cmd` · Unix `$SHELL` → `/bin/sh`).

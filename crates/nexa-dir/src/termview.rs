@@ -307,6 +307,11 @@ impl TermView {
         self.session.is_some() && !self.exited
     }
 
+    /// 셸 프로세스 id(T-93 · 메모리 창 "셸 프로세스" 줄 = 이 pid와 자손의 전용 메모리).
+    pub(crate) fn shell_pid(&self) -> Option<u32> {
+        self.session.as_ref().and_then(|s| s.pid())
+    }
+
     /// 격자 치수(열, 행, cell_w, cell_h) — 호스트가 지연 시작 전에 계산(폰트 = Mono 슬롯 + 설정 증분 · 행 = 글꼴 높이 + 3).
     /// 줄 바꿈 끄기면 열 = `style.cols`(가시 열보다 많을 수 있다 — 가로 스크롤).
     pub(crate) fn grid_dims(

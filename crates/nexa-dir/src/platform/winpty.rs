@@ -356,6 +356,16 @@ impl ConPtySession {
 }
 
 impl PtySession for ConPtySession {
+    fn pid(&self) -> Option<u32> {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetProcessId(process: isize) -> u32;
+        }
+        // SAFETY: 우리가 만든 프로세스 핸들.
+        let id = unsafe { GetProcessId(self.process) };
+        (id != 0).then_some(id)
+    }
+
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
         if bytes.is_empty() {
             return Ok(());

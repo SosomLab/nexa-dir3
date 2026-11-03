@@ -1495,6 +1495,7 @@ mem.cat.launcherIcons = Quick launch icons
 mem.cat.preview = Dock preview
 mem.cat.termBuffer = Screen buffer (scrollback)
 mem.cat.termFont = Terminal font files
+mem.cat.termProcs = Shell processes (outside Nexa Dir)
 mem.mapped = resident of {0} mapped
 mem.cat.plugins = Loaded plugin modules
 mem.cat.logs = Log window buffer

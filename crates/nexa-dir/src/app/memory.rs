@@ -66,7 +66,39 @@ impl App {
         let main =
             u64::from(self.viewport.0.max(0) as u32) * u64::from(self.viewport.1.max(0) as u32) * 4;
         acc.add(Cat::SurfaceMain, main);
-        acc.add(Cat::SurfaceAux, self.mem_win.surface_bytes());
+        // 보조 창 전부(T-93 잔여 11-03 · 종전 = 메모리 창만) + 툴바 플로팅 창.
+        let aux = self.mem_win.surface_bytes()
+            + crate::winhost::surface_bytes(self.prefs_win.window())
+            + crate::winhost::surface_bytes(self.keys_win.window())
+            + self.check_win.surface_bytes()
+            + self.preview_win.surface_bytes()
+            + self.progress_win.surface_bytes()
+            + self.bulk_win.surface_bytes()
+            + self.preset_win.surface_bytes()
+            + self.order_win.surface_bytes()
+            + self.archive_win.surface_bytes()
+            + self.license_win.surface_bytes()
+            + self.log_win.surface_bytes()
+            + self.hash_win.surface_bytes()
+            + self.dupes_win.surface_bytes()
+            + self.compare_win.surface_bytes()
+            + self.file_win.surface_bytes()
+            + self.dlg.surface_bytes()
+            + self
+                .tool_floats
+                .iter()
+                .map(toolfloat::ToolFloatWin::surface_bytes)
+                .sum::<u64>();
+        acc.add(Cat::SurfaceAux, aux);
+        // 셸과 자손 프로세스(T-93 잔여): 우리 프로세스 밖이라 작업 관리자 "Nexa Dir" 줄에 안 보인다 — 도크 터미널마다 트리 합.
+        acc.add(
+            Cat::TermProcs,
+            self.terms
+                .iter()
+                .filter_map(TermView::shell_pid)
+                .filter_map(platform::procmem::tree_private_bytes)
+                .sum(),
+        );
         acc.add(
             Cat::Glyphs,
             self.ui_font.glyph_cache_bytes()
