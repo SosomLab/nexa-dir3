@@ -1131,6 +1131,8 @@ nexa-sql은 세션 성격의 값을 `settings.conf`의 HIDDEN 키(창 크기 · 
 | KEY-597 | `gfx.linux_backend` · `gfx.mac_present` · `clipboard.x11_native` | nexa-sql 그대로 | softbuffer/winit 플랫폼 층 스위치 | nexa-sql Performance 카테고리 |
 | KEY-598 | `input.scroll_natural` · `ui.dblclick_ms` | Bool `off` · Int `400`(HIDDEN) | dir2는 OS 값(KEY-326 · 327)을 읽었다 — winit에는 더블클릭 시간 조회가 없다 | nexa-sql `input.scroll_natural` · `ui.dblclick_ms` |
 | KEY-599 | `list.trash`(후보) 또는 OS 고정 | — | 휴지통 동작(Windows 휴지통 · macOS Trash · Linux `~/.local/share/Trash`)에 선택지가 필요한지 결정 필요 | 없음 |
+| KEY-600 | — (dir3 신규 · DR-37) | `transfer.dir_conflict` | Choice replace/merge/keep | `merge` | 폴더 이름 충돌 처리(사용자 11-02): 병합(DR-35) · 교체(옛 폴더 소멸) · 보관(" (2)" 옆에 · 묻지 않음) · 라벨 `pref.dirConflict.*` · 질문 글 `ops.mergeDir`/`ops.replaceDir` |
+| KEY-600 | — (dir3 신규 · GAP-039) | `window.blur_grace_ms` | Int 0..2000 · HIDDEN | `150` | 창 묶음(메인 + 보조 창)이 포커스를 잃은 뒤 메인을 `window.transparency_blur`로 흐리기까지의 유예(사용자 11-03) — 메인 → 보조 창 전환의 깜빡임 방지 · 구현 상수 → 설정 키 규칙 · 라벨 `pref.blurGraceMs.*` |
 | KEY-600 | 환경 변수 `NDIR_HOME` | 설정 폴더 재지정(시험 · 격리) | 회귀 시험 하네스가 사용자 설정을 건드리지 않게 | `NSQL_HOME`(`nexa-sql/crates/nsql-settings/src/lib.rs:154-161`) |
 
 ---

@@ -296,6 +296,10 @@ struct App {
     panel_toasts: [toast::Toasts; 2],
     started: Instant,
     main_active: bool,
+    /// 포커스를 가진 보조 창(모달 · 모달리스 · 플로팅 — GAP-039): 메인과 **한 묶음**으로 보고 이 동안 메인을 흐리지 않는다.
+    aux_focus: Option<winit::window::WindowId>,
+    /// 묶음이 포커스를 잃은 시각 + 유예(GAP-039 · `window.blur_grace_ms`): 메인 → 보조 창 전환의 중간 상태로 깜빡이지 않게 이때 흐린다.
+    blur_at: Option<Instant>,
     pending_chord: Option<Chord>,
     pressed: Option<Area>,
     /// 더블클릭 합성(winit은 더블클릭 사건이 없다 · dir2 Win32 `WM_LBUTTONDBLCLK` 대응): 마지막 좌클릭 시각·자리.
@@ -304,12 +308,12 @@ struct App {
     click_count: u8,
     /// 느린 재클릭 = 이름 바꾸기(`app/slowclick.rs`): 직전 행 클릭 · 뗄 때 확정할 예약(누른 자리) · 지연 중인 대상(패널, 경로, 발화 시각).
     slow_click: Option<app::slowclick::SlowClick>,
+    /// 상태줄 왼쪽 안내의 유지 마감(GAP-034): 이 시각 전에는 `update_status`가 항목 수로 덮지 않는다 · 틱이 마감 때 다시 채운다.
+    status_hold: Option<Instant>,
     rename_on_up: Option<(i32, i32)>,
     rename_due: Option<(usize, PathBuf, Instant)>,
     /// 드래그 발신 후보(`app/dnd.rs::drag_out_after`): 선택된 행을 누른 (패널, 자리) — 임계 넘게 끌면 OS 드래그를 시작한다.
     drag_press: Option<(usize, i32, i32)>,
-    /// 상태줄 왼쪽 안내의 유지 마감(GAP-034): 이 시각 전에는 `update_status`가 항목 수로 덮지 않는다 · 틱이 마감 때 다시 채운다.
-    status_hold: Option<Instant>,
     /// 우클릭 드래그 후보(탐색기 꼴 · 10-18): 선택된 행을 오른쪽 버튼으로 누른 (패널, 자리) — 임계 넘게 끌면 드래그 · 그냥 떼면 메뉴.
     right_press: Option<(usize, i32, i32)>,
     /// 우클릭 드래그로 놓은 뒤 메뉴가 기다리는 (경로들, 놓은 자리) — 복사/이동을 고르면 `external_drop_with`.
@@ -785,18 +789,20 @@ impl App {
             ctrl_mac: false,
             started: Instant::now(),
             main_active: true,
+            aux_focus: None,
+            blur_at: None,
             pending_chord: None,
             pressed: None,
             last_click: None,
             click_count: 0,
             slow_click: None,
+            status_hold: None,
             rename_on_up: None,
             rename_due: None,
             drag_press: None,
             right_press: None,
             dnd_menu: None,
             quicklook: None,
-            status_hold: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),

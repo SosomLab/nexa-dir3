@@ -431,6 +431,14 @@ impl ApplicationHandler<Wake> for App {
             self.last_input_ms = self.started.elapsed().as_millis() as u64;
             self.idle_trimmed = false;
         }
+        // 보조 창 포커스 = 메인과 한 묶음(GAP-039) — 보조 창 처리기가 사건을 먹기 전에 본다.
+        if self.window.as_ref().is_some_and(|w| w.id() != id) {
+            match &event {
+                WindowEvent::Focused(on) => self.on_aux_focus(id, *on),
+                WindowEvent::Destroyed => self.on_aux_focus(id, false),
+                _ => {}
+            }
+        }
         // 보조 창(설정 · 단축키) 사건 = 창마다 자기 처리기로(처리했으면 끝) — 보조 창이 낸 "창 열기" 요청도 같은 펌프를 지난다.
         if self.aux_window_event(id, &event) {
             self.open_requested_windows(el);
@@ -620,7 +628,10 @@ impl App {
             eprintln!("[focus] change on={on} was={}", self.main_active);
         }
         self.main_active = on;
-        self.apply_transparency(); // 포커스별 투명도(T-199): 떠나면 blur 값 · 돌아오면 포커스 값
+        if on {
+            self.aux_focus = None; // 포커스는 한 창에만 — 메인이 받았으면 보조 창은 놓았다(닫힌 창의 남은 값 정리)
+        }
+        self.focus_group_changed(); // 포커스별 투명도(T-199 · GAP-039 묶음): 떠나면 blur 값 · 돌아오면 포커스 값
         if !on {
             // 창 안 드래그 중 포커스를 잃으면 취소(뗌을 못 받는다) — 단, X11 XDND 세션이 있으면 유지: 뗌은 버튼 상태 폴링
             // (`pointer_button1_down`)으로 받고, mutter가 우리 XdndSelection 소유를 보고 그랩을 걸며 포커스를 흔드는 동안
@@ -648,6 +659,53 @@ impl App {
             self.pointer_gone();
         }
         self.redraw();
+    }
+
+    /// 보조 창(모달 · 모달리스 · 플로팅) 포커스 전환(GAP-039 · 사용자 11-03 "별도 창은 메인 투명도를 바꾸지 말고 묶음으로"):
+    /// 얻으면 그 창을 기억 · 잃거나 사라지면(그 창일 때만) 잊는다 → 묶음 판정 다시.
+    pub(crate) fn on_aux_focus(&mut self, id: WindowId, on: bool) {
+        if self.trace_ime {
+            eprintln!("[focus] aux {id:?} on={on} was={:?}", self.aux_focus);
+        }
+        if on {
+            self.aux_focus = Some(id);
+        } else if self.aux_focus == Some(id) {
+            self.aux_focus = None;
+        } else {
+            return;
+        }
+        self.focus_group_changed();
+    }
+
+    /// 창 묶음(메인 + 보조 창) 중 하나라도 포커스가 있으면 활성 — 투명도는 이것으로 정한다(GAP-039).
+    pub(crate) fn focus_group_active(&self) -> bool {
+        self.main_active || self.aux_focus.is_some()
+    }
+
+    /// 묶음 활성 변화 반영: 활성 = 바로 포커스 값 · 비활성 = 유예 뒤 blur 값(`blur_tick` · 메인 → 보조 창 전환은 "메인 잃음 →
+    /// 보조 얻음" 두 사건이라 그 사이에 흐려졌다 돌아오는 깜빡임을 막는다).
+    fn focus_group_changed(&mut self) {
+        if self.focus_group_active() {
+            self.blur_at = None;
+            self.apply_transparency();
+        } else if self.blur_at.is_none() {
+            // 유예 = 설정 `window.blur_grace_ms`(HIDDEN · 기본 150 · 0 = 바로).
+            let grace = self.settings.int("window.blur_grace_ms").clamp(0, 2000) as u64;
+            self.blur_at = Some(Instant::now() + Duration::from_millis(grace));
+        }
+    }
+
+    /// 유예가 지났고 여전히 묶음 밖이면 blur 값 적용. 돌려주는 값 = 다음에 깰 시각(유예 중).
+    pub(crate) fn blur_tick(&mut self, now: Instant) -> Option<Instant> {
+        let at = self.blur_at?;
+        if now < at {
+            return Some(at);
+        }
+        self.blur_at = None;
+        if !self.focus_group_active() {
+            self.apply_transparency();
+        }
+        None
     }
 
     /// 조합 한 번의 처리(키맵 조회 → 명령) — 처리했으면 `true`(호출부는 그 키를 컨트롤로 흘리지 않는다). 창 사건 처리에서 떼어

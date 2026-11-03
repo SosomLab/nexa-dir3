@@ -979,6 +979,8 @@ pref.transparency = 창 투명도 — 포커스 있을 때(%)
 pref.transparency.desc = 메인 창에 포커스가 있는 동안의 투명도입니다(0 = 불투명 · 최대 90). 보조 창도 이 값을 씁니다. 성능 향상 모드에서는 꺼집니다.
 pref.transparencyBlur = 창 투명도 — 포커스 없을 때(%)
 pref.transparencyBlur.desc = 다른 창으로 포커스가 가면 메인 창이 이만큼 투명해집니다(0 = 불투명 · 최대 90). 포커스가 떠나는 순간 적용되고 돌아오면 복원됩니다. 성능 향상 모드에서는 꺼집니다.
+pref.blurGraceMs = 포커스 없을 때 투명도가 적용되기까지의 지연(ms · 0~2000)
+pref.blurGraceMs.desc = 메인 창과 그 보조 창(대화상자)은 한 묶음으로 봅니다. Nexa Dir의 대화상자로 포커스가 가도 메인 창은 투명해지지 않습니다. 이 지연은 포커스가 메인 창을 떠난 뒤 대화상자가 받기까지의 순간을 넘겨 깜빡임을 막습니다. 느린 창 관리자에서는 늘리세요.
 pref.panelMode = 패널 모드
 pref.panelMode.desc = 파일 패널 하나 또는 둘(보기 메뉴·도구 모음).
 pref.panelMode.single = 싱글
@@ -1022,10 +1024,10 @@ pref.dblclickMs = 더블클릭 간격(ms)
 pref.dblclickMs.desc = 이 시간 안의 두 번 클릭을 더블클릭으로 봅니다.
 pref.flashHoldMs = 플래시 메시지 유지 시간(ms)
 pref.flashHoldMs.desc = 플래시 메시지가 사라지기 시작하기 전까지 그대로 보이는 시간
-pref.flashFadeMs = 플래시 메시지 페이드아웃(ms)
-pref.flashFadeMs.desc = "복사됨" 같은 플래시 메시지가 유지 시간 뒤 서서히 사라지는 데 걸리는 시간
 pref.statusNoteMs = 상태줄 안내 유지 시간(ms, 0~30000)
 pref.statusNoteMs.desc = 상태줄 왼쪽 안내(전송 결과 · 큐 안내 · 오류)가 항목 수로 바뀌기까지의 시간(밀리초)입니다. 0이면 바로 바뀝니다.
+pref.flashFadeMs = 플래시 메시지 페이드아웃(ms)
+pref.flashFadeMs.desc = "복사됨" 같은 플래시 메시지가 유지 시간 뒤 서서히 사라지는 데 걸리는 시간
 pref.flashShape = 플래시 메시지 모양
 pref.flashShape.desc = 플래시 메시지의 배경 상자: 직사각형 · 둥근 모서리 · 없음(글만)
 pref.flashShape.rect = 직사각형

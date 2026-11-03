@@ -257,6 +257,16 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 90 },
         "20"
     ),
+    // 창 묶음(메인 + 보조 창)이 포커스를 잃은 뒤 메인을 흐리기까지의 유예(GAP-039 · 사용자 11-03 "별도 창은 묶음으로"): 메인 → 보조 창
+    // 전환은 "잃음 → 얻음" 두 사건이라 그 사이 깜빡임을 넘긴다 · 구현 상수 → 설정 키(HIDDEN · 느린 WM이면 늘린다).
+    e!(
+        "window.blur_grace_ms",
+        CAT_APPEARANCE,
+        "pref.blurGraceMs",
+        "pref.blurGraceMs.desc",
+        Int { min: 0, max: 2000 },
+        "150"
+    ),
     e!(
         "layout.panel_mode",
         CAT_APPEARANCE,
@@ -496,16 +506,6 @@ pub const REGISTRY: &[Entry] = &[
         },
         "2000"
     ),
-    e!(
-        "ui.flash_ms",
-        CAT_APPEARANCE,
-        "pref.flashFadeMs",
-        "pref.flashFadeMs.desc",
-        Int {
-            min: 200,
-            max: 30_000
-        },
-        "3000"
     // 상태줄 안내 유지(GAP-034 · 11-02): 결과·안내 문구가 항목 수로 덮이기까지의 시간 · 0 = 바로 덮임(종전).
     e!(
         "ui.status_note_ms",
@@ -518,6 +518,16 @@ pub const REGISTRY: &[Entry] = &[
         },
         "4000"
     ),
+    e!(
+        "ui.flash_ms",
+        CAT_APPEARANCE,
+        "pref.flashFadeMs",
+        "pref.flashFadeMs.desc",
+        Int {
+            min: 200,
+            max: 30_000
+        },
+        "3000"
     ),
     e!(
         "ui.flash_shape",
@@ -2720,6 +2730,7 @@ pub const WINDOWS_ONLY: &[&str] = &["list.show_dotfiles", "key.view.dot"];
 /// 비노출(자동 기억 값 · 메뉴/툴바로만 바뀌는 값 · 구현 상수) — `set/get/reset`은 되지만 설정 창에는 안 보인다.
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",
+    "window.blur_grace_ms",
     "mem.always_on_top",
     "mem.detail",
     "layout.panel_mode",

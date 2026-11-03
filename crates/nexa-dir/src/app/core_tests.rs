@@ -11092,6 +11092,35 @@ fn window_transparency_follows_setting_and_boost() {
     app.on_focus_change(true);
     assert!(app.main_active);
     assert_eq!(app.apply_transparency(), 0);
+    // GAP-039(사용자 11-03): 보조 창(모달 · 모달리스)으로 포커스가 가면 메인 + 보조 = 한 묶음 → 메인은 포커스 값 그대로 ·
+    // 앱 밖으로 나가면 유예 뒤 blur · 다른 창의 잃음은 무시 · 사라진 보조 창은 잊는다 · 메인이 다시 받으면 남은 값 정리.
+    let aux = winit::window::WindowId::dummy();
+    app.on_focus_change(false);
+    app.on_aux_focus(aux, true);
+    assert!(app.focus_group_active());
+    assert_eq!(app.apply_transparency(), 0, "보조 창 포커스 = 메인 안 흐림");
+    let now = std::time::Instant::now();
+    assert_eq!(app.blur_tick(now), None, "묶음 활성 = 유예 없음");
+    app.on_aux_focus(aux, false);
+    assert!(!app.focus_group_active());
+    let at = app.blur_tick(now).expect("앱 밖 = 유예 뒤 흐림");
+    assert!(at > now);
+    assert_eq!(app.blur_tick(at), None, "유예 마감 = 적용 · 더 깨지 않음");
+    assert_eq!(app.apply_transparency(), 55);
+    // 잃음 → 유예 안에 보조 창이 받으면(전환 중간 상태) 흐리지 않는다.
+    app.on_aux_focus(aux, true);
+    assert_eq!(app.blur_tick(now), None);
+    assert_eq!(app.apply_transparency(), 0);
+    app.on_focus_change(true);
+    assert_eq!(app.aux_focus, None, "메인이 받음 = 보조 창은 놓음");
+    // 기억한 창이 아닌 보조 창의 잃음은 무시(포커스가 보조 창 A → B로 옮겨 가는 순서가 OS마다 다르다).
+    app.on_focus_change(false);
+    app.on_aux_focus(aux, true);
+    app.aux_focus = Some(aux);
+    let before = app.blur_at;
+    app.on_aux_focus(winit::window::WindowId::from(7u64), false);
+    assert_eq!((app.aux_focus, app.blur_at), (Some(aux), before));
+    app.on_focus_change(true);
     assert_eq!(
         crate::platform::opacity_pct(),
         0,

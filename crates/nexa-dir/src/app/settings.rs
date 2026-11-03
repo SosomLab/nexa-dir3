@@ -341,7 +341,12 @@ impl App {
         // 포커스별 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40" → 10-26 기본 20): 메인 창 = 포커스 여부에 따라 · 새로 만드는 창과 보조 창
         // = 포커스 값(보조 창을 쓰는 동안 그 창이 흐려지지 않게 — 메인은 그때 포커스를 잃어 blur 값이 된다).
         platform::set_opacity_pct(focused);
-        let main_pct = if self.main_active { focused } else { blur };
+        // 묶음(GAP-039): 보조 창(모달 · 모달리스)에 포커스가 있어도 메인은 포커스 값 — 앱 밖으로 나갔을 때만 blur.
+        let main_pct = if self.focus_group_active() {
+            focused
+        } else {
+            blur
+        };
         if let Some(w) = &self.window {
             let r = platform::apply_window_opacity_pct(w, main_pct);
             // 진단(`NDIR_TRACE_IME=1` · 11-01 Linux 실기 — 쓰기 유실 원인 확정에 쓴 줄 · 유지): 적용값 · 결과.

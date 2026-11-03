@@ -980,6 +980,8 @@ pref.transparency = ウィンドウの透明度 — フォーカスあり (%)
 pref.transparency.desc = メインウィンドウにフォーカスがある間の透明度です(0 = 不透明、最大 90)。補助ウィンドウもこの値を使います。パフォーマンス向上モードではオフになります。
 pref.transparencyBlur = ウィンドウの透明度 — フォーカスなし (%)
 pref.transparencyBlur.desc = 他のウィンドウにフォーカスが移るとメインウィンドウがこの割合だけ透明になります(0 = 不透明、最大 90)。フォーカスが離れた瞬間に適用され、戻ると復元されます。パフォーマンス向上モードではオフになります。
+pref.blurGraceMs = フォーカスなしの透明度が適用されるまでの遅延 (ms、0〜2000)
+pref.blurGraceMs.desc = メインウィンドウとそのダイアログは一つのグループとして扱います。Nexa Dir のダイアログにフォーカスが移ってもメインウィンドウは透明になりません。この遅延は、フォーカスがメインウィンドウを離れてからダイアログが受け取るまでの瞬間をつなぎ、ちらつきを防ぎます。動作の遅いウィンドウマネージャーでは長くしてください。
 pref.panelMode = パネルモード
 pref.panelMode.desc = ファイルパネルを1つまたは2つ(表示メニュー・ツールバー)。
 pref.panelMode.single = シングル
@@ -1023,10 +1025,10 @@ pref.dblclickMs = ダブルクリック間隔(ms)
 pref.dblclickMs.desc = この時間内の2回のクリックをダブルクリックとみなします。
 pref.flashHoldMs = フラッシュメッセージの保持時間（ms）
 pref.flashHoldMs.desc = フラッシュメッセージが消え始めるまでそのまま表示される時間
-pref.flashFadeMs = フラッシュメッセージのフェードアウト（ms）
-pref.flashFadeMs.desc = 「コピーしました」などのフラッシュメッセージが保持時間後に徐々に消えるまでの時間
 pref.statusNoteMs = ステータスバー通知の保持時間(ms, 0～30000)
 pref.statusNoteMs.desc = ステータスバー左側の通知(転送結果・キュー通知・エラー)が項目数に置き換わるまでの時間(ミリ秒)です。0 の場合はすぐに置き換わります。
+pref.flashFadeMs = フラッシュメッセージのフェードアウト（ms）
+pref.flashFadeMs.desc = 「コピーしました」などのフラッシュメッセージが保持時間後に徐々に消えるまでの時間
 pref.flashShape = フラッシュメッセージの形
 pref.flashShape.desc = フラッシュメッセージの背景ボックス: 長方形・角丸・なし（文字のみ）
 pref.flashShape.rect = 長方形

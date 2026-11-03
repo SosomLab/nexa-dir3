@@ -980,6 +980,8 @@ pref.transparency = Window transparency when focused (%)
 pref.transparency.desc = How transparent the main window is while it has focus (0 = opaque, up to 90). Secondary windows use this value too. Turned off in performance boost mode.
 pref.transparencyBlur = Window transparency when not focused (%)
 pref.transparencyBlur.desc = How transparent the main window becomes when another window has focus (0 = opaque, up to 90). Applied the moment focus leaves and restored when it returns. Turned off in performance boost mode.
+pref.blurGraceMs = Delay before the unfocused transparency applies (ms, 0-2000)
+pref.blurGraceMs.desc = The main window and its own dialogs count as one group: moving focus to a Nexa Dir dialog does not make the main window transparent. This delay bridges the moment focus leaves the main window before the dialog takes it, so the window does not flicker. Raise it on a slow window manager.
 pref.panelMode = Panel mode
 pref.panelMode.desc = Single or dual file panels (View menu / toolbar).
 pref.panelMode.single = Single
@@ -1023,10 +1025,10 @@ pref.dblclickMs = Double-click interval (ms)
 pref.dblclickMs.desc = Two clicks within this time count as a double-click.
 pref.flashHoldMs = Flash message hold (ms)
 pref.flashHoldMs.desc = How long a flash message stays fully visible before it starts to fade out
-pref.flashFadeMs = Flash message fade-out (ms)
-pref.flashFadeMs.desc = How long a flash message (for example "copied") takes to fade out after its hold time
 pref.statusNoteMs = Status bar notice hold (ms, 0-30000)
 pref.statusNoteMs.desc = How long (in milliseconds) a notice on the left of the status bar (transfer result, queue notice, errors) stays before the item count replaces it. 0 replaces it immediately.
+pref.flashFadeMs = Flash message fade-out (ms)
+pref.flashFadeMs.desc = How long a flash message (for example "copied") takes to fade out after its hold time
 pref.flashShape = Flash message shape
 pref.flashShape.desc = Background box of flash messages: rectangle, rounded corners, or none (text only)
 pref.flashShape.rect = Rectangle
