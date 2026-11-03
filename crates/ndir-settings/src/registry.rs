@@ -1509,6 +1509,16 @@ pub const REGISTRY: &[Entry] = &[
         Choice(DIR_CONFLICT_OPTS),
         "merge"
     ),
+    // 발신 드래그가 경로 글자(CF_UNICODETEXT)도 내는가(T-147 ① · 11-03 · Windows): Windows Terminal 등 글자만 받는 대상에 경로를
+    // 떨어뜨린다 · 파일을 받는 대상은 CF_HDROP을 고른다 · 글자 대상이 경로 삽입을 원치 않으면 끈다(HIDDEN).
+    e!(
+        "dnd.offer_text",
+        CAT_TRANSFER,
+        "pref.dndOfferText",
+        "pref.dndOfferText.desc",
+        Bool,
+        "on"
+    ),
     e!(
         "transfer.dnd_hover_ms",
         CAT_TRANSFER,
@@ -2731,6 +2741,7 @@ pub const WINDOWS_ONLY: &[&str] = &["list.show_dotfiles", "key.view.dot"];
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",
     "window.blur_grace_ms",
+    "dnd.offer_text",
     "mem.always_on_top",
     "mem.detail",
     "layout.panel_mode",

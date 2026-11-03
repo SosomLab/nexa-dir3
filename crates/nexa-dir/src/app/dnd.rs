@@ -658,6 +658,12 @@ impl App {
                 self.dnd_end();
                 DropChoice::None
             }
+            // 글자 드롭(T-147 ① Windows · 11-03): 경로면 이동/선택 · 글이면 터미널 입력(규칙 = `app/textdrop.rs` · macOS와 같다).
+            DropEvent::Text { text, at } => {
+                self.dnd_end();
+                self.apply_text_drop(&text, Point { x: at.0, y: at.1 });
+                DropChoice::Copy
+            }
             DropEvent::Drop {
                 paths,
                 at,

@@ -905,6 +905,8 @@ pref.dirConflict.keep = Keep both (new folder gets " (2)")
 # DnD hover switch (X-32) - dwell on tab/collapsed folder while dragging
 pref.dndHover = Drag hover switch delay (ms, 200-10000)
 pref.dndHover.desc = How long (in milliseconds) to hover over a tab or a collapsed folder while dragging before it switches or expands. Default 3000 ms (3 s).
+pref.dndOfferText = Offer dropped paths as text
+pref.dndOfferText.desc = When dragging files out of Nexa Dir, also offer the paths as plain text (one per line, quoted when they contain spaces) so text-only targets such as Windows Terminal receive the paths. Targets that accept files still receive the files.
 pref.xferQueue = Queue transfers started while another is running
 pref.xferQueue.desc = When a transfer is already running (or an archive is being extracted or folders synchronized), a new copy or move waits in a queue and starts when the previous one finishes. The progress window lists the waiting jobs; the status bar shows the count. Turn off to refuse new transfers while one is running (previous behavior).
 pref.xferQueueRestore = Unfinished transfers after a restart

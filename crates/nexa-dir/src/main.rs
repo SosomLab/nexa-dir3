@@ -976,6 +976,7 @@ impl App {
         app.tab_menu
             .set_char_jump(app.settings.flag("menu.char_jump"));
         app.apply_transfer_tuning(); // 고속 복사 전략(OS 복사 · 동시 작업 수 · 캐시 없이 복사)
+        platform::set_drag_offers_text(app.settings.flag("dnd.offer_text")); // 발신 드래그 경로 글자(T-147 ①)
         app.apply_typeahead(); // 타입어헤드 켬/끔 · 초기화 시간 · 공백 · 특수문자 · 배지 위치
                                // 메뉴 아이콘: UI 글꼴 사슬(Windows = Segoe Fluent/MDL2 아이콘 글꼴 포함)을 준 뒤 스위치를 적용한다.
         app::menu_icons::init(Rc::clone(&app.ui_font));

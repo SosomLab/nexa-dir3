@@ -13049,3 +13049,53 @@ fn delete_permanent_runs_on_worker_and_reports_failures() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-147 ①(11-03 · Windows 글자 드롭 수신): 자체 수신부가 파일 없이 글자만 있을 때 `DropEvent::Text`를 큐에 넣고 효과 = 복사 →
+/// 앱이 다음 틱(`drop_pump`)에 `apply_text_drop`으로 처리 — 폴더 경로 글자 = 그 폴더로 이동 · 파일 = 부모 + 선택 · 글 = 터미널 없으면 상태줄 안내.
+/// 규칙은 macOS(78f23dd)와 같은 `textdrop.rs` — 여기서는 Windows OLE 뒤의 큐 경로만 본다(OLE 자체는 실기).
+#[test]
+fn text_drop_event_from_os_queue_navigates_or_notes() {
+    use crate::platform::{DropChoice, DropEvent};
+    let (mut app, dir) = fixture("textdrop_q");
+    app.layout_for(1200, 800, 1.0);
+    let now = std::time::Instant::now();
+    let shared = Rc::new(std::cell::RefCell::new(
+        crate::platform::DropShared::default(),
+    ));
+    app.drop_shared = Some(Rc::clone(&shared));
+    let b = app.panels[0].bounds();
+    let at = (b.x + 10, b.y + b.h / 2);
+    // 폴더 경로 글자(따옴표 · 공백 없음) → 그 폴더로.
+    let c = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Text {
+            text: format!("\"{}\"", dir.join("sub").display()),
+            at,
+        },
+    );
+    assert_eq!(c, DropChoice::Copy, "글자 = 늘 복사 효과");
+    assert!(app.drop_pump(now));
+    assert_eq!(app.panels[0].root_path(), dir.join("sub"));
+    // 파일 경로 글자 → 부모로 + 선택.
+    let _ = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Text {
+            text: dir.join("a.txt").display().to_string(),
+            at,
+        },
+    );
+    assert!(app.drop_pump(now));
+    assert_eq!(app.panels[0].root_path(), dir);
+    assert_eq!(app.panels[0].selected_paths(), vec![dir.join("a.txt")]);
+    // 여러 줄 글 + 터미널 없음 → 상태줄 안내.
+    let _ = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Text {
+            text: "hello\nworld".into(),
+            at,
+        },
+    );
+    assert!(app.drop_pump(now));
+    assert_eq!(app.statusbar.left(), tr("dnd.cannot"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -499,6 +499,12 @@ pub(crate) enum DropEvent {
         /// 오른쪽 버튼으로 놓았다(탐색기 꼴 · 호스트가 그 자리에 복사/이동/취소 메뉴를 연다 · 10-18).
         menu: bool,
     },
+    /// 글자 드롭(T-147 ① Windows · 11-03): 파일(CF_HDROP)이 없고 CF_UNICODETEXT/CF_TEXT만 있을 때 — 놓는 순간 한 번(들어옴/위에 있음은
+    /// 효과 "복사"만 답하고 사건을 내지 않는다). 호스트는 `App::apply_text_drop`(경로면 이동/선택 · 글이면 터미널 입력)으로 처리.
+    Text {
+        text: String,
+        at: (i32, i32),
+    },
 }
 
 /// 놓았을 때 일어날 일(= 커서 모양): 불가 · 복사 · 이동.
@@ -652,9 +658,24 @@ pub(crate) fn drop_dispatch(shared: &Rc<RefCell<DropShared>>, ev: DropEvent) -> 
             sh.dragging.clear();
             c
         }
+        // 글자 = 볼륨·자기/하위 판정이 없다 → 늘 복사(dir2 SHELL-062 가상 소스와 같은 규칙) · 적용은 앱이 다음 틱에.
+        DropEvent::Text { .. } => DropChoice::Copy,
     };
     sh.events.push(ev);
     choice
+}
+
+/// 발신 드래그가 경로 글자(CF_UNICODETEXT)도 내는가(T-147 ① · 설정 `dnd.offer_text` HIDDEN · 기본 켬 — Windows Terminal 등 글자만 받는
+/// 대상에 경로를 떨어뜨릴 수 있다 · 파일을 먼저 보는 대상은 CF_HDROP을 고른다). 앱이 설정에서 넣는다 · `windrag`가 읽는다.
+static DRAG_OFFERS_TEXT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub(crate) fn set_drag_offers_text(on: bool) {
+    DRAG_OFFERS_TEXT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn drag_offers_text() -> bool {
+    DRAG_OFFERS_TEXT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// 메인 창에 자체 드롭 수신부를 단다 — Windows만(창은 `with_drag_and_drop(false)`로 만들어져 있어야 한다). 다른 OS · 실패 =

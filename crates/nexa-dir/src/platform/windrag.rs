@@ -250,13 +250,47 @@ fn is_hdrop_fmt(fmt: &FORMATETC) -> bool {
         && fmt.dwAspect == DVASPECT_CONTENT.0
 }
 
+const CF_UNICODETEXT: u16 = 13;
+
+/// CF_UNICODETEXT · TYMED_HGLOBAL · DVASPECT_CONTENT 요청인가(T-147 ① 경로 글자 · `super::drag_offers_text()`가 켜져 있을 때만 낸다).
+fn is_text_fmt(fmt: &FORMATETC) -> bool {
+    fmt.cfFormat == CF_UNICODETEXT
+        && fmt.tymed & TYMED_HGLOBAL.0 as u32 != 0
+        && fmt.dwAspect == DVASPECT_CONTENT.0
+}
+
+/// 경로 글자(순수): 한 줄에 하나(`\r\n`) · 공백이 든 경로는 `"…"`(Windows Terminal · 셸 붙여넣기 규칙) · 끝에 줄바꿈 없음.
+pub(super) fn paths_text(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|p| {
+            let s = p.to_string_lossy();
+            if s.contains(' ') {
+                format!("\"{s}\"")
+            } else {
+                s.into_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\r\n")
+}
+
+/// 경로 글자의 CF_UNICODETEXT 바이트(UTF-16LE + NUL).
+fn paths_text_bytes(paths: &[PathBuf]) -> Vec<u8> {
+    paths_text(paths)
+        .encode_utf16()
+        .chain([0u16])
+        .flat_map(u16::to_le_bytes)
+        .collect()
+}
+
 /// 저장된 형식이 요청과 맞는가(형식 번호 · 측면 · 매체 비트 겹침 · `ptd`/`lindex`는 보지 않는다 — 헬퍼는 -1로 묻는다).
 fn stored_matches(s: &Stored, fmt: &FORMATETC) -> bool {
     s.cf == fmt.cfFormat && s.aspect == fmt.dwAspect && fmt.tymed & s.payload.tymed() != 0
 }
 
-/// HGLOBAL 내용 사본(잠금 실패 = 빈 벡터).
-unsafe fn global_bytes(h: *mut c_void) -> Vec<u8> {
+/// HGLOBAL 내용 사본(잠금 실패 = 빈 벡터) — `windrop`의 글자 읽기도 쓴다.
+pub(super) unsafe fn global_bytes(h: *mut c_void) -> Vec<u8> {
     if h.is_null() {
         return Vec::new();
     }
@@ -304,6 +338,18 @@ impl IDataObject_Impl for FileListDataObject_Impl {
                 pUnkForRelease: std::mem::ManuallyDrop::new(None),
             });
         }
+        if is_text_fmt(fmt) && super::drag_offers_text() {
+            // SAFETY: 바이트 사본을 새 전역 블록에 담는다.
+            let h = unsafe { global_from_bytes(&paths_text_bytes(&self.paths)) }
+                .ok_or_else(|| ::windows::core::Error::from(E_OUTOFMEMORY))?;
+            return Ok(STGMEDIUM {
+                tymed: TYMED_HGLOBAL.0 as u32,
+                u: STGMEDIUM_0 {
+                    hGlobal: HGLOBAL(h),
+                },
+                pUnkForRelease: std::mem::ManuallyDrop::new(None),
+            });
+        }
         let extra = self.extra.borrow();
         let Some(s) = extra.iter().find(|s| stored_matches(s, fmt)) else {
             return Err(DV_E_FORMATETC.into());
@@ -341,7 +387,10 @@ impl IDataObject_Impl for FileListDataObject_Impl {
         }
         // SAFETY: 널이 아니면 호출자가 준 유효한 FORMATETC다.
         let fmt = unsafe { &*fmt };
-        if is_hdrop_fmt(fmt) || self.extra.borrow().iter().any(|s| stored_matches(s, fmt)) {
+        if is_hdrop_fmt(fmt)
+            || (is_text_fmt(fmt) && super::drag_offers_text())
+            || self.extra.borrow().iter().any(|s| stored_matches(s, fmt))
+        {
             S_OK
         } else {
             DV_E_FORMATETC
@@ -408,6 +457,16 @@ impl IDataObject_Impl for FileListDataObject_Impl {
             lindex: -1,
             tymed: TYMED_HGLOBAL.0 as u32,
         }];
+        // 파일이 먼저 · 글자는 뒤(파일을 받는 대상은 CF_HDROP을 고르고, 글자만 받는 대상(Windows Terminal)은 CF_UNICODETEXT를 쓴다).
+        if super::drag_offers_text() {
+            fmts.push(FORMATETC {
+                cfFormat: CF_UNICODETEXT,
+                ptd: std::ptr::null_mut(),
+                dwAspect: DVASPECT_CONTENT.0,
+                lindex: -1,
+                tymed: TYMED_HGLOBAL.0 as u32,
+            });
+        }
         fmts.extend(self.extra.borrow().iter().map(|s| FORMATETC {
             cfFormat: s.cf,
             ptd: std::ptr::null_mut(),
@@ -459,17 +518,40 @@ mod tests {
         assert_eq!(outcome(true, false), DragOutcome::Copied);
         let hdrop = hdrop_fmt();
         let text = FORMATETC {
-            cfFormat: 13, // CF_UNICODETEXT
+            cfFormat: CF_UNICODETEXT,
             ..hdrop
         };
         assert!(is_hdrop_fmt(&hdrop) && !is_hdrop_fmt(&text));
-        let paths = vec![PathBuf::from(r"C:\a\one.txt"), PathBuf::from(r"C:\b\둘.md")];
+        assert!(is_text_fmt(&text) && !is_text_fmt(&hdrop));
+        let paths = vec![
+            PathBuf::from(r"C:\a\one.txt"),
+            PathBuf::from(r"C:\b\둘.md"),
+            PathBuf::from(r"C:\c d\e.txt"),
+        ];
+        assert_eq!(
+            paths_text(&paths),
+            "C:\\a\\one.txt\r\nC:\\b\\둘.md\r\n\"C:\\c d\\e.txt\"",
+            "한 줄에 하나 · 공백 경로는 따옴표"
+        );
         let data: IDataObject = FileListDataObject::new(paths.clone()).into();
         // SAFETY: 방금 만든 COM 객체에 유효한 FORMATETC로 묻는다 · 받은 매체는 ReleaseStgMedium으로 푼다.
         unsafe {
             assert_eq!(data.QueryGetData(&hdrop), S_OK);
-            assert_eq!(data.QueryGetData(&text), DV_E_FORMATETC);
-            assert!(data.GetData(&text).is_err());
+            // T-147 ①(11-03): 경로 글자(CF_UNICODETEXT)도 낸다(기본 켬 · Windows Terminal) · 설정으로 끄면 종전처럼 없다.
+            assert_eq!(data.QueryGetData(&text), S_OK);
+            let mut tm = data.GetData(&text).expect("text");
+            assert_eq!(tm.tymed, TYMED_HGLOBAL.0 as u32);
+            let bytes = global_bytes(tm.u.hGlobal.0);
+            ReleaseStgMedium(&mut tm);
+            let units: Vec<u16> = bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_le_bytes(*c))
+                .take_while(|&u| u != 0)
+                .collect();
+            assert_eq!(String::from_utf16_lossy(&units), paths_text(&paths));
+            // 끄는 길(`set_drag_offers_text(false)`)은 전역 스위치라 병렬 시험과 겹친다 — 분기 자체는 `is_text_fmt && drag_offers_text()` 한 줄.
             let mut medium = data.GetData(&hdrop).expect("hdrop");
             assert_eq!(medium.tymed, TYMED_HGLOBAL.0 as u32);
             let back = super::super::windows::paths_from_hdrop_global(medium.u.hGlobal.0);
@@ -517,7 +599,10 @@ mod tests {
             let mut buf = [FORMATETC::default(); 8];
             let mut n = 0u32;
             let _ = e.Next(&mut buf, Some(&mut n));
-            assert_eq!(n, 2, "HDROP + 사설 형식 하나");
+            assert_eq!(
+                n, 3,
+                "HDROP + 경로 글자(CF_UNICODETEXT · T-147 ①) + 사설 형식 하나"
+            );
             // 모르는 매체는 거부.
             let bad = STGMEDIUM {
                 tymed: 0x40, // TYMED_MFPICT

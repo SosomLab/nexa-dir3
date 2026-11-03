@@ -36,6 +36,7 @@ pub(super) fn register(hwnd: isize) -> Option<Rc<RefCell<DropShared>>> {
         shared: Rc::clone(&shared),
         paths: RefCell::new(Vec::new()),
         right: std::cell::Cell::new(false),
+        text: RefCell::new(None),
     }
     .into();
     // SAFETY: UI 스레드(STA)에서 부른다 · OleInitialize는 이미 돼 있으면 S_FALSE(무해) · 등록된 COM 객체의 수명은 OLE가 쥔다.
@@ -55,6 +56,49 @@ struct DropTarget {
     /// 끌기 중 오른쪽 버튼을 봤는가(탐색기 꼴 우클릭 드래그 · 10-18 실기): `Drop`이 불릴 때는 버튼이 **이미 떼어져** `grfKeyState`에
     /// `MK_RBUTTON`이 없다 → Enter/Over에서 기억해 두고 Drop에서 쓴다(탐색기도 같은 방식).
     right: std::cell::Cell<bool>,
+    /// 파일이 없을 때 `DragEnter`에서 읽은 글자(CF_UNICODETEXT · 없으면 CF_TEXT · T-147 ① 11-03) — 파일이 먼저다(둘 다 있으면 파일만).
+    text: RefCell<Option<String>>,
+}
+
+/// 데이터 객체의 글자(CF_UNICODETEXT → 없으면 CF_TEXT(ANSI · 손실 변환)) — 없거나 비면 `None`. OLE는 클립보드와 달리 CF_TEXT를
+/// CF_UNICODETEXT로 합성해 주지 않으므로 둘을 차례로 묻는다.
+///
+/// # Safety
+/// `data`는 살아 있는 COM 객체여야 한다(OLE 콜백 인자).
+unsafe fn drop_text(data: &IDataObject) -> Option<String> {
+    const CF_TEXT: u16 = 1;
+    const CF_UNICODETEXT: u16 = 13;
+    for cf in [CF_UNICODETEXT, CF_TEXT] {
+        let fmt = FORMATETC {
+            cfFormat: cf,
+            ptd: std::ptr::null_mut(),
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0 as u32,
+        };
+        let Ok(mut medium) = data.GetData(&fmt) else {
+            continue;
+        };
+        let bytes = super::windrag::global_bytes(medium.u.hGlobal.0);
+        ReleaseStgMedium(&mut medium);
+        let s = if cf == CF_UNICODETEXT {
+            let units: Vec<u16> = bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_le_bytes(*c))
+                .take_while(|&u| u != 0)
+                .collect();
+            String::from_utf16_lossy(&units)
+        } else {
+            let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+            String::from_utf8_lossy(&bytes[..end]).into_owned()
+        };
+        if !s.trim().is_empty() {
+            return Some(s);
+        }
+    }
+    None
 }
 
 /// 데이터 객체의 CF_HDROP 경로 목록(없거나 실패 = 빈 목록).
@@ -130,9 +174,20 @@ impl IDropTarget_Impl for DropTarget_Impl {
             .unwrap_or_default();
         *self.paths.borrow_mut() = paths.clone();
         self.right.set(keys.0 & MK_RBUTTON.0 != 0);
+        // 파일이 없으면 글자(T-147 ①) — 효과는 늘 복사 · 사건은 놓을 때 한 번. 가상 파일(FILEDESCRIPTOR)은 아직 받지 않는다.
+        // SAFETY: OLE가 준 데이터 객체.
+        *self.text.borrow_mut() = if paths.is_empty() {
+            data.as_ref().and_then(|d| unsafe { drop_text(d) })
+        } else {
+            None
+        };
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if paths.is_empty() {
-            DropChoice::None // 파일이 아닌 것(글자 · 가상 파일)은 아직 받지 않는다
+            if self.text.borrow().is_some() {
+                DropChoice::Copy
+            } else {
+                DropChoice::None
+            }
         } else {
             self.send(DropEvent::Enter {
                 paths,
@@ -159,7 +214,11 @@ impl IDropTarget_Impl for DropTarget_Impl {
         }
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if self.paths.borrow().is_empty() {
-            DropChoice::None
+            if self.text.borrow().is_some() {
+                DropChoice::Copy
+            } else {
+                DropChoice::None
+            }
         } else {
             self.send(DropEvent::Over { at, ctrl, shift })
         };
@@ -172,6 +231,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
 
     fn DragLeave(&self) -> ::windows::core::Result<()> {
         self.right.set(false);
+        *self.text.borrow_mut() = None;
         if !self.paths.borrow().is_empty() {
             self.paths.borrow_mut().clear();
             let _ = self.send(DropEvent::Leave);
@@ -200,7 +260,16 @@ impl IDropTarget_Impl for DropTarget_Impl {
         };
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if paths.is_empty() {
-            DropChoice::None
+            // 글자 드롭(T-147 ①): 놓는 순간 다시 읽는다(없으면 들어올 때 읽은 것) → 큐로 한 번.
+            // SAFETY: OLE가 준 데이터 객체.
+            let text = data
+                .as_ref()
+                .and_then(|d| unsafe { drop_text(d) })
+                .or_else(|| self.text.borrow_mut().take());
+            match text {
+                Some(text) => self.send(DropEvent::Text { text, at }),
+                None => DropChoice::None,
+            }
         } else {
             self.send(DropEvent::Drop {
                 paths,

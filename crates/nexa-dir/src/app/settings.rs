@@ -226,6 +226,10 @@ impl App {
             "transfer.native" | "transfer.threads" | "transfer.unbuffered_mb" => {
                 self.apply_transfer_tuning();
             }
+            // 발신 드래그의 경로 글자 제공(T-147 ① · HIDDEN · 다음 드래그부터).
+            "dnd.offer_text" => {
+                platform::set_drag_offers_text(self.settings.flag("dnd.offer_text"))
+            }
             k if k.starts_with("scroll.") => self.apply_scroll_settings(),
             // 글자 래스터(GAP-015 · DR-31 ⑤ · 10-25): 종전엔 레지스트리에만 있고 읽는 곳이 없어 바꿔도 효과가 없었다 → 즉시 반영.
             k if k.starts_with("ui.text_") => self.apply_text_raster(),
