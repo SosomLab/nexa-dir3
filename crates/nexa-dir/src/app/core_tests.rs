@@ -1335,6 +1335,16 @@ fn dialogs_delete_permanent_and_paste_conflict() {
     assert!(dir.join("b.md").is_file() && app.dump_of("dlg").unwrap() == "none\n");
     app.command("edit.delete_permanent");
     app.startup_cmd("dlg.pick:1");
+    // GAP-040(11-03): 완전 삭제는 워커 — 명령은 바로 돌아오고 유휴 틱이 결과를 수거한다.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.delete_busy() {
+        app.delete_tick();
+        assert!(
+            std::time::Instant::now() < deadline,
+            "delete did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     assert!(!dir.join("b.md").exists(), "확인 = 영구 삭제");
     // 충돌: sub/a.txt(old)가 있을 때 a.txt 복사 → 질문 → 건너뛰기.
     std::fs::write(dir.join("sub/a.txt"), b"old").unwrap();
@@ -12965,5 +12975,73 @@ fn prefs_dump_lists_forced_and_card_lines() {
         .iter()
         .any(|l| l.contains("[locked: "));
     assert_eq!(d2.contains("[locked: "), locked, "{d2}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// GAP-040(사용자 11-03 "삭제가 메인 화면을 멈추지 않게"): 완전 삭제는 워커 스레드 — 시작 직후 바쁨 · 틱이 항목별 결과를 수거 · 끝나면 토스트 ·
+/// 실패분(Windows: 다른 프로그램이 공유 금지로 연 파일)은 [다시 시도]/[닫기] 안내 · 다시 시도 = 실패분만 워커로(확인 없이).
+#[test]
+fn delete_permanent_runs_on_worker_and_reports_failures() {
+    let (mut app, dir) = fixture("delworker");
+    app.layout_for(1200, 800, 1.0);
+    let paths: Vec<std::path::PathBuf> = (0..5).map(|i| dir.join(format!("w{i}.txt"))).collect();
+    for p in &paths {
+        std::fs::write(p, b"x").unwrap();
+    }
+    let wait = |app: &mut App| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while app.delete_busy() {
+            app.delete_tick();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "delete did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    };
+    // Windows: 하나를 공유 금지로 열어 둔다(다른 프로그램이 쓰는 파일) → 그 항목만 실패 · 나머지는 지워진다.
+    #[cfg(windows)]
+    let hold = {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&paths[0])
+            .unwrap()
+    };
+    app.delete_permanent_start(paths.clone());
+    assert!(app.delete_busy(), "명령은 바로 돌아온다 — 워커가 지운다");
+    assert!(
+        app.statusbar.left().starts_with("Deleting"),
+        "{}",
+        app.statusbar.left()
+    );
+    wait(&mut app);
+    for p in &paths[1..] {
+        assert!(!p.exists(), "{}", p.display());
+    }
+    #[cfg(windows)]
+    {
+        assert!(paths[0].exists(), "잠긴 파일은 남는다");
+        let d = app.dump_of("dlg").unwrap();
+        assert!(d.starts_with("pending Delete Failed | "), "{d}");
+        assert!(d.contains("w0.txt"), "{d}");
+        // 다시 시도 = 실패분만 워커로(확인 없이) — 풀린 뒤라 지워지고 안내 없음.
+        drop(hold);
+        app.startup_cmd("dlg.pick:1");
+        assert!(app.delete_busy());
+        wait(&mut app);
+        assert!(!paths[0].exists());
+        assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    }
+    #[cfg(not(windows))]
+    {
+        assert!(!paths[0].exists());
+        assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+    }
+    assert!(
+        !app.statusbar.left().starts_with("Deleting"),
+        "끝나면 항목 수로"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

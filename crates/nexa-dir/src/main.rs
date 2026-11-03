@@ -547,6 +547,8 @@ struct App {
     transfer_queue: app::queue::TransferQueue,
     /// 휴지통 워커(10-18 · `Trash::trash_async`) — (결과 채널, 대상) · 끝나면 `trash_finish`.
     trash_job: Option<(platform::TrashRx, Vec<PathBuf>, app::menus::TrashOrigin)>,
+    /// 완전 삭제 워커(GAP-040 · 사용자 11-03 "삭제가 메인 화면을 멈추지 않게") — 항목별 결과 채널 · 끝나면 `delete_finish`.
+    delete_job: Option<app::dialogs::DeleteJob>,
     /// 폴더 크기 계산(정보 도크 · T-166) — 작업 1개 + 경로별 캐시.
     dirsizes: app::dirsize::DirSizes,
     /// 도크(정보 · 미리보기) 갱신 예약 시각(T-177 · 사용자 10-05 "파일 간 키보드 이동 속도") — 선택이 바뀔 때마다 바로 계산하지
@@ -921,6 +923,7 @@ impl App {
             transfer: None,
             transfer_queue: app::queue::TransferQueue::new(None),
             trash_job: None,
+            delete_job: None,
             dirsizes: app::dirsize::DirSizes::default(),
             docks_due: None,
             docks_first: None,

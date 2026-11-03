@@ -304,6 +304,13 @@ impl ApplicationHandler<Wake> for App {
         if self.trash_busy() {
             next = next.min(now + Duration::from_millis(50));
         }
+        // 완전 삭제 워커(GAP-040) — 항목별 결과 수거 · 끝나면 결과 반영 · 기다리는 동안 50 ms.
+        if self.delete_tick() {
+            self.redraw();
+        }
+        if self.delete_busy() {
+            next = next.min(now + Duration::from_millis(50));
+        }
         if self
             .panels
             .iter()

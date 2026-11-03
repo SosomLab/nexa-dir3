@@ -6,6 +6,14 @@ use crate::dlg_win::{DlgAction, DlgInput, DlgSpec};
 use crate::*;
 use std::sync::mpsc;
 
+/// 완전 삭제 워커(GAP-040): 워커가 항목마다 `(경로, 성공)`을 보내고 끝나면 채널을 닫는다 — UI는 `App::delete_tick`이 수거.
+pub(crate) struct DeleteJob {
+    rx: mpsc::Receiver<(PathBuf, bool)>,
+    total: usize,
+    done: usize,
+    failed: Vec<PathBuf>,
+}
+
 /// 대화상자 결과를 누가 받는가.
 pub(crate) enum DlgReply {
     /// 확인(1)이면 영구 삭제.
@@ -17,6 +25,8 @@ pub(crate) enum DlgReply {
         /// 출처(GAP-029) — 취소(0)면 미러는 문구 + 재비교.
         origin: crate::app::menus::TrashOrigin,
     },
+    /// 완전 삭제 실패 안내(GAP-040) — 1 = 실패분만 다시 시도(확인 없이 워커로) · 그 외 = 닫기.
+    DeleteFailedPermanent(Vec<PathBuf>),
     /// 휴지통 삭제 실패 안내(dir2 X-35) — 1 = 실패분만 다시 시도(잠금 검사부터) · 출처 유지.
     DeleteFailed {
         failed: Vec<PathBuf>,
@@ -126,7 +136,12 @@ impl App {
         match reply {
             DlgReply::DeletePermanent(paths) => {
                 if id == 1 {
-                    self.delete_permanent(&paths);
+                    self.delete_permanent_start(paths);
+                }
+            }
+            DlgReply::DeleteFailedPermanent(failed) => {
+                if id == 1 {
+                    self.delete_permanent_start(failed);
                 }
             }
             DlgReply::DeleteLocked {
@@ -247,15 +262,91 @@ impl App {
         self.ask(spec, DlgReply::DeletePermanent(paths));
     }
 
-    fn delete_permanent(&mut self, paths: &[PathBuf]) {
-        let mut ok = 0usize;
-        let mut failed = 0usize;
-        for p in paths {
-            match ndir_ops::delete_permanent(p) {
-                Ok(()) => ok += 1,
-                Err(_) => failed += 1,
-            }
+    /// 완전 삭제 시작(확인 뒤 · GAP-040 · 사용자 11-03): **워커 스레드**에서 `ndir_ops::delete_permanent`를 항목마다 — 큰 트리 · 잠긴 파일
+    /// (Windows 공유 위반은 바로 실패하지만 느린 볼륨 · 수천 항목은 수 초)이 UI를 멈추지 않는다. 종전(dir2 win.rs:3754 계승) = UI 스레드 동기
+    /// 루프 → "응답 없음". 결과는 유휴 틱 `delete_tick`이 수거(docs/01 §3 · 자체 타이머 없음) · 동시 1잡(dir2 SHELL-070 `pending_delete`).
+    pub(crate) fn delete_permanent_start(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
         }
+        if self.delete_job.is_some() {
+            let a = self.active;
+            self.toast_panel(
+                a,
+                toast::ToastKind::Warn,
+                tr("del.title"),
+                tr("del.progress"),
+            );
+            return;
+        }
+        let total = paths.len();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for p in paths {
+                let ok = ndir_ops::delete_permanent(&p).is_ok();
+                if tx.send((p, ok)).is_err() {
+                    break; // 앱이 먼저 끝났다 — 남은 항목은 지우지 않는다
+                }
+            }
+        });
+        self.delete_job = Some(DeleteJob {
+            rx,
+            total,
+            done: 0,
+            failed: Vec::new(),
+        });
+        self.status_note(&trf("del.progressCount", &["0", &total.to_string()]));
+        self.redraw();
+    }
+
+    pub(crate) fn delete_busy(&self) -> bool {
+        self.delete_job.is_some()
+    }
+
+    /// 완전 삭제 워커 수거(틱) — 진행이 바뀌었거나 끝났으면 `true`(다시 그림). 채널이 닫히면 끝.
+    pub(crate) fn delete_tick(&mut self) -> bool {
+        let (changed, finished, done, total) = {
+            let Some(job) = &mut self.delete_job else {
+                return false;
+            };
+            let mut changed = false;
+            let mut finished = false;
+            loop {
+                match job.rx.try_recv() {
+                    Ok((p, ok)) => {
+                        job.done += 1;
+                        if !ok {
+                            job.failed.push(p);
+                        }
+                        changed = true;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        finished = true;
+                        break;
+                    }
+                }
+            }
+            (changed, finished, job.done, job.total)
+        };
+        if finished {
+            let job = self.delete_job.take().expect("checked above");
+            self.delete_finish(job);
+            return true;
+        }
+        if changed {
+            self.status_note(&trf(
+                "del.progressCount",
+                &[&done.to_string(), &total.to_string()],
+            ));
+        }
+        changed
+    }
+
+    /// 완전 삭제 결과 반영: 토스트(지운 수 · 실패 수) · 재열람 · 실패분은 [다시 시도]/[닫기] 안내(휴지통 삭제 실패 안내 dir2 X-35와 같은 모양).
+    fn delete_finish(&mut self, job: DeleteJob) {
+        let ok = job.done - job.failed.len();
+        let failed = job.failed.len();
         let mut text = trf("del.done", &[&tr("del.kindPermanent"), &ok.to_string()]);
         if failed > 0 {
             text.push_str(" · ");
@@ -276,7 +367,21 @@ impl App {
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }
+        self.status_hold = None; // 진행 "n/m"은 끝났다 — 항목 수로
         self.update_status();
+        if failed > 0 {
+            let spec = DlgSpec {
+                title: tr("del.failTitle"),
+                text: app::menus::fail_message(&job.failed),
+                buttons: vec![(1, tr("del.retry")), (0, tr("del.close"))],
+                default: 1,
+                cancel: 0,
+                input: None,
+                delay: None,
+                arm: None,
+            };
+            self.ask(spec, DlgReply::DeleteFailedPermanent(job.failed));
+        }
     }
 
     /// 질문 글 — 재개 중 끊긴 덮어쓰기 사본(docs/26 §12.7 · 저널 started 줄 · `TransferJob.interrupted`)이면 "이전 전송에서 중단된 사본 ·

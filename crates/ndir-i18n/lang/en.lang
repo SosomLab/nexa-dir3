@@ -923,6 +923,7 @@ pref.xferThreads.desc = How many files inside a folder are copied at the same ti
 pref.xferUnbuffered = Copy without cache from this size (MB, 0 = off)
 pref.xferUnbuffered.desc = Files at least this large are copied without the system file cache (Windows). This keeps other programs responsive while moving files far larger than memory, but the copy itself is usually slower. Default 0 (off).
 del.progress = Deleting...
+del.progressCount = Deleting... {0}/{1}
 
 # 압축 미리보기(X-46)
 archive.summary = {0} archive · {1} files · {2} folders

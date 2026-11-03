@@ -923,6 +923,7 @@ pref.xferThreads.desc = フォルダー内のファイルを同時にいくつ�
 pref.xferUnbuffered = キャッシュなしでコピーするサイズ (MB, 0 = 使用しない)
 pref.xferUnbuffered.desc = このサイズ以上のファイルはシステムのファイルキャッシュを通さずにコピーします (Windows)。メモリよりはるかに大きいファイルを移すときに他のプログラムへの影響を減らしますが、通常はコピー自体が遅くなります。既定値は 0 (使用しない)。
 del.progress = 削除中...
+del.progressCount = 削除中... {0}/{1}
 
 # 압축 미리보기(X-46)
 archive.summary = {0} アーカイブ · ファイル {1} · フォルダー {2}

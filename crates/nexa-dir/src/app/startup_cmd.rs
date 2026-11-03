@@ -1075,9 +1075,12 @@ impl App {
                     || self.sync_job.is_some()
                     || self.transfer_busy()
                     || self.trash_busy()
+                    || self.delete_busy()
             }
             // 휴지통 워커(Windows `trash_async` · 미러 삭제 실기 · 10-26).
             "trash.wait" => self.trash_busy(),
+            // 완전 삭제 워커(GAP-040 · 11-03).
+            "delete.wait" => self.delete_busy(),
             "dirsize.wait" => self.dirsizes.running() || self.dirsizes.display_pending(),
             "git.wait" => !self.git_busy.is_empty(),
             _ => false,

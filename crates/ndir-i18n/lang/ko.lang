@@ -922,6 +922,7 @@ pref.xferThreads.desc = 폴더 안의 파일을 몇 개씩 동시에 복사할�
 pref.xferUnbuffered = 캐시 없이 복사할 파일 크기(MB, 0 = 사용 안 함)
 pref.xferUnbuffered.desc = 이 크기 이상인 파일은 시스템 파일 캐시를 거치지 않고 복사합니다(Windows). 메모리보다 훨씬 큰 파일을 옮길 때 다른 프로그램이 느려지는 것을 줄이지만, 보통은 복사 자체가 느려집니다. 기본 0(사용 안 함).
 del.progress = 삭제 중...
+del.progressCount = 삭제 중... {0}/{1}
 
 # 압축 미리보기(X-46)
 archive.summary = {0} 압축 · 파일 {1} · 폴더 {2}
