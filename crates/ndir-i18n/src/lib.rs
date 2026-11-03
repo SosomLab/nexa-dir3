@@ -489,4 +489,55 @@ mod tests {
         assert_eq!(from_worker, "파일");
         activate(Lang::builtin_en());
     }
+
+    /// T-134(11-03): 코드가 부르는 `tr("…")` · `trf("…"` **리터럴 키**는 en.lang에 있어야 한다 — 종전엔 아무 가드도 없어 `pref.fastScroll`
+    /// 같은 누락을 못 잡았다. 대상 = nexa-dir · ndir-settings 소스(시험 모듈 포함) · `tr(&format!(..))` 같은 동적 키는 리터럴이 아니라 지나간다 ·
+    /// 허용 = `no.such.key`(폴백 시험용).
+    #[test]
+    fn code_literal_keys_exist_in_en() {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        for c in ["nexa-dir", "ndir-settings"] {
+            walk(&root.join(c).join("src"), &mut files);
+        }
+        assert!(files.len() > 50, "소스 {}개 — 경로가 맞는가", files.len());
+        let en = parse(BUILTIN_EN);
+        let mut missing = std::collections::BTreeSet::new();
+        for f in &files {
+            let text = std::fs::read_to_string(f).expect("read");
+            for pat in ["tr(\"", "trf(\""] {
+                for (i, _) in text.match_indices(pat) {
+                    // `push_str("` · `substr("` 같은 식별자 꼬리는 호출이 아니다 — 앞 글자가 식별자 문자가 아닐 때만.
+                    if i > 0 {
+                        let b = text.as_bytes()[i - 1];
+                        if b.is_ascii_alphanumeric() || b == b'_' {
+                            continue;
+                        }
+                    }
+                    let rest = &text[i + pat.len()..];
+                    let Some(end) = rest.find('"') else { continue };
+                    let key = &rest[..end];
+                    if key.is_empty() || key == "no.such.key" || en.strings.contains_key(key) {
+                        continue;
+                    }
+                    let rel = f.strip_prefix(&root).unwrap_or(f).display().to_string();
+                    missing.insert(format!("{key} ({rel})"));
+                }
+            }
+        }
+        assert!(missing.is_empty(), "en.lang에 없는 키: {missing:?}");
+    }
 }

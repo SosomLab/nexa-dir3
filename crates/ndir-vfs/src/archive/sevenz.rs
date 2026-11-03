@@ -62,7 +62,7 @@ impl ArchiveFormat for SevenZ {
             Some(0x17) => Err(ArchiveError::NeedsCodec("7z".into(), "LZMA".into())),
             // 평문 헤더도 스트림 구조 해석에 코덱 지식이 필요 — 플러그인 경로로
             Some(0x01) => Err(ArchiveError::NeedsCodec("7z".into(), "LZMA".into())),
-            _ => Err(ArchiveError::Corrupt("7z 다음 헤더 손상".into())),
+            _ => Err(ArchiveError::Corrupt("7z next header corrupt".into())),
         }
     }
 }

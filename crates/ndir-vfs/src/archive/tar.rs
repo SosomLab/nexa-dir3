@@ -142,7 +142,7 @@ impl ArchiveFormat for Tar {
             zeros = 0;
             if !checksum_ok(&h) {
                 if out.entries.is_empty() {
-                    return Err(ArchiveError::Corrupt("TAR 헤더 체크섬 불일치".into()));
+                    return Err(ArchiveError::Corrupt("TAR header checksum mismatch".into()));
                 }
                 break; // 뒤쪽 잡음은 조용히 종료(패딩 관용)
             }
@@ -220,7 +220,7 @@ impl ArchiveFormat for Tar {
             off = after_data;
         }
         if out.entries.is_empty() {
-            return Err(ArchiveError::Corrupt("TAR 항목 없음".into()));
+            return Err(ArchiveError::Corrupt("no TAR entries".into()));
         }
         Ok(finish(out, limit))
     }

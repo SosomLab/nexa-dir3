@@ -120,7 +120,7 @@ pub(super) fn find_eocd(src: &dyn ReadAt) -> Result<(Vec<u8>, usize, u64), Archi
     let n = src.read_at(start, &mut buf)?;
     buf.truncate(n);
     if buf.len() < EOCD_MIN {
-        return Err(ArchiveError::Corrupt("ZIP 꼬리 부족".into()));
+        return Err(ArchiveError::Corrupt("ZIP tail too short".into()));
     }
     for i in (0..=buf.len() - EOCD_MIN).rev() {
         if u32le(&buf, i) == Some(SIG_EOCD) {
@@ -131,7 +131,7 @@ pub(super) fn find_eocd(src: &dyn ReadAt) -> Result<(Vec<u8>, usize, u64), Archi
             }
         }
     }
-    Err(ArchiveError::Corrupt("EOCD 없음".into()))
+    Err(ArchiveError::Corrupt("EOCD missing".into()))
 }
 
 impl ArchiveFormat for Zip {
@@ -184,7 +184,7 @@ impl ArchiveFormat for Zip {
             }
         }
         if cd_size as usize > MAX_CHUNK {
-            return Err(ArchiveError::Corrupt("중앙 디렉터리 과대".into()));
+            return Err(ArchiveError::Corrupt("central directory too large".into()));
         }
         // SFX 등 앞에 데이터가 붙은 파일 보정 — EOCD 직전이 CD 끝이어야 한다
         // (Zip64 u64 오프셋이 거대하면 덧셈이 wrap하므로 checked — 실패도 보정 대상)
@@ -263,7 +263,9 @@ impl ArchiveFormat for Zip {
             seen += 1;
         }
         if out.entries.is_empty() && total > 0 && seen == 0 {
-            return Err(ArchiveError::Corrupt("중앙 디렉터리 레코드 없음".into()));
+            return Err(ArchiveError::Corrupt(
+                "central directory record missing".into(),
+            ));
         }
         Ok(finish(out, limit))
     }

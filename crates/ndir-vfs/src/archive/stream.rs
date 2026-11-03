@@ -22,7 +22,7 @@ pub struct SingleStream;
 fn inner_name(hint: &str, ext: &str) -> String {
     let base = hint.trim();
     if base.is_empty() {
-        return format!("(안쪽 내용 — {ext})");
+        return format!("(inner content — {ext})");
     }
     let lower = base.to_ascii_lowercase();
     for (suffix, rep) in [
@@ -148,7 +148,7 @@ impl ArchiveFormat for SingleStream {
         "stream"
     }
     fn label(&self) -> &'static str {
-        "단일 스트림"
+        "single stream"
     }
     fn exts(&self) -> &'static [&'static str] {
         &[

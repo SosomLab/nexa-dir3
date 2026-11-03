@@ -222,12 +222,12 @@ impl ReadAt for SliceSource<'_> {
 /// 정확히 `len`바이트 읽기(부족 = `Corrupt`). 상한 [`MAX_CHUNK`].
 pub fn read_exact_at(src: &dyn ReadAt, off: u64, len: usize) -> Result<Vec<u8>, ArchiveError> {
     if len > MAX_CHUNK {
-        return Err(ArchiveError::Corrupt("읽기 상한 초과".into()));
+        return Err(ArchiveError::Corrupt("read limit exceeded".into()));
     }
     let mut buf = vec![0u8; len];
     let n = src.read_at(off, &mut buf)?;
     if n != len {
-        return Err(ArchiveError::Corrupt(format!("{off}+{len} 범위 부족")));
+        return Err(ArchiveError::Corrupt(format!("{off}+{len} out of range")));
     }
     Ok(buf)
 }

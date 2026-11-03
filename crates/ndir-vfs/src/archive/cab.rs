@@ -117,7 +117,7 @@ impl ArchiveFormat for Cab {
             });
         }
         if out.entries.is_empty() && n_files > 0 {
-            return Err(ArchiveError::Corrupt("CFFILE 테이블 읽기 실패".into()));
+            return Err(ArchiveError::Corrupt("CFFILE table read failed".into()));
         }
         Ok(finish(out, limit))
     }
@@ -131,7 +131,7 @@ fn read_cstr(src: &dyn ReadAt, off: u64) -> Result<(Vec<u8>, u64), ArchiveError>
     loop {
         let n = src.read_at(cur, &mut buf)?;
         if n == 0 {
-            return Err(ArchiveError::Corrupt("이름 종료 없음".into()));
+            return Err(ArchiveError::Corrupt("unterminated name".into()));
         }
         if let Some(i) = buf[..n].iter().position(|&b| b == 0) {
             out.extend_from_slice(&buf[..i]);
@@ -140,7 +140,7 @@ fn read_cstr(src: &dyn ReadAt, off: u64) -> Result<(Vec<u8>, u64), ArchiveError>
         out.extend_from_slice(&buf[..n]);
         cur += n as u64;
         if out.len() > super::MAX_NAME {
-            return Err(ArchiveError::Corrupt("이름 과대".into()));
+            return Err(ArchiveError::Corrupt("name too long".into()));
         }
     }
 }

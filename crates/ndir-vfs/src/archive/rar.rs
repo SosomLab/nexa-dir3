@@ -326,7 +326,7 @@ impl ArchiveFormat for Rar {
             return Err(ArchiveError::NotArchive);
         }
         if out.entries.is_empty() {
-            return Err(ArchiveError::Corrupt("RAR 항목 없음".into()));
+            return Err(ArchiveError::Corrupt("no RAR entries".into()));
         }
         Ok(finish(out, opts.limit()))
     }

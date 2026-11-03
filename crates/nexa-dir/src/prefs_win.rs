@@ -2462,10 +2462,8 @@ nav.favorites=D:/x
         s.set("scroll.fast", "off").expect("set");
         w.refresh(&s);
         let why = w.lock_reason("scroll.fast_step").expect("reason");
-        assert!(
-            why.contains(&tr("pref.fastScroll")) || !why.is_empty(),
-            "{why}"
-        );
+        // T-134(11-03): 종전 `pref.fastScroll`은 없는 키였고 `|| !why.is_empty()`가 가려 주었다 → 실제 라벨 키 `pref.fsEnabled`로 엄격히.
+        assert!(why.contains(&tr("pref.fsEnabled")), "{why}");
         assert_eq!(w.is_locked("scroll.fast_hud_pos"), Some(true), "전이 잠금");
         assert_eq!(w.lock_reason("scroll.fast_hud_pos"), Some(why));
         assert_eq!(s.get("scroll.fast_step"), Some("7"), "잠겨도 값은 보관");

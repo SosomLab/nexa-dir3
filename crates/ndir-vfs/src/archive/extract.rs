@@ -158,7 +158,7 @@ fn plan(path: &Path) -> Result<Plan, ArchiveError> {
         Kind::Gzip => {
             let size = src.size();
             if size > MAX_ENTRY {
-                return Err(ArchiveError::Corrupt("gzip 파일이 너무 큼".into()));
+                return Err(ArchiveError::Corrupt("gzip file too large".into()));
             }
             let whole = read_exact_at(&src, 0, size as usize)?;
             let (name, payload) = gzip_header(&whole)?;
@@ -318,11 +318,11 @@ fn write_item(
             crc: want,
         } => {
             if *encrypted {
-                return Err(ArchiveError::NeedsCodec("ZIP".into(), "암호".into()));
+                return Err(ArchiveError::NeedsCodec("ZIP".into(), "encryption".into()));
             }
             let lh = src.read(*off, 30)?;
             if u32le(&lh, 0) != Some(0x0403_4B50) {
-                return Err(ArchiveError::Corrupt("로컬 헤더 없음".into()));
+                return Err(ArchiveError::Corrupt("local header missing".into()));
             }
             let nlen = u64::from(u16le(&lh, 26).unwrap_or(0));
             let xlen = u64::from(u16le(&lh, 28).unwrap_or(0));
@@ -340,7 +340,7 @@ fn write_item(
                 }
                 8 => {
                     if *packed > MAX_ENTRY {
-                        return Err(ArchiveError::NeedsCodec("ZIP".into(), "크기".into()));
+                        return Err(ArchiveError::NeedsCodec("ZIP".into(), "size".into()));
                     }
                     // ★ 스트리밍(T-179 D): 압축 입력만 메모리에 · 출력은 32 KiB 창을 넘는 대로 파일로(취소 · 진행은 `put`이 본다).
                     let comp = src.read(data_off, *packed)?;
@@ -431,7 +431,7 @@ fn zip_items(src: &dyn ReadAt) -> Result<Vec<Item>, ArchiveError> {
         }
     }
     if cd_size as usize > super::MAX_CHUNK {
-        return Err(ArchiveError::Corrupt("중앙 디렉터리 과대".into()));
+        return Err(ArchiveError::Corrupt("central directory too large".into()));
     }
     // SFX 보정(zip.rs와 같다).
     let mut base = 0u64;
@@ -601,7 +601,7 @@ fn gzip_header(whole: &[u8]) -> Result<(Option<String>, &[u8]), ArchiveError> {
         p += 2;
     }
     if p + 8 > whole.len() {
-        return Err(ArchiveError::Corrupt("gzip 헤더 손상".into()));
+        return Err(ArchiveError::Corrupt("gzip header corrupt".into()));
     }
     Ok((name, &whole[p..whole.len() - 8]))
 }
@@ -642,7 +642,10 @@ struct Bits<'a> {
 impl Bits<'_> {
     fn bits(&mut self, n: u32) -> Result<u32, ArchiveError> {
         while self.cnt < n {
-            let b = *self.d.get(self.pos).ok_or_else(|| corrupt("입력 끝"))?;
+            let b = *self
+                .d
+                .get(self.pos)
+                .ok_or_else(|| corrupt("unexpected end of input"))?;
             self.pos += 1;
             self.buf |= u32::from(b) << self.cnt;
             self.cnt += 8;
@@ -673,7 +676,7 @@ impl Huff {
             left <<= 1;
             left -= i32::from(c);
             if left < 0 {
-                return Err(corrupt("허프먼 코드 과다"));
+                return Err(corrupt("too many Huffman codes"));
             }
         }
         let mut offs = [0u16; MAXBITS + 1];
@@ -703,7 +706,7 @@ impl Huff {
             first <<= 1;
             code <<= 1;
         }
-        Err(corrupt("허프먼 코드 불일치"))
+        Err(corrupt("Huffman code mismatch"))
     }
 }
 
@@ -748,7 +751,7 @@ impl<'s> Out<'s> {
     /// 뒤참조 복사(`d` 바이트 앞에서 `len`개 · 겹침 허용) — 거리가 지금까지 낸 출력보다 멀면 손상.
     fn copy_back(&mut self, d: usize, len: usize) -> Result<(), ArchiveError> {
         if d == 0 || d > self.hist.len() {
-            return Err(corrupt("거리가 출력보다 멀다"));
+            return Err(corrupt("distance beyond output"));
         }
         let start = self.hist.len() - d;
         for k in 0..len {
@@ -811,15 +814,18 @@ fn inflate_into(data: &[u8], out: &mut Out<'_>) -> Result<(), ArchiveError> {
                 // 저장 블록: 바이트 경계 · LEN · NLEN.
                 b.buf = 0;
                 b.cnt = 0;
-                let len = u16le(data, b.pos).ok_or_else(|| corrupt("입력 끝"))? as usize;
-                let nlen = u16le(data, b.pos + 2).ok_or_else(|| corrupt("입력 끝"))? as usize;
+                let len =
+                    u16le(data, b.pos).ok_or_else(|| corrupt("unexpected end of input"))? as usize;
+                let nlen = u16le(data, b.pos + 2)
+                    .ok_or_else(|| corrupt("unexpected end of input"))?
+                    as usize;
                 if len != (!nlen & 0xFFFF) {
-                    return Err(corrupt("저장 블록 길이 불일치"));
+                    return Err(corrupt("stored block length mismatch"));
                 }
                 b.pos += 4;
                 let chunk = data
                     .get(b.pos..b.pos + len)
-                    .ok_or_else(|| corrupt("입력 끝"))?;
+                    .ok_or_else(|| corrupt("unexpected end of input"))?;
                 out.extend(chunk)?;
                 b.pos += len;
             }
@@ -838,7 +844,7 @@ fn inflate_into(data: &[u8], out: &mut Out<'_>) -> Result<(), ArchiveError> {
                 let ndist = b.bits(5)? as usize + 1;
                 let ncode = b.bits(4)? as usize + 4;
                 if nlen > 286 || ndist > 30 {
-                    return Err(corrupt("코드 수 초과"));
+                    return Err(corrupt("code count exceeded"));
                 }
                 let mut cl = [0u8; 19];
                 for &i in CL_ORDER.iter().take(ncode) {
@@ -856,12 +862,12 @@ fn inflate_into(data: &[u8], out: &mut Out<'_>) -> Result<(), ArchiveError> {
                         }
                         16 => {
                             if i == 0 {
-                                return Err(corrupt("반복할 길이 없음"));
+                                return Err(corrupt("no previous length to repeat"));
                             }
                             let prev = lengths[i - 1];
                             let n = 3 + b.bits(2)? as usize;
                             if i + n > lengths.len() {
-                                return Err(corrupt("반복 초과"));
+                                return Err(corrupt("repeat overflow"));
                             }
                             lengths[i..i + n].fill(prev);
                             i += n;
@@ -873,24 +879,24 @@ fn inflate_into(data: &[u8], out: &mut Out<'_>) -> Result<(), ArchiveError> {
                                 11 + b.bits(7)? as usize
                             };
                             if i + n > lengths.len() {
-                                return Err(corrupt("반복 초과"));
+                                return Err(corrupt("repeat overflow"));
                             }
                             i += n;
                         }
-                        _ => return Err(corrupt("길이 코드")),
+                        _ => return Err(corrupt("bad length code")),
                     }
                 }
                 if lengths[256] == 0 {
-                    return Err(corrupt("블록 끝 코드 없음"));
+                    return Err(corrupt("missing end-of-block code"));
                 }
                 let lit = Huff::new(&lengths[..nlen])?;
                 let dist = Huff::new(&lengths[nlen..])?;
                 codes(&mut b, out, &lit, &dist)?;
             }
-            _ => return Err(corrupt("블록 종류 3")),
+            _ => return Err(corrupt("block type 3")),
         }
         if out.total > MAX_ENTRY {
-            return Err(corrupt("결과가 너무 큼"));
+            return Err(corrupt("output too large"));
         }
         if last {
             return Ok(());
@@ -908,12 +914,12 @@ fn codes(b: &mut Bits<'_>, out: &mut Out<'_>, lit: &Huff, dist: &Huff) -> Result
         } else {
             let si = sym - 257;
             if si >= 29 {
-                return Err(corrupt("길이 기호"));
+                return Err(corrupt("bad length symbol"));
             }
             let len = LEN_BASE[si] as usize + b.bits(u32::from(LEN_EXTRA[si]))? as usize;
             let ds = dist.decode(b)? as usize;
             if ds >= 30 {
-                return Err(corrupt("거리 기호"));
+                return Err(corrupt("bad distance symbol"));
             }
             let d = DIST_BASE[ds] as usize + b.bits(u32::from(DIST_EXTRA[ds]))? as usize;
             out.copy_back(d, len)?;
@@ -971,7 +977,7 @@ mod tests {
         assert_eq!(inflate(MIXED_256).unwrap(), mixed);
         assert_eq!(inflate(STORED).unwrap(), b"stored!");
         assert!(inflate(&[]).is_err());
-        assert!(inflate(&[0x07]).is_err(), "블록 종류 3");
+        assert!(inflate(&[0x07]).is_err(), "block type 3");
         assert!(inflate(&DYN_FOX[..20]).is_err(), "잘린 입력");
     }
 
