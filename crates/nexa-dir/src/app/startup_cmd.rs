@@ -1052,9 +1052,12 @@ impl App {
             // 대화상자 **대기 사양이 창이 될 때까지**(`ask` → `dlg_pending` → 다음 틱 창 생성 · T-136 delete-confirm · 종전 `@after:300`) ·
             // 요청 자체가 없으면 바로 통과(덤프가 `none`으로 판정을 드러낸다).
             "dlg.wait" => self.dlg_pending.is_some(),
-            // 앱이 조용해질 때까지: 전송 · 메뉴 셸 항목 수집 · 자가 점검 · 대화상자 대기 · 도크 갱신 예약이 모두 없을 때.
+            // 앱이 조용해질 때까지: 전송 · 삭제 워커(휴지통 · 완전 삭제 GAP-040 — T4 delete-confirm이 워커가 끝나기 전에 목록을 덤프했다 · 11-03) ·
+            // 메뉴 셸 항목 수집 · 자가 점검 · 대화상자 대기 · 도크 갱신 예약이 모두 없을 때.
             "idle.wait" => {
                 self.transfer_busy()
+                    || self.trash_busy()
+                    || self.delete_busy()
                     || self.ctx_pending.is_some()
                     || self.ctx_wait.is_some()
                     || self.open_check
