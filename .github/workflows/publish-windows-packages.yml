@@ -19,6 +19,11 @@ on:
       tag:
         required: true
         type: string
+      # 직전 태그의 버전(예: 0.29.0) — choco에서 그 판이 아직 검수 중이면 이번 제출을 건너뛴다(사용자 11-03 "진행 중이면 제외").
+      prev:
+        required: false
+        default: ""
+        type: string
       force:
         required: false
         default: false
@@ -28,6 +33,11 @@ on:
       tag:
         description: "릴리스 태그(예: v0.23.0)"
         required: true
+        type: string
+      prev:
+        description: "직전 버전(예: 0.29.0 · choco 검수 중이면 건너뜀 · 비우면 검사 안 함)"
+        required: false
+        default: ""
         type: string
       force:
         description: "검수 대기 판정을 무시하고 제출(사람이 확인했을 때만)"
@@ -111,6 +121,15 @@ jobs:
                 if body2=$(curl -fsS "$url2") && echo "$body2" | grep -q '<entry>'; then
                   echo "::warning::choco: $pkg $cur 이(가) 이미 제출되어 검수 중 — 건너뛴다(반려 뒤 재제출은 force=true)."
                   go=false; continue
+                fi
+                # 직전 판이 아직 검수 중이면 큐에 쌓지 않는다(사용자 11-03 정책 "진행 중인 상태가 있으면 제외" · 11-03 0.29.0 Pending 사례).
+                prev="${{ inputs.prev }}"
+                if [ -n "$prev" ] && [ "$prev" != "$latest" ]; then
+                  url3="https://community.chocolatey.org/api/v2/Packages()?\$filter=Id%20eq%20'$pkg'%20and%20Version%20eq%20'$prev'"
+                  if body3=$(curl -fsS "$url3") && echo "$body3" | grep -q '<d:PackageStatus>Submitted'; then
+                    echo "::warning::choco: $pkg 직전 $prev 이(가) 검수 중 — 이번 릴리스는 제출을 건너뛴다(승인 뒤 publish-windows-packages 수동 1회)."
+                    go=false; continue
+                  fi
                 fi
                 echo "choco: $pkg 승인 최신 $latest → $cur 제출."
               done

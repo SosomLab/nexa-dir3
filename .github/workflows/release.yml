@@ -47,10 +47,13 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
       prerelease: ${{ steps.v.outputs.prerelease }}
+      # 직전 태그의 버전(채널 가드 — 직전 판이 choco 검수 중이면 제출 건너뜀 · 사용자 11-03 "진행 중이면 제외").
+      prev_version: ${{ steps.v.outputs.prev_version }}
     steps:
       - uses: actions/checkout@v4
         with:
           path: nexa-dir3
+          fetch-depth: 0
       - id: v
         shell: bash
         run: |
@@ -63,6 +66,8 @@ jobs:
           case "$version" in *-*) pre=true ;; *) pre=false ;; esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"; echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
           echo "릴리스 $tag (버전 $version · prerelease=$pre)"
+          prev=$(git -C "$GITHUB_WORKSPACE/nexa-dir3" tag --list "v*" --sort=-v:refname | grep -vx "$tag" | head -1 || true)
+          echo "prev_version=${prev#v}" >> "$GITHUB_OUTPUT"; echo "직전 태그 ${prev:-없음}"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             cargo_v=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
             [ "$cargo_v" = "$version" ] || { echo "::error::태그 $version ≠ Cargo.toml $cargo_v"; exit 1; }
@@ -383,6 +388,7 @@ jobs:
     uses: ./.github/workflows/publish-windows-packages.yml
     with:
       tag: ${{ needs.meta.outputs.tag }}
+      prev: ${{ needs.meta.outputs.prev_version }}
     secrets: inherit
 
   # ── Linux 패키지 저장소(pkg.sosomlab.com) 갱신 신호 — SosomLab/linux-repo의 publish가 받아 서명 색인을 다시 만든다(정식 공개만 ·
