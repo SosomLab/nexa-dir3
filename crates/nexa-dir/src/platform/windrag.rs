@@ -259,6 +259,93 @@ fn is_text_fmt(fmt: &FORMATETC) -> bool {
         && fmt.dwAspect == DVASPECT_CONTENT.0
 }
 
+#[link(name = "user32")]
+extern "system" {
+    fn RegisterClipboardFormatW(name: *const u16) -> u32;
+}
+
+/// 등록 형식 번호(`RegisterClipboardFormatW` · 프로세스 안에서 안정).
+fn registered_format(name: &str) -> u16 {
+    let w: Vec<u16> = name.encode_utf16().chain([0]).collect();
+    // SAFETY: NUL 종단 이름.
+    unsafe { RegisterClipboardFormatW(w.as_ptr()) as u16 }
+}
+
+/// `CFSTR_SHELLIDLIST`("Shell IDList Array") — WinUI/UWP 대상(Windows Terminal 등)은 파일(`StorageItems`)을 **이 형식**에서 만든다 · CF_HDROP만으로는
+/// "받을 것 없음"으로 금지 커서(사용자 11-03 실기 · UAC 끔이라 UIPI 아님). 탐색기 발신과 같은 꼴.
+fn idlist_format() -> u16 {
+    registered_format("Shell IDList Array")
+}
+
+/// `CFSTR_FILENAMEW`("FileNameW") — 첫 파일의 전체 경로(단일 파일만 받는 대상).
+fn filename_format() -> u16 {
+    registered_format("FileNameW")
+}
+
+fn is_global_content(fmt: &FORMATETC, cf: u16) -> bool {
+    fmt.cfFormat == cf
+        && fmt.tymed & TYMED_HGLOBAL.0 as u32 != 0
+        && fmt.dwAspect == DVASPECT_CONTENT.0
+}
+
+/// CIDA 바이트(부모 = 데스크톱 빈 PIDL · 자식 = 각 경로의 **절대** PIDL) — 파싱되는 경로만(없는 경로는 건너뜀 · 하나도 없으면 `None`).
+///
+/// # Safety
+/// 셸 API 호출(STA 권장) · 받은 PIDL은 `CoTaskMemFree`로 푼다.
+unsafe fn shell_idlist_bytes(paths: &[PathBuf]) -> Option<Vec<u8>> {
+    use ::windows::core::PCWSTR;
+    use ::windows::Win32::System::Com::CoTaskMemFree;
+    use ::windows::Win32::UI::Shell::Common::ITEMIDLIST;
+    use ::windows::Win32::UI::Shell::{ILGetSize, SHParseDisplayName};
+    use std::os::windows::ffi::OsStrExt as _;
+    let mut pidls: Vec<Vec<u8>> = Vec::new();
+    for p in paths {
+        let w: Vec<u16> = p.as_os_str().encode_wide().chain([0]).collect();
+        let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+        if SHParseDisplayName(PCWSTR(w.as_ptr()), None, &mut pidl, 0, None).is_err()
+            || pidl.is_null()
+        {
+            continue;
+        }
+        let n = ILGetSize(Some(pidl)) as usize;
+        pidls.push(std::slice::from_raw_parts(pidl as *const u8, n).to_vec());
+        CoTaskMemFree(Some(pidl as *const c_void));
+    }
+    if pidls.is_empty() {
+        return None;
+    }
+    let n = pidls.len();
+    let mut out = Vec::new();
+    out.extend_from_slice(&(n as u32).to_le_bytes());
+    let mut off = 4 + 4 * (n + 1);
+    out.extend_from_slice(&(off as u32).to_le_bytes()); // 부모(빈 PIDL · 2바이트)
+    off += 2;
+    for p in &pidls {
+        out.extend_from_slice(&(off as u32).to_le_bytes());
+        off += p.len();
+    }
+    out.extend_from_slice(&[0, 0]);
+    for p in &pidls {
+        out.extend_from_slice(p);
+    }
+    Some(out)
+}
+
+/// `FileNameW` 바이트(첫 경로 UTF-16LE + NUL).
+fn filename_bytes(paths: &[PathBuf]) -> Vec<u8> {
+    use std::os::windows::ffi::OsStrExt as _;
+    paths
+        .first()
+        .map(|p| {
+            p.as_os_str()
+                .encode_wide()
+                .chain([0u16])
+                .flat_map(u16::to_le_bytes)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 경로 글자(순수): 한 줄에 하나(`\r\n`) · 공백이 든 경로는 `"…"`(Windows Terminal · 셸 붙여넣기 규칙) · 끝에 줄바꿈 없음.
 pub(super) fn paths_text(paths: &[PathBuf]) -> String {
     paths
@@ -350,6 +437,33 @@ impl IDataObject_Impl for FileListDataObject_Impl {
                 pUnkForRelease: std::mem::ManuallyDrop::new(None),
             });
         }
+        // 셸 항목 목록 · 첫 파일 이름(WinUI 대상 · 11-03) — 바이트는 요청 때 만든다(PIDL 파싱 = 경로마다 셸 조회).
+        if is_global_content(fmt, idlist_format()) {
+            // SAFETY: 셸 조회 · 결과 사본을 새 전역 블록에.
+            let bytes = unsafe { shell_idlist_bytes(&self.paths) }
+                .ok_or_else(|| ::windows::core::Error::from(DV_E_FORMATETC))?;
+            let h = unsafe { global_from_bytes(&bytes) }
+                .ok_or_else(|| ::windows::core::Error::from(E_OUTOFMEMORY))?;
+            return Ok(STGMEDIUM {
+                tymed: TYMED_HGLOBAL.0 as u32,
+                u: STGMEDIUM_0 {
+                    hGlobal: HGLOBAL(h),
+                },
+                pUnkForRelease: std::mem::ManuallyDrop::new(None),
+            });
+        }
+        if is_global_content(fmt, filename_format()) && !self.paths.is_empty() {
+            // SAFETY: 바이트 사본을 새 전역 블록에.
+            let h = unsafe { global_from_bytes(&filename_bytes(&self.paths)) }
+                .ok_or_else(|| ::windows::core::Error::from(E_OUTOFMEMORY))?;
+            return Ok(STGMEDIUM {
+                tymed: TYMED_HGLOBAL.0 as u32,
+                u: STGMEDIUM_0 {
+                    hGlobal: HGLOBAL(h),
+                },
+                pUnkForRelease: std::mem::ManuallyDrop::new(None),
+            });
+        }
         let extra = self.extra.borrow();
         let Some(s) = extra.iter().find(|s| stored_matches(s, fmt)) else {
             return Err(DV_E_FORMATETC.into());
@@ -389,6 +503,8 @@ impl IDataObject_Impl for FileListDataObject_Impl {
         let fmt = unsafe { &*fmt };
         if is_hdrop_fmt(fmt)
             || (is_text_fmt(fmt) && super::drag_offers_text())
+            || is_global_content(fmt, idlist_format())
+            || (is_global_content(fmt, filename_format()) && !self.paths.is_empty())
             || self.extra.borrow().iter().any(|s| stored_matches(s, fmt))
         {
             S_OK
@@ -458,6 +574,16 @@ impl IDataObject_Impl for FileListDataObject_Impl {
             tymed: TYMED_HGLOBAL.0 as u32,
         }];
         // 파일이 먼저 · 글자는 뒤(파일을 받는 대상은 CF_HDROP을 고르고, 글자만 받는 대상(Windows Terminal)은 CF_UNICODETEXT를 쓴다).
+        // 셸 항목 목록 · 첫 파일 이름 — 탐색기 발신과 같은 꼴(WinUI 대상은 IDList로 StorageItems를 만든다 · 11-03).
+        for cf in [idlist_format(), filename_format()] {
+            fmts.push(FORMATETC {
+                cfFormat: cf,
+                ptd: std::ptr::null_mut(),
+                dwAspect: DVASPECT_CONTENT.0,
+                lindex: -1,
+                tymed: TYMED_HGLOBAL.0 as u32,
+            });
+        }
         if super::drag_offers_text() {
             fmts.push(FORMATETC {
                 cfFormat: CF_UNICODETEXT,
@@ -511,6 +637,60 @@ mod tests {
     }
 
     /// 결과 해석 · 형식 판정 · 데이터 객체가 CF_HDROP을 내고 넣은 경로를 그대로 돌려준다(OS 드래그 없이 COM 객체만 검증).
+    /// 셸 항목 목록(`Shell IDList Array` · CIDA: cidl · 오프셋 · 부모 빈 PIDL · 절대 PIDL들) · `FileNameW`(첫 경로) — WinUI 대상(Windows Terminal)이
+    /// 파일을 받는 형식(사용자 11-03 실기 금지 커서 처방). 없는 경로는 IDList에서 건너뛴다.
+    #[test]
+    fn data_object_offers_shell_idlist_and_filename() {
+        let dir = std::env::temp_dir().join(format!("ndir-idlist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a b.txt"), b"a").unwrap();
+        std::fs::write(dir.join("둘.md"), b"b").unwrap();
+        let paths = vec![dir.join("a b.txt"), dir.join("둘.md"), dir.join("없음.bin")];
+        let data: IDataObject = FileListDataObject::new(paths.clone()).into();
+        let idlist = FORMATETC {
+            cfFormat: idlist_format(),
+            ..hdrop_fmt()
+        };
+        let fname = FORMATETC {
+            cfFormat: filename_format(),
+            ..hdrop_fmt()
+        };
+        // SAFETY: 방금 만든 COM 객체 · 받은 매체는 ReleaseStgMedium으로 푼다.
+        unsafe {
+            assert_eq!(data.QueryGetData(&idlist), S_OK);
+            assert_eq!(data.QueryGetData(&fname), S_OK);
+            let mut m = data.GetData(&idlist).expect("idlist");
+            let b = global_bytes(m.u.hGlobal.0);
+            ReleaseStgMedium(&mut m);
+            let u32_at =
+                |o: usize| u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]) as usize;
+            assert_eq!(u32_at(0), 2, "있는 경로 2개만(없는 경로는 건너뜀)");
+            let parent = u32_at(4);
+            assert_eq!(&b[parent..parent + 2], &[0, 0], "부모 = 데스크톱 빈 PIDL");
+            let (c0, c1) = (u32_at(8), u32_at(12));
+            assert!(parent < c0 && c0 < c1 && c1 < b.len(), "오프셋 단조 증가");
+            assert_eq!(&b[b.len() - 2..], &[0, 0], "마지막 PIDL 종단");
+            let mut m2 = data.GetData(&fname).expect("filename");
+            let fb = global_bytes(m2.u.hGlobal.0);
+            ReleaseStgMedium(&mut m2);
+            let units: Vec<u16> = fb
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_le_bytes(*c))
+                .take_while(|&u| u != 0)
+                .collect();
+            assert_eq!(String::from_utf16_lossy(&units), paths[0].to_string_lossy());
+            let e = data.EnumFormatEtc(DATADIR_GET.0 as u32).expect("enum");
+            let mut buf = [FORMATETC::default(); 8];
+            let mut n = 0u32;
+            let _ = e.Next(&mut buf, Some(&mut n));
+            assert_eq!(n, 4, "HDROP + IDList + FileNameW + 글자");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn data_object_offers_hdrop() {
         assert_eq!(outcome(false, true), DragOutcome::Cancelled);
@@ -600,8 +780,8 @@ mod tests {
             let mut n = 0u32;
             let _ = e.Next(&mut buf, Some(&mut n));
             assert_eq!(
-                n, 3,
-                "HDROP + 경로 글자(CF_UNICODETEXT · T-147 ①) + 사설 형식 하나"
+                n, 5,
+                "HDROP + IDList + FileNameW(11-03) + 경로 글자(CF_UNICODETEXT · T-147 ①) + 사설 형식 하나"
             );
             // 모르는 매체는 거부.
             let bad = STGMEDIUM {
