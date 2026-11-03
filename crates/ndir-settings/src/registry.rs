@@ -506,6 +506,18 @@ pub const REGISTRY: &[Entry] = &[
             max: 30_000
         },
         "3000"
+    // 상태줄 안내 유지(GAP-034 · 11-02): 결과·안내 문구가 항목 수로 덮이기까지의 시간 · 0 = 바로 덮임(종전).
+    e!(
+        "ui.status_note_ms",
+        CAT_APPEARANCE,
+        "pref.statusNoteMs",
+        "pref.statusNoteMs.desc",
+        Int {
+            min: 0,
+            max: 30_000
+        },
+        "4000"
+    ),
     ),
     e!(
         "ui.flash_shape",

@@ -308,6 +308,8 @@ struct App {
     rename_due: Option<(usize, PathBuf, Instant)>,
     /// 드래그 발신 후보(`app/dnd.rs::drag_out_after`): 선택된 행을 누른 (패널, 자리) — 임계 넘게 끌면 OS 드래그를 시작한다.
     drag_press: Option<(usize, i32, i32)>,
+    /// 상태줄 왼쪽 안내의 유지 마감(GAP-034): 이 시각 전에는 `update_status`가 항목 수로 덮지 않는다 · 틱이 마감 때 다시 채운다.
+    status_hold: Option<Instant>,
     /// 우클릭 드래그 후보(탐색기 꼴 · 10-18): 선택된 행을 오른쪽 버튼으로 누른 (패널, 자리) — 임계 넘게 끌면 드래그 · 그냥 떼면 메뉴.
     right_press: Option<(usize, i32, i32)>,
     /// 우클릭 드래그로 놓은 뒤 메뉴가 기다리는 (경로들, 놓은 자리) — 복사/이동을 고르면 `external_drop_with`.
@@ -794,6 +796,7 @@ impl App {
             right_press: None,
             dnd_menu: None,
             quicklook: None,
+            status_hold: None,
             exit_requested: false,
             startup_timed: Vec::new(),
             trace_ime: input::trace_ime(),
@@ -1078,7 +1081,16 @@ impl App {
             ],
         );
         let mut inv = Invalidations::default();
-        self.statusbar.set_text(&left, &right, &mut inv);
+        // 안내 유지 중(GAP-034 · `status_note`)이면 왼쪽은 그대로 두고 오른쪽만 — 마감은 `status_tick`이 본다.
+        match self.status_hold {
+            Some(d) if Instant::now() < d => {
+                self.statusbar.set_right(&right, &mut inv);
+            }
+            _ => {
+                self.status_hold = None;
+                self.statusbar.set_text(&left, &right, &mut inv);
+            }
+        }
         // 오른쪽 칸(탭 · CPU · 메모리 · 디스크 I/O · 라이선스 — `statusbar.layout`) + 패널마다 탭 상태바.
         let segs = self.status_segments();
         self.statusbar.set_segments(segs, &mut inv);

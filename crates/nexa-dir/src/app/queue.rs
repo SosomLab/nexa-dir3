@@ -288,7 +288,15 @@ impl crate::App {
         if let Claim::OtherAlive(_) = self.transfer_queue.claim() {
             // 둘째 인스턴스(사용자 11-01): 저장하지 않고 메모리 큐만 · 상태줄 안내.
             self.transfer_queue.set_dir(None);
+            // 상태줄 안내(유지 시간 · GAP-034) + 토스트(상태줄뿐이면 못 볼 수 있다 · 협업 실측 11-01).
             self.status_note(&tr("ops.queueOtherInstance"));
+            let a = self.active;
+            self.toast_panel(
+                a,
+                crate::toast::ToastKind::Info,
+                tr("ops.progressTitle"),
+                tr("ops.queueOtherInstance"),
+            );
             return;
         }
         let left = self.transfer_queue.leftovers();

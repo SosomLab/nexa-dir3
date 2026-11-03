@@ -7174,6 +7174,107 @@ fn paste_folder_onto_itself_duplicates_beside() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-034(협업 실측 11-01): 상태줄 왼쪽 안내(`status_note`)는 `ui.status_note_ms` 동안 `update_status`(항목 수)가 덮지 않는다 ·
+/// 마감 뒤 `status_tick`이 항목 수로 되돌린다 · 0 = 종전대로 바로 덮임.
+#[test]
+fn status_note_holds_against_update_status_until_deadline() {
+    let (mut app, dir) = fixture("statushold");
+    app.layout_for(1200, 800, 1.0);
+    app.update_status();
+    let count = app.statusbar.left().to_string();
+    assert!(count.contains("item"), "{count}");
+    app.status_note("notice");
+    app.update_status();
+    assert_eq!(app.statusbar.left(), "notice", "유지 시간 동안은 안 덮는다");
+    let now = std::time::Instant::now();
+    assert!(
+        app.status_tick(now).is_some_and(|t| t > now),
+        "마감 전 = 깨울 시각"
+    );
+    // 마감이 지나면 틱이 항목 수로 되돌린다.
+    app.status_hold = Some(now - std::time::Duration::from_millis(1));
+    assert!(app.status_tick(now).is_none());
+    assert_eq!(app.statusbar.left(), count);
+    // 0 = 종전 동작(바로 덮임).
+    let _ = app.settings.set("ui.status_note_ms", "0");
+    app.status_note("notice");
+    assert!(app.status_hold.is_none());
+    app.update_status();
+    assert_eq!(app.statusbar.left(), count);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// DR-37(사용자 11-02): 폴더 이름 충돌 처리 설정 `transfer.dir_conflict` — 보관 = 묻지 않고 "sub (2)" 옆에(옛 폴더 불변) ·
+/// 교체 = 폴더 질문 글이 교체 뜻(`ops.replaceDir`) → 예 = 대상에만 있던 항목 소멸 · 병합(기본) = 질문 글이 병합 뜻(`ops.mergeDir`) · 파일은 종전 글.
+#[test]
+fn dir_conflict_setting_keep_replace_merge() {
+    let (mut app, dir) = fixture("dirconf");
+    app.layout_for(1200, 800, 1.0);
+    let wait = |app: &mut App, pick: Option<i32>| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let live = app.ops_tick();
+            if app.dlg_pending.is_some() {
+                if let Some(id) = pick {
+                    app.startup_cmd(&format!("dlg.pick:{id}"));
+                } else {
+                    return true;
+                }
+            }
+            if !live && app.transfer.is_none() {
+                return false;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "transfer did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let mut inv = Invalidations::default();
+    let dst = dir.join("dst");
+    std::fs::create_dir_all(dst.join("sub")).unwrap();
+    std::fs::write(dst.join("sub/only.txt"), b"keep").unwrap();
+    // 보관: 질문 없이 "sub (2)" 옆에 · 옛 폴더 그대로.
+    let _ = app.settings.set("transfer.dir_conflict", "keep");
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    app.command("edit.copy");
+    app.startup_cmd(&format!("nav:{}", dst.display()));
+    app.command("edit.paste");
+    assert!(!wait(&mut app, None), "보관 = 묻지 않음");
+    assert!(dst.join("sub (2)/inner.rs").is_file(), "옆에 순번 이름");
+    assert!(dst.join("sub/only.txt").is_file() && !dst.join("sub/inner.rs").exists());
+    // 교체: 질문 글 = 교체 뜻 → 예 → 대상에만 있던 only.txt 소멸.
+    let _ = app.settings.set("transfer.dir_conflict", "replace");
+    let q = app.conflict_question(&dst.join("sub"));
+    assert_eq!(
+        q,
+        trf("ops.replaceDir", &["sub", &dst.display().to_string()])
+    );
+    app.command("edit.paste");
+    assert!(wait(&mut app, None), "교체 = 질문");
+    app.startup_cmd("dlg.pick:1");
+    wait(&mut app, Some(1));
+    assert!(
+        dst.join("sub/inner.rs").is_file() && !dst.join("sub/only.txt").exists(),
+        "교체 = 옛 내용 소멸"
+    );
+    // 병합(기본): 질문 글 = 병합 뜻 · 파일 충돌은 종전 글.
+    let _ = app.settings.set("transfer.dir_conflict", "merge");
+    assert_eq!(
+        app.conflict_question(&dst.join("sub")),
+        trf("ops.mergeDir", &["sub", &dst.display().to_string()])
+    );
+    assert_eq!(
+        app.conflict_question(&dst.join("sub/inner.rs")),
+        trf(
+            "ops.overwrite",
+            &["inner.rs", &dst.join("sub").display().to_string()]
+        )
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// T-150 ⑰ F3 · Tab · Ctrl+Tab이 키맵을 거쳐 명령에 닿는다(dir2 WINC-117/118 — 10-05 §11/§13의 "키맵 id와 분기 id 불일치" 유형 예방).
 #[test]
 fn f3_tab_and_ctrl_tab_through_the_keymap() {

@@ -567,9 +567,8 @@ impl App {
     /// 삭제가 시작되지 못했다(잠금 질문 취소 · 다른 대화상자가 열려 있음) — 미러 출처면 문구 + 재비교(GAP-029 출구 B·C · 협업 분석).
     pub(crate) fn trash_canceled(&mut self, origin: TrashOrigin, n: usize) {
         if let TrashOrigin::Mirror { after_sync, .. } = origin {
-            let mut inv = Invalidations::default();
             let text = trf("cmp.mirrorTrashCanceled", &[&n.to_string()]);
-            self.statusbar.set_left(&text, &mut inv);
+            self.status_note(&text); // GAP-034: 유지 시간 동안 항목 수로 안 덮임
             self.toasts
                 .push(toast::ToastKind::Warn, tr("cmp.title"), text);
             self.recompare_after_trash(after_sync);
@@ -657,7 +656,7 @@ impl App {
                     ),
                 )
             };
-            self.statusbar.set_left(&text, &mut inv);
+            self.status_note(&text); // GAP-034: 유지 시간 동안 항목 수로 안 덮임
             self.toasts.push(kind, tr("cmp.title"), text);
         }
         if !deleted.is_empty() {

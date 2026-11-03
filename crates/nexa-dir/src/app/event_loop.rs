@@ -355,6 +355,14 @@ impl ApplicationHandler<Wake> for App {
         if let Some(t) = self.slow_click_tick(now) {
             next = next.min(t);
         }
+        // 상태줄 안내 유지 마감(GAP-034) — 지나면 항목 수로 되돌린다.
+        if let Some(t) = self.status_tick(now) {
+            next = next.min(t);
+        }
+        // 묶음 포커스 잃음 유예 마감(GAP-039) — 지나도 묶음 밖이면 메인을 blur 값으로.
+        if let Some(t) = self.blur_tick(now) {
+            next = next.min(t);
+        }
         // 상태줄 표식(디스크 · 네트워크 ▲▼) 깜빡임 — 위상이 바뀔 때만 다시 그리고, 송수신이 있을 때만 다음 전환 시각에 깬다.
         // 상태줄 사각형만(T-144 · `gfx.partial_redraw` 위 — 종전 = 단계 9에서 초당 16회 창 전체).
         if self.statusbar.tick(now_ms) {
