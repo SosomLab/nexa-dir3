@@ -4,6 +4,7 @@
 
 ## 2026-11-03
 
+- **T-147 ② 가상 파일 받기(사용자)**: Outlook 첨부 · zip 안 · MTP → Drop 반환 전 스테이징 동기 추출 → Staged 사건 → 이동 · 7-Zip 휘발 사본 확보 · `vfiles.rs`(3-OS) + `winvirtual.rs` · 시험 6 · 남은 = 클립보드 Ctrl+V → [11-03 §8](journal/2026-11-03.md)
 - **A 항목 5개(사용자)**: T-161 ✅ 523d3ec · T-202 ④ 잔여 ✅ 94c9996(kill-resume-check.sh ★ OK) · T-134 1차 5d8603a(ndir-vfs 영어 · 가드) · **T-137 Windows ✅ 212dd36**(대체 데스크톱 · T4 45/0) · **T-147 ① ✅ 6386cd9**(글자 드롭 · `dnd.offer_text`) · 이월 = T-147 ② 가상 파일 · T-93~95 잔여 → [11-03 §7](journal/2026-11-03.md)
 - **GAP-040 ✅**: Shift+Del 완전 삭제가 UI 스레드 동기 루프라 "응답 없음"(사용자 스크린샷) → 워커 + 틱 수거 · 상태줄 n/m · 실패분 [다시 시도]/[닫기] · 결정 = 잠금 사전 확인은 현재 유지(사용자) → [11-03 §6](journal/2026-11-03.md)
 - **v0.29.0 공개 ✅(사용자)**: 버전 0.29.0 선택 · 승격 75ff1ef · gate full 819/0 · CI ✓ · 선검증 41587830952 ✓ · 태그 75ff1ef · release run 41588710450 전 잡 ✓ · 자산 9 · linux-repo · brew · choco Pending · winget #469333/#469334 · **GAP-041** 가드가 Portable 0.28.1 OPEN을 못 봄(검색 빈틈 · 수정) → [11-03 §5](journal/2026-11-03.md)
