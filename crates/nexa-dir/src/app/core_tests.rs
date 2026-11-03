@@ -2295,7 +2295,10 @@ fn launcher_bar_layout_and_launch() {
     let themed = nexa_fs::icontheme::theme_name().is_some();
     assert_eq!(ld.contains("launch:2=glyph:Ba"), !themed, "{ld}");
     assert_eq!(ld.contains("launch:2=image"), themed, "{ld}");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    // T-161(11-01 CI windows 흔들림 1회 · 11-03): 셸 아이콘은 전역 `IconService` 워커가 다른 시험의 조회와 한 줄로 처리한다 — 부하 중
+    // 5 s를 넘겼다. 시한은 상한일 뿐(아이콘이 오면 바로 빠진다)이라 30 s로 · 실패 문구에 걸린 시간을 남긴다.
+    let started = std::time::Instant::now();
+    let deadline = started + std::time::Duration::from_secs(30);
     while app.launcher_icons_tick(std::time::Instant::now()).is_some()
         && std::time::Instant::now() < deadline
     {
@@ -2305,7 +2308,8 @@ fn launcher_bar_layout_and_launch() {
     if cfg!(any(windows, target_os = "macos")) {
         assert!(
             icons.iter().any(|s| s.starts_with("launch:0=image 16x16")),
-            "{icons:?}"
+            "{icons:?} (셸 아이콘 대기 {:?} · T-161)",
+            started.elapsed()
         );
     } else if themed {
         assert!(
