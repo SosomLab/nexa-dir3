@@ -50,6 +50,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 5. 교차 clippy(`check-3os.sh`)를 push 전에 — `cfg` 모듈 경로 실수는 다른 OS에서만 드러난다. `allow(dead_code)` 무조건 금지 · OS별은 `cfg_attr` + 이유.
 6. OS별 차이 원장 = [port/19](port/19-dir2-shell-integration.md)(셸·클립보드·DnD·휴지통·감시) · [port/18](port/18-dir2-terminal.md)(PTY·셸) · [port/40 §3](port/40-sql-app-skeleton.md)(창·입력·IME·클립보드) — 새 분기를 만들면 해당 문서 표에 한 줄.
 7. **시험의 `cfg!(windows)`(OS별 기대값) 분기는 push 전에 다른 OS 쪽 의미를 제품 코드와 대조한다** — 개발 PC gate는 호스트 OS 시험만 실행하고 다른 두 OS는 clippy뿐이라, 틀린 비호스트 기대값은 CI에서야 드러난다(10-24 af63f73 T-196 `fav_file_round_trip_and_merge`: `same_fav`는 끝 구분자 차이를 모든 OS에서 같게 보는데 unix 기대값이 "다르다"로 적혀 ubuntu·macOS 빨강 → db92084 정정). 대조 근거(어느 함수가 OS별로 갈리는지)를 시험 주석에 한 줄.
+8. **자식 프로세스는 콘솔 창을 띄우지 않는다**(사용자 11-02): 앱이 내부적으로 띄우는 명령줄 도구(상태줄 git · 열기/보기 · 미리보기 · 테마/설정 조회 · 동기화 등)는 `platform::quiet_command`(Windows `CREATE_NO_WINDOW` 0x0800_0000 · 다른 OS = 그대로)로만 만든다 — `std::process::Command::new` 직접 호출 금지 · `cmd /C` 경유 금지(GAP-010 메타문자). 예외(의도된 창) = 런처 `launcher.rs`(사용자가 고른 cmd/pwsh/프로그램) · PTY(`winpty.rs` ConPTY = 창 없음) · `ShellExecuteW` 열기 · 콘솔 보조 `bin/ndir.rs`. **정적 가드** = nexa-dir `platform::tests::command_spawn_sites_are_allowlisted`(파일별 `Command::new(` 건수 표 · 주석 제외) — 새 호출은 `quiet_command`로 바꾸거나 표에 사유를 적어 등재. 자동 실행 경로(기동 · 셸 탐지(PATH 검색만 · 프로세스 없음) · 상태줄 git · 세션 복원)도 같은 규칙. 점검 11-02: Windows GUI에서 도는 생성 지점 = git(`quiet_command`) · `explorer /select,`(→ `quiet_command`로 통일) · ShellExecuteW · ConPTY · 런처 — 콘솔 창이 뜨는 경로 없음.
 
 ### 2-4. 설정 · i18n 규칙(DR-3 · DR-14)
 
@@ -113,3 +114,4 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 
 - `git add -A`/`.` · 자동 태그 push · 강제 push · 사용자 자원 수정.
 - 앱 크레이트 안 범용 컨트롤 · `platform/` 밖 `#[cfg(target_os)]` · 문자열 리터럴 UI 문구 · 레지스트리 밖 설정 키 · 자체 타이머/스레드 틱 · 모달 중첩 루프 · 입력 주입(SendKeys 등) · 사용자 클립보드 덮어쓰기 시험 · 픽셀 골든 시험(글꼴 OS 차이).
+- `platform::quiet_command` 밖의 `std::process::Command::new`(콘솔 창 · §2-3 ⑧ · 예외 = 런처 · PTY · ShellExecuteW · `ndir`) · `cmd /C` 경유 실행.

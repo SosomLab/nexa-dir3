@@ -54,6 +54,7 @@
 - **기능 설계 전 이식 원장(docs/port) · dir2 원본 코드 먼저 확인**(재발명 금지). 원장에 없는 기능을 발견하면 원장에 `GAP-NNN`으로 먼저 등재.
 - **컨트롤 추가는 nexa-ui에**(DR-2): **① 착수 전 최신화**(`git -C ../nexa-ui fetch` → ff-pull · 상류에 같은 기능이 이미 있는지 확인 · nexa-license도 동일) → ② 추가 → nexa-ui 테스트 + nexa-sql 빌드 확인 → **③ 기능 단위 커밋 1개 + 즉시 push**(여러 기능을 모아 두지 않는다 — 다른 PC·세션이 같은 저장소를 쓰며 바꾸고 있을 수 있다 · 사용자 10-10) → ④ dir3에서 사용. nexa-ui 커밋 본문에 `영향: nexa-sql | dir3`.
 - **OS 분기는 `platform/`에만**(DR-5) · 분기 판정이 2조건 이상이면 순수 함수 + MC/DC 시험 · 다른 OS = `None`/`Err(Unsupported)`로 돌려주고 호출부가 안내.
+- **자식 프로세스는 콘솔 창을 띄우지 않는다**(사용자 11-02): 앱이 내부적으로 띄우는 명령줄 도구(git · 열기/보기 · 미리보기 · 동기화 등)는 `platform::quiet_command`(Windows `CREATE_NO_WINDOW`)로만 만든다 — `std::process::Command::new` 직접 호출 금지. 예외 = 런처(사용자가 고른 프로그램 · 창이 의도) · PTY(ConPTY · 창 없음) · `ShellExecuteW` 열기 · 콘솔 보조 `ndir`. 정적 가드 = nexa-dir 시험 `command_spawn_sites_are_allowlisted`(파일별 호출 수 표 · 새 호출은 표를 고치며 사유를 적는다). 자동 실행(기동 · 셸 탐지 · 상태줄)도 같은 규칙.
 - **사용자 문자열은 전부 i18n 키**(dir2 `.lang` 자원) · **설정 키는 `ndir-settings::REGISTRY`에만**(라벨·설명 = i18n 키) · 구현 상수는 설정 키로(자주 안 바꾸면 `HIDDEN`).
 - **새 기능 = 시험 1개 이상**(단위 또는 T3 시나리오) + 검증 매트릭스 행 갱신. 실기만 가능한 것은 "실기 필요" 사유를 매트릭스에.
 - 시험은 실제 설정 폴더·사용자 파일·클립보드·휴지통을 건드리지 않는다(임시 샌드박스 · 가짜 플랫폼 · opt-in 자가 점검만).

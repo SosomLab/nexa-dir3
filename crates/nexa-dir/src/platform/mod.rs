@@ -1515,7 +1515,7 @@ impl CommandOpener {
         let Some((prog, rest)) = argv.split_first() else {
             return Err(PlatformError::Unsupported("opener"));
         };
-        let mut cmd = std::process::Command::new(prog);
+        let mut cmd = quiet_command(prog); // 콘솔 창 없음(규칙 docs/15 §2-3 · Windows `explorer /select,`는 GUI라 무해하지만 통일)
         let mut has_path = false;
         for a in rest {
             if a == "{path}" {
@@ -1569,7 +1569,7 @@ impl Opener for CommandOpener {
         let (prog, rest) = argv
             .split_first()
             .ok_or(PlatformError::Unsupported("quick look"))?;
-        std::process::Command::new(prog)
+        quiet_command(prog)
             .args(rest)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -2142,6 +2142,81 @@ mod tests {
     }
 
     use super::*;
+
+    /// 콘솔 창 규칙(사용자 11-02 · docs/15 §2-3 ⑧ · CLAUDE.md §5): 앱이 띄우는 자식 프로세스는 [`quiet_command`](Windows
+    /// `CREATE_NO_WINDOW`)로만 — `Command::new(` 직접 호출은 아래 표의 파일·건수뿐(주석 줄 제외). 새 호출은 `quiet_command`로 바꾸거나
+    /// 표에 **사유와 함께** 등재한다(건수가 달라지면 이 시험이 막는다 — 자동 실행 경로(기동 · 셸 탐지 · 상태줄 git)도 같은 규칙).
+    #[test]
+    fn command_spawn_sites_are_allowlisted() {
+        const ALLOW: &[(&str, usize, &str)] = &[
+            (
+                "bin/ndir.rs",
+                1,
+                "콘솔 보조 실행 파일(콘솔 서브시스템 · 표준 입출력 상속 · 창 안 생김)",
+            ),
+            (
+                "clipboard.rs",
+                1,
+                "cfg(not(windows)) pbcopy/pbpaste/xclip/wl-*",
+            ),
+            (
+                "launcher.rs",
+                2,
+                "런처 = 사용자가 고른 프로그램(cmd/pwsh 창이 의도) · macOS `open -a`",
+            ),
+            ("platform/linux.rs", 2, "Linux 전용(xdg 열기 · 터미널)"),
+            ("platform/macmenu.rs", 1, "macOS 전용(다음으로 열기)"),
+            (
+                "platform/mod.rs",
+                5,
+                "quiet_command 자체 · exec_direct(unix) · gsettings/plutil(unix 전용) · 시험 sh",
+            ),
+            ("preview/quicklook.rs", 1, "macOS qlmanage"),
+            ("selfcheck.rs", 1, "macOS qlmanage(--selfcheck = 콘솔 모드)"),
+            ("theme.rs", 2, "macOS defaults · Linux gsettings"),
+        ];
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            for e in std::fs::read_dir(dir).expect("read_dir").flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        walk(&root, &mut files);
+        let mut found = std::collections::BTreeMap::new();
+        for f in files {
+            let rel = f
+                .strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            let n = std::fs::read_to_string(&f)
+                .expect("read")
+                .lines()
+                .filter(|l| {
+                    let t = l.trim_start();
+                    // 찾는 글을 둘로 쪼개 이 줄 자신이 세어지지 않게.
+                    !t.starts_with("//") && t.contains(concat!("Command::", "new("))
+                })
+                .count();
+            if n > 0 {
+                found.insert(rel, n);
+            }
+        }
+        let expected: std::collections::BTreeMap<String, usize> = ALLOW
+            .iter()
+            .map(|(f, n, _)| ((*f).to_string(), *n))
+            .collect();
+        assert_eq!(
+            found, expected,
+            "Command::new 직접 호출이 표와 다르다 — quiet_command로 바꾸거나 ALLOW에 사유와 함께 등재(docs/15 §2-3 ⑧)"
+        );
+    }
 
     /// 글꼴 지정 문자열: 끝 숫자 = 크기 · 굵기 낱말 제거 · 따옴표/공백 · 크기 없음/범위 밖 = None.
     #[test]
