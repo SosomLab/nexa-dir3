@@ -64,6 +64,19 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Mon Nov 03 2026 Sangyong Bae <kiros33@gmail.com> - 0.30.0-1
+- Drag and drop in: virtual files (Outlook attachments/messages, items inside Explorer zip
+  folders, MTP devices, browser images) are extracted into the drop folder via the transfer
+  engine; items that archivers materialize only at drop time are secured first. Dropped text
+  navigates (folder), selects (file) or goes to the terminal dock.
+- Paste: virtual files copied from Outlook and similar apps are extracted on Ctrl+V in the
+  background with status-bar progress; Undo sends them to the Recycle Bin.
+- Drag and drop out: paths are also offered as text and as a shell item list.
+- Delete: permanent delete of many or locked items no longer freezes the window; failures are
+  listed afterwards with Retry.
+- Memory window: "Shell processes" line and all tool-window surfaces counted.
+- Archive preview error messages in English; consistent ellipsis in labels.
+
 * Mon Nov 03 2026 Sangyong Bae <kiros33@gmail.com> - 0.29.0-1
 - Transfers: new setting "When a folder with the same name exists" — Merge (default, as
   before), Replace (removes the old folder entirely) or Keep both ("Name (2)" beside, no

@@ -1,0 +1,13 @@
+Nexa Dir 0.30.0 — Outlook attachments and archive items by drag and drop · text drops · responsive bulk delete · memory view
+
+Highlights since 0.29.0:
+- Drag and drop in: virtual files are now accepted — Outlook attachments and messages, items from inside Explorer's zip folders, MTP devices and browser images are extracted into the drop folder (with the transfer engine: progress, name-conflict prompts, Undo). Items that 7-Zip and similar archivers materialize only at drop time are secured before they vanish.
+- Paste: with files copied from Outlook (or any app that offers virtual files), Ctrl+V in a panel extracts them in the background with progress on the status bar; Undo sends them to the Recycle Bin.
+- Drag and drop in: dropped text is handled — a folder path navigates there, a file path selects the file, other text goes to the terminal dock.
+- Drag and drop out: dragged files also carry their paths as text and the shell item list, so text-only and WinUI targets receive them (Windows Terminal running elevated still refuses external drops — a Terminal limitation).
+- Delete: permanent delete (Shift+Del) of many or locked items no longer freezes the main window; progress shows on the status bar and failed items are listed afterwards with Retry.
+- Memory window: new "Shell processes" line (the terminal shell and its child processes) and all tool windows counted under "Other window surfaces".
+- Archive previews: error messages are now in English (they were partly Korean); menu and progress labels use a consistent ellipsis.
+- Settings: "Offer dropped paths as text" (hidden, on by default).
+
+Packages: Windows MSI + portable zip, macOS Universal pkg/dmg, Linux deb/rpm (also via winget, Chocolatey, Homebrew tap and pkg.sosomlab.com). Channels whose previous submission is still under review are skipped automatically and submitted later.
