@@ -664,6 +664,29 @@ impl App {
                 self.apply_text_drop(&text, Point { x: at.0, y: at.1 });
                 DropChoice::Copy
             }
+            // 확보된 항목(T-147 ② · 가상 파일 추출물 · 7-Zip 휘발 사본): 우리 사본이므로 **이동**으로 대상에(스테이징 자연 소거 · 전송 엔진 =
+            // 진행 창 · 충돌 질문 · 실행 취소). 거부(전송 중 · 대상 없음)면 확보분은 원위치 · 추출물은 지운다(조용한 고립 금지).
+            DropEvent::Staged { paths, at, restore } => {
+                self.dnd_end();
+                let started = self.external_drop_with(
+                    paths.clone(),
+                    Point { x: at.0, y: at.1 },
+                    Some(Op::Move),
+                );
+                if started.is_none() {
+                    platform::vfiles::restore_volatile(&restore);
+                    for p in paths
+                        .iter()
+                        .filter(|p| !restore.iter().any(|(s, _)| s == *p))
+                    {
+                        let _ = ndir_ops::delete_permanent(p);
+                        if let Some(dir) = p.parent() {
+                            let _ = std::fs::remove_dir(dir);
+                        }
+                    }
+                }
+                DropChoice::Copy
+            }
             DropEvent::Drop {
                 paths,
                 at,

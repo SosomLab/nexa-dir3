@@ -13099,3 +13099,84 @@ fn text_drop_event_from_os_queue_navigates_or_notes() {
     assert_eq!(app.statusbar.left(), tr("dnd.cannot"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// T-147 ②(11-03 · 가상 파일 · 지연 렌더링 확보): 수신부가 스테이징에 확보한 항목(`DropEvent::Staged`)은 앱이 **이동**으로 대상에 옮긴다
+/// (전송 엔진 · 스테이징 소거 · 실행 취소 기록) · 전송이 막혀 거부되면 확보분은 원위치 · 추출물은 지운다. OLE 추출 자체는 `winvirtual` 시험.
+#[test]
+fn staged_drop_moves_into_panel_or_restores_on_reject() {
+    use crate::platform::{DropChoice, DropEvent};
+    let (mut app, dir) = fixture("staged");
+    app.layout_for(1200, 800, 1.0);
+    let now = std::time::Instant::now();
+    let shared = Rc::new(std::cell::RefCell::new(
+        crate::platform::DropShared::default(),
+    ));
+    app.drop_shared = Some(Rc::clone(&shared));
+    assert!(
+        !app.drop_pump(now) && !shared.borrow().zones.is_empty(),
+        "첫 틱 = 요약"
+    );
+    let b = app.panels[0].bounds();
+    let at = (b.x + 10, b.y + b.h / 2);
+    // 추출물 흉내(스테이징 폴더 안 파일 2개) → 대상 폴더로 이동 · 스테이징 비움.
+    let stage = crate::platform::vfiles::staging_dir("vdrop");
+    std::fs::create_dir_all(stage.join("폴더")).unwrap();
+    std::fs::write(stage.join("첨부.txt"), b"mail").unwrap();
+    std::fs::write(stage.join("폴더").join("안.bin"), b"in").unwrap();
+    let c = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Staged {
+            paths: vec![stage.join("첨부.txt"), stage.join("폴더")],
+            at,
+            restore: Vec::new(),
+        },
+    );
+    assert_eq!(
+        c,
+        DropChoice::Copy,
+        "확보 항목 = 복사 효과(소스에 NONE/COPY)"
+    );
+    assert!(app.drop_pump(now));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app.ops_tick() || app.transfer.is_some() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "transfer did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(std::fs::read(dir.join("첨부.txt")).unwrap(), b"mail");
+    assert_eq!(
+        std::fs::read(dir.join("폴더").join("안.bin")).unwrap(),
+        b"in"
+    );
+    assert!(
+        !stage.join("첨부.txt").exists() && !stage.join("폴더").exists(),
+        "이동 = 스테이징 소거"
+    );
+    assert!(app.history.can_undo(), "실행 취소 기록(이동)");
+    let _ = std::fs::remove_dir_all(&stage);
+    // 거부(`external_drop_with` = None · 여기서는 "제자리 놓기" 조건으로 결정적으로): 7-Zip 확보분(restore 있음)은 원위치 · 추출물은 삭제.
+    let src = dir.join("7z-src");
+    std::fs::create_dir_all(&src).unwrap();
+    let stage2 = dir.join("v.txt"); // 대상 폴더 안에 두어 "모든 원본이 이미 그 폴더" = 거부
+    std::fs::write(&stage2, b"v").unwrap();
+    let stage3 = dir.join("x.txt");
+    std::fs::write(&stage3, b"x").unwrap();
+    let _ = crate::platform::drop_dispatch(
+        &shared,
+        DropEvent::Staged {
+            paths: vec![stage2.clone(), stage3.clone()],
+            at,
+            restore: vec![(stage2.clone(), src.join("v.txt"))],
+        },
+    );
+    assert!(app.drop_pump(now));
+    assert!(
+        src.join("v.txt").is_file() && !stage2.exists(),
+        "거부 = 확보분 원위치"
+    );
+    assert!(!stage3.exists(), "추출물 삭제");
+    assert!(dir.join("첨부.txt").is_file(), "앞서 옮긴 것은 그대로");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -42,6 +42,7 @@ pub(crate) mod procmem;
 pub(crate) mod sysload;
 #[cfg(unix)]
 mod unixpty;
+pub(crate) mod vfiles;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -56,6 +57,8 @@ mod winrecycle;
 mod winshell;
 #[cfg(windows)]
 mod wintemplates;
+#[cfg(windows)]
+mod winvirtual;
 #[cfg(windows)]
 mod winwatch;
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -505,6 +508,23 @@ pub(crate) enum DropEvent {
         text: String,
         at: (i32, i32),
     },
+    /// 우리 스테이징에 **이미 확보된** 항목(T-147 ② · 11-03): 가상 파일(Outlook 첨부 · zip 안)을 `Drop` 반환 전에 추출했거나, 지연 렌더링
+    /// 소스(7-Zip)의 휘발 사본을 rename으로 확보했다 → 호스트는 **이동**으로 대상에 옮긴다(스테이징 자연 소거). 거부되면 `restore`의
+    /// (스테이징, 원경로)는 원위치로, 나머지(추출물)는 지운다.
+    Staged {
+        paths: Vec<PathBuf>,
+        at: (i32, i32),
+        restore: Vec<(PathBuf, PathBuf)>,
+    },
+}
+
+/// 포인터가 어느 패널 요약 위에 있는가(글자 · 가상 파일처럼 경로 판정이 없는 소스의 "복사" 효과용).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn zone_hit(zones: &[DropZone], at: (i32, i32)) -> bool {
+    zones.iter().any(|z| {
+        let (x, y, w, h) = z.rect;
+        at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h
+    })
 }
 
 /// 놓았을 때 일어날 일(= 커서 모양): 불가 · 복사 · 이동.
@@ -658,8 +678,8 @@ pub(crate) fn drop_dispatch(shared: &Rc<RefCell<DropShared>>, ev: DropEvent) -> 
             sh.dragging.clear();
             c
         }
-        // 글자 = 볼륨·자기/하위 판정이 없다 → 늘 복사(dir2 SHELL-062 가상 소스와 같은 규칙) · 적용은 앱이 다음 틱에.
-        DropEvent::Text { .. } => DropChoice::Copy,
+        // 글자 · 확보된 항목 = 볼륨·자기/하위 판정이 없다 → 늘 복사(dir2 SHELL-062 가상 소스와 같은 규칙) · 적용은 앱이 다음 틱에.
+        DropEvent::Text { .. } | DropEvent::Staged { .. } => DropChoice::Copy,
     };
     sh.events.push(ev);
     choice

@@ -305,7 +305,7 @@ pub(super) unsafe fn global_bytes(h: *mut c_void) -> Vec<u8> {
 }
 
 /// 바이트 → 새 HGLOBAL(받는 쪽이 `ReleaseStgMedium`으로 푼다 · 실패 = None).
-unsafe fn global_from_bytes(bytes: &[u8]) -> Option<*mut c_void> {
+pub(super) unsafe fn global_from_bytes(bytes: &[u8]) -> Option<*mut c_void> {
     let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1));
     if h.is_null() {
         return None;

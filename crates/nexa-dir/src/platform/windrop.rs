@@ -12,7 +12,7 @@
 //! - 이동으로 놓였을 때는 소스에 **`DROPEFFECT_NONE`**을 돌려준다(최적화 이동 규약 — 옮기는 일은 우리 전송 엔진이 한다.
 //!   MOVE를 돌려주면 소스(탐색기)가 원본을 지워 비동기 전송과 경쟁한다 · dir2 dnd.rs:466-475).
 
-use super::{DropChoice, DropEvent, DropShared};
+use super::{zone_hit, DropChoice, DropEvent, DropShared};
 use ::windows::core::{implement, Ref};
 use ::windows::Win32::Foundation::{HWND, POINT, POINTL};
 use ::windows::Win32::Graphics::Gdi::ScreenToClient;
@@ -37,6 +37,7 @@ pub(super) fn register(hwnd: isize) -> Option<Rc<RefCell<DropShared>>> {
         paths: RefCell::new(Vec::new()),
         right: std::cell::Cell::new(false),
         text: RefCell::new(None),
+        virtual_src: std::cell::Cell::new(false),
     }
     .into();
     // SAFETY: UI 스레드(STA)에서 부른다 · OleInitialize는 이미 돼 있으면 S_FALSE(무해) · 등록된 COM 객체의 수명은 OLE가 쥔다.
@@ -58,6 +59,9 @@ struct DropTarget {
     right: std::cell::Cell<bool>,
     /// 파일이 없을 때 `DragEnter`에서 읽은 글자(CF_UNICODETEXT · 없으면 CF_TEXT · T-147 ① 11-03) — 파일이 먼저다(둘 다 있으면 파일만).
     text: RefCell<Option<String>>,
+    /// 가상 파일 소스인가(T-147 ② · CF_HDROP 없이 `FileGroupDescriptorW`만 광고 — Outlook 첨부 · zip 안 · MTP): 참이면 패널 위 = 복사 ·
+    /// `Drop`에서 **반환 전** 스테이징에 추출해 `DropEvent::Staged`.
+    virtual_src: std::cell::Cell<bool>,
 }
 
 /// 데이터 객체의 글자(CF_UNICODETEXT → 없으면 CF_TEXT(ANSI · 손실 변환)) — 없거나 비면 `None`. OLE는 클립보드와 달리 CF_TEXT를
@@ -139,6 +143,17 @@ impl DropTarget_Impl {
     fn send(&self, ev: DropEvent) -> DropChoice {
         super::drop_dispatch(&self.shared, ev)
     }
+
+    /// 경로가 없는 소스의 효과: 글자 = 창 어디서나 복사(터미널 도크 · 상태줄 안내까지 앱이 가른다) · 가상 파일 = 패널 위에서만 복사 · 그 밖 = 불가.
+    fn no_path_choice(&self, at: (i32, i32)) -> DropChoice {
+        if self.text.borrow().is_some()
+            || (self.virtual_src.get() && zone_hit(&self.shared.borrow().zones, at))
+        {
+            DropChoice::Copy
+        } else {
+            DropChoice::None
+        }
+    }
 }
 
 /// 판정 → OLE 효과(순수): `on_drop`이면 이동을 NONE으로 바꾼다(최적화 이동 — 소스가 원본을 지우지 않게).
@@ -174,20 +189,22 @@ impl IDropTarget_Impl for DropTarget_Impl {
             .unwrap_or_default();
         *self.paths.borrow_mut() = paths.clone();
         self.right.set(keys.0 & MK_RBUTTON.0 != 0);
-        // 파일이 없으면 글자(T-147 ①) — 효과는 늘 복사 · 사건은 놓을 때 한 번. 가상 파일(FILEDESCRIPTOR)은 아직 받지 않는다.
+        // 파일이 없으면 글자(T-147 ①) → 없으면 가상 파일(T-147 ②) — 효과는 복사(가상 파일은 패널 위에서만) · 사건은 놓을 때 한 번.
         // SAFETY: OLE가 준 데이터 객체.
         *self.text.borrow_mut() = if paths.is_empty() {
             data.as_ref().and_then(|d| unsafe { drop_text(d) })
         } else {
             None
         };
+        let virt = paths.is_empty()
+            && self.text.borrow().is_none()
+            && data
+                .as_ref()
+                .is_some_and(|d| unsafe { super::winvirtual::data_has_virtual_files(d) });
+        self.virtual_src.set(virt);
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if paths.is_empty() {
-            if self.text.borrow().is_some() {
-                DropChoice::Copy
-            } else {
-                DropChoice::None
-            }
+            self.no_path_choice(at)
         } else {
             self.send(DropEvent::Enter {
                 paths,
@@ -214,11 +231,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
         }
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if self.paths.borrow().is_empty() {
-            if self.text.borrow().is_some() {
-                DropChoice::Copy
-            } else {
-                DropChoice::None
-            }
+            self.no_path_choice(at)
         } else {
             self.send(DropEvent::Over { at, ctrl, shift })
         };
@@ -232,6 +245,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
     fn DragLeave(&self) -> ::windows::core::Result<()> {
         self.right.set(false);
         *self.text.borrow_mut() = None;
+        self.virtual_src.set(false);
         if !self.paths.borrow().is_empty() {
             self.paths.borrow_mut().clear();
             let _ = self.send(DropEvent::Leave);
@@ -252,12 +266,16 @@ impl IDropTarget_Impl for DropTarget_Impl {
             .as_ref()
             .map(|d| unsafe { hdrop_paths(d) })
             .unwrap_or_default();
+        // 지연 렌더링 판정(T-147 ② · dir2 SHELL-064 · G8-03): 광고가 있었고 재조회가 다른 집합이면 소스가 놓는 순간 목록을 다시 쓴 것 →
+        // 반환 직후 지워질 임시 사본을 반환 전에 확보한다.
+        let delayed = super::vfiles::is_delayed(&self.paths.borrow(), &fresh);
         let paths = if fresh.is_empty() {
             std::mem::take(&mut *self.paths.borrow_mut())
         } else {
             self.paths.borrow_mut().clear();
             fresh
         };
+        let virt = self.virtual_src.replace(false);
         let (at, ctrl, shift) = self.locate(keys, pt);
         let choice = if paths.is_empty() {
             // 글자 드롭(T-147 ①): 놓는 순간 다시 읽는다(없으면 들어올 때 읽은 것) → 큐로 한 번.
@@ -266,9 +284,50 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 .as_ref()
                 .and_then(|d| unsafe { drop_text(d) })
                 .or_else(|| self.text.borrow_mut().take());
-            match text {
-                Some(text) => self.send(DropEvent::Text { text, at }),
-                None => DropChoice::None,
+            match (text, virt) {
+                (Some(text), _) => self.send(DropEvent::Text { text, at }),
+                // 가상 파일(T-147 ②): **반환 전** 동기 추출(소스가 DoDragDrop 종료 후 스트림을 무효화할 수 있다) → 스테이징 → 큐 → 앱이 이동.
+                // 큰 첨부는 그동안 창이 멈춘다(dir2 win.rs:3290 한계 · 클립보드 워커화는 다음 슬라이스).
+                (None, true) if zone_hit(&self.shared.borrow().zones, at) => {
+                    let dir = super::vfiles::staging_dir("vdrop");
+                    // SAFETY: OLE가 준 데이터 객체.
+                    let created = match (std::fs::create_dir_all(&dir), data.as_ref()) {
+                        (Ok(()), Some(d)) => unsafe {
+                            super::winvirtual::extract_virtual_from(d, &dir)
+                        },
+                        _ => Vec::new(),
+                    };
+                    if created.is_empty() {
+                        let _ = std::fs::remove_dir(&dir);
+                        DropChoice::None
+                    } else {
+                        self.send(DropEvent::Staged {
+                            paths: created,
+                            at,
+                            restore: Vec::new(),
+                        })
+                    }
+                }
+                _ => DropChoice::None,
+            }
+        } else if delayed {
+            let (secured, stolen) = super::vfiles::steal_volatile(paths);
+            if stolen.is_empty() {
+                // 확보한 것이 없다(임시 폴더 밖 · rename 실패) → 종전 경로(비동기 전송 · 경쟁 가능).
+                self.send(DropEvent::Drop {
+                    paths: secured,
+                    at,
+                    ctrl,
+                    shift,
+                    menu: self.right.replace(false) || keys.0 & MK_RBUTTON.0 != 0,
+                })
+            } else {
+                self.right.set(false);
+                self.send(DropEvent::Staged {
+                    paths: secured,
+                    at,
+                    restore: stolen,
+                })
             }
         } else {
             self.send(DropEvent::Drop {
