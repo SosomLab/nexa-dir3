@@ -90,6 +90,7 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - **왜**: 사용자 "개발에 사용된 폴더가 Sublime에 캐시되거나 Clean 되지 않은 상태로 수십 GB를 차지하는 경우가 많아 과다한 디스크 사용이 되지 않도록 관리해줘. 규칙에 넣어줘"(11-02). 첫 측정(journal 11-02 §3) = `target/debug/incremental` 하나가 30.6 GB · 세션별 `CARGO_TARGET_DIR`(target/collab · dev) · 교차 타깃 메타데이터가 쌓인다.
 - **세션별 `CARGO_TARGET_DIR`**(`target/collab` · `target/dev*` 같은 격리 빌드)도 같은 예산에 든다 — **협업 격리 빌드(`target/collab`)는 인스턴스 종료 뒤 trim 대상**(`--trim` ⑥ · 79b0ebd · 실행 중인 nexa-dir가 `target/` 아래에 있으면 ⑥만 건너뜀).
 - **형제 · 원본 저장소**(nexa-sql · nexa-dir2 · nexa-ui)의 `target/`은 disk-check 보고에 들지만 `--trim` 범위 밖 — 첫 측정에서 nexa-sql 245 GB · nexa-dir2 38 GB(journal 11-02 §3) · 정리는 사용자 판단.
+- **프로젝트 밖 임시 폴더/파일(사용자 11-03 "임시 폴더/파일을 사용한 경우 정리하는 작업을 배치해서 과다하게 누적되지 않도록")**: 시험 고정물(`core_tests::fixture` = `Temp/ndir-core-<이름>-<pid>` · ndir-vfs/tree/ops `nexa_*` · 미리보기 `nexa-preview*` · xfer `xfer-home-*`) · 스크립트 홈(`perf-baseline` `ndir-perf-*` · gate `/tmp/ndir-gate-check.*`) · 세션 스크래치(`Temp/claude/<프로젝트>/<세션>`)는 ① 만든 쪽이 끝나면 지운다(시험 = `remove_dir_all` · 스크립트 = trap) ② 그래도 남는 것(패닉한 시험 · 끊긴 세션)은 `disk-check.sh`가 보고하고 `--trim` ⑦이 **나이 가드**로 거둔다 — 고정물은 `NDIR_TMP_AGE_H`(기본 24) 시간, 스크래치는 7일 넘은 것만(게이트 full이 도는 동안 그 시험의 폴더가 Temp에 살아 있다 · 11-03 확인) ③ 프로젝트 밖에 임시 폴더를 새로 두는 코드는 위 접두사 중 하나를 쓰거나 disk-check `tmp_left()` 목록에 접두사를 추가한다(다른 프로젝트의 임시 파일은 건드리지 않기 위해 접두사 화이트리스트 방식) ④ 실행 시점 = 회차 마감 `disk-check.sh --trim`(규칙 ①과 같은 자리 · 별도 타이머 없음).
 
 ## 3. 이식 절차(한 기능)
 
@@ -113,5 +114,5 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 ## 4. 금지 목록
 
 - `git add -A`/`.` · 자동 태그 push · 강제 push · 사용자 자원 수정.
-- 앱 크레이트 안 범용 컨트롤 · `platform/` 밖 `#[cfg(target_os)]` · 문자열 리터럴 UI 문구 · 레지스트리 밖 설정 키 · 자체 타이머/스레드 틱 · 모달 중첩 루프 · 입력 주입(SendKeys 등) · 사용자 클립보드 덮어쓰기 시험 · 픽셀 골든 시험(글꼴 OS 차이).
 - `platform::quiet_command` 밖의 `std::process::Command::new`(콘솔 창 · §2-3 ⑧ · 예외 = 런처 · PTY · ShellExecuteW · `ndir`) · `cmd /C` 경유 실행.
+- 앱 크레이트 안 범용 컨트롤 · `platform/` 밖 `#[cfg(target_os)]` · 문자열 리터럴 UI 문구 · 레지스트리 밖 설정 키 · 자체 타이머/스레드 틱 · 모달 중첩 루프 · 입력 주입(SendKeys 등) · 사용자 클립보드 덮어쓰기 시험 · 픽셀 골든 시험(글꼴 OS 차이).

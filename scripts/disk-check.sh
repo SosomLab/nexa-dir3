@@ -9,7 +9,10 @@
 #            ② target/perf/bench-* · target/tmp ③ target/*.log(게이트 로그) ④ target/{debug,release}/incremental ⑤ 다른 OS 타깃 폴더
 #            (`target/<triple>/` = check-3os clippy 메타데이터 · 다음 full 게이트가 다시 만든다) ⑥ 세션별 target(`target/collab` · `target/dev*` =
 #            협업 격리 인스턴스 · 개발 세션의 `CARGO_TARGET_DIR` · 11-02 측정 collab 9.8 GB · dev 6.7 GB) — 단, nexa-dir 프로세스가 떠 있으면 ⑥은 건너뛴다
-#            (실행 중인 인스턴스의 exe를 지우지 않게). 소스 · 설정 · 문서 · ~/.cargo는 건드리지 않는다.
+#            (실행 중인 인스턴스의 exe를 지우지 않게) ⑦ **프로젝트 밖 임시 폴더**(사용자 11-03): OS Temp의 시험 고정물 잔재(`ndir-*` · `nexa_*` ·
+#            `nexa-preview*` · `xfer-home-*` 폴더 — 패닉한 시험이 `remove_dir_all`에 못 닿아 남긴 것)는 `NDIR_TMP_AGE_H`(기본 24) 시간 넘은 것만 ·
+#            세션 스크래치(`Temp/claude/<프로젝트>/<세션>`)는 7일 넘은 세션만 — 나이 가드가 지금 도는 시험·세션의 것을 지킨다.
+#            소스 · 설정 · 문서 · ~/.cargo · 다른 프로젝트의 임시 파일(접두사 밖)은 건드리지 않는다.
 #            release/debug 본체를 비우려면 사람이 `cargo clean --release`(다음 게이트 full 재빌드 10분+).
 #   측정은 Windows에서 느리다(du · 수십만 파일 = 수 분) — 백그라운드로 돌리고 결과만 본다. 측정·기록 = 협업 세션 · 삭제 실행 = 개발 세션(사용자 확인).
 set -u
@@ -58,6 +61,16 @@ for p in "${LOCALAPPDATA:-}/Sublime Text" "${LOCALAPPDATA:-}/Sublime Text 3" "${
 done
 [ -d "${LOCALAPPDATA:-}/Temp/claude" ] && printf "  %7s G  %s\n" "$(gb "$(size_k "$LOCALAPPDATA/Temp/claude")")" "$LOCALAPPDATA/Temp/claude(세션 스크래치)"
 [ -d "$HOME/.cargo/registry" ] && printf "  %7s G  %s\n" "$(gb "$(size_k "$HOME/.cargo/registry")")" "$HOME/.cargo/registry"
+# ⑦ 프로젝트 밖 임시 폴더(OS Temp) — 이 프로젝트의 시험·스크립트 접두사만(폴더만 · 다른 프로젝트 것은 세지 않는다).
+TMP_ROOT="${TEMP:-${TMPDIR:-/tmp}}"
+tmp_left() { # [추가 find 조건...] → 경로 줄들
+    find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -type d \( -name 'ndir-*' -o -name 'nexa_*' -o -name 'nexa-preview*' -o -name 'xfer-home-*' \) "$@" 2>/dev/null
+}
+TMP_N=$(tmp_left | wc -l | tr -d ' ')
+if [ "$TMP_N" -gt 0 ]; then
+    TMP_K=$(tmp_left -print0 | xargs -0 du -skc 2>/dev/null | tail -1 | cut -f1)
+    printf "  %7s G  %s(%s개 · 시험 고정물 잔재 · --trim ⑦ = %s h 넘은 것만)\n" "$(gb "${TMP_K:-0}")" "$TMP_ROOT/{ndir-*,nexa_*,…}" "$TMP_N" "${NDIR_TMP_AGE_H:-24}"
+fi
 
 echo "[여유]"
 df -h "$ROOT" | awk 'NR==2 {printf "  %s 여유 %s(사용 %s)\n", $1, $4, $5}'
@@ -88,6 +101,14 @@ if [ "$TRIM" = 1 ]; then
         if [ -n "$RUNNING" ]; then echo "  (skip ${d#"$ROOT"/} — target/ 아래 nexa-dir 실행 중: $(echo "$RUNNING" | head -1))"; continue; fi
         echo "  rm -rf ${d#"$ROOT"/}"; rm -rf "$d"
     done
+    # ⑦ 프로젝트 밖 임시 폴더(사용자 11-03) — 나이 가드: 시험 고정물은 `NDIR_TMP_AGE_H`(24) 시간 · 세션 스크래치는 7일 넘은 것만
+    #   (게이트 full이 도는 동안 그 시험의 `ndir-core-*-<pid>`가 Temp에 살아 있다 — 11-03 확인).
+    AGE_MIN=$(( ${NDIR_TMP_AGE_H:-24} * 60 ))
+    tmp_left -mmin +"$AGE_MIN" | while IFS= read -r d; do echo "  rm -rf $d"; rm -rf "$d"; done
+    SCRATCH="${LOCALAPPDATA:-}/Temp/claude"
+    if [ -d "$SCRATCH" ]; then
+        find "$SCRATCH" -mindepth 2 -maxdepth 2 -type d -mtime +7 2>/dev/null | while IFS= read -r d; do echo "  rm -rf $d"; rm -rf "$d"; done
+    fi
     echo "  (release/debug 본체는 그대로 — 비우려면 cargo clean --release)"
     df -h "$ROOT" | awk 'NR==2 {printf "  여유 %s(사용 %s)\n", $4, $5}'
 fi
