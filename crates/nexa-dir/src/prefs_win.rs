@@ -1056,6 +1056,7 @@ impl PrefsWin {
             return;
         };
         let _ = crate::platform::apply_window_opacity(&win); // 창 투명도(T-102)
+        let _ = crate::platform::guard_taskbar_created(&win); // GAP-042 TaskbarCreated 교착 우회
         if let Some(((x, y), _)) = same {
             crate::wingeom::place_outer(&win, Some((x, y)));
         }

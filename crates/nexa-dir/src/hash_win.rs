@@ -633,6 +633,7 @@ impl HashWin {
             return;
         };
         let _ = crate::platform::apply_window_opacity(&win); // 창 투명도(T-102)
+        let _ = crate::platform::guard_taskbar_created(&win); // GAP-042 TaskbarCreated 교착 우회
         let win = Rc::new(win);
         win.set_ime_allowed(crate::input::system_ime());
         self.scale = win.scale_factor() as f32;

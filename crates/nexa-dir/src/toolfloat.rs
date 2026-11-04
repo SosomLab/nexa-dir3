@@ -65,6 +65,7 @@ impl ToolFloatWin {
         let attrs = crate::winfocus::owned_by(crate::icon::with_icon(attrs), owner);
         let win = el.create_window(attrs).ok()?;
         let _ = crate::platform::apply_window_opacity(&win); // 창 투명도(T-102)
+        let _ = crate::platform::guard_taskbar_created(&win); // GAP-042 TaskbarCreated 교착 우회
         let win = Rc::new(win);
         let scale = win.scale_factor() as f32;
         let mut me = ToolFloatWin {

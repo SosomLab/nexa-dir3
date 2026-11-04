@@ -217,6 +217,7 @@ impl FileWin {
             return;
         };
         let _ = crate::platform::apply_window_opacity(&win); // 창 투명도(T-102)
+        let _ = crate::platform::guard_taskbar_created(&win); // GAP-042 TaskbarCreated 교착 우회
         let win = Rc::new(win);
         self.scale = win.scale_factor() as f32;
         self.surface = crate::present::Presenter::new(win.clone()).ok();

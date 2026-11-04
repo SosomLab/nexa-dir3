@@ -56,6 +56,8 @@ mod winrecycle;
 #[cfg(windows)]
 mod winshell;
 #[cfg(windows)]
+mod wintaskbar;
+#[cfg(windows)]
 mod wintemplates;
 #[cfg(windows)]
 mod winvirtual;
@@ -2188,6 +2190,56 @@ mod tests {
 
     use super::*;
 
+    /// GAP-042 정적 가드(3-OS): winit 창을 만드는 줄(`el.create_window(`)마다 같은 파일에 `guard_taskbar_created(&win)` 호출이
+    /// 하나씩 있어야 한다(주석 줄 제외 · 파일별 건수 대조). 새 창을 추가하면 생성 직후 호출도 함께 넣는다 — winit 0.30.13
+    /// `TaskbarCreated` 교착을 창마다 막는 유일한 길이라서. winit을 0.31 이후로 올리면 이 시험과 호출을 함께 지운다.
+    #[test]
+    fn taskbar_guard_follows_every_window_creation() {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            for e in std::fs::read_dir(dir).expect("read_dir").flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        fn count(src: &str, needle: &str) -> usize {
+            src.lines()
+                .filter(|l| {
+                    let t = l.trim_start();
+                    !t.starts_with("//") && !t.starts_with("///") && t.contains(needle)
+                })
+                .count()
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        walk(&root, &mut files);
+        let mut total = 0;
+        let mut bad = Vec::new();
+        for f in files {
+            let rel = f
+                .strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            let src = std::fs::read_to_string(&f).expect("read");
+            // 찾는 글을 둘로 쪼개 이 줄 자신이 세어지지 않게.
+            let created = count(&src, concat!("el.create_", "window("));
+            let guarded = count(&src, concat!("guard_taskbar_", "created(&win)"));
+            total += created;
+            if created != guarded {
+                bad.push(format!("{rel}: create_window {created} · guard {guarded}"));
+            }
+        }
+        assert!(bad.is_empty(), "GAP-042 가드 누락/과잉: {bad:?}");
+        assert!(
+            total >= 19,
+            "winit 창 생성 지점이 줄었다({total} · 기대 19) — 표를 확인"
+        );
+    }
+
     /// 콘솔 창 규칙(사용자 11-02 · docs/15 §2-3 ⑧ · CLAUDE.md §5): 앱이 띄우는 자식 프로세스는 [`quiet_command`](Windows
     /// `CREATE_NO_WINDOW`)로만 — `Command::new(` 직접 호출은 아래 표의 파일·건수뿐(주석 줄 제외). 새 호출은 `quiet_command`로 바꾸거나
     /// 표에 **사유와 함께** 등재한다(건수가 달라지면 이 시험이 막는다 — 자동 실행 경로(기동 · 셸 탐지 · 상태줄 git)도 같은 규칙).
@@ -2639,6 +2691,29 @@ pub(crate) fn opacity_pct() -> u8 {
 /// `Err(Unsupported)`(호출부는 조용히 넘긴다 — 앱은 기본 X11 창).
 pub(crate) fn apply_window_opacity(w: &winit::window::Window) -> Result<(), PlatformError> {
     apply_window_opacity_pct(w, i64::from(opacity_pct()))
+}
+
+/// GAP-042: 창을 만든 직후 `TaskbarCreated` 교착 우회 서브클래스를 단다(Windows · [`wintaskbar`]) — winit 0.30.13이 이 메시지를
+/// 창 상태 잠금을 쥔 채 처리하다 테마 변경 재진입으로 영구 대기하는 결함을 앱 쪽에서 막는다(사용자 11-04 ⓑ · 포크 없음). winit 창을
+/// 만드는 **모든** 곳(`el.create_window`)이 바로 뒤에 부른다(정적 가드 `taskbar_guard_follows_every_window_creation`). 다른 OS =
+/// `Err(Unsupported)`(호출부는 조용히 넘긴다). 제거 조건 = winit #4563이 든 판(0.31 이후)으로 올릴 때.
+pub(crate) fn guard_taskbar_created(w: &winit::window::Window) -> Result<(), PlatformError> {
+    #[cfg(windows)]
+    {
+        let Some(h) = crate::winfocus::hwnd(w) else {
+            return Err(PlatformError::Unsupported("taskbar guard"));
+        };
+        if wintaskbar::install(h) {
+            Ok(())
+        } else {
+            Err(PlatformError::Failed("SetWindowSubclass".into()))
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = w;
+        Err(PlatformError::Unsupported("taskbar guard"))
+    }
 }
 
 /// 창에 **지정한** 투명도(%)를 적용한다 — 메인 창의 포커스별 값(T-199 · `window.transparency` / `window.transparency_blur`).
