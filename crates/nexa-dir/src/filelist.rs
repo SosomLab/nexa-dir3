@@ -1318,18 +1318,16 @@ impl RowSource for TreeSource {
                 }
             }
             COL_SIZE => {
-                // 번들(macOS `.app` · GAP-025): 폴더 크기 계산이 합계를 줬으면 그것(10-31 T-114 잔여) · 아니면 메타 길이(종전).
+                // 번들(macOS `.app` · GAP-025): 폴더 크기 계산이 합계를 줬으면 그것(10-31 T-114 잔여) · 아니면 폴더처럼 빈칸(GAP-050 · 메타 길이 "96 B"는 앱 크기가 아니다).
                 if ndir_vfs::is_bundle_attrs(r.attrs) {
-                    if let Some((bytes, partial)) = self
+                    return match self
                         .row_path(index)
                         .and_then(|p| self.dir_sizes.get(&p).copied())
                     {
-                        return if partial {
-                            format!("\u{2265} {}", format_size(bytes))
-                        } else {
-                            format_size(bytes)
-                        };
-                    }
+                        Some((bytes, false)) => format_size(bytes),
+                        Some((bytes, true)) => format!("\u{2265} {}", format_size(bytes)),
+                        None => String::new(),
+                    };
                 }
                 format_size(r.size)
             }
@@ -2090,7 +2088,7 @@ mod probe_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 번들 크기(10-31 T-114 잔여): 폴더 크기 합계가 오면 그것 · 없으면 메타 길이 · 비번들 폴더 행은 종전 그대로(크기 열 빈칸 아님).
+    /// 번들 크기(10-31 T-114 잔여 · GAP-050): 폴더 크기 합계가 오면 그것 · 없으면 폴더처럼 빈칸.
     #[test]
     fn bundle_size_cell_uses_dir_size_sum_when_known() {
         if !cfg!(target_os = "macos") {
@@ -2112,13 +2110,11 @@ mod probe_tests {
         };
         let mut src = TreeSource::open(&base, o);
         assert!(src.row_is_bundle(0), "Foo.app = 번들 행");
-        let before = src.cell(0, COL_SIZE);
+        assert_eq!(src.cell(0, COL_SIZE), "", "합계 전 = 빈칸(메타 길이 아님)");
         let mut sizes = std::collections::HashMap::new();
         sizes.insert(base.join("Foo.app"), (3000u64, false));
         src.set_dir_sizes(sizes);
-        let after = src.cell(0, COL_SIZE);
-        assert_ne!(before, after, "합계가 오면 셀이 바뀐다: {before} → {after}");
-        assert_eq!(after, format_size(3000));
+        assert_eq!(src.cell(0, COL_SIZE), format_size(3000));
         let _ = std::fs::remove_dir_all(&base);
     }
 
