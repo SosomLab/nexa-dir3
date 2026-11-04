@@ -570,6 +570,8 @@ pub struct Settings {
     values: BTreeMap<String, String>,
     /// 레지스트리에 없는 키(보존 재방출).
     unknown: Vec<(String, String)>,
+    /// 파일에 마지막으로 있던(읽은 · 쓴) 본문 — 같으면 `save`가 다시 쓰지 않는다(GAP-047 · 종료마다 무변경 재기록 방지).
+    saved: std::cell::RefCell<Option<String>>,
 }
 
 impl Settings {
@@ -596,6 +598,7 @@ impl Settings {
             path,
             values: BTreeMap::new(),
             unknown: Vec::new(),
+            saved: std::cell::RefCell::new((!text.is_empty()).then(|| text.to_string())),
         };
         let mut seen: Vec<String> = Vec::new();
         for (k, v) in doc.pairs {
@@ -729,17 +732,24 @@ impl Settings {
         Ok(default_of(e.key).unwrap_or(e.default))
     }
 
-    /// 원자적 저장(폴더가 없으면 만든다). 내용 = 변경분 + 모르는 키.
+    /// 원자적 저장(폴더가 없으면 만든다). 내용 = 변경분 + 모르는 키. 본문이 마지막 파일 내용과 글자까지 같으면 쓰지 않는다(GAP-047 ·
+    /// 형식만 다른 첫 1회 — CRLF · 손상 줄 · 옛 키 — 는 정상적으로 써서 정규화한다).
     pub fn save(&self) -> io::Result<()> {
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
         let known: Vec<(&str, &str)> = self
             .values
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
-        nexa_conf::write_atomic(&self.path, &nexa_conf::serialize(&known, &self.unknown))
+        let text = nexa_conf::serialize(&known, &self.unknown);
+        if self.saved.borrow().as_deref() == Some(text.as_str()) {
+            return Ok(());
+        }
+        if let Some(dir) = self.path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        nexa_conf::write_atomic(&self.path, &text)?;
+        *self.saved.borrow_mut() = Some(text);
+        Ok(())
     }
 
     // ── 타입 있는 접근자(자주 쓰는 키)
@@ -1304,6 +1314,40 @@ mod tests {
         assert!(!s.is_modified("ui.theme"));
         s.save().unwrap();
         assert!(!std::fs::read_to_string(&p).unwrap().contains("ui.theme"));
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+
+    /// GAP-047: 값이 그대로면 `save`는 파일을 건드리지 않는다(바깥에서 덧붙인 줄이 남아 있음으로 판정) · 바뀌면 쓴다 · 다시 열면 첫 저장도 건너뛴다.
+    #[test]
+    fn save_skips_rewrite_when_unchanged() {
+        let p = tmp("nosave");
+        let mut s = Settings::open(p.clone());
+        s.set("ui.theme", "light").unwrap();
+        s.save().unwrap();
+        let written = std::fs::read_to_string(&p).unwrap();
+        let marker = format!("{written}# touched outside\n");
+        std::fs::write(&p, &marker).unwrap();
+        s.save().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            marker,
+            "무변경 = 안 씀"
+        );
+        s.set("ui.theme", "dark").unwrap();
+        s.save().unwrap();
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert!(
+            text.contains("ui.theme=dark\n") && !text.contains("touched"),
+            "{text}"
+        );
+        let again = Settings::open(p.clone());
+        std::fs::write(&p, &marker).unwrap();
+        again.save().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            marker,
+            "다시 연 뒤 첫 저장도 같으면 안 씀"
+        );
         let _ = std::fs::remove_dir_all(p.parent().unwrap());
     }
 
