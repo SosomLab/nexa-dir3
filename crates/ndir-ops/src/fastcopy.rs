@@ -321,6 +321,12 @@ pub fn with_filter<R>(filter: NameFilter, f: impl FnOnce() -> R) -> R {
     f()
 }
 
+/// 이 스레드에 이름 필터가 걸려 있는가 — 폴더 통째 `rename`은 필터를 지킬 수 없어 복사 이동으로 돌린다(GAP-045).
+#[must_use]
+pub fn filter_active() -> bool {
+    FILTER.with(|c| c.borrow().is_some())
+}
+
 /// 계획 단계의 필터 판정(없으면 전부 허용) — `crate::verify`도 같은 판정으로 제외 항목을 건너뛴다(GAP-027).
 pub fn filter_allows(name: &std::ffi::OsStr, is_dir: bool) -> bool {
     FILTER.with(|c| {

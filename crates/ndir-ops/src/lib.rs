@@ -367,6 +367,7 @@ pub fn unique_dest(dest_dir: &Path, name: &str, is_dir: bool) -> PathBuf {
 }
 
 /// 파일/폴더 총 바이트(폴더 재귀 합계) — 접근 실패는 0으로 개별 격리(원본 SizeOf).
+/// 이름 필터(`fastcopy::with_filter`)가 걸려 있으면 폴더 안의 거른 항목은 세지 않는다(GAP-044 · 실행과 같은 판정).
 pub fn size_of(path: &Path) -> u64 {
     fn dir_sum(dir: &Path) -> u64 {
         let Ok(rd) = fs::read_dir(dir) else { return 0 };
@@ -374,9 +375,17 @@ pub fn size_of(path: &Path) -> u64 {
             .map(|e| {
                 let p = e.path();
                 match e.file_type() {
-                    Ok(t) if t.is_dir() => dir_sum(&p),
-                    Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
-                    _ => 0, // 심링크·실패 격리
+                    Ok(t) if t.is_dir() => {
+                        if fastcopy::filter_allows(&e.file_name(), true) {
+                            dir_sum(&p)
+                        } else {
+                            0
+                        }
+                    }
+                    Ok(t) if t.is_file() && fastcopy::filter_allows(&e.file_name(), false) => {
+                        e.metadata().map(|m| m.len()).unwrap_or(0)
+                    }
+                    _ => 0, // 심링크·거른 항목·실패 격리
                 }
             })
             .sum()
@@ -472,16 +481,21 @@ fn copy_dir_with_progress(
 /// `remove_dir`한다(탐색기 방식). 열거에서 빠졌거나 복사 중 새로 생긴 항목은 남고, 그 때문에 폴더가
 /// 비지 않으면 오류로 보고한다 — 사본은 완성돼 있으므로 데이터는 양쪽 어디에도 유실되지 않는다.
 fn remove_copied(src: &Path, copied: &[PathBuf]) -> io::Result<()> {
+    // 이름 필터(GAP-045)가 걸려 있으면 거른 항목이 원본에 남는 것이 **정상** — 그 때문에 비지 않은 폴더는 오류가 아니다.
+    let filtered = fastcopy::filter_active();
     let mut first_err: Option<io::Error> = None;
-    let mut note = |r: io::Result<()>| {
+    let mut note = |r: io::Result<()>, dir: Option<&Path>| {
         if let Err(e) = r {
+            if filtered && dir.is_some_and(dir_has_entries) {
+                return;
+            }
             first_err.get_or_insert(e);
         }
     };
     for p in copied {
         // 링크는 **링크만**(대상은 그대로) · 파일 우선, 실패하면 폴더(빈 폴더만 — 남은 항목이 있으면 그대로 둔다)
         if is_link(p) {
-            note(remove_link(p));
+            note(remove_link(p), None);
             continue;
         }
         let r = fs::remove_file(p).or_else(|e| {
@@ -491,13 +505,18 @@ fn remove_copied(src: &Path, copied: &[PathBuf]) -> io::Result<()> {
                 Err(e)
             }
         });
-        note(r);
+        note(r, p.is_dir().then_some(p.as_path()));
     }
-    note(remove_empty_dir(src));
+    note(remove_empty_dir(src), Some(src));
     match first_err {
         Some(e) => Err(e),
         None => Ok(()),
     }
+}
+
+/// 폴더에 항목이 하나라도 남아 있는가(읽기 실패 = 모름 → `false`).
+fn dir_has_entries(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|mut rd| rd.next().is_some())
 }
 
 /// 빈 폴더 삭제 — 비어 있지 않으면 사용자 메시지에 사유를 담아 반환.
@@ -772,7 +791,8 @@ pub fn move_onto_with_progress(
     if is_dir && is_same_or_sub(src, dest) {
         return Err(OpsError::IntoSelf.io());
     }
-    if same_volume(src, dest) {
+    // 이름 필터가 걸린 폴더는 통째 rename 금지(GAP-045) — 복사 이동이 고른 항목만 옮기고 거른 항목은 원본에 남긴다.
+    if same_volume(src, dest) && !(is_dir && fastcopy::filter_active()) {
         match rename_onto(src, dest, overwrite, is_dir) {
             Ok(()) => {
                 on_bytes(size_of(dest)); // 메타데이터 이동(즉시) — 전체 크기 1회 보고

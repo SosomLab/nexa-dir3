@@ -75,6 +75,8 @@ Options:
   --include <glob>     copy only files whose name matches the glob (* ?, case-insensitive);
                        repeatable, or several globs separated by ; · folders are always entered
   --exclude <glob>     skip files and folders whose name matches (repeatable or ;-separated · wins over --include)
+                       · with --move, filtered items stay in the source (a filtered folder is moved by copy,
+                       never renamed as a whole)
   --verify             after copying, compare each copied file with its source (size + SHA-256);
                        folders are checked recursively · a mismatch is reported and the exit code is 1
                        (with --move: each cross-volume move is verified before its source is removed —
@@ -672,12 +674,13 @@ pub(crate) fn run_with(
     } else if o.verify {
         let v_started = Instant::now();
         // 읽을 총량 = 복사한 항목 크기 × 2(원본 + 사본) — "n of m" 진행.
-        let total: u64 = out
-            .transferred
-            .iter()
-            .map(|(s, _)| ndir_ops::size_of(s))
-            .sum::<u64>()
-            .saturating_mul(2);
+        let total: u64 = ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+            out.transferred
+                .iter()
+                .map(|(s, _)| ndir_ops::size_of(s))
+                .sum::<u64>()
+        })
+        .saturating_mul(2);
         let mut read = 0u64;
         let mut last = Instant::now();
         let mut on_bytes = |n: u64| {
@@ -755,7 +758,9 @@ fn dry_run(o: &Options, out: &mut dyn Write, err: &mut dyn Write) -> ExitCode {
         .cloned()
         .collect();
     let plan = ndir_ops::fastcopy::with_dir_conflict(o.dir_conflict, || {
-        plan_transfer(&sources, &o.dest, o.op, &mut resolve)
+        ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+            plan_transfer(&sources, &o.dest, o.op, &mut resolve)
+        })
     });
     let verb = match o.op {
         Op::Copy => "copy",
@@ -1219,6 +1224,72 @@ mod tests {
         );
         assert!(String::from_utf8_lossy(&out).starts_with("error\t"));
         let _ = fs::remove_dir_all(&d);
+    }
+
+    /// GAP-044: dry-run 계획 바이트에도 이름 필터를 적용한다(실행과 같은 판정) — 일반 경로 · 작업 경로(`ndir_xfer::run`) 둘 다.
+    #[test]
+    fn dry_run_bytes_follow_name_filter() {
+        let d = sandbox("dryfilter");
+        let src = d.join("src").join("d");
+        let dest = d.join("dest");
+        fs::create_dir_all(&src).expect("mkdir");
+        fs::create_dir_all(&dest).expect("mkdir");
+        fs::write(src.join("a.txt"), [0u8; 10]).expect("write");
+        fs::write(src.join("b.log"), [0u8; 100]).expect("write");
+        let (s, t) = (src.to_string_lossy(), dest.to_string_lossy());
+        let Ok(Parsed::Run(o)) = parse(&a(&["-n", "--include", "*.txt", s.as_ref(), t.as_ref()]))
+        else {
+            panic!("parse")
+        };
+        let (mut out, mut err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        let cancel = AtomicBool::new(false);
+        assert_eq!(run_with(&o, &cancel, &mut out, &mut err), ExitCode::SUCCESS);
+        let report = String::from_utf8_lossy(&out).into_owned();
+        assert!(report.starts_with("copy\t10\t"), "{report}");
+        let rep = ndir_xfer::run(&o.to_spec(), &mut |_| {}, &cancel);
+        assert_eq!(rep.transferred_bytes, 10, "{rep:?}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// GAP-045: 같은 볼륨 `--move` + 이름 필터 = 고른 파일만 옮기고 거른 파일은 원본에 남는다(종전 = 폴더 통째 rename으로 전부 이동).
+    #[test]
+    fn move_with_name_filter_leaves_filtered_items() {
+        for (opt, glob) in [("--include", "*.txt"), ("--exclude", "*.log")] {
+            let d = sandbox(&format!("mvfilter{opt}"));
+            let src = d.join("src").join("d");
+            let dest = d.join("dest");
+            fs::create_dir_all(src.join("sub")).expect("mkdir");
+            fs::create_dir_all(&dest).expect("mkdir");
+            fs::write(src.join("a.txt"), b"a").expect("write");
+            fs::write(src.join("b.log"), b"b").expect("write");
+            fs::write(src.join("sub").join("c.txt"), b"c").expect("write");
+            fs::write(src.join("sub").join("e.log"), b"e").expect("write");
+            let (s, t) = (src.to_string_lossy(), dest.to_string_lossy());
+            let Ok(Parsed::Run(o)) = parse(&a(&["--move", opt, glob, s.as_ref(), t.as_ref()]))
+            else {
+                panic!("parse {opt}")
+            };
+            let mut err: Vec<u8> = Vec::new();
+            assert_eq!(run(&o, &mut err), ExitCode::SUCCESS, "{opt}");
+            let moved = dest.join("d");
+            assert!(moved.join("a.txt").is_file(), "{opt} 옮김");
+            assert!(
+                moved.join("sub").join("c.txt").is_file(),
+                "{opt} 옮김(하위)"
+            );
+            assert!(!moved.join("b.log").exists(), "{opt} 거른 파일이 옮겨짐");
+            assert!(
+                !moved.join("sub").join("e.log").exists(),
+                "{opt} 거른 파일이 옮겨짐(하위)"
+            );
+            assert!(!src.join("a.txt").exists(), "{opt} 원본에서 사라짐");
+            assert!(src.join("b.log").is_file(), "{opt} 거른 파일은 원본에");
+            assert!(
+                src.join("sub").join("e.log").is_file(),
+                "{opt} 거른 파일은 원본에(하위)"
+            );
+            let _ = fs::remove_dir_all(&d);
+        }
     }
 
     /// GAP-043: `--dir-conflict`가 일반 실행(`run_with`)과 dry-run에도 먹는다 — 값은 스레드 지역이라 `with_dir_conflict`로 감싸야 한다

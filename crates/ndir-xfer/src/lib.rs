@@ -351,7 +351,9 @@ pub fn run_full(
     };
     if spec.dry_run {
         let plan = fastcopy::with_dir_conflict(spec.dir_conflict, || {
-            plan_transfer(&sources, &spec.dest, spec.op, &mut resolve)
+            fastcopy::with_filter(spec.filter.clone(), || {
+                plan_transfer(&sources, &spec.dest, spec.op, &mut resolve)
+            })
         });
         for it in &plan.items {
             let (action, status, note) = match &it.action {
@@ -588,12 +590,13 @@ pub fn run_full(
         });
     }
     if spec.verify && spec.op == Op::Copy && !out.canceled {
-        let total: u64 = out
-            .transferred
-            .iter()
-            .map(|(s, _)| ndir_ops::size_of(s))
-            .sum::<u64>()
-            .saturating_mul(2);
+        let total: u64 = fastcopy::with_filter(spec.filter.clone(), || {
+            out.transferred
+                .iter()
+                .map(|(s, _)| ndir_ops::size_of(s))
+                .sum::<u64>()
+        })
+        .saturating_mul(2);
         let mut read = 0u64;
         let mut on_bytes = |n: u64| {
             read += n;
