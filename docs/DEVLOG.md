@@ -2,11 +2,6 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
-## 2026-11-04
-
-- **GAP-042 원인 확정(사용자 설치본 0.29.0 "응답 없음")**: 미니덤프(PowerShell `MiniDumpWriteDump`) + WinDbg cdb → **winit 0.30.13 `TaskbarCreated` 교착**(잠금 쥔 채 `AddTab` 동기 대기 → 테마 변경 → `WM_WINDOWPOSCHANGING` 재진입) · 계기 = RDP 재접속 · 0.30.0에도 있음 · 상류 #4563은 0.31에만 · **처방 ⓐ 포크 백포트 결정(사용자)** · 형제 nexa-sql · beep · clip 동일 · 구현 미착수 → [11-04 §1](journal/2026-11-04.md)
-- **저장소 최신화**: C:\Projects 10개 fetch · 5개 ff-pull(dir3 516 · nexa-sql 524 · beep 62 · ui 11 · clip 9) · 변경 분석 = 협업 보고서 · Bitbucket 11-12 SSH 호스트 변경 공지 → [11-04 §1-6](journal/2026-11-04.md)
-
 ## 2026-11-03
 
 - **v0.30.0 공개 ✅(사용자)**: 가드 보강 90919ba(직전 판 검수 중 → 건너뜀) · 승격 dff5251 · gate 834/0 · CI ✓ · 선검증 ✓ · 태그 dff5251 · release run 41621963098(Release 자산 9 · linux-repo · brew · winget/choco 건너뜀 = 정책대로) → [11-03 §12](journal/2026-11-03.md)
