@@ -163,6 +163,7 @@ del.lockedTitle = 削除できない項目
 del.lockedMsg = 次の {0} 個の項目は他のプログラムで使用中です:\n\n{1}
 del.failTitle = 削除の失敗
 del.failMsg = 次の {0} 個の項目を削除できませんでした (使用中またはアクセス不可):\n\n{1}
+del.failRest = それ以外はすべて完全に削除されました。再試行は削除できなかった項目のみ (上に表示されていないものも含めてすべて) を対象にします。
 del.skipLocked = スキップして削除({0} 個)
 del.retry = 再試行
 del.cancel = キャンセル

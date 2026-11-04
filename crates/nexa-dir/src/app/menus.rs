@@ -209,21 +209,22 @@ pub(crate) fn menu_of(id: &str) -> Option<&'static str> {
 
 /// 잠긴 항목 안내 글(순수 · dir2 `del.lockedMsg`): 개수 + 이름 목록(최대 10줄 · 넘으면 "…외 n개").
 pub(crate) fn locked_message(locked: &[PathBuf]) -> String {
-    list_message("del.lockedMsg", locked)
+    list_message("del.lockedMsg", locked, |p| ndir_ops::leaf_name(p))
 }
 
 /// 삭제 실패 안내 글(dir2 `del.failMsg`) — 이름 목록 규칙은 [`locked_message`]와 같다.
 pub(crate) fn fail_message(failed: &[PathBuf]) -> String {
-    list_message("del.failMsg", failed)
+    list_message("del.failMsg", failed, |p| ndir_ops::leaf_name(p))
 }
 
-fn list_message(key: &str, paths: &[PathBuf]) -> String {
+/// 완전 삭제 실패 안내(GAP-046) — 트리 안쪽 항목이라 이름만으로는 어디인지 모른다 → **전체 경로**로(10개 + "…외 n개").
+pub(crate) fn fail_message_paths(failed: &[PathBuf]) -> String {
+    list_message("del.failMsg", failed, |p| p.display().to_string())
+}
+
+fn list_message(key: &str, paths: &[PathBuf], show: impl Fn(&PathBuf) -> String) -> String {
     const SHOWN: usize = 10;
-    let mut lines: Vec<String> = paths
-        .iter()
-        .take(SHOWN)
-        .map(|p| ndir_ops::leaf_name(p))
-        .collect();
+    let mut lines: Vec<String> = paths.iter().take(SHOWN).map(show).collect();
     if paths.len() > SHOWN {
         lines.push(trf("del.listMore", &[&(paths.len() - SHOWN).to_string()]));
     }

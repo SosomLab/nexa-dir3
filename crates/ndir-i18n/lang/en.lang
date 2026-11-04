@@ -163,6 +163,7 @@ del.lockedTitle = Items In Use
 del.lockedMsg = The following {0} item(s) are in use by another program:\n\n{1}
 del.failTitle = Delete Failed
 del.failMsg = The following {0} item(s) could not be deleted (in use or inaccessible):\n\n{1}
+del.failRest = Everything else was deleted permanently. Retry tries only the items that could not be deleted (all of them, including any not shown above).
 del.skipLocked = Skip and Delete ({0})
 del.retry = Retry
 del.cancel = Cancel

@@ -13047,6 +13047,56 @@ fn delete_permanent_runs_on_worker_and_reports_failures() {
         !app.statusbar.left().starts_with("Deleting"),
         "끝나면 항목 수로"
     );
+    // GAP-046(사용자 11-04 ⓐ · 협업 Linux 실측 A8): 폴더 안쪽 하나가 막혀도 **끝까지** 지우고 안내는 막힌 항목의 **전체 경로**(폴더 이름이 아님) +
+    // "나머지는 지워졌다" · [다시 시도] = 그 목록만. unix = 쓰기 금지 하위 폴더(root면 막히지 않아 건너뜀).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let big = dir.join("big");
+        std::fs::create_dir_all(big.join("ro")).unwrap();
+        std::fs::create_dir_all(big.join("a/b")).unwrap();
+        for i in 0..30 {
+            std::fs::write(big.join(format!("f{i}.txt")), b"x").unwrap();
+        }
+        std::fs::write(big.join("a/b/deep.txt"), b"y").unwrap();
+        std::fs::write(big.join("ro/k"), b"k").unwrap();
+        std::fs::set_permissions(big.join("ro"), std::fs::Permissions::from_mode(0o555)).unwrap();
+        if std::fs::write(big.join("ro/probe"), b"").is_err() {
+            app.delete_permanent_start(vec![big.clone()]);
+            wait(&mut app);
+            assert!(big.join("ro/k").is_file(), "막힌 항목은 남는다");
+            assert!(
+                !big.join("a").exists() && !big.join("f0.txt").exists(),
+                "나머지는 전부 지워짐"
+            );
+            let d = app.dump_of("dlg").unwrap();
+            assert!(d.starts_with("pending Delete Failed | "), "{d}");
+            let shown = big.join("ro/k").display().to_string();
+            assert!(d.contains(&shown), "전체 경로로 안내: {d}");
+            assert!(d.contains("Everything else was deleted"), "{d}");
+            assert!(
+                !d.contains("1 item(s) could not be deleted (in use or inaccessible):\n\nbig"),
+                "{d}"
+            );
+            std::fs::set_permissions(big.join("ro"), std::fs::Permissions::from_mode(0o755))
+                .unwrap();
+            app.startup_cmd("dlg.pick:1");
+            assert!(app.delete_busy());
+            wait(&mut app);
+            assert!(
+                !big.join("ro/k").exists(),
+                "다시 시도 = 그 목록만 · 풀린 뒤 지워짐"
+            );
+            assert_eq!(app.dump_of("dlg").unwrap(), "none\n");
+            assert!(
+                big.exists(),
+                "다시 시도 대상은 안쪽 항목이라 빈 폴더 big은 남는다(사용자가 다시 지움)"
+            );
+        } else {
+            std::fs::set_permissions(big.join("ro"), std::fs::Permissions::from_mode(0o755))
+                .unwrap();
+        }
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

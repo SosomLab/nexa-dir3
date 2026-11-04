@@ -8,10 +8,14 @@ use std::sync::mpsc;
 
 /// 완전 삭제 워커(GAP-040): 워커가 항목마다 `(경로, 성공)`을 보내고 끝나면 채널을 닫는다 — UI는 `App::delete_tick`이 수거.
 pub(crate) struct DeleteJob {
-    rx: mpsc::Receiver<(PathBuf, bool)>,
+    /// 항목마다 (경로 · 지우지 못한 안쪽 경로 목록 — 빈 목록 = 전부 삭제 · GAP-046).
+    rx: mpsc::Receiver<(PathBuf, Vec<PathBuf>)>,
     total: usize,
     done: usize,
+    /// 지우지 못한 경로(안쪽 항목 · 전체 경로) — [다시 시도]는 이 목록만.
     failed: Vec<PathBuf>,
+    /// 실패가 하나라도 있던 최상위 항목 수(토스트 "n deleted").
+    failed_items: usize,
 }
 
 /// 대화상자 결과를 누가 받는가.
@@ -283,8 +287,12 @@ impl App {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             for p in paths {
-                let ok = ndir_ops::delete_permanent(&p).is_ok();
-                if tx.send((p, ok)).is_err() {
+                // 끝까지 지우고 지우지 못한 안쪽 경로만(GAP-046 · 사용자 11-04 ⓐ) — 종전 `delete_permanent`는 첫 실패에서 멈췄다.
+                let bad: Vec<PathBuf> = ndir_ops::delete_permanent_tree(&p)
+                    .into_iter()
+                    .map(|(bad, _)| bad)
+                    .collect();
+                if tx.send((p, bad)).is_err() {
                     break; // 앱이 먼저 끝났다 — 남은 항목은 지우지 않는다
                 }
             }
@@ -294,6 +302,7 @@ impl App {
             total,
             done: 0,
             failed: Vec::new(),
+            failed_items: 0,
         });
         self.status_note(&trf("del.progressCount", &["0", &total.to_string()]));
         self.redraw();
@@ -313,10 +322,11 @@ impl App {
             let mut finished = false;
             loop {
                 match job.rx.try_recv() {
-                    Ok((p, ok)) => {
+                    Ok((_, bad)) => {
                         job.done += 1;
-                        if !ok {
-                            job.failed.push(p);
+                        if !bad.is_empty() {
+                            job.failed_items += 1;
+                            job.failed.extend(bad);
                         }
                         changed = true;
                     }
@@ -344,8 +354,9 @@ impl App {
     }
 
     /// 완전 삭제 결과 반영: 토스트(지운 수 · 실패 수) · 재열람 · 실패분은 [다시 시도]/[닫기] 안내(휴지통 삭제 실패 안내 dir2 X-35와 같은 모양).
+    /// 실패 목록은 지우지 못한 **안쪽 항목의 전체 경로**(GAP-046 · 나머지는 이미 지워졌다고 함께 알림) · [다시 시도] = 그 목록만.
     fn delete_finish(&mut self, job: DeleteJob) {
-        let ok = job.done - job.failed.len();
+        let ok = job.done - job.failed_items;
         let failed = job.failed.len();
         let mut text = trf("del.done", &[&tr("del.kindPermanent"), &ok.to_string()]);
         if failed > 0 {
@@ -370,9 +381,13 @@ impl App {
         self.status_hold = None; // 진행 "n/m"은 끝났다 — 항목 수로
         self.update_status();
         if failed > 0 {
+            // 목록 밖은 전부 시도해 지웠다(끝까지 도는 삭제) — 나머지가 없었어도 참이라 늘 붙인다.
+            let mut text = app::menus::fail_message_paths(&job.failed);
+            text.push_str("\n\n");
+            text.push_str(&tr("del.failRest"));
             let spec = DlgSpec {
                 title: tr("del.failTitle"),
-                text: app::menus::fail_message(&job.failed),
+                text,
                 buttons: vec![(1, tr("del.retry")), (0, tr("del.close"))],
                 default: 1,
                 cancel: 0,

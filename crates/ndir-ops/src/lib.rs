@@ -928,8 +928,58 @@ pub fn process_alive(pid: u32) -> bool {
     }
 }
 
-/// 완전 삭제(휴지통 아님, 폴더 재귀) — 없으면 무동작(원본 DeletePermanent).
-/// 휴지통 삭제는 셸 API가 필요해 앱 계층(win.rs) 담당.
+/// 완전 삭제 — 트리를 **끝까지** 돈다(GAP-046 · 사용자 11-04 ⓐ · 탐색기 방식): 지울 수 있는 것은 전부 지우고 지우지 못한 항목의 경로와
+/// 사유를 돌려준다(빈 목록 = 전부 삭제 · 없는 경로 = 무동작). 폴더는 `remove_dir_all`(한 번에 · Windows 읽기 전용 속성 무시)을 먼저 시도하고,
+/// 실패하면 항목마다 내려가며 계속한다. 안쪽 항목이 남아 비지 않은 폴더는 그 자체를 실패로 적지 않는다(안쪽 실패만 보인다) · 열거할 수 없는
+/// 폴더 = 그 폴더가 실패 · 링크는 링크만. 종전 [`delete_permanent`]는 첫 실패에서 멈춰 폴더가 반쯤 지워진 채 "지우지 못함"만 알렸다.
+pub fn delete_permanent_tree(path: &Path) -> Vec<(PathBuf, io::Error)> {
+    fn go(path: &Path, failed: &mut Vec<(PathBuf, io::Error)>) {
+        if is_link(path) {
+            if let Err(e) = remove_link(path) {
+                failed.push((path.to_path_buf(), e));
+            }
+            return;
+        }
+        let Ok(meta) = fs::symlink_metadata(path) else {
+            return; // 없음 = 무동작
+        };
+        if !meta.is_dir() {
+            if let Err(e) = fs::remove_file(path) {
+                failed.push((path.to_path_buf(), e));
+            }
+            return;
+        }
+        if fs::remove_dir_all(path).is_ok() {
+            return;
+        }
+        let rd = match fs::read_dir(path) {
+            Ok(rd) => rd,
+            Err(e) => {
+                failed.push((path.to_path_buf(), e));
+                return;
+            }
+        };
+        let before = failed.len();
+        for e in rd {
+            match e {
+                Ok(e) => go(&e.path(), failed),
+                Err(e) => failed.push((path.to_path_buf(), e)),
+            }
+        }
+        if failed.len() > before {
+            return; // 안쪽이 남았다 — 폴더는 그대로 두고 실패로 적지 않는다
+        }
+        if let Err(e) = fs::remove_dir(path) {
+            failed.push((path.to_path_buf(), e));
+        }
+    }
+    let mut failed = Vec::new();
+    go(path, &mut failed);
+    failed
+}
+
+/// 완전 삭제(휴지통 아님, 폴더 재귀) — 없으면 무동작(원본 DeletePermanent). 첫 실패에서 멈춘다(정리용 · 사용자 명령은
+/// [`delete_permanent_tree`]). 휴지통 삭제는 셸 API가 필요해 앱 계층(win.rs) 담당.
 pub fn delete_permanent(path: &Path) -> io::Result<()> {
     if is_link(path) {
         // 링크 자체만(깨진 링크 포함) — 대상 폴더의 내용은 건드리지 않는다.
@@ -2014,6 +2064,78 @@ mod tests {
         delete_permanent(&d.join("새 폴더")).unwrap(); // 폴더 재귀
         assert!(!d.join("새 폴더").exists());
         delete_permanent(&d.join("없는 경로")).unwrap(); // 무동작
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-046(사용자 11-04 ⓐ): 안쪽 하나가 지워지지 않아도 **끝까지** 지우고 그 항목 경로만 돌려준다 · 비지 않은 조상 폴더는 실패에 안 적음 ·
+    /// 막힘이 풀린 뒤 같은 호출 = 전부 삭제 · 없는 경로 = 빈 목록.
+    #[test]
+    fn delete_permanent_tree_continues_past_failures_and_lists_them() {
+        let d = fixture("deltree");
+        let top = d.join("big");
+        fs::create_dir_all(top.join("a/b")).unwrap();
+        fs::create_dir_all(top.join("ro")).unwrap();
+        for i in 0..20 {
+            fs::write(top.join(format!("f{i}.txt")), b"x").unwrap();
+        }
+        fs::write(top.join("a/b/deep.txt"), b"y").unwrap();
+        fs::write(top.join("ro/k"), b"k").unwrap();
+        assert!(
+            delete_permanent_tree(&d.join("없음")).is_empty(),
+            "없는 경로 = 무동작"
+        );
+        // 막는 방법은 OS별 — unix = 쓰기 금지 폴더(안의 항목을 못 지움) · Windows = 공유 금지로 열어 둔 파일.
+        #[cfg(unix)]
+        let blocked = {
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(top.join("ro"), fs::Permissions::from_mode(0o555)).unwrap();
+            // root(권한 무시)면 막히지 않는다 — 그때는 전부 지워지는 쪽만 확인.
+            fs::write(top.join("ro/probe"), b"").is_err()
+        };
+        #[cfg(windows)]
+        let hold = {
+            use std::os::windows::fs::OpenOptionsExt as _;
+            fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(top.join("ro/k"))
+                .unwrap()
+        };
+        #[cfg(windows)]
+        let blocked = true;
+        let failed = delete_permanent_tree(&top);
+        let names: Vec<String> = failed
+            .iter()
+            .map(|(p, _)| {
+                p.strip_prefix(&top)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        if blocked {
+            assert_eq!(
+                names,
+                ["ro/k"],
+                "안쪽 실패 경로만 · 조상 폴더(ro · big)는 안 적음: {failed:?}"
+            );
+            assert!(top.join("ro/k").is_file(), "막힌 항목은 남는다");
+            assert!(
+                !top.join("a").exists() && !top.join("f0.txt").exists(),
+                "나머지는 전부 지워짐"
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                fs::set_permissions(top.join("ro"), fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            #[cfg(windows)]
+            drop(hold);
+            assert!(delete_permanent_tree(&top).is_empty(), "풀린 뒤 = 전부");
+        } else {
+            assert!(failed.is_empty(), "{failed:?}");
+        }
+        assert!(!top.exists());
         fs::remove_dir_all(&d).unwrap();
     }
 
