@@ -55,6 +55,7 @@ Options:
                        'When a folder with the same name exists'): merge (default) = replace same-named
                        files only and keep the rest · replace = remove the old folder entirely ·
                        keep = put the new folder beside it as 'name (2)' without asking
+                       · merge and replace need --overwrite or --ask (otherwise the folder is skipped)
   --ask                ask on each conflict instead: prompt on stderr, answer on stdin —
                        y = overwrite · n = skip · a = overwrite all · s = skip all · c = cancel (exit 130)
   --threads <n>        worker threads for files inside folders: 0 = auto (default), 1 = sequential, max 16
@@ -626,19 +627,22 @@ pub(crate) fn run_with(
     // 속도 제한(`--max-bps` · T-202 ③): 복사 단계만 · 복제 경로는 세지 않음 · 병렬 합계(`fastcopy::Pacer`).
     // 이동 검증(`--verify --move` · T-202 ⑤): 교차 볼륨 이동이 원본을 지우기 전에 사본 대조(불일치 = 그 항목 오류 · 양쪽 유지).
     // 복사 검증(GAP-027): 옮긴 경로 목록을 모아 그 목록만 대조(`with_verify_collect` · 원본 트리 재주행 없음).
-    let out = ndir_ops::fastcopy::with_verify_collect(o.verify && o.op == Op::Copy, || {
-        ndir_ops::fastcopy::with_move_verify(o.verify && o.op == Op::Move, || {
-            ndir_ops::fastcopy::with_pacer(o.max_bps, || {
-                ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
-                    transfer_with(
-                        &sources,
-                        &o.dest,
-                        o.op,
-                        &mut resolve,
-                        &mut |ev| printer.event(&ev, err),
-                        cancel,
-                        &tuning,
-                    )
+    // 폴더 충돌(`--dir-conflict` · DR-37 · GAP-043): 값은 스레드 지역이라 여기서 건다(`ndir_xfer::run_full`과 같은 순서).
+    let out = ndir_ops::fastcopy::with_dir_conflict(o.dir_conflict, || {
+        ndir_ops::fastcopy::with_verify_collect(o.verify && o.op == Op::Copy, || {
+            ndir_ops::fastcopy::with_move_verify(o.verify && o.op == Op::Move, || {
+                ndir_ops::fastcopy::with_pacer(o.max_bps, || {
+                    ndir_ops::fastcopy::with_filter(o.filter.clone(), || {
+                        transfer_with(
+                            &sources,
+                            &o.dest,
+                            o.op,
+                            &mut resolve,
+                            &mut |ev| printer.event(&ev, err),
+                            cancel,
+                            &tuning,
+                        )
+                    })
                 })
             })
         })
@@ -750,7 +754,9 @@ fn dry_run(o: &Options, out: &mut dyn Write, err: &mut dyn Write) -> ExitCode {
         .filter(|p| o.filter.allows(&ndir_ops::leaf_name(p), p.is_dir()))
         .cloned()
         .collect();
-    let plan = plan_transfer(&sources, &o.dest, o.op, &mut resolve);
+    let plan = ndir_ops::fastcopy::with_dir_conflict(o.dir_conflict, || {
+        plan_transfer(&sources, &o.dest, o.op, &mut resolve)
+    });
     let verb = match o.op {
         Op::Copy => "copy",
         Op::Move => "move",
@@ -1213,6 +1219,62 @@ mod tests {
         );
         assert!(String::from_utf8_lossy(&out).starts_with("error\t"));
         let _ = fs::remove_dir_all(&d);
+    }
+
+    /// GAP-043: `--dir-conflict`가 일반 실행(`run_with`)과 dry-run에도 먹는다 — 값은 스레드 지역이라 `with_dir_conflict`로 감싸야 한다
+    /// (`ndir_xfer::run_full`만 감싸던 때 세 값 모두 병합으로 동작 · Linux 점검 11-04 적발).
+    #[test]
+    fn dir_conflict_applies_to_direct_run_and_dry_run() {
+        for (mode, plan, kept_only, same, beside) in [
+            ("merge", "overwrite", true, "new", false),
+            ("replace", "overwrite", false, "new", false),
+            ("keep", "duplicate", true, "old", true),
+        ] {
+            let d = sandbox(&format!("dirconf-{mode}"));
+            let src = d.join("src").join("d");
+            let dest = d.join("dest");
+            fs::create_dir_all(src.join("sub")).expect("mkdir");
+            fs::create_dir_all(dest.join("d")).expect("mkdir");
+            fs::write(src.join("same.txt"), b"new").expect("write");
+            fs::write(src.join("sub").join("n.txt"), b"n").expect("write");
+            fs::write(dest.join("d").join("same.txt"), b"old").expect("write");
+            fs::write(dest.join("d").join("only.txt"), b"only").expect("write");
+            let (s, t) = (src.to_string_lossy(), dest.to_string_lossy());
+            let args = [
+                "--overwrite",
+                "--dir-conflict",
+                mode,
+                s.as_ref(),
+                t.as_ref(),
+            ];
+            let mut dry = vec!["-n"];
+            dry.extend(args);
+            let Ok(Parsed::Run(o)) = parse(&a(&dry)) else {
+                panic!("parse {mode}")
+            };
+            let (mut out, mut err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+            let cancel = AtomicBool::new(false);
+            assert_eq!(run_with(&o, &cancel, &mut out, &mut err), ExitCode::SUCCESS);
+            let report = String::from_utf8_lossy(&out).into_owned();
+            assert!(report.starts_with(plan), "{mode} dry-run: {report}");
+
+            let Ok(Parsed::Run(o)) = parse(&a(&args)) else {
+                panic!("parse {mode}")
+            };
+            assert_eq!(run(&o, &mut err), ExitCode::SUCCESS);
+            let old = dest.join("d");
+            assert_eq!(old.join("only.txt").exists(), kept_only, "{mode} only");
+            assert_eq!(
+                fs::read_to_string(old.join("same.txt")).expect("read"),
+                same,
+                "{mode} same"
+            );
+            let copy = dest.join("d (2)");
+            assert_eq!(copy.is_dir(), beside, "{mode} 옆 사본");
+            let holder = if beside { copy } else { old };
+            assert!(holder.join("sub").join("n.txt").is_file(), "{mode} 새 파일");
+            let _ = fs::remove_dir_all(&d);
+        }
     }
 
     /// 실행(샌드박스): 폴더 + 파일 복사 → 내용 같음 · 두 번째는 건너뜀(기본) · `--overwrite`면 덮어씀 · `--move`는 원본이 사라짐 ·
