@@ -7,13 +7,15 @@
 #   ③ 같은 NDIR_HOME으로 재기동(`@ready:ops.wait` ×3 = 상한 60 s) → `ops.dump` = "transfer idle · queue 0" → `quit`
 #   ④ 판정 = dst/big 파일 N개가 원본과 바이트 동일 · `.nexa-tmp*`/`.nexa-old*` 잔여 0 · `queue/` 비움(정상 종료가 지움)
 #
-# 사용: scripts/kill-resume-check.sh [--exe <nexa-dir>] [--files N] [--mb M] [--kill-ms T] [--keep]
+# 사용: scripts/kill-resume-check.sh [--exe <nexa-dir>] [--files N] [--mb M] [--kill-ms T] [--native] [--keep]
+#   --native = 기본 복사 경로(`transfer.native=on` · 스레드 기본값 · macOS = clonefile · Linux = copy_file_range)를 시험한다. 복제는 파일 하나가
+#     즉시 끝나 큰 파일로는 끊을 틈이 없으므로 기본값을 작은 파일 다수로 바꾼다(30000 × 1 MiB 희소 · kill 2500 ms = 복제 진행 중 · --files/--mb/--kill-ms가 우선).
 #   환경: NDIR_KR_FILES · NDIR_KR_MB · NDIR_KR_KILL_MS · NDIR_KR_KEEP=1(샌드박스 보존) · NDIR_EXE
 #   종료 코드: 0 = ★ OK · 1 = 판정 실패 · 2 = 전송이 KILL_MS 안에 끝나 강제 종료를 못 함(파일 수·크기를 키운다) · 3 = 환경 오류
 #   임시 폴더 = OS Temp `ndir-killres-<pid>`(disk-check `--trim` ⑦ 접두사 · 끝나면 스스로 지운다 · --keep = 보존).
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-N="${NDIR_KR_FILES:-8}"; MB="${NDIR_KR_MB:-300}"; KILL_MS="${NDIR_KR_KILL_MS:-1500}"; KEEP="${NDIR_KR_KEEP:-0}"
+N="${NDIR_KR_FILES:-}"; MB="${NDIR_KR_MB:-}"; KILL_MS="${NDIR_KR_KILL_MS:-}"; KEEP="${NDIR_KR_KEEP:-0}"; NATIVE=0
 EXE="${NDIR_EXE:-}"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -21,11 +23,17 @@ while [ $# -gt 0 ]; do
         --files) N="$2"; shift ;;
         --mb) MB="$2"; shift ;;
         --kill-ms) KILL_MS="$2"; shift ;;
+        --native) NATIVE=1 ;;
         --keep) KEEP=1 ;;
         *) echo "unknown arg: $1" >&2; exit 3 ;;
     esac
     shift
 done
+if [ "$NATIVE" = 1 ]; then
+    N="${N:-30000}"; MB="${MB:-1}"; KILL_MS="${KILL_MS:-2500}"
+else
+    N="${N:-8}"; MB="${MB:-300}"; KILL_MS="${KILL_MS:-1500}"
+fi
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1 ;; *) WIN=0 ;; esac
 if [ -z "$EXE" ]; then
     EXE="$ROOT/target/debug/nexa-dir"; [ "$WIN" = 1 ] && EXE="$EXE.exe"
@@ -40,16 +48,17 @@ trap cleanup EXIT
 # 네이티브 경로(기동 명령 · Windows = 역슬래시).
 np() { if [ "$WIN" = 1 ]; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 
-printf '_schema=1\nui.lang=en\ntransfer.native=off\ntransfer.threads=1\ntransfer.queue_restore=auto\ntransfer.close_ms=0\n' > "$HOME_D/settings.conf"
-echo "▶ kill-resume-check — $N × ${MB} MiB · kill ${KILL_MS} ms · $TMP"
-for i in $(seq 1 "$N"); do
-    f="$SRC/big/f$i.bin"
-    if [ "$WIN" = 1 ]; then
-        fsutil.exe file createnew "$(np "$f")" $((MB * 1024 * 1024)) >/dev/null || { echo "✗ fsutil" >&2; exit 3; }
-    else
-        truncate -s "${MB}M" "$f" || { echo "✗ truncate" >&2; exit 3; }
-    fi
-done
+if [ "$NATIVE" = 1 ]; then ENGINE='transfer.native=on\n'; else ENGINE='transfer.native=off\ntransfer.threads=1\n'; fi
+printf "_schema=1\nui.lang=en\n${ENGINE}transfer.queue_restore=auto\ntransfer.close_ms=0\n" > "$HOME_D/settings.conf"
+echo "▶ kill-resume-check — $N × ${MB} MiB · native $NATIVE · kill ${KILL_MS} ms · $TMP"
+if [ "$WIN" = 1 ]; then
+    for i in $(seq 1 "$N"); do
+        fsutil.exe file createnew "$(np "$SRC/big/f$i.bin")" $((MB * 1024 * 1024)) >/dev/null || { echo "✗ fsutil" >&2; exit 3; }
+    done
+else
+    # 파일 수가 많아도(--native) 빠르게: 프로세스 하나에 모아 만든다.
+    (cd "$SRC/big" && seq 1 "$N" | sed 's/.*/f&.bin/' | xargs truncate -s "${MB}M") || { echo "✗ truncate" >&2; exit 3; }
+fi
 
 run_app() { # <기동 명령> → 백그라운드 PID
     NDIR_HOME="$(np "$HOME_D")" NDIR_NO_ACTIVATE=1 NDIR_FAKE_CLIPBOARD=1 NDIR_STARTUP_CMD="$1" "$EXE" >"$OUT/stderr.$2.txt" 2>&1 &
@@ -94,12 +103,10 @@ echo "  재기동 덤프: $(head -2 "$RUN2" | tr '\n' ' ')"
 FAIL=0
 grep -q '^transfer idle' "$RUN2" || { echo "✗ transfer idle 아님"; FAIL=1; }
 grep -q '^queue 0' "$RUN2" || { echo "✗ queue 0 아님"; FAIL=1; }
-for i in $(seq 1 "$N"); do
-    cmp -s "$SRC/big/f$i.bin" "$DST/big/f$i.bin" || { echo "✗ f$i.bin 불일치/없음"; FAIL=1; }
-done
+diff -rq "$SRC/big" "$DST/big" >"$OUT/diff.txt" 2>&1 || { echo "✗ 원본과 다름 $(wc -l <"$OUT/diff.txt" | tr -d ' ')건: $(head -3 "$OUT/diff.txt" | tr '\n' ' ')"; FAIL=1; }
 STRAY=$(find "$DST" -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
 [ "$STRAY" = 0 ] || { echo "✗ 스테이징 잔여 $STRAY"; FAIL=1; }
 LEFT=$(ls -A "$HOME_D/queue" 2>/dev/null | wc -l | tr -d ' ')
 [ "$LEFT" = 0 ] || { echo "✗ queue/ 잔여 $LEFT: $(ls -A "$HOME_D/queue" | tr '\n' ' ')"; FAIL=1; }
-if [ "$FAIL" = 0 ]; then echo "★ KILL-RESUME OK — $N개 바이트 동일 · 잔여 0 · queue/ 비움"; exit 0; fi
+if [ "$FAIL" = 0 ]; then echo "★ KILL-RESUME OK — ${N}개 바이트 동일 · 잔여 0 · queue/ 비움"; exit 0; fi
 echo "✗ KILL-RESUME 실패 — $OUT (--keep로 보존)"; exit 1

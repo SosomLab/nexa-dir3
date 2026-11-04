@@ -195,7 +195,7 @@ TAIL="$(echo "$RESULT" | tail -n 1)"
 REG="${TAIL#REGRESSIONS=}"; REG="${REG%% *}"
 FAILN="${TAIL##*FAILED=}"
 if [ "$STRICT" = 1 ] && { [ "$REG" != 0 ] || [ "$FAILN" != 0 ]; }; then
-    echo "✗ perf-baseline: 회귀 $REG건 · 측정 실패 $FAILN건(--strict)" >&2
+    echo "✗ perf-baseline: 회귀 ${REG}건 · 측정 실패 ${FAILN}건(--strict)" >&2
     exit 1
 fi
 exit 0
