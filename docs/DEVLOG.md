@@ -4,6 +4,7 @@
 
 ## 2026-11-04
 
+- **회차 마감(개발 · 사용자 "진행사항 최신화 · commit · push")**: origin/main 28ccb74 · CI ✓ 3-OS · **GAP-042 교착 관련 코드 잔여 0** · 열린 것 = 사용자 결정 2(0.30.1 발행 · T-205) + 실기(RDP 재접속) → [11-04 §3](journal/2026-11-04.md)
 - **GAP-042 ⓑ 구현 ✅ cd17f2d(개발)**: `platform/wintaskbar.rs` 서브클래스 선처리(`TaskbarCreated` → `DefWindowProcW`) · `guard_taskbar_created` 창 생성 19곳 · Win32 단위 시험 + 3-OS 정적 가드 · DR-38 · docs/27 이식 안내(형제는 요청 때) · gate full ★ 836/0 · CI **✗ Windows `budget` 단계**(check(ubuntu·macos) ✓ · plugins ✓ · fmt·clippy·test·smoke·selfcheck·T4 Windows 전부 ✓ · exe 8,148,480 B ≤ 10 MB ✓ · **`scripts/check-imports.ps1` 인박스 허용 목록에 `comctl32.dll` 미등재** → "NFR-B-5 위반" 판정 · 실제로는 comctl32 = Windows 인박스 DLL이라 거짓 양성 · 로컬 gate는 임포트 게이트를 안 돌려 못 잡음 · 개발 후속 커밋 = 허용 목록 + docs/27 주석 → 재CI) · 열린 결정 = 0.30.1 발행 여부 → [11-04 §2](journal/2026-11-04.md)
 - **GAP-042 원인 확정(사용자 설치본 0.29.0 "응답 없음" · 1차 등재 fed8e3a → 철회 b728619 → 독립 재판독 동일 → 복원)**: 미니덤프(PowerShell `MiniDumpWriteDump`) + WinDbg cdb → **winit 0.30.13 `TaskbarCreated` 교착**(잠금 쥔 채 `AddTab` 동기 대기 → 테마 변경 → `WM_WINDOWPOSCHANGING` 재진입) · 계기 = RDP 재접속 · 0.30.0에도 있음 · 상류 #4563은 0.31에만 · **처방 ⓑ 우리 코드 보완 결정(사용자 · 포크·`[patch]` 없음 · dir3만 · `platform/` `SetWindowSubclass` 선처리 · 형제는 이식 안내 문서로)** · 개발 착수 → [11-04 §1](journal/2026-11-04.md)
 - **세션 역할 확정(사용자)**: "개발" = 코드·빌드·시험·게이트·push·태그 · "협업" = 요구사항·리뷰·journal/DEVLOG/STATUS·커밋 문구·CI·채널 검수 → [11-04 §1-6](journal/2026-11-04.md)
