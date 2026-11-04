@@ -2,6 +2,12 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-11-04
+
+- **GAP-042 원인 확정(사용자 설치본 0.29.0 "응답 없음" · 1차 등재 fed8e3a → 철회 b728619 → 독립 재판독 동일 → 복원)**: 미니덤프(PowerShell `MiniDumpWriteDump`) + WinDbg cdb → **winit 0.30.13 `TaskbarCreated` 교착**(잠금 쥔 채 `AddTab` 동기 대기 → 테마 변경 → `WM_WINDOWPOSCHANGING` 재진입) · 계기 = RDP 재접속 · 0.30.0에도 있음 · 상류 #4563은 0.31에만 · **처방 ⓑ 우리 코드 보완 결정(사용자 · 포크·`[patch]` 없음 · dir3만 · `platform/` `SetWindowSubclass` 선처리 · 형제는 이식 안내 문서로)** · 개발 착수 → [11-04 §1](journal/2026-11-04.md)
+- **세션 역할 확정(사용자)**: "개발" = 코드·빌드·시험·게이트·push·태그 · "협업" = 요구사항·리뷰·journal/DEVLOG/STATUS·커밋 문구·CI·채널 검수 → [11-04 §1-6](journal/2026-11-04.md)
+- **저장소 최신화**: C:\Projects 10개 fetch · 5개 ff-pull(dir3 516 · nexa-sql 524 · beep 62 · ui 11 · clip 9) · 변경 분석 = 협업 보고서 · Bitbucket 11-12 SSH 호스트 변경 공지 → [11-04 §1-6](journal/2026-11-04.md)
+
 ## 2026-11-03
 
 - **v0.30.0 공개 ✅(사용자)**: 가드 보강 90919ba(직전 판 검수 중 → 건너뜀) · 승격 dff5251 · gate 834/0 · CI ✓ · 선검증 ✓ · 태그 dff5251 · release run 41621963098(Release 자산 9 · linux-repo · brew · winget/choco 건너뜀 = 정책대로) → [11-03 §12](journal/2026-11-03.md)
