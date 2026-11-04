@@ -1099,105 +1099,6 @@ mod os {
             || matches!(e.raw_os_error(), Some(EXDEV | EINVAL | ENOTSUP))
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        const CHILD_ENV: &str = "NDIR_COPYFILE_WRITE_ERROR_CHILD";
-        const EFBIG: i32 = 27;
-
-        /// `status_reply` MC/DC: 중단 · 데이터 단계 · 오류 단계가 각각 판정을 바꾼다.
-        #[test]
-        fn status_reply_quits_only_on_stop_or_data_error() {
-            const COPYFILE_COPY_XATTR: c_int = 5;
-            for (what, stage, stopped, want) in [
-                (COPYFILE_COPY_DATA, COPYFILE_ERR, false, COPYFILE_QUIT),
-                (COPYFILE_COPY_XATTR, COPYFILE_ERR, false, COPYFILE_CONTINUE),
-                (
-                    COPYFILE_COPY_DATA,
-                    COPYFILE_PROGRESS,
-                    false,
-                    COPYFILE_CONTINUE,
-                ),
-                (COPYFILE_COPY_XATTR, COPYFILE_ERR, true, COPYFILE_QUIT),
-            ] {
-                assert_eq!(
-                    status_reply(what, stage, stopped),
-                    want,
-                    "{what} {stage} {stopped}"
-                );
-            }
-        }
-
-        /// 쓰기 실패가 끝없는 재시도가 아니라 원래 오류로 끝난다(GAP-049) — 파일 크기 제한(`RLIMIT_FSIZE`)은 프로세스 전체에 걸리므로
-        /// 시험 실행 파일을 자식으로 다시 띄워 그 안에서만 건다 · 복제는 제한을 안 받아 `COPYFILE_CLONE`을 뺀 데이터 복사로 · 멈추면 시한으로 죽인다.
-        #[test]
-        fn copyfile_write_error_returns_instead_of_retrying() {
-            if std::env::var_os(CHILD_ENV).is_some() {
-                write_error_child();
-                return;
-            }
-            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "fastcopy::os::tests::copyfile_write_error_returns_instead_of_retrying",
-                ])
-                .env(CHILD_ENV, "1")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .unwrap();
-            let start = std::time::Instant::now();
-            let status = loop {
-                if let Some(s) = child.try_wait().unwrap() {
-                    break s;
-                }
-                if start.elapsed() > std::time::Duration::from_secs(20) {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    panic!("쓰기 실패 뒤 복사가 끝나지 않음(재시도 고리)");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            };
-            assert!(status.success(), "자식 판정 실패: {status:?}");
-        }
-
-        fn write_error_child() {
-            #[repr(C)]
-            struct RLimit {
-                cur: u64,
-                max: u64,
-            }
-            const RLIMIT_FSIZE: c_int = 1;
-            const SIGXFSZ: c_int = 25;
-            const SIG_IGN: usize = 1;
-            extern "C" {
-                fn setrlimit(resource: c_int, rlp: *const RLimit) -> c_int;
-                fn signal(sig: c_int, handler: usize) -> usize;
-            }
-            let dir =
-                std::env::temp_dir().join(format!("ndir-copyfile-err-{}", std::process::id()));
-            let _ = fs::remove_dir_all(&dir);
-            fs::create_dir_all(&dir).unwrap();
-            let (src, dest) = (dir.join("src.bin"), dir.join("dest.bin"));
-            fs::write(&src, vec![7u8; 8 << 20]).unwrap();
-            // SAFETY: 이 자식 프로세스만의 설정 · 인자는 호출 동안 유효하다.
-            unsafe {
-                signal(SIGXFSZ, SIG_IGN);
-                let lim = RLimit {
-                    cur: 1 << 20,
-                    max: 1 << 20,
-                };
-                assert_eq!(setrlimit(RLIMIT_FSIZE, &raw const lim), 0);
-            }
-            let r = copy_with_flags(&src, &dest, false, &mut |_| {}, &|| false, COPYFILE_ALL);
-            let e = r.expect_err("크기 제한을 넘긴 복사는 실패해야 한다");
-            assert_eq!(e.raw_os_error(), Some(EFBIG), "원래 오류 그대로: {e}");
-            assert!(!dest.exists(), "부분 파일을 남기지 않는다");
-            let _ = fs::remove_dir_all(&dir);
-        }
-    }
-
     /// `struct statfs`(64비트 inode 판 · sys/mount.h · 2168바이트) — 파일 시스템 이름과 장치 경로만 쓴다.
     #[repr(C)]
     struct StatFs {
@@ -1368,6 +1269,105 @@ mod os {
         }
         let medium = from.strip_prefix("/dev/").and_then(medium_type);
         seek_from(&fstype, medium.as_deref())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        const CHILD_ENV: &str = "NDIR_COPYFILE_WRITE_ERROR_CHILD";
+        const EFBIG: i32 = 27;
+
+        /// `status_reply` MC/DC: 중단 · 데이터 단계 · 오류 단계가 각각 판정을 바꾼다.
+        #[test]
+        fn status_reply_quits_only_on_stop_or_data_error() {
+            const COPYFILE_COPY_XATTR: c_int = 5;
+            for (what, stage, stopped, want) in [
+                (COPYFILE_COPY_DATA, COPYFILE_ERR, false, COPYFILE_QUIT),
+                (COPYFILE_COPY_XATTR, COPYFILE_ERR, false, COPYFILE_CONTINUE),
+                (
+                    COPYFILE_COPY_DATA,
+                    COPYFILE_PROGRESS,
+                    false,
+                    COPYFILE_CONTINUE,
+                ),
+                (COPYFILE_COPY_XATTR, COPYFILE_ERR, true, COPYFILE_QUIT),
+            ] {
+                assert_eq!(
+                    status_reply(what, stage, stopped),
+                    want,
+                    "{what} {stage} {stopped}"
+                );
+            }
+        }
+
+        /// 쓰기 실패가 끝없는 재시도가 아니라 원래 오류로 끝난다(GAP-049) — 파일 크기 제한(`RLIMIT_FSIZE`)은 프로세스 전체에 걸리므로
+        /// 시험 실행 파일을 자식으로 다시 띄워 그 안에서만 건다 · 복제는 제한을 안 받아 `COPYFILE_CLONE`을 뺀 데이터 복사로 · 멈추면 시한으로 죽인다.
+        #[test]
+        fn copyfile_write_error_returns_instead_of_retrying() {
+            if std::env::var_os(CHILD_ENV).is_some() {
+                write_error_child();
+                return;
+            }
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "fastcopy::os::tests::copyfile_write_error_returns_instead_of_retrying",
+                ])
+                .env(CHILD_ENV, "1")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let start = std::time::Instant::now();
+            let status = loop {
+                if let Some(s) = child.try_wait().unwrap() {
+                    break s;
+                }
+                if start.elapsed() > std::time::Duration::from_secs(20) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("쓰기 실패 뒤 복사가 끝나지 않음(재시도 고리)");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            };
+            assert!(status.success(), "자식 판정 실패: {status:?}");
+        }
+
+        fn write_error_child() {
+            #[repr(C)]
+            struct RLimit {
+                cur: u64,
+                max: u64,
+            }
+            const RLIMIT_FSIZE: c_int = 1;
+            const SIGXFSZ: c_int = 25;
+            const SIG_IGN: usize = 1;
+            extern "C" {
+                fn setrlimit(resource: c_int, rlp: *const RLimit) -> c_int;
+                fn signal(sig: c_int, handler: usize) -> usize;
+            }
+            let dir =
+                std::env::temp_dir().join(format!("ndir-copyfile-err-{}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            let (src, dest) = (dir.join("src.bin"), dir.join("dest.bin"));
+            fs::write(&src, vec![7u8; 8 << 20]).unwrap();
+            // SAFETY: 이 자식 프로세스만의 설정 · 인자는 호출 동안 유효하다.
+            unsafe {
+                signal(SIGXFSZ, SIG_IGN);
+                let lim = RLimit {
+                    cur: 1 << 20,
+                    max: 1 << 20,
+                };
+                assert_eq!(setrlimit(RLIMIT_FSIZE, &raw const lim), 0);
+            }
+            let r = copy_with_flags(&src, &dest, false, &mut |_| {}, &|| false, COPYFILE_ALL);
+            let e = r.expect_err("크기 제한을 넘긴 복사는 실패해야 한다");
+            assert_eq!(e.raw_os_error(), Some(EFBIG), "원래 오류 그대로: {e}");
+            assert!(!dest.exists(), "부분 파일을 남기지 않는다");
+            let _ = fs::remove_dir_all(&dir);
+        }
     }
 }
 
