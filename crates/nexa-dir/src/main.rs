@@ -1702,6 +1702,14 @@ fn run_gui(start: Option<PathBuf>) -> ExitCode {
                 b.with_x11();
             }
         }
+        // macOS 자체 시험(`NDIR_NO_ACTIVATE` · T-137): winit 기본은 기동 때 앱을 활성화하고 `set_visible`이 창을 키 창으로 올려 사용자 포커스를 뺏는다
+        // → 백그라운드 전용 앱(창이 화면에 안 나타남 · Dock 없음)으로 띄운다. 그리기 · 기동 명령 · 덤프 · `capture:`는 그대로 돈다.
+        #[cfg(target_os = "macos")]
+        if std::env::var_os("NDIR_NO_ACTIVATE").is_some() {
+            use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS as _};
+            b.with_activation_policy(ActivationPolicy::Prohibited);
+            b.with_activate_ignoring_other_apps(false);
+        }
         b.build()
             .or_else(|_| EventLoop::<Wake>::with_user_event().build())
     };

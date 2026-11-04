@@ -110,6 +110,12 @@ pub(crate) fn set_alpha(w: &Window, alpha: f64) -> bool {
     let Some(nsw) = ns_window(w) else {
         return false;
     };
+    // 자체 시험(`NDIR_NO_ACTIVATE` · T-137): 모든 창이 이 길로 지나므로 여기서 투명하게 — 맥은 Xvfb 같은 가상 화면이 없어 창이 화면에 보인다.
+    let alpha = if std::env::var_os("NDIR_NO_ACTIVATE").is_some() {
+        0.0
+    } else {
+        alpha
+    };
     // SAFETY: 살아 있는 winit 창의 NSWindow · 메인 스레드 · 0.0~1.0.
     unsafe { nsw.setAlphaValue(alpha) };
     true
