@@ -916,10 +916,12 @@ mod os {
     const COPYFILE_STATE_STATUS_CTX: u32 = 7;
     const COPYFILE_STATE_COPIED: u32 = 8;
     const COPYFILE_COPY_DATA: c_int = 4;
+    const COPYFILE_ERR: c_int = 3;
     const COPYFILE_PROGRESS: c_int = 4;
     const COPYFILE_CONTINUE: c_int = 0;
     const COPYFILE_QUIT: c_int = 2;
     const EXDEV: i32 = 18;
+    const EIO: i32 = 5;
     const EINVAL: i32 = 22;
     const ENOTSUP: i32 = 45;
     const ECANCELED: i32 = 89;
@@ -952,9 +954,21 @@ mod os {
         sent: u64,
         /// 속도 제한(T-202 ③) — 진행 콜백 사이에서만 쉴 수 있다(간격은 OS가 정한다) · 복제로 끝난 합계 채움은 세지 않는다.
         pacer: Option<std::sync::Arc<super::Pacer>>,
+        /// 데이터 단계 오류의 errno(GAP-049) — 콜백 밖에서 원래 오류로 돌려준다.
+        data_err: Option<i32>,
     }
 
-    /// 진행 콜백 — 데이터 복사 진행 단계에서 누적 바이트(`COPYFILE_STATE_COPIED`)의 증분을 보고 · 중단이면 `COPYFILE_QUIT`.
+    /// 콜백 응답(순수 · GAP-049): 중단 요청 또는 **데이터 단계 오류** = `QUIT`(데이터 단계에 `CONTINUE`를 주면 같은 쓰기를 끝없이 다시 한다) ·
+    /// 그 밖 = `CONTINUE`(확장 속성 · ACL 하나를 못 옮긴 것은 그 항목만 건너뛰는 종전 동작을 유지한다).
+    fn status_reply(what: c_int, stage: c_int, stopped: bool) -> c_int {
+        if stopped || (what == COPYFILE_COPY_DATA && stage == COPYFILE_ERR) {
+            COPYFILE_QUIT
+        } else {
+            COPYFILE_CONTINUE
+        }
+    }
+
+    /// 진행 콜백 — 데이터 복사 진행 단계에서 누적 바이트(`COPYFILE_STATE_COPIED`)의 증분을 보고 · 중단 · 데이터 오류면 `COPYFILE_QUIT`.
     unsafe extern "C" fn status(
         what: c_int,
         stage: c_int,
@@ -963,8 +977,13 @@ mod os {
         _dst: *const c_char,
         ctx: *mut c_void,
     ) -> c_int {
+        // 오류 단계의 errno가 라이브러리의 원인 값이다 — 다른 호출이 덮어쓰기 전에 읽는다.
+        let errno = io::Error::last_os_error().raw_os_error();
         // SAFETY: `ctx`는 `copy_file`이 넘긴 `Ctx`이고 `copyfile` 호출 동안 살아 있다.
         let ctx = unsafe { &mut *ctx.cast::<Ctx<'_>>() };
+        if what == COPYFILE_COPY_DATA && stage == COPYFILE_ERR {
+            ctx.data_err = Some(errno.filter(|e| *e != 0).unwrap_or(EIO));
+        }
         if what == COPYFILE_COPY_DATA && stage == COPYFILE_PROGRESS {
             let mut copied: i64 = 0;
             // SAFETY: `state`는 라이브러리가 넘긴 유효한 상태 · COPIED는 off_t(i64) 하나를 쓴다.
@@ -982,11 +1001,7 @@ mod os {
                 }
             }
         }
-        if (ctx.stop)() {
-            COPYFILE_QUIT
-        } else {
-            COPYFILE_CONTINUE
-        }
+        status_reply(what, stage, (ctx.stop)())
     }
 
     fn cstr(p: &Path) -> io::Result<CString> {
@@ -1002,6 +1017,24 @@ mod os {
         on_bytes: &mut dyn FnMut(u64),
         stop: Stop<'_>,
         _unbuffered_min: u64,
+    ) -> io::Result<()> {
+        copy_with_flags(
+            src,
+            dest,
+            overwrite,
+            on_bytes,
+            stop,
+            COPYFILE_ALL | COPYFILE_CLONE,
+        )
+    }
+
+    fn copy_with_flags(
+        src: &Path,
+        dest: &Path,
+        overwrite: bool,
+        on_bytes: &mut dyn FnMut(u64),
+        stop: Stop<'_>,
+        flags: u32,
     ) -> io::Result<()> {
         let meta = fs::symlink_metadata(src)?;
         if meta.file_type().is_symlink() {
@@ -1021,6 +1054,7 @@ mod os {
             stop,
             sent: 0,
             pacer: super::pacer(),
+            data_err: None,
         };
         // SAFETY: 상태 객체는 이 함수 안에서만 쓰고 끝에 해제한다 · 콜백/컨텍스트 포인터는 호출 동안 유효하다.
         let state = unsafe { copyfile_state_alloc() };
@@ -1031,25 +1065,26 @@ mod os {
         let rc = unsafe {
             copyfile_state_set(state, COPYFILE_STATE_STATUS_CB, cb as *const c_void);
             copyfile_state_set(state, COPYFILE_STATE_STATUS_CTX, (&raw mut ctx).cast());
-            copyfile(
-                from.as_ptr(),
-                to.as_ptr(),
-                state,
-                COPYFILE_ALL | COPYFILE_CLONE,
-            )
+            copyfile(from.as_ptr(), to.as_ptr(), state, flags)
         };
-        let err = (rc != 0).then(io::Error::last_os_error);
+        // `QUIT` 뒤 errno는 `ECANCELED`일 수 있다 → 콜백이 기록한 데이터 오류가 먼저.
+        let err = ctx
+            .data_err
+            .map(io::Error::from_raw_os_error)
+            .or_else(|| (rc != 0).then(io::Error::last_os_error));
         // SAFETY: 위에서 받은 상태 객체를 한 번만 해제한다.
         unsafe {
             copyfile_state_free(state);
         }
         if let Some(e) = err {
             let _ = fs::remove_file(dest); // 부분 파일 정리
-            return Err(if e.raw_os_error() == Some(ECANCELED) || stop() {
-                canceled()
-            } else {
-                e
-            });
+            return Err(
+                if stop() || (ctx.data_err.is_none() && e.raw_os_error() == Some(ECANCELED)) {
+                    canceled()
+                } else {
+                    e
+                },
+            );
         }
         // 복제로 끝났으면 콜백이 불리지 않는다 → 합계를 채운다.
         if ctx.sent < len {
@@ -1062,6 +1097,105 @@ mod os {
     pub(super) fn unsupported(e: &io::Error) -> bool {
         e.kind() == io::ErrorKind::Unsupported
             || matches!(e.raw_os_error(), Some(EXDEV | EINVAL | ENOTSUP))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        const CHILD_ENV: &str = "NDIR_COPYFILE_WRITE_ERROR_CHILD";
+        const EFBIG: i32 = 27;
+
+        /// `status_reply` MC/DC: 중단 · 데이터 단계 · 오류 단계가 각각 판정을 바꾼다.
+        #[test]
+        fn status_reply_quits_only_on_stop_or_data_error() {
+            const COPYFILE_COPY_XATTR: c_int = 5;
+            for (what, stage, stopped, want) in [
+                (COPYFILE_COPY_DATA, COPYFILE_ERR, false, COPYFILE_QUIT),
+                (COPYFILE_COPY_XATTR, COPYFILE_ERR, false, COPYFILE_CONTINUE),
+                (
+                    COPYFILE_COPY_DATA,
+                    COPYFILE_PROGRESS,
+                    false,
+                    COPYFILE_CONTINUE,
+                ),
+                (COPYFILE_COPY_XATTR, COPYFILE_ERR, true, COPYFILE_QUIT),
+            ] {
+                assert_eq!(
+                    status_reply(what, stage, stopped),
+                    want,
+                    "{what} {stage} {stopped}"
+                );
+            }
+        }
+
+        /// 쓰기 실패가 끝없는 재시도가 아니라 원래 오류로 끝난다(GAP-049) — 파일 크기 제한(`RLIMIT_FSIZE`)은 프로세스 전체에 걸리므로
+        /// 시험 실행 파일을 자식으로 다시 띄워 그 안에서만 건다 · 복제는 제한을 안 받아 `COPYFILE_CLONE`을 뺀 데이터 복사로 · 멈추면 시한으로 죽인다.
+        #[test]
+        fn copyfile_write_error_returns_instead_of_retrying() {
+            if std::env::var_os(CHILD_ENV).is_some() {
+                write_error_child();
+                return;
+            }
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "fastcopy::os::tests::copyfile_write_error_returns_instead_of_retrying",
+                ])
+                .env(CHILD_ENV, "1")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let start = std::time::Instant::now();
+            let status = loop {
+                if let Some(s) = child.try_wait().unwrap() {
+                    break s;
+                }
+                if start.elapsed() > std::time::Duration::from_secs(20) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("쓰기 실패 뒤 복사가 끝나지 않음(재시도 고리)");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            };
+            assert!(status.success(), "자식 판정 실패: {status:?}");
+        }
+
+        fn write_error_child() {
+            #[repr(C)]
+            struct RLimit {
+                cur: u64,
+                max: u64,
+            }
+            const RLIMIT_FSIZE: c_int = 1;
+            const SIGXFSZ: c_int = 25;
+            const SIG_IGN: usize = 1;
+            extern "C" {
+                fn setrlimit(resource: c_int, rlp: *const RLimit) -> c_int;
+                fn signal(sig: c_int, handler: usize) -> usize;
+            }
+            let dir =
+                std::env::temp_dir().join(format!("ndir-copyfile-err-{}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            let (src, dest) = (dir.join("src.bin"), dir.join("dest.bin"));
+            fs::write(&src, vec![7u8; 8 << 20]).unwrap();
+            // SAFETY: 이 자식 프로세스만의 설정 · 인자는 호출 동안 유효하다.
+            unsafe {
+                signal(SIGXFSZ, SIG_IGN);
+                let lim = RLimit {
+                    cur: 1 << 20,
+                    max: 1 << 20,
+                };
+                assert_eq!(setrlimit(RLIMIT_FSIZE, &raw const lim), 0);
+            }
+            let r = copy_with_flags(&src, &dest, false, &mut |_| {}, &|| false, COPYFILE_ALL);
+            let e = r.expect_err("크기 제한을 넘긴 복사는 실패해야 한다");
+            assert_eq!(e.raw_os_error(), Some(EFBIG), "원래 오류 그대로: {e}");
+            assert!(!dest.exists(), "부분 파일을 남기지 않는다");
+            let _ = fs::remove_dir_all(&dir);
+        }
     }
 
     /// `struct statfs`(64비트 inode 판 · sys/mount.h · 2168바이트) — 파일 시스템 이름과 장치 경로만 쓴다.
