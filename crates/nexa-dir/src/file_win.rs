@@ -388,6 +388,11 @@ impl FileWin {
         let Some(p) = &mut self.picker else {
             return FileWinAction::None;
         };
+        // 우클릭 직전 클립보드 글 유무 주입(GAP-048 · nexa-dlg 257) — 입력 상자 편집 메뉴 "붙여넣기" 활성 근거(prefs_win · bulk_win과 같은 규칙).
+        if matches!(ie, InputEvent::RightDown { .. }) {
+            let has = crate::clipboard::read_text().is_some_and(|s| !s.is_empty());
+            p.set_clipboard_has_text(has);
+        }
         p.on_event(&ie, &mut inv);
         let a = p.take_action();
         self.redraw();
