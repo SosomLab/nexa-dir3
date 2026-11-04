@@ -1,0 +1,17 @@
+Nexa Dir 0.30.1 — fixes a Windows hang after remote desktop reconnects, nexa-copy option handling and partial permanent deletes
+
+Fixes since 0.30.0:
+- Windows: the main window could stop responding for good after a Remote Desktop reconnect or an Explorer restart (a deadlock in the winit window library when the taskbar is recreated). The app now handles that message itself in every window (GAP-042).
+- Permanent delete (Shift+Del): when something inside a folder could not be deleted, the delete stopped at that point, leaving the folder partly deleted, and the message did not say so. See "Behavior changes" (GAP-046).
+- nexa-copy: --dir-conflict had no effect in plain runs and dry runs; every value behaved as merge. "keep" could overwrite existing files instead of creating " (2)", and "replace" left old files behind. See "Behavior changes" (GAP-043).
+- nexa-copy: --move with --include/--exclude on the same volume moved the whole folder, including the items the filter should have left behind. See "Behavior changes" (GAP-045).
+- nexa-copy: --include/--exclude were ignored when counting planned bytes, so dry-run totals, progress totals and verify totals included filtered files. The files actually copied were already correct (GAP-044).
+- Settings: settings.conf is no longer rewritten on every exit when nothing changed (GAP-047).
+- File picker: Paste in the text box menu is now disabled when the clipboard holds no text (GAP-048).
+
+Behavior changes:
+- Permanent delete: a failure inside a folder no longer stops the delete. Everything that can be deleted is deleted, the items that could not be deleted are listed by path (the first 10), and Retry tries only the failed items — all of them, not just the ten shown. Folders that still contain such items are left in place.
+- nexa-copy --dir-conflict now applies in plain runs and dry runs. merge and replace still need --overwrite or --ask; keep creates " (2)" without asking. Scripts that passed replace or keep and relied on the old merge behavior will see different results.
+- nexa-copy --move with a name filter now moves a folder by copying it, even on the same volume: filtered items stay in the source, and the move takes as long as a copy.
+
+Packages: Windows MSI + portable zip, macOS Universal pkg/dmg, Linux deb/rpm (also via winget, Chocolatey, Homebrew tap and pkg.sosomlab.com). Channels whose previous submission is still under review are skipped automatically and submitted later.

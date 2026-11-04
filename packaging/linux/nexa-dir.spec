@@ -64,6 +64,17 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Wed Nov 04 2026 Sangyong Bae <kiros33@gmail.com> - 0.30.1-1
+- Windows: the main window no longer hangs for good after a Remote Desktop reconnect or an
+  Explorer restart (TaskbarCreated deadlock in the window library, handled by the app).
+- Permanent delete: a failure inside a folder no longer stops the delete; everything else is
+  deleted, the failed items are listed by path and Retry tries only those.
+- nexa-copy: --dir-conflict now applies in plain runs and dry runs (keep no longer overwrites);
+  --move with --include/--exclude keeps filtered items in the source on the same volume;
+  planned, progress and verify byte totals honor the name filter.
+- settings.conf is not rewritten on exit when nothing changed; file picker Paste follows the
+  clipboard.
+
 * Mon Nov 03 2026 Sangyong Bae <kiros33@gmail.com> - 0.30.0-1
 - Drag and drop in: virtual files (Outlook attachments/messages, items inside Explorer zip
   folders, MTP devices, browser images) are extracted into the drop folder via the transfer
