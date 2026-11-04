@@ -4,6 +4,7 @@
 
 ## 2026-11-04
 
+- **v0.30.1 승격 62c25d3**(시험 835/0 · T4 45/0 · CI 3499fe4 ✓) · GAP-046 ~ 048 수정본 Linux 격리 실측 ✓ · 다음 = 선검증 → 태그 → [11-04 §5](journal/2026-11-04.md)
 - **Linux PC 동작 점검**: A1 ~ A11 · GAP-043 ~ 048 수정(029dd15 · a1e6555 · d71fb87 · 7edc21b · 3499fe4 · 시험 835/0 · T4 45/0) · 결정 = GAP-046 끝까지 삭제 + 실패 목록 · 0.30.1 발행 · T-203 ⑤ 복사 재측정(VMware · 참고용 · 뚜렷한 이득 없음 · "약 2배" 정정) → [11-04 §4](journal/2026-11-04.md)
 - **회차 마감(개발 · 사용자 "진행사항 최신화 · commit · push")**: origin/main 28ccb74 · CI ✓ 3-OS · **GAP-042 교착 관련 코드 잔여 0** · 열린 것 = 사용자 결정 2(0.30.1 발행 · T-205) + 실기(RDP 재접속) → [11-04 §3](journal/2026-11-04.md)
 - **GAP-042 ⓑ 구현 ✅ cd17f2d(개발)**: `platform/wintaskbar.rs` 서브클래스 선처리(`TaskbarCreated` → `DefWindowProcW`) · `guard_taskbar_created` 창 생성 19곳 · Win32 단위 시험 + 3-OS 정적 가드 · DR-38 · docs/27 이식 안내(형제는 요청 때) · gate full ★ 836/0 · CI **✗ Windows `budget` 단계**(check(ubuntu·macos) ✓ · plugins ✓ · fmt·clippy·test·smoke·selfcheck·T4 Windows 전부 ✓ · exe 8,148,480 B ≤ 10 MB ✓ · **`scripts/check-imports.ps1` 인박스 허용 목록에 `comctl32.dll` 미등재** → "NFR-B-5 위반" 판정 · 실제로는 comctl32 = Windows 인박스 DLL이라 거짓 양성 · 로컬 gate는 임포트 게이트를 안 돌려 못 잡음 · 개발 후속 커밋 = 허용 목록 + docs/27 주석 → 재CI) · 열린 결정 = 0.30.1 발행 여부 → [11-04 §2](journal/2026-11-04.md)
