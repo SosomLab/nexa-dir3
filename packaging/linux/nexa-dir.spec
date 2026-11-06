@@ -64,6 +64,14 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 %doc %{_docdir}/nexa-dir/copyright
 
 %changelog
+* Fri Nov 06 2026 Sangyong Bae <kiros33@gmail.com> - 0.30.2-1
+- macOS: copies and moves onto a full volume (or another write error) now fail with the error
+  instead of retrying forever.
+- macOS: .app bundles no longer show "96 B" in the size column before the folder size is known.
+- New setting window.dialog_keeps_active (on by default): whether the main window counts as
+  active while one of the app's own dialogs has focus (window transparency).
+- Window transparency defaults: focused 5 %, unfocused 10 %.
+
 * Wed Nov 04 2026 Sangyong Bae <kiros33@gmail.com> - 0.30.1-1
 - Windows: the main window no longer hangs for good after a Remote Desktop reconnect or an
   Explorer restart (TaskbarCreated deadlock in the window library, handled by the app).
