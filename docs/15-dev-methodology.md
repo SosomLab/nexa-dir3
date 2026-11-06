@@ -116,3 +116,29 @@ nexa-dir(bin) ← 위 전부 + nexa-ui 7 + winit/softbuffer/wasmi
 - `git add -A`/`.` · 자동 태그 push · 강제 push · 사용자 자원 수정.
 - `platform::quiet_command` 밖의 `std::process::Command::new`(콘솔 창 · §2-3 ⑧ · 예외 = 런처 · PTY · ShellExecuteW · `ndir`) · `cmd /C` 경유 실행.
 - 앱 크레이트 안 범용 컨트롤 · `platform/` 밖 `#[cfg(target_os)]` · 문자열 리터럴 UI 문구 · 레지스트리 밖 설정 키 · 자체 타이머/스레드 틱 · 모달 중첩 루프 · 입력 주입(SendKeys 등) · 사용자 클립보드 덮어쓰기 시험 · 픽셀 골든 시험(글꼴 OS 차이).
+
+## 5. 세션 분담 · 세마포어(사용자 11-05 · 11-06 "Fable 사용량 절감")
+
+> 원본 = PC 전역 `~/.claude/CLAUDE.md`(이 PC의 모든 세션에 적용) · 이식용 사본 = `../nexa-sql/docs/claude-global-rules.md` + `../nexa-sql/scripts/install-global-rules.sh`(새 PC 첫 일 = `bash ../nexa-sql/scripts/install-global-rules.sh --check` → 없으면 인자 없이 설치). 이 절은 **dir3에서 덧붙는 것만** 적는다(충돌 시 사용자 지시 > 이 절 > 전역 원문).
+
+**① 모델별 분담**
+
+| 세션 | 맡는 일 |
+| --- | --- |
+| **개발(Fable)** | 꼭 더 나은 결과가 필요한 일만 — 설계 결정(DR/ADR · GAP 해결 방식) · 새 기능·다층 변경(크레이트 2개 이상 또는 ≈200줄 이상 · 형제 저장소 nexa-ui/nexa-license 컨트롤 추가) · 코어 rlib·`platform/`·설정 엔진·라이선스·플러그인 ABI·동시성(워커·세대 가드) · 성능/결함 **원인 분석** · 릴리스(버전 승격·태그·채널) |
+| **협업(Opus · 필요하면 Agent 병렬)** | 그 밖의 전부 — 상태 점검(git · CI `gh run` · 프로세스 · disk-check 측정) · 기록(journal · DEVLOG · STATUS · MILESTONES · BRANCHES) · `gate.sh`·T4·`--selfcheck`·실기 인스턴스(`_collab/` 세트 · `NDIR_HOME` 격리) **실행** · 간단 수정(오타·문구 · i18n `.lang` 문자열 · 주석 · 단일 스크립트 · 설정 기본값 · fmt/clippy 위반 · 원인이 명확한 단일 함수 버그 ≤30줄) · 이식 원장·dir2 원본 조사 보고 |
+
+- 일을 받은 세션이 위 표로 **즉시** 분류한다. 협업이 하다가 설계 판단이 필요해지면 멈추고 개발에 넘긴다. 개발은 사용자가 직접 준 간단 작업·점검도 협업에 `SendMessage`로 넘기고 결과만 중계한다(협업이 없을 때만 Opus Agent).
+- 개발 세션은 설계 전 조사를 직접 읽지 않는다 — 질문 목록만 협업/`Agent(model: opus, subagent_type: Explore)`에 보내 요약을 받는다. 개발은 `cargo check -p <크레이트>`까지 · 그 뒤 `gate.sh`·CI 감시·기록은 협업에 `[P0~P3]` 위임.
+
+**② 파일 소유(세마포어 기본 소유자)**
+
+| 소유자 | 파일 |
+| --- | --- |
+| 개발 | `crates/**` · `tests/**` · `Cargo.*` · `.github/**` · `packaging/**`(빌드 정의) · `CLAUDE.md` · `.claude/` · 형제 저장소 코드 · **`docs/TODO.md` · `docs/22-dir3-features.md` · `docs/port/90-verification-matrix.md`**(기능 커밋에 함께 바꾼다 · 10-25 합의 계승 — 협업은 넣을 행 문구를 개발에 보낸다) · `docs/10`(결정 내용) |
+| 협업 | 그 밖의 `docs/**`(journal · DEVLOG · STATUS · MILESTONES · BRANCHES · docs/15·16·18 · archive · release 노트 초안) · nexa-ui `docs/CONSUMER-CHANGES` · `scripts/`의 **실행**(수정은 간단 수정 범위 + 개발 SEM 승인) |
+
+- 남의 파일은 `[SEM 요청] <파일> — <이유> — <범위>` → `[SEM 승인]`(그동안 소유자도 저장하지 않음) → 작업 → `[SEM 해제] <파일> <해시>`. 토큰은 파일당 하나. 소유자가 idle인데 10분 무응답이면 `[SEM 자동승인]`으로 진행하고 사용자 보고에 남긴다(busy면 기다림). 사용자가 특정 세션에 직접 지시한 편집은 그 지시가 승인을 대신한다(상대에 통지만).
+- 공유 트리 커밋 = 자기 파일만 `git add <파일>` · 쓰기 직후 `git diff <파일>`이 제 변경뿐인지 확인(§3-1 10-25 사고) · `pull --rebase --autostash` 금지.
+- **push(11-05 개정 · 11-01 "협업은 push 안 함"과 11-04 §1-6 "빌드·시험·게이트·push = 개발"을 대체 — 게이트·시험 실행은 협업 · 개발은 `cargo check`까지)**: 협업도 자기 소유 기록·간단 수정은 스스로 `fetch` → `git add <파일>` → commit(메시지 끝 `(협업 세션)`) → `pull --ff-only` → push. 코드가 섞인 push 전 게이트는 종전대로 `gate.sh`(★ GATE OK 판정 줄 조건). 태그는 개발 세션 · 사용자 승인.
+- `target/` 빌드는 한 번에 한 세션 — 빌드 요청·완료 메시지로 묶는다(협업 실기는 `_collab/` 세트 · 끝나면 `--trim`).
