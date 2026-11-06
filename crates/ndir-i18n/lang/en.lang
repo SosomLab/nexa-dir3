@@ -982,6 +982,8 @@ pref.transparencyBlur = Window transparency when not focused (%)
 pref.transparencyBlur.desc = How transparent the main window becomes when another window has focus (0 = opaque, up to 90). Applied the moment focus leaves and restored when it returns. Turned off in performance boost mode.
 pref.blurGraceMs = Delay before the unfocused transparency applies (ms, 0-2000)
 pref.blurGraceMs.desc = The main window and its own dialogs count as one group: moving focus to a Nexa Dir dialog does not make the main window transparent. This delay bridges the moment focus leaves the main window before the dialog takes it, so the window does not flicker. Raise it on a slow window manager.
+pref.dialogKeepsActive = Keep the main window active while a dialog is open
+pref.dialogKeepsActive.desc = When on, the main window is treated as active while one of Nexa Dir's own dialogs (modal or modeless) has focus, so it keeps the focused transparency. When off, the main window is treated as inactive as soon as a dialog takes focus and uses the unfocused transparency.
 pref.panelMode = Panel mode
 pref.panelMode.desc = Single or dual file panels (View menu / toolbar).
 pref.panelMode.single = Single

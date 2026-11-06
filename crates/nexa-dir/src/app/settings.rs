@@ -114,7 +114,7 @@ impl App {
                     p.set_async_read(on, wait);
                 }
             }
-            "window.transparency" | "window.transparency_blur" => {
+            "window.transparency" | "window.transparency_blur" | "window.dialog_keeps_active" => {
                 self.apply_transparency();
             }
             "window.always_on_top" => {

@@ -238,24 +238,34 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
-    // 창 투명도(T-102 · NEW-013 · DR-22): 0~90 % · 창 전체 OS 합성 · 보조 창 포함 · 성능 향상 모드면 0(`FORCES`).
+    // 창 투명도(T-102 · NEW-013 · DR-22): 0~90 % · 창 전체 OS 합성 · 보조 창 포함 · 성능 향상 모드면 0(`FORCES`) · 기본 5(사용자 11-06).
     e!(
         "window.transparency",
         CAT_APPEARANCE,
         "pref.transparency",
         "pref.transparency.desc",
         Int { min: 0, max: 90 },
-        "0"
+        "5"
     ),
-    // 포커스 없을 때의 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40" → 10-26 기본 **20**) — 메인 창만 · 보조 창은 포커스 값 ·
-    // 성능 향상 모드 = 0(`FORCES`).
+    // 포커스 없을 때의 투명도(T-199 · 사용자 10-24 "포커스 있을 때 0 · 없을 때 40" → 10-26 기본 20 → 11-06 기본 **10**) — 메인 창만 ·
+    // 보조 창은 포커스 값 · 성능 향상 모드 = 0(`FORCES`).
     e!(
         "window.transparency_blur",
         CAT_APPEARANCE,
         "pref.transparencyBlur",
         "pref.transparencyBlur.desc",
         Int { min: 0, max: 90 },
-        "20"
+        "10"
+    ),
+    // 앱 자체 대화상자(모달 · 모달리스)에 포커스가 있을 때 메인 창을 활성으로 볼지(사용자 11-06) — on = 메인 + 대화상자 한 묶음(GAP-039 ·
+    // 종전 동작) · off = 대화상자로 포커스가 가면 메인은 비활성(포커스 없을 때 투명도).
+    e!(
+        "window.dialog_keeps_active",
+        CAT_APPEARANCE,
+        "pref.dialogKeepsActive",
+        "pref.dialogKeepsActive.desc",
+        Bool,
+        "on"
     ),
     // 창 묶음(메인 + 보조 창)이 포커스를 잃은 뒤 메인을 흐리기까지의 유예(GAP-039 · 사용자 11-03 "별도 창은 묶음으로"): 메인 → 보조 창
     // 전환은 "잃음 → 얻음" 두 사건이라 그 사이 깜빡임을 넘긴다 · 구현 상수 → 설정 키(HIDDEN · 느린 WM이면 늘린다).

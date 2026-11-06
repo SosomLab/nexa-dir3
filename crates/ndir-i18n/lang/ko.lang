@@ -981,6 +981,8 @@ pref.transparencyBlur = 창 투명도 — 포커스 없을 때(%)
 pref.transparencyBlur.desc = 다른 창으로 포커스가 가면 메인 창이 이만큼 투명해집니다(0 = 불투명 · 최대 90). 포커스가 떠나는 순간 적용되고 돌아오면 복원됩니다. 성능 향상 모드에서는 꺼집니다.
 pref.blurGraceMs = 포커스 없을 때 투명도가 적용되기까지의 지연(ms · 0~2000)
 pref.blurGraceMs.desc = 메인 창과 그 보조 창(대화상자)은 한 묶음으로 봅니다. Nexa Dir의 대화상자로 포커스가 가도 메인 창은 투명해지지 않습니다. 이 지연은 포커스가 메인 창을 떠난 뒤 대화상자가 받기까지의 순간을 넘겨 깜빡임을 막습니다. 느린 창 관리자에서는 늘리세요.
+pref.dialogKeepsActive = 대화상자가 열려 있을 때 메인 창을 활성으로 유지
+pref.dialogKeepsActive.desc = 켜면 Nexa Dir 자체 대화상자(모달 · 모달리스)에 포커스가 있어도 메인 창을 활성 상태로 보아 포커스 있을 때 투명도를 유지합니다. 끄면 대화상자로 포커스가 가는 순간 메인 창을 비활성 상태로 보아 포커스 없을 때 투명도를 적용합니다.
 pref.panelMode = 패널 모드
 pref.panelMode.desc = 파일 패널 하나 또는 둘(보기 메뉴·도구 모음).
 pref.panelMode.single = 싱글

@@ -11056,7 +11056,11 @@ fn window_transparency_follows_setting_and_boost() {
     use crate::platform::opacity_alpha;
     let (mut app, dir) = fixture("opacity");
     app.main_active = true;
-    assert_eq!(app.settings.int("window.transparency"), 0, "기본 = 불투명");
+    assert_eq!(
+        app.settings.int("window.transparency"),
+        5,
+        "기본 = 5(사용자 11-06)"
+    );
     let _ = app.settings.set("window.transparency", "40");
     assert_eq!(app.apply_transparency(), 40);
     let _ = app.settings.set("perf.boost", "on");
@@ -11080,14 +11084,14 @@ fn window_transparency_follows_setting_and_boost() {
         (255, 127, 25, 25)
     );
     assert_eq!(opacity_alpha(-5), 255);
-    // 포커스 없을 때 = `window.transparency_blur`(기본 20 · T-199 · 사용자 10-26 40 → 20) · 성능 향상 모드 = 0(FORCES) · 포커스가 돌아오면 포커스 값.
+    // 포커스 없을 때 = `window.transparency_blur`(기본 10 · T-199 · 사용자 10-26 40 → 20 → 11-06 10) · 성능 향상 모드 = 0(FORCES) · 포커스가 돌아오면 포커스 값.
     assert_eq!(
         app.settings.int("window.transparency_blur"),
-        20,
-        "기본 = 20"
+        10,
+        "기본 = 10"
     );
     app.main_active = false;
-    assert_eq!(app.apply_transparency(), 20);
+    assert_eq!(app.apply_transparency(), 10);
     let _ = app.settings.set("window.transparency_blur", "55");
     assert_eq!(app.apply_transparency(), 55);
     let _ = app.settings.set("perf.boost", "on");
@@ -11140,6 +11144,17 @@ fn window_transparency_follows_setting_and_boost() {
         0,
         "새 창 · 보조 창은 포커스 값"
     );
+    // `window.dialog_keeps_active`(사용자 11-06): 기본 on = 위 묶음 동작 · off = 보조 창 포커스여도 메인은 비활성(blur 값).
+    let _ = app.settings.set("window.dialog_keeps_active", "off");
+    app.on_focus_change(false);
+    app.on_aux_focus(aux, true);
+    assert!(
+        !app.focus_group_active(),
+        "off = 대화상자 포커스는 묶음 아님"
+    );
+    assert_eq!(app.apply_transparency(), 55);
+    app.on_focus_change(true);
+    assert_eq!(app.apply_transparency(), 0, "메인 포커스 = 포커스 값");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

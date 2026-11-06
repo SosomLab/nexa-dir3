@@ -695,8 +695,10 @@ impl App {
     }
 
     /// 창 묶음(메인 + 보조 창) 중 하나라도 포커스가 있으면 활성 — 투명도는 이것으로 정한다(GAP-039).
+    /// `window.dialog_keeps_active` = off면 보조 창 포커스는 묶음에 넣지 않는다(메인 포커스만 · 사용자 11-06).
     pub(crate) fn focus_group_active(&self) -> bool {
-        self.main_active || self.aux_focus.is_some()
+        self.main_active
+            || (self.aux_focus.is_some() && self.settings.flag("window.dialog_keeps_active"))
     }
 
     /// 묶음 활성 변화 반영: 활성 = 바로 포커스 값 · 비활성 = 유예 뒤 blur 값(`blur_tick` · 메인 → 보조 창 전환은 "메인 잃음 →
