@@ -12,6 +12,7 @@
 #   ① 전수 기록이 없다(target/gate/last-full — PC마다 따로)
 #   ② 마지막 전수가 NDIR_GATE_FULL_HOURS(기본 24)시간보다 오래됐다
 #   ③ 마지막 전수 뒤로 **핵심 경로**가 바뀌었다(영향도 높음 — 아래 CORE) · 형제 저장소 nexa-ui/nexa-license가 바뀌었다
+#   full의 Windows 호스트 추가 단계(T-205 ⓑ · 11-09): 임포트 영향 경로(platform/ · Cargo · build.rs)가 바뀌었으면 release exe 임포트 게이트(check-imports.ps1).
 # 그 밖 = quick. push 뒤 CI(3-OS 전수)는 그대로 돈다 — quick으로 push했으면 CI 결과 확인이 전수 역할을 한다.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
@@ -102,6 +103,23 @@ T="$(echo "$OUT" | grep -E '^test result' | awk '{p+=$4;f+=$6} END{print p+0" "f
 echo "  ✓ 시험(전체) — 통과/실패 $T"
 SM="$(cargo run -q -p nexa-dir -- --smoke 2>&1 | tail -1)"; [[ "$SM" == "smoke ok"* ]] || fail "smoke: $SM"; echo "  ✓ $SM"
 SC="$(cargo run -q -p nexa-dir -- --selfcheck --ci 2>&1 | tail -1)"; [[ "$SC" == *"fail 0"* ]] || fail "selfcheck: $SC"; echo "  ✓ selfcheck $SC"
+# T-205 ⓑ(11-09 · 협업 교훈 11-04: CI Windows `budget`만 comctl32.dll 미등재로 빨강 · 로컬 gate는 release exe를 안 만들어 못 잡았다): **Windows 호스트**에서
+#   임포트 테이블에 영향을 주는 경로(platform/ · Cargo.toml/lock · build.rs · 허용 목록 스크립트)가 마지막 전수 뒤로 바뀌었을 때만 release exe를 만들어
+#   `check-imports.ps1`(NFR-B-5 인박스 허용 목록)로 대조한다(+2~3분 · CI budget 단계와 같은 검사). NDIR_GATE_IMPORTS=1 = 강제 · 다른 OS = 해당 없음(CI가 맡음).
+IMPORTS='^(crates/nexa-dir/src/platform/|crates/[^/]+/(Cargo\.toml|build\.rs)|Cargo\.(toml|lock)|\.cargo/|scripts/check-imports\.ps1)'
+case "$(uname -s)" in
+MINGW*|MSYS*|CYGWIN*)
+    if [[ -n "${NDIR_GATE_IMPORTS:-}" ]]; then IHIT="강제(NDIR_GATE_IMPORTS)"
+    elif [[ -f "$REC" ]]; then read -r _ IHASH _ _ < "$REC"; IHIT="$(changed_since "$IHASH" | grep -E "$IMPORTS" | head -3 | tr '\n' ' ')"
+    else IHIT="전수 기록 없음"; fi
+    if [[ -n "$IHIT" ]]; then
+        cargo build -q --release -p nexa-dir || fail "release 빌드(임포트 게이트)"
+        OUT="$(pwsh -NoProfile -File scripts/check-imports.ps1 target/release/nexa-dir.exe 2>&1)" || { echo "$OUT" | tail -20; fail "임포트 게이트(NFR-B-5 · 허용 목록 = scripts/check-imports.ps1)"; }
+        echo "  ✓ 임포트 게이트(release exe · $IHIT)"
+    else
+        echo "  - 임포트 게이트 생략(임포트 영향 경로 변경 없음 · NDIR_GATE_IMPORTS=1로 강제)"
+    fi;;
+esac
 # T4 화면 격리(T-137 · 10-31 사용자 Xvfb 설치): Linux에 xvfb-run이 있으면 가상 X 화면(:99 자동 할당)에서 돌린다 — 시나리오 창이 사용자
 #   데스크톱에 뜨지 않는다(실측 43/0 · 24초). 앱은 DISPLAY가 있으면 X11 백엔드를 강제하므로(main.rs `with_x11` · 협업 xwininfo 실측) 메인 창은
 #   WAYLAND_DISPLAY와 무관하게 Xvfb에 뜬다 — `env -u WAYLAND_DISPLAY`는 시나리오가 띄우는 보조 프로세스가 Wayland를 보지 않게 하는
