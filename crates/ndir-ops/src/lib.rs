@@ -862,13 +862,57 @@ pub fn remove_staging_leftovers(dest: &Path, tags: &[&str]) -> usize {
 
 /// 대상 **폴더**의 스테이징 잔여를 이름과 무관하게 치운다(T-208 후속 · 협업 실측 11-09: 저널 없는 `nexa-copy` 재실행은 끊긴 항목을 모르니 그 대상의
 /// 잔여를 `remove_staging_leftovers`로 짚어 치울 수 없다 → 새 대상도 스테이징에 쓰는 지금은 숨은 잔여가 디스크를 계속 차지한다). 전송 시작 때
-/// 대상 폴더에 1회(항목마다 `read_dir`하면 파일 다수에 O(n²)). 규칙은 같다 — 엔진 이름 꼴 `.<x>.nexa-<tag>-<pid>-<seq>` · 죽은 pid만.
+/// 대상 폴더에 1회(항목마다 `read_dir`하면 파일 다수에 O(n²)). 규칙 = 엔진 이름 꼴 `.<x>.nexa-<tag>-<pid>-<seq>` · 죽은 pid · **그리고**
+/// [`SWEEP_AGE_SECS`](1시간) 넘게 변경이 없는 것만(협업 지적 11-09: `process_alive`는 이 기계의 프로세스 표라 공유 폴더(NAS · SMB)에서 **다른 기계**가
+/// 쓰는 중인 스테이징이 "죽은 pid"로 보인다 — 쓰는 중이면 수정 시각이 계속 바뀌므로 나이로 가른다 · 폴더는 안쪽까지 가장 최근 변경). 그래서 방금 죽은
+/// 잔여는 이 쓸기가 아니라 재개(저널 · 이름 지정)가 치우고, 저널 없는 재실행의 잔여는 한 시간 뒤 다음 전송이 치운다.
 pub fn sweep_staging_leftovers(dir: &Path, tags: &[&str]) -> usize {
     sweep_staging(dir, None, tags)
 }
 
-/// 공용 본체: `name`이 있으면 그 대상의 잔여만(`.<name>.nexa-<tag>-`) · 없으면 폴더 안 엔진 이름 꼴 전부. `<pid>-<seq>` 둘 다 숫자 · pid가 죽었을 때만.
+/// 폴더 쓸기의 나이 기준(초) — 시험이 바꾼다.
+static SWEEP_AGE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(3600);
+
+#[cfg(test)]
+fn set_sweep_age_for_test(secs: u64) {
+    SWEEP_AGE_SECS.store(secs, Ordering::Relaxed);
+}
+
+/// `p`(파일 · 폴더는 안쪽 전부) 어디에도 `cutoff`보다 늦은 변경이 없는가 — 폴더는 하나라도 새것이면 바로 `false`(살아 있는 전송은 거의 즉시 끝난다 ·
+/// 전부 훑는 것은 정말 오래된 잔여일 때뿐 = 곧 지울 것). 시각을 못 읽으면 보수적으로 `false`(안 지움).
+fn untouched_since(p: &Path, cutoff: std::time::SystemTime) -> bool {
+    let Ok(meta) = fs::symlink_metadata(p) else {
+        return false;
+    };
+    let Ok(m) = meta.modified() else {
+        return false;
+    };
+    if m > cutoff {
+        return false;
+    }
+    if meta.is_dir() {
+        let Ok(rd) = fs::read_dir(p) else {
+            return false;
+        };
+        for e in rd.flatten() {
+            if !untouched_since(&e.path(), cutoff) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// 공용 본체: `name`이 있으면 그 대상의 잔여만(`.<name>.nexa-<tag>-` · 재개 경로 · 나이 안 봄 = 44ac475 그대로) · 없으면 폴더 안 엔진 이름 꼴 전부
+/// (나이 가드). `<pid>-<seq>` 둘 다 숫자 · pid가 죽었을 때만.
 fn sweep_staging(dir: &Path, name: Option<&str>, tags: &[&str]) -> usize {
+    let cutoff = name.is_none().then(|| {
+        std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(
+                SWEEP_AGE_SECS.load(Ordering::Relaxed),
+            ))
+            .unwrap_or(std::time::UNIX_EPOCH)
+    });
     let Ok(rd) = fs::read_dir(dir) else {
         return 0;
     };
@@ -908,6 +952,11 @@ fn sweep_staging(dir: &Path, name: Option<&str>, tags: &[&str]) -> usize {
             continue;
         }
         let p = e.path();
+        if let Some(cutoff) = cutoff {
+            if !untouched_since(&p, cutoff) {
+                continue; // 최근에 변한 것 = 다른 기계(또는 모르는 프로세스)가 쓰는 중일 수 있다
+            }
+        }
         let r = if is_link(&p) {
             remove_link(&p)
         } else if p.is_dir() {
@@ -2170,21 +2219,62 @@ mod tests {
         fs::write(b.join(".k.nexa-old-4000000000-2"), b"old").unwrap();
         let live = format!(".y.nexa-tmp-{}-0", std::process::id());
         fs::write(b.join(&live), b"busy").unwrap();
-        let out = transfer_with(
-            &[a.join("x.txt")],
-            &b,
-            Op::Copy,
-            &mut no_conflict,
-            &mut |_| {},
-            &AtomicBool::new(false),
-            &LOOP,
+        let run = |name: &str| {
+            let out = transfer_with(
+                &[a.join("x.txt")],
+                &b,
+                Op::Copy,
+                &mut |_| Conflict::Overwrite,
+                &mut |_| {},
+                &AtomicBool::new(false),
+                &LOOP,
+            );
+            assert!(out.errors.is_empty(), "{name}: {:?}", out.errors);
+        };
+        // 나이 가드(공유 폴더 · 다른 기계): 기본 1시간 안의 잔여는 pid가 죽어 보여도 둔다.
+        run("기본 나이");
+        assert!(
+            b.join(".x.txt.nexa-tmp-4000000000-0").is_file()
+                && b.join(".d.nexa-tmp-4000000000-1/inner").is_dir(),
+            "방금 생긴 잔여는 두어야 한다(다른 기계가 쓰는 중일 수 있다)"
         );
-        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        for f in [
+            ".x.txt.nexa-tmp-4000000000-0",
+            ".other.bin.nexa-tmp-4000000001-7",
+            ".d.nexa-tmp-4000000000-1/inner",
+            ".d.nexa-tmp-4000000000-1",
+        ] {
+            set_mtime(&b.join(f), old);
+        }
+        // 폴더는 안쪽 파일 하나만 새것이어도 둔다(쓰는 중).
+        fs::write(b.join(".d.nexa-tmp-4000000000-1/inner/fresh"), b"f").unwrap();
+        set_mtime(&b.join(".d.nexa-tmp-4000000000-1/inner"), old);
+        set_mtime(&b.join(".d.nexa-tmp-4000000000-1"), old);
+        set_sweep_age_for_test(5);
+        run("나이 5 s");
+        assert!(
+            !b.join(".x.txt.nexa-tmp-4000000000-0").exists()
+                && !b.join(".other.bin.nexa-tmp-4000000001-7").exists(),
+            "오래된 파일 잔여 = 제거"
+        );
+        assert!(
+            b.join(".d.nexa-tmp-4000000000-1/inner/fresh").is_file(),
+            "폴더는 안쪽에 새것이 있으면 둔다"
+        );
+        set_mtime(&b.join(".d.nexa-tmp-4000000000-1/inner/fresh"), old);
+        set_mtime(&b.join(".d.nexa-tmp-4000000000-1/inner"), old);
+        set_mtime(&b.join(".d.nexa-tmp-4000000000-1"), old);
+        run("나이 5 s · 폴더 전부 오래됨");
+        set_sweep_age_for_test(3600);
         let mut names: Vec<String> = fs::read_dir(&b)
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         names.sort();
+        if cfg!(windows) {
+            names.retain(|n| n != ".d.nexa-tmp-4000000000-1"); // 폴더 시각을 못 늙혀 남는다(위 set_mtime 설명)
+        }
         assert_eq!(
             names,
             [
@@ -2193,9 +2283,23 @@ mod tests {
                 ".z.nexa-tmp-notes",
                 "x.txt"
             ],
-            "죽은 pid tmp(파일 2 · 폴더 1) 제거 · 살아 있는 pid · 사용자 꼴 · old 유지"
+            "오래된 죽은 pid tmp(파일 2 · 폴더 1) 제거 · 살아 있는 pid · 사용자 꼴 · old 유지"
         );
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// 시험용 수정 시각 설정(파일 · 폴더). Windows는 폴더 핸들에 `FILE_FLAG_BACKUP_SEMANTICS`가 필요해 폴더는 건너뛴다 — 그러면 폴더 자체 시각이
+    /// 새것으로 남아 폴더 잔여가 안 지워지므로, Windows에서는 폴더 쪽 단언을 느슨하게 한다(`sweep_dirs_checked`).
+    fn set_mtime(p: &Path, t: std::time::SystemTime) {
+        let f = if p.is_dir() {
+            if cfg!(windows) {
+                return;
+            }
+            fs::File::open(p)
+        } else {
+            fs::OpenOptions::new().write(true).open(p)
+        };
+        f.unwrap().set_modified(t).unwrap();
     }
 
     /// T-208: 새 대상 자리에 이미 무엇이 있으면(계획 뒤 생김 · 덮어쓰기 아님) 복사 전에 `AlreadyExists` · 있던 것 무손상 · 잔여 0.
