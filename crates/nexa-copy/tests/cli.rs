@@ -394,6 +394,30 @@ fn include_exclude_filters_files_and_top_level_sources() {
         "{}",
         r.err
     );
+    // -q(조용히)여도 파일을 골랐으면 그 안내가 나오지 않는다(협업 QA 11-09 #3: 진행을 안 받아 "0"으로 판정하던 거짓 안내).
+    let d4 = d.join("dst4");
+    fs::create_dir_all(&d4).expect("mkdir");
+    let r = run(
+        &[&src.join("tree"), &d4],
+        &["-q", "--include", "*.txt"],
+        &[],
+    );
+    assert_eq!(r.code, 0, "{}", r.err);
+    assert!(d4.join("tree").join("f0.txt").is_file());
+    assert!(
+        !r.err.contains("matched no files"),
+        "-q에서 거짓 안내: {}",
+        r.err
+    );
+    // -q + 정말 안 맞으면 안내는 그대로(오류가 아닌 안내지만 사용자 보호).
+    let d5 = d.join("dst5");
+    fs::create_dir_all(&d5).expect("mkdir");
+    let r = run(
+        &[&src.join("tree"), &d5],
+        &["-q", "--include", "*.nomatch"],
+        &[],
+    );
+    assert!(r.err.contains("matched no files"), "{}", r.err);
     // 최상위 원본이 걸러지면 안내 + 나머지만.
     let d2 = d.join("dst2");
     fs::create_dir_all(&d2).expect("mkdir");

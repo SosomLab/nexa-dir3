@@ -842,6 +842,10 @@ impl Printer {
     }
 
     fn event(&mut self, ev: &Event, err: &mut dyn Write) {
+        // 옮긴 바이트는 조용히(-q)일 때도 적는다 — `--include` "파일을 하나도 안 골랐다" 판정이 이 값을 본다(협업 QA 11-09 #3: -q면 늘 None이라 거짓 안내).
+        if let Event::Bytes(p) = ev {
+            self.seen = Some((p.done_bytes, p.total_bytes));
+        }
         if self.quiet {
             return;
         }
