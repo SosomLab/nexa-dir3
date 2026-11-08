@@ -545,8 +545,9 @@ fn copy_onto_inner(
     // T-208(11-09 · 사용자 결정 ⓒ): **새 대상도** 스테이징에 쓰고 끝에 커밋 — 프로세스가 죽어도(kill -9 · 전원) 최종 이름의 잘린 파일이 남지 않는다.
     // 남는 것은 숨김 `tmp` 잔여뿐이고 재개(`ndir-xfer`) · 버림(앱 큐)이 치운다. 새 대상 커밋 = 덮어쓰지 않는 rename(`fastcopy::rename_noreplace` ·
     // 종전 `create_new`가 주던 "그 사이 생긴 같은 이름은 건드리지 않음" 보장 유지 · 같은 폴더 복제 " (2)" 포함).
-    let replacing = overwrite && dest.exists();
-    if !overwrite && dest.symlink_metadata().is_ok() {
+    let existing = dest.symlink_metadata().is_ok(); // stat 1회(파일 다수 비용 · 협업 실측 11-09 파일당 +21 µs 중 일부)
+    let replacing = overwrite && existing;
+    if !overwrite && existing {
         return Err(already_exists(dest)); // 종전 `create_new`와 같은 시점(복사 전)에 거부 — 다 복사한 뒤 커밋에서 알면 낭비
     }
     let staged = staging_path(dest, "tmp");
@@ -856,17 +857,43 @@ pub fn remove_staging_leftovers(dest: &Path, tags: &[&str]) -> usize {
     let (Some(parent), Some(name)) = (dest.parent(), dest.file_name()) else {
         return 0;
     };
-    let name = name.to_string_lossy();
-    let Ok(rd) = fs::read_dir(parent) else {
+    sweep_staging(parent, Some(&name.to_string_lossy()), tags)
+}
+
+/// 대상 **폴더**의 스테이징 잔여를 이름과 무관하게 치운다(T-208 후속 · 협업 실측 11-09: 저널 없는 `nexa-copy` 재실행은 끊긴 항목을 모르니 그 대상의
+/// 잔여를 `remove_staging_leftovers`로 짚어 치울 수 없다 → 새 대상도 스테이징에 쓰는 지금은 숨은 잔여가 디스크를 계속 차지한다). 전송 시작 때
+/// 대상 폴더에 1회(항목마다 `read_dir`하면 파일 다수에 O(n²)). 규칙은 같다 — 엔진 이름 꼴 `.<x>.nexa-<tag>-<pid>-<seq>` · 죽은 pid만.
+pub fn sweep_staging_leftovers(dir: &Path, tags: &[&str]) -> usize {
+    sweep_staging(dir, None, tags)
+}
+
+/// 공용 본체: `name`이 있으면 그 대상의 잔여만(`.<name>.nexa-<tag>-`) · 없으면 폴더 안 엔진 이름 꼴 전부. `<pid>-<seq>` 둘 다 숫자 · pid가 죽었을 때만.
+fn sweep_staging(dir: &Path, name: Option<&str>, tags: &[&str]) -> usize {
+    let Ok(rd) = fs::read_dir(dir) else {
         return 0;
     };
     let mut n = 0;
     for e in rd.flatten() {
         let fname = e.file_name().to_string_lossy().into_owned();
-        let Some(rest) = tags
-            .iter()
-            .find_map(|t| fname.strip_prefix(&format!(".{name}.nexa-{t}-")))
-        else {
+        let rest = match name {
+            Some(name) => tags
+                .iter()
+                .find_map(|t| fname.strip_prefix(&format!(".{name}.nexa-{t}-"))),
+            None => {
+                if !fname.starts_with('.') {
+                    continue;
+                }
+                // 마지막 ".nexa-<tag>-" 뒤 = <pid>-<seq> · 앞에 이름이 한 글자 이상.
+                tags.iter().find_map(|t| {
+                    let marker = format!(".nexa-{t}-");
+                    fname
+                        .rfind(&marker)
+                        .filter(|&i| i > 0)
+                        .map(|i| &fname[i + marker.len()..])
+                })
+            }
+        };
+        let Some(rest) = rest else {
             continue;
         };
         // 엔진이 만든 이름만(`<pid>-<seq>` 둘 다 숫자) — 해석이 안 되면 사용자 것일 수 있어 건너뛴다(협업 실측 11-01: `.t.nexa-old-notes`가 지워졌다).
@@ -1260,6 +1287,9 @@ fn transfer_inner(
         sizes: &sizes,
         total_bytes,
     });
+    // T-208 후속(11-09): 지난 실행(죽은 pid)이 대상 폴더에 남긴 `tmp` 잔여를 전송 시작 때 1회 치운다 — 저널 없는 재실행(`nexa-copy` 옵션 없음 · 앱의
+    // 같은 복사 반복)도 숨은 잔여를 쌓지 않는다. `old`는 두는 것이 안전(병합 중 치워 둔 옛 대상 · 재개가 끝난 뒤 치운다).
+    sweep_staging_leftovers(dest_dir, &["tmp"]);
     let item_count = sources.len();
     let mut done = 0u64;
     for (i, src) in sources.iter().enumerate() {
@@ -2122,6 +2152,49 @@ mod tests {
         );
         assert!(out.errors.is_empty(), "{:?}", out.errors);
         assert_eq!(listing(&a), ["big (2).bin", "big.bin", "dir"]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// T-208 후속: 전송 시작 때 대상 폴더의 죽은 pid `tmp` 잔여(파일 · 폴더 · 이름 무관)를 치운다 — 살아 있는 pid 것 · 숫자가 아닌 꼬리(사용자 파일 꼴) ·
+    /// `old`는 그대로. 저널 없는 재실행 사례(협업 실측 11-09).
+    #[test]
+    fn transfer_sweeps_dead_pid_staging_in_dest_dir() {
+        let d = fixture("sweep");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(b.join(".d.nexa-tmp-4000000000-1/inner")).unwrap();
+        fs::write(a.join("x.txt"), b"x").unwrap();
+        fs::write(b.join(".x.txt.nexa-tmp-4000000000-0"), b"part").unwrap();
+        fs::write(b.join(".other.bin.nexa-tmp-4000000001-7"), b"part").unwrap();
+        fs::write(b.join(".z.nexa-tmp-notes"), b"mine").unwrap();
+        fs::write(b.join(".k.nexa-old-4000000000-2"), b"old").unwrap();
+        let live = format!(".y.nexa-tmp-{}-0", std::process::id());
+        fs::write(b.join(&live), b"busy").unwrap();
+        let out = transfer_with(
+            &[a.join("x.txt")],
+            &b,
+            Op::Copy,
+            &mut no_conflict,
+            &mut |_| {},
+            &AtomicBool::new(false),
+            &LOOP,
+        );
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        let mut names: Vec<String> = fs::read_dir(&b)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                ".k.nexa-old-4000000000-2",
+                &live,
+                ".z.nexa-tmp-notes",
+                "x.txt"
+            ],
+            "죽은 pid tmp(파일 2 · 폴더 1) 제거 · 살아 있는 pid · 사용자 꼴 · old 유지"
+        );
         fs::remove_dir_all(&d).unwrap();
     }
 

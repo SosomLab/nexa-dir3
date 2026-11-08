@@ -93,12 +93,13 @@ hard_kill "$PID"; wait "$PID" 2>/dev/null
 JOBS=$(ls "$HOME_D/queue/"*.job.json 2>/dev/null | wc -l | tr -d ' '); JRN=$(ls "$HOME_D/queue/"*.journal 2>/dev/null | wc -l | tr -d ' ')
 # ②-b 스냅숏(T-208): 최종 이름 파일 수 · 그중 크기가 원본(MB MiB)과 다른 것 · 스테이징 잔여 수.
 FULL=$((MB * 1048576))
-FINAL=$(find "$DST/big" -type f ! -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
-TRUNC=$(find "$DST/big" -type f ! -name '.nexa-*' ! -size "${FULL}c" 2>/dev/null | wc -l | tr -d ' ')
-STAGED=$(find "$DST" -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
+# 스테이징 이름 = `.<이름>.nexa-tmp-<pid>-<seq>` / `.nexa-old-…` — 종전 `-name '.nexa-*'`는 절대 맞지 않아 잔여 판정이 눈먼 상태였다(협업 지적 11-09).
+FINAL=$(find "$DST/big" -type f ! -name '*.nexa-tmp-*' ! -name '*.nexa-old-*' 2>/dev/null | wc -l | tr -d ' ')
+TRUNC=$(find "$DST/big" -type f ! -name '*.nexa-tmp-*' ! -name '*.nexa-old-*' ! -size "${FULL}c" 2>/dev/null | wc -l | tr -d ' ')
+STAGED=$(find "$DST" \( -name '*.nexa-tmp-*' -o -name '*.nexa-old-*' \) 2>/dev/null | wc -l | tr -d ' ')
 echo "  queue/: job $JOBS · journal $JRN · 최종 이름 ${FINAL}개(잘린 것 $TRUNC) · 스테이징 잔여 $STAGED"
 [ "$JOBS" -ge 1 ] || { echo "✗ 강제 종료 뒤 queue/<id>.job.json 없음"; exit 1; }
-[ "$TRUNC" = 0 ] || { echo "✗ T-208: 잘린 파일 ${TRUNC}개가 최종 이름으로 남음: $(find "$DST/big" -type f ! -name '.nexa-*' ! -size "${FULL}c" -exec ls -l {} + | head -3 | awk '{print $NF, $5}' | tr '\n' ' ')"; exit 1; }
+[ "$TRUNC" = 0 ] || { echo "✗ T-208: 잘린 파일 ${TRUNC}개가 최종 이름으로 남음: $(find "$DST/big" -type f ! -name '*.nexa-tmp-*' ! -name '*.nexa-old-*' ! -size "${FULL}c" -exec ls -l {} + | head -3 | awk '{print $NF, $5}' | tr '\n' ' ')"; exit 1; }
 
 # ③ 재기동 = 자동 복원 → 끝날 때까지 → 덤프 → 종료.
 RUN2="$OUT/run2.txt"
@@ -112,7 +113,7 @@ FAIL=0
 grep -q '^transfer idle' "$RUN2" || { echo "✗ transfer idle 아님"; FAIL=1; }
 grep -q '^queue 0' "$RUN2" || { echo "✗ queue 0 아님"; FAIL=1; }
 diff -rq "$SRC/big" "$DST/big" >"$OUT/diff.txt" 2>&1 || { echo "✗ 원본과 다름 $(wc -l <"$OUT/diff.txt" | tr -d ' ')건: $(head -3 "$OUT/diff.txt" | tr '\n' ' ')"; FAIL=1; }
-STRAY=$(find "$DST" -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
+STRAY=$(find "$DST" \( -name '*.nexa-tmp-*' -o -name '*.nexa-old-*' \) 2>/dev/null | wc -l | tr -d ' ')
 [ "$STRAY" = 0 ] || { echo "✗ 스테이징 잔여 $STRAY"; FAIL=1; }
 LEFT=$(ls -A "$HOME_D/queue" 2>/dev/null | wc -l | tr -d ' ')
 [ "$LEFT" = 0 ] || { echo "✗ queue/ 잔여 $LEFT: $(ls -A "$HOME_D/queue" | tr '\n' ' ')"; FAIL=1; }
