@@ -6,6 +6,8 @@
 #      (Windows `taskkill /F` · unix `kill -9`) → `queue/`에 `<id>.job.json` + `<id>.journal`이 남아야 한다
 #   ③ 같은 NDIR_HOME으로 재기동(`@ready:ops.wait` ×3 = 상한 60 s) → `ops.dump` = "transfer idle · queue 0" → `quit`
 #   ④ 판정 = dst/big 파일 N개가 원본과 바이트 동일 · `.nexa-tmp*`/`.nexa-old*` 잔여 0 · `queue/` 비움(정상 종료가 지움)
+#   ②-b(T-208 · 11-09) 강제 종료 **직후** 스냅숏 = 최종 이름(`.nexa-*` 아닌 것)으로 남은 파일은 전부 온전한 크기여야 한다 — 잘린 파일이 최종 이름으로
+#      남으면 즉시 실패(종전엔 자동 복원이 고친 뒤 최종 상태만 봐서 결함이 있어도 OK였다 · 협업 지적 11-09). 부분 내용은 숨김 스테이징에만.
 #
 # 사용: scripts/kill-resume-check.sh [--exe <nexa-dir>] [--files N] [--mb M] [--kill-ms T] [--native] [--keep]
 #   --native = 기본 복사 경로(`transfer.native=on` · 스레드 기본값 · macOS = clonefile · Linux = copy_file_range)를 시험한다. 복제는 파일 하나가
@@ -89,8 +91,14 @@ fi
 echo "  전송 중 $(head -1 "$RUN1") → 강제 종료 pid $PID"
 hard_kill "$PID"; wait "$PID" 2>/dev/null
 JOBS=$(ls "$HOME_D/queue/"*.job.json 2>/dev/null | wc -l | tr -d ' '); JRN=$(ls "$HOME_D/queue/"*.journal 2>/dev/null | wc -l | tr -d ' ')
-echo "  queue/: job $JOBS · journal $JRN · $(ls "$DST/big" 2>/dev/null | wc -l | tr -d ' ')개 부분 대상"
+# ②-b 스냅숏(T-208): 최종 이름 파일 수 · 그중 크기가 원본(MB MiB)과 다른 것 · 스테이징 잔여 수.
+FULL=$((MB * 1048576))
+FINAL=$(find "$DST/big" -type f ! -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
+TRUNC=$(find "$DST/big" -type f ! -name '.nexa-*' ! -size "${FULL}c" 2>/dev/null | wc -l | tr -d ' ')
+STAGED=$(find "$DST" -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
+echo "  queue/: job $JOBS · journal $JRN · 최종 이름 ${FINAL}개(잘린 것 $TRUNC) · 스테이징 잔여 $STAGED"
 [ "$JOBS" -ge 1 ] || { echo "✗ 강제 종료 뒤 queue/<id>.job.json 없음"; exit 1; }
+[ "$TRUNC" = 0 ] || { echo "✗ T-208: 잘린 파일 ${TRUNC}개가 최종 이름으로 남음: $(find "$DST/big" -type f ! -name '.nexa-*' ! -size "${FULL}c" -exec ls -l {} + | head -3 | awk '{print $NF, $5}' | tr '\n' ' ')"; exit 1; }
 
 # ③ 재기동 = 자동 복원 → 끝날 때까지 → 덤프 → 종료.
 RUN2="$OUT/run2.txt"
@@ -108,5 +116,5 @@ STRAY=$(find "$DST" -name '.nexa-*' 2>/dev/null | wc -l | tr -d ' ')
 [ "$STRAY" = 0 ] || { echo "✗ 스테이징 잔여 $STRAY"; FAIL=1; }
 LEFT=$(ls -A "$HOME_D/queue" 2>/dev/null | wc -l | tr -d ' ')
 [ "$LEFT" = 0 ] || { echo "✗ queue/ 잔여 $LEFT: $(ls -A "$HOME_D/queue" | tr '\n' ' ')"; FAIL=1; }
-if [ "$FAIL" = 0 ]; then echo "★ KILL-RESUME OK — ${N}개 바이트 동일 · 잔여 0 · queue/ 비움"; exit 0; fi
+if [ "$FAIL" = 0 ]; then echo "★ KILL-RESUME OK — 강제 종료 직후 잘린 최종 이름 0(스테이징 $STAGED) · 재기동 뒤 ${N}개 바이트 동일 · 잔여 0 · queue/ 비움"; exit 0; fi
 echo "✗ KILL-RESUME 실패 — $OUT (--keep로 보존)"; exit 1

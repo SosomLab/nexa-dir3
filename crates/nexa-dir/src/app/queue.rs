@@ -245,6 +245,18 @@ impl TransferQueue {
         }
     }
 
+    /// 저널의 끊긴 항목(`started`만) 대상 — 버림 때 스테이징 잔여 정리용(T-208). 저널이 없거나 못 읽으면 빈 목록.
+    pub(crate) fn interrupted_dests(&self, id: u64) -> Vec<PathBuf> {
+        let Some(dir) = &self.dir else {
+            return Vec::new();
+        };
+        std::fs::read_to_string(journal_path(dir, id))
+            .ok()
+            .and_then(|t| ndir_xfer::resume::interrupted_items(&t).ok())
+            .map(|v| v.into_iter().map(|i| i.dest).collect())
+            .unwrap_or_default()
+    }
+
     /// 끝난(또는 지운) 작업의 파일 두 개를 치운다 — 없으면 그만.
     pub(crate) fn forget(&self, id: u64) {
         if let Some(dir) = &self.dir {
@@ -340,9 +352,13 @@ impl crate::App {
         self.sync_queue_view();
     }
 
-    /// 버림(대화상자 2 · `discard`): 작업 파일 · 저널 삭제 · 상태줄.
+    /// 버림(대화상자 2 · `discard`): 끊긴 항목이 남긴 스테이징 `tmp` 잔여 정리(T-208 · 죽은 pid 것만 · `old`는 두는 것이 안전 — 병합 중 치워 둔
+    /// 옛 대상일 수 있다 · 재개가 끝난 뒤 치운다) → 작업 파일 · 저널 삭제 · 상태줄. 새 대상은 스테이징에만 쓰므로 버린 뒤 잘린 파일이 남지 않는다.
     pub(crate) fn queue_discard(&mut self, jobs: Vec<(u64, JobSpec)>) {
         for (id, _) in &jobs {
+            for dest in self.transfer_queue.interrupted_dests(*id) {
+                ndir_ops::remove_staging_leftovers(&dest, &["tmp"]);
+            }
             self.transfer_queue.forget(*id);
         }
         self.status_note(&trf("ops.queueDiscarded", &[&jobs.len().to_string()]));

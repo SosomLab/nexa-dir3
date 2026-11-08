@@ -542,31 +542,49 @@ fn copy_onto_inner(
     cancel: &AtomicBool,
     copied: Option<&mut Vec<PathBuf>>,
 ) -> io::Result<()> {
+    // T-208(11-09 · 사용자 결정 ⓒ): **새 대상도** 스테이징에 쓰고 끝에 커밋 — 프로세스가 죽어도(kill -9 · 전원) 최종 이름의 잘린 파일이 남지 않는다.
+    // 남는 것은 숨김 `tmp` 잔여뿐이고 재개(`ndir-xfer`) · 버림(앱 큐)이 치운다. 새 대상 커밋 = 덮어쓰지 않는 rename(`fastcopy::rename_noreplace` ·
+    // 종전 `create_new`가 주던 "그 사이 생긴 같은 이름은 건드리지 않음" 보장 유지 · 같은 폴더 복제 " (2)" 포함).
     let replacing = overwrite && dest.exists();
+    if !overwrite && dest.symlink_metadata().is_ok() {
+        return Err(already_exists(dest)); // 종전 `create_new`와 같은 시점(복사 전)에 거부 — 다 복사한 뒤 커밋에서 알면 낭비
+    }
+    let staged = staging_path(dest, "tmp");
     if src.is_dir() {
-        if !replacing {
-            return copy_dir_with_progress(src, dest, on_bytes, cancel, copied);
-        }
-        let staged = staging_path(dest, "tmp");
         let run = copy_dir_with_progress(src, &staged, on_bytes, cancel, copied)
-            .and_then(|()| commit_replace(&staged, dest));
+            .and_then(|()| commit(&staged, dest, replacing));
         if run.is_err() {
             let _ = fs::remove_dir_all(&staged);
         }
         run
-    } else if replacing {
-        let staged = staging_path(dest, "tmp");
+    } else {
         // copy_file_with_progress가 실패 시 staged를 정리한다
         copy_file_with_progress(src, &staged, true, on_bytes, cancel)?;
-        commit_replace(&staged, dest).inspect_err(|_| {
+        commit(&staged, dest, replacing).inspect_err(|_| {
             let _ = fs::remove_file(&staged);
         })
-    } else {
-        copy_file_with_progress(src, dest, overwrite, on_bytes, cancel)
     }
 }
 
-/// 교체용 스테이징 경로 — 대상과 **같은 부모**(같은 볼륨이라 rename이 원자적). 숨김 규약 `.<name>.nexa-<tag>-<pid>-<seq>`.
+/// 스테이징 → 대상 커밋: 교체(`replacing`) = [`commit_replace`](옛 대상은 새 내용이 완성된 뒤에만 사라진다) · 새 대상 = 덮어쓰지 않는
+/// rename(T-208 · 그 틈에 같은 이름이 생겼으면 `AlreadyExists` = 그 항목 실패 · 호출자가 스테이징을 치운다).
+fn commit(staged: &Path, dest: &Path, replacing: bool) -> io::Result<()> {
+    if replacing {
+        commit_replace(staged, dest)
+    } else {
+        fastcopy::rename_noreplace(staged, dest)
+    }
+}
+
+/// 새 대상 자리에 이미 무엇이 있다(덮어쓰기 아님 · 종전 `create_new`의 `AlreadyExists`와 같은 뜻).
+fn already_exists(dest: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        format!("already exists: {}", dest.display()),
+    )
+}
+
+/// 스테이징 경로(교체 · 새 대상 공용 · T-208) — 대상과 **같은 부모**(같은 볼륨이라 rename이 원자적). 숨김 규약 `.<name>.nexa-<tag>-<pid>-<seq>`.
 fn staging_path(dest: &Path, tag: &str) -> PathBuf {
     use std::sync::atomic::AtomicU64;
     static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -691,8 +709,9 @@ fn revert_moves(moved: &[(PathBuf, PathBuf)]) {
     }
 }
 
-/// 원본을 정확히 `dest`로 복사(순번 부여 없음). overwrite면 **스테이징 후 교체** — 취소/실패 시
-/// 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저 지워 취소 시 소실). 폴더 교체는 **병합**(11-01 · 새 내용을 옛 대상
+/// 원본을 정확히 `dest`로 복사(순번 부여 없음). 늘 **스테이징에 쓰고 끝에 커밋**(T-208 · 11-09 — 새 대상 = 덮어쓰지 않는 rename · 덮어쓰기 = 교체) —
+/// 취소/실패/강제 종료 어느 때도 최종 이름에 잘린 파일이 생기지 않고, 덮어쓰기는 옛 대상이 그대로 남고 스테이징만 제거된다(점검 1차 #1: 종전은 폴더를 먼저
+/// 지워 취소 시 소실). 폴더 교체는 **병합**(11-01 · 새 내용을 옛 대상
 /// 안으로 · 옛 대상에만 있던 항목은 남고 같은 이름만 새 것으로 — 탐색기 "폴더 바꾸기"와 같음 · 대상 폴더는 어느 순간에도 존재 · 파일 ↔ 폴더 이름
 /// 충돌은 그 항목 실패).
 pub fn copy_onto_with_progress(
@@ -2018,7 +2037,111 @@ mod tests {
         assert!(out.canceled);
         assert!(out.transferred.is_empty());
         assert!(!b.join("big.bin").exists(), "부분 파일 정리");
+        assert_eq!(
+            fs::read_dir(&b).unwrap().count(),
+            0,
+            "스테이징 잔여 없음(T-208)"
+        );
         assert!(a.join("big.bin").exists(), "원본 무손상");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// T-208(11-09): 새 대상(파일 · 폴더)도 스테이징 `.<이름>.nexa-tmp-*`에 쓰고 끝에 커밋한다 — 바이트가 흐르는 동안 최종 이름은 없고
+    /// 스테이징만 있다 · 끝나면 최종 이름만 남는다(잔여 0). 같은 폴더 복제 " (2)"도 같은 경로. 루프 경로 인자(블록 복제는 틈이 없다).
+    #[test]
+    fn new_dest_is_staged_until_commit() {
+        let d = fixture("stagenew");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(a.join("dir")).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("big.bin"), vec![1u8; 9 * 1024 * 1024]).unwrap();
+        fs::write(a.join("dir/big.bin"), vec![2u8; 9 * 1024 * 1024]).unwrap();
+        let listing = |p: &Path| -> Vec<String> {
+            let mut v: Vec<String> = fs::read_dir(p)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            v.sort();
+            v
+        };
+        let seen = std::cell::RefCell::new(Vec::<Vec<String>>::new());
+        let cancel = AtomicBool::new(false);
+        let out = transfer_with(
+            &[a.join("big.bin"), a.join("dir")],
+            &b,
+            Op::Copy,
+            &mut no_conflict,
+            &mut |ev| {
+                if matches!(ev, Event::Bytes(_)) {
+                    seen.borrow_mut().push(listing(&b));
+                }
+            },
+            &cancel,
+            &LOOP,
+        );
+        assert!(!out.canceled && out.errors.is_empty(), "{:?}", out.errors);
+        let seen = seen.into_inner();
+        assert!(!seen.is_empty(), "바이트 보고가 있어야 중간 상태를 본다");
+        for names in &seen {
+            for n in names {
+                assert!(
+                    n.starts_with(".big.bin.nexa-tmp-")
+                        || n.starts_with(".dir.nexa-tmp-")
+                        || n == "big.bin"
+                        || n == "dir",
+                    "중간 상태의 이름 = 스테이징 또는 커밋된 것: {names:?}"
+                );
+            }
+        }
+        assert!(
+            seen.iter()
+                .any(|v| v.iter().any(|n| n.starts_with(".big.bin.nexa-tmp-")))
+                && seen
+                    .iter()
+                    .any(|v| v.iter().any(|n| n.starts_with(".dir.nexa-tmp-"))),
+            "파일 · 폴더 모두 스테이징을 거친다: {seen:?}"
+        );
+        assert_eq!(
+            listing(&b),
+            ["big.bin", "dir"],
+            "끝나면 최종 이름만(잔여 0)"
+        );
+        assert_eq!(
+            fs::read(b.join("dir/big.bin")).unwrap().len(),
+            9 * 1024 * 1024
+        );
+        // 같은 폴더 복제 = " (2)" — 역시 최종 이름만 남는다.
+        let out = transfer_with(
+            &[a.join("big.bin")],
+            &a,
+            Op::Copy,
+            &mut no_conflict,
+            &mut |_| {},
+            &cancel,
+            &LOOP,
+        );
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert_eq!(listing(&a), ["big (2).bin", "big.bin", "dir"]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// T-208: 새 대상 자리에 이미 무엇이 있으면(계획 뒤 생김 · 덮어쓰기 아님) 복사 전에 `AlreadyExists` · 있던 것 무손상 · 잔여 0.
+    #[test]
+    fn new_dest_refuses_existing_without_overwrite() {
+        let d = fixture("stagetaken");
+        fs::write(d.join("src.txt"), b"new").unwrap();
+        fs::write(d.join("dst.txt"), b"old").unwrap();
+        let e = copy_onto_with_progress(
+            &d.join("src.txt"),
+            &d.join("dst.txt"),
+            false,
+            &mut |_| {},
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::AlreadyExists, "{e}");
+        assert_eq!(fs::read(d.join("dst.txt")).unwrap(), b"old");
+        assert_eq!(fs::read_dir(&d).unwrap().count(), 2, "잔여 0");
         fs::remove_dir_all(&d).unwrap();
     }
 

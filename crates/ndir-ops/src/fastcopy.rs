@@ -711,10 +711,52 @@ fn copy_jobs_parallel(
     }
 }
 
+/// 덮어쓰지 않는 rename(T-208 · 11-09 · 사용자 결정 ⓒ): 새 대상 커밋 전용 — 스테이징 사본을 최종 이름으로 옮기되 **그 사이 생긴 같은 이름은 덮지
+/// 않는다**(종전 `create_new`가 주던 보장 유지 · 같은 폴더 복제 " (2)" 포함). Linux `renameat2(RENAME_NOREPLACE)` · macOS `renamex_np(RENAME_EXCL)` ·
+/// Windows `MoveFileExW`(REPLACE_EXISTING 없음 = 있으면 실패) · 그 조합을 모르는 파일 시스템/OS = [`rename_noreplace_portable`]. 있으면
+/// `ErrorKind::AlreadyExists`.
+pub(crate) fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+    match os::rename_noreplace(from, to) {
+        Err(e) if os::rename_unsupported(&e) => rename_noreplace_portable(from, to),
+        r => r,
+    }
+}
+
+/// 이식 대체: 파일 = `hard_link`(원자 · 있으면 AlreadyExists) 뒤 원본 링크 제거 · 링크를 못 만드는 파일 시스템(exFAT · 일부 네트워크) 또는 폴더 =
+/// 존재 확인 뒤 `rename`(원자 아님 — 그 틈에 생긴 같은 이름은 덮일 수 있다 · 종전 새 대상 경로보다 나쁘지 않다).
+fn rename_noreplace_portable(from: &Path, to: &Path) -> io::Result<()> {
+    if from.symlink_metadata()?.is_file() {
+        match fs::hard_link(from, to) {
+            Ok(()) => {
+                let _ = fs::remove_file(from); // 실패해도 대상은 완성 — 남은 링크는 스테이징 잔여 정리가 치운다
+                return Ok(());
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(e),
+            Err(_) => {} // 링크 미지원 → 아래
+        }
+    }
+    if to.symlink_metadata().is_ok() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("already exists: {}", to.display()),
+        ));
+    }
+    fs::rename(from, to)
+}
+
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 mod os {
     use super::Seek;
+    use std::io;
     use std::path::Path;
+
+    /// 그 밖의 Unix: 전용 호출을 모른다 → 이식 대체로.
+    pub(super) fn rename_noreplace(_from: &Path, _to: &Path) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+    pub(super) fn rename_unsupported(e: &io::Error) -> bool {
+        e.kind() == io::ErrorKind::Unsupported
+    }
 
     /// 저장 장치 판정 — 그 밖의 Unix(BSD 등)는 보지 않는다 → 보수적으로 [`Seek::Costly`](자동 4까지).
     pub(super) fn seek_of(_path: &Path) -> Seek {
@@ -760,6 +802,35 @@ mod os {
         ) -> isize;
         fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
         fn posix_fadvise(fd: c_int, offset: i64, len: i64, advice: c_int) -> c_int;
+        fn renameat2(
+            olddirfd: c_int,
+            oldpath: *const std::ffi::c_char,
+            newdirfd: c_int,
+            newpath: *const std::ffi::c_char,
+            flags: c_uint,
+        ) -> c_int;
+    }
+
+    const AT_FDCWD: c_int = -100;
+    const RENAME_NOREPLACE: c_uint = 1;
+
+    /// `renameat2(RENAME_NOREPLACE)`(커널 3.15+ · glibc 2.28+) — 있으면 EEXIST(= AlreadyExists) · 파일 시스템이 모르면 EINVAL/ENOSYS/EOPNOTSUPP → 상위가 이식 대체로.
+    pub(super) fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+        use std::os::unix::ffi::OsStrExt as _;
+        let c = |p: &Path| {
+            std::ffi::CString::new(p.as_os_str().as_bytes())
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "NUL in path"))
+        };
+        let (f, t) = (c(from)?, c(to)?);
+        // SAFETY: 두 경로는 NUL 종결 C 문자열이고 호출 동안 살아 있다.
+        if unsafe { renameat2(AT_FDCWD, f.as_ptr(), AT_FDCWD, t.as_ptr(), RENAME_NOREPLACE) } == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+    pub(super) fn rename_unsupported(e: &io::Error) -> bool {
+        matches!(e.raw_os_error(), Some(EINVAL | ENOSYS | EOPNOTSUPP))
     }
 
     /// 파일 하나 — 블록 복제 → 커널 안 복사. 실패 · 중단 시 이번에 만든 대상은 지운다.
@@ -902,7 +973,7 @@ mod os {
 #[cfg(target_os = "macos")]
 mod os {
     use super::{canceled, Seek, Stop};
-    use std::ffi::{c_char, c_int, c_void, CString};
+    use std::ffi::{c_char, c_int, c_uint, c_void, CString};
     use std::fs;
     use std::io;
     use std::os::unix::ffi::OsStrExt as _;
@@ -946,6 +1017,23 @@ mod os {
             state: CopyfileState,
             flags: u32,
         ) -> c_int;
+        fn renamex_np(from: *const c_char, to: *const c_char, flags: c_uint) -> c_int;
+    }
+
+    const RENAME_EXCL: c_uint = 4;
+
+    /// `renamex_np(RENAME_EXCL)`(10.12+) — 있으면 EEXIST(= AlreadyExists) · 파일 시스템이 모르면 ENOTSUP/EINVAL → 상위가 이식 대체로.
+    pub(super) fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+        let (f, t) = (cstr(from)?, cstr(to)?);
+        // SAFETY: 두 경로는 NUL 종결 C 문자열이고 호출 동안 살아 있다.
+        if unsafe { renamex_np(f.as_ptr(), t.as_ptr(), RENAME_EXCL) } == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+    pub(super) fn rename_unsupported(e: &io::Error) -> bool {
+        matches!(e.raw_os_error(), Some(ENOTSUP | EINVAL))
     }
 
     struct Ctx<'a> {
@@ -1406,6 +1494,7 @@ mod os {
 
     #[link(name = "kernel32")]
     extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
         fn CopyFileExW(
             existing: *const u16,
             new: *const u16,
@@ -1498,6 +1587,20 @@ mod os {
         } else {
             PROGRESS_CONTINUE
         }
+    }
+
+    /// `MoveFileExW` 플래그 0 = REPLACE_EXISTING 없음 → 대상이 있으면 ERROR_ALREADY_EXISTS(= AlreadyExists) · 같은 볼륨 rename(파일 · 폴더) · 늘 지원.
+    pub(super) fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+        let (f, t) = (wide(from)?, wide(to)?);
+        // SAFETY: 두 경로는 NUL 종결 UTF-16이고 호출 동안 살아 있다.
+        if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), 0) } != 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+    pub(super) fn rename_unsupported(_e: &io::Error) -> bool {
+        false
     }
 
     /// `CopyFileExW`로 파일 하나를 복사한다. 중단 · 실패 시 대상 파일은 Windows가 지운다(이미 있던 대상은 `FAIL_IF_EXISTS`라 그대로).
@@ -1647,6 +1750,66 @@ mod os {
 
 #[cfg(test)]
 mod tests {
+    /// T-208: 덮어쓰지 않는 rename — 새 이름 OK(파일 · 폴더) · 있는 이름 = AlreadyExists + 양쪽 무손상 · OS 전용 호출과 이식 대체가 같은 계약.
+    #[test]
+    fn rename_noreplace_refuses_existing_target() {
+        let d = std::env::temp_dir().join(format!("ndir-fastcopy-rnr-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        type Rn = fn(&std::path::Path, &std::path::Path) -> std::io::Result<()>;
+        let cases: [(&str, Rn); 2] = [
+            ("os", super::rename_noreplace),
+            ("portable", super::rename_noreplace_portable),
+        ];
+        for (name, f) in cases {
+            let (a, b, c) = (
+                d.join(format!("{name}-a")),
+                d.join(format!("{name}-b")),
+                d.join(format!("{name}-c")),
+            );
+            std::fs::write(&a, b"new").unwrap();
+            std::fs::write(&c, b"old").unwrap();
+            f(&a, &b).unwrap_or_else(|e| panic!("{name}: 새 이름으로 = Ok · {e}"));
+            assert!(
+                !a.exists() && std::fs::read(&b).unwrap() == b"new",
+                "{name}: 옮겨짐"
+            );
+            let e = f(&b, &c).unwrap_err();
+            assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{name}: {e}");
+            assert_eq!(std::fs::read(&b).unwrap(), b"new", "{name}: 원본 그대로");
+            assert_eq!(
+                std::fs::read(&c).unwrap(),
+                b"old",
+                "{name}: 있던 대상 무손상"
+            );
+            // 폴더.
+            let (da, db, dc) = (
+                d.join(format!("{name}-da")),
+                d.join(format!("{name}-db")),
+                d.join(format!("{name}-dc")),
+            );
+            std::fs::create_dir_all(da.join("sub")).unwrap();
+            std::fs::write(da.join("sub/x"), b"x").unwrap();
+            std::fs::create_dir_all(&dc).unwrap();
+            f(&da, &db).unwrap_or_else(|e| panic!("{name}: 폴더 새 이름 = Ok · {e}"));
+            assert!(
+                !da.exists() && db.join("sub/x").is_file(),
+                "{name}: 폴더 옮겨짐"
+            );
+            let e = f(&db, &dc).unwrap_err();
+            assert_eq!(
+                e.kind(),
+                std::io::ErrorKind::AlreadyExists,
+                "{name}: 폴더 {e}"
+            );
+            assert!(
+                db.join("sub/x").is_file() && dc.is_dir(),
+                "{name}: 폴더 양쪽 무손상"
+            );
+        }
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
     /// macOS 장치 판정(10-31): 순수 매핑 MC/DC(네트워크 · Solid State · Rotational · 모름) · 실제 `/`와 `/tmp`는 죽지 않고 판정이 나온다
     /// (이 Mac = Solid State → Free · CI VM은 Medium Type이 없을 수 있어 값은 단정하지 않음) · 없는 경로 = 부모로.
     #[cfg(target_os = "macos")]

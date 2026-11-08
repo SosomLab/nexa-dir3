@@ -1995,12 +1995,34 @@ fn queue_restore_asks_resumes_and_discards() {
         "끝난 작업 파일 정리"
     );
     assert!(app.panel_toasts[app.active].len() >= 2, "재개 n건 + 완료");
-    // discard = 파일 삭제 · 상태줄.
+    // discard = 파일 삭제 · 상태줄 · 끊긴 항목의 스테이징 `tmp` 잔여 정리(T-208 · 죽은 pid 것만 · 사용자 파일 꼴은 그대로).
     std::fs::write(qdir.join("78.job.json"), spec.to_json()).unwrap();
+    ndir_xfer::resume::Journal::open(&qdir.join("78.journal"))
+        .unwrap()
+        .record(&ndir_xfer::ItemReport {
+            action: "copy".into(),
+            status: "started".into(),
+            bytes: 5,
+            source: dir.join("a.txt"),
+            dest: dir.join("sub/c.txt"),
+            note: "new".into(),
+        })
+        .unwrap();
+    std::fs::write(dir.join("sub/.c.txt.nexa-tmp-4000000000-0"), b"part").unwrap();
+    std::fs::write(dir.join("sub/.c.txt.nexa-tmp-notes"), b"mine").unwrap();
     let _ = app.settings.set("transfer.queue_restore", "discard");
     app.queue_restore_startup();
     assert!(!qdir.join("78.job.json").exists() && app.transfer_queue.is_empty());
+    assert!(!qdir.join("78.journal").exists(), "저널도 삭제");
     assert_eq!(app.statusbar.left(), trf("ops.queueDiscarded", &["1"]));
+    assert!(
+        !dir.join("sub/.c.txt.nexa-tmp-4000000000-0").exists(),
+        "버림 = 끊긴 항목의 스테이징 잔여 정리(T-208)"
+    );
+    assert!(
+        dir.join("sub/.c.txt.nexa-tmp-notes").is_file() && !dir.join("sub/c.txt").exists(),
+        "사용자 파일 꼴은 그대로 · 최종 이름은 생기지 않음"
+    );
     // auto = 바로 실행.
     let spec_b = ndir_xfer::JobSpec {
         sources: vec![dir.join("b.md")],
