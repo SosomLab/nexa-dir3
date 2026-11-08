@@ -77,6 +77,8 @@ step "matrix-audit --check" "$ROOT" python scripts/matrix-audit.py --check
 # dir2 파일 커버리지(docs/port/99) · 실기 QA 표(docs/port/92)도 생성물 — 틀리면 각 스크립트로 재생성(T-91).
 step "coverage-files --check" "$ROOT" python scripts/coverage-files.py --check
 step "qa-checklist --check" "$ROOT" python scripts/qa-checklist.py --check
+# Release 본문 조립(T-206 · CI-114) — docs/release/tag-v*.txt 전부로 조립해 모양을 단언한다.
+step "release-notes --selftest" "$ROOT" bash scripts/release-notes.sh --selftest
 if [[ $QUICK -eq 0 ]]; then
     # T4 화면 격리(T-137): Linux + xvfb-run = 가상 X 화면 · `env -u WAYLAND_DISPLAY`는 보조 프로세스용 예방 조치(gate.sh와 같은 규칙 · 메인 창은 DISPLAY 있으면 X11 강제).
     if [[ "$(uname -s)" == Linux && -z "${NDIR_GATE_NO_XVFB:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
