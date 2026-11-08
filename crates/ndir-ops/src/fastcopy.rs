@@ -558,6 +558,14 @@ fn plan(
             if record {
                 dirs.push(p);
             }
+        } else if link && fs::metadata(&p).is_err() {
+            // 끊어진 링크(가리키는 곳 없음 · 협업 QA 11-09 #2): 내용을 따라갈 수 없다 → **링크를 그대로 재생성**(가리키는 경로 보존 — 원본도 끊긴 상태이니
+            // 그것이 정직한 사본 · 탐색기/`cp -a`도 링크로 둔다) · 못 만들면(Windows 권한) 건너뛴다. 종전엔 파일 작업으로 들어가 열기 실패 → 폴더 **전체**
+            // 실패였다(0.30.2부터 · node_modules · 프로필 lock 링크 등 Linux에 흔함 · T-208 뒤에는 스테이징이 치워져 대상이 비었다).
+            recreate_link(&p, &d);
+            if record {
+                dirs.push(p); // 교차 볼륨 이동의 원본 정리 = `remove_copied`가 링크는 링크만 지운다
+            }
         } else {
             jobs.push(Job {
                 len: e.metadata().map_or(0, |m| m.len()),
@@ -568,6 +576,20 @@ fn plan(
         }
     }
     Ok(())
+}
+
+/// 끊어진 링크를 같은 가리킴으로 다시 만든다(실패 = 조용히 건너뜀 · 대상 자리에 있던 것은 치운다).
+fn recreate_link(from: &Path, to: &Path) {
+    let Ok(target) = fs::read_link(from) else {
+        return;
+    };
+    if fs::symlink_metadata(to).is_ok() {
+        let _ = crate::remove_link(to).or_else(|_| fs::remove_file(to));
+    }
+    #[cfg(unix)]
+    let _ = std::os::unix::fs::symlink(&target, to);
+    #[cfg(windows)]
+    let _ = std::os::windows::fs::symlink_file(&target, to); // 가리키는 곳이 없어 종류를 모른다 → 파일 링크 · 권한 없으면 건너뜀
 }
 
 /// 폴더 재귀 복사 — `copied`가 있으면 복사를 마친 원본 경로를 적는다(파일들 → 폴더들의 **후위 순서** · 교차 볼륨 이동의 원본 정리용).
@@ -1866,6 +1888,51 @@ mod tests {
         assert!(
             at.elapsed() < std::time::Duration::from_millis(500),
             "있는 대상은 재시도 없이 즉시"
+        );
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// 협업 QA 11-09 #2: 폴더 안 끊어진 심볼릭 링크 하나 때문에 폴더 복사 전체가 실패하던 것 → 링크를 같은 가리킴으로 재생성하고 나머지는 그대로 ·
+    /// `copied`(교차 볼륨 이동 원본 정리)에는 링크 경로가 들어간다 · 대상에 같은 이름의 파일이 있어도 링크로 바뀐다.
+    #[cfg(unix)]
+    #[test]
+    fn dangling_symlink_inside_tree_is_recreated_not_fatal() {
+        let d = std::env::temp_dir().join(format!("ndir-fastcopy-dangling-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let (src, dest) = (d.join("tree"), d.join("out"));
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("a.txt"), b"a").unwrap();
+        std::fs::write(src.join("sub/b.txt"), b"b").unwrap();
+        std::os::unix::fs::symlink("nowhere", src.join("dang")).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("dang"), b"stale").unwrap();
+        let mut copied = Vec::new();
+        super::copy_tree(
+            &src,
+            &dest,
+            &mut |_| {},
+            &|| false,
+            Some(&mut copied),
+            &super::Tuning::default(),
+        )
+        .expect("끊어진 링크는 치명적이지 않다");
+        assert_eq!(std::fs::read(dest.join("a.txt")).unwrap(), b"a");
+        assert_eq!(std::fs::read(dest.join("sub/b.txt")).unwrap(), b"b");
+        let dl = dest.join("dang");
+        assert!(
+            std::fs::symlink_metadata(&dl)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "링크로 재생성"
+        );
+        assert_eq!(
+            std::fs::read_link(&dl).unwrap(),
+            std::path::PathBuf::from("nowhere")
+        );
+        assert!(
+            copied.contains(&src.join("dang")),
+            "이동 원본 정리 목록에 링크: {copied:?}"
         );
         std::fs::remove_dir_all(&d).unwrap();
     }

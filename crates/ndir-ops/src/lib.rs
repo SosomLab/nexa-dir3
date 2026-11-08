@@ -418,7 +418,7 @@ pub fn is_link(path: &Path) -> bool {
 }
 
 /// 링크 **자체만** 제거(대상은 그대로). Windows의 폴더 링크는 `remove_dir`, 그 밖은 `remove_file`.
-fn remove_link(path: &Path) -> io::Result<()> {
+pub(crate) fn remove_link(path: &Path) -> io::Result<()> {
     fs::remove_file(path).or_else(|e| match fs::remove_dir(path) {
         Ok(()) => Ok(()),
         Err(_) => Err(e),
