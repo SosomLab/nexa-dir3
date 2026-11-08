@@ -2,6 +2,10 @@
 
 > 시간 역순. 항목당 1~2줄. 상세는 journal.
 
+## 2026-11-09
+
+- **v0.30.2 Linux 판정 ✓**(격리 Xvfb 창 속성 5/10 · `dialog_keeps_active` on/off · T4 45/0) · T-206 · T-207 2cce6e8 · f73c752 · gate full ★ 835/0 · CI 42494540747 ✓ · choco 0.30.2 승인 · winget #468006 정체 지속 → [11-09 §1](journal/2026-11-09.md)
+
 ## 2026-11-06
 
 - **최신화**: origin/main = fa3ce24 · CI 3-OS ✓(c463c04 · fa3ce24) · 공개 최신 v0.30.2 · choco 0.30.2 Submitted · winget #468006 정체(T-207) · 브랜치 main뿐 · 워크트리 2 · 열린 결정 1(T-208) → [11-06 §4](journal/2026-11-06.md)
