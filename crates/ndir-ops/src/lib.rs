@@ -594,10 +594,29 @@ fn staging_path(dest: &Path, tag: &str) -> PathBuf {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     dest.with_file_name(format!(
-        ".{name}.nexa-{tag}-{}-{}",
+        ".{}.nexa-{tag}-{}-{}",
+        staging_stem(&name),
         std::process::id(),
         SEQ.fetch_add(1, Ordering::Relaxed)
     ))
+}
+
+/// 스테이징 이름의 "이름" 부분 상한(바이트) — 파일 시스템 NAME_MAX 255(Linux · APFS = 바이트 · NTFS = UTF-16 255 단위 ≥ 글자 수)에 장식
+/// `.` + `.nexa-<tag>-<pid>-<seq>`(최대 ≈ 42 B)를 더해도 넘지 않게. 협업 QA 11-09 #1: 새 대상까지 스테이징하자(T-208) 232 B 넘는 이름(한글 80자 등)이
+/// 전부 `File name too long`으로 실패했다(덮어쓰기 경로는 0.30.2부터 같은 한계 — 함께 해소).
+const STAGING_STEM_MAX: usize = 200;
+
+/// 긴 이름은 UTF-8 글자 경계에서 자른다. [`staging_path`]와 이름 지정 쓸기([`remove_staging_leftovers`])가 **같은 함수**로 접두를 만든다 — 그래야
+/// 재개·버림이 긴 이름의 잔여를 놓치지 않는다. 앞 200 B가 같은 다른 이름의 잔여도 접두에 걸리지만 죽은 pid 것만 지우므로 무해.
+fn staging_stem(name: &str) -> &str {
+    if name.len() <= STAGING_STEM_MAX {
+        return name;
+    }
+    let mut i = STAGING_STEM_MAX;
+    while !name.is_char_boundary(i) {
+        i -= 1;
+    }
+    &name[..i]
 }
 
 /// 스테이징 → 대상 **커밋 교체**(점검 1차 #1 — 옛 대상은 새 내용이 완성된 뒤에만 사라진다).
@@ -920,9 +939,11 @@ fn sweep_staging(dir: &Path, name: Option<&str>, tags: &[&str]) -> usize {
     for e in rd.flatten() {
         let fname = e.file_name().to_string_lossy().into_owned();
         let rest = match name {
-            Some(name) => tags
-                .iter()
-                .find_map(|t| fname.strip_prefix(&format!(".{name}.nexa-{t}-"))),
+            Some(name) => {
+                let stem = staging_stem(name);
+                tags.iter()
+                    .find_map(|t| fname.strip_prefix(&format!(".{stem}.nexa-{t}-")))
+            }
             None => {
                 if !fname.starts_with('.') {
                     continue;
@@ -2300,6 +2321,58 @@ mod tests {
             fs::OpenOptions::new().write(true).open(p)
         };
         f.unwrap().set_modified(t).unwrap();
+    }
+
+    /// 협업 QA 11-09 #1(회귀): 이름이 긴 항목(한글 80자 = 240 B · ASCII 250 B)은 스테이징 이름이 NAME_MAX를 넘어 실패했다 → 이름 부분을 200 B로 잘라
+    /// 새 복사 · 덮어쓰기 모두 성공 · 스테이징 파일 이름 ≤ 255 B · 재개의 이름 지정 쓸기도 같은 접두로 잔여를 찾는다.
+    #[test]
+    fn long_names_fit_staging_name_max() {
+        let d = fixture("longname");
+        let (a, b) = (d.join("a"), d.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        let hangul = format!("{}.bin", "가".repeat(80)); // 244 B · 84자
+        let ascii = format!("{}.bin", "x".repeat(246)); // 250 B
+        for n in [&hangul, &ascii] {
+            fs::write(a.join(n), b"K").unwrap();
+            let staged = staging_path(&b.join(n), "tmp");
+            let sn = staged.file_name().unwrap().to_string_lossy().into_owned();
+            assert!(sn.len() <= 255, "{}: {sn}", sn.len());
+            assert!(sn.starts_with(&format!(".{}.nexa-tmp-", staging_stem(n))));
+        }
+        let cancel = AtomicBool::new(false);
+        // 새 복사.
+        let out = transfer_with(
+            &[a.join(&hangul), a.join(&ascii)],
+            &b,
+            Op::Copy,
+            &mut no_conflict,
+            &mut |_| {},
+            &cancel,
+            &LOOP,
+        );
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert_eq!(fs::read(b.join(&hangul)).unwrap(), b"K");
+        // 덮어쓰기(0.30.2는 여기서도 실패하던 한계).
+        fs::write(a.join(&hangul), b"K2").unwrap();
+        let out = transfer_with(
+            &[a.join(&hangul)],
+            &b,
+            Op::Copy,
+            &mut |_| Conflict::Overwrite,
+            &mut |_| {},
+            &cancel,
+            &LOOP,
+        );
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert_eq!(fs::read(b.join(&hangul)).unwrap(), b"K2");
+        assert_eq!(fs::read_dir(&b).unwrap().count(), 2, "잔여 0");
+        // 이름 지정 쓸기(재개 · 버림)가 잘린 접두로 잔여를 찾는다.
+        let left = b.join(format!(".{}.nexa-tmp-4000000000-0", staging_stem(&hangul)));
+        fs::write(&left, b"part").unwrap();
+        assert_eq!(remove_staging_leftovers(&b.join(&hangul), &["tmp"]), 1);
+        assert!(!left.exists());
+        fs::remove_dir_all(&d).unwrap();
     }
 
     /// T-208: 새 대상 자리에 이미 무엇이 있으면(계획 뒤 생김 · 덮어쓰기 아님) 복사 전에 `AlreadyExists` · 있던 것 무손상 · 잔여 0.
