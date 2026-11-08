@@ -1472,6 +1472,9 @@ mod os {
     const PROGRESS_CONTINUE: u32 = 0;
     const PROGRESS_CANCEL: u32 = 1;
     const ERROR_INVALID_FUNCTION: i32 = 1;
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    const ERROR_LOCK_VIOLATION: i32 = 33;
     const ERROR_NOT_SUPPORTED: i32 = 50;
     const ERROR_INVALID_PARAMETER: i32 = 87;
     const ERROR_REQUEST_ABORTED: i32 = 1235;
@@ -1589,15 +1592,32 @@ mod os {
         }
     }
 
+    /// 스테이징 → 최종 이름 rename 재시도 횟수(사용자 결정 11-09 ⓑ): Defender · 백업 · 색인기가 **닫기 직후** 파일을 열어 두면 rename이 공유 위반(32) ·
+    /// 잠금 위반(33) · 접근 거부(5)로 실패한다 — 종전엔 최종 이름에 바로 써서 없던 경로. 10 → 20 → 40 → … → 200 ms(합계 ≈ 1.1 s · 탐색기도 같은 식).
+    const RENAME_RETRIES: u32 = 10;
+
     /// `MoveFileExW` 플래그 0 = REPLACE_EXISTING 없음 → 대상이 있으면 ERROR_ALREADY_EXISTS(= AlreadyExists) · 같은 볼륨 rename(파일 · 폴더) · 늘 지원.
+    /// 일시 오류(공유 · 잠금 · 접근 거부)는 [`RENAME_RETRIES`]만큼 다시 시도하고, 그 밖은 즉시 돌려준다.
     pub(super) fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
         let (f, t) = (wide(from)?, wide(to)?);
-        // SAFETY: 두 경로는 NUL 종결 UTF-16이고 호출 동안 살아 있다.
-        if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), 0) } != 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
+        let mut delay_ms = 10u64;
+        for attempt in 1..=RENAME_RETRIES {
+            // SAFETY: 두 경로는 NUL 종결 UTF-16이고 호출 동안 살아 있다.
+            if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), 0) } != 0 {
+                return Ok(());
+            }
+            let e = io::Error::last_os_error();
+            let transient = matches!(
+                e.raw_os_error(),
+                Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
+            );
+            if !transient || attempt == RENAME_RETRIES {
+                return Err(e);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            delay_ms = (delay_ms * 2).min(200);
         }
+        unreachable!("loop returns")
     }
     pub(super) fn rename_unsupported(_e: &io::Error) -> bool {
         false
@@ -1807,6 +1827,46 @@ mod tests {
                 "{name}: 폴더 양쪽 무손상"
             );
         }
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// Windows(T-208 · 사용자 결정 11-09 ⓑ): 다른 핸들이 공유 없이(`share_mode(0)` = Defender 스캔 꼴) 열어 둔 파일의 rename은 처음엔 실패하지만
+    /// 핸들이 닫히면 재시도가 성공한다 · 열어 둔 시간(150 ms)만큼은 걸린다 · 대상이 있는 경우는 재시도 없이 즉시 AlreadyExists.
+    #[cfg(windows)]
+    #[test]
+    fn windows_rename_noreplace_retries_while_file_is_held_open() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        let d = std::env::temp_dir().join(format!("ndir-fastcopy-rnr-hold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let (a, b, c) = (d.join("a"), d.join("b"), d.join("c"));
+        std::fs::write(&a, b"new").unwrap();
+        std::fs::write(&c, b"old").unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&a)
+            .unwrap();
+        let holder = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(held);
+        });
+        let at = std::time::Instant::now();
+        super::rename_noreplace(&a, &b).expect("핸들이 닫히면 재시도가 성공");
+        let took = at.elapsed();
+        holder.join().unwrap();
+        assert!(
+            took >= std::time::Duration::from_millis(100),
+            "{took:?}: 기다렸어야 한다"
+        );
+        assert_eq!(std::fs::read(&b).unwrap(), b"new");
+        let at = std::time::Instant::now();
+        let e = super::rename_noreplace(&b, &c).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{e}");
+        assert!(
+            at.elapsed() < std::time::Duration::from_millis(500),
+            "있는 대상은 재시도 없이 즉시"
+        );
         std::fs::remove_dir_all(&d).unwrap();
     }
 
