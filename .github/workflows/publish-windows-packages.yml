@@ -77,11 +77,33 @@ jobs:
               # GAP-041(11-03): `--search "SosomLab.NexaDir"`는 GitHub 검색이 점으로 이어진 `SosomLab.NexaDir.Portable` 제목을 못 찾아
               # Portable 0.28.1 #468006(OPEN)을 놓치고 0.29.0을 제출했다 → 검색 없이 내 열린 PR 전부를 받아 제목을 여기서 거른다.
               open=$(GH_TOKEN="$WINGET_TOKEN" gh pr list -R microsoft/winget-pkgs --state open --author "$me" -L 100 \
-                       --json number,title -q '.[] | "#\(.number) \(.title)"' | grep -F "SosomLab.NexaDir" || true)
+                       --json number,title,labels,updatedAt \
+                       -q '.[] | select(.title | contains("SosomLab.NexaDir")) | "#\(.number)\t\(.updatedAt)\t\(if (.labels | length) == 0 then "-" else ([.labels[].name] | join(",")) end)\t\(.title)"' || true)
               if [ -n "$open" ]; then
                 echo "::warning::winget: 직전 제출이 검수 대기 중 — 이번 릴리스는 제출을 건너뛴다(큐 엉킴 방지)."
                 echo "$open"
                 go=false
+                # T-207(11-04 · 11-09): 낡은 판 PR 하나(0.28.1 Portable #468006 Defender 오탐)가 가드를 무기한 막아도 잡은 초록이라 안 보였다
+                # → 사람 조치가 필요한 PR(Needs-Author-Feedback · Validation-Defender-Error · 오래 갱신 없음)은 제목 붙은 경고 + 잡 요약 표.
+                stale_days="${{ vars.WINGET_STALE_DAYS }}"; stale_days="${stale_days:-7}"
+                now=$(date -u +%s); stale=""
+                { echo "## winget 가드 — 이번 릴리스 제출 건너뜀(열린 PR)"; echo
+                  echo "| PR | 마지막 갱신 | 라벨 | 제목 |"; echo "| --- | --- | --- | --- |"; } >> "$GITHUB_STEP_SUMMARY"
+                while IFS=$'\t' read -r num upd labels title; do
+                  [ -n "$num" ] || continue
+                  age=$(( (now - $(date -u -d "$upd" +%s)) / 86400 ))
+                  echo "| $num | $upd (${age}d) | $labels | $title |" >> "$GITHUB_STEP_SUMMARY"
+                  reason=""
+                  case ",$labels," in *,Needs-Author-Feedback,*) reason="Needs-Author-Feedback" ;; esac
+                  case ",$labels," in *,Validation-Defender-Error,*) reason="${reason:+$reason · }Validation-Defender-Error" ;; esac
+                  [ "$age" -lt "$stale_days" ] || reason="${reason:+$reason · }${age}일 갱신 없음(기준 ${stale_days}일 · vars.WINGET_STALE_DAYS)"
+                  if [ -n "$reason" ]; then
+                    msg="$num $title — $reason. 사람 조치 필요(재스캔 코멘트 · WDSI 오탐 신고 · 닫기). 풀리면 publish-windows-packages -f tag=<최신> 수동 1회."
+                    echo "::warning title=winget 정체(T-207)::$msg"
+                    stale="$stale"$'\n'"⚠ **정체(T-207)**: $msg"
+                  fi
+                done <<< "$open"
+                [ -z "$stale" ] || echo "$stale" >> "$GITHUB_STEP_SUMMARY"
               fi
             fi
           fi
