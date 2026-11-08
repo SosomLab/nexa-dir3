@@ -2747,6 +2747,15 @@ pub const INTERNAL: &[&str] = &["license.gates"];
 /// (값은 남아 있어 같은 설정 파일을 Windows로 가져가면 그대로 쓴다).
 pub const WINDOWS_ONLY: &[&str] = &["list.show_dotfiles", "key.view.dot"];
 
+/// **특정 OS에만 뜻이 있는 설정**(T-210 · 11-09 · 협업 판정 11-04 "Windows 전용 설정 2개가 맥에서 보임") — (키, 뜻이 있는 OS = `std::env::consts::OS` 이름).
+/// 그 OS가 아니면 [`INTERNAL`]처럼 설정 창 · 검색 · JSON에서 빠진다(값은 남아 같은 설정 파일을 그 OS로 가져가면 그대로 쓴다). [`WINDOWS_ONLY`]는
+/// Windows 항목의 종전 표현(그대로 유효). 값은 다른 OS에서도 코드가 읽어도 무해해야 한다(무시되는 키만 올린다).
+pub const OS_ONLY: &[(&str, &[&str])] = &[
+    ("transfer.unbuffered_mb", &["windows"]), // `COPY_FILE_NO_BUFFERING` — 다른 OS 복사 경로엔 없음
+    ("ui.text_gdi", &["windows", "macos"]), // Windows GDI / macOS CoreText — Linux는 내장 래스터만(OS_DEFAULTS off)
+    ("gfx.mac_present", &["macos"]),        // IOSurface/softbuffer 선택 — 다른 OS는 무시
+];
+
 /// 비노출(자동 기억 값 · 메뉴/툴바로만 바뀌는 값 · 구현 상수) — `set/get/reset`은 되지만 설정 창에는 안 보인다.
 pub const HIDDEN: &[&str] = &[
     "window.always_on_top",

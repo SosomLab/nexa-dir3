@@ -34,7 +34,7 @@ pub use json::{
 pub use keymap::{split_seq, Chord, Keymap};
 pub use registry::{
     ADVANCED, CATEGORY_TREE, CONSTRAINTS, DEPENDS, EXTENSION_CATEGORIES, FORCES, HIDDEN, INFO_KEYS,
-    INTERNAL, OLD_DEFAULTS, OS_DEFAULTS, REGISTRY, RENAMED, RESCALED, WINDOWS_ONLY,
+    INTERNAL, OLD_DEFAULTS, OS_DEFAULTS, OS_ONLY, REGISTRY, RENAMED, RESCALED, WINDOWS_ONLY,
 };
 
 /// 앱 폴더 이름(`%APPDATA%\nexa-dir` · `~/.config/nexa-dir` · `~/Library/Application Support/nexa-dir`).
@@ -416,16 +416,26 @@ pub fn is_hidden(key: &str) -> bool {
             .is_some_and(|id| !commands::visible(id))
 }
 
-/// 내부 전용 설정인가 — 설정 창(고급 포함) · 검색 · JSON 어디에도 나오지 않는다([`INTERNAL`]).
+/// 내부 전용 설정인가 — 설정 창(고급 포함) · 검색 · JSON 어디에도 나오지 않는다([`INTERNAL`] ∪ 이 OS에 뜻이 없는 OS 전용 키).
 #[must_use]
 pub fn is_internal(key: &str) -> bool {
-    is_internal_on(key, cfg!(windows))
+    is_internal_for(key, std::env::consts::OS)
 }
 
-/// [`is_internal`]의 순수 판정(`windows` = 이 OS가 Windows인가): 내부 전용 키 ∪ (Windows가 아니면) [`WINDOWS_ONLY`].
+/// [`is_internal`]의 순수 판정(`windows` = 이 OS가 Windows인가): 내부 전용 키 ∪ (Windows가 아니면) [`WINDOWS_ONLY`]. OS 이름이 필요한 [`OS_ONLY`]는
+/// 보지 않는다(종전 호출자 호환 · 새 코드는 [`is_internal_for`]).
 #[must_use]
 pub fn is_internal_on(key: &str, windows: bool) -> bool {
     INTERNAL.contains(&key) || (!windows && WINDOWS_ONLY.contains(&key))
+}
+
+/// [`is_internal`]의 순수 판정(`os` = `std::env::consts::OS` 이름): 내부 전용 키 ∪ (Windows가 아니면) [`WINDOWS_ONLY`] ∪ 그 OS에 뜻이 없는 [`OS_ONLY`](T-210).
+#[must_use]
+pub fn is_internal_for(key: &str, os: &str) -> bool {
+    is_internal_on(key, os == "windows")
+        || OS_ONLY
+            .iter()
+            .any(|(k, oses)| *k == key && !oses.contains(&os))
 }
 
 /// 고급 설정인가(설정 창 Advanced 토글 대상) — 비노출 ∪ [`ADVANCED`].
@@ -1494,6 +1504,24 @@ mod tests {
         }
         assert!(!is_internal_on("list.show_hidden", false));
         assert!(is_internal_on("license.gates", true));
+        // OS 전용 설정(T-210): 뜻이 있는 OS에서만 보이고 그 밖에서는 내부 전용처럼 빠진다 · 키는 레지스트리에 있어야 한다.
+        for (k, oses) in OS_ONLY {
+            assert!(entry(k).is_some(), "{k}");
+            for os in ["windows", "macos", "linux"] {
+                assert_eq!(is_internal_for(k, os), !oses.contains(&os), "{k} on {os}");
+            }
+        }
+        assert!(
+            is_internal_for("transfer.unbuffered_mb", "linux")
+                && !is_internal_for("transfer.unbuffered_mb", "windows")
+        );
+        assert!(
+            is_internal_for("gfx.mac_present", "windows")
+                && !is_internal_for("gfx.mac_present", "macos")
+        );
+        assert!(
+            is_internal_for("list.show_dotfiles", "macos") && !is_internal_for("ui.theme", "linux")
+        );
         for k in INTERNAL {
             assert!(entry(k).is_some(), "레지스트리에 있어야 한다: {k}");
             assert!(
