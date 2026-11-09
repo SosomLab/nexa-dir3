@@ -4,6 +4,7 @@
 
 ## 2026-11-09
 
+- **`_collab/` 제거**(사용자): 10-25 협업 실기용 형제 세트 worktree 3(dir3 · nexa-ui · nexa-license) · 11-02 이후 미사용 · 모두 main 포함 · 변경 0 → remove + 폴더 삭제 · docs/15 §2 "상시 두지 않는다" → [11-09 §8](journal/2026-11-09.md)
 - **워크트리 `nexa-dir3-wt-perf` 제거**(사용자): 10-18 683b9ec perf 측정용 · main 포함 · 변경 0 · 427 MB → 제거 · 남은 워크트리 = `_collab/nexa-dir3` 1개 → [11-09 §7](journal/2026-11-09.md)
 - **회차 마감**: 앱 전송 UI QA ✓(취소 · 큐 · 복원 · 실행 취소 · 복제 · 긴 이름) · 열린 코드 결함 0 · main 미발행분 → 다음 = Windows PC 실기 → 0.30.3(태그 별도 승인) · Linux 실기 4건 미회신 이월 → [11-09 §6](journal/2026-11-09.md)
 - **Linux 기능 QA**: 차등 시험 40건 · 결함 3건 수정(T-208 긴 이름 회귀 a0c2052 · GAP-051 끊어진 링크 cb8224f · GAP-052 d1bec06) · T-210 · T-205 ⓑ · Windows rename 재시도 72f703a · gate full ★ 841/0 · CI 42501728623 ✓ → [11-09 §5](journal/2026-11-09.md)
