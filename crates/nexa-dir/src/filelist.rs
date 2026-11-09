@@ -956,6 +956,14 @@ impl TreeSource {
             .is_some_and(|r| r.kind == FileKind::Dir)
     }
 
+    /// 가시 행의 수정 시각(unix ms · 목록이 읽어 둔 값) — 폴더 크기 캐시의 mtime 가드(11-09 · stat 없음).
+    pub(crate) fn row_modified_ms(&self, index: usize) -> Option<i64> {
+        self.tree
+            .as_ref()
+            .and_then(|t| t.row_ref(index))
+            .map(|r| r.modified_unix_ms)
+    }
+
     /// 선택된 항목의 전체 경로(선택 순).
     /// 선택 반전 — 목록이 있으면 `true`.
     pub(crate) fn invert_selection(&mut self) -> bool {

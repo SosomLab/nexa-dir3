@@ -660,6 +660,7 @@ impl App {
             self.status_note(&text); // GAP-034: 유지 시간 동안 항목 수로 안 덮임
             self.toasts.push(kind, tr("cmp.title"), text);
         }
+        self.dirsize_touched(&deleted); // 폴더 크기 캐시(T-166 · 11-09): 지운 항목 + 상위 폴더 — 종전엔 감시 통지에만 기댔다.
         if !deleted.is_empty() {
             let n = deleted.len().to_string();
             self.history.push(Box::new(trashop::TrashOp::new(
@@ -1096,6 +1097,7 @@ impl App {
             "edit.undo" => self.history_step(false),
             "edit.redo" => self.history_step(true),
             "view.refresh" => {
+                self.dirsize_refresh_view(); // 폴더 크기 캐시: 보는 트리 전체 강제 재계산(11-09 규칙 ④)
                 for p in &mut self.panels {
                     p.reopen(&mut inv);
                 }

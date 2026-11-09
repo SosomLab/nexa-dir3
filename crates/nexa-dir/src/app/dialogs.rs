@@ -16,6 +16,8 @@ pub(crate) struct DeleteJob {
     failed: Vec<PathBuf>,
     /// 실패가 하나라도 있던 최상위 항목 수(토스트 "n deleted").
     failed_items: usize,
+    /// 지우려던 최상위 경로(폴더 크기 캐시 무효화 — 자신 + 상위 · 11-09).
+    paths: Vec<PathBuf>,
 }
 
 /// 대화상자 결과를 누가 받는가.
@@ -284,6 +286,7 @@ impl App {
             return;
         }
         let total = paths.len();
+        let targets = paths.clone();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             for p in paths {
@@ -303,6 +306,7 @@ impl App {
             done: 0,
             failed: Vec::new(),
             failed_items: 0,
+            paths: targets,
         });
         self.status_note(&trf("del.progressCount", &["0", &total.to_string()]));
         self.redraw();
@@ -375,6 +379,7 @@ impl App {
             text,
         );
         let mut inv = Invalidations::default();
+        self.dirsize_touched(&job.paths); // 폴더 크기 캐시(T-166 · 11-09): 지운 항목 + 상위 폴더 — 종전엔 무효화 없음.
         for p in &mut self.panels {
             p.reopen(&mut inv);
         }

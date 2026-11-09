@@ -301,7 +301,8 @@ impl App {
             "git.enabled" | "git.untracked" | "git.diverged_glyph" => self.apply_git_setting(key),
             "dock.folder_size_threads"
             | "dock.folder_size_queue"
-            | "dock.folder_size_settle_ms" => {
+            | "dock.folder_size_settle_ms"
+            | "dock.folder_size_ttl_s" => {
                 self.apply_dirsize_tuning();
             }
             _ => {}

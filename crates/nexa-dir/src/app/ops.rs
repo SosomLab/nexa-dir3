@@ -730,7 +730,18 @@ impl App {
             self.progress_win.set_done(&tr("ops.doneClosing"), ms, now);
         }
         let mut inv = Invalidations::default();
-        self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+        // 폴더 크기 캐시(T-166 · 11-09 규칙 ①): 옮긴 쌍의 원본·대상 + 상위 폴더만 버린다(관계없는 폴더의 값·진행 중 작업은 유지).
+        // 오류·취소가 섞이면 무엇이 반쯤 됐는지 모른다 → 전부.
+        if out.errors.is_empty() && !out.canceled {
+            let touched: Vec<PathBuf> = out
+                .transferred
+                .iter()
+                .flat_map(|(s, d)| [s.clone(), d.clone()])
+                .collect();
+            self.dirsize_touched(&touched);
+        } else {
+            self.dirsizes.clear();
+        }
         self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
         for p in &mut self.panels {
             p.reopen(&mut inv);
@@ -935,7 +946,7 @@ impl App {
             recreate,
         )));
         let mut inv = Invalidations::default();
-        self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+        self.dirsize_touched(std::slice::from_ref(&path)); // 폴더 크기 캐시(T-166 · 11-09): 새 항목의 상위 폴더만.
         self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
         for p in &mut self.panels {
             p.reopen(&mut inv);
@@ -996,7 +1007,8 @@ impl App {
                     )));
                     note = Some(desc);
                 }
-                self.dirsizes.clear(); // 폴더 크기 캐시(T-166) — 내용이 바뀌었다.
+                // 폴더 크기 캐시(T-166 · 11-09): 옛 이름(자신 · 안쪽 · 상위) + 새 이름만 — 이름이 바뀐 폴더의 합계 자체는 다시 잰다.
+                self.dirsize_touched(&[path.clone(), new_path.clone()]);
                 self.git_detail.clear(); // git 요약 — 작업으로 바뀌었다(10-06).
                                          // 펼침·선택을 새 이름으로 이어서 복원(WINB-033 `rename_expanded` · 10-25 — 종전엔 이름 바꾼 폴더 안이 접혔다).
                 for p in &mut self.panels {

@@ -16,6 +16,9 @@ pub(crate) fn reload_deferred(renaming: bool, path_editing: bool, transfer: bool
 /// "내 PC" 볼륨 구성 확인 간격(ms).
 const DRIVES_POLL_MS: u64 = 1000;
 
+/// 크기 열용 추가 감시 상한(패널당 · 보이는 폴더 행 · 11-09) — Windows는 폴더당 스레드 1개라 화면 한 장(≈30~60행)만큼만.
+const DIRSIZE_WATCH_CAP: usize = 48;
+
 /// 볼륨 지문이 바뀌었는가(순수): 처음 본 값 · 모름(0)은 "바뀜"이 아니다 — 기준만 잡는다.
 pub(crate) fn volumes_changed(seen: &mut Option<u64>, now: u64) -> bool {
     if now == 0 {
@@ -60,6 +63,7 @@ impl App {
     pub(crate) fn watch_sync(&mut self) {
         // 현재 폴더 + 화면에 펼쳐진 하위 폴더(dir2 WINB-014 · 패널당 64개 상한). 내 PC(가상 최상위)는 드라이브 감시가 본다.
         let mut dirs: Vec<PathBuf> = Vec::new();
+        let col_on = self.dirsize_col_enabled();
         for p in &mut self.panels {
             if ndir_vfs::is_virtual_root(p.root_path()) {
                 continue;
@@ -67,6 +71,16 @@ impl App {
             for d in p.watch_dirs() {
                 if !dirs.contains(&d) {
                     dirs.push(d);
+                }
+            }
+            // 크기 열이 켜져 있으면 **보이는 폴더 행**도 본다(사용자 11-09 "인지한 무효화는 바로"): 그 안의 1단계 변경(파일 추가 ·
+            // 삭제 · 크기 변화)을 통지받아 그 폴더 + 상위의 캐시를 즉시 버린다(비재귀 감시라 더 깊은 변경은 mtime 가드 · 유효기간 몫).
+            // 목록 재열람 대상은 아니다(`watch_dirs`가 아니라서 `hits`에 안 잡힌다). 패널당 상한 = 스레드/핸들 예산.
+            if col_on {
+                for d in p.visible_dir_paths().into_iter().take(DIRSIZE_WATCH_CAP) {
+                    if !dirs.contains(&d) {
+                        dirs.push(d);
+                    }
                 }
             }
             // 보이는 저장소의 `.git`(T-95 HEAD/index 감시 · 10-25): 다른 앱의 checkout · commit · add가 `.git/HEAD` · `index`를 바꾸면 그 폴더
@@ -119,7 +133,9 @@ impl App {
                 self.redraw();
                 return self.watch_next;
             }
-            self.dirsizes.invalidate(&changed); // 폴더 크기 캐시(T-166) — 닿는 항목만.
+            // 폴더 크기 캐시(T-166): 닿는 항목만(자신 · 안쪽 · 상위 전부). 버린 게 있으면 목록 재열람과 무관하게 **바로** 다시 동기해
+            // 보이는 행부터 다시 잰다(11-09 — 보이는 폴더 행 감시는 `hits`에 안 잡혀 아래 재열람 길을 타지 않는다).
+            let sizes_hit = self.dirsizes.invalidate(&changed);
             let mut inv = Invalidations::default();
             let transfer = self.transfer.is_some();
             let self_window =
@@ -151,6 +167,10 @@ impl App {
                 }
             }
             if !reloaded {
+                if sizes_hit {
+                    self.update_docks_filtered(true); // 도크 + 크기 열 동기(보이는 행 재요청)
+                    self.redraw();
+                }
                 return self.watch_next;
             }
             self.log_with(

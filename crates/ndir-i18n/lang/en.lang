@@ -562,6 +562,8 @@ pref.folderSizeQueue = Folder size: queue limit
 pref.folderSizeQueue.desc = Upper bound of folders waiting their turn. Beyond it the oldest requests are dropped.
 pref.folderSizeSettle = Folder size: settle time (ms)
 pref.folderSizeSettle.desc = When moving quickly through folders with the keyboard or scrolling, a request that comes sooner than this after the previous selection is not queued; only the last folder is measured once you stop (no work is created for folders you passed). 0 = always immediately.
+pref.folderSizeTtl = Folder size: lifetime (s)
+pref.folderSizeTtl.desc = A measured folder size is reused for this long. After that the old value stays visible while it is measured again in the background. Changes inside the folder (file operations, folder watching, a changed modification time) trigger an immediate re-measure regardless of this time. 0 = never expires (Refresh / F5 forces a recount).
 pref.dockMaxDefer = Maximum dock update delay (ms)
 pref.dockMaxDefer.desc = While the selection keeps changing (drag selection, key repeat) dock updates wait until it settles, but once this much time has passed since the first change the docks update anyway. 0 = no limit (wait until it settles).
 pref.dockInfoWait = Info dock wait (ms)

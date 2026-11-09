@@ -2860,6 +2860,14 @@ impl Panel {
 
     /// 활성 탭의 **보이는 폴더 행** 경로(T-166 3차 · 크기 열) — 가상 루트(내 PC)는 없음(드라이브 전체를 재지 않는다).
     pub(crate) fn visible_dir_paths(&self) -> Vec<PathBuf> {
+        self.visible_dir_rows()
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect()
+    }
+
+    /// 활성 탭의 보이는 폴더 행 = (경로 · 수정 시각 unix ms) — 수정 시각은 폴더 크기 캐시의 mtime 가드(11-09).
+    pub(crate) fn visible_dir_rows(&self) -> Vec<(PathBuf, i64)> {
         let rows = self.rows();
         let src = rows.source();
         if ndir_vfs::is_virtual_root(src.path()) {
@@ -2869,7 +2877,7 @@ impl Panel {
         // 번들(macOS `.app` · 파일로 다룸)도 폴더 크기 합계 대상(GAP-025 후속 · 10-31 — 종전 크기 열 = 디렉터리 메타 길이).
         (s..e)
             .filter(|&i| src.row_is_dir(i) || src.row_is_bundle(i))
-            .filter_map(|i| src.row_path(i))
+            .filter_map(|i| Some((src.row_path(i)?, src.row_modified_ms(i).unwrap_or(0))))
             .collect()
     }
 

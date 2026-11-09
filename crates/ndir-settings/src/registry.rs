@@ -1774,6 +1774,19 @@ pub const REGISTRY: &[Entry] = &[
         Int { min: 0, max: 5000 },
         "250"
     ),
+    // 폴더 크기 캐시 유효기간(초 · 사용자 11-09 · 고급): 지난 값은 보여 주면서 뒤에서 다시 잰다 · 0 = 만료 없음(감시 · 작업 · mtime 가드 ·
+    //   새로 고침으로만 갱신). 기본 30분 — 1단계 변경은 감시와 mtime 가드가 즉시 잡으므로 만료는 감시 밖 깊은 외부 변경의 안전망.
+    e!(
+        "dock.folder_size_ttl_s",
+        CAT_DOCK,
+        "pref.folderSizeTtl",
+        "pref.folderSizeTtl.desc",
+        Int {
+            min: 0,
+            max: 86_400
+        },
+        "1800"
+    ),
     // 크기 열에 폴더 크기(dir3 신규 · T-166 3차 · 10-25 · 분류는 목록이지만 DEPENDS 부모 `dock.folder_size` 뒤에 등재): 보이는 폴더 행을 뒤쪽 큐로 재어 크기 열에 — 기본 off(목록마다 디스크를 읽는다) ·
     //   폴더 크기 계산(`dock.folder_size`)이 켜져 있어야 하고 성능 향상 모드에서는 꺼진다.
     e!(
@@ -2659,6 +2672,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("list.folder_size_col", "dock.folder_size", Dep::On),
     ("dock.folder_size_queue", "dock.folder_size", Dep::On),
     ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
+    ("dock.folder_size_ttl_s", "dock.folder_size", Dep::On),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
@@ -2829,6 +2843,7 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_threads",
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
+    "dock.folder_size_ttl_s",
     "dock.max_defer_ms",
     "dock.info_wait_ms",
     // 값 추출 1차(T-100): 폴링 · 캐시 · 프레임 · 읽기 상한은 고급(스크롤백 · 토스트 · 미리보기 줄 수는 일반).

@@ -13311,3 +13311,75 @@ fn vpaste_job_tick_reports_and_records_undo() {
     app.vpaste_cancel(); // 잡 없음 = 무동작
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 보이는 것 우선 + 새로 고침 무효화(사용자 11-09 · NEW-037 4차): 크기 열이 켜진 채 A(하위 A1·A2)를 열면 보이는 행이 큐에 들어가고,
+/// 형제 B로 가면 A의 남은 요청은 큐에서 빠지며 B1·B2가 차례를 받는다(동시 1개라 A1이 슬롯을 쥐고 있으면 선점) · 다 재면 열에 값 ·
+/// `view.refresh`는 보는 트리의 캐시를 버리고 다음 동기가 다시 요청한다.
+#[test]
+fn sibling_navigation_prioritizes_visible_folder_rows() {
+    use crate::app::dirsize::SizeState;
+    let (mut app, dir) = fixture("dirsizescope");
+    let (a, b) = (dir.join("A"), dir.join("B"));
+    let (a1, a2, b1, b2) = (a.join("A1"), a.join("A2"), b.join("B1"), b.join("B2"));
+    for p in [&a1, &a2, &b1, &b2] {
+        std::fs::create_dir_all(p).expect("mkdir");
+        std::fs::write(p.join("f.bin"), vec![0u8; 100]).expect("write");
+    }
+    let _ = app.settings.set("list.folder_size_col", "on");
+    let _ = app.settings.set("dock.folder_size_threads", "1");
+    app.apply_dirsize_tuning();
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    // 오른쪽 패널은 빈 폴더로(픽스처 루트의 `sub` 행이 보이면 그것도 정당한 열 요청이라 슬롯을 다툰다).
+    let empty = dir.join("E");
+    std::fs::create_dir_all(&empty).expect("mkdir");
+    let _ = app.panels[1].navigate_to(empty, &mut inv);
+    let _ = app.panels[0].navigate_to(a, &mut inv);
+    app.dirsize_col_sync(&mut inv);
+    assert!(app.dirsizes.running(), "A의 보이는 폴더 행 = 요청");
+    let queued_or_running = |app: &App, p: &std::path::Path| {
+        matches!(
+            app.dirsizes.get(p),
+            SizeState::Running(_) | SizeState::Queued | SizeState::Done(_)
+        )
+    };
+    assert!(queued_or_running(&app, &a1) && queued_or_running(&app, &a2));
+    // 형제 B로 이동: A 쪽 열 요청은 큐에서 빠지고 B1·B2가 들어간다(틱 전이라 A1은 아직 슬롯에 — 선점당해 B가 바로 시작).
+    let _ = app.panels[0].navigate_to(b, &mut inv);
+    app.dirsize_col_sync(&mut inv);
+    assert_ne!(
+        app.dirsizes.get(&a2),
+        SizeState::Queued,
+        "안 보이는 A2는 큐에 남지 않는다"
+    );
+    assert!(
+        queued_or_running(&app, &b1) && queued_or_running(&app, &b2),
+        "B1·B2 요청"
+    );
+    assert!(
+        matches!(
+            app.dirsizes.get(&b1),
+            SizeState::Running(_) | SizeState::Done(_)
+        ),
+        "B1이 슬롯을 받는다(A1 선점)"
+    );
+    let at = std::time::Instant::now();
+    while app.dirsize_tick() {
+        assert!(at.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.dirsize_col_sync(&mut inv);
+    assert_eq!(app.dirsizes.cached(&b1).map(|d| d.bytes), Some(100));
+    assert_eq!(app.dirsizes.cached(&b2).map(|d| d.bytes), Some(100));
+    // 새로 고침 = 보는 트리(B 안 전부 + 상위) 캐시 버림 → 다음 동기가 다시 요청.
+    app.command("view.refresh");
+    assert!(app.dirsizes.cached(&b1).is_none() && app.dirsizes.cached(&b2).is_none());
+    let mut inv = Invalidations::default();
+    app.dirsize_col_sync(&mut inv);
+    assert!(app.dirsizes.running(), "새로 고침 뒤 다시 잰다");
+    while app.dirsize_tick() {
+        assert!(at.elapsed().as_secs() < 10);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
