@@ -121,6 +121,7 @@
 | — | `app/dirsize.rs` | 폴더 크기 동시 계산 개수(1~8) | 2 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_threads`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | — | `app/dirsize.rs` | 대기 큐 상한(넘치면 오래된 요청 버림 · 1~500) | 50 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_queue`(T-166 2차) | ✅ 10-05 §82(5359834) |
 | — | `app/dirsize.rs` | 빠르게 지나갈 때 이 시간 안에 떠난 폴더는 건너뜀(마지막 것만 보류 · 0~5000 ms) | 250 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_settle_ms`(T-166 2차) | ✅ 10-05 §82(5359834) |
+| — | `app/dirsize.rs` | 폴더 크기 캐시 유효기간(0~86400 s · 0 = 없음 · 만료 값은 보여 주며 재계산) | 1800 | 고급(하단 도크 · `dock.folder_size` 종속) | `dock.folder_size_ttl_s`(T-166 4차) | ✅ 11-09 6723b46 |
 | 체크섬 없음(dir2 · dir3 종전) | `app/checksum.rs` · `hash_win.rs` · ndir-ops `hash.rs` | 체크섬 창이 기본으로 계산할 알고리즘 목록 | — | 고급(드문 조절 · 기본 `crc32,md5,sha1,sha256` · SHA-512 추가 가능) | `hash.algos`(NEW-038) | ✅ 10-05 §55(0953f27) |
 | 체크섬 자동 계산(크기 무관) | `app/checksum.rs` · `hash_win.rs` | 이 크기를 넘는 파일은 자동 계산하지 않고 [계산] 버튼 | 512 MB | 고급(드문 조절 · 0 = 항상 수동) | `hash.auto_limit_mb`(NEW-038 2차) | ✅ 10-05 §73(55038ef) |
 | 1200 ms(라이선스 창 상수) | `license_win.rs` · nexa-ctl `Flash` | 플래시 메시지 유지 시간(0~30000 ms) | 2000 | 설정(일반 › 모양) | `ui.flash_hold_ms`(nexa-sql 차용) | ✅ 10-07 §3(bce31ce) |
