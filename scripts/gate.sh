@@ -60,6 +60,16 @@ MIN_FREE="${NDIR_GATE_MIN_FREE_GB:-5}"
 FREE_GB=$(( $(df -Pk . | awk 'NR==2 {print $4}') / 1024 / 1024 ))
 (( FREE_GB >= MIN_FREE )) || fail "디스크 여유 ${FREE_GB}G < ${MIN_FREE}G — target/ 캐시를 비우세요(target/debug/incremental · cargo clean --release)"
 
+# 시험 임시 폴더는 git 작업 트리 밖(11-12 사고: `TMPDIR=target/tmp`로 돌리자 시험 고정물이 저장소 안에 생겨 앱이 git 저장소로
+# 인식 → 감시 목록에 `.git` · 상태줄 golden 3건 거짓 실패) — 안이면 시작 전에 멈춘다. 큰 벤치 자료만 `target/tmp`에 둔다.
+for V in TMPDIR TMP TEMP; do
+    T="${!V:-}"
+    [[ -n "$T" && -d "$T" ]] || continue
+    if [[ "$(git -C "$T" rev-parse --is-inside-work-tree 2>/dev/null)" == true ]]; then
+        fail "$V=$T 가 git 작업 트리 안입니다 — 시험 임시 폴더는 저장소 밖이어야 합니다($V 를 비우고 다시 실행)"
+    fi
+done
+
 if [[ "$MODE" == quick ]]; then
     BASE="$( [[ -f "$REC" ]] && cut -d' ' -f2 "$REC" || echo HEAD )"
     # OS 조건부 코드(`cfg(unix|windows|target_os …)` · `cfg!`)가 더해졌으면 quick에서도 **3-OS clippy**(Windows 호스트 clippy는 cfg(unix/macos)
