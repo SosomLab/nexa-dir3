@@ -135,7 +135,9 @@ impl App {
             }
             // 폴더 크기 캐시(T-166): 닿는 항목만(자신 · 안쪽 · 상위 전부). 버린 게 있으면 목록 재열람과 무관하게 **바로** 다시 동기해
             // 보이는 행부터 다시 잰다(11-09 — 보이는 폴더 행 감시는 `hits`에 안 잡혀 아래 재열람 길을 타지 않는다).
-            let sizes_hit = self.dirsizes.invalidate(&changed);
+            // GAP-054(사용자 11-14): 값을 지우지 않고 "바뀜"으로만 표시한다 — 옛 값을 보여 준 채 뒤에서 다시 잰다(깜빡임 없음 ·
+            // 재측정 간격 `dock.folder_size_refresh_ms`).
+            let sizes_hit = self.dirsizes.mark_stale(&changed, Instant::now());
             let mut inv = Invalidations::default();
             let transfer = self.transfer.is_some();
             let self_window =

@@ -1787,6 +1787,20 @@ pub const REGISTRY: &[Entry] = &[
         },
         "1800"
     ),
+    // 바뀐 폴더 재측정 최소 간격(dir3 신규 · GAP-054 · 사용자 11-14 "백그라운드에서 폴더 크기가 계속 갱신되며 깜빡임"): 감시 통지 ·
+    //   수정 시각 변화로 "바뀜"이 된 폴더는 옛 값을 보여 준 채 다시 재는데, 계속 바뀌는 폴더(내려받기 · 빌드 · 로그)가 쉬지 않고
+    //   재측정되지 않게 마지막 측정에서 이 시간이 지나야 다시 잰다. 0 = 바뀔 때마다 바로.
+    e!(
+        "dock.folder_size_refresh_ms",
+        CAT_DOCK,
+        "pref.folderSizeRefresh",
+        "pref.folderSizeRefresh.desc",
+        Int {
+            min: 0,
+            max: 600_000
+        },
+        "3000"
+    ),
     // 크기 열에 폴더 크기(dir3 신규 · T-166 3차 · 10-25 · 분류는 목록이지만 DEPENDS 부모 `dock.folder_size` 뒤에 등재): 보이는 폴더 행을 뒤쪽 큐로 재어 크기 열에 — 기본 off(목록마다 디스크를 읽는다) ·
     //   폴더 크기 계산(`dock.folder_size`)이 켜져 있어야 하고 성능 향상 모드에서는 꺼진다.
     e!(
@@ -2673,6 +2687,7 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("dock.folder_size_queue", "dock.folder_size", Dep::On),
     ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
     ("dock.folder_size_ttl_s", "dock.folder_size", Dep::On),
+    ("dock.folder_size_refresh_ms", "dock.folder_size", Dep::On),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
@@ -2844,6 +2859,7 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_queue",
     "dock.folder_size_settle_ms",
     "dock.folder_size_ttl_s",
+    "dock.folder_size_refresh_ms",
     "dock.max_defer_ms",
     "dock.info_wait_ms",
     // 값 추출 1차(T-100): 폴링 · 캐시 · 프레임 · 읽기 상한은 고급(스크롤백 · 토스트 · 미리보기 줄 수는 일반).

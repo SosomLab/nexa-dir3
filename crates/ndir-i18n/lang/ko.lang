@@ -561,6 +561,8 @@ pref.folderSizeSettle = 폴더 크기 멈춤 기준(ms)
 pref.folderSizeSettle.desc = 키보드나 스크롤로 폴더를 빠르게 지나갈 때, 직전 선택에서 이 시간이 지나기 전의 요청은 큐에 넣지 않고 마지막 폴더만 멈춘 뒤 잽니다(지나친 폴더의 일을 아예 만들지 않음). 0 = 항상 즉시.
 pref.folderSizeTtl = 폴더 크기 유효기간(초)
 pref.folderSizeTtl.desc = 한 번 잰 폴더 크기를 이 시간 동안 다시 씁니다. 지나면 옛 값을 보여 주면서 뒤에서 다시 잽니다. 폴더 안의 변경(파일 작업 · 폴더 감시 · 수정 시각 변화)은 이 시간과 무관하게 바로 다시 잽니다. 0 = 만료 없음(새로 고침 F5로 강제 재계산).
+pref.folderSizeRefresh = 폴더 크기 재측정 간격(ms)
+pref.folderSizeRefresh.desc = 폴더가 바뀌면 옛 크기를 보여 준 채 다시 잽니다. 계속 바뀌는 폴더(내려받기 · 빌드 · 로그)는 직전 측정에서 이 시간이 지나야 다시 잽니다. 0 = 바뀔 때마다 바로 다시 잼.
 pref.dockMaxDefer = 도크 갱신 최대 지연(ms)
 pref.dockMaxDefer.desc = 선택이 계속 바뀌는 동안(끌어 선택 · 키 반복) 도크 갱신은 멈출 때까지 미뤄지지만, 첫 변경부터 이 시간이 지나면 한 번은 갱신합니다. 0 = 상한 없음(멈출 때까지 미룸).
 pref.dockInfoWait = 정보 도크 대기(ms)

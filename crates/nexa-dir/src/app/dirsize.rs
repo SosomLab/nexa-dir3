@@ -94,6 +94,9 @@ struct Entry {
     /// 끝까지 쟀다(거짓 = 선점 취소된 진행값 — 보이면 다시 잰다).
     complete: bool,
     mtime_ms: Option<i64>,
+    /// 잰 뒤에 폴더가 바뀌었다(감시 통지 · mtime 가드 — GAP-054): 값은 **그대로 보여 주면서** 다시 잰다. 다시 재는 간격은
+    /// [`Tuning::refresh_min`] 이상(계속 바뀌는 폴더가 쉬지 않고 재측정되지 않게).
+    stale: bool,
 }
 
 /// 경로 하나의 상태.
@@ -120,7 +123,12 @@ pub(crate) struct Tuning {
     pub(crate) settle_ms: u64,
     /// 캐시 유효기간(`None` = 만료 없음).
     pub(crate) ttl: Option<Duration>,
+    /// 바뀐 폴더를 다시 재는 최소 간격(GAP-054 · 설정 `dock.folder_size_refresh_ms`).
+    pub(crate) refresh_min: Duration,
 }
+
+/// 바뀐 폴더 재측정 최소 간격의 기본값(ms) — 설정 `dock.folder_size_refresh_ms`의 기본값과 같다.
+pub(crate) const DEFAULT_REFRESH_MS: u64 = 3000;
 
 /// 기본 유효기간(초 · 사용자 11-09 "mtime 가드가 있으면 30분") — 설정 `dock.folder_size_ttl_s`의 기본값과 같다.
 pub(crate) const DEFAULT_TTL_S: u64 = 1800;
@@ -132,6 +140,7 @@ impl Default for Tuning {
             queue_max: 50,
             settle_ms: 250,
             ttl: Some(Duration::from_secs(DEFAULT_TTL_S)),
+            refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
         }
     }
 }
@@ -160,6 +169,10 @@ pub(crate) struct DirSizes {
     visible: HashSet<PathBuf>,
     /// 표시 조절(10-08 프레임 계측 적발): 상태 전이(끝남 · 시작 · 큐 변화)가 있었다 → 다음 표시는 즉시.
     changed: bool,
+    /// 재는 도중에 폴더가 바뀐 작업(GAP-054) — 끝나면 값은 넣되 "바뀜"으로 표시해 뒤에 다시 잰다.
+    dirty: HashSet<PathBuf>,
+    /// "바뀜" 표시한 항목을 다시 잴 수 있게 되는 시각(GAP-054) — 그때 한 번 표시 동기를 일으킨다(그 사이 유휴 틱이 깨어 있다).
+    stale_wake: Option<Instant>,
     /// 마지막으로 도크에 반영한 시각 — 재는 중의 진행값("지금까지 …")은 [`DISPLAY_EVERY_MS`]마다만. 종전에는 유휴 틱(사건마다 =
     /// 그리기 뒤에도)마다 다시 그려 **그리기 → 틱 → 그리기** 고리로 재는 내내 120~170 fps가 됐다(docs/25 §8-1).
     last_shown: Option<Instant>,
@@ -278,14 +291,18 @@ impl DirSizes {
             queue_max: t.queue_max.max(1),
             settle_ms: t.settle_ms,
             ttl: t.ttl,
+            refresh_min: t.refresh_min,
         };
     }
 
-    /// 캐시 값이 지금도 유효한가 — 끝까지 쟀고 유효기간 안.
+    /// 캐시 값이 지금도 유효한가 — 끝까지 쟀고 유효기간 안이고 잰 뒤에 바뀌지 않았다. "바뀜" 표시가 있어도 잰 지
+    /// [`Tuning::refresh_min`]이 안 됐으면 아직 유효로 본다(GAP-054 · 재측정 간격 제한).
     fn fresh(&self, path: &Path, now: Instant) -> bool {
-        self.cache
-            .get(path)
-            .is_some_and(|e| e.complete && !expired(e.at, now, self.tuning.ttl))
+        self.cache.get(path).is_some_and(|e| {
+            e.complete
+                && !expired(e.at, now, self.tuning.ttl)
+                && !(e.stale && now.saturating_duration_since(e.at) >= self.tuning.refresh_min)
+        })
     }
 
     fn is_running(&self, path: &Path) -> bool {
@@ -477,15 +494,23 @@ impl DirSizes {
             let sh = &j.shared;
             // 끝까지 돈 결과(취소 표시가 있어도 중간에 그치지 않았으면 온전하다).
             let complete = !sh.aborted.load(Ordering::Relaxed);
-            self.remember(j.path, sh.snapshot(), now, complete, j.mtime_ms);
+            let dirty = self.dirty.remove(&j.path);
+            self.remember(j.path.clone(), sh.snapshot(), now, complete, j.mtime_ms);
+            if dirty {
+                self.set_stale(&j.path, now);
+            }
         }
         let (done, still): (Vec<DirSizeJob>, Vec<DirSizeJob>) =
             self.retired.drain(..).partition(DirSizeJob::is_done);
         self.retired = still;
         for j in done {
             let sh = &j.shared;
+            let dirty = self.dirty.remove(&j.path);
             if !sh.aborted.load(Ordering::Relaxed) {
-                self.remember(j.path, sh.snapshot(), now, true, j.mtime_ms);
+                self.remember(j.path.clone(), sh.snapshot(), now, true, j.mtime_ms);
+                if dirty {
+                    self.set_stale(&j.path, now);
+                }
             } else if sh.has_progress() && !self.cache.contains_key(&j.path) {
                 let mut d = sh.snapshot();
                 d.partial = true;
@@ -516,7 +541,50 @@ impl DirSizes {
         {
             self.changed = true;
         }
-        self.busy()
+        // "바뀜" 항목을 다시 잴 때가 됐다 → 표시 동기 한 번(보이는 행 · 도크 폴더가 다시 요청된다).
+        if self.stale_wake.is_some_and(|t| now >= t) {
+            self.stale_wake = None;
+            if self.cache.values().any(|e| e.stale) {
+                self.changed = true;
+            }
+        }
+        self.busy() || self.stale_wake.is_some()
+    }
+
+    /// 캐시 항목에 "바뀜" 표시(값은 유지) + 다시 잴 수 있는 시각에 깨어나게 예약.
+    fn set_stale(&mut self, path: &Path, now: Instant) {
+        let min = self.tuning.refresh_min;
+        if let Some(e) = self.cache.get_mut(path) {
+            e.stale = true;
+            let due = (e.at + min).max(now);
+            self.stale_wake = Some(self.stale_wake.map_or(due, |t| t.min(due)));
+        }
+    }
+
+    /// 폴더가 바뀌었다(감시 통지 · mtime 가드 — GAP-054 · 사용자 11-14 "백그라운드에서 폴더 크기가 계속 갱신되며 깜빡임"):
+    /// 바뀐 폴더 **자신과 상위**의 캐시 값을 지우지 않고 "바뀜"으로만 표시한다 — 열은 옛 값을 보여 준 채 뒤에서 다시 재고
+    /// (간격 = [`Tuning::refresh_min`] 이상), 새 값이 오면 바꿔 끼운다. 종전 [`Self::invalidate`]는 값을 지워 "값 → 빈칸 → 값"으로
+    /// 깜빡였고, 바뀐 폴더 **안쪽** 항목까지 전부 버려 현재 폴더에 파일 하나만 생겨도 보이는 폴더가 모두 다시 재졌다(안쪽 폴더는
+    /// 자기 감시 · mtime 가드 · 유효기간이 따로 잡는다). 재는 중인 작업은 그대로 끝내고 결과에 "바뀜"을 붙인다.
+    /// 돌려주는 값 = 표시한 것이 있다.
+    pub(crate) fn mark_stale(&mut self, changed: &[PathBuf], now: Instant) -> bool {
+        let hit = |p: &Path| changed.iter().any(|c| c.starts_with(p));
+        let keys: Vec<PathBuf> = self
+            .cache
+            .iter()
+            .filter(|(k, e)| !e.stale && hit(k))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in &keys {
+            self.set_stale(k, now);
+        }
+        let mut any = !keys.is_empty();
+        for j in self.running.iter().chain(self.retired.iter()) {
+            if hit(&j.path) && self.dirty.insert(j.path.clone()) {
+                any = true;
+            }
+        }
+        any
     }
 
     /// 지금 도크에 반영해야 하는가([`display_due`]) — 참을 돌려주면 "보여 줬다"로 기록한다(호스트는 그때만 `update_docks` + 다시 그리기).
@@ -584,6 +652,13 @@ impl DirSizes {
             .is_some_and(|m| m != row_mtime_ms)
     }
 
+    /// mtime 가드를 한 번 쓴 항목의 기준 시각을 지운다(같은 불일치로 그리기마다 다시 걸리지 않게 — 다시 재면 새 기준이 온다).
+    pub(crate) fn forget_mtime(&mut self, path: &Path) {
+        if let Some(e) = self.cache.get_mut(path) {
+            e.mtime_ms = None;
+        }
+    }
+
     /// 캐시에 넣는다 — [`CACHE_MAX`]를 넘으면 가장 먼저 넣은 것부터 버린다(T-189 ⑦ · 종전 = 작업 전까지 상한 없음).
     fn remember(
         &mut self,
@@ -598,6 +673,7 @@ impl DirSizes {
             at: now,
             complete,
             mtime_ms,
+            stale: false,
         };
         if self.cache.insert(path.clone(), e).is_none() {
             self.order.push_back(path);
@@ -662,6 +738,8 @@ impl DirSizes {
         self.order.clear();
         self.queue.clear();
         self.pending = None;
+        self.dirty.clear();
+        self.stale_wake = None;
         for j in self.running.drain(..).chain(self.retired.drain(..)) {
             j.cancel();
         }
@@ -737,6 +815,9 @@ impl App {
             queue_max: s.int("dock.folder_size_queue").clamp(1, 10_000) as usize,
             settle_ms: s.int("dock.folder_size_settle_ms").clamp(0, 60_000) as u64,
             ttl: (ttl_s > 0).then(|| Duration::from_secs(ttl_s)),
+            refresh_min: Duration::from_millis(
+                s.int("dock.folder_size_refresh_ms").clamp(0, 600_000) as u64,
+            ),
         };
         self.dirsizes.set_tuning(t);
     }
@@ -771,7 +852,9 @@ impl App {
             let mut map = std::collections::HashMap::new();
             for (p, mtime) in rows {
                 if self.dirsizes.mtime_mismatch(p, *mtime) {
-                    self.dirsizes.invalidate(std::slice::from_ref(p));
+                    // 값은 보여 준 채 다시 잰다(GAP-054) — 새 요청이 지금 행의 수정 시각을 들고 가므로 가드는 한 번만 걸린다.
+                    self.dirsizes.mark_stale(std::slice::from_ref(p), now);
+                    self.dirsizes.forget_mtime(p);
                 }
                 match self.dirsizes.get(p) {
                     SizeState::Done(d) => {
@@ -942,6 +1025,7 @@ mod tests {
             queue_max: 3,
             settle_ms: 0,
             ttl: None,
+            refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
         });
         let now = Instant::now();
         let p = |n: usize| PathBuf::from(format!("/q/{n}"));
@@ -1091,6 +1175,7 @@ mod tests {
             queue_max: 10,
             settle_ms: 0,
             ttl: None,
+            refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
         });
         let now = Instant::now();
         let p = |s: &str| PathBuf::from(format!("/p/{s}"));
@@ -1215,6 +1300,58 @@ mod tests {
         assert!(d.cached(&a1).is_none(), "안쪽도");
     }
 
+    /// GAP-054(사용자 11-14 깜빡임): 폴더가 바뀌면 값을 **지우지 않는다** — 자신과 상위만 "바뀜"(안쪽은 그대로) · 값은 계속 `Done` ·
+    /// 다시 재는 것은 직전 측정에서 `refresh_min`이 지난 뒤 · 그때 유휴 틱이 표시 동기를 한 번 일으킨다.
+    #[test]
+    fn mark_stale_keeps_values_and_throttles_refresh() {
+        let mut d = DirSizes::default();
+        let min = d.tuning.refresh_min;
+        let t0 = Instant::now();
+        let (root, a, a1, b) = (
+            PathBuf::from("/m"),
+            PathBuf::from("/m/a"),
+            PathBuf::from("/m/a/1"),
+            PathBuf::from("/m/b"),
+        );
+        for p in [&root, &a, &a1, &b] {
+            d.remember(p.clone(), V, t0, true, None);
+        }
+        assert!(d.mark_stale(std::slice::from_ref(&a), t0));
+        assert!(!d.mark_stale(std::slice::from_ref(&a), t0), "이미 표시됨");
+        for p in [&root, &a, &a1, &b] {
+            assert_eq!(d.get(p), SizeState::Done(V), "값은 그대로(빈칸 없음)");
+        }
+        // 직후 = 아직 다시 재지 않는다(간격 제한) · 안쪽 · 형제는 영향 없음.
+        assert!(!d.wants_refresh(&a, t0) && !d.wants_refresh(&root, t0));
+        // 간격이 지나면 자신 + 상위만 다시 잰다.
+        let t1 = t0 + min;
+        assert!(d.wants_refresh(&a, t1) && d.wants_refresh(&root, t1));
+        assert!(!d.wants_refresh(&a1, t1) && !d.wants_refresh(&b, t1));
+        // 유휴 틱: 그때까지 깨어 있고(참) · 때가 되면 표시 동기 1회 뒤 잠든다.
+        d.changed = false;
+        assert!(d.tick(t0), "깨움 예약");
+        assert!(
+            !d.take_display_due(t0),
+            "때가 되기 전에는 다시 그리지 않는다"
+        );
+        assert!(!d.tick(t1), "때가 됐다 → 예약 해제");
+        assert!(d.take_display_due(t1));
+        // 현재 폴더(루트)만 바뀌면 그 안의 폴더들은 다시 재지 않는다 — 종전에는 보이는 폴더가 전부 버려졌다.
+        let mut d = DirSizes::default();
+        for p in [&root, &a, &b] {
+            d.remember(p.clone(), V, t0, true, None);
+        }
+        d.mark_stale(std::slice::from_ref(&root), t0);
+        assert!(d.wants_refresh(&root, t1));
+        assert!(!d.wants_refresh(&a, t1) && !d.wants_refresh(&b, t1));
+        // 다시 잰 값이 들어오면 표시가 풀린다 · mtime 기준을 지우면 가드는 다시 걸리지 않는다.
+        d.remember(root.clone(), V, t1, true, Some(5));
+        assert!(!d.wants_refresh(&root, t1 + min));
+        assert!(d.mtime_mismatch(&root, 6));
+        d.forget_mtime(&root);
+        assert!(!d.mtime_mismatch(&root, 6));
+    }
+
     /// 훑기: 바이트 · 파일 · 폴더 합계 · 빈 폴더 · 없는 폴더 = 오류 1 · 취소 = 즉시 그침(`aborted`).
     #[test]
     fn walk_counts_and_cancels() {
@@ -1273,6 +1410,7 @@ mod tests {
             queue_max: 2,
             settle_ms: 0,
             ttl: None,
+            refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
         });
         let now = Instant::now();
         s.request(&a, now);
@@ -1328,6 +1466,7 @@ mod tests {
             queue_max: 50,
             settle_ms: 250,
             ttl: None,
+            refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
         });
         let t0 = Instant::now();
         s.request(&d.join("p1"), t0);
