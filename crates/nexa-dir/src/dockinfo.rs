@@ -336,7 +336,12 @@ mod tests {
             one("b.bin", "", "").lines,
             vec!["binary file \u{2014} no text preview"]
         );
-        assert_eq!(one("nope.txt", "", "").lines, vec!["read failed"]);
+        // 열기 실패 = 사유를 붙인다(협업 순회 11-14 · 사유 글은 OS마다 다르다).
+        let fail = one("nope.txt", "", "").lines;
+        assert!(
+            fail.len() == 1 && fail[0].starts_with("read failed: "),
+            "{fail:?}"
+        );
         // 오버라이드: png를 텍스트로 → 이진 안내 1줄(이미지 없음).
         let out = one("p.png", "png:builtin.text", "");
         assert!(out.image.is_none() && out.provider == "builtin.text");

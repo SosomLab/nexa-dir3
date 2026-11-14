@@ -61,15 +61,58 @@ pub(crate) fn text_caps() -> (usize, usize) {
     TEXT_CAPS.with(std::cell::Cell::get)
 }
 
-/// 상한까지 읽어 (내용, 이진 여부) — 공급자·호스트 API 공용. `Err` = 열기 실패.
-pub(crate) fn read_text(path: &Path, cap: usize) -> Result<(String, bool), ()> {
+/// 상한까지 읽어 (내용, 이진 여부) — 공급자·호스트 API 공용. `Err` = 열기 실패(사유는 호출부가 문구로).
+pub(crate) fn read_text(path: &Path, cap: usize) -> std::io::Result<(String, bool)> {
     use std::io::Read;
-    let mut f = std::fs::File::open(path).map_err(|_| ())?;
+    let mut f = std::fs::File::open(path)?;
     let mut buf = vec![0u8; cap];
     let n = f.read(&mut buf).unwrap_or(0);
     buf.truncate(n);
-    let binary = buf[..n.min(1024)].contains(&0);
-    Ok((String::from_utf8_lossy(&buf).into_owned(), binary))
+    Ok(decode_text(&buf))
+}
+
+/// 바이트 → (글, 이진 여부)(순수): BOM이 있으면 그 부호화로 푼다 — UTF-16 LE/BE(Windows의 reg 내보내기 · PowerShell `>` 출력 ·
+/// 종전에는 0 바이트 때문에 "이진 파일"로 보였다 · 협업 순회 11-14) · UTF-8 BOM은 떼어 낸다. BOM이 없으면 UTF-8(손실 허용)로 읽고
+/// 앞 1 KiB에 0 바이트가 있으면 이진.
+pub(crate) fn decode_text(buf: &[u8]) -> (String, bool) {
+    let utf16 = |body: &[u8], le: bool| {
+        let units: Vec<u16> = body
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| {
+                if le {
+                    u16::from_le_bytes([c[0], c[1]])
+                } else {
+                    u16::from_be_bytes([c[0], c[1]])
+                }
+            })
+            .collect();
+        (String::from_utf16_lossy(&units), false)
+    };
+    match buf {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => (
+            String::from_utf8_lossy(rest).into_owned(),
+            rest[..rest.len().min(1024)].contains(&0),
+        ),
+        _ => (
+            String::from_utf8_lossy(buf).into_owned(),
+            buf[..buf.len().min(1024)].contains(&0),
+        ),
+    }
+}
+
+/// 열기 실패 문구(순수에 가깝다 — 링크 판정만 디스크를 본다): 끊어진 심볼릭 링크 = "끊어진 링크 → 대상" · 그 밖 = "읽기 실패: 사유"
+/// (종전 = 어느 쪽이든 "read failed"뿐 · 협업 순회 11-14).
+pub(crate) fn read_fail_text(path: &Path, e: &std::io::Error) -> String {
+    if let Ok(target) = std::fs::read_link(path) {
+        if !path.exists() {
+            return ndir_i18n::trf("preview.brokenLink", &[&target.to_string_lossy()]);
+        }
+    }
+    ndir_i18n::trf("preview.failWhy", &[&crate::app::ops::ops_err_text(e)])
 }
 
 thread_local! {
@@ -262,8 +305,9 @@ impl PreviewProvider for BuiltinText {
     }
     fn preview(&self, path: &Path) -> PreviewDoc {
         let (read_cap, line_cap) = text_caps();
-        let Ok((text, binary)) = read_text(path, read_cap) else {
-            return PreviewDoc::Lines(vec![tr("preview.fail")]);
+        let (text, binary) = match read_text(path, read_cap) {
+            Ok(v) => v,
+            Err(e) => return PreviewDoc::Lines(vec![read_fail_text(path, &e)]),
         };
         if text.is_empty() {
             return PreviewDoc::Lines(vec![tr("preview.empty")]);
@@ -549,6 +593,41 @@ pub(crate) fn dock_lines(lines: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 텍스트 해독(협업 순회 11-14): UTF-16 LE/BE BOM = 글로(종전 "이진") · UTF-8 BOM은 떼기 · BOM 없는 0 바이트 = 이진 ·
+    /// 열기 실패 = 사유 · 끊어진 링크 = 대상.
+    #[test]
+    fn text_decoding_handles_boms_and_read_failures_explain() {
+        ndir_i18n::activate(ndir_i18n::load("en", Path::new("nowhere")));
+        let le: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain("hi 한\n".encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        assert_eq!(decode_text(&le), ("hi 한\n".to_owned(), false));
+        let be: Vec<u8> = [0xFE, 0xFF]
+            .into_iter()
+            .chain("ok".encode_utf16().flat_map(u16::to_be_bytes))
+            .collect();
+        assert_eq!(decode_text(&be), ("ok".to_owned(), false));
+        assert_eq!(decode_text(b"\xEF\xBB\xBFbom"), ("bom".to_owned(), false));
+        assert_eq!(decode_text(b"plain"), ("plain".to_owned(), false));
+        assert!(decode_text(b"a\0b").1, "BOM 없는 0 바이트 = 이진");
+        assert_eq!(decode_text(&[0xFF, 0xFE, 0x41]).0, "", "홀수 꼬리는 버린다");
+        let dir = std::env::temp_dir().join(format!("ndir-prevtext-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("nope.txt");
+        let e = read_text(&missing, 16).unwrap_err();
+        assert!(read_fail_text(&missing, &e).starts_with("read failed: "));
+        #[cfg(unix)]
+        {
+            let link = dir.join("dangling");
+            std::os::unix::fs::symlink("missing_target", &link).unwrap();
+            let e = read_text(&link, 16).unwrap_err();
+            assert_eq!(read_fail_text(&link, &e), "broken link → missing_target");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// T-62 C-2: `render_svg` = nexa-gfx svg 래스터 → 임시 BMP(해시 이름) · 디코드 크기 = viewBox · 같은 입력 = 같은 경로 · 손상 SVG = None.
     #[test]
