@@ -88,6 +88,30 @@ impl CalcCol {
         {
             return Err(DefError::Expr(format!("unknown name '{bad}'")));
         }
+        // 견본 행으로 한 번 돌려 본다 — 모르는 함수 · 틀린 정규식은 행과 무관한 정의 실수라 여기서 알린다(종전 = 만든 뒤 칸마다
+        // `#ERR`). 값에 따른 오류(형 불일치 · 0 나누기)는 행마다 다르므로 그대로 둔다.
+        let probe = VisibleRowRef {
+            id: 0,
+            depth: 1,
+            kind: FileKind::File,
+            name: "probe.txt",
+            size: 1,
+            modified_unix_ms: 1_000,
+            attrs: 0,
+            expanded: false,
+            has_children: false,
+        };
+        let env = RowEnv {
+            row: &probe,
+            path: Path::new("/probe.txt"),
+            dir_size: None,
+            clock: (0, 0),
+        };
+        if let Err(e) = expr.eval(&env) {
+            if e.0.starts_with("unknown function") || e.0.starts_with("bad regex") {
+                return Err(DefError::Expr(e.0));
+            }
+        }
         Ok(CalcCol {
             name: name.to_owned(),
             src: src.to_owned(),
@@ -208,6 +232,15 @@ pub(crate) struct RowEnv<'a> {
 }
 
 impl Env for RowEnv<'_> {
+    /// 정규식 함수(`re.sub` · `re.search` …)는 `ndir-ops`가 맡는다(코어는 의존 0).
+    fn call_ext(
+        &self,
+        name: &str,
+        args: &[Value],
+    ) -> Option<Result<Value, ndir_core::calc::CalcError>> {
+        ndir_ops::calcre::call(name, args)
+    }
+
     fn var(&self, name: &str) -> Option<Value> {
         let r = self.row;
         let is_dir = r.kind == FileKind::Dir;
@@ -338,6 +371,16 @@ mod tests {
             CalcCol::parse_def(&format!("{} = 1", "n".repeat(41))),
             Err(DefError::Name)
         );
+        // 모르는 함수 · 틀린 정규식은 정의 때 알린다(견본 행 평가) · 값에 따른 오류는 통과(칸에서 `#ERR`).
+        assert_eq!(
+            CalcCol::parse_def("x = lenn(name)"),
+            Err(DefError::Expr("unknown function 'lenn'".into()))
+        );
+        assert!(matches!(
+            CalcCol::parse_def("x = re.sub('(', '', name)"),
+            Err(DefError::Expr(m)) if m.starts_with("bad regex")
+        ));
+        assert!(CalcCol::parse_def("x = 1 / (size - 1)").is_ok());
     }
 
     /// 행 변수와 평가: 파일 · 폴더(계산된 크기) · 확장자 없는 이름 · 정렬 값 · 셀 글(오류 = `#ERR`).
@@ -357,6 +400,15 @@ mod tests {
             "Report.final.pdf"
         );
         assert_eq!(cell_text(&val("a = size // 1024")), "3072");
+        // 정규식 함수(`ndir-ops::calcre`): 바꾸기 · 찾기 · 정렬용 숫자 뽑기.
+        assert_eq!(
+            cell_text(&val(r"a = re.sub('\\.final', '', name)")),
+            "Report.PDF"
+        );
+        assert_eq!(
+            cell_text(&val("a = re.search('(?i)pdf$', name) != None")),
+            "True"
+        );
         assert_eq!(
             cell_text(&val("a = f'{size / 1024 / 1024:.1f} MB'")),
             "3.0 MB"

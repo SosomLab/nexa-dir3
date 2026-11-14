@@ -39,6 +39,11 @@ pub trait Env {
     fn tz_offset(&self) -> i64 {
         0
     }
+    /// 이 모듈이 모르는 함수(확장 — 예: 정규식 `re.sub`)를 환경이 처리한다. 모르면 `None`(평가 오류 "unknown function").
+    /// 코어는 의존 0이라 정규식 엔진을 품지 않는다(구현 = `ndir-ops::calcre`).
+    fn call_ext(&self, _name: &str, _args: &[Value]) -> Option<Result<Value, CalcError>> {
+        None
+    }
 }
 
 /// 구문 · 평가 오류(영어 기술 문구 — 호출부가 i18n 머리말을 붙여 보여 준다).
@@ -555,7 +560,13 @@ impl Parser {
                     return err("expected method name after '.'");
                 };
                 self.expect_op("(")?;
-                n = Node::Method(Box::new(n), name, self.args()?);
+                // `re.sub(…)` 같은 모듈 꼴 호출 = 확장 함수 `re.sub`(변수 `re`는 없다 — [`Env::call_ext`]).
+                n = match n {
+                    Node::Name(module) if module == "re" => {
+                        Node::Call(format!("{module}.{name}"), self.args()?)
+                    }
+                    recv => Node::Method(Box::new(recv), name, self.args()?),
+                };
             } else {
                 return Ok(n);
             }
@@ -1286,7 +1297,9 @@ fn call(name: &str, a: &[Value], env: &dyn Env) -> Result<Value, CalcError> {
                 _ => c.wd,
             }))
         }
-        _ => err(format!("unknown function '{name}'")),
+        _ => env
+            .call_ext(name, a)
+            .unwrap_or_else(|| err(format!("unknown function '{name}'"))),
     }
 }
 
@@ -1893,6 +1906,9 @@ mod tests {
         assert!(fails("'abc").contains("unterminated"));
         assert!(fails("a $ b").contains("unexpected character"));
         assert!(fails("unknown_var + 1").contains("unknown name"));
+        // 모듈 꼴 호출은 확장 함수로 넘어간다 — 환경이 모르면 "unknown function"(변수 `re`를 찾지 않는다).
+        assert!(fails("re.sub('a', 'b', 'c')").contains("unknown function 're.sub'"));
+        assert!(Expr::parse("re.sub('a', 'b', name)").unwrap().names() == ["name"]);
         assert!(fails("name.upper").contains("expected '('"));
         assert!(fails("(1)(2)").contains("only named functions"));
         assert!(fails("'a' * 99999999").contains("too long"));

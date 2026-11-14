@@ -1479,7 +1479,7 @@ calc.menu.add = 計算列を追加…
 calc.menu.edit = 計算列「{0}」を編集…
 calc.menu.del = 計算列「{0}」を削除
 calc.dlg.title = 計算列
-calc.dlg.text = 名前 = 式 の形で入力します。この列は現在のタブだけに属し、ほかの列と同じように並べ替えできます。変数: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind。Python 風の式: + - * / // % **、比較、and/or/not、a if c else b、'文字' + str(n)、f"{size / 1024:.1f} KB"、s[0:3]、s.upper()、s.replace(a, b)、s.split('.')、len()、round()、int()、min()、max()、size_h(size)、date(mtime, '%Y-%m')、year(mtime)、age_days(mtime)。
+calc.dlg.text = 名前 = 式 の形で入力します。この列は現在のタブだけに属し、ほかの列と同じように並べ替えできます。変数: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind。Python 風の式: + - * / // % **、比較、and/or/not、a if c else b、'文字' + str(n)、f"{size / 1024:.1f} KB"、s[0:3]、s.upper()、s.replace(a, b)、s.split('.')、len()、round()、int()、min()、max()、size_h(size)、date(mtime, '%Y-%m')、year(mtime)、age_days(mtime)。 正規表現: re.search(パターン, s[, グループ]), re.match(), re.fullmatch(), re.sub(パターン, 置換, s), re.findall(), re.split() — 検索は一致した文字列または None を返します。
 calc.dlg.input = 定義
 calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
 calc.full = 1 つのタブに置ける計算列は {0} 個までです。
