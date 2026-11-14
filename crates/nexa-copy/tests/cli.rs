@@ -567,14 +567,16 @@ fn cancel_mid_copy_cleans_partial_and_exits_130() {
     let (src, dst) = (d.join("src"), d.join("dst"));
     fs::create_dir_all(&src).expect("mkdir");
     fs::create_dir_all(&dst).expect("mkdir");
-    // 512 MiB — 희소 파일이면 읽기가 빨라 루프라도 수백 ms · 취소는 20 ms 뒤(청크 4 MiB 경계에서 멈춘다).
+    // 512 MiB 희소 파일 · 취소는 20 ms 뒤(청크 4 MiB 경계에서 멈춘다). 러너 속도에 기대지 않게 `--max-bps 16M`으로
+    // 복사를 최소 수십 초짜리로 만든다 — 종전에는 빠른 러너에서 복사가 취소보다 먼저 끝나 종료 0이 났다
+    // (11-14 CI macOS run 43583109256).
     let big = src.join("big.bin");
     let f = fs::File::create(&big).expect("create");
     f.set_len(512 * 1024 * 1024).expect("set_len");
     drop(f);
     let r = run(
         &[&big, &dst],
-        &["--no-native", "--threads", "1"],
+        &["--no-native", "--threads", "1", "--max-bps", "16M"],
         &[("NEXA_COPY_CANCEL_AFTER_MS", "20")],
     );
     assert_eq!(r.code, 130, "stderr:\n{}", r.err);
