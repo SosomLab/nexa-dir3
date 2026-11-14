@@ -256,7 +256,8 @@ impl App {
 
     /// `edit.delete_permanent` — 확인 뒤 `ndir_ops::delete_permanent`(휴지통 경유 없음 · undo 없음).
     pub(crate) fn delete_permanent_ask(&mut self) {
-        let paths = self.panels[self.active].selected_paths();
+        // 부모와 함께 선택된 자식 · 중복은 뺀다(GAP-053) — 개수 안내도 실제로 지울 최상위 항목 수가 된다.
+        let paths = ndir_ops::prune_nested(self.panels[self.active].selected_paths());
         if paths.is_empty() {
             return;
         }

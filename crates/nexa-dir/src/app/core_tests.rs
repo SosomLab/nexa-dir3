@@ -6367,6 +6367,44 @@ fn background_tab_reloads_when_revealed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// GAP-053(사용자 11-14): 폴더를 펼친 채 전체 선택하면 부모와 그 안의 자식이 함께 선택된다 — 휴지통 · 완전 삭제는 **최상위 항목만**
+/// 넘긴다(부모가 먼저 지워진 뒤 자식 경로에서 묶음 삭제가 멈춰 뒤 항목이 남던 것).
+#[test]
+fn delete_drops_children_selected_with_their_parent() {
+    let (mut app, dir) = fixture("delnest");
+    app.layout_for(1200, 800, 1.0);
+    let log = app.platform.log.clone().expect("fake log");
+    let mut inv = Invalidations::default();
+    app.panels[0].select_path(&dir.join("sub"), &mut inv);
+    app.startup_cmd("ui.press:right");
+    app.command("edit.select_all");
+    let picked = app.panels[0].selected_paths();
+    assert!(
+        picked.contains(&dir.join("sub")) && picked.contains(&dir.join("sub/inner.rs")),
+        "{picked:?}"
+    );
+    app.command("edit.delete");
+    let calls: Vec<String> = log
+        .borrow()
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("trash:"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        calls,
+        ["trash:3"],
+        "sub · a.txt · b.md(inner.rs는 sub에 포함)"
+    );
+    // 완전 삭제 확인 창의 개수도 최상위 3개.
+    app.command("edit.select_all");
+    app.command("edit.delete_permanent");
+    let d = app.dump_of("dlg").unwrap();
+    assert!(d.contains(&trf("del.confirm", &["3"])), "{d}");
+    app.startup_cmd("dlg.pick:0");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 휴지통 삭제 일부 실패(dir2 X-35 · win.rs:3926-3976 · T-149 10): 성패 = 삭제 뒤에도 남아 있는가. 지워진 것만 실행 취소 기록 ·
 /// 남은 것은 선택해 보이고 [다시 시도](실패분만) / [닫기]. 종전 dir3 = 반환값만 믿어 일부 실패를 알리지 않았다.
 #[test]

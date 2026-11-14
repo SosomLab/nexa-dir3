@@ -1044,6 +1044,26 @@ pub fn process_alive(pid: u32) -> bool {
     }
 }
 
+/// 삭제 대상에서 **겹치는 경로**를 걷어 낸다(GAP-053 · 사용자 11-14): 목록 안에 상위 폴더가 함께 든 항목(펼친 트리에서 전체 선택하면
+/// 부모와 그 안의 자식이 같이 온다)과 같은 경로의 중복을 뺀다 — 순서는 유지. 부모가 먼저 지워지면 자식 경로는 이미 없어서, 묶음 삭제
+/// (Windows `SHFileOperationW` · freedesktop 휴지통)가 그 자리에서 멈추고 뒤 항목이 남았다.
+pub fn prune_nested(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let all: std::collections::HashSet<&Path> = paths.iter().map(PathBuf::as_path).collect();
+    let mut seen: std::collections::HashSet<&Path> = std::collections::HashSet::new();
+    let keep: Vec<bool> = paths
+        .iter()
+        .map(|p| {
+            let nested = p.ancestors().skip(1).any(|a| all.contains(a));
+            !nested && seen.insert(p.as_path())
+        })
+        .collect();
+    let mut it = keep.into_iter();
+    paths
+        .into_iter()
+        .filter(|_| it.next().unwrap_or(false))
+        .collect()
+}
+
 /// 완전 삭제 — 트리를 **끝까지** 돈다(GAP-046 · 사용자 11-04 ⓐ · 탐색기 방식): 지울 수 있는 것은 전부 지우고 지우지 못한 항목의 경로와
 /// 사유를 돌려준다(빈 목록 = 전부 삭제 · 없는 경로 = 무동작). 폴더는 `remove_dir_all`(한 번에 · Windows 읽기 전용 속성 무시)을 먼저 시도하고,
 /// 실패하면 항목마다 내려가며 계속한다. 안쪽 항목이 남아 비지 않은 폴더는 그 자체를 실패로 적지 않는다(안쪽 실패만 보인다) · 열거할 수 없는
@@ -2438,6 +2458,26 @@ mod tests {
         assert!(!d.join("새 폴더").exists());
         delete_permanent(&d.join("없는 경로")).unwrap(); // 무동작
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// GAP-053: 상위가 함께 든 항목 · 중복은 빠지고 순서는 그대로 · 이름만 앞부분이 같은 형제(`a` · `ab`)는 남는다.
+    #[test]
+    fn prune_nested_drops_children_and_duplicates() {
+        let p = |s: &str| PathBuf::from(s);
+        assert_eq!(
+            prune_nested(vec![
+                p("/t/a/x.txt"),
+                p("/t/a"),
+                p("/t/ab"),
+                p("/t/a/sub/deep"),
+                p("/t/b.txt"),
+                p("/t/a"),
+                p("/t/ab/y"),
+            ]),
+            vec![p("/t/a"), p("/t/ab"), p("/t/b.txt")]
+        );
+        assert_eq!(prune_nested(Vec::new()), Vec::<PathBuf>::new());
+        assert_eq!(prune_nested(vec![p("/t/a/x")]), vec![p("/t/a/x")]);
     }
 
     /// GAP-046(사용자 11-04 ⓐ): 안쪽 하나가 지워지지 않아도 **끝까지** 지우고 그 항목 경로만 돌려준다 · 비지 않은 조상 폴더는 실패에 안 적음 ·

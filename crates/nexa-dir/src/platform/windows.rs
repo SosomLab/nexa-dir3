@@ -412,17 +412,58 @@ impl Trash for NativeTrash {
     fn trash_async(&self, paths: Vec<PathBuf>) -> Option<TrashRx> {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = tx.send(shell_trash(&paths));
+            use ::windows::Win32::System::Com::{
+                CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED,
+            };
+            // 셸 파일 작업은 COM을 초기화한 스레드에서(dir2 WINB-025 · GAP-053): 초기화가 없으면 셸 확장 · 휴지통 처리기가
+            // 일부 항목에서 실패할 수 있다. 짝이 맞게 성공했을 때만 해제한다.
+            // SAFETY: 이 워커 스레드 전용 STA 초기화 · 같은 스레드에서 해제.
+            let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+            let result = shell_trash(&paths);
+            if com.is_ok() {
+                // SAFETY: 위 `CoInitializeEx`가 성공한 같은 스레드.
+                unsafe { CoUninitialize() };
+            }
+            let _ = tx.send(result);
         });
         Some(rx)
     }
 }
 
 /// 휴지통 = `SHFileOperationW(FO_DELETE | FOF_ALLOWUNDO)` — 어느 스레드에서나.
+///
+/// 묶음 한 번이 실패하면 **남은 항목을 하나씩** 다시 보낸다(GAP-053 · 사용자 11-14 `C:\Windows\Temp` 전체 선택 삭제): 오류 창을 끈
+/// (`FOF_NOERRORUI`) 묶음 삭제는 첫 오류(안에 사용 중인 파일이 든 폴더 · 접근 거부 · 그 사이 사라진 항목)에서 **작업 전체를 멈춰**
+/// 그 뒤 항목은 시도조차 하지 않았다 → 지울 수 있는 것이 남고, 남은 것만 다시 지우면 지워졌다. 이미 없는 경로는 처음부터 뺀다.
 fn shell_trash(paths: &[PathBuf]) -> Result<usize, PlatformError> {
-    if paths.is_empty() {
+    let exists = |p: &PathBuf| p.symlink_metadata().is_ok();
+    let live: Vec<PathBuf> = paths.iter().filter(|p| exists(p)).cloned().collect();
+    if live.is_empty() {
         return Ok(0);
     }
+    let first = shell_trash_batch(&live);
+    if first == 0 {
+        return Ok(live.len());
+    }
+    let mut last = first;
+    for p in live.iter().filter(|p| exists(p)) {
+        let rc = shell_trash_batch(std::slice::from_ref(p));
+        if rc != 0 {
+            last = rc;
+        }
+    }
+    let left = live.iter().filter(|p| exists(p)).count();
+    if left == 0 {
+        Ok(live.len())
+    } else {
+        Err(PlatformError::Failed(format!(
+            "SHFileOperationW: {last} ({left} left)"
+        )))
+    }
+}
+
+/// `SHFileOperationW` 한 번 — 돌려주는 값 = 0(전부 성공) · 그 밖 = 오류 코드(중단됨 = -1).
+fn shell_trash_batch(paths: &[PathBuf]) -> i32 {
     let list = double_null_list(paths);
     let mut op = ShFileOpStructW {
         hwnd: std::ptr::null_mut(),
@@ -436,10 +477,10 @@ fn shell_trash(paths: &[PathBuf]) -> Result<usize, PlatformError> {
     };
     // SAFETY: 구조체·목록은 호출 동안 살아 있다 · 이중 NUL 종단.
     let rc = unsafe { SHFileOperationW(&mut op) };
-    if rc == 0 && op.any_aborted == 0 {
-        Ok(paths.len())
+    if rc == 0 && op.any_aborted != 0 {
+        -1
     } else {
-        Err(PlatformError::Failed(format!("SHFileOperationW: {rc}")))
+        rc
     }
 }
 

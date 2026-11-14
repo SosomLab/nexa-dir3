@@ -301,54 +301,71 @@ impl Trash for FreedesktopTrash {
         Ok(n)
     }
 
+    /// 항목마다 따로 옮기고 **끝까지** 돈다(GAP-053): 종전에는 첫 실패에서 `?`로 돌아가 뒤 항목이 시도되지 않았다
+    /// (Windows 묶음 삭제와 같은 증상). 실패가 있으면 첫 오류를 돌려준다 — 성패 판정은 호출부의 `remaining`.
     fn trash(&self, paths: &[PathBuf]) -> Result<usize, PlatformError> {
         let mut n = 0;
+        let mut first_err = None;
         for p in paths {
-            let abs = if p.is_absolute() {
-                p.clone()
-            } else {
-                std::env::current_dir().unwrap_or_default().join(p)
-            };
-            let (base, top) = self.site_for(&abs);
-            let files = base.join("files");
-            let info = base.join("info");
-            std::fs::create_dir_all(&files).map_err(|e| PlatformError::Failed(e.to_string()))?;
-            std::fs::create_dir_all(&info).map_err(|e| PlatformError::Failed(e.to_string()))?;
-            let name = p
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .ok_or_else(|| PlatformError::Failed(format!("no file name: {}", p.display())))?;
-            // 이름 충돌 = 숫자 꼬리(규격 권고).
-            let mut target = name.clone();
-            let mut k = 1;
-            while files.join(&target).exists() || info.join(format!("{target}.trashinfo")).exists()
-            {
-                k += 1;
-                target = format!("{name}.{k}");
+            match self.trash_one(p) {
+                Ok(()) => n += 1,
+                Err(e) => {
+                    first_err.get_or_insert(e);
+                }
             }
-            let when = crate::filelist::format_iso_utc(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |d| d.as_secs() as i64),
-            );
-            // topdir 휴지통의 `Path=`는 topdir 기준 상대 경로(규격 · 다른 파일 관리자와 호환).
-            let recorded = match &top {
-                Some(t) => abs.strip_prefix(t).map_or(abs.clone(), Path::to_path_buf),
-                None => abs,
-            };
-            let body = format!(
-                "[Trash Info]\nPath={}\nDeletionDate={when}\n",
-                percent_encode(&recorded.to_string_lossy())
-            );
-            std::fs::write(info.join(format!("{target}.trashinfo")), body)
-                .map_err(|e| PlatformError::Failed(e.to_string()))?;
-            if let Err(e) = std::fs::rename(p, files.join(&target)) {
-                let _ = std::fs::remove_file(info.join(format!("{target}.trashinfo")));
-                return Err(PlatformError::Failed(format!("{}: {e}", p.display())));
-            }
-            n += 1;
         }
-        Ok(n)
+        match first_err {
+            Some(e) => Err(e),
+            None => Ok(n),
+        }
+    }
+}
+
+impl FreedesktopTrash {
+    /// 항목 하나를 휴지통으로(`.trashinfo` 기록 → `rename`).
+    fn trash_one(&self, p: &Path) -> Result<(), PlatformError> {
+        let abs = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(p)
+        };
+        let (base, top) = self.site_for(&abs);
+        let files = base.join("files");
+        let info = base.join("info");
+        std::fs::create_dir_all(&files).map_err(|e| PlatformError::Failed(e.to_string()))?;
+        std::fs::create_dir_all(&info).map_err(|e| PlatformError::Failed(e.to_string()))?;
+        let name = p
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .ok_or_else(|| PlatformError::Failed(format!("no file name: {}", p.display())))?;
+        // 이름 충돌 = 숫자 꼬리(규격 권고).
+        let mut target = name.clone();
+        let mut k = 1;
+        while files.join(&target).exists() || info.join(format!("{target}.trashinfo")).exists() {
+            k += 1;
+            target = format!("{name}.{k}");
+        }
+        let when = crate::filelist::format_iso_utc(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs() as i64),
+        );
+        // topdir 휴지통의 `Path=`는 topdir 기준 상대 경로(규격 · 다른 파일 관리자와 호환).
+        let recorded = match &top {
+            Some(t) => abs.strip_prefix(t).map_or(abs.clone(), Path::to_path_buf),
+            None => abs,
+        };
+        let body = format!(
+            "[Trash Info]\nPath={}\nDeletionDate={when}\n",
+            percent_encode(&recorded.to_string_lossy())
+        );
+        std::fs::write(info.join(format!("{target}.trashinfo")), body)
+            .map_err(|e| PlatformError::Failed(e.to_string()))?;
+        if let Err(e) = std::fs::rename(p, files.join(&target)) {
+            let _ = std::fs::remove_file(info.join(format!("{target}.trashinfo")));
+            return Err(PlatformError::Failed(format!("{}: {e}", p.display())));
+        }
+        Ok(())
     }
 }
 
@@ -1172,6 +1189,14 @@ mod tests {
         assert_eq!(t.trash(&[src.join("a.txt")]), Ok(1));
         assert!(base.join("Trash/files/a.txt.2").is_file());
         assert!(t.trash(&[src.join("nope")]).is_err());
+        // GAP-053: 가운데 항목이 실패해도 **뒤 항목까지** 옮긴다(종전 = 첫 실패에서 멈춰 c가 남았다).
+        std::fs::write(src.join("b.txt"), b"b").unwrap();
+        std::fs::write(src.join("c.txt"), b"c").unwrap();
+        assert!(t
+            .trash(&[src.join("b.txt"), src.join("gone"), src.join("c.txt")])
+            .is_err());
+        assert!(!src.join("b.txt").exists() && !src.join("c.txt").exists());
+        assert!(base.join("Trash/files/c.txt").is_file());
         assert!(NativeDisk
             .space(Path::new("/"))
             .is_some_and(|(t, f)| t >= f && t > 0));

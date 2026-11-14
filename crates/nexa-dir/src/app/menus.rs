@@ -530,6 +530,8 @@ impl App {
     /// [`Self::trash_checked`] + 출처(GAP-029 · 11-01): 결과 문구 · 뒤처리는 출처별로 `trash_finish`가 낸다. 돌려주는 값 = 삭제가 진행/대기/질문에
     /// 들어갔는가(`false` = 빈 목록 또는 다른 대화상자가 열려 있어 묻지 못함 → 호출자가 취소로 처리).
     pub(crate) fn trash_checked_from(&mut self, paths: Vec<PathBuf>, origin: TrashOrigin) -> bool {
+        // 부모와 함께 선택된 자식 · 중복은 뺀다(GAP-053) — 부모가 먼저 지워지면 자식에서 묶음 삭제가 멈춘다.
+        let paths = ndir_ops::prune_nested(paths);
         if paths.is_empty() {
             return false;
         }
