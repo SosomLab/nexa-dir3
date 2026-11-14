@@ -25,6 +25,8 @@ pub struct WriteReport {
     pub too_big: Vec<PathBuf>,
     /// 항목별 실패(경로 · 사유).
     pub errors: Vec<(PathBuf, String)>,
+    /// 건너뛴 심볼릭 링크(GAP-055 — 종전에는 말없이 빠졌다 · 호출부가 개수를 알린다).
+    pub skipped_links: Vec<PathBuf>,
     pub canceled: bool,
 }
 
@@ -171,7 +173,9 @@ fn collect(src: &Path, base: &Path, out: &mut Vec<(PathBuf, String, bool)>, rep:
         }
     };
     if meta.file_type().is_symlink() {
-        return; // 링크는 건너뜀(풀기 쪽도 지원하지 않는다)
+        // 링크는 건너뜀(풀기 쪽도 지원하지 않는다) — 건너뛴 것은 보고서에 남긴다(GAP-055 · 사용자가 고른 링크가 말없이 빠지지 않게).
+        rep.skipped_links.push(src.to_path_buf());
+        return;
     }
     if meta.is_dir() {
         if !name.is_empty() {
@@ -444,6 +448,32 @@ mod tests {
         assert!(!fits_zip32(&[LIMIT + 1]), "항목 하나 초과");
         assert!(!fits_zip32(&[3 << 30, 3 << 30]), "전체 초과");
         assert!(!fits_zip32(&[LIMIT - 10]), "머리 여유까지 세면 초과");
+    }
+
+    /// GAP-055: 심볼릭 링크(최상위 선택 · 폴더 안)는 넣지 않되 보고서에 남는다 — 종전에는 말없이 빠졌다.
+    #[cfg(unix)]
+    #[test]
+    fn skipped_symlinks_are_reported() {
+        let base = std::env::temp_dir().join(format!("ndir-zipw-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("d")).unwrap();
+        std::fs::write(base.join("a.txt"), b"a").unwrap();
+        std::os::unix::fs::symlink(base.join("a.txt"), base.join("top.lnk")).unwrap();
+        std::os::unix::fs::symlink(base.join("a.txt"), base.join("d/in.lnk")).unwrap();
+        let rep = write_zip(
+            &[base.join("a.txt"), base.join("top.lnk"), base.join("d")],
+            &base.join("out.zip"),
+            &mut |_| {},
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!((rep.files, rep.dirs), (1, 1), "{rep:?}");
+        assert_eq!(
+            rep.skipped_links,
+            vec![base.join("top.lnk"), base.join("d/in.lnk")]
+        );
+        assert!(rep.errors.is_empty());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

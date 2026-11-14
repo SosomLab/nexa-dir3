@@ -72,21 +72,33 @@ fn total_bytes(paths: &[PathBuf]) -> u64 {
 
 /// 결과 요약(토스트 · 상태줄). 두 번째 = 경고 여부.
 fn zip_summary(rep: &WriteReport, dest: &Path) -> (String, bool) {
-    let warn = rep.canceled || !rep.too_big.is_empty() || !rep.errors.is_empty();
+    let warn = rep.canceled
+        || !rep.too_big.is_empty()
+        || !rep.errors.is_empty()
+        || !rep.skipped_links.is_empty();
     let text = if rep.canceled {
         tr("zip.canceled")
     } else if !rep.too_big.is_empty() {
         // 4 GiB 한도(ZIP64 없음) = 쓰지 않았다(엔진이 파일을 만들지 않는다 · 협업 검토 ③).
         trf("zip.tooBig", &[&rep.too_big.len().to_string()])
     } else {
-        trf(
+        let done = trf(
             "zip.done",
             &[
                 &rep.files.to_string(),
                 &rep.dirs.to_string(),
                 &ndir_ops::leaf_name(dest),
             ],
-        )
+        );
+        // 건너뛴 링크가 있으면 개수를 덧붙인다(GAP-055).
+        if rep.skipped_links.is_empty() {
+            done
+        } else {
+            format!(
+                "{done} · {}",
+                trf("zip.skippedLinks", &[&rep.skipped_links.len().to_string()])
+            )
+        }
     };
     (text, warn)
 }
@@ -168,6 +180,14 @@ impl App {
                     self.log_with(
                         ndir_log::LogKind::Error,
                         format!("{}: {why}", p.display()),
+                        None,
+                        None,
+                    );
+                }
+                for p in &rep.skipped_links {
+                    self.log_with(
+                        ndir_log::LogKind::Error,
+                        trf("zip.skippedLinkItem", &[&p.display().to_string()]),
                         None,
                         None,
                     );
