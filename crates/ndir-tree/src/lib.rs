@@ -126,8 +126,32 @@ pub enum SortKey {
     Kind,
     /// 상태(클라우드 — dir3 "상태" 열): 없음 → 온라인 전용 → 로컬에 있음 → 항상 유지 순 · 같은 상태끼리는 다음 키/이름.
     Status,
+    /// 호스트 정의 값(dir3 계산 컬럼 · NEW-060): 자리 번호 — 값은 호스트가 준 [`CustomKeyFn`]이 행마다 낸다
+    /// ([`Tree::set_custom_key`]). 함수가 없으면 전부 동률.
+    Custom(u8),
     /// 정렬 없음 = 원래 **열거 순서**(children id 오름차순 복원).
     None,
+}
+
+/// 호스트 정의 정렬 값(계산 컬럼 · NEW-060) — 순서: 빈 값 < 수(값 순) < 글(이름과 같은 비교 규칙 · 자연 정렬 설정을 따른다).
+#[derive(Debug, Clone, PartialEq)]
+pub enum CustomKey {
+    None,
+    Num(f64),
+    Text(String),
+}
+
+/// 호스트가 주는 정렬 값 함수: (자리, 행, 전체 경로) → 값. 워커에서 만든 트리에 끼울 수 있게 `Send + Sync`.
+pub type CustomKeyFn =
+    std::sync::Arc<dyn Fn(u8, &VisibleRowRef<'_>, &Path) -> CustomKey + Send + Sync>;
+
+/// `Debug`를 위한 상자(클로저는 Debug가 없다).
+struct CustomBox(CustomKeyFn);
+
+impl std::fmt::Debug for CustomBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CustomKeyFn")
+    }
 }
 
 /// 정렬 사양(패널별 독립, docs/23 §3-1). `keys`는 1차→2차… 우선순위이며 각 키에 `desc`.
@@ -272,6 +296,14 @@ pub fn deep_name_match(
     Some(false)
 }
 
+fn custom_rank(k: &CustomKey) -> u8 {
+    match k {
+        CustomKey::None => 0,
+        CustomKey::Num(_) => 1,
+        CustomKey::Text(_) => 2,
+    }
+}
+
 /// 호스트가 주는 이름 판정기(빠른 필터 · 10-25).
 pub type NameMatcherFn = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
@@ -311,6 +343,9 @@ pub struct Tree {
     /// 크기 정렬에 쓸 **계산된 폴더 크기**(dir3 NEW-061 · 사용자 11-14): `None` = 끔(폴더는 0 · 종전) · `Some` = 켬 — 지도에 있는
     /// 폴더는 그 크기로, 없는 폴더(아직 계산 안 됨)는 방향과 무관하게 맨 위. 호스트가 [`Self::set_dir_sizes`]로 넣는다.
     dir_sizes: Option<HashMap<PathBuf, u64>>,
+    /// 호스트 정의 정렬 값 함수(계산 컬럼 · NEW-060) + 값 기억(자리 · 노드 → 값 — 정렬 한 번에 같은 행을 여러 번 비교한다).
+    custom_key: Option<CustomBox>,
+    custom_cache: std::sync::Mutex<HashMap<(u8, NodeId), CustomKey>>,
 }
 
 impl Tree {
@@ -352,6 +387,8 @@ impl Tree {
             },
             sort: SortSpec::default(),
             dir_sizes: None,
+            custom_key: None,
+            custom_cache: std::sync::Mutex::new(HashMap::new()),
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,
@@ -496,6 +533,11 @@ impl Tree {
                     .cmp(&kind_rank(nb.kind))
                     .then_with(|| cmp_name(ext_of(&na.name), ext_of(&nb.name))),
                 SortKey::Status => status_rank(na.attrs).cmp(&status_rank(nb.attrs)),
+                SortKey::Custom(slot) => match (self.custom_of(slot, a), self.custom_of(slot, b)) {
+                    (CustomKey::Num(x), CustomKey::Num(y)) => x.total_cmp(&y),
+                    (CustomKey::Text(x), CustomKey::Text(y)) => cmp_name(&x, &y),
+                    (x, y) => custom_rank(&x).cmp(&custom_rank(&y)),
+                },
                 SortKey::None => Ordering::Equal, // 위에서 처리(도달 안 함)
             };
             let ord = if desc { ord.reverse() } else { ord };
@@ -505,6 +547,58 @@ impl Tree {
         }
         // 모든 키 동률 → 이름, 그다음 id(안정·열거 순서)
         cmp_ci(&na.name, &nb.name).then(a.cmp(&b))
+    }
+
+    /// 호스트 정의 정렬 값(기억해 둔 것 · 없으면 함수로 계산) — 함수가 없으면 빈 값.
+    fn custom_of(&self, slot: u8, id: NodeId) -> CustomKey {
+        let Some(f) = &self.custom_key else {
+            return CustomKey::None;
+        };
+        if let Ok(c) = self.custom_cache.lock() {
+            if let Some(v) = c.get(&(slot, id)) {
+                return v.clone();
+            }
+        }
+        let n = &self.nodes[id as usize];
+        let row = VisibleRowRef {
+            id: n.id,
+            depth: n.depth,
+            kind: n.kind,
+            name: &n.name,
+            size: n.size,
+            modified_unix_ms: n.modified_unix_ms,
+            attrs: n.attrs,
+            expanded: n.expanded,
+            has_children: n.is_dir(),
+        };
+        let v = (f.0)(slot, &row, &n.path);
+        if let Ok(mut c) = self.custom_cache.lock() {
+            c.insert((slot, id), v.clone());
+        }
+        v
+    }
+
+    /// 호스트 정의 정렬 값 함수를 바꾼다(계산 컬럼 · NEW-060) — 기억을 비우고, 지금 정렬에 그 키가 있으면 다시 정렬해 참.
+    /// 식 · 변수 값이 바뀌었을 때도 같은 함수를 다시 넣어 기억을 비운다.
+    pub fn set_custom_key(&mut self, f: Option<CustomKeyFn>) -> bool {
+        if f.is_none() && self.custom_key.is_none() {
+            return false;
+        }
+        self.custom_key = f.map(CustomBox);
+        if let Ok(mut c) = self.custom_cache.lock() {
+            c.clear();
+        }
+        if self
+            .sort
+            .keys
+            .iter()
+            .any(|(k, _)| matches!(k, SortKey::Custom(_)))
+        {
+            self.set_sort(self.sort.clone());
+            true
+        } else {
+            false
+        }
     }
 
     /// 크기 정렬 값: 파일 = 크기 · 폴더 = 0(끔) 또는 계산된 크기(켬 · 모르면 `None`).
@@ -1359,6 +1453,8 @@ impl Tree {
             },
             sort: SortSpec::default(),
             dir_sizes: None,
+            custom_key: None,
+            custom_cache: std::sync::Mutex::new(HashMap::new()),
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,

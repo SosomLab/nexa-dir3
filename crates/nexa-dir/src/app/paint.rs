@@ -323,6 +323,11 @@ impl App {
         let clip = self.paint_clip;
         let vis = move |r: Rect| clip.is_none_or(|c| c.intersects(&r));
         dc.fill_rect(Rect::new(0, 0, wi, hi), th.window_bg);
+        // 계산 컬럼(NEW-060): 탭마다 자기 열 · 식이 맞게(새 탭 · 열 복사 · 새 원천 뒤 수렴 — 바뀐 게 없으면 무동작).
+        {
+            let mut calc_inv = Invalidations::default();
+            self.calc_sync(&mut calc_inv);
+        }
         // 크기 열의 폴더 크기(T-166 3차): 스크롤로 드러난 행을 그리기 직전에 요청/반영(무효화는 지금 그리는 프레임이 덮는다).
         if self.dirsize_col_enabled() {
             let mut col_inv = Invalidations::default();

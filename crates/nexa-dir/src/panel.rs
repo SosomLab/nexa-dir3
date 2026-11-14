@@ -70,6 +70,8 @@ pub(crate) struct Tab {
     pub pending: Option<PendingNav>,
     /// 워커에서 다시 읽는 중(② 2단계 · 재열람 = F5 · 작업 뒤 · 감시 · 전환 수렴) — 결과는 [`Panel::nav_poll`]이 끼운다.
     pub reloading: Option<PendingReload>,
+    /// 이 탭의 계산 컬럼(NEW-060 · 사용자 11-14 "각 탭에만 종속") — 열 · 원천에는 [`Panel::calc_sync`]가 맞춰 넣는다 · 세션 영속.
+    pub calc: Vec<crate::calccol::CalcCol>,
 }
 
 /// 워커 재열람 1건: 결과 채널 · 만들 때의 경로·옵션(그 사이 진입·옵션이 바뀌었으면 버린다) · 감시가 시킨 것인가(신선 스탬프 지움) ·
@@ -409,6 +411,7 @@ impl Panel {
                 stale: false,
                 pending: None,
                 reloading: None,
+                calc: Vec::new(),
             }],
             active: 0,
             bounds: Rect::default(),
@@ -515,6 +518,10 @@ impl Panel {
             .min(panel.tabs.len() - 1);
         panel.active = active;
         for (slot, (orig, _)) in valid.iter().enumerate() {
+            // 탭별 계산 컬럼(NEW-060) — 정렬보다 먼저(정렬 키가 계산 컬럼을 가리킬 수 있다 · 열 · 원천은 `calc_sync`가 맞춘다).
+            if let Some(text) = ps.calc.get(*orig) {
+                panel.tabs[slot].calc = crate::calccol::decode_tab(text);
+            }
             panel.tabs[slot].locked = ps.locked.get(*orig).copied().unwrap_or(false);
             panel.tabs[slot].pinned = ps.pinned.get(*orig).copied().unwrap_or(false);
             // 탭별 정렬(T-128 · 없는 자리는 기본 그대로).
@@ -584,7 +591,163 @@ impl Panel {
         if self.active_is_virtual_root() && !self.base_columns.is_empty() {
             return self.base_columns.iter().map(|c| c.width).collect();
         }
-        self.rows().columns().iter().map(|c| c.width).collect()
+        // 계산 컬럼(탭 종속)은 패널 열 폭에 싣지 않는다 — 폭은 계산 컬럼 정의와 함께 저장된다(NEW-060).
+        self.rows()
+            .columns()
+            .iter()
+            .filter(|c| crate::calccol::slot_of(c.key).is_none())
+            .map(|c| c.width)
+            .collect()
+    }
+
+    /// 활성 탭의 계산 컬럼(NEW-060).
+    pub(crate) fn calc_cols(&self) -> &[crate::calccol::CalcCol] {
+        &self.tabs[self.active].calc
+    }
+
+    /// 활성 탭의 계산 컬럼 교체 → 열 · 원천 동기 · 세션 더러움.
+    pub(crate) fn set_calc(&mut self, cols: Vec<crate::calccol::CalcCol>, inv: &mut Invalidations) {
+        self.tabs[self.active].calc = cols;
+        self.session_dirty = true;
+        self.calc_sync(inv);
+    }
+
+    /// 활성 탭의 계산 컬럼 하나 제거 — 뒤 자리는 앞으로 당긴다(열 · 정렬 키도 같이).
+    pub(crate) fn calc_remove(&mut self, slot: usize, inv: &mut Invalidations) {
+        use crate::calccol::{key_of, slot_of};
+        let tab = &mut self.tabs[self.active];
+        if slot >= tab.calc.len() {
+            return;
+        }
+        // 지금 폭을 정의에 적어 둔다(당겨진 자리의 열이 자기 폭을 유지하게).
+        for (s, c) in tab.calc.iter_mut().enumerate() {
+            if let Some(col) = tab.rows.columns().iter().find(|col| col.key == key_of(s)) {
+                c.width = col.width;
+            }
+        }
+        tab.calc.remove(slot);
+        let shift = |k: u32| -> Option<u32> {
+            match slot_of(k) {
+                Some(s) if s == slot => None,
+                Some(s) if s > slot => Some(key_of(s - 1)),
+                _ => Some(k),
+            }
+        };
+        let cols: Vec<Column> = tab
+            .rows
+            .columns()
+            .iter()
+            .filter_map(|c| {
+                shift(c.key).map(|k| {
+                    let mut c = c.clone();
+                    c.key = k;
+                    if let Some(def) = slot_of(k).and_then(|s| tab.calc.get(s)) {
+                        if def.width > 0 {
+                            c.width = def.width;
+                        }
+                    }
+                    c
+                })
+            })
+            .collect();
+        let sort: Vec<(u32, bool)> = tab
+            .rows
+            .sort()
+            .iter()
+            .filter_map(|(k, d)| shift(*k).map(|k| (k, *d)))
+            .collect();
+        tab.rows.set_columns(cols, inv);
+        tab.rows.set_sort(&sort, inv);
+        self.session_dirty = true;
+        self.calc_sync(inv);
+    }
+
+    /// 계산 컬럼 동기(NEW-060): 탭마다 **자기** 계산 컬럼만 열에 있게 맞추고(다른 탭에서 복사돼 온 것 · 지워진 자리는 뺀다 · 없는
+    /// 것은 끝에 붙인다 · 제목 갱신) · 사라진 자리를 가리키는 정렬 키를 빼고 · 원천에 식을 넣는다. 내 PC(드라이브 열)에는 붙이지
+    /// 않는다. 열을 통째로 복사하는 길(새 탭 · 열 순서 전파 · 열 배치 적용)이 여럿이라 한곳에서 수렴시킨다 — 그리기 직전 · 상태 갱신 ·
+    /// 정의 변경 때 부른다(바뀐 게 없으면 무동작).
+    pub(crate) fn calc_sync(&mut self, inv: &mut Invalidations) {
+        use crate::calccol::{key_of, slot_of, DEFAULT_WIDTH};
+        let default_w = (DEFAULT_WIDTH as f32 * self.m.scale).round() as i32;
+        for tab in &mut self.tabs {
+            let virt = tab.rows.source().is_virtual_root();
+            let want: &[crate::calccol::CalcCol] = if virt { &[] } else { &tab.calc };
+            let mut changed = false;
+            let mut out: Vec<Column> = Vec::with_capacity(tab.rows.columns().len() + want.len());
+            for c in tab.rows.columns() {
+                match slot_of(c.key) {
+                    None => out.push(c.clone()),
+                    Some(s) if s < want.len() => {
+                        let mut c = c.clone();
+                        if c.title != want[s].name {
+                            c.title = want[s].name.clone();
+                            changed = true;
+                        }
+                        out.push(c);
+                    }
+                    Some(_) => changed = true,
+                }
+            }
+            for (s, def) in want.iter().enumerate() {
+                if !out.iter().any(|c| c.key == key_of(s)) {
+                    let w = if def.width > 0 { def.width } else { default_w };
+                    out.push(Column::new(key_of(s), def.name.clone(), w));
+                    changed = true;
+                }
+            }
+            if changed {
+                tab.rows.set_columns(out, inv);
+            }
+            if tab
+                .rows
+                .sort()
+                .iter()
+                .any(|(k, _)| slot_of(*k).is_some_and(|s| s >= want.len()))
+            {
+                let keep: Vec<(u32, bool)> = tab
+                    .rows
+                    .sort()
+                    .iter()
+                    .filter(|(k, _)| slot_of(*k).is_none_or(|s| s < want.len()))
+                    .copied()
+                    .collect();
+                tab.rows.set_sort(&keep, inv);
+                self.session_dirty = true;
+            }
+            if tab.rows.source_mut().set_calc(want.to_vec()) {
+                inv.push(tab.rows.bounds());
+            }
+        }
+    }
+
+    /// 세션 저장 — 탭별 계산 컬럼(`panel{i}.calc` · NEW-060): 지금 열 폭을 함께 적는다 · 하나도 없으면 빈 목록.
+    pub(crate) fn session_calc(&self) -> Vec<String> {
+        if self.tabs.iter().all(|t| t.calc.is_empty()) {
+            return Vec::new();
+        }
+        self.tabs
+            .iter()
+            .map(|t| {
+                let cols: Vec<crate::calccol::CalcCol> = t
+                    .calc
+                    .iter()
+                    .enumerate()
+                    .map(|(s, c)| {
+                        let mut c = c.clone();
+                        if let Some(col) = t
+                            .rows
+                            .columns()
+                            .iter()
+                            .find(|col| col.key == crate::calccol::key_of(s))
+                        {
+                            c.width = col.width;
+                        }
+                        c
+                    })
+                    .collect();
+                crate::calccol::encode_tab(&cols)
+            })
+            .collect()
     }
 
     /// 내 PC 열 폭(세션 `drivew` · 이름 · 종류 · 전체 크기 · 여유 공간 순) — 사용자가 내 PC에서 폭을 바꾼 뒤에만(T-193).
@@ -645,6 +808,7 @@ impl Panel {
         };
         let mut items: Vec<(String, bool)> = cols
             .iter()
+            .filter(|c| crate::calccol::slot_of(c.key).is_none()) // 계산 컬럼은 탭 종속(패널 열 배치에 싣지 않는다)
             .filter(|c| crate::order::col_key_id(crate::order::col_id_key(c.key)) == Some(c.key))
             .map(|c| (crate::order::col_id_key(c.key).to_string(), true))
             .collect();
@@ -1851,6 +2015,7 @@ impl Panel {
             stale: false,
             pending: None,
             reloading: None,
+            calc: Vec::new(),
         });
         self.active = self.tabs.len() - 1;
         self.navigated = true;
@@ -1996,6 +2161,7 @@ impl Panel {
                 stale: false,
                 pending: None,
                 reloading: None,
+                calc: Vec::new(),
             },
         );
         self.active = i + 1;

@@ -31,6 +31,9 @@ pub(crate) struct PanelSession {
     pub drive_widths: Vec<i32>,
     /// 탭별 정렬(`panel{i}.sort` · dir3 신규 T-128 · dir2는 모르는 키 = 무시): `name+,size-` · 전부 기본이면 빈 목록.
     pub sort: Vec<String>,
+    /// 탭별 계산 컬럼(`panel{i}.calc` · dir3 신규 NEW-060 · dir2는 모르는 키 = 무시): 탭마다 `이름=식@폭;…`(퍼센트 인코딩 ·
+    /// `calccol::encode_tab`) · 하나도 없으면 빈 목록.
+    pub calc: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -109,6 +112,9 @@ impl Session {
             if !p.sort.is_empty() {
                 out.push_str(&format!("panel{i}.sort={}\n", p.sort.join("|")));
             }
+            if !p.calc.is_empty() {
+                out.push_str(&format!("panel{i}.calc={}\n", p.calc.join("|")));
+            }
             if !p.col_widths.is_empty() {
                 let ws: Vec<String> = p.col_widths.iter().map(|w| w.to_string()).collect();
                 out.push_str(&format!("panel{i}.colw={}\n", ws.join(",")));
@@ -166,6 +172,7 @@ impl Session {
                 }
                 "cols" => p.col_layout = v.to_string(),
                 "sort" => p.sort = v.split('|').map(str::to_string).collect(),
+                "calc" => p.calc = v.split('|').map(|t| t.trim().to_string()).collect(),
                 "colw" => {
                     p.col_widths = v
                         .split(',')
@@ -267,6 +274,10 @@ mod tests {
                     drive_widths: vec![300, 100, 120, 140],
                     col_layout: "cols:1[ext:1,name:1,size:0,modified:1,kind:1]".into(),
                     sort: vec!["size-,name+".into(), String::new()],
+                    calc: vec![
+                        String::new(),
+                        "MB=size / 1048576@120;x=ext%3D%3D'a'@0".into(),
+                    ],
                 },
                 PanelSession {
                     tabs: vec![PathBuf::from("C:\\")],

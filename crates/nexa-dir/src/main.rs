@@ -43,6 +43,7 @@ fn detail_push(
 }
 mod archive_win;
 mod bulk_win;
+mod calccol;
 mod check_win;
 mod cli;
 #[allow(dead_code)] // M6 파일 작업·M5 터미널 복사에서 소비(지금은 호스트 껍질만 들여놓음).
@@ -1068,6 +1069,7 @@ impl App {
         // 내 PC(가상 최상위)를 보는 탭 = 드라이브 용량을 Disk 포트로 한 번 채운다(PANEL-044).
         {
             let mut inv = Invalidations::default();
+            self.calc_sync(&mut inv); // 계산 컬럼(NEW-060): 이동 · 탭 전환 뒤 새 원천에 식을 잇는다
             let disk = &*self.platform.disk;
             for p in &mut self.panels {
                 // 전환·닫기로 드러난 배경 탭은 그동안의 바깥 변경을 모른다 → 여기서 다시 읽는다(dir2 X-44 S1 · win.rs:4967-4976).

@@ -1473,6 +1473,17 @@ launcher.dlg.title = クイックランチャーの項目
 launcher.dlg.text = ラベル|プログラム|引数 の形式で入力します。引数の %path% は現在のフォルダーに置き換わります。
 launcher.dlg.input = 項目
 launcher.dlg.invalid = ラベルとプログラムを | で区切って入力してください。
+calc.menu.add = 計算列を追加…
+calc.menu.edit = 計算列「{0}」を編集…
+calc.menu.del = 計算列「{0}」を削除
+calc.dlg.title = 計算列
+calc.dlg.text = 名前 = 式 の形で入力します。この列は現在のタブだけに属し、ほかの列と同じように並べ替えできます。変数: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind。Python 風の式: + - * / // % **、比較、and/or/not、a if c else b、'文字' + str(n)、f"{size / 1024:.1f} KB"、s[0:3]、s.upper()、s.replace(a, b)、s.split('.')、len()、round()、int()、min()、max()、size_h(size)、date(mtime, '%Y-%m')、year(mtime)、age_days(mtime)。
+calc.dlg.input = 定義
+calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.full = 1 つのタブに置ける計算列は {0} 個までです。
+calc.err.shape = 名前 = 式 の形で入力してください。
+calc.err.name = 列名が空か長すぎます(40 文字以内)。
+calc.err.expr = 式エラー: {0}
 mem.subtitle = 常駐 {0} · ヒープ空き {1}
 mem.trimming = 整理中…
 mem.trimmed = ヒープ整理完了 — {0} 返却（{1} ms）

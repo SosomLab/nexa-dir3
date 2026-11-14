@@ -373,6 +373,27 @@ impl App {
             self.dlg_type(text);
             return;
         }
+        // 계산 컬럼(NEW-060): `calc.add:이름 = 식` · `calc.del:자리` — 활성 탭.
+        if let Some(def) = id.strip_prefix("calc.add:") {
+            self.calc_entered(None, def);
+            return;
+        }
+        if let Some(n) = id.strip_prefix("calc.del:") {
+            if let Ok(slot) = n.trim().parse::<usize>() {
+                self.calc_delete(slot);
+            }
+            return;
+        }
+        // 정렬(시험 · 실기 판정용): `sort.by:size-,name+`(세션 `panel{i}.sort`와 같은 글 · `calc0+` 포함) — 활성 탭.
+        if let Some(spec) = id.strip_prefix("sort.by:") {
+            let keys = crate::panel::sort_from_str(spec);
+            let mut inv = Invalidations::default();
+            self.calc_sync(&mut inv);
+            let a = self.active;
+            self.panels[a].rows_mut().set_sort(&keys, &mut inv);
+            self.redraw();
+            return;
+        }
         if let Some(text) = id.strip_prefix("ui.type:") {
             // 글자 입력(이름 바꾸기·경로 바·타입어헤드) — `\b` = Backspace.
             let text = text.replace("\\b", "\u{8}");

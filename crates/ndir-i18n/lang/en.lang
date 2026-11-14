@@ -1473,6 +1473,17 @@ launcher.dlg.title = Quick launcher item
 launcher.dlg.text = Enter the item as: label|program|arguments. In arguments, %path% is replaced by the current folder.
 launcher.dlg.input = Item
 launcher.dlg.invalid = Enter at least a label and a program, separated by |.
+calc.menu.add = Add calculated column…
+calc.menu.edit = Edit calculated column "{0}"…
+calc.menu.del = Remove calculated column "{0}"
+calc.dlg.title = Calculated column
+calc.dlg.text = Enter the column as: name = expression. The column belongs to this tab and can be sorted like any other. Variables: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. Python-style expressions: + - * / // % **, comparisons, and/or/not, a if c else b, 'text' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime).
+calc.dlg.input = Definition
+calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.full = A tab can hold up to {0} calculated columns.
+calc.err.shape = Enter the column as: name = expression.
+calc.err.name = The column name is empty or too long (40 characters at most).
+calc.err.expr = Expression error: {0}
 mem.subtitle = resident {0} · heap free {1}
 mem.trimming = Trimming…
 mem.trimmed = Heap trimmed - {0} returned ({1} ms)

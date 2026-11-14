@@ -414,11 +414,18 @@ pub(crate) fn col_key_id(key: &str) -> Option<u32> {
         "size" => crate::filelist::COL_SIZE,
         "modified" => crate::filelist::COL_MODIFIED,
         "kind" => crate::filelist::COL_KIND,
-        _ => return None,
+        // 계산 컬럼(NEW-060 · 탭 종속): 정렬 저장(`calc0+`)에만 쓴다 — 열 배치(`cols`)에는 싣지 않는다.
+        other => {
+            let slot = crate::calccol::KEY_NAMES.iter().position(|n| *n == other)?;
+            crate::calccol::key_of(slot)
+        }
     })
 }
 
 pub(crate) fn col_id_key(id: u32) -> &'static str {
+    if let Some(slot) = crate::calccol::slot_of(id) {
+        return crate::calccol::KEY_NAMES[slot];
+    }
     match id {
         crate::filelist::COL_STATUS => "status",
         crate::filelist::COL_EXT => "ext",

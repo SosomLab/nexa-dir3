@@ -250,6 +250,10 @@ pub(crate) struct TreeSource {
     /// 크기 정렬에 쓸 폴더 크기(NEW-061 · 사용자 11-14): `Some` = 켬 — 지금까지 본 값을 **쌓아 둔다**(보이는 행만 오는 `dir_sizes`와
     /// 달리 스크롤로 벗어난 행의 값도 남겨, 정렬 순서가 스크롤에 따라 바뀌지 않게) · 다른 폴더로 가면 새 원천 = 비움.
     sort_sizes: Option<std::collections::HashMap<PathBuf, u64>>,
+    /// 이 탭의 계산 컬럼(NEW-060 · 탭 소유 — 패널이 새 원천에도 넣는다 · [`Self::set_calc`]).
+    calc: Vec<crate::calccol::CalcCol>,
+    /// 계산 컬럼의 시계(지금 · 시간대) — 식을 넣을 때 · 다시 읽을 때 잰다(행마다 OS 시간대를 묻지 않는다).
+    calc_clock: (i64, i64),
     /// 빠른 필터 글(NEW-057 · 탭 소유 · 재열람에도 유지 · 다른 폴더로 가면 새 원천 = 풀림) — 빈 글 = 끔.
     name_filter: String,
     /// 빠른 필터 토글(대소문자 · 단어 · 정규식 · 10-25 검색창) — 판정기는 ndir-ops `namefilter`.
@@ -310,6 +314,8 @@ impl TreeSource {
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
             sort_sizes: None,
+            calc: Vec::new(),
+            calc_clock: (0, 0),
             name_filter: String::new(),
             filter_opts: ndir_ops::namefilter::FilterOpts::default(), // 패널이 자기 토글을 넣는다(`Panel::apply_nav` · 전역 없음 · 10-26)
             filter_err: false,
@@ -658,10 +664,78 @@ impl TreeSource {
         self.push_sort_sizes()
     }
 
-    /// 쌓아 둔 폴더 크기를 트리 정렬에 넣는다 — 순서가 바뀌었으면 true.
+    /// 쌓아 둔 폴더 크기를 트리 정렬에 넣는다 — 순서가 바뀌었으면 true. 계산 컬럼이 있으면 그 정렬 값도 다시 낸다(식의 `size`가
+    /// 폴더에서는 계산된 크기다).
     fn push_sort_sizes(&mut self) -> bool {
         let sizes = self.sort_sizes.clone();
-        self.tree.as_mut().is_some_and(|t| t.set_dir_sizes(sizes))
+        let a = self.tree.as_mut().is_some_and(|t| t.set_dir_sizes(sizes));
+        let b = !self.calc.is_empty() && self.install_calc();
+        a || b
+    }
+
+    /// 계산 컬럼 교체 — 이름 · 식이 같으면 무동작(false) · 바뀌었으면 정렬 값 함수를 다시 끼우고 true(호스트가 목록 무효화).
+    pub(crate) fn set_calc(&mut self, cols: Vec<crate::calccol::CalcCol>) -> bool {
+        let same = self.calc.len() == cols.len()
+            && self
+                .calc
+                .iter()
+                .zip(&cols)
+                .all(|(a, b)| a.name == b.name && a.src == b.src);
+        if same {
+            return false;
+        }
+        self.calc = cols;
+        self.install_calc();
+        true
+    }
+
+    /// 트리에 계산 컬럼의 정렬 값 함수를 끼운다(없으면 뺀다) — 순서가 바뀌었으면 true. 시계도 이때 다시 잰다.
+    fn install_calc(&mut self) -> bool {
+        self.calc_clock = crate::calccol::clock();
+        let Some(t) = self.tree.as_mut() else {
+            return false;
+        };
+        if self.calc.is_empty() {
+            return t.set_custom_key(None);
+        }
+        let cols = self.calc.clone();
+        let sizes = self.sort_sizes.clone().unwrap_or_default();
+        let clock = self.calc_clock;
+        t.set_custom_key(Some(std::sync::Arc::new(move |slot, row, path| match cols
+            .get(usize::from(slot))
+        {
+            Some(c) => crate::calccol::sort_key(c.eval(&crate::calccol::RowEnv {
+                row,
+                path,
+                dir_size: sizes.get(path).copied(),
+                clock,
+            })),
+            None => ndir_tree::CustomKey::None,
+        })))
+    }
+
+    /// 계산 컬럼 셀 글(자리 · 행) — 오류 = `#ERR`.
+    fn calc_cell(&self, index: usize, slot: usize) -> String {
+        let (Some(t), Some(c)) = (self.tree.as_ref(), self.calc.get(slot)) else {
+            return String::new();
+        };
+        let (Some(row), Some(path)) = (
+            t.row_ref(index),
+            t.visible_id(index).and_then(|id| t.node_path(id)),
+        ) else {
+            return String::new();
+        };
+        let dir_size = self
+            .dir_sizes
+            .get(path)
+            .map(|(b, _)| *b)
+            .or_else(|| self.sort_sizes.as_ref().and_then(|m| m.get(path).copied()));
+        crate::calccol::cell_text(&c.eval(&crate::calccol::RowEnv {
+            row: &row,
+            path,
+            dir_size,
+            clock: self.calc_clock,
+        }))
     }
 
     /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
@@ -762,6 +836,7 @@ impl TreeSource {
             Ok(t) => {
                 self.tree = Some(t);
                 self.push_sort_sizes(); // 새 트리에도 계산된 폴더 크기 정렬을 잇는다(NEW-061)
+                self.install_calc(); // 계산 컬럼 정렬 값 함수(NEW-060)
                 self.error = None;
                 // 빠른 필터(NEW-057)는 재열람해도 그대로 — 토글·하위 폴더 범위까지 다시 건다(종전엔 글만 넣어 판정기가 부분 문자열로 돌아갔다 · 10-26).
                 self.apply_matcher();
@@ -1087,7 +1162,8 @@ pub(crate) fn sort_key_of(col: u32) -> Option<SortKey> {
         COL_SIZE => SortKey::Size,
         COL_MODIFIED => SortKey::Modified,
         COL_STATUS => SortKey::Status,
-        _ => return None,
+        // 계산 컬럼(NEW-060) = 호스트 정의 값.
+        k => SortKey::Custom(u8::try_from(crate::calccol::slot_of(k)?).ok()?),
     })
 }
 
@@ -1334,6 +1410,9 @@ impl RowSource for TreeSource {
         let Some(r) = self.tree.as_ref().and_then(|t| t.row_ref(index)) else {
             return String::new();
         };
+        if let Some(slot) = crate::calccol::slot_of(key) {
+            return self.calc_cell(index, slot);
+        }
         match key {
             COL_EXT if r.kind == FileKind::Dir => String::new(),
             COL_EXT => match r.name.rsplit_once('.') {

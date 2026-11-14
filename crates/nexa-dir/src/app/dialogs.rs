@@ -48,6 +48,8 @@ pub(crate) enum DlgReply {
     BulkPreset,
     /// 빠른 실행 항목 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`라벨|실행 파일|인자`)을 넣는다(T-133).
     LauncherItem(Option<usize>),
+    /// 계산 컬럼 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`이름 = 식`)을 활성 탭에 넣는다(NEW-060).
+    CalcColumn(Option<usize>),
     /// 이름을 NFC로 변환(10-18): 1 = 폴더 안까지 · 2 = 선택한 것만 · 그 외 취소.
     NfcConvert(Vec<PathBuf>),
     /// 패턴으로 선택(NEW-054 · 10-25): 1 = 선택에 더함 · 2 = 선택에서 뺌 · 그 외 취소 — 입력 = `;` 구분 글롭.
@@ -215,6 +217,11 @@ impl App {
             DlgReply::LauncherItem(at) => {
                 if id == 1 {
                     self.launcher_item_entered(at, text.as_deref().unwrap_or(""));
+                }
+            }
+            DlgReply::CalcColumn(at) => {
+                if id == 1 {
+                    self.calc_entered(at, text.as_deref().unwrap_or(""));
                 }
             }
             DlgReply::Conflict(tx) => {

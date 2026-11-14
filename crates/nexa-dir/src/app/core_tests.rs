@@ -11402,6 +11402,122 @@ fn size_sort_orders_folders_by_computed_size() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 계산 컬럼(NEW-060 · 사용자 11-14): `이름 = 식`으로 만든 열이 **탭에 종속** — 셀 값 · 정렬(오름/내림) · 다른 탭에는 없음 ·
+/// 폴더 이동 · 재열람 뒤 유지 · 편집 · 오류(다시 묻기) · 삭제(정렬 키 정리) · 세션 저장 왕복.
+#[test]
+fn calculated_columns_belong_to_tab_and_sort() {
+    use crate::calccol::COL_CALC0;
+    let (mut app, dir) = fixture("calccol");
+    std::fs::write(dir.join("longer-name.txt"), vec![0u8; 2048]).expect("write");
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let titles = |app: &App| -> Vec<String> {
+        app.panels[0]
+            .rows()
+            .columns()
+            .iter()
+            .map(|c| c.title.clone())
+            .collect()
+    };
+    let names = |app: &App| -> Vec<String> {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .filter_map(|i| src.row_path(i))
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .collect()
+    };
+    let cells = |app: &App, key: u32| -> Vec<String> {
+        use nexa_grid::RowSource;
+        let src = app.panels[0].rows().source();
+        (0..src.len()).map(|i| src.cell(i, key)).collect()
+    };
+    let base = titles(&app).len();
+    // 추가 = 끝에 붙는다 · 셀 값.
+    app.startup_cmd("calc.add:Len = len(name)");
+    assert_eq!(titles(&app).len(), base + 1);
+    assert_eq!(titles(&app).last().map(String::as_str), Some("Len"));
+    assert_eq!(names(&app), ["sub", "a.txt", "b.md", "longer-name.txt"]);
+    assert_eq!(cells(&app, COL_CALC0), ["3", "5", "4", "15"]);
+    // 둘째 열(글 · 조건식 · f-문자열) + 정렬: 계산 컬럼 내림 = 폴더 우선 뒤 값 순.
+    app.startup_cmd("calc.add:Tag = 'big' if size > 1024 else f'{ext.upper()}:{size}'");
+    assert_eq!(cells(&app, COL_CALC0 + 1), [":0", "TXT:5", "MD:3", "big"]);
+    app.startup_cmd("sort.by:calc0-");
+    assert_eq!(names(&app), ["sub", "longer-name.txt", "a.txt", "b.md"]);
+    app.startup_cmd("sort.by:calc1+");
+    assert_eq!(
+        names(&app),
+        ["sub", "longer-name.txt", "b.md", "a.txt"],
+        "글 순(big < MD:3 < TXT:5 · 대소문자 무시)"
+    );
+    // 틀린 식 = 열은 그대로 · 안내 뒤 같은 글로 다시 묻는다.
+    app.calc_ask(None, None);
+    app.startup_cmd("dlg.type:Bad = sise * 2");
+    app.startup_cmd("dlg.pick:1");
+    assert_eq!(titles(&app).len(), base + 2);
+    let d = app.dump_of("dlg").unwrap();
+    assert!(d.contains(&tr("calc.dlg.title")), "다시 묻는다: {d}");
+    app.startup_cmd("dlg.pick:0");
+    // 편집 = 같은 자리 교체(정렬은 그 자리를 계속 가리킨다).
+    app.calc_ask(Some(1), None);
+    app.startup_cmd("dlg.type:Kb = size // 1024");
+    app.startup_cmd("dlg.pick:1");
+    assert_eq!(titles(&app).last().map(String::as_str), Some("Kb"));
+    assert_eq!(
+        names(&app),
+        ["sub", "a.txt", "b.md", "longer-name.txt"],
+        "수 순"
+    );
+    // 폴더 이동 · 돌아오기 · 재열람 뒤에도 열과 식이 유지된다.
+    let _ = app.panels[0].navigate_to(dir.join("sub"), &mut inv);
+    app.startup_cmd("sort.by:name+");
+    assert_eq!(titles(&app).len(), base + 2);
+    assert_eq!(cells(&app, COL_CALC0), ["8"], "inner.rs");
+    app.command("nav.back");
+    app.panels[0].reopen(&mut inv);
+    let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert_eq!(cells(&app, COL_CALC0), ["3", "5", "4", "15"]);
+    // 다른 탭에는 없다 · 돌아오면 있다.
+    app.command("file.new_tab");
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert_eq!(titles(&app).len(), base, "새 탭 = 계산 컬럼 없음");
+    app.command("tab.prev");
+    app.paint_into(&mut rec, 1200, 800, 1.0);
+    assert_eq!(titles(&app).len(), base + 2);
+    // 세션: 탭별 저장 · 열 폭(패널 `colw`)에는 싣지 않는다 · 정렬 글에 `calc`.
+    app.startup_cmd("sort.by:calc1-");
+    let snap = app.session_snapshot();
+    assert_eq!(snap.panels[0].calc.len(), 2, "{:?}", snap.panels[0].calc);
+    assert!(
+        snap.panels[0].calc[0].starts_with("Len=len(name)@")
+            && snap.panels[0].calc[0].contains(";Kb=size // 1024@"),
+        "{:?}",
+        snap.panels[0].calc
+    );
+    assert!(snap.panels[0].calc[1].is_empty());
+    assert_eq!(snap.panels[0].sort[0], "calc1-");
+    assert!(snap.panels[0].col_widths.len() <= base);
+    let text = snap.serialize();
+    let back = crate::session::Session::parse(&text);
+    assert_eq!(back.panels[0].calc, snap.panels[0].calc);
+    // 첫 열 삭제 = 뒤 열이 앞으로 · 정렬 키도 따라온다 · 마지막까지 지우면 정렬에서도 빠진다.
+    app.startup_cmd("calc.del:0");
+    assert_eq!(titles(&app).len(), base + 1);
+    assert_eq!(titles(&app).last().map(String::as_str), Some("Kb"));
+    assert_eq!(app.panels[0].rows().sort(), [(COL_CALC0, true)]);
+    assert_eq!(
+        cells(&app, COL_CALC0),
+        ["0", "2", "0", "0"],
+        "Kb 내림(폴더 우선)"
+    );
+    app.startup_cmd("calc.del:0");
+    assert_eq!(titles(&app).len(), base);
+    assert!(app.panels[0].rows().sort().is_empty());
+    assert!(app.session_snapshot().panels[0].calc.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 상태바 전송 진행 칸(T-96 · NEW-006 · 10-25): 전송이 없으면 칸이 없다 · 전송 중 = "T nn%"(탭 칸 뒤) · 클릭 = 진행 창 띄우기
 /// (창 없이 돌던 전송이면 새로 준비) · 끝나면 사라진다 · 순서 편집기 라벨.
 #[test]

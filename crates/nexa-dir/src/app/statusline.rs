@@ -894,10 +894,15 @@ impl App {
 
     /// 열 머리글 우클릭 메뉴(dir2 win.rs:6262-6304 `show_bar_popup(false)`): 파일 컬럼… = 열 배치(표시/숨김 · 순서) 편집 창.
     pub(crate) fn open_header_menu(&mut self) {
-        let items = vec![CtxItem::item(
+        let mut items = vec![CtxItem::item(
             "aux.col.order",
             format!("{}…", tr("pref.colLayout")),
         )];
+        // 계산 컬럼(NEW-060 · 탭 종속): 내 PC(드라이브 열)에는 붙이지 않는다.
+        if !self.panels[self.active].active_is_virtual_root() {
+            items.push(CtxItem::Separator);
+            items.extend(self.calc_menu_items());
+        }
         self.open_ctx(CtxKind::Aux(self.active), items);
     }
 
@@ -995,7 +1000,10 @@ impl App {
 
     /// 보조 메뉴(탭 상태바 · 툴바 · 런처) 항목 실행.
     pub(crate) fn aux_menu_action(&mut self, panel: usize, id: &str) {
-        if self.fav_menu_action(panel, id) || self.recent_menu_action(panel, id) {
+        if self.fav_menu_action(panel, id)
+            || self.recent_menu_action(panel, id)
+            || self.calc_menu_action(id)
+        {
             return;
         }
         if let Some(i) = id

@@ -1472,6 +1472,17 @@ launcher.dlg.title = 빠른 실행 항목
 launcher.dlg.text = 라벨|실행 파일|인자 형식으로 입력합니다. 인자의 %path%는 현재 폴더로 바뀝니다.
 launcher.dlg.input = 항목
 launcher.dlg.invalid = 라벨과 실행 파일을 |로 구분해 입력해 주세요.
+calc.menu.add = 계산 컬럼 추가…
+calc.menu.edit = 계산 컬럼 "{0}" 편집…
+calc.menu.del = 계산 컬럼 "{0}" 제거
+calc.dlg.title = 계산 컬럼
+calc.dlg.text = 이름 = 식 형태로 입력합니다. 이 컬럼은 현재 탭에만 속하며 다른 컬럼처럼 정렬할 수 있습니다. 변수: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. 파이썬식 표현: + - * / // % **, 비교, and/or/not, a if c else b, '글' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime).
+calc.dlg.input = 정의
+calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.full = 탭 하나에 계산 컬럼은 {0}개까지 둘 수 있습니다.
+calc.err.shape = 이름 = 식 형태로 입력하세요.
+calc.err.name = 컬럼 이름이 비었거나 너무 깁니다(40자 이하).
+calc.err.expr = 식 오류: {0}
 mem.subtitle = 상주 {0} · 힙 여유 {1}
 mem.trimming = 정리 중…
 mem.trimmed = 힙 정리 완료 — {0} 반환({1} ms)
