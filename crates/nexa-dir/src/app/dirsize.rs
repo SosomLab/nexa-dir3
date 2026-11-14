@@ -43,6 +43,10 @@ pub(crate) struct DirSizeShared {
     /// 훑기가 `cancel`을 보고 중간에 그쳤다(진행값은 일부) — 끝까지 돈 뒤에 취소된 것과 구분(11-09).
     aborted: AtomicBool,
     done: AtomicBool,
+    /// 항목 수 상한(0 = 없음 · 설정 `dock.folder_size_max_items` · 수동 명령은 0) — 넘으면 [`Self::capped`]를 세우고 그친다.
+    limit: AtomicU64,
+    /// 상한에 걸려 그쳤다 — 결과는 "일부(≥)"지만 **끝난 것**으로 친다(다시 재도 같은 자리에서 그치므로 재요청하지 않는다).
+    capped: AtomicBool,
 }
 
 /// 요청의 출처 — 보임 여부로 버리거나 선점할 수 있는가를 가른다(11-09).
@@ -125,6 +129,10 @@ pub(crate) struct Tuning {
     pub(crate) ttl: Option<Duration>,
     /// 바뀐 폴더를 다시 재는 최소 간격(GAP-054 · 설정 `dock.folder_size_refresh_ms`).
     pub(crate) refresh_min: Duration,
+    /// 자동 측정(도크 · 크기 열)이 폴더 하나에서 세는 항목 수 상한(0 = 없음 · 설정 `dock.folder_size_max_items`).
+    pub(crate) max_items: u64,
+    /// 네트워크 위치도 자동으로 재는가(설정 `dock.folder_size_network`) — 끄면 수동 명령만 잰다.
+    pub(crate) network: bool,
 }
 
 /// 바뀐 폴더 재측정 최소 간격의 기본값(ms) — 설정 `dock.folder_size_refresh_ms`의 기본값과 같다.
@@ -141,6 +149,8 @@ impl Default for Tuning {
             settle_ms: 250,
             ttl: Some(Duration::from_secs(DEFAULT_TTL_S)),
             refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
+            max_items: 0,
+            network: true,
         }
     }
 }
@@ -176,7 +186,13 @@ pub(crate) struct DirSizes {
     /// 마지막으로 도크에 반영한 시각 — 재는 중의 진행값("지금까지 …")은 [`DISPLAY_EVERY_MS`]마다만. 종전에는 유휴 틱(사건마다 =
     /// 그리기 뒤에도)마다 다시 그려 **그리기 → 틱 → 그리기** 고리로 재는 내내 120~170 fps가 됐다(docs/25 §8-1).
     last_shown: Option<Instant>,
+    /// 네트워크 위치 판정 캐시(상위 폴더 → 네트워크인가 · 판정 시각) — 그리기마다 마운트 표를 읽지 않게([`NET_CACHE_S`]초).
+    net: HashMap<PathBuf, (bool, Instant)>,
 }
+
+/// 네트워크 위치 판정 캐시 유효 시간(초) · 항목 상한.
+const NET_CACHE_S: u64 = 30;
+const NET_CACHE_MAX: usize = 64;
 
 /// 재는 중 진행값 표시 간격(ms).
 pub(crate) const DISPLAY_EVERY_MS: u64 = 250;
@@ -264,6 +280,14 @@ pub(crate) fn walk(root: &Path, sh: &DirSizeShared) {
                     sh.bytes.fetch_add(m.len(), Ordering::Relaxed);
                 }
             }
+            // 항목 수 상한(큰 폴더 제외 · T-166 남김): 넘으면 지금까지의 값으로 그친다 — 취소가 아니라 끝남(≥ 표시).
+            let limit = sh.limit.load(Ordering::Relaxed);
+            if limit > 0
+                && sh.files.load(Ordering::Relaxed) + sh.dirs.load(Ordering::Relaxed) >= limit
+            {
+                sh.capped.store(true, Ordering::Relaxed);
+                return;
+            }
         }
     }
 }
@@ -274,7 +298,7 @@ impl DirSizeShared {
             bytes: self.bytes.load(Ordering::Relaxed),
             files: self.files.load(Ordering::Relaxed),
             dirs: self.dirs.load(Ordering::Relaxed),
-            partial: self.errors.load(Ordering::Relaxed) > 0,
+            partial: self.errors.load(Ordering::Relaxed) > 0 || self.capped.load(Ordering::Relaxed),
         }
     }
 
@@ -298,12 +322,17 @@ impl DirSizeJob {
 impl DirSizes {
     /// 조절값(설정 변경 때 · 재는 중인 작업은 그대로 끝까지).
     pub(crate) fn set_tuning(&mut self, t: Tuning) {
+        if t.network != self.tuning.network {
+            self.net.clear();
+        }
         self.tuning = Tuning {
             threads: t.threads.max(1),
             queue_max: t.queue_max.max(1),
             settle_ms: t.settle_ms,
             ttl: t.ttl,
             refresh_min: t.refresh_min,
+            max_items: t.max_items,
+            network: t.network,
         };
     }
 
@@ -329,7 +358,7 @@ impl DirSizes {
     /// `path`의 크기를 요청한다(정보 도크) — 유효한 캐시가 있거나 재는 중이면 무동작 · 빠른 이동 중이면 보류(마지막 것만) ·
     /// 아니면 큐 맨 앞에.
     pub(crate) fn request(&mut self, path: &Path, now: Instant) {
-        if self.fresh(path, now) || self.is_running(path) {
+        if self.fresh(path, now) || self.is_running(path) || self.skip_network(path, now) {
             return;
         }
         let ok = settled(now, self.last_request, self.tuning.settle_ms);
@@ -378,6 +407,7 @@ impl DirSizes {
             || self.is_running(path)
             || self.is_queued(path)
             || self.queue.len() >= self.tuning.queue_max
+            || (origin != Origin::Manual && self.skip_network(path, now))
         {
             return;
         }
@@ -437,6 +467,26 @@ impl DirSizes {
         true
     }
 
+    /// 자동 측정에서 뺄 네트워크 위치인가(설정 `dock.folder_size_network` off · T-166 남김) — 판정은 상위 폴더 단위로
+    /// [`NET_CACHE_S`]초 기억한다(같은 목록의 폴더 행들이 한 번만 묻는다 · Linux는 마운트 표를 읽는다).
+    fn skip_network(&mut self, path: &Path, now: Instant) -> bool {
+        if self.tuning.network {
+            return false;
+        }
+        let key = path.parent().unwrap_or(path);
+        if let Some((net, at)) = self.net.get(key) {
+            if now.saturating_duration_since(*at).as_secs() < NET_CACHE_S {
+                return *net;
+            }
+        }
+        if self.net.len() >= NET_CACHE_MAX {
+            self.net.clear();
+        }
+        let net = ndir_vfs::is_network_path(path);
+        self.net.insert(key.to_path_buf(), (net, now));
+        net
+    }
+
     /// 재는 중 `i`번째를 취소하고 슬롯에서 빼 둔다(결과 수거는 `tick`).
     fn retire(&mut self, i: usize) {
         let j = self.running.remove(i);
@@ -461,6 +511,9 @@ impl DirSizes {
                 break;
             };
             let shared = Arc::new(DirSizeShared::default());
+            if req.origin != Origin::Manual {
+                shared.limit.store(self.tuning.max_items, Ordering::Relaxed);
+            }
             let sh = Arc::clone(&shared);
             let root = req.path.clone();
             let spawned = std::thread::Builder::new()
@@ -831,6 +884,8 @@ impl App {
             refresh_min: Duration::from_millis(
                 s.int("dock.folder_size_refresh_ms").clamp(0, 600_000) as u64,
             ),
+            max_items: s.int("dock.folder_size_max_items").clamp(0, 1_000_000_000) as u64,
+            network: s.flag("dock.folder_size_network"),
         };
         self.dirsizes.set_tuning(t);
     }
@@ -1039,6 +1094,8 @@ mod tests {
             settle_ms: 0,
             ttl: None,
             refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
+            max_items: 0,
+            network: true,
         });
         let now = Instant::now();
         let p = |n: usize| PathBuf::from(format!("/q/{n}"));
@@ -1094,6 +1151,62 @@ mod tests {
         );
         d.clear();
         assert!(d.order.is_empty() && d.cache.is_empty());
+    }
+
+    /// 큰 폴더 제외(T-166 남김): 항목 수 상한에 걸리면 지금까지의 값으로 **끝난다**(≥ 표시 · 취소 아님 · 재요청 없음) ·
+    /// 수동 명령은 상한 없이 끝까지 · 네트워크 제외는 설정이 켜져 있으면(기본) 아무것도 막지 않는다.
+    #[test]
+    fn item_cap_finishes_partial_and_manual_ignores_it() {
+        let dir = fixture("cap");
+        for i in 0..20 {
+            std::fs::write(dir.join(format!("f{i}")), b"12345").unwrap();
+        }
+        let sh = DirSizeShared::default();
+        sh.limit.store(5, Ordering::Relaxed);
+        walk(&dir, &sh);
+        let d = sh.snapshot();
+        assert!(d.partial && d.files == 5 && d.bytes == 25, "{d:?}");
+        assert!(!sh.aborted.load(Ordering::Relaxed), "취소가 아니다");
+        let run = |origin: Origin, max_items: u64| {
+            let mut s = DirSizes::default();
+            s.set_tuning(Tuning {
+                max_items,
+                settle_ms: 0,
+                ..Tuning::default()
+            });
+            let t0 = Instant::now();
+            s.request_back(&dir, t0, origin, None);
+            let deadline = t0 + Duration::from_secs(10);
+            while s.tick(Instant::now()) {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            (
+                s.cached(&dir).unwrap(),
+                s.wants_refresh(&dir, Instant::now()),
+            )
+        };
+        let (d, again) = run(Origin::Column, 5);
+        assert!(
+            d.partial && d.files == 5 && !again,
+            "상한 = 일부지만 끝남: {d:?}"
+        );
+        let (d, _) = run(Origin::Manual, 5);
+        assert!(!d.partial && d.files == 20, "수동 = 끝까지: {d:?}");
+        let (d, _) = run(Origin::Column, 0);
+        assert!(!d.partial && d.files == 20, "0 = 상한 없음");
+        let mut s = DirSizes::default();
+        assert!(
+            !s.skip_network(&dir, Instant::now()),
+            "기본 = 네트워크도 잰다"
+        );
+        s.set_tuning(Tuning {
+            network: false,
+            ..Tuning::default()
+        });
+        assert!(!s.skip_network(&dir, Instant::now()), "로컬 폴더는 그대로");
+        assert_eq!(s.net.len(), 1, "판정은 상위 폴더 단위로 기억");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// 표시 조절(MC/DC · 10-08 프레임 계측 · 11-14 묶음): 전이 + 유휴 = 즉시 · 전이 + 재는 중 = 묶음 간격 뒤(첫 표시는 즉시) ·
@@ -1200,6 +1313,8 @@ mod tests {
             settle_ms: 0,
             ttl: None,
             refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
+            max_items: 0,
+            network: true,
         });
         let now = Instant::now();
         let p = |s: &str| PathBuf::from(format!("/p/{s}"));
@@ -1435,6 +1550,8 @@ mod tests {
             settle_ms: 0,
             ttl: None,
             refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
+            max_items: 0,
+            network: true,
         });
         let now = Instant::now();
         s.request(&a, now);
@@ -1491,6 +1608,8 @@ mod tests {
             settle_ms: 250,
             ttl: None,
             refresh_min: Duration::from_millis(DEFAULT_REFRESH_MS),
+            max_items: 0,
+            network: true,
         });
         let t0 = Instant::now();
         s.request(&d.join("p1"), t0);

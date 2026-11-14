@@ -1801,6 +1801,28 @@ pub const REGISTRY: &[Entry] = &[
         },
         "3000"
     ),
+    // 큰 폴더 · 네트워크 제외(dir3 신규 · T-166 남김 · 11-14 · 고급): 자동 측정(정보 도크 · 크기 열)이 폴더 하나에서 세는 항목 수 상한 —
+    //   넘으면 지금까지의 값을 "≥"로 보이고 그친다(0 = 상한 없음 · 수동 "폴더 크기 계산"은 늘 끝까지).
+    e!(
+        "dock.folder_size_max_items",
+        CAT_DOCK,
+        "pref.folderSizeMaxItems",
+        "pref.folderSizeMaxItems.desc",
+        Int {
+            min: 0,
+            max: 1_000_000_000
+        },
+        "0"
+    ),
+    // 네트워크 위치(UNC · NFS/SMB/sshfs 마운트)도 자동으로 재는가 — 끄면 수동 명령으로만 잰다(느린 공유에서 목록마다 훑지 않게).
+    e!(
+        "dock.folder_size_network",
+        CAT_DOCK,
+        "pref.folderSizeNetwork",
+        "pref.folderSizeNetwork.desc",
+        Bool,
+        "on"
+    ),
     // 크기 열에 폴더 크기(dir3 신규 · T-166 3차 · 10-25 · 분류는 목록이지만 DEPENDS 부모 `dock.folder_size` 뒤에 등재): 보이는 폴더 행을 뒤쪽 큐로 재어 크기 열에 — 기본 off(목록마다 디스크를 읽는다) ·
     //   폴더 크기 계산(`dock.folder_size`)이 켜져 있어야 하고 성능 향상 모드에서는 꺼진다.
     e!(
@@ -2688,6 +2710,8 @@ pub const DEPENDS: &[(&str, &str, Dep)] = &[
     ("dock.folder_size_settle_ms", "dock.folder_size", Dep::On),
     ("dock.folder_size_ttl_s", "dock.folder_size", Dep::On),
     ("dock.folder_size_refresh_ms", "dock.folder_size", Dep::On),
+    ("dock.folder_size_max_items", "dock.folder_size", Dep::On),
+    ("dock.folder_size_network", "dock.folder_size", Dep::On),
     ("toolbar.on_line_color", "toolbar.on_color", Dep::Eq("line")),
     ("toolbar.on_line_pct", "toolbar.on_color", Dep::Eq("accent")),
     (
@@ -2860,6 +2884,8 @@ pub const ADVANCED: &[&str] = &[
     "dock.folder_size_settle_ms",
     "dock.folder_size_ttl_s",
     "dock.folder_size_refresh_ms",
+    "dock.folder_size_max_items",
+    "dock.folder_size_network",
     "dock.max_defer_ms",
     "dock.info_wait_ms",
     // 값 추출 1차(T-100): 폴링 · 캐시 · 프레임 · 읽기 상한은 고급(스크롤백 · 토스트 · 미리보기 줄 수는 일반).

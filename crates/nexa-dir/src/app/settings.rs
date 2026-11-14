@@ -303,7 +303,9 @@ impl App {
             | "dock.folder_size_queue"
             | "dock.folder_size_settle_ms"
             | "dock.folder_size_ttl_s"
-            | "dock.folder_size_refresh_ms" => {
+            | "dock.folder_size_refresh_ms"
+            | "dock.folder_size_max_items"
+            | "dock.folder_size_network" => {
                 self.apply_dirsize_tuning();
             }
             _ => {}
