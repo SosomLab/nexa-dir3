@@ -2882,21 +2882,39 @@ impl Panel {
     }
 
     /// 크기 열의 폴더 크기 지도(T-166 3차): 활성 탭에 넘기고(바뀌면 목록 무효화) · 빈 지도면 모든 탭을 비운다(설정 끔).
+    /// `on` = 크기 열이 켜져 있다(NEW-061): 켜진 동안 활성 탭은 크기 정렬에 계산된 폴더 크기를 쓴다 · 끄면 모든 탭이 종전 정렬로.
     pub(crate) fn set_dir_sizes(
         &mut self,
         sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
+        on: bool,
         inv: &mut Invalidations,
     ) {
-        if sizes.is_empty() {
+        if !on {
             for tab in &mut self.tabs {
-                if tab.rows.source_mut().set_dir_sizes(Default::default()) {
+                let src = tab.rows.source_mut();
+                let resorted = src.set_dir_size_sort(false);
+                if src.set_dir_sizes(Default::default()) || resorted {
                     inv.push(tab.rows.bounds());
                 }
             }
             return;
         }
         let tab = &mut self.tabs[self.active];
-        if tab.rows.source_mut().set_dir_sizes(sizes) {
+        let src = tab.rows.source_mut();
+        let resorted = src.set_dir_size_sort(true);
+        if sizes.is_empty() {
+            // 보이는 폴더 행이 없거나 아직 끝난 값이 없다 — 다른 탭의 표시 지도만 비운다(쌓아 둔 정렬 값은 둔다).
+            for tab in &mut self.tabs {
+                if tab.rows.source_mut().set_dir_sizes(Default::default()) {
+                    inv.push(tab.rows.bounds());
+                }
+            }
+            if resorted {
+                inv.push(self.tabs[self.active].rows.bounds());
+            }
+            return;
+        }
+        if src.set_dir_sizes(sizes) || resorted {
             inv.push(tab.rows.bounds());
         }
     }

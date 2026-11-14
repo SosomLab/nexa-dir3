@@ -247,6 +247,9 @@ pub(crate) struct TreeSource {
     cut_marks: std::collections::HashSet<PathBuf>,
     /// 크기 열에 보일 폴더 크기(T-166 3차 · 10-25): 경로 → (바이트, 읽지 못한 폴더 있음). 호스트가 보이는 행만큼 넘긴다 · 비면 빈칸.
     dir_sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
+    /// 크기 정렬에 쓸 폴더 크기(NEW-061 · 사용자 11-14): `Some` = 켬 — 지금까지 본 값을 **쌓아 둔다**(보이는 행만 오는 `dir_sizes`와
+    /// 달리 스크롤로 벗어난 행의 값도 남겨, 정렬 순서가 스크롤에 따라 바뀌지 않게) · 다른 폴더로 가면 새 원천 = 비움.
+    sort_sizes: Option<std::collections::HashMap<PathBuf, u64>>,
     /// 빠른 필터 글(NEW-057 · 탭 소유 · 재열람에도 유지 · 다른 폴더로 가면 새 원천 = 풀림) — 빈 글 = 끔.
     name_filter: String,
     /// 빠른 필터 토글(대소문자 · 단어 · 정규식 · 10-25 검색창) — 판정기는 ndir-ops `namefilter`.
@@ -306,6 +309,7 @@ impl TreeSource {
             drive_space_asked: false,
             cut_marks: std::collections::HashSet::new(),
             dir_sizes: std::collections::HashMap::new(),
+            sort_sizes: None,
             name_filter: String::new(),
             filter_opts: ndir_ops::namefilter::FilterOpts::default(), // 패널이 자기 토글을 넣는다(`Panel::apply_nav` · 전역 없음 · 10-26)
             filter_err: false,
@@ -628,11 +632,36 @@ impl TreeSource {
         &mut self,
         sizes: std::collections::HashMap<PathBuf, (u64, bool)>,
     ) -> bool {
+        let mut grew = false;
+        if let Some(acc) = self.sort_sizes.as_mut() {
+            for (p, (bytes, _)) in &sizes {
+                if acc.insert(p.clone(), *bytes) != Some(*bytes) {
+                    grew = true;
+                }
+            }
+        }
+        let resorted = grew && self.push_sort_sizes();
         if self.dir_sizes == sizes {
-            return false;
+            return resorted;
         }
         self.dir_sizes = sizes;
         true
+    }
+
+    /// 크기 정렬에 계산된 폴더 크기를 쓰는가(NEW-061 · 설정 `list.folder_size_col`의 유효값) — 켜면 폴더도 계산된 크기로 정렬되고
+    /// 아직 계산 안 된 폴더는 방향과 무관하게 맨 위 · 끄면 종전(폴더 = 0). 순서가 바뀌었으면 true.
+    pub(crate) fn set_dir_size_sort(&mut self, on: bool) -> bool {
+        if on == self.sort_sizes.is_some() {
+            return false;
+        }
+        self.sort_sizes = on.then(std::collections::HashMap::new);
+        self.push_sort_sizes()
+    }
+
+    /// 쌓아 둔 폴더 크기를 트리 정렬에 넣는다 — 순서가 바뀌었으면 true.
+    fn push_sort_sizes(&mut self) -> bool {
+        let sizes = self.sort_sizes.clone();
+        self.tree.as_mut().is_some_and(|t| t.set_dir_sizes(sizes))
     }
 
     /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
@@ -732,6 +761,7 @@ impl TreeSource {
         match built.tree {
             Ok(t) => {
                 self.tree = Some(t);
+                self.push_sort_sizes(); // 새 트리에도 계산된 폴더 크기 정렬을 잇는다(NEW-061)
                 self.error = None;
                 // 빠른 필터(NEW-057)는 재열람해도 그대로 — 토글·하위 폴더 범위까지 다시 건다(종전엔 글만 넣어 판정기가 부분 문자열로 돌아갔다 · 10-26).
                 self.apply_matcher();

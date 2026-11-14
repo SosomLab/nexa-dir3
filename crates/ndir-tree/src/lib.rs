@@ -308,6 +308,9 @@ pub struct Tree {
     /// 깊은 판정 결과(노드 → 자손 중 맞는 이름 있음) — 필터 열쇠가 바뀌면 비움 · 범위를 끄고 켜는 것은 유지.
     deep: HashMap<NodeId, bool>,
     sort: SortSpec,
+    /// 크기 정렬에 쓸 **계산된 폴더 크기**(dir3 NEW-061 · 사용자 11-14): `None` = 끔(폴더는 0 · 종전) · `Some` = 켬 — 지도에 있는
+    /// 폴더는 그 크기로, 없는 폴더(아직 계산 안 됨)는 방향과 무관하게 맨 위. 호스트가 [`Self::set_dir_sizes`]로 넣는다.
+    dir_sizes: Option<HashMap<PathBuf, u64>>,
 }
 
 impl Tree {
@@ -348,6 +351,7 @@ impl Tree {
                 show_protected,
             },
             sort: SortSpec::default(),
+            dir_sizes: None,
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,
@@ -477,12 +481,14 @@ impl Tree {
             let ord = match key {
                 SortKey::Name => cmp_name(&na.name, &nb.name),
                 SortKey::Ext => cmp_name(ext_of(&na.name), ext_of(&nb.name)),
-                // 폴더 크기는 OS 잡음값 → 정렬상 0으로 정규화(폴더는 이름 tie-break로, 탐색기와 동일).
-                SortKey::Size => {
-                    let sa = if na.is_dir() { 0 } else { na.size };
-                    let sb = if nb.is_dir() { 0 } else { nb.size };
-                    sa.cmp(&sb)
-                }
+                // 폴더 크기는 OS 잡음값 → 정렬상 0으로 정규화(폴더는 이름 tie-break로, 탐색기와 동일). 계산된 폴더 크기가
+                // 켜져 있으면(NEW-061) 그 값으로 · 아직 계산 안 된 폴더는 **방향과 무관하게** 맨 위(뒤집지 않고 바로 돌려준다).
+                SortKey::Size => match (self.size_key(a), self.size_key(b)) {
+                    (Some(sa), Some(sb)) => sa.cmp(&sb),
+                    (None, None) => Ordering::Equal,
+                    (None, Some(_)) => return Ordering::Less,
+                    (Some(_), None) => return Ordering::Greater,
+                },
                 SortKey::Modified => na.modified_unix_ms.cmp(&nb.modified_unix_ms),
                 // "종류" = 파일 타입. kind_rank만으론 folders_first 뒤 파일이 전부 동률(File)→asc=desc가 됨.
                 // 셸 타입 문자열이 없으므로 확장자를 타입 대용으로 2차 비교(파일 간 변별력 + 방향 반영).
@@ -499,6 +505,33 @@ impl Tree {
         }
         // 모든 키 동률 → 이름, 그다음 id(안정·열거 순서)
         cmp_ci(&na.name, &nb.name).then(a.cmp(&b))
+    }
+
+    /// 크기 정렬 값: 파일 = 크기 · 폴더 = 0(끔) 또는 계산된 크기(켬 · 모르면 `None`).
+    fn size_key(&self, id: NodeId) -> Option<u64> {
+        let n = &self.nodes[id as usize];
+        if !n.is_dir() {
+            return Some(n.size);
+        }
+        match &self.dir_sizes {
+            None => Some(0),
+            Some(m) => self.node_path(id).and_then(|p| m.get(p).copied()),
+        }
+    }
+
+    /// 크기 정렬에 쓸 계산된 폴더 크기를 바꾼다(NEW-061) — `None` = 끔. 값이 달라졌고 지금 정렬에 크기 키가 있으면 다시
+    /// 정렬하고 참(호스트가 목록을 다시 그린다). 선택 · 펼침은 노드 기준이라 그대로다.
+    pub fn set_dir_sizes(&mut self, sizes: Option<HashMap<PathBuf, u64>>) -> bool {
+        if self.dir_sizes == sizes {
+            return false;
+        }
+        self.dir_sizes = sizes;
+        if self.sort.keys.iter().any(|(k, _)| *k == SortKey::Size) {
+            self.set_sort(self.sort.clone());
+            true
+        } else {
+            false
+        }
     }
 
     /// 현재 정렬 사양(호스트/테스트 조회용).
@@ -1325,6 +1358,7 @@ impl Tree {
                 show_protected: true,
             },
             sort: SortSpec::default(),
+            dir_sizes: None,
             name_filter: None,
             name_matcher: None,
             unfiltered_len: 0,
@@ -2006,6 +2040,67 @@ mod tests {
         t.set_sort(spec(SortKey::Size, true, true));
         // 파일 크기 내림: a(3) z(2) m(1). 폴더는 여전히 앞(folders_first).
         assert_eq!(names(&t), vec!["adir", "zdir", "a.log", "z.md", "m.txt"]);
+    }
+
+    /// NEW-061(사용자 11-14): 계산된 폴더 크기가 켜지면 크기 정렬에 폴더도 그 값으로 · 아직 계산 안 된 폴더는 **오름 · 내림 모두 맨 위** ·
+    /// 값이 도착하면 다시 정렬 · 끄면 종전(폴더 = 0 · 이름 순) · 크기 키가 없는 정렬은 건드리지 않는다.
+    #[test]
+    fn size_sort_uses_computed_dir_sizes_and_keeps_unknown_on_top() {
+        let base = make_sort_fixture("dsz");
+        fs::create_dir_all(base.join("mdir")).unwrap();
+        let mut t = Tree::open(&base).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+        let sizes = |v: &[(&str, u64)]| -> Option<HashMap<PathBuf, u64>> {
+            Some(v.iter().map(|(n, b)| (base.join(n), *b)).collect())
+        };
+        t.set_sort(spec(SortKey::Size, false, true));
+        // 켰지만 아직 아무것도 모름 = 폴더끼리 동률 → 이름 순(종전과 같은 모양).
+        assert!(t.set_dir_sizes(sizes(&[])));
+        assert_eq!(
+            names(&t),
+            vec!["adir", "mdir", "zdir", "m.txt", "z.md", "a.log"]
+        );
+        // adir = 900 · zdir = 10 · mdir = 모름 → 오름: mdir(모름) · zdir · adir.
+        assert!(t.set_dir_sizes(sizes(&[("adir", 900), ("zdir", 10)])));
+        assert_eq!(
+            names(&t),
+            vec!["mdir", "zdir", "adir", "m.txt", "z.md", "a.log"]
+        );
+        assert!(
+            !t.set_dir_sizes(sizes(&[("adir", 900), ("zdir", 10)])),
+            "같은 값"
+        );
+        // 내림: 모르는 mdir은 여전히 맨 위 · 그다음 adir · zdir.
+        t.set_sort(spec(SortKey::Size, true, true));
+        assert_eq!(
+            names(&t),
+            vec!["mdir", "adir", "zdir", "a.log", "z.md", "m.txt"]
+        );
+        // 폴더 우선을 끄면 파일과 섞인다(파일 1~3 B) · 모르는 폴더는 맨 위.
+        t.set_sort(spec(SortKey::Size, true, false));
+        assert_eq!(
+            names(&t),
+            vec!["mdir", "adir", "zdir", "a.log", "z.md", "m.txt"]
+        );
+        t.set_sort(spec(SortKey::Size, false, false));
+        assert_eq!(
+            names(&t),
+            vec!["mdir", "m.txt", "z.md", "a.log", "zdir", "adir"]
+        );
+        // 마지막 값 도착 → 다시 정렬(mdir = 2 → z.md(2)와 동률 = 이름 순).
+        assert!(t.set_dir_sizes(sizes(&[("adir", 900), ("zdir", 10), ("mdir", 2)])));
+        assert_eq!(
+            names(&t),
+            vec!["m.txt", "mdir", "z.md", "a.log", "zdir", "adir"]
+        );
+        // 크기 키가 없는 정렬은 다시 정렬하지 않는다(거짓) · 끄면 종전 규칙.
+        t.set_sort(spec(SortKey::Name, false, true));
+        assert!(!t.set_dir_sizes(None));
+        t.set_sort(spec(SortKey::Size, true, true));
+        assert_eq!(
+            names(&t),
+            vec!["adir", "mdir", "zdir", "a.log", "z.md", "m.txt"]
+        );
     }
 
     #[test]

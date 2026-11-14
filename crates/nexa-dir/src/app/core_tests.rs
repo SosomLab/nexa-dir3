@@ -11330,6 +11330,78 @@ fn size_column_shows_folder_sizes_when_enabled() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// NEW-061(사용자 11-14): 크기 열이 켜져 있으면 크기 정렬에 폴더도 **계산된 크기**로 · 아직 계산 안 된 폴더는 방향과 무관하게 맨 위 ·
+/// 값이 도착하면 다시 정렬 · 재열람(F5 · 감시) 뒤에도 유지 · 끄면 종전(폴더 = 이름 순).
+#[test]
+fn size_sort_orders_folders_by_computed_size() {
+    use crate::filelist::COL_SIZE;
+    let (mut app, dir) = fixture("dirsizesort");
+    for (name, bytes) in [("big", 5000usize), ("mid", 300), ("tiny", 1)] {
+        std::fs::create_dir_all(dir.join(name)).expect("mkdir");
+        std::fs::write(dir.join(name).join("x.bin"), vec![0u8; bytes]).expect("write");
+    }
+    app.layout_for(1200, 800, 1.0);
+    let mut inv = Invalidations::default();
+    app.panels[0].reopen(&mut inv);
+    let dirs = |app: &App| -> Vec<String> {
+        let src = app.panels[0].rows().source();
+        (0..src.len())
+            .filter_map(|i| src.row_path(i))
+            .filter(|p| p.is_dir())
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .collect()
+    };
+    app.panels[0]
+        .rows_mut()
+        .set_sort(&[(COL_SIZE, false)], &mut inv);
+    assert_eq!(dirs(&app), ["big", "mid", "sub", "tiny"], "끔 = 이름 순");
+    let _ = app.settings.set("list.folder_size_col", "on");
+    app.after_setting_changed("list.folder_size_col");
+    assert_eq!(
+        dirs(&app),
+        ["big", "mid", "sub", "tiny"],
+        "아직 모름 = 동률"
+    );
+    let settle = |app: &mut App| {
+        let at = std::time::Instant::now();
+        while app.dirsize_tick() {
+            assert!(at.elapsed().as_secs() < 10);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let mut inv = Invalidations::default();
+        app.dirsize_col_sync(&mut inv);
+    };
+    settle(&mut app);
+    // sub = inner.rs 9 B.
+    assert_eq!(
+        dirs(&app),
+        ["tiny", "sub", "mid", "big"],
+        "오름 = 계산된 크기"
+    );
+    app.panels[0]
+        .rows_mut()
+        .set_sort(&[(COL_SIZE, true)], &mut inv);
+    assert_eq!(dirs(&app), ["big", "mid", "sub", "tiny"], "내림");
+    // 새 폴더(아직 모름)는 내림차순에서도 맨 위 → 재면 제자리.
+    std::fs::create_dir_all(dir.join("newer")).expect("mkdir");
+    std::fs::write(dir.join("newer").join("y.bin"), vec![0u8; 700]).expect("write");
+    app.panels[0].reopen(&mut inv);
+    assert_eq!(
+        dirs(&app)[0],
+        "newer",
+        "모르는 폴더 = 맨 위(재열람 뒤에도 나머지는 유지)"
+    );
+    assert_eq!(dirs(&app)[1..], ["big", "mid", "sub", "tiny"]);
+    app.dirsize_col_sync(&mut inv);
+    settle(&mut app);
+    assert_eq!(dirs(&app), ["big", "newer", "mid", "sub", "tiny"]);
+    // 끔 → 종전.
+    let _ = app.settings.set("list.folder_size_col", "off");
+    app.after_setting_changed("list.folder_size_col");
+    assert_eq!(dirs(&app), ["big", "mid", "newer", "sub", "tiny"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 상태바 전송 진행 칸(T-96 · NEW-006 · 10-25): 전송이 없으면 칸이 없다 · 전송 중 = "T nn%"(탭 칸 뒤) · 클릭 = 진행 창 띄우기
 /// (창 없이 돌던 전송이면 새로 준비) · 끝나면 사라진다 · 순서 편집기 라벨.
 #[test]

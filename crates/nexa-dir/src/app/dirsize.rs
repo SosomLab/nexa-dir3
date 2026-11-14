@@ -871,7 +871,7 @@ impl App {
                     SizeState::Running(_) | SizeState::Queued => {}
                 }
             }
-            self.panels[i].set_dir_sizes(map, inv);
+            self.panels[i].set_dir_sizes(map, on, inv);
         }
     }
 
