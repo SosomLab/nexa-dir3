@@ -172,17 +172,17 @@ pub fn cloud_status(attrs: u32) -> FileStatus {
 #[must_use]
 pub fn is_network_path(path: &Path) -> bool {
     let s = path.to_string_lossy();
-    if s.starts_with("\\\\") && !s.starts_with("\\\\?\\") {
-        return true;
-    }
+    let unc = s.starts_with("\\\\") && !s.starts_with("\\\\?\\");
     #[cfg(target_os = "linux")]
     {
-        let mounts = fs::read_to_string("/proc/self/mounts").unwrap_or_default();
-        network_mount_covers(&mounts, &s)
+        unc || {
+            let mounts = fs::read_to_string("/proc/self/mounts").unwrap_or_default();
+            network_mount_covers(&mounts, &s)
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        false
+        unc
     }
 }
 

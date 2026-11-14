@@ -263,7 +263,7 @@ pub fn write_zip(
         let meta = match std::fs::metadata(&path) {
             Ok(m) => m,
             Err(e) => {
-                rep.errors.push((path.clone(), e.to_string()));
+                rep.errors.push((path, e.to_string()));
                 continue;
             }
         };
@@ -292,7 +292,7 @@ pub fn write_zip(
         let mut f = match std::fs::File::open(&path) {
             Ok(f) => f,
             Err(e) => {
-                rep.errors.push((path.clone(), e.to_string()));
+                rep.errors.push((path, e.to_string()));
                 continue; // 머리를 쓰기 전이라 항목 자체를 뺀다
             }
         };

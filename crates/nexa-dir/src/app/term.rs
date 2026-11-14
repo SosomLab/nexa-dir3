@@ -254,8 +254,8 @@ impl App {
     pub(crate) fn set_term_focus(&mut self, f: Option<usize>, inv: &mut Invalidations) {
         if self.term_focus != f {
             self.term_focus = f;
-            for i in 0..2 {
-                self.docks[i].set_focused(f == Some(i), inv);
+            for (i, dock) in self.docks.iter_mut().enumerate() {
+                dock.set_focused(f == Some(i), inv);
             }
             if let Some(i) = f {
                 let now = self.started.elapsed().as_millis() as u64;

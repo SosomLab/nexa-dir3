@@ -203,10 +203,7 @@ impl Filter {
             return false;
         }
         let hidden = (attrs & ATTR_HIDDEN) != 0 || (dot_is_hidden && dot);
-        if !self.show_hidden && hidden {
-            return false;
-        }
-        true
+        self.show_hidden || !hidden
     }
 }
 

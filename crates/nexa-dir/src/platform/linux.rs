@@ -334,7 +334,7 @@ impl Trash for FreedesktopTrash {
             // topdir 휴지통의 `Path=`는 topdir 기준 상대 경로(규격 · 다른 파일 관리자와 호환).
             let recorded = match &top {
                 Some(t) => abs.strip_prefix(t).map_or(abs.clone(), Path::to_path_buf),
-                None => abs.clone(),
+                None => abs,
             };
             let body = format!(
                 "[Trash Info]\nPath={}\nDeletionDate={when}\n",
