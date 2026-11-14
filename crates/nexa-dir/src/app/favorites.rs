@@ -213,10 +213,11 @@ impl App {
         {
             if let Some(p) = self.favorites().get(i).cloned() {
                 let mut inv = Invalidations::default();
-                if let Some(why) = self.panels[panel].navigate_to(p, &mut inv) {
-                    self.statusbar.set_left(&why, &mut inv);
-                }
+                let why = self.panels[panel].navigate_to(p, &mut inv);
                 self.update_status();
+                if let Some(why) = why {
+                    self.status_note(&why); // GAP-034: 실패 사유가 항목 수로 바로 덮이지 않게
+                }
                 self.redraw();
             }
             return true;
@@ -302,10 +303,11 @@ impl App {
         {
             if let Some(p) = self.recent_dirs().get(i).cloned() {
                 let mut inv = Invalidations::default();
-                if let Some(why) = self.panels[panel].navigate_to(p, &mut inv) {
-                    self.statusbar.set_left(&why, &mut inv);
-                }
+                let why = self.panels[panel].navigate_to(p, &mut inv);
                 self.update_status();
+                if let Some(why) = why {
+                    self.status_note(&why); // GAP-034: 실패 사유가 항목 수로 바로 덮이지 않게
+                }
                 self.redraw();
             }
             return true;

@@ -186,9 +186,9 @@ impl App {
                     tr("cmp.title"),
                     text.clone(),
                 );
-                self.statusbar.set_left(&text, &mut inv);
                 self.update_status();
-                // 끝났으면 다시 비교해 창을 최신으로 — 미러 삭제를 보냈으면 그 결과 뒤 `trash_finish`가 한다(GAP-029).
+                self.status_note(&text); // GAP-034: 항목 수로 바로 덮이지 않게
+                                         // 끝났으면 다시 비교해 창을 최신으로 — 미러 삭제를 보냈으면 그 결과 뒤 `trash_finish`가 한다(GAP-029).
                 if !mirror_dispatched {
                     self.recompare_after_trash(true);
                 }

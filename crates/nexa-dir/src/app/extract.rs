@@ -239,8 +239,8 @@ impl App {
             tr("ctx.extract"),
             text.clone(),
         );
-        self.statusbar.set_left(&text, &mut inv);
         self.update_status();
+        self.status_note(&text); // GAP-034: 항목 수로 바로 덮이지 않게
         self.redraw();
         // 다음 압축 파일(여러 개 풀기 · 10-25): 같은 슬롯에서 바로 시작 — 아직 진행 중(true).
         if !self.extract_queue.is_empty() {

@@ -231,8 +231,8 @@ impl App {
             tr("ctx.compress"),
             text.clone(),
         );
-        self.statusbar.set_left(&text, &mut inv);
         self.update_status();
+        self.status_note(&text); // GAP-034: 항목 수로 바로 덮이지 않게
         self.redraw();
         false
     }

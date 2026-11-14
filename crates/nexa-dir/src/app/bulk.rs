@@ -311,7 +311,7 @@ impl App {
             tr("bulk.title"),
             msg.clone(),
         );
-        self.statusbar.set_left(&msg, &mut inv);
         self.update_status();
+        self.status_note(&msg); // GAP-034: 항목 수로 바로 덮이지 않게
     }
 }

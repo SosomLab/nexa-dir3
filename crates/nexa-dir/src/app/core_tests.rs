@@ -12631,6 +12631,11 @@ fn builtin_zip_compresses_selection_when_no_external_archiver() {
         vec![zip],
         "끝나면 새 zip을 가리킨다"
     );
+    // 완료 안내는 유지 시간 동안 항목 수로 덮이지 않는다(GAP-034 · 종전 = 같은 틱의 `update_status`가 바로 덮었다).
+    let note = app.statusbar.left().to_string();
+    assert!(note.contains("pack.zip"), "{note}");
+    app.update_status();
+    assert_eq!(app.statusbar.left(), note);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
