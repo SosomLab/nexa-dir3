@@ -184,17 +184,29 @@ pub(crate) const DISPLAY_EVERY_MS: u64 = 250;
 /// 종전엔 `C:\Windows` 같은 큰 트리 2개가 끝날 때까지 새로 고른 폴더가 "측정 대기 중"에 머물렀다). 짧은 작업은 그대로 끝낸다.
 const LONG_RUN_MS: u64 = 2_000;
 
-/// 도크에 반영할 때인가(순수 · MC/DC): 상태 전이가 있으면 즉시 · 재는 중이면 마지막 표시에서 `every_ms` 이상 지났을 때 ·
-/// 둘 다 아니면(유휴 · 방금 보여 줌) 아니다.
+/// 재는 중에 결과가 잇따라 도착할 때 표시를 묶는 간격(ms) — 폴더 30개가 0.2초 사이에 끝나면 종전에는 결과마다 창 전체를
+/// 다시 그렸다(27프레임 · 11-14 계측). 마지막 결과(유휴로 넘어감)는 기다리지 않고 바로 보인다.
+pub(crate) const COALESCE_MS: u64 = 100;
+
+/// 도크 · 크기 열에 지금 반영할 때인가(순수 · MC/DC): 상태가 바뀌었고 **더 할 일이 없으면** 즉시 · 바뀌었지만 아직 재는 중이면
+/// 직전 표시에서 `coalesce_ms`가 지난 뒤(묶음) · 바뀐 것 없이 재는 중이면 진행값을 `every_ms`마다 · 유휴 + 전이 없음 = 아니다.
 pub(crate) fn display_due(
     changed: bool,
     busy: bool,
     last_shown: Option<Instant>,
     now: Instant,
     every_ms: u64,
+    coalesce_ms: u64,
 ) -> bool {
-    changed
-        || (busy && last_shown.is_none_or(|t| now.duration_since(t).as_millis() as u64 >= every_ms))
+    let waited = |ms: u64| {
+        last_shown.is_none_or(|t| now.saturating_duration_since(t).as_millis() as u64 >= ms)
+    };
+    match (changed, busy) {
+        (true, false) => true,
+        (true, true) => waited(coalesce_ms),
+        (false, true) => waited(every_ms),
+        (false, false) => false,
+    }
 }
 
 /// 캐시 항목 `key`가 `changed` 폴더의 변경에 영향을 받는가(순수): 바뀐 폴더가 항목 자신이거나 그 안(조상 항목의 합계가 변함 —
@@ -595,6 +607,7 @@ impl DirSizes {
             self.last_shown,
             now,
             DISPLAY_EVERY_MS,
+            COALESCE_MS,
         ) {
             self.changed = false;
             self.last_shown = Some(now);
@@ -1083,17 +1096,28 @@ mod tests {
         assert!(d.order.is_empty() && d.cache.is_empty());
     }
 
-    /// 표시 조절(MC/DC · 10-08 프레임 계측): 전이 = 즉시 · 재는 중 + 첫 표시 = 즉시 · 재는 중 + 250 ms 안 = 아니다 · 재는 중 + 250 ms
-    /// 지남 = 예 · 유휴 + 전이 없음 = 아니다. `take_display_due`는 참 뒤 바로 다시 부르면 거짓(보여 줬다로 기록).
+    /// 표시 조절(MC/DC · 10-08 프레임 계측 · 11-14 묶음): 전이 + 유휴 = 즉시 · 전이 + 재는 중 = 묶음 간격 뒤(첫 표시는 즉시) ·
+    /// 재는 중 + 250 ms 안 = 아니다 · 재는 중 + 250 ms 지남 = 예 · 유휴 + 전이 없음 = 아니다. `take_display_due`는 참 뒤 바로 다시
+    /// 부르면 거짓(보여 줬다로 기록).
     #[test]
     fn display_is_throttled_while_measuring_and_immediate_on_transition() {
         let t0 = Instant::now();
         let ms = |n| t0 + Duration::from_millis(n);
-        assert!(display_due(true, false, Some(ms(0)), ms(1), 250));
-        assert!(display_due(false, true, None, ms(1), 250));
-        assert!(!display_due(false, true, Some(ms(0)), ms(249), 250));
-        assert!(display_due(false, true, Some(ms(0)), ms(250), 250));
-        assert!(!display_due(false, false, Some(ms(0)), ms(10_000), 250));
+        assert!(display_due(true, false, Some(ms(0)), ms(1), 250, 100));
+        assert!(display_due(true, true, None, ms(1), 250, 100));
+        assert!(!display_due(true, true, Some(ms(0)), ms(99), 250, 100));
+        assert!(display_due(true, true, Some(ms(0)), ms(100), 250, 100));
+        assert!(display_due(false, true, None, ms(1), 250, 100));
+        assert!(!display_due(false, true, Some(ms(0)), ms(249), 250, 100));
+        assert!(display_due(false, true, Some(ms(0)), ms(250), 250, 100));
+        assert!(!display_due(
+            false,
+            false,
+            Some(ms(0)),
+            ms(10_000),
+            250,
+            100
+        ));
         let mut s = DirSizes {
             changed: true,
             ..Default::default()
