@@ -141,7 +141,7 @@ pub(crate) fn render_svg_impl(svg: &str) -> Option<String> {
     let mut hsh = std::collections::hash_map::DefaultHasher::new();
     svg.hash(&mut hsh);
     dark.hash(&mut hsh);
-    let dir = std::env::temp_dir().join("nexa-preview");
+    let dir = svg_cache_dir();
     let path = dir.join(format!("d{:016x}.bmp", hsh.finish()));
     if path.exists() {
         return Some(path.to_string_lossy().into_owned());
@@ -155,13 +155,25 @@ pub(crate) fn render_svg_impl(svg: &str) -> Option<String> {
     Some(path.to_string_lossy().into_owned())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// 시험용 SVG 캐시 루트(T-212): 시험이 실제 `<temp>/nexa-preview`에 파일을 남기지 않게 샌드박스로 돌린다(같은 스레드만).
+    pub(crate) static SVG_CACHE_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// SVG 렌더 BMP 캐시 폴더 = `<temp>/nexa-preview`(시험은 `SVG_CACHE_ROOT`로 바꿔 끼운다).
+fn svg_cache_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(d) = SVG_CACHE_ROOT.with(|r| r.borrow().clone()) {
+        return d;
+    }
+    std::env::temp_dir().join("nexa-preview")
+}
+
 /// 앱이 만든 임시 캐시 폴더(T-189 ⑦): SVG 렌더 BMP(`nexa-preview`) · Quick Look 썸네일(`nexa-dir-ql` · macOS). 둘 다 이 앱만 쓰는
 /// 고정 이름이고 지워도 다음에 다시 만든다.
 pub(crate) fn temp_cache_dirs() -> [PathBuf; 2] {
-    [
-        std::env::temp_dir().join("nexa-preview"),
-        quicklook::cache_root(),
-    ]
+    [svg_cache_dir(), quicklook::cache_root()]
 }
 
 /// 임시 캐시에서 이만큼 안 바뀐 파일은 버린다(T-189 ⑦ · 종전 = 영영 쌓였다).
@@ -541,6 +553,8 @@ mod tests {
     /// T-62 C-2: `render_svg` = nexa-gfx svg 래스터 → 임시 BMP(해시 이름) · 디코드 크기 = viewBox · 같은 입력 = 같은 경로 · 손상 SVG = None.
     #[test]
     fn render_svg_writes_bmp_and_caches() {
+        let cache = std::env::temp_dir().join(format!("ndir-svgcache-{}", std::process::id()));
+        SVG_CACHE_ROOT.with(|r| *r.borrow_mut() = Some(cache.clone()));
         set_dark(true);
         let svg = r##"<svg viewBox="0 0 40 24" stroke-width="1"><rect x="1" y="1" width="38" height="22" rx="4" fill="#336699"/><text x="20" y="16" font-size="12" text-anchor="middle" fill="#ffffff">ok</text></svg>"##;
         let p1 = render_svg_impl(svg).expect("render");
@@ -564,6 +578,8 @@ mod tests {
                 .is_none(),
             "상한"
         );
+        SVG_CACHE_ROOT.with(|r| *r.borrow_mut() = None);
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     /// 임시 캐시 정리(T-189 ⑦ · 샌드박스): 오래된 파일만 · 하위 폴더 포함 · 빈 하위 폴더 제거 · 루트는 남김.

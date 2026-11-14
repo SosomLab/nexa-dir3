@@ -346,10 +346,14 @@ fn run(scn: &Scenario, bin: &Path, out_root: &Path) -> Outcome {
     let base = out_root.join(&scn.id);
     let _ = std::fs::remove_dir_all(&base);
     let (home, root, out) = (base.join("home"), base.join("root"), base.join("out"));
+    // 앱의 OS 임시 폴더도 시나리오 샌드박스로(T-212) — SVG 미리보기 캐시(`<temp>/nexa-preview`) 같은 임시 산출물이
+    // 사용자의 실제 OS Temp에 남지 않는다. unix = `TMPDIR` · Windows = `TMP`/`TEMP`(셋 다 줘도 무해).
+    let tmp = base.join("tmp");
     let mut failures = Vec::new();
     let started = Instant::now();
     if let Err(e) = std::fs::create_dir_all(&home)
         .and_then(|()| std::fs::create_dir_all(&out))
+        .and_then(|()| std::fs::create_dir_all(&tmp))
         .and_then(|()| build_tree(&root, &scn.tree))
     {
         failures.push(format!("setup: {e}"));
@@ -378,6 +382,9 @@ fn run(scn: &Scenario, bin: &Path, out_root: &Path) -> Outcome {
         // 시나리오의 복사/잘라내기가 사용자의 실제 OS 클립보드를 덮어쓰지 않게(프로세스 안 가짜 — CLAUDE.md §5).
         .env("NDIR_FAKE_CLIPBOARD", "1")
         .env("NDIR_PLUGINS_DIR", plugins_dir())
+        .env("TMPDIR", &tmp)
+        .env("TMP", &tmp)
+        .env("TEMP", &tmp)
         .env("NDIR_STARTUP_CMD", cmds.join(","))
         .stdin(Stdio::null())
         .stdout(Stdio::null())

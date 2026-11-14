@@ -21,6 +21,8 @@ fn fresh(tag: &str) -> PathBuf {
 #[test]
 fn bundled_markdown_plugin_end_to_end() {
     let d = fresh("md");
+    // Mermaid 이미지(`render_svg`)가 실제 `<temp>/nexa-preview`가 아니라 이 샌드박스에 떨어지게(T-212).
+    super::SVG_CACHE_ROOT.with(|r| *r.borrow_mut() = Some(d.join("svgcache")));
     std::fs::copy(bundled_dir().join("markdown.wasm"), d.join("markdown.wasm")).unwrap();
     let (plugins, errors) = load_dir(&d);
     assert!(errors.is_empty(), "{errors:?}");
@@ -61,6 +63,7 @@ fn bundled_markdown_plugin_end_to_end() {
         joined.contains('▶') || joined.contains('◀'),
         "sequence 화살표"
     );
+    super::SVG_CACHE_ROOT.with(|r| *r.borrow_mut() = None);
     let _ = std::fs::remove_dir_all(&d);
 }
 
