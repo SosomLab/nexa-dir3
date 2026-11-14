@@ -1218,9 +1218,13 @@ impl Panel {
                     .iter()
                     .find(|t| !t.rows.source().is_virtual_root())
                     .map_or(cols, |t| t.rows.columns().to_vec());
+                // 계산 컬럼(탭 종속 · NEW-060)은 패널 기본 열에 들지 않는다.
+                self.base_columns
+                    .retain(|c| crate::calccol::slot_of(c.key).is_none());
             }
             self.retitle_columns(inv);
             self.sync_columns_for_root(inv);
+            self.calc_sync(inv);
             return;
         }
         self.base_columns = cols.clone();
@@ -1228,6 +1232,7 @@ impl Panel {
             tab.rows.set_columns(cols.clone(), inv);
         }
         self.sync_columns_for_root(inv);
+        self.calc_sync(inv); // 열을 통째로 갈았다 → 탭의 계산 컬럼을 다시 붙인다(재기동 직후 첫 배치 · 협업 실기 11-14)
     }
 
     /// 열 제목을 지금 언어로(폭 · 순서 · 표시는 그대로) — 열 정의 원형(`pool_columns`)의 제목을 key로 찾아 넣는다.
@@ -2378,6 +2383,7 @@ impl Panel {
         self.session_dirty = true;
         self.navigated = true;
         self.sync_columns_for_root(inv);
+        self.calc_sync(inv); // 새 원천 · (내 PC ↔ 폴더) 열 교체 뒤 계산 컬럼을 잇는다(NEW-060)
         self.sync_chrome(inv);
     }
 

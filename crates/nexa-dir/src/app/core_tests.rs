@@ -11518,6 +11518,42 @@ fn calculated_columns_belong_to_tab_and_sort() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 계산 컬럼 세션 복원(NEW-060 · 협업 실기 11-14 "재기동 뒤 활성 탭에 계산 컬럼이 안 보인다 · 탭을 오갔다 오면 나타남"):
+/// 탭 2개(탭0에 계산 컬럼 2 + 정렬) 세션으로 새 앱을 띄우면 **첫 화면부터** 탭0에 열 · 값 · 정렬이 있다.
+#[test]
+fn calculated_columns_survive_restart_on_active_tab() {
+    use crate::calccol::COL_CALC0;
+    let (mut app, dir) = fixture("calcrestore");
+    app.layout_for(1200, 800, 1.0);
+    app.startup_cmd("calc.add:Len = len(name)");
+    app.startup_cmd("calc.add:Up = name.upper()");
+    app.startup_cmd("sort.by:calc0-");
+    app.command("file.new_tab");
+    app.command("tab.prev");
+    let snap = app.session_snapshot();
+    assert_eq!(snap.panels[0].active, 0);
+    let settings = Settings::from_text(
+        dir.join("settings.conf"),
+        "launcher.visible=off\nlauncher.seed=2\nui.theme=dark\n",
+    );
+    let font = nexa_font::ui_font(None).expect("font");
+    let mut app2 = App::new(settings, font.font, None, Some(snap), Platform::fake());
+    app2.layout_for(1200, 800, 1.0);
+    // 그리기 전(기동 직후 덤프 길)에도 이미 붙어 있어야 한다.
+    let dump = app2.dump_of("list").unwrap();
+    assert!(dump.contains("| 5 | A.TXT"), "{dump}");
+    let cols = app2.panels[0].rows().columns();
+    let titles: Vec<&str> = cols.iter().map(|c| c.title.as_str()).collect();
+    assert!(
+        titles.ends_with(&["Len", "Up"]),
+        "첫 화면부터 계산 컬럼: {titles:?}"
+    );
+    assert_eq!(app2.panels[0].rows().sort(), [(COL_CALC0, true)]);
+    let dump = app2.dump_of("list").unwrap();
+    assert!(dump.contains("| 5 | A.TXT"), "{dump}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 상태바 전송 진행 칸(T-96 · NEW-006 · 10-25): 전송이 없으면 칸이 없다 · 전송 중 = "T nn%"(탭 칸 뒤) · 클릭 = 진행 창 띄우기
 /// (창 없이 돌던 전송이면 새로 준비) · 끝나면 사라진다 · 순서 편집기 라벨.
 #[test]

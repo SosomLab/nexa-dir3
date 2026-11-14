@@ -1096,6 +1096,7 @@ impl App {
             }
             "jobs.wait" => {
                 self.extract_job.is_some()
+                    || self.zip_job.is_some() // 내장 zip(협업 실기 11-14: 직후 덤프가 결과보다 먼저 찍혔다)
                     || self.sync_job.is_some()
                     || self.transfer_busy()
                     || self.trash_busy()
@@ -1116,7 +1117,8 @@ impl App {
 
     /// `NDIR_STARTUP_CMD` 해석 — 즉시/`@ready`/`@idle`/`@after` 분류(순수 판정은 [`classify_startup`]).
     pub(crate) fn queue_startup(&mut self, cmds: &str) {
-        for id in cmds.split(',').map(str::trim).filter(|c| !c.is_empty()) {
+        let parts = split_startup(cmds);
+        for id in parts.iter().map(|c| c.trim()).filter(|c| !c.is_empty()) {
             match classify_startup(id) {
                 StartupWhen::Now(c) => self.startup_cmd(c),
                 StartupWhen::Ready(c) => self.startup_ready.push(c.to_string()),
@@ -1141,6 +1143,30 @@ pub(crate) enum StartupWhen<'a> {
     After(u64, &'a str),
     /// `<조건>.wait` 뒤 명령(조건 = `idle` · `check` · `dlg` · `ops` · `ctx` … — `is_wait_cmd` 어휘의 앞부분).
     Until(&'a str, &'a str),
+}
+
+/// 기동 명령 목록 나누기(순수): 쉼표로 나누되 `\\,` = 글자 쉼표(식에 쉼표가 든 `calc.add:MB = round(size / 1024\\, 1)` ·
+/// `sort.by:size-\\,name+` — 협업 실기 11-14: 종전에는 쉼표 든 인자를 넘길 수 없었다). 그 밖의 `\\`는 그대로.
+pub(crate) fn split_startup(cmds: &str) -> Vec<String> {
+    let mut out = vec![String::new()];
+    let mut it = cmds.chars().peekable();
+    while let Some(c) = it.next() {
+        match c {
+            '\\' if it.peek() == Some(&',') => {
+                it.next();
+                if let Some(last) = out.last_mut() {
+                    last.push(',');
+                }
+            }
+            ',' => out.push(String::new()),
+            other => {
+                if let Some(last) = out.last_mut() {
+                    last.push(other);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// `@ready:` · `@idle:<명령>`(= 앱이 조용해진 뒤 · 10-31 T-161) · `@until:<조건>:<명령>`(조건 = `check` 자가 점검 끝 · `dlg` 대화상자
@@ -1172,6 +1198,22 @@ pub(crate) fn classify_startup(id: &str) -> StartupWhen<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 기동 명령 나누기: 쉼표 = 구분 · `\\,` = 글자 쉼표 · 빈 항목은 호출부가 거른다 · 다른 역슬래시는 그대로.
+    #[test]
+    fn split_startup_keeps_escaped_commas() {
+        assert_eq!(split_startup("a,b , c"), ["a", "b ", " c"]);
+        assert_eq!(
+            split_startup("calc.add:MB = round(size / 1024\\, 1),sort.by:size-\\,name+,list.dump"),
+            [
+                "calc.add:MB = round(size / 1024, 1)",
+                "sort.by:size-,name+",
+                "list.dump"
+            ]
+        );
+        assert_eq!(split_startup("ui.type:a\\b,x"), ["ui.type:a\\b", "x"]);
+        assert_eq!(split_startup(""), [""]);
+    }
 
     #[test]
     fn classify_prefixes() {
