@@ -3130,6 +3130,7 @@ fn tab_min_width_and_close_pad_follow_settings() {
         w0 + 4,
         "여백 2 → 6 = 폭 +4"
     );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 탭 여러 줄(T-121 · 사용자 10-03 "Multi-line 기본 · Single-line은 옵션 · 한 줄일 때 ◀ ▶ 자리 3가지"): 기본 = 폭을 넘으면
@@ -5420,8 +5421,8 @@ fn panel_grid_pushes_its_bounds_as_clip() {
     app.paint_into(&mut probe, 1200, 800, 1.0);
     assert_eq!(probe.pushed.len(), probe.pops, "push/pop 짝");
     assert!(probe.stack.is_empty() && probe.max_depth >= 1);
-    for p in 0..2 {
-        let b = app.panels[p].rows().bounds();
+    for (p, panel) in app.panels.iter().enumerate() {
+        let b = panel.rows().bounds();
         assert!(
             probe.pushed.contains(&b),
             "panel {p} rows bounds {b:?} not pushed: {:?}",
@@ -8620,7 +8621,7 @@ fn double_and_triple_click_select_text() {
 /// 고속 복사 설정(NEW-007 1차): 기본 = OS 복사 켬 · 동시 작업 자동(0) · 캐시 없이 복사 끔 — 설정값이 엔진 조절값으로 옮겨진다(MB → 바이트).
 #[test]
 fn transfer_tuning_follows_settings() {
-    let (mut app, _dir) = fixture("xfertune");
+    let (mut app, dir) = fixture("xfertune");
     let t = App::transfer_tuning(&app.settings);
     assert!(t.native && t.threads == 0 && t.unbuffered_min == 0, "{t:?}");
     let _ = app.settings.set("transfer.native", "off");
@@ -8631,6 +8632,7 @@ fn transfer_tuning_follows_settings() {
         !t.native && t.threads == 6 && t.unbuffered_min == 512 * 1024 * 1024,
         "{t:?}"
     );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 일괄 이름 변경의 시간대 오프셋(순수): 현지 달력과 UTC 초의 차이(분) — 한국 +540 · 뉴욕 겨울 −300 · 날짜가 넘어가는 경우 · UTC.
@@ -8673,18 +8675,20 @@ fn bulk_apply_swaps_and_never_overwrites() {
     std::fs::write(dir.join("d.txt"), b"D").expect("write");
     app.bulk_apply(vec![(dir.join("c.txt"), "d.txt".into())]);
     assert_eq!((read("c.txt").as_str(), read("d.txt").as_str()), ("C", "D"));
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 자연 정렬 설정(dir3 신규): 기본 켬 · 키가 등록돼 있고 3언어 라벨이 있다(정렬 규칙 자체는 ndir-tree `natural_compare_orders_numbers_by_value`).
 #[test]
 fn natural_sort_setting_defaults_on() {
-    let (app, _dir) = fixture("natsort");
+    let (app, dir) = fixture("natsort");
     assert!(app.settings.flag("list.sort_natural"));
     for lang in ["ko", "en", "ja"] {
         let cat = ndir_i18n::load(lang, std::path::Path::new("nowhere"));
         assert!(cat.get("pref.sortNatural").is_some(), "{lang}");
         assert!(cat.get("pref.sortNatural.desc").is_some(), "{lang}");
     }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 선택 반전(`edit.select_invert` · dir3 신규): 선택한 것만 빼고 나머지를 선택 · 전체 선택 뒤 = 선택 없음 · 선택 없음 뒤 = 전체.
@@ -8711,6 +8715,7 @@ fn invert_selection_flips_visible_rows() {
     assert!(app.panels[0].selected_paths().is_empty());
     app.command("edit.select_invert");
     assert_eq!(app.panels[0].selected_paths().len(), total);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 자연 정렬 = 다섯 번째 탭 보기 옵션(사용자 10-08 "자연 정렬도 `list.view_scope`에 영향 받게" · 기본 켬): 토글(`view.natural_sort` ·
@@ -8874,6 +8879,7 @@ fn dock_shows_folder_size_after_worker_finishes() {
         .len(),
         1
     );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 체크섬(T-167 · 10-06 개편): 파일 여러 개 → 작업 스레드가 차례로 · 값 = 엔진 결과 · 같은 내용 = 같은 묶음 글자 · 진행 중 두 번째 요청
@@ -8924,6 +8930,7 @@ fn checksum_window_computes_multiple_files_and_refuses_second_job() {
     assert!(app.hash_job.is_some() && app.hash_win.is_running());
     app.close_checksum();
     assert!(app.hash_job.is_none() && !app.hash_win.is_open());
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 툴바 그룹 띄우기/붙이기(T-108 2/2 · NEW-010 · nexa-sql 차용): 툴바 우클릭 메뉴에 커서 아래 그룹 "띄우기" + 배치 초기화 · 고르면 창 요청만
@@ -9377,6 +9384,7 @@ fn favorites_toggle_menu_and_navigate() {
     assert_eq!(app.fav_has_current(), None);
     app.command("nav.fav_toggle");
     assert_eq!(app.favorites().len(), 1, "{:?}", app.favorites());
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 압축 풀기(T-169): tar 파일 → "<이름>" 폴더에 풀기(작업 스레드) → 파일 생김 · 결과 안내 · 진행 중 전송/풀기 요청은 거부 ·
@@ -9501,6 +9509,7 @@ fn extract_archive_into_named_folder() {
     };
     let s = crate::app::extract::extract_summary(&rep);
     assert!(s.contains('2') && s.contains("1"), "{s}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 중복 파일 찾기(T-170): 폴더 안 같은 내용 2개 → 작업 스레드 → 창에 묶음 1 + 파일 2 · 최신 보존 = 표시 1 · 진행 중 두 번째 요청 거부 ·
@@ -9565,6 +9574,7 @@ fn duplicate_finder_groups_and_marks() {
         app.dupes_win.status()
     );
     app.close_dupes();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 폴더 비교 · 동기화(T-171/172): 두 폴더 → 작업 스레드 → 창에 다른 것만 · [→ 왼쪽 기준] = 복사 워커 → 오른쪽에 생김 → 다시 비교.
@@ -9723,6 +9733,7 @@ fn compare_two_folders_and_sync_left_to_right() {
     log.borrow_mut().locked.clear();
     app.close_compare();
     assert!(app.cmp_job.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 도크 갱신 디바운스(T-177): 선택이 바뀌어도 바로 계산하지 않고 예약만 · 때가 되면 틱이 1번 갱신 · 연속 이동은 하나로 합쳐진다.
@@ -9754,6 +9765,7 @@ fn dock_refresh_is_debounced_after_rapid_moves() {
     app.docks[0].select_all_text(&mut inv2);
     let text = app.docks[0].selected_text().unwrap_or_default();
     assert!(text.contains("c.txt"), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 기동 명령은 사용자 동작의 대역이라 **유휴 트림 시계를 되감는다**(10-08 메모리 2차 — 종전엔 창 사건만 되감아 시나리오의 "동작 →
