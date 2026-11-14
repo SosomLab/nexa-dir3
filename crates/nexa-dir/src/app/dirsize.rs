@@ -101,6 +101,9 @@ struct Entry {
     /// 잰 뒤에 폴더가 바뀌었다(감시 통지 · mtime 가드 — GAP-054): 값은 **그대로 보여 주면서** 다시 잰다. 다시 재는 간격은
     /// [`Tuning::refresh_min`] 이상(계속 바뀌는 폴더가 쉬지 않고 재측정되지 않게).
     stale: bool,
+    /// 항목 수 상한에 걸려 그친 값(자동 측정) — 수동 명령은 이 값을 버리고 끝까지 다시 잰다(읽기 오류로 인한 "일부"와 구분:
+    /// 그쪽은 다시 재도 같으므로 그대로 쓴다).
+    capped: bool,
 }
 
 /// 경로 하나의 상태.
@@ -403,6 +406,13 @@ impl DirSizes {
         origin: Origin,
         mtime_ms: Option<i64>,
     ) {
+        // 수동 명령은 상한에 걸려 그친 값을 버리고 끝까지 다시 잰다(협업 실기 11-14: 자동 "≥ 9.8 KB" 뒤 수동 계산이 그 값을
+        // 유효 캐시로 보고 그대로 끝났다) — 버려야 `get`이 대기/진행으로 바뀌어 수동 완료 판정이 새 값을 기다린다.
+        if origin == Origin::Manual && self.cache.get(path).is_some_and(|e| e.capped) {
+            self.cache.remove(path);
+            self.order.retain(|p| p != path);
+            self.changed = true;
+        }
         if self.fresh(path, now)
             || self.is_running(path)
             || self.is_queued(path)
@@ -561,6 +571,11 @@ impl DirSizes {
             let complete = !sh.aborted.load(Ordering::Relaxed);
             let dirty = self.dirty.remove(&j.path);
             self.remember(j.path.clone(), sh.snapshot(), now, complete, j.mtime_ms);
+            if sh.capped.load(Ordering::Relaxed) {
+                if let Some(e) = self.cache.get_mut(&j.path) {
+                    e.capped = true;
+                }
+            }
             if dirty {
                 self.set_stale(&j.path, now);
             }
@@ -740,6 +755,7 @@ impl DirSizes {
             complete,
             mtime_ms,
             stale: false,
+            capped: false,
         };
         if self.cache.insert(path.clone(), e).is_none() {
             self.order.push_back(path);
@@ -1193,6 +1209,41 @@ mod tests {
         );
         let (d, _) = run(Origin::Manual, 5);
         assert!(!d.partial && d.files == 20, "수동 = 끝까지: {d:?}");
+        // 자동 상한 → 수동(협업 실기 순서): 상한 값이 캐시에 있어도 수동은 버리고 끝까지 다시 잰다 · 그 사이 상태는 끝남이 아니다.
+        let mut s = DirSizes::default();
+        s.set_tuning(Tuning {
+            max_items: 5,
+            settle_ms: 0,
+            ..Tuning::default()
+        });
+        let wait = |s: &mut DirSizes| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while s.tick(Instant::now()) {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        s.request_back(&dir, Instant::now(), Origin::Column, None);
+        wait(&mut s);
+        assert!(s.cached(&dir).unwrap().partial);
+        s.request_back(&dir, Instant::now(), Origin::Manual, None);
+        assert!(
+            !matches!(s.get(&dir), SizeState::Done(_)),
+            "수동 요청 직후 = 옛 상한 값을 결과로 내놓지 않는다"
+        );
+        wait(&mut s);
+        let d = s.cached(&dir).unwrap();
+        assert!(!d.partial && d.files == 20, "{d:?}");
+        // 읽기 오류로 인한 "일부"는 수동도 그대로 쓴다(다시 재도 같다).
+        s.remember(
+            dir.join("denied"),
+            DirSize { partial: true, ..V },
+            Instant::now(),
+            true,
+            None,
+        );
+        s.request_back(&dir.join("denied"), Instant::now(), Origin::Manual, None);
+        assert_eq!(s.queue_len() + s.running_len(), 0);
         let (d, _) = run(Origin::Column, 0);
         assert!(!d.partial && d.files == 20, "0 = 상한 없음");
         let mut s = DirSizes::default();
