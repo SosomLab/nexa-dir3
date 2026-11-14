@@ -328,6 +328,7 @@ impl crate::App {
                     cancel: 0, // Esc = 그대로 둔다(다음 기동에 다시 묻는다)
                     input: None,
                     delay: None,
+                    more: None,
                     arm: None,
                 };
                 let _ = self.ask(spec, DlgReply::QueueRestore(left));

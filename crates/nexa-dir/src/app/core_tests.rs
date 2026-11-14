@@ -11458,6 +11458,31 @@ fn calculated_columns_belong_to_tab_and_sort() {
     let d = app.dump_of("dlg").unwrap();
     assert!(d.contains(&tr("calc.dlg.title")), "다시 묻는다: {d}");
     app.startup_cmd("dlg.pick:0");
+    // 정의 창 = 두 칸(이름 · 식) + 미리보기 줄: 입력이 바뀌면 선택 행(없으면 첫 행)의 값 · 틀리면 사유(위험색) · 식이 비면 조용.
+    app.calc_ask(None, None);
+    let (spec, reply) = app.dlg_pending.take().unwrap();
+    assert!(spec.dump().ends_with("| input | input2"), "{}", spec.dump());
+    app.dlg.set_spec(spec);
+    app.dlg_reply = Some(reply);
+    app.calc_hint_tick();
+    assert_eq!(app.dlg.hint(), ("", false), "빈 식");
+    app.dlg_type("Kb = size // 1024");
+    assert_eq!(app.dlg.input_text().as_deref(), Some("Kb = size // 1024"));
+    app.calc_hint_tick();
+    assert_eq!(app.dlg.hint(), ("sub \u{2192} 0", false));
+    app.dlg_type("= re.sub('(', '', name)");
+    app.calc_hint_tick();
+    let (hint, err) = app.dlg.hint();
+    assert!(err && hint.contains("bad regex"), "{hint}");
+    app.dlg_type("x = 1 / (size - size)");
+    app.calc_hint_tick();
+    let (hint, err) = app.dlg.hint();
+    assert!(
+        err && hint.starts_with("sub \u{2192}"),
+        "행에 따른 오류: {hint}"
+    );
+    app.startup_cmd("dlg.pick:0");
+    assert_eq!(titles(&app).len(), base + 2, "취소 = 그대로");
     // 편집 = 같은 자리 교체(정렬은 그 자리를 계속 가리킨다).
     app.calc_ask(Some(1), None);
     app.startup_cmd("dlg.type:Kb = size // 1024");

@@ -378,6 +378,12 @@ impl App {
             self.calc_entered(None, def);
             return;
         }
+        // 정의 창 열기(실기 · 캡처): `calc.ask` = 새 열 · `calc.ask:<자리>` = 편집.
+        if let Some(rest) = id.strip_prefix("calc.ask") {
+            let at = rest.strip_prefix(':').and_then(|n| n.trim().parse().ok());
+            self.calc_ask(at, None);
+            return;
+        }
         if let Some(n) = id.strip_prefix("calc.del:") {
             if let Ok(slot) = n.trim().parse::<usize>() {
                 self.calc_delete(slot);

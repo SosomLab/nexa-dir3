@@ -20,18 +20,61 @@ impl App {
         let initial = initial
             .or_else(|| at.and_then(|i| cols.get(i)).map(CalcCol::def_text))
             .unwrap_or_default();
+        // 두 칸(이름 · 식) + 미리보기 줄 — 결과 글은 종전 한 줄 입력과 같은 `이름 = 식`.
+        let (name, expr) = initial.split_once('=').unwrap_or((initial.as_str(), ""));
         let mut spec = crate::dlg_win::DlgSpec::confirm(
             tr("calc.dlg.title"),
             tr("calc.dlg.text"),
             tr("dlg.ok"),
         );
         spec.input = Some(crate::dlg_win::DlgInput {
-            label: tr("calc.dlg.input"),
+            label: tr("calc.dlg.name"),
             masked: false,
-            initial,
-            placeholder: tr("calc.dlg.placeholder"),
+            initial: name.trim().to_owned(),
+            placeholder: tr("calc.dlg.namePlaceholder"),
+        });
+        spec.more = Some(crate::dlg_win::DlgMore {
+            input: crate::dlg_win::DlgInput {
+                label: tr("calc.dlg.input"),
+                masked: false,
+                initial: expr.trim().to_owned(),
+                placeholder: tr("calc.dlg.placeholder"),
+            },
+            join: " = ".into(),
         });
         let _ = self.ask(spec, crate::app::dialogs::DlgReply::CalcColumn(at));
+    }
+
+    /// 정의 창의 미리보기 줄(유휴 틱 · `dlg.type` 뒤): 입력이 바뀌었으면 지금 글을 열로 풀어 **첫 선택 행(없으면 첫 행)**의 값을
+    /// 보여 준다 — 틀리면 사유(위험색). 계산 컬럼 창이 아니면 무동작.
+    pub(crate) fn calc_hint_tick(&mut self) {
+        if !self.dlg.take_edited()
+            || !matches!(
+                self.dlg_reply,
+                Some(crate::app::dialogs::DlgReply::CalcColumn(_))
+            )
+        {
+            return;
+        }
+        let text = self.dlg.input_text().unwrap_or_default();
+        let (name, expr) = text.split_once('=').unwrap_or((text.as_str(), ""));
+        let (hint, error) = if expr.trim().is_empty() {
+            (String::new(), false) // 아직 식을 안 썼다 — 조용히
+        } else {
+            // 이름을 아직 안 썼어도 식은 미리 본다(이름 오류는 확인 때 알린다).
+            let name = if name.trim().is_empty() { "_" } else { name };
+            match CalcCol::new(name, expr) {
+                Err(DefError::Expr(m)) => (trf("calc.err.expr", &[&m]), true),
+                Err(DefError::Name) => (tr("calc.err.name"), true),
+                Err(DefError::Shape) => (tr("calc.err.shape"), true),
+                Ok(col) => match self.panels[self.active].calc_preview(&col) {
+                    Some((row, Ok(v))) => (trf("calc.hint.value", &[&row, &v]), false),
+                    Some((row, Err(m))) => (trf("calc.hint.rowError", &[&row, &m]), true),
+                    None => (tr("calc.hint.ok"), false),
+                },
+            }
+        };
+        self.dlg.set_hint(hint, error);
     }
 
     /// 정의 창 확인 — 입력을 열로 풀어 활성 탭에 추가/교체한다. 틀리면 사유를 알리고 같은 글로 다시 묻는다.

@@ -1261,6 +1261,7 @@ clip.vpasteFail = {0} failed
 clip.vpasteOp = paste {0} item(s) from the clipboard
 dlg.ok = OK
 dlg.cancel = Cancel
+dlg.busy = Another dialog is open — finish it first
 sel.patternTitle = Select by Pattern
 sel.patternText = Items whose name matches any of the patterns (* and ?, separate with ;, case-insensitive)
 sel.pattern = Pattern
@@ -1479,9 +1480,14 @@ calc.menu.add = Add calculated column…
 calc.menu.edit = Edit calculated column "{0}"…
 calc.menu.del = Remove calculated column "{0}"
 calc.dlg.title = Calculated column
-calc.dlg.text = Enter the column as: name = expression. The column belongs to this tab and can be sorted like any other. Variables: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. Python-style expressions: + - * / // % **, comparisons, and/or/not, a if c else b, 'text' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime). Regular expressions: re.search(pattern, s[, group]), re.match(), re.fullmatch(), re.sub(pattern, repl, s), re.findall(), re.split() — a search returns the matched text or None.
-calc.dlg.input = Definition
-calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.dlg.text = Give the column a name and an expression; the line below the expression previews the value for the selected row. The column belongs to this tab and can be sorted like any other. Variables: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. Python-style expressions: + - * / // % **, comparisons, and/or/not, a if c else b, 'text' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime). Regular expressions: re.search(pattern, s[, group]), re.match(), re.fullmatch(), re.sub(pattern, repl, s), re.findall(), re.split() — a search returns the matched text or None.
+calc.dlg.input = Expression
+calc.dlg.placeholder = round(size / 1024 / 1024, 1)
+calc.dlg.name = Name
+calc.dlg.namePlaceholder = MB
+calc.hint.value = {0} → {1}
+calc.hint.rowError = {0} → error: {1}
+calc.hint.ok = The expression is valid.
 calc.full = A tab can hold up to {0} calculated columns.
 calc.err.shape = Enter the column as: name = expression.
 calc.err.name = The column name is empty or too long (40 characters at most).

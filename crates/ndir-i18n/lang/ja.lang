@@ -1261,6 +1261,7 @@ clip.vpasteFail = {0} 個失敗
 clip.vpasteOp = クリップボードの {0} 個を貼り付け
 dlg.ok = OK
 dlg.cancel = キャンセル
+dlg.busy = 別のダイアログが開いています — 先に閉じてください
 sel.patternTitle = パターンで選択
 sel.patternText = 名前がいずれかのパターンに一致する項目(* と ?、複数は ; で区切り、大文字小文字を区別しない)
 sel.pattern = パターン
@@ -1479,9 +1480,14 @@ calc.menu.add = 計算列を追加…
 calc.menu.edit = 計算列「{0}」を編集…
 calc.menu.del = 計算列「{0}」を削除
 calc.dlg.title = 計算列
-calc.dlg.text = 名前 = 式 の形で入力します。この列は現在のタブだけに属し、ほかの列と同じように並べ替えできます。変数: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind。Python 風の式: + - * / // % **、比較、and/or/not、a if c else b、'文字' + str(n)、f"{size / 1024:.1f} KB"、s[0:3]、s.upper()、s.replace(a, b)、s.split('.')、len()、round()、int()、min()、max()、size_h(size)、date(mtime, '%Y-%m')、year(mtime)、age_days(mtime)。 正規表現: re.search(パターン, s[, グループ]), re.match(), re.fullmatch(), re.sub(パターン, 置換, s), re.findall(), re.split() — 検索は一致した文字列または None を返します。
-calc.dlg.input = 定義
-calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.dlg.text = 列の名前と式を入力します。式の下の行に選択した行の値がプレビューされます。この列は現在のタブだけに属し、ほかの列と同じように並べ替えできます。変数: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind。Python 風の式: + - * / // % **、比較、and/or/not、a if c else b、'文字' + str(n)、f"{size / 1024:.1f} KB"、s[0:3]、s.upper()、s.replace(a, b)、s.split('.')、len()、round()、int()、min()、max()、size_h(size)、date(mtime, '%Y-%m')、year(mtime)、age_days(mtime)。 正規表現: re.search(パターン, s[, グループ]), re.match(), re.fullmatch(), re.sub(パターン, 置換, s), re.findall(), re.split() — 検索は一致した文字列または None を返します。
+calc.dlg.input = 式
+calc.dlg.placeholder = round(size / 1024 / 1024, 1)
+calc.dlg.name = 名前
+calc.dlg.namePlaceholder = MB
+calc.hint.value = {0} → {1}
+calc.hint.rowError = {0} → エラー: {1}
+calc.hint.ok = 式は有効です。
 calc.full = 1 つのタブに置ける計算列は {0} 個までです。
 calc.err.shape = 名前 = 式 の形で入力してください。
 calc.err.name = 列名が空か長すぎます(40 文字以内)。

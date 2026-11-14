@@ -738,6 +738,40 @@ impl TreeSource {
         }))
     }
 
+    /// 정의 창 미리보기(NEW-060 후속): 첫 선택 행(없으면 첫 행)에서 `col`을 평가 — (행 이름, 셀 글 또는 평가 오류). 행이 없으면
+    /// `None`.
+    pub(crate) fn calc_preview(
+        &self,
+        col: &crate::calccol::CalcCol,
+    ) -> Option<(String, Result<String, String>)> {
+        let t = self.tree.as_ref()?;
+        let index = t
+            .selected_path(0)
+            .and_then(|p| t.index_of_path(&p.to_string_lossy()))
+            .unwrap_or(0);
+        let row = t.row_ref(index)?;
+        let path = t.visible_id(index).and_then(|id| t.node_path(id))?;
+        let dir_size = self
+            .dir_sizes
+            .get(path)
+            .map(|(b, _)| *b)
+            .or_else(|| self.sort_sizes.as_ref().and_then(|m| m.get(path).copied()));
+        let value = col.eval(&crate::calccol::RowEnv {
+            row: &row,
+            path,
+            dir_size,
+            clock: crate::calccol::clock(),
+        });
+        let name = row.name.to_owned();
+        Some((
+            name,
+            match value {
+                Ok(v) => Ok(v.display()),
+                Err(e) => Err(e.0),
+            },
+        ))
+    }
+
     /// 잘라내기 표식 집합 교체 — 바뀌었으면 true(호스트가 목록 무효화).
     pub(crate) fn set_cut_marks(&mut self, marks: std::collections::HashSet<PathBuf>) -> bool {
         if self.cut_marks == marks {

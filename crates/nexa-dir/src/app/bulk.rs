@@ -205,6 +205,7 @@ impl App {
                         placeholder: tr("bulk.preset.savedSeq"),
                     }),
                     delay: None,
+                    more: None,
                     // 같은 이름이면 [확인]이 그 자리에서 "덮어쓰기 (3)" 무장 버튼으로(사용자 10-18 · 별도 창 없음 · 시간 지나면 원복).
                     arm: Some(DlgArm {
                         id: 1,

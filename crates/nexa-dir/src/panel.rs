@@ -605,6 +605,14 @@ impl Panel {
         &self.tabs[self.active].calc
     }
 
+    /// 정의 창 미리보기 — [`crate::filelist::TreeSource::calc_preview`].
+    pub(crate) fn calc_preview(
+        &self,
+        col: &crate::calccol::CalcCol,
+    ) -> Option<(String, Result<String, String>)> {
+        self.rows().source().calc_preview(col)
+    }
+
     /// 활성 탭의 계산 컬럼 교체 → 열 · 원천 동기 · 세션 더러움.
     pub(crate) fn set_calc(&mut self, cols: Vec<crate::calccol::CalcCol>, inv: &mut Invalidations) {
         self.tabs[self.active].calc = cols;

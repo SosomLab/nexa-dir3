@@ -555,6 +555,7 @@ impl App {
             cancel: 0,
             input: None,
             delay: None,
+            more: None,
             arm: None,
         };
         self.ask(
@@ -713,6 +714,7 @@ impl App {
             cancel: 0,
             input: None,
             delay: None,
+            more: None,
             arm: None,
         };
         if !self.ask(

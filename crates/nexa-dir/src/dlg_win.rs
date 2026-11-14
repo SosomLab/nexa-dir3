@@ -38,6 +38,15 @@ pub(crate) struct DlgArm {
     pub empty_as: String,
 }
 
+/// 둘째 입력란 + 미리보기 줄(계산 컬럼 정의 창 · NEW-060 후속 11-14): 첫 입력란 아래에 입력란을 하나 더 두고 그 아래에 호스트가
+/// 채우는 안내 한 줄([`DlgWin::set_hint`])을 둔다. 결과 글 = `첫 글 + join + 둘째 글`(호출부는 한 줄 입력 때와 같은 글을 받는다) ·
+/// `dlg.type`의 글은 `join`의 알맹이(공백 뺀 것)에서 한 번 갈라 두 칸에 나눠 넣는다. Tab = 칸 이동.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DlgMore {
+    pub input: DlgInput,
+    pub join: String,
+}
+
 /// 대화상자 사양.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DlgSpec {
@@ -54,6 +63,8 @@ pub(crate) struct DlgSpec {
     pub delay: Option<(i32, u64)>,
     /// 무장 버튼(그 자리 재확인) — [`DlgArm`].
     pub arm: Option<DlgArm>,
+    /// 둘째 입력란 + 미리보기 줄 — [`DlgMore`].
+    pub more: Option<DlgMore>,
 }
 
 impl DlgSpec {
@@ -67,6 +78,7 @@ impl DlgSpec {
             cancel: 0,
             input: None,
             delay: None,
+            more: None,
             arm: None,
         }
     }
@@ -99,6 +111,7 @@ impl DlgSpec {
                 .as_ref()
                 .map(|a| format!(" | arm {}:{}", a.id, a.ms))
                 .unwrap_or_default()
+            + if self.more.is_some() { " | input2" } else { "" }
     }
 }
 
@@ -119,6 +132,8 @@ const BTN_H: f32 = 28.0;
 const BTN_W: f32 = 104.0;
 const INPUT_H: f32 = 30.0;
 const WIDTH: f32 = 460.0;
+/// 미리보기 줄 높이(사양 `more`).
+const HINT_H: f32 = 20.0;
 
 pub(crate) struct DlgWin {
     window: Option<Rc<Window>>,
@@ -130,6 +145,13 @@ pub(crate) struct DlgWin {
     spec: Option<DlgSpec>,
     buttons: Vec<Button>,
     input: Option<TextBox>,
+    /// 둘째 입력란(사양 `more`) · 포커스가 그쪽인가.
+    input2: Option<TextBox>,
+    focus2: bool,
+    /// 미리보기 줄(글 · 오류인가) — 호스트가 채운다.
+    hint: (String, bool),
+    /// 입력란 글이 바뀌었다(호스트가 [`Self::take_edited`]로 거둬 미리보기를 다시 계산).
+    edited: bool,
     done: Option<(i32, Option<String>)>,
     /// 잠금 버튼(사양 `delay`): 첫 틱부터 ms 동안 끔 + 라벨 `(N)`.
     wait: Option<Wait>,
@@ -159,6 +181,10 @@ impl DlgWin {
             spec: None,
             buttons: Vec::new(),
             input: None,
+            input2: None,
+            focus2: false,
+            hint: (String::new(), false),
+            edited: false,
             done: None,
             wait: None,
             armed: None,
@@ -205,6 +231,9 @@ impl DlgWin {
             any |= b.tick(now_ms);
         }
         if let Some(tb) = &mut self.input {
+            any |= tb.tick(now_ms);
+        }
+        if let Some(tb) = &mut self.input2 {
             any |= tb.tick(now_ms);
         }
         any
@@ -338,7 +367,8 @@ impl DlgWin {
             && (self.buttons.iter().any(|b| b.is_animating())
                 || self.wait.as_ref().is_some_and(|w| !w.done)
                 || self.armed.is_some()
-                || self.input.as_ref().is_some_and(|t| t.is_animating()))
+                || self.input.as_ref().is_some_and(|t| t.is_animating())
+                || self.input2.as_ref().is_some_and(|t| t.is_animating()))
     }
 
     /// 사양으로 컨트롤 구성(창 유무 무관 — 시험은 창 없이 `pick`).
@@ -353,6 +383,14 @@ impl DlgWin {
             tb.set_masked(i.masked);
             tb
         });
+        self.input2 = spec.more.as_ref().map(|m| {
+            let mut tb = TextBox::new(m.input.placeholder.as_str()).with_text(&m.input.initial);
+            tb.set_masked(m.input.masked);
+            tb
+        });
+        self.focus2 = false;
+        self.hint = (String::new(), false);
+        self.edited = self.input2.is_some();
         self.done = None;
         self.armed = None;
         self.wait = spec.delay.and_then(|(id, ms)| {
@@ -376,15 +414,79 @@ impl DlgWin {
 
     /// 현재 입력란 텍스트(없으면 None).
     pub(crate) fn input_text(&self) -> Option<String> {
-        self.input.as_ref().map(|t| t.text())
+        let first = self.input.as_ref().map(|t| t.text())?;
+        Some(
+            match (
+                &self.input2,
+                self.spec.as_ref().and_then(|s| s.more.as_ref()),
+            ) {
+                (Some(second), Some(m)) => format!("{first}{}{}", m.join, second.text()),
+                _ => first,
+            },
+        )
+    }
+
+    /// 입력란 글이 바뀌었는가 — 한 번만 참(호스트가 미리보기 줄을 다시 계산한다).
+    pub(crate) fn take_edited(&mut self) -> bool {
+        std::mem::take(&mut self.edited)
+    }
+
+    /// 미리보기 줄(사양 `more`가 있을 때만 그린다).
+    pub(crate) fn set_hint(&mut self, text: String, error: bool) {
+        if self.hint != (text.clone(), error) {
+            self.hint = (text, error);
+            self.redraw();
+        }
+    }
+
+    /// 미리보기 줄(시험 · 덤프).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn hint(&self) -> (&str, bool) {
+        (&self.hint.0, self.hint.1)
+    }
+
+    /// 포커스가 있는 입력란.
+    fn focused_input(&mut self) -> Option<&mut TextBox> {
+        if self.focus2 && self.input2.is_some() {
+            self.input2.as_mut()
+        } else {
+            self.input.as_mut()
+        }
+    }
+
+    /// 입력 칸 이동(Tab) — 둘째 칸이 없으면 무동작.
+    fn focus_input(&mut self, second: bool) {
+        if self.input2.is_none() {
+            return;
+        }
+        self.focus2 = second;
+        if let Some(tb) = &mut self.input {
+            tb.set_focused(!second);
+        }
+        if let Some(tb) = &mut self.input2 {
+            tb.set_focused(second);
+        }
     }
 
     /// 입력란 텍스트 설정(기동 명령 `dlg.type`).
     pub(crate) fn set_input_text(&mut self, text: &str) {
-        if let Some(tb) = &mut self.input {
-            tb.set_text(text);
-            self.redraw();
+        let join = self
+            .spec
+            .as_ref()
+            .and_then(|s| s.more.as_ref())
+            .map(|m| m.join.trim().to_owned());
+        match (&mut self.input, &mut self.input2, join) {
+            (Some(a), Some(b), Some(j)) if !j.is_empty() => {
+                // 두 칸: 구분 글에서 한 번 가른다(없으면 전부 첫 칸).
+                let (x, y) = text.split_once(j.as_str()).unwrap_or((text, ""));
+                a.set_text(x.trim());
+                b.set_text(y.trim());
+            }
+            (Some(a), _, _) => a.set_text(text),
+            _ => return,
         }
+        self.edited = true;
+        self.redraw();
     }
 
     /// 버튼 id로 결정(기동 명령 · 시험) — 입력란 텍스트 동봉.
@@ -436,6 +538,10 @@ impl DlgWin {
             INPUT_H + 28.0
         } else {
             0.0
+        } + if spec.more.is_some() {
+            INPUT_H + 28.0 + HINT_H + 8.0
+        } else {
+            0.0
         };
         // 본문이 없으면(입력만) 위 여백 한 단 줄임.
         let pads = if spec.text.is_empty() { 2.0 } else { 3.0 };
@@ -473,6 +579,10 @@ impl DlgWin {
         self.spec = None;
         self.buttons.clear();
         self.input = None;
+        self.input2 = None;
+        self.focus2 = false;
+        self.hint = (String::new(), false);
+        self.edited = false;
         self.wait = None;
         self.armed = None;
     }
@@ -501,9 +611,18 @@ impl DlgWin {
             x += bw + gap;
         }
         let ih = self.s(INPUT_H);
+        // 아래에서 위로: 버튼 ← (미리보기 줄 ← 둘째 입력란) ← 첫 입력란. 입력란 사이는 라벨 한 줄 자리.
+        let mut bottom = by - gap;
+        let (hint_h, label_h) = (self.s(HINT_H), self.s(28.0));
+        if let Some(tb) = &mut self.input2 {
+            bottom -= hint_h + gap;
+            tb.set_scale(s);
+            tb.set_bounds(Rect::new(pad, bottom - ih, w - pad * 2, ih), &mut inv);
+            bottom -= ih + label_h;
+        }
         if let Some(tb) = &mut self.input {
             tb.set_scale(s);
-            tb.set_bounds(Rect::new(pad, by - gap - ih, w - pad * 2, ih), &mut inv);
+            tb.set_bounds(Rect::new(pad, bottom - ih, w - pad * 2, ih), &mut inv);
         }
     }
 
@@ -541,7 +660,7 @@ impl DlgWin {
             }
             WindowEvent::Ime(ime) => {
                 let mut inv = Invalidations::default();
-                if let Some(tb) = &mut self.input {
+                if let Some(tb) = self.focused_input() {
                     match ime {
                         winit::event::Ime::Preedit(t, _) => tb.set_preedit(t, &mut inv),
                         winit::event::Ime::Commit(t) => {
@@ -552,6 +671,7 @@ impl DlgWin {
                         }
                         _ => {}
                     }
+                    self.edited = true;
                     self.redraw();
                 }
                 return DlgAction::None;
@@ -569,34 +689,40 @@ impl DlgWin {
                             return a;
                         }
                     }
+                    Key::Named(NamedKey::Tab) if self.input2.is_some() => {
+                        self.focus_input(!self.focus2);
+                        self.redraw();
+                        return DlgAction::None;
+                    }
                     _ => {}
                 }
-                if let Some(tb) = &mut self.input {
+                let (shift, primary) = (self.shift, self.primary);
+                if let Some(tb) = self.focused_input() {
                     let mut inv = Invalidations::default();
                     let ie = match kev.logical_key.as_ref() {
                         Key::Named(NamedKey::ArrowLeft) => Some(InputEvent::Key {
                             key: CtlKey::Left,
-                            shift: self.shift,
+                            shift,
                             primary: false,
                         }),
                         Key::Named(NamedKey::ArrowRight) => Some(InputEvent::Key {
                             key: CtlKey::Right,
-                            shift: self.shift,
+                            shift,
                             primary: false,
                         }),
                         Key::Named(NamedKey::Home) => Some(InputEvent::Key {
                             key: CtlKey::Home,
-                            shift: self.shift,
+                            shift,
                             primary: false,
                         }),
                         Key::Named(NamedKey::End) => Some(InputEvent::Key {
                             key: CtlKey::End,
-                            shift: self.shift,
+                            shift,
                             primary: false,
                         }),
                         Key::Named(NamedKey::Delete) => Some(InputEvent::Key {
                             key: CtlKey::Delete,
-                            shift: self.shift,
+                            shift,
                             primary: false,
                         }),
                         Key::Named(NamedKey::Backspace) => Some(InputEvent::Char {
@@ -604,23 +730,18 @@ impl DlgWin {
                             now_ms: 0,
                         }),
                         Key::Named(NamedKey::Space) => Some(InputEvent::Char { c: ' ', now_ms: 0 }),
-                        Key::Character(t) if self.primary => {
-                            match t.to_ascii_lowercase().as_str() {
-                                "a" => Some(InputEvent::SelectAll),
-                                "v" => {
-                                    if let Some(p) = crate::clipboard::read_text() {
-                                        for c in p.chars().filter(|c| !c.is_control()) {
-                                            tb.on_event(
-                                                &InputEvent::Char { c, now_ms: 0 },
-                                                &mut inv,
-                                            );
-                                        }
+                        Key::Character(t) if primary => match t.to_ascii_lowercase().as_str() {
+                            "a" => Some(InputEvent::SelectAll),
+                            "v" => {
+                                if let Some(p) = crate::clipboard::read_text() {
+                                    for c in p.chars().filter(|c| !c.is_control()) {
+                                        tb.on_event(&InputEvent::Char { c, now_ms: 0 }, &mut inv);
                                     }
-                                    None
                                 }
-                                _ => None,
+                                None
                             }
-                        }
+                            _ => None,
+                        },
                         Key::Character(t) => t
                             .chars()
                             .next()
@@ -631,6 +752,7 @@ impl DlgWin {
                     if let Some(ie) = ie {
                         tb.on_event(&ie, &mut inv);
                     }
+                    self.edited = true;
                     self.redraw();
                 }
                 return DlgAction::None;
@@ -660,11 +782,23 @@ impl DlgWin {
         for b in &mut self.buttons {
             b.on_event(&ie, &mut inv);
         }
+        let mut hit2 = None;
         if let Some(tb) = &mut self.input {
             tb.on_event(&ie, &mut inv);
             if let InputEvent::MouseDown { x, y, .. } = ie {
                 tb.set_focused(tb.bounds().contains(Point { x, y }));
             }
+        }
+        if let Some(tb) = &mut self.input2 {
+            tb.on_event(&ie, &mut inv);
+            if let InputEvent::MouseDown { x, y, .. } = ie {
+                let hit = tb.bounds().contains(Point { x, y });
+                tb.set_focused(hit);
+                hit2 = Some(hit);
+            }
+        }
+        if let Some(hit) = hit2 {
+            self.focus2 = hit;
         }
         let ids: Vec<i32> = self
             .spec
@@ -747,6 +881,27 @@ impl DlgWin {
                 );
                 tb.paint(&mut dc, th);
             }
+            if let (Some(tb), Some(more)) = (&mut self.input2, &spec.more) {
+                let r = tb.bounds();
+                dc.text(
+                    pad,
+                    r.y - th_txt - 4,
+                    Rect::new(0, 0, wi, hi),
+                    &more.input.label,
+                    th.text_dim,
+                );
+                tb.paint(&mut dc, th);
+                // 미리보기 줄: 오류 = 위험색 · 넘치면 창 폭에서 잘린다.
+                let hy = r.y + r.h + (8.0 * s).round() as i32;
+                let color = if self.hint.1 { th.danger } else { th.text_dim };
+                dc.text(
+                    pad,
+                    hy,
+                    Rect::new(pad, hy, wi - pad * 2, th_txt + 4),
+                    &self.hint.0,
+                    color,
+                );
+            }
             for b in &mut self.buttons {
                 b.paint(&mut dc, th);
             }
@@ -780,6 +935,7 @@ mod tests {
                 placeholder: String::new(),
             }),
             delay: None,
+            more: None,
             arm: None,
         });
         assert!(w.spec().unwrap().dump().ends_with("input(masked)"));
@@ -806,6 +962,7 @@ mod tests {
                 placeholder: String::new(),
             }),
             delay: None,
+            more: None,
             arm: Some(DlgArm {
                 id: 1,
                 label: "Overwrite".into(),
@@ -845,6 +1002,7 @@ mod tests {
                 placeholder: String::new(),
             }),
             delay: None,
+            more: None,
             arm: Some(DlgArm {
                 id: 1,
                 label: "Overwrite".into(),

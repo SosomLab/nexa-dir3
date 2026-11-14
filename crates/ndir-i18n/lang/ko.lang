@@ -1260,6 +1260,7 @@ clip.vpasteFail = {0}개 실패
 clip.vpasteOp = 클립보드 항목 {0}개 붙여넣기
 dlg.ok = 확인
 dlg.cancel = 취소
+dlg.busy = 다른 대화상자가 열려 있습니다 — 먼저 닫아 주세요
 sel.patternTitle = 패턴으로 선택
 sel.patternText = 이름이 패턴 중 하나에 맞는 항목(* 와 ? · 여러 개는 ; 로 구분 · 대소문자 무시)
 sel.pattern = 패턴
@@ -1478,9 +1479,14 @@ calc.menu.add = 계산 컬럼 추가…
 calc.menu.edit = 계산 컬럼 "{0}" 편집…
 calc.menu.del = 계산 컬럼 "{0}" 제거
 calc.dlg.title = 계산 컬럼
-calc.dlg.text = 이름 = 식 형태로 입력합니다. 이 컬럼은 현재 탭에만 속하며 다른 컬럼처럼 정렬할 수 있습니다. 변수: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. 파이썬식 표현: + - * / // % **, 비교, and/or/not, a if c else b, '글' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime). 정규식: re.search(패턴, s[, 그룹]), re.match(), re.fullmatch(), re.sub(패턴, 바꿀 글, s), re.findall(), re.split() — 찾기는 찾은 글 또는 None을 돌려줍니다.
-calc.dlg.input = 정의
-calc.dlg.placeholder = MB = round(size / 1024 / 1024, 1)
+calc.dlg.text = 컬럼 이름과 식을 입력합니다. 식 아래 줄에 선택한 행의 값이 미리 보입니다. 이 컬럼은 현재 탭에만 속하며 다른 컬럼처럼 정렬할 수 있습니다. 변수: name, stem, ext, size, mtime, is_dir, is_file, is_link, is_hidden, path, parent, depth, kind. 파이썬식 표현: + - * / // % **, 비교, and/or/not, a if c else b, '글' + str(n), f"{size / 1024:.1f} KB", s[0:3], s.upper(), s.replace(a, b), s.split('.'), len(), round(), int(), min(), max(), size_h(size), date(mtime, '%Y-%m'), year(mtime), age_days(mtime). 정규식: re.search(패턴, s[, 그룹]), re.match(), re.fullmatch(), re.sub(패턴, 바꿀 글, s), re.findall(), re.split() — 찾기는 찾은 글 또는 None을 돌려줍니다.
+calc.dlg.input = 식
+calc.dlg.placeholder = round(size / 1024 / 1024, 1)
+calc.dlg.name = 이름
+calc.dlg.namePlaceholder = MB
+calc.hint.value = {0} → {1}
+calc.hint.rowError = {0} → 오류: {1}
+calc.hint.ok = 식이 올바릅니다.
 calc.full = 탭 하나에 계산 컬럼은 {0}개까지 둘 수 있습니다.
 calc.err.shape = 이름 = 식 형태로 입력하세요.
 calc.err.name = 컬럼 이름이 비었거나 너무 깁니다(40자 이하).

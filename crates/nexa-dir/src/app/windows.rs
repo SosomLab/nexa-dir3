@@ -659,7 +659,8 @@ impl App {
         if self.dlg.tick(now_ms) {
             self.dlg.redraw();
         }
-        // 밖에서(다른 설치 경로) 라이선스 파일이 바뀌면 재판정 → 창 다시 그림(LIC-109).
+        self.calc_hint_tick(); // 계산 컬럼 정의 창의 미리보기 줄(입력이 바뀐 틱에만)
+                               // 밖에서(다른 설치 경로) 라이선스 파일이 바뀌면 재판정 → 창 다시 그림(LIC-109).
         if self.licensing.refresh() {
             self.license_win.redraw();
         }

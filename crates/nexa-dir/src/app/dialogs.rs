@@ -88,7 +88,8 @@ impl App {
     pub(crate) fn ask(&mut self, spec: DlgSpec, reply: DlgReply) -> bool {
         if self.dlg.is_open() || self.dlg.spec().is_some() || self.dlg_pending.is_some() {
             let mut inv = Invalidations::default();
-            self.statusbar.set_left(&tr("ops.busy"), &mut inv);
+            // 전송 중 문구(`ops.busy`)를 같이 쓰면 오해를 산다(협업 관찰 11-14) — 대화상자 전용 문구.
+            self.statusbar.set_left(&tr("dlg.busy"), &mut inv);
             self.redraw();
             return false;
         }
@@ -129,8 +130,25 @@ impl App {
         if self.dlg.is_open() || self.dlg.spec().is_some() {
             self.dlg.set_input_text(text);
         } else if let Some((spec, _)) = &mut self.dlg_pending {
+            // 두 칸 사양(계산 컬럼)은 구분 글에서 한 번 갈라 나눠 넣는다 — 창의 `set_input_text`와 같은 규칙.
+            let join = spec
+                .more
+                .as_ref()
+                .map(|m| m.join.trim().to_owned())
+                .filter(|j| !j.is_empty());
+            let (first, second) = match &join {
+                Some(j) => text.split_once(j.as_str()).unwrap_or((text, "")),
+                None => (text, ""),
+            };
             if let Some(i) = &mut spec.input {
-                i.initial = text.to_string();
+                i.initial = if join.is_some() {
+                    first.trim().to_string()
+                } else {
+                    text.to_string()
+                };
+            }
+            if let Some(m) = &mut spec.more {
+                m.input.initial = second.trim().to_string();
             }
         }
     }
@@ -256,6 +274,7 @@ impl App {
                 placeholder: "*.txt; *.md".into(),
             }),
             delay: None,
+            more: None,
             arm: None,
         };
         self.ask(spec, DlgReply::SelectPattern);
@@ -406,6 +425,7 @@ impl App {
                 cancel: 0,
                 input: None,
                 delay: None,
+                more: None,
                 arm: None,
             };
             self.ask(spec, DlgReply::DeleteFailedPermanent(job.failed));
@@ -473,6 +493,7 @@ impl App {
             cancel: 4,
             input: None,
             delay: None,
+            more: None,
             arm: None,
         };
         if !self.ask(spec, DlgReply::Conflict(tx.clone())) {
