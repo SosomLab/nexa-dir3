@@ -181,6 +181,7 @@ pub(crate) struct CompareWin {
     pub(crate) left: PathBuf,
     pub(crate) right: PathBuf,
     status: String,
+    skipped_links: u64,
     running: bool,
     /// 이번 결과가 내용 비교인가(요약에 모드 표시 · "내용 비교" 버튼은 다시 누를 일이 없으면 끔 · 10-18).
     by_content: bool,
@@ -208,6 +209,7 @@ impl CompareWin {
             left: PathBuf::new(),
             right: PathBuf::new(),
             status: String::new(),
+            skipped_links: 0,
             running: false,
             by_content: false,
             row_h: 0,
@@ -342,6 +344,11 @@ impl CompareWin {
             .map_or_else(String::new, |r| r.source().cell(row, key))
     }
 
+    /// 비교에서 건너뛴 링크 수(요약에 덧붙인다 · `set_result` 전에).
+    pub(crate) fn set_skipped_links(&mut self, n: u64) {
+        self.skipped_links = n;
+    }
+
     pub(crate) fn set_error(&mut self, text: &str) {
         self.running = false;
         self.status = text.to_string();
@@ -370,7 +377,21 @@ impl CompareWin {
                         + count(Verdict::Differ))
                     .to_string(),
                 ],
-            ),
+            ) + &{
+                // 내역의 합이 "다름" 수와 맞게 종류 불일치(파일 ↔ 폴더)를 따로 적고, 건너뛴 링크를 알린다(협업 실기 11-14).
+                let mut more = String::new();
+                let mismatch = count(Verdict::TypeMismatch);
+                if mismatch > 0 {
+                    more += &format!(" · {}", trf("cmp.typeMismatch", &[&mismatch.to_string()]));
+                }
+                if self.skipped_links > 0 {
+                    more += &format!(
+                        " · {}",
+                        trf("cmp.linksSkipped", &[&self.skipped_links.to_string()])
+                    );
+                }
+                more
+            },
             tr(if self.by_content {
                 "cmp.modeContent"
             } else {

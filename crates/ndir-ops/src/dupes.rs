@@ -23,6 +23,8 @@ pub struct DupProgress {
     pub hashed: AtomicU64,
     /// 읽지 못한 파일/폴더 수.
     pub errors: AtomicU64,
+    /// 같은 파일의 다른 이름(하드 링크)이라 뺀 수 — 지워도 공간이 생기지 않으므로 중복으로 세지 않는다(유닉스).
+    pub hardlinks: AtomicU64,
 }
 
 /// 중복 묶음 — 같은 크기 · 같은 SHA-256.
@@ -87,6 +89,18 @@ impl Default for DupOpts {
     }
 }
 
+/// 이름이 둘 이상인 파일의 (장치, inode) — 하드 링크 묶기용. 이름이 하나뿐이거나 알 수 없으면 `None`.
+#[cfg(unix)]
+fn link_id(md: &std::fs::Metadata) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt as _;
+    (md.nlink() > 1).then(|| (md.dev(), md.ino()))
+}
+
+#[cfg(not(unix))]
+fn link_id(_md: &std::fs::Metadata) -> Option<(u64, u64)> {
+    None
+}
+
 fn canceled() -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Interrupted, "canceled")
 }
@@ -100,6 +114,9 @@ pub fn find(
 ) -> std::io::Result<Vec<DupGroup>> {
     // ① 크기별로 모은다.
     let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
+    // 하드 링크(같은 장치 · 같은 inode)는 한 파일이다 — 이름 순으로 가장 앞선 것 하나만 후보로 남긴다(협업 실기 11-14:
+    // 하드 링크가 중복으로 잡혀 회수 용량이 부풀었다). 유닉스만(Windows 표준 라이브러리는 파일 id를 주지 않는다).
+    let mut linked: HashMap<(u64, u64), (PathBuf, u64)> = HashMap::new();
     let mut stack: Vec<PathBuf> = roots.to_vec();
     while let Some(p) = stack.pop() {
         if cancel.load(Ordering::Relaxed) {
@@ -134,9 +151,25 @@ pub fn find(
         } else if md.is_file() {
             progress.scanned.fetch_add(1, Ordering::Relaxed);
             if md.len() >= opts.min_size {
-                by_size.entry(md.len()).or_default().push(p);
+                match link_id(&md) {
+                    Some(id) => match linked.get_mut(&id) {
+                        Some((kept, _)) => {
+                            progress.hardlinks.fetch_add(1, Ordering::Relaxed);
+                            if p < *kept {
+                                *kept = p;
+                            }
+                        }
+                        None => {
+                            linked.insert(id, (p, md.len()));
+                        }
+                    },
+                    None => by_size.entry(md.len()).or_default().push(p),
+                }
             }
         }
+    }
+    for (_, (p, len)) in linked {
+        by_size.entry(len).or_default().push(p);
     }
     let mut groups: Vec<DupGroup> = Vec::new();
     let mut sizes: Vec<u64> = by_size
@@ -431,6 +464,49 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(e.kind(), std::io::ErrorKind::Interrupted);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 하드 링크(협업 실기 11-14): 같은 파일의 다른 이름은 중복으로 세지 않는다 — 이름 순으로 앞선 것 하나만 묶음에 들고 뺀 수를
+    /// `hardlinks`에 센다 · 읽지 못한 파일은 `errors`에 센다(창이 요약에 알린다).
+    #[cfg(unix)]
+    #[test]
+    fn hard_links_count_once_and_unreadable_files_are_counted() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let d = fixture("links");
+        let body = vec![7u8; 100_000];
+        std::fs::write(d.join("b_orig.bin"), &body).unwrap();
+        std::fs::hard_link(d.join("b_orig.bin"), d.join("a_link.bin")).unwrap();
+        std::fs::hard_link(d.join("b_orig.bin"), d.join("c_link.bin")).unwrap();
+        std::fs::write(d.join("copy.bin"), &body).unwrap();
+        std::fs::write(d.join("locked.bin"), &body).unwrap();
+        std::fs::set_permissions(d.join("locked.bin"), std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+        let unreadable = std::fs::File::open(d.join("locked.bin")).is_err(); // root로 돌면 읽힌다
+        let prog = DupProgress::default();
+        let g = find(
+            std::slice::from_ref(&d),
+            DupOpts::default(),
+            &prog,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!(prog.hardlinks.load(Ordering::Relaxed), 2);
+        assert_eq!(g.len(), 1);
+        let names: Vec<String> = g[0]
+            .paths
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        if unreadable {
+            assert_eq!(names, ["a_link.bin", "copy.bin"]);
+            assert_eq!(g[0].reclaimable(), 100_000, "링크는 회수량에 없다");
+            assert_eq!(prog.errors.load(Ordering::Relaxed), 1);
+        } else {
+            assert_eq!(names, ["a_link.bin", "copy.bin", "locked.bin"]);
+        }
+        let _ =
+            std::fs::set_permissions(d.join("locked.bin"), std::fs::Permissions::from_mode(0o644));
         let _ = std::fs::remove_dir_all(&d);
     }
 

@@ -71,13 +71,39 @@ pub(crate) struct DupSource {
     selected: Vec<bool>,
     anchor: Option<usize>,
     tz: i32,
+    /// 모든 결과 경로의 공통 상위 폴더 — 행은 여기서부터의 상대 경로로 보인다(협업 실기 11-14: 절대 경로를 앞에서부터 그려
+    /// 깊은 폴더에서는 모든 행이 같은 글로 잘리고 파일 이름이 안 보였다). 요약 줄 끝에 이 폴더를 적는다.
+    base: PathBuf,
+}
+
+/// 경로들의 공통 상위 폴더(순수) — 비었으면 빈 경로.
+pub(crate) fn common_base<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> PathBuf {
+    let mut base: Option<PathBuf> = None;
+    for p in paths {
+        let parent = p.parent().unwrap_or(std::path::Path::new(""));
+        base = Some(match base {
+            None => parent.to_path_buf(),
+            Some(mut b) => {
+                while !parent.starts_with(&b) {
+                    if !b.pop() {
+                        b = PathBuf::new();
+                        break;
+                    }
+                }
+                b
+            }
+        });
+    }
+    base.unwrap_or_default()
 }
 
 impl DupSource {
     fn new(groups: Vec<DupGroup>, mtimes: Vec<Vec<i64>>, tz: i32) -> Self {
         let marks = groups.iter().map(|g| vec![false; g.paths.len()]).collect();
         let collapsed = vec![false; groups.len()];
+        let base = common_base(groups.iter().flat_map(|g| g.paths.iter()));
         let mut s = DupSource {
+            base,
             groups,
             mtimes,
             marks,
@@ -236,7 +262,8 @@ impl RowSource for DupSource {
                 },
             },
             Some(p) => RowItem {
-                text: crate::filelist::display_path(p),
+                // 공통 상위 폴더에서부터 — 파일 이름과 하위 폴더가 먼저 보인다.
+                text: crate::filelist::display_path(p.strip_prefix(&self.base).unwrap_or(p)),
                 is_dir: false,
                 depth: 1,
                 marker: Marker::None,
@@ -342,6 +369,8 @@ pub(crate) struct DupesWin {
     primary: bool,
     rows: Option<VirtualRows<DupSource>>,
     status: String,
+    /// 훑기에서 뺀 수(읽지 못함 · 하드 링크) — 요약에 덧붙인다.
+    skipped: (u64, u64),
     running: bool,
     row_h: i32,
     keep: Combo,
@@ -366,6 +395,7 @@ impl DupesWin {
             primary: false,
             rows: None,
             status: String::new(),
+            skipped: (0, 0),
             running: false,
             row_h: 0,
             keep: Self::keep_combo(),
@@ -501,6 +531,11 @@ impl DupesWin {
         self.redraw();
     }
 
+    /// 훑기에서 뺀 것(읽지 못함 · 하드 링크) — 결과 요약에 덧붙인다(`set_result` 전에).
+    pub(crate) fn set_skipped(&mut self, unreadable: u64, hardlinks: u64) {
+        self.skipped = (unreadable, hardlinks);
+    }
+
     fn refresh_summary(&mut self) {
         let Some(r) = &self.rows else {
             return;
@@ -508,7 +543,7 @@ impl DupesWin {
         let src = r.source();
         let dup_count: usize = src.groups.iter().map(|g| g.paths.len() - 1).sum();
         let reclaim: u64 = src.groups.iter().map(DupGroup::reclaimable).sum();
-        self.status = if src.groups.is_empty() {
+        let mut status = if src.groups.is_empty() {
             tr("dupes.none")
         } else {
             trf(
@@ -520,6 +555,21 @@ impl DupesWin {
                 ],
             )
         };
+        // 말없이 빠진 것을 알린다(협업 실기 11-14: 읽지 못한 파일이 조용히 빠져 "중복 없음"을 믿게 된다).
+        let (unreadable, hardlinks) = self.skipped;
+        if unreadable > 0 {
+            status += &format!(" · {}", trf("dupes.unreadable", &[&unreadable.to_string()]));
+        }
+        if hardlinks > 0 {
+            status += &format!(" · {}", trf("dupes.hardlinks", &[&hardlinks.to_string()]));
+        }
+        if !src.groups.is_empty() && !src.base.as_os_str().is_empty() {
+            status += &format!(
+                " · {}",
+                trf("dupes.base", &[&crate::filelist::display_path(&src.base)])
+            );
+        }
+        self.status = status;
         let n = src.marked_paths().len();
         self.btn_trash
             .set_label(trf("dupes.trash", &[&n.to_string()]));
@@ -1050,6 +1100,22 @@ mod tests {
             "{}",
             w.status()
         );
+        // 행 = 공통 상위 폴더(D:/)에서부터의 상대 경로 · 요약 끝에 그 폴더 · 뺀 것(읽지 못함 · 하드 링크) 안내(협업 실기 11-14).
+        assert_eq!(w.rows.as_ref().unwrap().source().row(1).text, "a/1.txt");
+        assert!(w.status().contains("in D:"), "{}", w.status());
+        w.set_skipped(2, 1);
+        w.refresh_summary();
+        assert!(
+            w.status().contains("2 could not be read")
+                && w.status().contains("1 hard links skipped"),
+            "{}",
+            w.status()
+        );
+        assert_eq!(
+            common_base([PathBuf::from("/r/a/b/f"), PathBuf::from("/r/a/c/g")].iter()),
+            PathBuf::from("/r/a")
+        );
+        assert_eq!(common_base([].iter()), PathBuf::new());
         w.set_keep("oldest");
         let marked = w.marked_paths();
         assert!(!marked.contains(&PathBuf::from("D:/a/1.txt")) && marked.len() == 3);

@@ -50,6 +50,8 @@ pub(crate) enum DlgReply {
     LauncherItem(Option<usize>),
     /// 계산 컬럼 추가(`None`) · 편집(`Some(자리)`) — 확인(1)이면 입력(`이름 = 식`)을 활성 탭에 넣는다(NEW-060).
     CalcColumn(Option<usize>),
+    /// 한 방향 동기화가 대상 쪽의 더 새 파일을 덮는다(협업 실기 11-14) — 확인(1)이면 그대로 진행.
+    SyncOverwriteNewer(ndir_ops::compare::Direction, Vec<String>),
     /// 이름을 NFC로 변환(10-18): 1 = 폴더 안까지 · 2 = 선택한 것만 · 그 외 취소.
     NfcConvert(Vec<PathBuf>),
     /// 패턴으로 선택(NEW-054 · 10-25): 1 = 선택에 더함 · 2 = 선택에서 뺌 · 그 외 취소 — 입력 = `;` 구분 글롭.
@@ -204,6 +206,11 @@ impl App {
                 }
             }
             DlgReply::BulkPreset => self.bulk_preset_saved(id, text),
+            DlgReply::SyncOverwriteNewer(dir, only) => {
+                if id == 1 {
+                    self.compare_sync_checked(dir, only, true);
+                }
+            }
             DlgReply::NfcConvert(paths) => match id {
                 1 => self.nfc_convert(paths, true),
                 2 => self.nfc_convert(paths, false),

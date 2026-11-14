@@ -7432,17 +7432,33 @@ fn session_writes_once_after_debounce() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// T-150 ⑫ 터미널 [→] = 현재 폴더로 cd(dir2 WINC-080): 살아 있는 셸에 `cd "<패널 폴더>"`를 보내고 포커스를 준다.
+/// T-150 ⑫ 터미널 [→] = 현재 폴더로 cd(dir2 WINC-080): 살아 있는 셸에 그 셸의 **글자 그대로 인용**으로 감싼 cd를 보내고 포커스를 준다.
+/// 보안(협업 실기 11-14): 폴더 이름의 `$(…)`가 명령으로 읽히지 않는다 · 모르는 셸 = 보내지 않고 그 폴더에서 재시작.
 #[test]
 fn dock_goto_sends_cd_to_terminal() {
     let (mut app, dir) = fixture("termgoto");
     app.layout_for(1200, 800, 1.0);
+    let set_shell = |app: &mut crate::App, program: &str| {
+        app.platform
+            .log
+            .clone()
+            .expect("fake log")
+            .borrow_mut()
+            .shells = vec![crate::platform::ShellSpec {
+            program: std::path::PathBuf::from(program),
+            args: vec![],
+            label: "sh".into(),
+        }];
+    };
+    set_shell(&mut app, "/bin/bash");
     app.startup_cmd("dock.kind:2");
     let mut rec = nexa_ctl::RecordCtx::with_surface(1200, 800);
     app.paint_into(&mut rec, 1200, 800, 1.0);
     assert!(app.terms[0].alive(), "{}", app.term_dump());
     let mut inv = Invalidations::default();
-    let _ = app.panels[0].navigate_to(dir.join("sub"), &mut inv);
+    let evil = dir.join("x$(touch INJECTED)");
+    std::fs::create_dir_all(&evil).unwrap();
+    let _ = app.panels[0].navigate_to(evil, &mut inv);
     app.set_term_focus(None, &mut inv);
     app.term_goto(0, &mut inv);
     assert_eq!(app.term_focus, Some(0), "포커스를 준다");
@@ -7450,9 +7466,20 @@ fn dock_goto_sends_cd_to_terminal() {
     app.term_tick(100);
     // 가짜 PTY는 받은 것을 되돌린다 → 화면에 보낸 명령이 보인다(긴 경로는 줄이 넘어가므로 줄바꿈을 지우고 본다).
     let flat: String = app.term_dump().replace(['\n', '\r'], "");
-    assert!(flat.contains("cd \""), "{flat}");
-    assert!(flat.contains("sub\""), "대상 = 패널의 현재 폴더: {flat}");
-    assert!(!flat.contains("cd /d"), "cmd가 아니면 /d 없음: {flat}");
+    assert!(flat.contains("cd -- '"), "{flat}");
+    assert!(
+        flat.contains("x$(touch INJECTED)'"),
+        "대상 = 패널의 현재 폴더 · 작은따옴표 안: {flat}"
+    );
+    assert!(!flat.contains("cd \""), "큰따옴표 인용 없음: {flat}");
+    // 모르는 셸 = 셸에 아무것도 보내지 않고 그 폴더에서 다시 시작한다.
+    set_shell(&mut app, "/usr/bin/nu");
+    let shell = app.term_shell();
+    assert!(app.terms[0].start(&app.platform, shell, &dir, 80, 24));
+    app.term_goto(0, &mut inv);
+    app.term_tick(100);
+    let flat: String = app.term_dump().replace(['\n', '\r'], "");
+    assert!(!flat.contains("cd "), "{flat}");
     // cmd.exe는 `/d`(드라이브 전환) — 라벨이 번역돼 있어도 **프로그램 이름**으로 판정(T-134 · 10-25).
     app.platform
         .log
@@ -9612,6 +9639,76 @@ fn duplicate_finder_groups_and_marks() {
         app.dupes_win.status()
     );
     app.close_dupes();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 한 방향 동기화가 대상 쪽의 더 새 파일을 덮기 전에 확인(협업 실기 11-14 · `compare.confirm_overwrite_newer`): 그런 항목이 있으면
+/// 개수 · 이름을 보이고 묻는다 — 취소 = 아무것도 안 함 · 확인 = 진행 · 설정 off = 종전대로 바로 · 요약에 건너뛴 링크.
+#[test]
+fn one_way_sync_asks_before_overwriting_newer_target() {
+    let (mut app, dir) = fixture("syncnewer");
+    let (l, r) = (dir.join("L"), dir.join("R"));
+    std::fs::create_dir_all(&l).unwrap();
+    std::fs::create_dir_all(&r).unwrap();
+    std::fs::write(l.join("rn.txt"), b"old").unwrap();
+    std::fs::write(r.join("rn.txt"), b"newer").unwrap();
+    let old = std::time::SystemTime::now() - Duration::from_secs(86_400);
+    std::fs::File::options()
+        .write(true)
+        .open(l.join("rn.txt"))
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(l.join("rn.txt"), l.join("lnk")).unwrap();
+    app.layout_for(1200, 800, 1.0);
+    let compare = |app: &mut crate::App| {
+        app.start_compare(&l, &r, false);
+        let at = std::time::Instant::now();
+        while app.compare_tick() {
+            assert!(at.elapsed().as_secs() < 30);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    };
+    compare(&mut app);
+    #[cfg(unix)]
+    assert!(
+        app.compare_win.status().contains("1 links skipped"),
+        "{}",
+        app.compare_win.status()
+    );
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    assert!(app.sync_job.is_none(), "먼저 묻는다");
+    let d = app.dlg_dump();
+    assert!(d.contains("1 newer") && d.contains("rn.txt"), "{d}");
+    app.dlg_pick(0);
+    assert!(app.sync_job.is_none());
+    assert_eq!(
+        std::fs::read(r.join("rn.txt")).unwrap(),
+        b"newer",
+        "취소 = 그대로"
+    );
+    // 양쪽(새 쪽이 이긴다)은 묻지 않는다 · 한 방향 + 확인 = 진행.
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    app.dlg_pick(1);
+    assert!(app.sync_job.is_some(), "확인 = 진행");
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(std::fs::read(r.join("rn.txt")).unwrap(), b"old");
+    // 설정 off = 종전대로 바로.
+    std::fs::write(r.join("rn.txt"), b"newer again").unwrap();
+    let _ = app.settings.set("compare.confirm_overwrite_newer", "off");
+    compare(&mut app);
+    app.compare_sync(ndir_ops::compare::Direction::LeftToRight, Vec::new());
+    assert!(app.sync_job.is_some() && app.dlg_dump().starts_with("none"));
+    let at = std::time::Instant::now();
+    while app.compare_tick() {
+        assert!(at.elapsed().as_secs() < 30);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

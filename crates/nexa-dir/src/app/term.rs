@@ -399,13 +399,18 @@ impl App {
     pub(crate) fn term_goto(&mut self, i: usize, inv: &mut Invalidations) {
         let dir = self.term_cwd(i);
         let t = &mut self.terms[i];
-        if t.alive() {
-            // cmd.exe만 `/d`(드라이브 전환) — 프로그램 이름으로 판정(T-134 · 종전 라벨 "Command Prompt" 비교는 번역·WT 라벨에 깨졌다).
-            let flag = if t.shell_is_cmd { "/d " } else { "" };
-            t.write(&format!("cd {flag}\"{}\"\r", dir.display()));
-            t.view_off = 0;
-        } else {
-            t.reset();
+        // 경로는 셸별 글자 그대로 인용으로만 넣는다([`crate::termview::cd_command`] — 종전 큰따옴표는 폴더 이름의 `$(…)` · 백틱을
+        // 명령으로 실행했다 · 협업 실기 11-14). 안전하게 넣을 수 없는 경로 · 모르는 셸 = 셸에 보내지 않고 그 폴더에서 다시 시작.
+        let line = t
+            .alive()
+            .then(|| crate::termview::cd_command(t.shell_kind, &dir.to_string_lossy()))
+            .flatten();
+        match line {
+            Some(line) => {
+                t.write(&format!("{line}\r"));
+                t.view_off = 0;
+            }
+            None => t.reset(),
         }
         self.set_term_focus(Some(i), inv);
         inv.push(self.docks[i].bounds());

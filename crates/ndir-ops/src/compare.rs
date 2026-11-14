@@ -95,6 +95,8 @@ pub struct CmpProgress {
     pub scanned: AtomicU64,
     pub hashed: AtomicU64,
     pub errors: AtomicU64,
+    /// 건너뛴 링크(심볼릭 링크 · 정션) 수 — 비교하지도 따라가지도 않는다(창이 요약에 알린다 · 협업 실기 11-14).
+    pub links: AtomicU64,
 }
 
 fn canceled() -> std::io::Error {
@@ -139,6 +141,7 @@ fn scan(
                 continue;
             };
             if md.file_type().is_symlink() || crate::is_link(&p) {
+                progress.links.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
             let name = e.file_name().to_string_lossy().into_owned();
@@ -271,6 +274,27 @@ pub enum Direction {
     RightToLeft,
     /// 양쪽 모두 새 것으로(새로운 쪽이 이긴다 · 한쪽에만 있는 것은 복사).
     Both,
+}
+
+/// 한 방향 동기화가 덮어쓸 **대상 쪽이 더 새로운** 항목의 상대 경로(순수 · 협업 실기 11-14): 한 방향은 원본이 늘 이기므로
+/// 대상의 새 파일이 옛 내용으로 바뀐다(되돌릴 수 없다) → 호스트가 시작 전에 확인을 받는다. `Both`는 새 쪽이 이기므로 없다.
+#[must_use]
+pub fn overwrites_newer(
+    entries: &[CmpEntry],
+    dir: Direction,
+    only: Option<&[String]>,
+) -> Vec<String> {
+    let loser = match dir {
+        Direction::LeftToRight => Verdict::RightNewer,
+        Direction::RightToLeft => Verdict::LeftNewer,
+        Direction::Both => return Vec::new(),
+    };
+    entries
+        .iter()
+        .filter(|e| e.verdict == loser)
+        .filter(|e| only.is_none_or(|o| o.iter().any(|x| x == &e.rel)))
+        .map(|e| e.rel.clone())
+        .collect()
 }
 
 /// 동기화 계획 — 복사 쌍(원본 · 대상 · 덮어쓰기)과 미러일 때 지울 것.

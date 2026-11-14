@@ -98,7 +98,11 @@ impl App {
                 self.mem_after_job();
                 let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
                 match result {
-                    Some(Ok(entries)) => self.compare_win.set_result(entries),
+                    Some(Ok(entries)) => {
+                        self.compare_win
+                            .set_skipped_links(job.shared.progress.links.load(Ordering::Relaxed));
+                        self.compare_win.set_result(entries);
+                    }
                     Some(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {
                         self.compare_win.set_error(&tr("ops.canceled"));
                     }
@@ -132,16 +136,27 @@ impl App {
                     Some(Ok(failed)) if failed.is_empty() => {
                         (trf("cmp.syncDone", &[&job.count.to_string()]), false)
                     }
-                    Some(Ok(failed)) => (
-                        trf(
-                            "cmp.syncPartial",
-                            &[
-                                &(job.count - failed.len()).to_string(),
-                                &failed.len().to_string(),
-                            ],
-                        ),
-                        true,
-                    ),
+                    Some(Ok(failed)) => {
+                        // 무엇이 왜 실패했는지 로그에 남긴다(협업 실기 11-14: "1 failed"만 보이고 볼 곳이 없었다).
+                        for (p, why) in &failed {
+                            self.log_with(
+                                ndir_log::LogKind::Error,
+                                format!("{}: {why}", p.display()),
+                                None,
+                                None,
+                            );
+                        }
+                        (
+                            trf(
+                                "cmp.syncPartial",
+                                &[
+                                    &(job.count - failed.len()).to_string(),
+                                    &failed.len().to_string(),
+                                ],
+                            ),
+                            true,
+                        )
+                    }
                     Some(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {
                         (tr("ops.canceled"), true)
                     }
@@ -202,6 +217,16 @@ impl App {
 
     /// 창의 동기화 버튼 — 계획을 세워 복사 워커를 시작한다(전송 · 풀기 · 다른 동기화 중이면 거부).
     pub(crate) fn compare_sync(&mut self, dir: Direction, only: Vec<String>) {
+        self.compare_sync_checked(dir, only, false);
+    }
+
+    /// `confirmed` = "대상이 더 새로운 파일을 덮어씀" 확인을 이미 받았다(대화상자 응답).
+    pub(crate) fn compare_sync_checked(
+        &mut self,
+        dir: Direction,
+        only: Vec<String>,
+        confirmed: bool,
+    ) {
         if self.transfer_busy() || self.extract_job.is_some() || self.sync_job.is_some() {
             let mut inv = Invalidations::default();
             self.statusbar.set_left(&tr("ops.busy"), &mut inv);
@@ -216,6 +241,31 @@ impl App {
             self.compare_win.right.clone(),
         );
         let only_ref = (!only.is_empty()).then_some(only.as_slice());
+        // 한 방향 = 원본이 늘 이긴다 → 대상 쪽이 더 새로운 파일은 옛 내용으로 덮이고 되돌릴 수 없다(휴지통을 거치지 않는다).
+        // 시작 전에 몇 개인지 · 무엇인지 보이고 확인을 받는다(협업 실기 11-14 · 설정 `compare.confirm_overwrite_newer`).
+        if !confirmed && self.settings.flag("compare.confirm_overwrite_newer") {
+            let newer = cmpx::overwrites_newer(&entries, dir, only_ref);
+            if !newer.is_empty() {
+                let mut lines: Vec<String> = newer.iter().take(5).cloned().collect();
+                if newer.len() > 5 {
+                    lines.push(trf("del.listMore", &[&(newer.len() - 5).to_string()]));
+                }
+                let spec = crate::dlg_win::DlgSpec::confirm(
+                    tr("cmp.title"),
+                    format!(
+                        "{}\n{}",
+                        trf("cmp.overwriteNewer", &[&newer.len().to_string()]),
+                        lines.join("\n")
+                    ),
+                    tr("cmp.overwriteNewerOk"),
+                );
+                let _ = self.ask(
+                    spec,
+                    crate::app::dialogs::DlgReply::SyncOverwriteNewer(dir, only),
+                );
+                return;
+            }
+        }
         // 미러 삭제(T-172 · 설정 `compare.mirror_delete` · 기본 off): 한 방향일 때 대상에만 있는 것 = 휴지통(복사가 끝난 뒤 · 실행 취소 = 복원).
         let mirror = self.settings.flag("compare.mirror_delete") && dir != Direction::Both;
         let mut plan = cmpx::plan(&entries, &l, &r, dir, mirror, only_ref);

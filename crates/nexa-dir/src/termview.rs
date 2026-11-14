@@ -252,6 +252,8 @@ pub(crate) struct TermView {
     pub(crate) shell_label: String,
     /// 셸이 cmd.exe인가(cd `/d` 구문) — 라벨 글이 아닌 **프로그램 이름**으로 판정(T-134 · 10-25: 라벨은 번역·WT commandline에 따라 달라진다).
     pub(crate) shell_is_cmd: bool,
+    /// 셸 문법 갈래(프로그램 이름으로 판정) — "폴더로 이동"이 경로를 그 셸의 글자 그대로 인용으로 감싼다([`cd_command`]).
+    pub(crate) shell_kind: ShellKind,
     pub(crate) cwd: PathBuf,
 }
 
@@ -295,6 +297,7 @@ impl TermView {
             blink_at: 0,
             shell_label: String::new(),
             shell_is_cmd: false,
+            shell_kind: ShellKind::Other,
             cwd: PathBuf::new(),
         }
     }
@@ -376,6 +379,7 @@ impl TermView {
                     .program
                     .file_stem()
                     .is_some_and(|s| s.eq_ignore_ascii_case("cmd"));
+                self.shell_kind = ShellKind::of(&shell.program);
                 self.shell_label = shell.label;
                 self.cwd = cwd.to_path_buf();
                 true
@@ -961,8 +965,131 @@ impl TermView {
     }
 }
 
+/// 셸 문법 갈래 — 경로를 명령 줄에 넣을 때의 인용 규칙이 다르다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShellKind {
+    /// sh · bash · zsh · dash · ksh · fish — 작은따옴표 = 글자 그대로.
+    Posix,
+    /// pwsh · powershell — 작은따옴표 = 글자 그대로(`''` = 따옴표 하나).
+    PowerShell,
+    /// cmd.exe — 큰따옴표 · `%VAR%`는 따옴표 안에서도 펼쳐진다.
+    Cmd,
+    /// 모르는 셸(nu · xonsh …) — 인용 규칙을 모르므로 명령 줄에 경로를 넣지 않는다.
+    Other,
+}
+
+impl ShellKind {
+    /// 프로그램 파일 이름(확장자 제외 · 대소문자 무시)으로 판정.
+    pub(crate) fn of(program: &std::path::Path) -> ShellKind {
+        let stem = program
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        match stem.as_str() {
+            "sh" | "bash" | "zsh" | "dash" | "ksh" | "ash" | "fish" => ShellKind::Posix,
+            "pwsh" | "powershell" => ShellKind::PowerShell,
+            "cmd" => ShellKind::Cmd,
+            _ => ShellKind::Other,
+        }
+    }
+}
+
+/// "폴더로 이동"이 살아 있는 셸에 보낼 한 줄(순수 · 끝의 `\r` 제외) — **경로가 셸에서 글자 그대로만 읽히게** 인용한다.
+/// 안전하게 인용할 수 없으면 `None`(호출부는 셸에 아무것도 보내지 않고 그 폴더에서 다시 시작한다).
+///
+/// 종전에는 어느 셸이든 큰따옴표로만 감쌌다 → 폴더 이름의 `$(…)` · 백틱이 bash/zsh/PowerShell에서 **명령으로 실행**됐다
+/// (협업 실기 11-14 · 내려받거나 압축에서 나온 폴더 이름으로 임의 명령 실행). 규칙:
+/// - 제어 문자(줄바꿈 · ESC …)가 든 경로 = 어느 셸이든 `None`(입력 줄을 끊거나 터미널 제어열이 된다).
+/// - POSIX: `cd -- '…'` · `'` → `'\''`.
+/// - PowerShell: `Set-Location -LiteralPath '…'` · `'` → `''` · 굽은 따옴표(‘ ’ ‚ ‛ — PowerShell은 이것도 따옴표로 읽는다)가
+///   있으면 `None`.
+/// - cmd: `cd /d "…"` · `%`(변수 펼침) · `"`가 있으면 `None`.
+/// - 모르는 셸 = `None`.
+pub(crate) fn cd_command(kind: ShellKind, dir: &str) -> Option<String> {
+    if dir.is_empty() || dir.chars().any(char::is_control) {
+        return None;
+    }
+    match kind {
+        ShellKind::Posix => Some(format!("cd -- '{}'", dir.replace('\'', "'\\''"))),
+        ShellKind::PowerShell => {
+            if dir.contains(['\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}']) {
+                return None;
+            }
+            Some(format!(
+                "Set-Location -LiteralPath '{}'",
+                dir.replace('\'', "''")
+            ))
+        }
+        ShellKind::Cmd => {
+            if dir.contains(['%', '"']) {
+                return None;
+            }
+            Some(format!("cd /d \"{dir}\""))
+        }
+        ShellKind::Other => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    /// "폴더로 이동" 인용(보안 · 협업 실기 11-14): 경로는 어느 셸에서도 글자 그대로만 읽힌다 — 명령 치환 · 변수 · 따옴표 탈출 불가 ·
+    /// 안전하게 못 넣으면 `None`(재시작).
+    #[test]
+    fn cd_command_quotes_paths_literally_per_shell() {
+        use std::path::Path;
+        assert_eq!(ShellKind::of(Path::new("/bin/bash")), ShellKind::Posix);
+        assert_eq!(ShellKind::of(Path::new("/usr/bin/fish")), ShellKind::Posix);
+        assert_eq!(
+            ShellKind::of(Path::new("C:/Program Files/PowerShell/7/pwsh.exe")),
+            ShellKind::PowerShell
+        );
+        assert_eq!(
+            ShellKind::of(Path::new("C:/Windows/System32/CMD.EXE")),
+            ShellKind::Cmd
+        );
+        assert_eq!(ShellKind::of(Path::new("/usr/bin/nu")), ShellKind::Other);
+        // POSIX: 작은따옴표 안에서는 아무것도 펼쳐지지 않는다 · 따옴표는 닫고-넣고-다시 연다.
+        assert_eq!(
+            cd_command(ShellKind::Posix, "/t/x$(touch INJECTED)`id`"),
+            Some("cd -- '/t/x$(touch INJECTED)`id`'".into())
+        );
+        assert_eq!(
+            cd_command(ShellKind::Posix, "/t/it's; rm -rf ~"),
+            Some("cd -- '/t/it'\\''s; rm -rf ~'".into())
+        );
+        assert_eq!(
+            cd_command(ShellKind::Posix, "-rf"),
+            Some("cd -- '-rf'".into()),
+            "`--` = 옵션으로 읽히지 않는다"
+        );
+        // PowerShell: 글자 그대로 경로 · 따옴표 두 번 · 굽은 따옴표는 거부.
+        assert_eq!(
+            cd_command(ShellKind::PowerShell, "C:\\t\\x$(calc) [1]"),
+            Some("Set-Location -LiteralPath 'C:\\t\\x$(calc) [1]'".into())
+        );
+        assert_eq!(
+            cd_command(ShellKind::PowerShell, "C:\\it's"),
+            Some("Set-Location -LiteralPath 'C:\\it''s'".into())
+        );
+        assert_eq!(
+            cd_command(ShellKind::PowerShell, "C:\\a\u{2019};calc"),
+            None
+        );
+        // cmd: `%` · `"`는 거부(따옴표 안에서도 펼쳐진다) · 그 밖은 따옴표로.
+        assert_eq!(
+            cd_command(ShellKind::Cmd, "D:\\a & b"),
+            Some("cd /d \"D:\\a & b\"".into())
+        );
+        assert_eq!(cd_command(ShellKind::Cmd, "D:\\%PATH%"), None);
+        // 제어 문자 · 모르는 셸 · 빈 경로 = 보내지 않는다.
+        for k in [ShellKind::Posix, ShellKind::PowerShell, ShellKind::Cmd] {
+            assert_eq!(cd_command(k, "/t/a\nrm -rf ~"), None);
+            assert_eq!(cd_command(k, "/t/a\u{1b}[2J"), None);
+            assert_eq!(cd_command(k, ""), None);
+        }
+        assert_eq!(cd_command(ShellKind::Other, "/t/plain"), None);
+    }
+
     use super::*;
 
     #[test]

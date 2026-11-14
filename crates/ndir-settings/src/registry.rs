@@ -1475,6 +1475,16 @@ pub const REGISTRY: &[Entry] = &[
         Bool,
         "off"
     ),
+    // 한 방향 동기화가 대상 쪽의 더 새 파일을 덮기 전에 확인(dir3 신규 · 협업 실기 11-14): 한 방향은 원본이 늘 이겨 대상의 새 파일이
+    //   옛 내용으로 바뀌고 휴지통을 거치지 않는다(되돌릴 수 없음) — 그런 항목이 있으면 개수 · 이름을 보이고 확인을 받는다. 기본 on.
+    e!(
+        "compare.confirm_overwrite_newer",
+        CAT_CTXMENU,
+        "pref.cmpConfirmNewer",
+        "pref.cmpConfirmNewer.desc",
+        Bool,
+        "on"
+    ),
     // 실행 파일 직접 실행(DR-32 ② · 10-26 · Linux): 켜면 더블클릭한 실행 비트 + ELF 파일을 xdg-open 대신 그 폴더에서 바로 실행. 기본 off.
     e!(
         "open.exec_direct",

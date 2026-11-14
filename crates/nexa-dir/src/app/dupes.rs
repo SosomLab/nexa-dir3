@@ -87,6 +87,10 @@ impl App {
             return true;
         }
         let job = self.dup_job.take().expect("checked above");
+        self.dupes_win.set_skipped(
+            job.shared.progress.errors.load(Ordering::Relaxed),
+            job.shared.progress.hardlinks.load(Ordering::Relaxed),
+        );
         self.mem_after_job();
         let result = job.shared.result.lock().ok().and_then(|mut r| r.take());
         match result {
