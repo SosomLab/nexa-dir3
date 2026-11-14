@@ -9673,7 +9673,7 @@ fn one_way_sync_asks_before_overwriting_newer_target() {
     compare(&mut app);
     #[cfg(unix)]
     assert!(
-        app.compare_win.status().contains("1 links skipped"),
+        app.compare_win.status().contains("1 link(s) skipped"),
         "{}",
         app.compare_win.status()
     );

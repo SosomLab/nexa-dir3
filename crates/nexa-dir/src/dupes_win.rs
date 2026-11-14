@@ -371,6 +371,8 @@ pub(crate) struct DupesWin {
     status: String,
     /// 훑기에서 뺀 수(읽지 못함 · 하드 링크) — 요약에 덧붙인다.
     skipped: (u64, u64),
+    /// 창 제목(결과가 있으면 끝에 기준 폴더).
+    title: String,
     running: bool,
     row_h: i32,
     keep: Combo,
@@ -396,6 +398,7 @@ impl DupesWin {
             rows: None,
             status: String::new(),
             skipped: (0, 0),
+            title: String::new(),
             running: false,
             row_h: 0,
             keep: Self::keep_combo(),
@@ -563,13 +566,16 @@ impl DupesWin {
         if hardlinks > 0 {
             status += &format!(" · {}", trf("dupes.hardlinks", &[&hardlinks.to_string()]));
         }
+        // 기준 폴더는 창 제목에(요약 줄에 붙이면 긴 경로가 뒤의 안내를 가린다 · 협업 실기 11-14).
+        let mut title = format!("{} \u{2014} {}", crate::APP_TITLE, tr("dupes.title"));
         if !src.groups.is_empty() && !src.base.as_os_str().is_empty() {
-            status += &format!(
-                " · {}",
-                trf("dupes.base", &[&crate::filelist::display_path(&src.base)])
-            );
+            title += &format!(" \u{2014} {}", crate::filelist::display_path(&src.base));
         }
         self.status = status;
+        if let Some(w) = &self.window {
+            w.set_title(&title);
+        }
+        self.title = title;
         let n = src.marked_paths().len();
         self.btn_trash
             .set_label(trf("dupes.trash", &[&n.to_string()]));
@@ -660,7 +666,11 @@ impl DupesWin {
             )
         });
         let mut attrs = Window::default_attributes()
-            .with_title(format!("{} — {}", crate::APP_TITLE, tr("dupes.title")))
+            .with_title(if self.title.is_empty() {
+                format!("{} — {}", crate::APP_TITLE, tr("dupes.title"))
+            } else {
+                self.title.clone()
+            })
             .with_theme(theme)
             .with_resizable(true)
             .with_inner_size(winit::dpi::LogicalSize::new(lw, lh));
@@ -1102,12 +1112,12 @@ mod tests {
         );
         // 행 = 공통 상위 폴더(D:/)에서부터의 상대 경로 · 요약 끝에 그 폴더 · 뺀 것(읽지 못함 · 하드 링크) 안내(협업 실기 11-14).
         assert_eq!(w.rows.as_ref().unwrap().source().row(1).text, "a/1.txt");
-        assert!(w.status().contains("in D:"), "{}", w.status());
+        assert!(w.title.contains("\u{2014} D:"), "{}", w.title);
         w.set_skipped(2, 1);
         w.refresh_summary();
         assert!(
             w.status().contains("2 could not be read")
-                && w.status().contains("1 hard links skipped"),
+                && w.status().contains("1 hard link(s) skipped"),
             "{}",
             w.status()
         );

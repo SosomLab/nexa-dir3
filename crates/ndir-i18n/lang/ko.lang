@@ -389,7 +389,6 @@ dupes.summary = 묶음 {0}개 · 중복 {1}개 · 되찾을 수 있음 {2}
 dupes.none = 중복 파일이 없습니다
 dupes.unreadable = 읽지 못함 {0}개
 dupes.hardlinks = 하드 링크 {0}개 제외
-dupes.base = 위치: {0}
 dupes.group = 묶음 {0} · {1} × {2}개 · 되찾기 {3}
 dupes.allMarked = 모두 표시됨 — 이 묶음은 지우지 않습니다
 dupes.keep = 보존:

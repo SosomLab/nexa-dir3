@@ -390,7 +390,6 @@ dupes.summary = グループ {0} · 重複 {1} 個 · 回収可能 {2}
 dupes.none = 重複ファイルはありません
 dupes.unreadable = 読み取れなかった項目 {0} 個
 dupes.hardlinks = ハードリンク {0} 個を除外
-dupes.base = 場所: {0}
 dupes.group = グループ {0} · {1} × {2} 個 · 回収 {3}
 dupes.allMarked = すべて選択 — このグループは削除しません
 dupes.keep = 保持:
